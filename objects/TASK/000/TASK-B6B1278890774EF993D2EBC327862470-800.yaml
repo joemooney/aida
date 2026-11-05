@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T22:47:51.035538744Z
+modified_at: 2026-11-05T23:07:18.058428262Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -126,6 +126,12 @@ comments:
   content: 'Round 3: confirmed PR #3458 already publishes cec131c8007 and has the required Refs title. CI failed on three added-test guards: raw current_exe in mailbox_action, missing mailbox disposition --until classification, and unquoted pid_start TOML interpolation. Fixed all three without changing production behavior. Core action suite (15 tests), portability ratchet, cargo fmt --all -- --check and git diff --check passed; CLI tests rebuilding against an isolated target. git add refuses read-only .git/index.lock; native ship dry-run requires host capture. Publication command and exact non-completing subject are in /tmp/task3074-round3-publication.md. No queue-done: PR-A cannot complete the task before approved PR-B. The published original commit reword in finding 1 still requires operator authorization for force push; no rewrite attempted.'
   created_at: 2026-11-05T22:47:51.035538744Z
   modified_at: 2026-11-05T22:47:51.035538744Z
+  session_id: 01a1ade125b6
+- id: 01a1adf7-74aa-7390-bcbd-79be60c97e59
+  author: joe
+  content: 'Round 3 final validation passed: 15 core action tests, four CLI action tests (including all 14 handler cases), raw executable lookup guard, all 13 time-bound tests, and three Refs completion regressions (36 tests total). Portability ratchet, cargo fmt --all -- --check and git diff --check passed. Fixed all three current CI regressions without production changes. Three files remain uncommitted: git add refused read-only .git/index.lock and aida ship --no-merge --dry-run explicitly requires host-side capture. Publish using /tmp/task3074-round3-publication.md and exact subject [AI:codex] test(mailbox): satisfy disposition CI guards (Refs TASK-3074). PR #3458 body now reflects published round-2 head cec131c8007 and pending validated round-3 fixes. Finding 1 historical reword of 1b20cf87e817 remains blocked on explicit operator authorization for history rewrite/force push; title is already correct. Preserve merge hold and Refs subject. PR-A cannot queue-done TASK-3074 before PR-B implements approved typed delivery correlation/escalation. No force push, pr ship, review record or merge performed.'
+  created_at: 2026-11-05T23:07:18.058428262Z
+  modified_at: 2026-11-05T23:07:18.058428262Z
   session_id: 01a1ade125b6
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
