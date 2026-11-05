@@ -806,3 +806,59 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+### Pipeline stall alarms
+
+<!-- trace:STORY-2476 | ai:codex -->
+`aida supervise stalls --json` previews two independent alarms without writing
+runtime state, queue data, eligibility caches, mail or notification receipts.
+Run `aida supervise stalls --execute --json` every few minutes from a host job,
+or use the same detector integrated into `aida supervise watch --execute`.
+A watch preview also previews these alarms; watch JSON keeps its objective
+report on stdout and emits the alarm report on stderr.
+
+Each alarm requires `--threshold-mins N` minutes of continuous observations
+(default 30, minimum 15), on both `stalls` and `watch`:
+
+- `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
+  has red CI/current-head request-changes or the project has queued work.
+  Any implementer/reviewer lane, running train or ready PR suppresses this kind.
+  Role-less, integrator, advisor and product seats do not count as worker lanes.
+- `ready-without-train`: a PR is ship-ready and no train is running. Worker
+  activity does not suppress this kind.
+
+Readiness uses current-head local review, required CI, mergeability, holds and
+reviewer activity, without the eligible-idle display's age filter. The detector
+uses the latest timestamped attempt of each check and reports `merge-hold-gate`
+through the hold blocker, excluding it from CI failures and failed-job log reads.
+StatusContext failures without job logs are labeled as unavailable test evidence.
+Process identity comes from leases, the registry and train ownership, including PID
+namespace checks. Unsupported forges, failed/partial forge reads and invisible
+processes remain unknown. Unknown predicates, cleared predicates, backwards
+clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
+frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
+A preview never advances an observation timer.
+
+Execute ticks serialize through the permanent main-worktree
+`.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
+versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
+reported as unknown by watch; its objective/redrive reporting continues.
+The digest names draft/hold/review/CI/conflict blockers and only applicable
+unblocking commands; ship-ready PRs get a ship command. At delivery time, up to
+four failed job logs are read with five-second timeouts and 1 MiB caps for failing tests
+and panic lines. Missing logs or exhausted budgets are labeled unavailable.
+One bounded actionable digest covers due kinds through the existing supervisor
+nudge path: urgent mailbox
+`kind=request` to the live advisor, or the configured operator notification
+fallback. A delivery reservation is persisted before sending. Known delivery
+failure retains the episode for retry; a crash or failed post-send write leaves
+an unresolved reservation, reported as unknown and suppressed until the
+predicate resets or the operator inspects the inbox and resets the state. An
+accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+sent/queued after quiet hours; it does not prove read or action. This slice
+does not implement repeated unresolved escalation.
+
+This detector never starts work, ends a session, releases a lease or merges.
+Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
+acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
+rework exits are follow-up work; reading or accepting a wake is not action.
