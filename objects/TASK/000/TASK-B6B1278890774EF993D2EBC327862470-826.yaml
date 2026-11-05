@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T16:14:25.711655340Z
+modified_at: 2026-11-05T16:16:10.683254570Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -44,6 +44,12 @@ comments:
   content: 'Advisor note: item (2) host-side publish on lane exit is STORY-2475''s scope (PR #3398). Start TASK-2879 only after #3398 merges and build on it; BUG-2456 likewise.'
   created_at: 2026-11-05T16:14:25.711655340Z
   modified_at: 2026-11-05T16:14:25.711655340Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac7f-0fbb-7591-9d88-e6150e005445
+  author: joe
+  content: 'Advisor addition (2026-11-05): (4) the host-side publish commit must mirror the PR''s trailer form — a PR titled with Refs gets a (Refs SPEC) commit, never a completing (SPEC) trailer. Observed: auto-published round-2 commit on #3426 carried (TASK-3048) under a Refs title, which would have completed TASK-3048 at merge (squash bodies count).'
+  created_at: 2026-11-05T16:16:10.683254570Z
+  modified_at: 2026-11-05T16:16:10.683254570Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
