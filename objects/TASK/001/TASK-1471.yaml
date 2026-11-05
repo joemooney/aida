@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T02:59:47.182204053Z
+modified_at: 2026-11-05T03:35:40.882538573Z
 req_type: Task
 relationships:
 - rel_type:
@@ -112,6 +112,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-05T02:20:19.298407069Z
   modified_at: 2026-11-05T02:20:19.298407069Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9c6-ce52-7013-be47-2e176e322d24
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (20:36): new head 7e029a01fad conflicts with main (watcher 20:34). Merge origin/main into task-1471, resolve conflicts, rerun the show/doc-link targeted tests plus make check-ci-fast, push.'
+  created_at: 2026-11-05T03:35:40.882538573Z
+  modified_at: 2026-11-05T03:35:40.882538573Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
