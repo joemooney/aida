@@ -1,0 +1,50 @@
+id: 01a1a977-b3b6-7502-a0ee-01f971e843f3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-408
+agreed_id: STORY-2480
+title: 'Work CI relay: mirror home commits to work GitLab, run CI there, return allow-listed result receipts via the aida-intent orphan branch'
+description: |
+  Operator ask (2026-11-04): use the work CI runners for home AIDA. This keeps GitHub-private or GitLab-as-primary viable. Information flowing from work to home must be strictly controlled.
+
+  ## Design sketch (advisor)
+  **Topology.** A relay daemon runs on the work machine and makes outbound connections only. Nothing at home ever connects into work.
+  1. **Poll (home → work).** The relay polls the home GitLab hub (joemooney GitLab) for CI-request refs: `main` plus `ci/*` branches, or a `ci-request/<sha>` tag. Pick one; see open questions. Polling avoids exposing a webhook endpoint at work.
+  2. **Mirror.** It fetches the commit and pushes it to the work GitLab project. Home → work content is the operator's own code, so no filtering is needed in that direction. If the work GitLab offers pull mirroring, that can replace this step.
+  3. **Watch.** It waits for the work pipeline for that SHA through the work GitLab API, with a timeout.
+  4. **Return (work → home), the only controlled channel.** It writes one receipt to the orphan `aida-intent` branch on the home hub at `ci-results/<sha>/<pipeline-attempt>.json`, then pushes only that branch.
+
+  **Receipt schema (allow-list; no free text).** Fields: version, home commit SHA, overall status, a per-job list of (job name, status, duration), the failing test names, digest. Job names must match the home repo's `.github`/`.gitlab-ci` job set at that SHA. Failing test names must exist in that SHA's test inventory. Home validates both, so nothing but home-derived identifiers can come back. No logs, runner names, hostnames, URLs, paths or env values by default. A log excerpt is a separate opt-in kind that needs human review, like observation envelopes.
+
+  **Credential scoping.** The work machine holds exactly one home credential: a project deploy token or key with write_repository. A protected-branch rule allows it to push `aida-intent` only; main, aida-store and every other branch are refused at the hub. The read side is a read_repository token. No home `api` scope at work.
+
+  **Home side.** A home job, outside work's reach, validates new receipts and does three things: rejects and quarantines malformed ones; publishes valid ones as native commit statuses on the home GitLab/GitHub SHA (so merge gating and MR UI work); and surfaces them to `aida pr` / the trains as a CI source. Receipts are data, never instructions.
+
+  **Shared with observation envelopes.** Same orphan branch, same validation and review gates, and the same home processing loop (observations/, receipts/, ci-results/).
+
+  ## Acceptance
+  - The relay runs as a user service at work. Its config names the home hub, the work project and the ref filter. It only makes outbound connections.
+  - Every receipt field is allow-listed; unknown fields or values not matching a home-derived identifier are rejected on both sides.
+  - The hub refuses any push by the work credential except to `aida-intent` (test with a deliberate refused push).
+  - A home validator turns valid receipts into commit statuses; trains can treat them as a required check.
+  - An end-to-end test with two local bare repos plus a fake pipeline API: push → mirror → pass/fail → receipt → home status. Cover a tampered receipt and an unknown field.
+  - Idempotent: re-polling never duplicates pushes or receipts. Retries are bounded and never force-push.
+
+  ## Open questions for the operator
+  - Trigger: mirror every main push, or only explicitly requested refs (`ci/*`)? Recommendation: explicit refs, which saves work CI minutes and limits what is mirrored.
+  - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
+
+  Depends on: observation-envelope story (shared aida-intent branch + validator).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T02:09:16.726846978Z
+modified_at: 2026-11-05T02:09:16.726846978Z
+req_type: Story
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
