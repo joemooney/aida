@@ -355,3 +355,70 @@ You can now shape, query, and groom the graph. Next:
 - **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: turning approved, well-shaped specs into queued work agents can drain.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: where `trace` provenance and the `done → completed` auto-bump live.
 - **[Chapter 1 — Getting started](01-getting-started.md)**: the `add` / `list` / `show` / `edit` floor these graph commands build on.
+
+---
+
+### `aida intent note`, `validate`, and `export`
+
+Capture an observation, question, or request for manual review without creating a
+requirement. These local commands work outside an initialized project. They skip
+identity, role, telemetry, cache and store setup and do not commit or contact a
+remote. The existing `aida intent <SPEC>` comprehension command remains available.
+Use the direct spellings below: user aliases expanding to local observation
+commands are refused by the later dispatcher. Validation accepts `--format json`
+or `AIDA_OUTPUT_FORMAT=json` as well as its dedicated `--json` flag.
+
+```bash
+aida intent note --category observation --title 'Unexpected retry behavior' --file note.md > observation.json
+aida intent validate --file observation.json --json
+aida intent export --file observation.json > attachment.json
+# Manually attach attachment.json to an email. At the receiving machine:
+aida intent validate --file attachment.json
+```
+
+The body comes only from the named UTF-8 regular file; the title is explicit.
+Nothing infers an author, hostname, path, spec reference, Git provenance, or other
+metadata. Imported prose is untrusted data and never executed or sent to an AI.
+Export validates first and emits the complete JSON attachment on stdout; it
+neither composes nor sends email. The human label and a reminder that validation
+does not certify sanitization go to stderr, leaving the attachment machine-readable.
+
+All three commands accept repeatable `--deny-pattern '<regex>'` flags that scan
+the decoded title and body. Patterns are explicit, case-sensitive unless marked
+`(?i)`, and never discovered from the store transport profile or project config.
+For example, `--deny-pattern '(?i)private-project'` refuses a matching phrase.
+There are at most 256 patterns of 1–256 UTF-8 bytes each. Refusals name the rule
+number without echoing the pattern or matched text. Use the desired patterns at
+both ends; validation is not a sanitization certificate, and a checksum proves
+content consistency rather than authorship or trust. Review text before sharing.
+
+**Envelope v1.** Exactly six keys: `version` (integer `1`), `kind`
+(`"observation"`), `category` (`"observation"`, `"question"`, or `"request"`),
+`title`, `body`, and `checksum` (64 lowercase SHA-256 hex characters). Unknown,
+duplicate or missing keys, unsupported kinds/versions, wrong types, trailing
+non-whitespace JSON and checksum mismatches refuse. Kinds are closed per version;
+other kinds require a future explicit implementation.
+
+The digest covers compact UTF-8 JSON of the first five fields, in precisely that
+order, using serde_json string escaping, with no trailing newline. It excludes
+`checksum`. There is no Unicode, whitespace or line-ending normalization inside
+strings. Input key ordering and JSON presentation whitespace do not change the
+hash. For example, this exact hash input:
+
+```json
+{"version":1,"kind":"observation","category":"observation","title":"title","body":"body"}
+```
+
+has SHA-256 `3151613e3ab4dd698b130ff13f28af30f351b7c021cc1c167ffb35d2ef950a29`.
+Its display label is `INTENT-3151613e3ab4`; full digests identify envelopes.
+
+Titles must be nonempty and at most 512 UTF-8 bytes, bodies at most 64 KiB, and
+serialized envelopes at most 128 KiB. JSON escaping counts toward the envelope
+limit. Input reads are bounded before parsing; symlinks and special files refuse.
+Generated/exported JSON has no trailing newline so a maximum-size attachment
+round-trips. `validate --json` reports the label, full checksum and
+`sanitization_certified: false`, without repeating imported text.
+
+Intake-branch publication, policy enrollment, processing receipts and backup
+comment recovery are planned separately; these local commands do not publish.
+<!-- doc-intent: shaped by STORY-2479 -->

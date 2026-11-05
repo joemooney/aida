@@ -70,6 +70,10 @@ pub(crate) struct RunnerConfig {
     pub max_jobs: Option<usize>,
     /// Tests: stop after this many idle rounds.
     pub max_rounds: Option<usize>,
+    /// Serve `submit.sock`, the only way a job reaches the queue. Off only in
+    /// tests that file accepted jobs directly.
+    // trace:STORY-2343 | ai:claude
+    pub serve_socket: bool,
 }
 
 /// Holds the single-runner lock for one deputy name.
@@ -114,6 +118,16 @@ pub(crate) struct Outcome {
 pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<usize> {
     q.ensure()?;
     let _lock = acquire_lock(q)?;
+    // Under the lock: a stale socket belongs to a dead runner.
+    let server = if cfg.serve_socket {
+        Some(super::socket::serve(
+            q,
+            cfg.probes.clone(),
+            cfg.clock.clone(),
+        )?)
+    } else {
+        None
+    };
     let me = std::process::id();
     let mut grant_id = cfg.grant_id.clone();
     let now = (cfg.clock)();
@@ -126,6 +140,7 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
             "keep_days": cfg.keep_days,
         }))
     });
+    note_legacy_incoming(q, cfg, &grant_id, now);
     q.prune(now, cfg.keep_days);
     let mut last_prune = now;
     let mut last_refresh = now;
@@ -228,6 +243,7 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
         }
         std::thread::sleep(cfg.poll);
     };
+    drop(server);
     let now = (cfg.clock)();
     q.audit_event(now, "runner-stop", None, &actor(&grant_id), |r| {
         r.reason = Some(stop_why.clone())
@@ -274,6 +290,46 @@ fn tty_name(fd: RawFd) -> Option<String> {
 }
 
 /// Write `text` to the operator's terminal, if there is one.
+/// Jobs left in the retired submitter-writable `incoming/` directory (from
+/// before submit moved to the socket) are never claimed: nothing vouches for
+/// who wrote them. Say so once at start, on the terminal and in the audit, so
+/// they do not simply vanish; `status`/`wait` report them as unknown.
+// trace:STORY-2343 | ai:claude
+fn note_legacy_incoming(q: &Queue, cfg: &RunnerConfig, grant_id: &str, now: DateTime<Utc>) {
+    let legacy = q.root.join("incoming");
+    let ids: Vec<String> = std::fs::read_dir(&legacy)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| !n.starts_with('.'))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    q.audit_event(
+        now,
+        "legacy-incoming-ignored",
+        None,
+        &actor(grant_id),
+        |r| {
+            r.reason = Some(format!(
+            "{} file(s) in the retired incoming/ directory were not claimed; resubmit those jobs",
+            ids.len()
+        ));
+            r.detail = Some(serde_json::json!({ "dir": legacy, "files": ids }));
+        },
+    );
+    say(
+        cfg,
+        &format!(
+            "[deputy shell] {} job file(s) in {} predate the socket submit and will never run; resubmit them, then remove that directory\r\n",
+            ids.len(),
+            legacy.display()
+        ),
+    );
+}
+
 fn say(cfg: &RunnerConfig, text: &str) {
     if let Some(t) = cfg.terminal {
         write_fd(t.output, text.as_bytes());
@@ -337,7 +393,7 @@ pub(crate) fn recover_orphans(q: &Queue, cfg: &RunnerConfig, now: DateTime<Utc>)
 fn sweep_cancels(q: &Queue, cfg: &RunnerConfig, now: DateTime<Utc>) -> usize {
     let mut n = 0;
     for id in q.cancel_ids() {
-        if q.incoming_job(&id).exists() {
+        if q.accepted_job(&id).exists() {
             if let Some(Claimed { job, queued_at }) = claim(q, &id, now) {
                 let job = match job {
                     Ok(job) => job,
@@ -386,13 +442,13 @@ struct Claimed {
     queued_at: DateTime<Utc>,
 }
 
-/// Move `incoming/<id>.job` to a NEW `jobs/<id>/job.json` (a link, then an
+/// Move `accepted/<id>.job` to a NEW `jobs/<id>/job.json` (a link, then an
 /// unlink: nothing is ever replaced), then read it as data. `None` when the
 /// job vanished (another claimer). An id that already has a `jobs/<id>/` is
 /// a collision: the submission is filed aside and refused.
 fn claim(q: &Queue, id: &str, now: DateTime<Utc>) -> Option<Claimed> {
     use std::os::unix::fs::DirBuilderExt;
-    let from = q.incoming_job(id);
+    let from = q.accepted_job(id);
     let dir = q.job_dir(id);
     if let Err(e) = std::fs::DirBuilder::new().mode(0o700).create(&dir) {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -432,7 +488,7 @@ fn claim(q: &Queue, id: &str, now: DateTime<Utc>) -> Option<Claimed> {
     let _ = std::fs::remove_file(&from);
     let job = read_claimed(&to, id, &q.name);
     let queued_at = job.as_ref().map_or(now, |j| j.created_at);
-    // The submitter writes only `incoming/`; its `queued` row is the runner's.
+    // The socket server accepted it; the `queued` row is written at claim.
     if let Ok(job) = &job {
         q.audit_event(
             job.created_at,

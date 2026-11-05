@@ -226,6 +226,7 @@ fn start(a: &ShellRunArgs) -> Result<()> {
         bash: "bash".into(),
         max_jobs: None,
         max_rounds: None,
+        serve_socket: true,
     };
     ds::runner::run(&q, &cfg, &stop)?;
     Ok(())
@@ -313,14 +314,21 @@ pub(crate) fn submit(
         spec: a.spec.clone(),
         submitter,
     };
-    q.submit(&job)?;
-    writeln!(out, "{}", job.id)?;
+    // trace:STORY-2343 | ai:claude
     if q.live_runner().is_none() {
-        eprintln!(
-            "no script deputy {:?} is running yet; the job waits until the operator starts `aida deputy shell run --name {}`",
-            q.name, q.name
+        bail!(
+            "no script deputy {:?} is running; the operator starts it with `aida deputy shell run --name {}` in their terminal first",
+            q.name,
+            q.name
         );
     }
+    ds::socket::expect_accepted(
+        q,
+        &ds::socket::Request::Submit {
+            job: Box::new(job.clone()),
+        },
+    )?;
+    writeln!(out, "{}", job.id)?;
     if !a.wait {
         eprintln!(
             "queued for script deputy {:?}. Result: `aida deputy shell status {id}`; wait: `aida deputy shell wait {id}`",
@@ -351,7 +359,7 @@ pub(crate) fn wait(
     let mut claiming_since: Option<std::time::Instant> = None;
     loop {
         let Some(view) = q.locate(id)? else {
-            // Mid-claim the runner has moved the job out of `incoming/` into
+            // Mid-claim the runner has moved the job out of `accepted/` into
             // its `jobs/<id>/` dir but not yet written `state.json`, so for a
             // moment it is in neither place. Keep polling through that window
             // (bounded, so an interrupted claim still errors) instead of
@@ -520,7 +528,7 @@ pub(crate) fn cancel(
             owner.as_deref().unwrap_or("an unknown session")
         );
     }
-    q.request_cancel(id)?;
+    ds::socket::expect_accepted(q, &ds::socket::Request::Cancel { id: id.to_string() })?;
     writeln!(
         out,
         "script job {id}: cancel requested; the runner stops it {}",
