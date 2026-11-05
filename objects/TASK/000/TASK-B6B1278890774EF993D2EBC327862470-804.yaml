@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T03:08:13.526173495Z
-modified_at: 2026-11-05T03:10:03.942106461Z
+modified_at: 2026-11-05T03:11:59.811370211Z
 req_type: Task
 tags:
 - docs:impacted
@@ -16,6 +16,13 @@ relationships:
 - rel_type: Child
   target_id: 01a1a977-748e-7091-949e-e1c3bbeab894
   created_at: 2026-11-05T03:08:24.672445812Z
+comments:
+- id: 01a1a9b1-1f43-75a2-9f22-7f1b73e502c1
+  author: joe
+  content: 'Implementation scope: adds intent note/validate/export with repeatable explicit --deny-pattern regex rules and --json/--format json validation reports. Documents exact ordered compact serde_json hash input and full-digest identity in docs/cli/02-specs.md. Commands run before all shared CLI setup. No enrollment/publication/processing in this slice. Advisor authorization is inherited from the explicitly sliced parent ruling; this task was filed Draft by the authority gate and is left for advisor triage.'
+  created_at: 2026-11-05T03:11:59.811370211Z
+  modified_at: 2026-11-05T03:11:59.811370211Z
+  session_id: 01a1a9a8fe02
 history:
 - id: 01a1a9ad-dc8f-7860-b3be-c9c032be5c1b
   author: joe
