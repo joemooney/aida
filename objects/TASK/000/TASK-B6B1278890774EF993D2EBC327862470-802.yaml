@@ -18,12 +18,12 @@ description: |-
   6. C3 can never pass, so posture B from the Q1 signoff is unreachable: evaluate() hardcodes C3 to fail-or-unknown (line 294). The payload also pins an explicit fixture ProxyHandler and ignores env proxies, and the fixture names resolve only through that loopback proxy (lines 161-169). A vendor whose allow-list works through its own proxy or DNS can therefore never route allow.fixture.test, and a correct deny-by-default sandbox blocks the loopback 'allowed' route (as AGY did, ECONNREFUSED). Either define a C3 pass rule (allowed receipt plus no denied receipts plus verified receipt) with an allowed route the vendor's policy can express, or state explicitly in the docs and on STORY-2460 that this runner cannot earn native posture and that a C3-capable harness is S2 work. Right now the 'native did not demonstrate a usable allowed_hosts route' rationale is partly an artifact of the harness.
   7. Cosmetic: verify_terminal_receipt() is tautological. run() takes results from terminal_receipts() and then checks that the same generator yields an equal row (lines 485-486), so receipt is always True when results is not None. Also, evaluate() recomputes the C0 sha comparison that 'positive' already checks (line 280), and shutil.which() returning None for a missing vendor crashes with TypeError at line 427 instead of a clear refusal.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T02:36:47.692421363Z
-modified_at: 2026-11-05T15:58:56.646813775Z
+modified_at: 2026-11-05T15:58:58.011956334Z
 req_type: Task
 tags:
 - from-advisor:TASK-3046
@@ -44,6 +44,14 @@ history:
   author: joe
   timestamp: 2026-11-05T02:58:17.563276400Z
   changes: []
+- id: 01a1ac6f-4ddb-7040-a173-2f6c4b7f65f0
+  author: joe
+  timestamp: 2026-11-05T15:58:58.011952622Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
