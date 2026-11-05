@@ -1,0 +1,29 @@
+id: 01a1ab22-f33d-77a0-a6cb-aef1b6cded9e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-824
+title: 'non-blocking (minor): review_watch.rs:1279 derives setup_retry from ANY prior F…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2450, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): review_watch.rs:1279 derives setup_retry from ANY prior Failed attempt on the head, so preflight failures (execute_reservation -> Failed, review_watch.rs:1788) and mark_spawn_failed (review_watch.rs:2101), which were freely retried before, now park the head terminally after two consecutive transient failures (e.g. a forge-probe flake), and select() reports 'exited without completing (no diagnostic)' because those transitions record no diagnostic. Set the retry marker only from the Exited->Failed setup conversion, or record the diagnostic.
+
+  PR: #3408
+  Reviewed sha: 76b61c98cdfb67c4eabb73966f9c0ef6b62ed919
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T09:55:56.861116497Z
+modified_at: 2026-11-05T09:55:56.861116497Z
+req_type: Task
+tags:
+- carried-from:BUG-2450
+- finding-hash:353df0f2
+- from-review:PR-3408
+- kind:carried-forward
+filed_at:
+  code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c735c7e8c30
+  vendor: claude
