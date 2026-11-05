@@ -196,6 +196,8 @@ mod unix {
     const REQUEST_DEADLINE: Duration = Duration::from_secs(5);
     /// Requests the runner handles at once; more are refused as busy.
     const MAX_CONNECTIONS: usize = 16;
+    /// How long the accept loop spends draining a request it refuses as busy.
+    const BUSY_DRAIN: Duration = Duration::from_millis(250);
 
     /// Read one request (to the client's half-close) within `deadline`,
     /// at most `MAX_REQUEST + 1` bytes.
@@ -381,7 +383,11 @@ mod unix {
                 match listener.accept() {
                     Ok((stream, _)) if live.len() >= MAX_CONNECTIONS => {
                         let _ = stream.set_nonblocking(false);
-                        let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+                        let _ = stream.set_write_timeout(Some(BUSY_DRAIN));
+                        // Drain first (briefly): closing a unix socket with
+                        // unread bytes resets the peer, which would lose the
+                        // reply.
+                        let _ = read_request(&stream, BUSY_DRAIN);
                         reply(
                             stream,
                             &Response::refused(&refusal(
