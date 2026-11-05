@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-05T00:28:00.889732287Z
+modified_at: 2026-11-05T00:48:43.007629287Z
 req_type: Story
 tags:
 - area:deputy
@@ -286,6 +286,12 @@ history:
   timestamp: 2026-11-05T00:28:02.363272480Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a92d-f29f-7013-8454-d15ad45f8495
+  author: joe
+  timestamp: 2026-11-05T00:48:43.167740615Z
+  session_id: 01a1a924af9b
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cfee54e5aabfce342a2e385a63dc2deb7d3c1d96
   branch: story-2338-sketch
@@ -300,3 +306,11 @@ attention_reason:
   lean: Resume this exact accepted checkout with a host-published live lane runner and an authorized route for the make fast gate, then finish LIGHT and open the PR.
   raised_by: implementer
   raised_at: 2026-11-04T19:57:37.809584547Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Design and diff meet AC1-AC3 (socket.rs attest/serve_one; verdict refused:unattested; tests a_socket_submit_records_the_kernel_peer..., attest_compares_bindings..., a_file_dropped_where_submitters_used_to_write..., every_unattributable table), but CI lib-1 ''Run tests'' is red at the reviewed head (run 41941547520) and was red on d12c6fef624 too (run 41910234263), while main is green at the merge base; the spec''s gate is CI''s full suite. AC status: (1) code verified, test unconfirmed while lib-1 is red; (2) verified by code (incoming/ removed, accepted/ runner-only, claim refuses no-peer); (3) hermetic tests present, CI-green unverified.'
+  recovery_hint: address the review findings, move STORY-2343 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T00:48:43.007629287Z
