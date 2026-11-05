@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:22:33.324739612Z
+modified_at: 2026-11-05T01:23:06.129353963Z
 req_type: Story
 comments:
 - id: 01a1a946-efb8-79d3-b78f-342e7e4872fe
@@ -22,6 +22,12 @@ comments:
   content: 'Operator 2026-11-04 18:21: the mailbox is the durable fallback and must be reliable regardless. Evidence it isn''t today: the review watcher mailed the advisor at 12:37 that PR-3373 conflicts, and nothing happened until 17:47. A claude-implementer handshake sat unacked for ~6h. Durability isn''t the gap: mail is stored but only read when the recipient polls. Acceptance addition: (1) unread advisor mail older than N minutes is itself a stall signal, with the age shown on the hook line; (2) actionable mail (kind=request) is pushed through the same per-vendor delivery adapter, not left to polling; (3) mail tracks read vs acted, so ''read and ignored'' is visible.'
   created_at: 2026-11-05T01:22:33.324739612Z
   modified_at: 2026-11-05T01:22:33.324739612Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a94d-6d11-7dd3-bcfc-d14768ed6448
+  author: joe
+  content: 'Correction 2026-11-04 18:25: delivery already exists. Reuse it, don''t build new. (1) Receipts/ACK: the STORY-1843 B2c explicit post-flush ACK with a common-Git receipt anchor; `aida mailbox inbox` marks mail seen, and `aida mailbox latency` measures read latency. (2) Push delivery for Codex: TASK-2347 mail-wake. The `aida mailbox wake-service` systemd unit runs `wake-run`, which wakes an armed Codex thread when its inbox gets new mail (installed; codex-advisor-05 is armed). Gaps to close: (a) wake adapters for Claude and agy sessions, since mail-wake is Codex-only; (b) ''seen'' is not ''acted on'': a [request] can be seen and dropped (PR-3373''s 12:37 request); (c) the stall detector should post through the mailbox with kind=request, so wake delivers it and ACK/latency track it, rather than adding a parallel channel.'
+  created_at: 2026-11-05T01:23:06.129353963Z
+  modified_at: 2026-11-05T01:23:06.129353963Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
