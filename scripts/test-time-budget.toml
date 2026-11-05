@@ -30,6 +30,9 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# Full CLI create/comment plus confirmed/ambiguous recovery; measured 12.83s locally.
+# trace:TASK-3096 | ai:codex
+"aida-cli::task_3096_intake_transport explicit_create_comment_and_recovery_do_not_repeat_spec_writes" = 30  # 12.83s x2, rounded up to 5s
 # Real implementer launch: the production watchdog checks on a 30s cadence.
 # trace:TASK-1954 trace:TASK-1625 | ai:codex
 "aida-cli-lib phase_gates::real_phase_driver_wiring_tests::task_1625_implementer_watchdog_survives_store_commit_refusal" = 65  # 30s watchdog interval plus fixture/driver work, x2 with headroom

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 const TITLE_LIMIT: usize = 512;
 const BODY_LIMIT: usize = 64 * 1024;
-const ENVELOPE_LIMIT: usize = 128 * 1024;
+pub(super) const ENVELOPE_LIMIT: usize = 128 * 1024;
 const LIMITATION: &str =
     "Validation does not certify sanitization. Review all text before sharing.";
 
@@ -32,13 +32,13 @@ pub(crate) enum Category {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Envelope {
+pub(super) struct Envelope {
     version: u32,
     kind: Kind,
     category: Category,
-    title: String,
-    body: String,
-    checksum: String,
+    pub(super) title: String,
+    pub(super) body: String,
+    pub(super) checksum: String,
 }
 
 // Struct field order is the wire hash contract; never hash a JSON map.
@@ -90,12 +90,12 @@ impl Envelope {
         check_patterns(&self.title, &self.body, patterns)
     }
 
-    fn label(&self) -> String {
+    pub(super) fn label(&self) -> String {
         format!("INTENT-{}", &self.checksum[..12])
     }
 }
 
-fn check_patterns(title: &str, body: &str, patterns: &[String]) -> Result<()> {
+pub(super) fn check_patterns(title: &str, body: &str, patterns: &[String]) -> Result<()> {
     if patterns.len() > 256 {
         bail!("At most 256 deny patterns are supported");
     }
@@ -117,7 +117,7 @@ fn check_patterns(title: &str, body: &str, patterns: &[String]) -> Result<()> {
 
 // Open first, validate the handle, then read at most limit+1. NONBLOCK keeps
 // malicious FIFOs/devices from blocking; only regular, non-symlink files pass.
-fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
+pub(super) fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
@@ -134,7 +134,7 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn parse(bytes: &[u8], patterns: &[String]) -> Result<Envelope> {
+pub(super) fn parse(bytes: &[u8], patterns: &[String]) -> Result<Envelope> {
     if bytes.len() > ENVELOPE_LIMIT {
         bail!("Envelope exceeds 128 KiB");
     }
@@ -147,6 +147,9 @@ fn parse(bytes: &[u8], patterns: &[String]) -> Result<Envelope> {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum LocalCommand {
+    /// Configure or use the independently enrolled intake branch.
+    #[clap(flatten)]
+    Intake(crate::intent_intake::IntakeCommand),
     /// Generate an observation envelope on stdout, without a spec or store.
     Note {
         #[clap(long, value_enum)]
@@ -196,6 +199,7 @@ fn emit(envelope: &Envelope) -> Result<()> {
 
 pub(crate) fn run(command: &LocalCommand, json_format: bool) -> Result<()> {
     match command {
+        LocalCommand::Intake(command) => crate::intent_intake::run(command, json_format),
         LocalCommand::Note {
             category,
             title,
@@ -271,9 +275,21 @@ pub(crate) fn local_entry() -> Option<Result<()>> {
     // conservative prefilter only decides whether to parse; the actual command
     // tree below decides what runs, never an argv substring match.
     if !argv.iter().any(|arg| arg == "intent")
-        || !argv
-            .iter()
-            .any(|arg| matches!(arg.to_str(), Some("note" | "validate" | "export")))
+        || !argv.iter().any(|arg| {
+            matches!(
+                arg.to_str(),
+                Some(
+                    "note"
+                        | "validate"
+                        | "export"
+                        | "enroll"
+                        | "publish"
+                        | "pull"
+                        | "list"
+                        | "process"
+                )
+            )
+        })
     {
         return None;
     }

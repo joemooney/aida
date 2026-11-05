@@ -489,6 +489,7 @@ mod harvest;
 mod integrate_checkout;
 mod integrate_view;
 mod intent;
+mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude

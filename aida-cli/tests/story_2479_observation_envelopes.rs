@@ -339,6 +339,8 @@ fn spec_comprehension_cli_remains_available() {
     assert!(text.contains("note"));
     assert!(text.contains("aida intent [OPTIONS] <ID>"));
     assert!(text.contains("aida intent <note|validate|export> ..."));
+    // trace:TASK-3096 | ai:codex
+    assert!(text.contains("aida intent <enroll|publish|pull|list|process> ..."));
     assert!(!fixture.run(&["intent"]).status.success());
     fs::write(fixture.root().join("note.md"), b"body").unwrap();
     assert!(!fixture

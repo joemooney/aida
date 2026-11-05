@@ -417,6 +417,71 @@ Generated/exported JSON has no trailing newline so a maximum-size attachment
 round-trips. `validate --json` reports the label, full checksum and
 `sanitization_certified: false`, without repeating imported text.
 
-Intake-branch publication, policy enrollment, processing receipts and backup
-comment recovery are planned separately; these local commands do not publish.
+These local commands do not publish. Enrolled intake transport is described
+below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
+
+### `aida intent enroll`, `publish`, `pull`, `list`, and `process`
+
+Intake transport uses a separately enrolled destination and policy. It works in a
+Git clone without a requirement store. Enroll an explicit absolute local path,
+HTTPS URL, or SSH URL (remote nicknames and helper protocols refuse):
+
+```bash
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed --deny-pattern 'private-project-name'
+aida intent publish --file observation.json --reviewed
+aida intent pull
+aida intent list --json
+aida intent process <full-sha256> --action pending
+aida intent process <full-sha256> --action dismiss
+aida intent process <full-sha256> --action create
+aida intent process <full-sha256> --action comment --target TASK-123
+aida intent list --all --json
+aida intent publish
+```
+
+Enrollment copies the reviewed regex policy, including an intentionally empty
+list, into owner-only clone-local state. Re-enrollment is idempotent only for the
+same destination and policy; use a separate clone to change either. Credentials
+and branch restrictions must be configured at the remote independently. Local
+validation does not certify sanitization or restrict raw Git clients.
+
+The clone's common Git directory contains `aida-intake/profile.json`, a permanent
+lock, and `aida-intake/worktree/` with its own `.git`, index, objects and refs.
+Linked product worktrees share this one intake boundary. No product/store index,
+ref, checkout, hooks, sync routine, or baseline participates. Commits use a fixed
+intake identity and message; imported text is never executed or passed to an LLM.
+Only the explicit `refs/heads/aida-intent` push/fetch mapping is used, with no tags,
+force push, rebase, or implicit additional refs. Fetches stage into a private ref
+and validate before moving the accepted branch; they do not write `FETCH_HEAD`.
+
+Publication requires `--reviewed` when adding a file. It retains the exact
+validated bytes at `observations/<sha256>.json`; an exact duplicate is a no-op,
+while different serialization with the same digest refuses. Full reachable
+history must be orphaned, linear and additive, containing only non-executable
+observation JSON and receipt JSON. Unknown paths, empty trees, foreign commit
+metadata, links, tampering, rewritten/deleted files, invalid receipts and denied
+text refuse, including in intermediate commits. Validation is bounded to 4096
+commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
+between commits and blobs. Each Git call has a 30-second timeout and bounded
+output.
+
+A failed push retains its local commit. `aida intent publish` without `--file`
+retries publication and sends any local processing receipts. Pull first when
+another clone has advanced the remote. Divergence refuses and requires manual
+review of both histories in a separate clone; the tool never merges or rebases.
+
+`list` defaults to pending; `--all` includes processed entries. Pending performs
+no spec write and creates no receipt. Dismiss creates a receipt only. Create
+explicitly creates a draft task, while comment appends the title and body to an
+existing spec. Both require an attached git-canonical home store and use the
+ordinary authorized CLI writers. Receipts contain exactly `version: 1`, the full
+`checksum`, `action`, and a destination UUID for create/comment, under
+`receipts/<sha256>.json`. Receipts are immutable and never enter envelopes.
+Processing writes a private durable operation journal before crossing into the
+store; the task tag or comment marker records its random operation identity.
+Retry recovers a confirmed successful write without repeating it. Missing,
+conflicting, or ambiguous evidence refuses automatic replay and keeps the journal
+for manual reconciliation. Do not delete a journal and repeat a store write
+without independently checking whether it succeeded.
+<!-- doc-intent: shaped by TASK-3096 -->
