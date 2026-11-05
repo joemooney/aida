@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T04:07:02.093993112Z
+modified_at: 2026-11-05T04:16:13.930915857Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -65,6 +65,11 @@ comments:
   content: 'Round 2 findings 1 and 2 accepted and prepared in the current worktree: wait delegates to wait_with_grace with production CLAIM_GRACE=10s; interrupted-claim regression injects 300ms, asserts grace <= elapsed < grace+1s, and uses a 5s hang watchdog. cargo fmt --all -- --check and git diff --check passed. Focused test compilation underway. Publication punt recorded: this launch is on newer main (e1fc3f06903), not the PR head fa97b48bcb09, and .git is mounted read-only, blocking merge/commit/push. Prepared incremental patch against reviewed PR head: /tmp/task-2832-round-2.patch. No findings disputed; relaunch on PR #3394 branch with git-write capability to commit and push.'
   created_at: 2026-11-05T04:07:02.093901691Z
   modified_at: 2026-11-05T04:07:02.093901691Z
+- id: 01a1a9eb-ee6a-76b0-a637-916b756f2839
+  author: mcp
+  content: 'Final round 2 validation: cargo test -p aida-cli-lib deputy_shell::tests::wait_ -- --nocapture PASSED (4 tests, 0 failures; test execution 0.31s after cold compilation). This includes interrupted-claim expiry with injected 300ms grace and lower/upper elapsed bounds, recovery through state publication, unknown-job refusal, and queued timeout. cargo fmt --all -- --check and git diff --check PASSED. No new commit or push possible under current read-only .git mount; TASK remains Needs Attention with the explicit publishing punt. PR #3394 confirmed OPEN on task-b6b1278890774ef993d2ebc327862470-779. Apply /tmp/task-2832-round-2.patch to reviewed head fa97b48bcb09 in a Git-writable launch, then commit [AI:codex] fix(deputy): shorten claim grace regression (TASK-2832) and push. Findings 1 and 2 accepted, neither disputed.'
+  created_at: 2026-11-05T04:16:13.930906437Z
+  modified_at: 2026-11-05T04:16:13.930906437Z
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
   author: joe
