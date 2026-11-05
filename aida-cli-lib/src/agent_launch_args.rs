@@ -450,6 +450,12 @@ pub enum SessionCommand {
         #[clap(long)]
         force: bool,
 
+        /// Explicitly discard commits on HEAD or any local branch that no
+        /// remote has. --force alone never permits losing these commits.
+        // trace:BUG-2450 | ai:codex
+        #[clap(long)]
+        discard_unpushed: bool,
+
         /// Remove the worktree, or reset it back into the warm pool, even
         /// while live processes use it. Without this, `session end` refuses
         /// and names each pid and command: a live `claude` inside the
