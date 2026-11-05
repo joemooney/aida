@@ -1664,6 +1664,7 @@ fn ship_cleanup_deadline(
 // clone's ref tips against main, rather than a fresh budget per call.
 // trace:TASK-2053 | ai:codex
 // trace:BUG-2224 | ai:claude
+// trace:BUG-2454 | ai:codex
 pub(crate) fn probe_until(
     main: &Path,
     clone: &Path,
@@ -1698,7 +1699,7 @@ pub(crate) fn probe_until(
                 clone.display()
             ))
         }
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("submodule evidence: {why}")),
     }
     // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
     // must not hide anything, should a submodule appear after the check.
@@ -1716,7 +1717,7 @@ pub(crate) fn probe_until(
         "git",
     ) {
         Ok(out) => out,
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("working tree status: {why}")),
     };
     let mut facts = parse_status_v2(&status);
     // The sandbox's empty `.gitmodules` placeholder holds no work, so it
@@ -1743,7 +1744,7 @@ pub(crate) fn probe_until(
         "sh",
     ) {
         Ok(out) => out,
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("local ref tips: {why}")),
     };
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
     let (ref_tips, candidates) = split_tips(&tips);
@@ -1781,7 +1782,7 @@ pub(crate) fn probe_until(
             }
             None => return Probe::Unknown(format!("unreadable commit count `{}`", out.trim())),
         },
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("unpushed commit count: {why}")),
     }
     Probe::Known(facts)
 }
