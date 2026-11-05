@@ -30,6 +30,9 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# Real implementer launch: the production watchdog checks on a 30s cadence.
+# trace:TASK-1954 trace:TASK-1625 | ai:codex
+"aida-cli-lib phase_gates::real_phase_driver_wiring_tests::task_1625_implementer_watchdog_survives_store_commit_refusal" = 65  # 30s watchdog interval plus fixture/driver work, x2 with headroom
 "aida-cli-lib contained_boundary::store_tests::bug_1985_host_status_guard" = 180  # max 108.6s, median 99.4s over 7 runs; x2 is 220, capped at the 180 s nextest kill
 "aida-cli-lib task_1507_history_cache_tests::bug_1620_id_every_cut_across_merges_matches_the_walk" = 125  # max 61.0s, median 51.9s over 7 runs
 "aida-cli-lib command_registry::story_1728_policy_parity_tests::registered_policy_matches_mains_legacy_tables_for_every_verb" = 120  # max 58.7s, median 55.0s over 7 runs

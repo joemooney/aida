@@ -2946,7 +2946,15 @@ aida show <SPEC-ID>
                 written_files.push(artifact.path.clone());
                 continue;
             }
-            fs::write(&full_path, &artifact.content).map_err(|e| ScaffoldError::IoError {
+            // A git hook is staged, fsynced, set 0755 and renamed into place,
+            // so git never runs a partial or non-executable one.
+            // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+            let written = if artifact.path.starts_with(".git/hooks/") {
+                crate::git_ops::write_hook_file(&full_path, artifact.content.as_bytes())
+            } else {
+                fs::write(&full_path, &artifact.content)
+            };
+            written.map_err(|e| ScaffoldError::IoError {
                 path: full_path.clone(),
                 message: e.to_string(),
             })?;

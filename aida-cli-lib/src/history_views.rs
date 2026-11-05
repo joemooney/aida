@@ -27,11 +27,16 @@ pub(crate) enum HistoryView {
     Completed,
     /// Transitions into Rejected.
     Rejected,
-    /// Transitions into Approved.
+    /// Transitions into Approved, from any other status: a draft
+    /// approved, a NeedsAttention spec un-punted, a closed spec reopened.
+    // trace:TASK-1954 trace:TASK-1762 | ai:claude
     Approved,
     /// Transitions into any terminal status: Completed, Rejected or
     /// Superseded. Archived is housekeeping, not an outcome, so it is not
-    /// one of them.
+    /// one of them. Done is not either: it means finished on a branch, not
+    /// yet merged, so it is not an outcome yet. `aida list closed` differs
+    /// on purpose: it shows Done rows, because they are no longer open work.
+    // trace:TASK-1954 trace:TASK-1762 | ai:claude
     Closed,
 }
 
@@ -104,8 +109,10 @@ pub(crate) struct ViewFilters {
     pub(crate) priority: Option<String>,
     /// Every listed tag must be present.
     pub(crate) tags: Vec<String>,
-    /// A canonical status (from `resolve_status_filter`).
-    pub(crate) status: Option<String>,
+    /// Canonical statuses (from [`resolve_view_status_filter`]); empty
+    /// matches any. `open` / `closed` expand to their status groups.
+    // trace:TASK-1954 trace:TASK-1762 | ai:claude
+    pub(crate) statuses: Vec<String>,
     pub(crate) archive: aida_core::ArchiveFilter,
     pub(crate) defer: aida_core::DeferFilter,
     pub(crate) include_meta: bool,
@@ -126,10 +133,13 @@ impl ViewFilters {
                 return false;
             }
         }
-        if let Some(st) = &self.status {
-            if history::status_key(&s.status) != history::status_key(st) {
-                return false;
-            }
+        if !self.statuses.is_empty()
+            && !self
+                .statuses
+                .iter()
+                .any(|st| history::status_key(&s.status) == history::status_key(st))
+        {
+            return false;
         }
         if !self
             .tags
@@ -152,6 +162,39 @@ impl ViewFilters {
     }
 }
 
+/// Resolve a view's `--status`: one status, a comma list, or the `open` /
+/// `closed` groups `aida list` accepts (`accepted` means Approved).
+// trace:TASK-1954 trace:TASK-1762 | ai:claude
+pub(crate) fn resolve_view_status_filter(raw: &str) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for token in raw.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+        if token.eq_ignore_ascii_case("accepted") {
+            out.push("Approved".to_string());
+            continue;
+        }
+        match aida_core::RequirementStatus::expand_filter_token(token) {
+            Some(keys) => out.extend(keys.into_iter().map(str::to_string)),
+            None => anyhow::bail!(
+                "invalid status `{token}` for --status: expected one of: {}, \
+                 or the groups `open` / `closed` (`accepted` means approved)",
+                crate::VALID_STATUS_INPUTS
+            ),
+        }
+    }
+    if out.is_empty() {
+        anyhow::bail!("--status needs a value");
+    }
+    Ok(out)
+}
+
+/// Resolve a view's `--priority`, refusing an unknown value instead of
+/// matching nothing. trace:TASK-1954 trace:TASK-1762 | ai:claude
+pub(crate) fn resolve_view_priority_filter(raw: &str) -> Result<String> {
+    crate::validate_priority_input(raw)
+        .map(str::to_string)
+        .map_err(|e| anyhow::anyhow!("{e} (for --priority)"))
+}
+
 /// Everything a view query needs beyond the view itself.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ViewQuery {
@@ -164,6 +207,11 @@ pub(crate) struct ViewQuery {
     pub(crate) all_events: bool,
     pub(crate) oldest_first: bool,
     pub(crate) filters: ViewFilters,
+    /// For `opened`: a creation event for a spec whose `created_at` is
+    /// before this is a re-filing (a renumber or duplicate repair writes the
+    /// object at a new path, which reads as an add), not a new spec.
+    // trace:TASK-1954 trace:TASK-1762 | ai:claude
+    pub(crate) created_floor: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// One output row: the event time plus the spec's current summary.
@@ -339,6 +387,9 @@ pub(crate) fn select_rows(
         if !q.filters.keep(summary) {
             continue;
         }
+        if is_refiled_creation(e, summary, q.created_floor) {
+            continue;
+        }
         if !q.all_events && !seen.insert(summary.id) {
             continue;
         }
@@ -354,6 +405,37 @@ pub(crate) fn select_rows(
         rows.truncate(n);
     }
     rows
+}
+
+/// An add event for a spec filed before `floor`: the object was written at
+/// a new path (renumber, duplicate repair), so it is not a new spec.
+// trace:TASK-1954 trace:TASK-1762 | ai:claude
+fn is_refiled_creation(
+    e: &Event,
+    summary: &aida_core::RequirementSummary,
+    floor: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    let (EventKind::Added { .. }, Some(floor)) = (&e.kind, floor) else {
+        return false;
+    };
+    chrono::DateTime::parse_from_rfc3339(&summary.created_at)
+        .is_ok_and(|created| created.with_timezone(&chrono::Utc) < floor)
+}
+
+/// The JSON `when`: RFC3339 with the local offset, like `since` / `until`.
+/// Event times are local minutes (`YYYY-MM-DD HH:MM`); a value already in
+/// RFC3339, or one that does not parse, is passed through.
+// trace:TASK-1954 trace:TASK-1762 | ai:claude
+pub(crate) fn when_rfc3339(when: &str) -> String {
+    use chrono::TimeZone;
+    if chrono::DateTime::parse_from_rfc3339(when).is_ok() {
+        return when.to_string();
+    }
+    chrono::NaiveDateTime::parse_from_str(when, "%Y-%m-%d %H:%M")
+        .ok()
+        .and_then(|naive| chrono::Local.from_local_datetime(&naive).earliest())
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_else(|| when.to_string())
 }
 
 /// The columns after `when`, in `aida list --fields` vocabulary.
@@ -383,7 +465,7 @@ pub(crate) fn render_json(view: HistoryView, c: &CollectedEvents, rows: &[ViewRo
         .map(|r| {
             let s = &r.summary;
             serde_json::json!({
-                "when": r.when,
+                "when": when_rfc3339(&r.when),
                 "spec_id": s.agreed_id.as_deref().or(s.spec_id.as_deref()).unwrap_or(""),
                 "title": s.title,
                 "req_type": s.req_type,
@@ -485,6 +567,12 @@ pub(crate) fn run(
         defer: aida_core::DeferFilter::Both,
         ..Default::default()
     })?;
+    let q = &ViewQuery {
+        created_floor: (view == HistoryView::Opened)
+            .then_some(collected.since_at)
+            .flatten(),
+        ..q.clone()
+    };
     let rows = select_rows(&collected.events, &summaries, q);
     if json {
         println!("{}", render_json(view, &collected, &rows));

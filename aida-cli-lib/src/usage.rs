@@ -309,9 +309,23 @@ pub fn read_events() -> Vec<UsageEvent> {
 pub fn derive_cmd_shape(argv: &[String]) -> String {
     let mut iter = argv.iter().skip(1); // skip program name
     let mut parts: Vec<String> = Vec::new();
-    for tok in iter.by_ref() {
+    while let Some(tok) = iter.next() {
         if tok.starts_with('-') {
-            // flag — stop capturing the subcommand path
+            // BUG-2129: a root-level flag before the subcommand
+            // (`aida --format toon show X`) is skipped, with its value,
+            // so the call is still logged as `show`. Any other flag
+            // stops capturing the subcommand path.
+            // trace:TASK-1954 | ai:claude  trace:BUG-2129 | ai:claude
+            if parts.is_empty() {
+                match root_flag_arity(tok) {
+                    Some(RootFlag::Switch) => continue,
+                    Some(RootFlag::TakesValue) => {
+                        iter.next();
+                        continue;
+                    }
+                    None => {}
+                }
+            }
             break;
         }
         // A subcommand looks like a lowercase word with maybe a hyphen.
@@ -329,6 +343,44 @@ pub fn derive_cmd_shape(argv: &[String]) -> String {
         "<root>".to_string()
     } else {
         parts.join(" ")
+    }
+}
+
+/// How a root-level (`GlobalArgs`) flag consumes argv, for
+/// [`derive_cmd_shape`]. trace:TASK-1954 | ai:claude  trace:BUG-2129 | ai:claude
+enum RootFlag {
+    /// A boolean switch, or a `--flag=value` form: the token alone.
+    Switch,
+    /// A flag whose value is the next token.
+    TakesValue,
+}
+
+/// Classify a flag the root command accepts before its subcommand
+/// (`GlobalArgs` in cli.rs). `None` for anything else — `--version`,
+/// `--help`, `--path` (all exit before a subcommand runs) and unknown
+/// flags — so the shape stays `<root>`. A plain slice match: the
+/// statusline logs on a hot path.
+fn root_flag_arity(tok: &str) -> Option<RootFlag> {
+    const VALUED: &[&str] = &[
+        "--format",
+        "--file",
+        "--project",
+        "-p",
+        "--server",
+        "-s",
+        "--cast-out",
+        "--cast-title",
+    ];
+    const SWITCHES: &[&str] = &["--canonical-ids", "--asciinema"];
+    if let Some((name, _)) = tok.split_once('=') {
+        return VALUED.contains(&name).then_some(RootFlag::Switch);
+    }
+    if VALUED.contains(&tok) {
+        Some(RootFlag::TakesValue)
+    } else if SWITCHES.contains(&tok) {
+        Some(RootFlag::Switch)
+    } else {
+        None
     }
 }
 
@@ -630,6 +682,53 @@ enabled = true
             "approved".to_string(),
         ];
         assert_eq!(derive_cmd_shape(&argv), "list");
+    }
+
+    // BUG-2129: a root-level flag before the subcommand must not hide the
+    // call as `<root>`. trace:TASK-1954 | ai:claude  trace:BUG-2129 | ai:claude
+    // trace:BUG-2129.acbd0e82 | ai:codex
+    // trace:BUG-2129.ac086007 | ai:codex
+    #[test]
+    fn derive_cmd_shape_skips_leading_global_flags() {
+        let shape = |args: &[&str]| {
+            let argv: Vec<String> = std::iter::once("aida")
+                .chain(args.iter().copied())
+                .map(String::from)
+                .collect();
+            derive_cmd_shape(&argv)
+        };
+        assert_eq!(shape(&["--format", "toon", "show", "BUG-1"]), "show");
+        for flag in [
+            "--format",
+            "--file",
+            "--project",
+            "-p",
+            "--server",
+            "-s",
+            "--cast-out",
+            "--cast-title",
+        ] {
+            assert_eq!(shape(&[flag, "v", "show", "BUG-1"]), "show", "{flag}");
+            let joined = format!("{flag}=v");
+            if flag.starts_with("--") {
+                assert_eq!(
+                    shape(&[joined.as_str(), "show", "BUG-1"]),
+                    "show",
+                    "{joined}"
+                );
+            }
+        }
+        assert_eq!(shape(&["--canonical-ids", "queue", "list"]), "queue list");
+        assert_eq!(
+            shape(&["--format", "json", "--canonical-ids", "db", "sync"]),
+            "db sync"
+        );
+        // A flag after the subcommand still stops the path.
+        assert_eq!(shape(&["list", "--format", "toon", "extra"]), "list");
+        assert_eq!(shape(&[]), "<root>");
+        assert_eq!(shape(&["--version"]), "<root>");
+        assert_eq!(shape(&["--help", "show"]), "<root>");
+        assert_eq!(shape(&["--format", "toon"]), "<root>");
     }
 
     #[test]

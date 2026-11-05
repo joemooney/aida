@@ -610,6 +610,7 @@ fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
     {
         let _cwd = crate::session::contained_cwd_seam::pin(&codex_seat);
         crate::session::compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Codex,
             "hello",
             "sess-codex",
@@ -628,6 +629,7 @@ fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
     {
         let _cwd = crate::session::contained_cwd_seam::pin(&reviewer);
         crate::session::compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Claude,
             "review",
             "sess-reviewer",
@@ -648,6 +650,7 @@ fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
     let (program, args) = {
         let _cwd = crate::session::contained_cwd_seam::pin(&f.seat);
         crate::session::compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Claude,
             "hello",
             "sess-claude",

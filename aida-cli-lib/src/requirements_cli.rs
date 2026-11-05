@@ -11,20 +11,24 @@ pub(crate) fn is_executable_artifact(rel_path: &std::path::Path) -> bool {
     s.starts_with(".git/hooks/") || s.starts_with(".claude/hooks/") || s.ends_with(".sh")
 }
 
-/// Ensure git/claude hook files are executable. Called from scaffolder
-/// write paths so freshly-scaffolded hooks don't trigger git's "hook was
-/// ignored because not executable" warning. Sets 0755 explicitly (never
-/// the mode an overwritten file had, nor what the umask leaves for a new
-/// one), and a failure is returned: a hook git skips is silent.
+/// Write a scaffold artifact. A git or Claude Code hook, or a shell script,
+/// goes through [`aida_core::git_ops::write_hook_file`]: staged, flushed,
+/// set to 0755 explicitly (never the mode an overwritten file had, nor what
+/// the umask leaves) and renamed into place, so git never runs a partial or
+/// non-executable hook — it silently skips one without the exec bit. Any
+/// other artifact is a plain write.
 // trace:BUG-21 trace:BUG-2009 | ai:claude
-pub(crate) fn ensure_executable_if_hook(
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+pub(crate) fn write_scaffold_artifact(
     rel_path: &std::path::Path,
     full_path: &std::path::Path,
+    content: &str,
 ) -> std::io::Result<()> {
-    if !is_executable_artifact(rel_path) {
-        return Ok(());
+    if is_executable_artifact(rel_path) {
+        aida_core::git_ops::write_hook_file(full_path, content.as_bytes())
+    } else {
+        std::fs::write(full_path, content)
     }
-    aida_core::git_ops::set_hook_mode(full_path)
 }
 
 /// True when the scaffold artifact at `full_path` must be executable and is
@@ -3467,9 +3471,17 @@ fn run_add(
                                                             "Warning: could not save blocks.yaml: {}",
                                                             e
                                                         );
-                                                    } else if !aida_core::git_ops::store_commit_deferred_to_host(
+                                                    } else if aida_core::git_ops::store_commit_deferred_to_host(
                                                         store_path,
                                                     ) {
+                                                        // TASK-1626: say the pointer commit is
+                                                        // left to the host, as every other
+                                                        // deferred store write does.
+                                                        // trace:TASK-1954 trace:TASK-1626 | ai:claude
+                                                        aida_core::git_ops::notice_store_commit_deferred(
+                                                            store_path,
+                                                        );
+                                                    } else {
                                                         // Commit the pointer advance to the store
                                                         let _ = aida_core::git_ops::add(
                                                             store_path,
@@ -5173,17 +5185,21 @@ fn run_list(
                     // The derived driver of every in-progress row (never stored on
                     // the spec), and the `--driver <kind>` filter over it.
                     // trace:STORY-1653 | ai:claude
-                    let list_drivers =
-                        crate::driver_view::list_driver_map(list_project_root.as_deref(), &reqs);
+                    //
+                    // The `--driver` filter must run over the pre-focus row set so
+                    // the focus banner's widened count matches `--no-focus`; for
+                    // display alone the map is built after the focus retain, so a
+                    // focused list doesn't probe a lease for every in-progress
+                    // spec in the project. trace:TASK-1954 trace:TASK-2011 | ai:claude
+                    let mut pre_focus_drivers = None;
                     if let Some(want) = driver.as_deref() {
-                        crate::driver_view::retain_by_driver(&mut reqs, &list_drivers, want)?;
+                        let drivers = crate::driver_view::list_driver_map(
+                            list_project_root.as_deref(),
+                            &reqs,
+                        );
+                        crate::driver_view::retain_by_driver(&mut reqs, &drivers, want)?;
+                        pre_focus_drivers = Some(drivers);
                     }
-                    // TASK-2003: a NeedsAttention row whose rework is awaiting
-                    // review reads `in review: PR-N @sha8, round k`, any other
-                    // NeedsAttention row its last activity. Display only.
-                    // trace:TASK-1951 trace:TASK-2003 | ai:claude
-                    let review_lens =
-                        crate::needs_attention_lens::lens_map(list_project_root.as_deref(), &reqs);
                     // Focus count follows every other filter and precedes the
                     // row limit, so it equals the view --no-focus would reveal.
                     // trace:BUG-2190 | ai:codex
@@ -5191,12 +5207,30 @@ fn run_list(
                     if let Some((label, ids)) = &active_focus {
                         let widened_count = reqs.len();
                         reqs.retain(|r| ids.contains(&r.id));
-                        focus_banner = Some(format!(
-                            "{}; {} matching specs hidden by focus; run `aida focus clear` to clear",
-                            crate::focus::focus_header(label, reqs.len(), widened_count),
-                            widened_count - reqs.len(),
-                        ).cyan().bold().to_string());
+                        focus_banner = Some(
+                            format!(
+                                "{}; {}; run `aida focus clear` to clear",
+                                crate::focus::focus_header(label, reqs.len(), widened_count),
+                                focus_hidden_phrase(widened_count - reqs.len()),
+                            )
+                            .cyan()
+                            .bold()
+                            .to_string(),
+                        );
                     }
+                    let list_drivers = match pre_focus_drivers {
+                        Some(drivers) => drivers,
+                        None => {
+                            crate::driver_view::list_driver_map(list_project_root.as_deref(), &reqs)
+                        }
+                    };
+                    // TASK-2003: a NeedsAttention row whose rework is awaiting
+                    // review reads `in review: PR-N @sha8, round k`, any other
+                    // NeedsAttention row its last activity. Display only, so it
+                    // is built over the focused rows. trace:TASK-1954 | ai:claude
+                    // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                    let review_lens =
+                        crate::needs_attention_lens::lens_map(list_project_root.as_deref(), &reqs);
                     let total_after_filters = reqs.len();
                     let agent_cap = crate::resolve_agent_list_limit(
                         std::env::var(crate::AGENT_LIST_LIMIT_ENV).ok().as_deref(),
@@ -10148,3 +10182,30 @@ mod story_105_agreed_first_tests;
 #[cfg(test)]
 #[path = "tests/task_1471_show_docs_tests.rs"]
 mod task_1471_show_docs_tests;
+
+/// The focus banner's hidden-row clause, singular for one spec.
+// trace:TASK-1954 trace:TASK-2013 | ai:claude
+pub(crate) fn focus_hidden_phrase(hidden: usize) -> String {
+    let noun = if hidden == 1 { "spec" } else { "specs" };
+    format!("{hidden} matching {noun} hidden by focus")
+}
+
+#[cfg(test)]
+mod task_1954_focus_phrase_tests {
+    // trace:TASK-1954 trace:TASK-2013 | ai:claude
+    #[test]
+    fn focus_hidden_phrase_uses_singular_for_one() {
+        assert_eq!(
+            super::focus_hidden_phrase(1),
+            "1 matching spec hidden by focus"
+        );
+        assert_eq!(
+            super::focus_hidden_phrase(0),
+            "0 matching specs hidden by focus"
+        );
+        assert_eq!(
+            super::focus_hidden_phrase(5),
+            "5 matching specs hidden by focus"
+        );
+    }
+}

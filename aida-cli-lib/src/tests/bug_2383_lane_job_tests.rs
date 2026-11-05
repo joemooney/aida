@@ -1622,6 +1622,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
     // does for Codex.
     let child_for = |native: bool, selector: Option<&str>| {
         let mut child = build_exec_vendor_headless_command_for(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "fixture prompt",
             "codex-session",
@@ -1647,7 +1648,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
                 };
             }
             contained
-                .args(crate::tool_contained_flags("codex").unwrap())
+                .args(crate::tool_contained_flags(None, "codex").unwrap())
                 .args(args);
             child = contained;
         }

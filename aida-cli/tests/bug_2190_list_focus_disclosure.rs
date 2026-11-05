@@ -197,8 +197,10 @@ fn open_statuses_remain_visible_and_persistent_focus_is_never_silent() {
             };
             // init seeds open META specs, excluded by the ordinary work lens.
             // They must not inflate the number focus hides from this listing.
+            // trace:TASK-1954 trace:TASK-2013 | ai:claude
+            let noun = if hidden == 1 { "spec" } else { "specs" };
             assert!(
-                disclosure.contains(&format!("{hidden} matching specs hidden by focus")),
+                disclosure.contains(&format!("{hidden} matching {noun} hidden by focus")),
                 "{disclosure}"
             );
             assert!(disclosure.contains("aida focus clear"));
@@ -246,5 +248,62 @@ fn open_statuses_remain_visible_and_persistent_focus_is_never_silent() {
     let all = ids(&fixture.aida(&["list", "--all", "--format", "json"]));
     for id in fixture.open.iter().chain(std::iter::once(&fixture.closed)) {
         assert!(all.contains(id));
+    }
+}
+
+impl Fixture {
+    fn add_machine_draft(&self, title: &str) -> String {
+        let out = self.aida(&[
+            "add",
+            "--type",
+            "task",
+            "--title",
+            title,
+            "--status",
+            "draft",
+            "--tags",
+            "auto-drafted",
+        ]);
+        String::from_utf8_lossy(&out.stdout)
+            .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            .find(|word| word.starts_with("TASK-") && word[5..].chars().all(|c| c.is_ascii_digit()))
+            .expect("created task id")
+            .to_string()
+    }
+}
+
+/// The hidden-row footers count only rows inside the active focus, while the
+/// focus banner counts the widened view. One machine-filed draft sits inside
+/// the focus and one outside; the footer must report one, not two.
+// trace:TASK-1954 trace:TASK-2012 trace:TASK-1653 | ai:claude
+#[test]
+fn machine_draft_footer_counts_only_rows_inside_the_focus() {
+    let fixture = Fixture::new();
+    let inside = fixture.add_machine_draft("machine draft inside focus");
+    let _outside = fixture.add_machine_draft("machine draft outside focus");
+
+    let unfocused = fixture.aida(&["list", "--status", "draft", "--format", "toon"]);
+    let unfocused = String::from_utf8_lossy(&unfocused.stdout);
+    assert!(
+        unfocused.contains("note: 2 machine-filed drafts hidden"),
+        "{unfocused}"
+    );
+
+    fixture.aida(&["focus", &inside]);
+    for format in ["toon", "human"] {
+        let focused = fixture.aida(&["list", "--status", "draft", "--format", format]);
+        let stdout = String::from_utf8_lossy(&focused.stdout);
+        assert!(
+            stdout.contains("1 machine-filed drafts hidden"),
+            "{format}: {stdout}"
+        );
+        assert!(
+            !stdout.contains("2 machine-filed drafts hidden"),
+            "{format}: {stdout}"
+        );
+        assert!(
+            stdout.contains(&format!("focused: {inside}")),
+            "{format}: {stdout}"
+        );
     }
 }

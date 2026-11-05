@@ -365,8 +365,13 @@ fn questions_clarify_posture_honours_configured_containment_without_the_env() {
                 .unwrap();
         assert_eq!(vendor, session::HeadlessVendor::Claude);
         assert!(contained);
-        let plan =
-            session::advisor_interactive_launch_plan(vendor, "/aida-clarify X", contained).unwrap();
+        let plan = session::advisor_interactive_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
+            vendor,
+            "/aida-clarify X",
+            contained,
+        )
+        .unwrap();
         assert!(
             plan.args.iter().any(|a| a == "--settings"),
             "{:?}",

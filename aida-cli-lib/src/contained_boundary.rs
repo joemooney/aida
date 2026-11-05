@@ -481,8 +481,16 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// the seat's own repository, which it must write to commit; no host git ever
 /// runs in it.
 // trace:BUG-2012 | ai:antigravity
+///
+/// `host_main` is the launch's host main, resolved by its entry point before
+/// any chdir into a seat and threaded here explicitly (TASK-2032); `None`
+/// exempts no clone.
 // trace:BUG-2169 | ai:claude
-pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn contained_main_checkout_git_deny_paths(
+    host_main: Option<&Path>,
+    write_roots: &[PathBuf],
+) -> Vec<PathBuf> {
     let mut denied = Vec::new();
     let mut push_unique = |p: PathBuf| {
         if !denied.contains(&p) {
@@ -495,7 +503,8 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
             continue;
         };
         // trace:BUG-2169 | ai:claude
-        if crate::seat_clone::host_recorded_clone(root).is_some() {
+        // trace:TASK-2032 | ai:claude
+        if crate::seat_clone::recorded_clone_for(host_main, root).is_some() {
             continue;
         }
         if meta.is_dir() || git_entry.is_dir() {
