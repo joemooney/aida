@@ -9,12 +9,12 @@ description: |-
 
   PR: #3436
   Reviewed sha: 46a371fc0d807a56214d49fea848d0e69f76e311
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:24:50.018024034Z
-modified_at: 2026-11-05T20:34:40.186712045Z
+modified_at: 2026-11-05T20:49:07.690485346Z
 req_type: Task
 tags:
 - carried-from:TASK-2842
@@ -33,6 +33,12 @@ comments:
   content: 'Implementing advisor triage scope: derive seat-publication summaries from the owning spec (explicit conventional type/scope when present, otherwise requirement type and feature), preserve AI attribution and existing completion/Refs groups, repair only existing generic rework titles, and retain descriptive author titles. Targeted coverage includes creation, rework, retitle failure, multi-spec credit and salvage references.'
   created_at: 2026-11-05T20:34:40.186712045Z
   modified_at: 2026-11-05T20:34:40.186712045Z
+  session_id: 01a1ad674920
+- id: 01a1ad78-cc81-7053-b8b0-47622750a37f
+  author: joe
+  content: 'Implemented in fddd6688890: seat PR titles derive from owning specs; generic existing rework titles are repaired using the PR existing trailers; descriptive author titles remain unchanged. GitHub/GitLab title edits fail before review handoff. Attribution and completion/reference credit are preserved, including multi-spec and salvage cases. Validation: 3 targeted regressions and all 33 seat_clone::seat_publish_tests tests passed; cargo fmt --all -- --check and git diff --check passed. Standalone implementer handoff: opening a PR for independent review; no ship or verdict recording.'
+  created_at: 2026-11-05T20:48:57.473169638Z
+  modified_at: 2026-11-05T20:48:57.473169638Z
   session_id: 01a1ad674920
 history:
 - id: 01a1ad63-61de-7b02-a9f2-463108532a66
@@ -59,6 +65,14 @@ history:
   timestamp: 2026-11-05T20:30:30.036535427Z
   session_id: 01a1ad674920
   changes: []
+- id: 01a1ad78-f531-75f0-a545-2e47c1a003b5
+  author: joe
+  timestamp: 2026-11-05T20:49:07.889269645Z
+  session_id: 01a1ad674920
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main
@@ -66,3 +80,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b66ec083185
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T20:49:07.690485346Z
+  implemented_by: joe
