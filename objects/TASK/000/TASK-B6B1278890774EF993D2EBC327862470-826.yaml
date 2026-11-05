@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T22:31:58.005504672Z
+modified_at: 2026-11-05T22:44:03.653949015Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -68,6 +68,12 @@ comments:
   created_at: 2026-11-05T18:21:02.380336991Z
   modified_at: 2026-11-05T18:21:02.380336991Z
   session_id: 01a1ace2e7a1
+- id: 01a1ade2-2dc5-70e2-9f9d-74b50f152060
+  author: joe
+  content: 'Implementation prepared in the assigned native seat: added native pickup/finish handoff prompts (command, skill and default role launch), deferred native queue done before committed-only diagnostics using the recorded lease branch, preserved Refs/non-completion for post-exit host commits, and reconciled newer remote PR heads through the existing sandbox before publication. Live-owner and pinned-directory checks are retained; conflicts abort without pushing; punt/hold vetoes are unchanged. Added targeted regressions and updated CLI documentation. Formatting and whitespace checks pass. Targeted Cargo tests are still compiling from a cold local target; lane job runner is unavailable in this launch. Work remains uncommitted because native Git metadata is read-only; final validation and host recovery command will follow before exit.'
+  created_at: 2026-11-05T22:44:03.653949015Z
+  modified_at: 2026-11-05T22:44:03.653949015Z
+  session_id: 01a1add6baf6
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
   author: joe
