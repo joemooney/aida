@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T13:22:44.418694470Z
+modified_at: 2026-11-05T13:45:05.342555385Z
 req_type: Bug
 tags:
 - area:compete
@@ -208,6 +208,12 @@ comments:
   created_at: 2026-11-05T13:19:23.576732480Z
   modified_at: 2026-11-05T13:19:23.576732480Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abf4-bc3e-7cd0-aff4-24e5f280f2ba
+  author: joe
+  content: 'Round 5: bd2b0041d8b fixes both findings (None receipt argument; shared actually_contained decision). bb2dfa6f93d repairs the parent-death fixture with a trusted native Codex policy. Validation on bb2dfa6f93d: make check-ci-fast 37 gates passed; compete_cmd 8 tests passed; resolve_aida_exe 7 tests passed; formatting and diff checks passed. Publication blocked: PR #3401 advanced to 6fd369fee80 during checks (main merge, no compete_cmd.rs changes). Push rejected non-fast-forward; ordinary merge refused because sandbox mounts .git/ORIG_HEAD read-only. Advisor must integrate and publish the two local commits, then validate the integrated head. No force push, ship, review record, or merge-hold changes performed.'
+  created_at: 2026-11-05T13:45:05.342555385Z
+  modified_at: 2026-11-05T13:45:05.342555385Z
+  session_id: 01a1abe03e16
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
