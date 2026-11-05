@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:17:27.701803338Z
+modified_at: 2026-11-05T20:22:40.396977177Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -73,6 +73,12 @@ comments:
   content: 'Round 2: findings 1-4 implemented: manual flag citation corrected; intended own-migrate help snapshot updated; creator-shell fallback removed; session-start ownership snapshot captures the AIDA invocation itself without altering legacy lease routing/liveness, then worker stamps replace it; injectable writer probe covers init/systemd/tini refusal. Finding 5 constructor fragility fixed: production HostFacts can only be constructed from ProbeSource, which always applies ownership validation. Generic remote subreaper detection remains a design fork: Linux PR_GET_CHILD_SUBREAPER reads only the calling process; procfs provides no arbitrary-PID flag, so known-init executable rejection is explicitly scoped in code/docs. Finding 6 remains unverified: this lane is PID namespace 4026533091, while host leases name 4026531836. own migrate --execute refused for missing operator terminal; lane own show sees zero ownership records and is not host acceptance evidence. Repairing an invalid orphan witness deliberately retains UNEXPLAINED never-released: no missing-lease release operation is included; an operator-reviewed lifecycle repair is required before PR-C cutover. Tests are running; final results and commit will follow.'
   created_at: 2026-11-05T20:13:42.115962312Z
   modified_at: 2026-11-05T20:13:42.115962312Z
+  session_id: 01a1ad52961b
+- id: 01a1ad60-bc0c-7781-a8ab-2be581e5444e
+  author: joe
+  content: 'Round 2 final validation: cargo test -p aida-cli-lib ownership:: --lib passes all 45 tests, including session_start_snapshot_names_setup_itself_and_preserves_a_stamped_worker, init/systemd/tini write-time refusal via injectable procfs, production HostFacts validation, migration/orphan behavior, and detached worker death. cargo test -p aida-cli-lib help_surface_matches_golden_snapshot --lib passes (1 test); the golden diff contains only intended own-migrate help wording. Full docs/cli/verify-manual.py, --static, targeted own flag_accuracy_misses=[] (the reported contracts failure), cargo fmt --all -- --check, scripts/check-portability.sh and git diff --check all pass. No commit/push was possible: git add refused .git/index.lock as Read-only file system; changes remain in the assigned worktree (11 files). Proposed host commit subject: [AI:codex] fix(ownership): address holder review and CI regressions (BUG-2458). Explicit punt for findings 5 (generic remote subreaper detection policy) and 6 (host migration/compare evidence and orphan-release policy) remains; keep merge hold. No pr ship or review record was run.'
+  created_at: 2026-11-05T20:22:40.396977177Z
+  modified_at: 2026-11-05T20:22:40.396977177Z
   session_id: 01a1ad52961b
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
