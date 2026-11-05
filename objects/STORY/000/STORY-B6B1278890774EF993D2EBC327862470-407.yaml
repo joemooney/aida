@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T02:51:54.621319967Z
+modified_at: 2026-11-05T02:57:09.057647075Z
 req_type: Story
 comments:
 - id: 01a1a99e-6b6e-7532-b180-a007c3a8b18c
@@ -127,6 +127,12 @@ comments:
   created_at: 2026-11-05T02:51:34.126969211Z
   modified_at: 2026-11-05T02:51:34.126969211Z
   session_id: 01a1a99c9599
+- id: 01a1a9a3-87c1-7f33-a9d5-4ecb32a7ed9b
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 20:00) on sketch 6423aace1cf: APPROVED as proposed. (1) Boundary: a separately enrolled, clone-local intake policy with its own pinned remote. It needs no store baseline and no author field. Do not extend the store-only work transport profile; keep its guarantees. This matches STORY-2480, whose work relay needs its own credential that can only push the intake branch. (2) Envelope v1: exactly six keys, the canonical hash over the first five in order, no normalization, an INTENT-<12 hex> label, full-digest identity, limits 512 B title / 64 KiB body / 128 KiB envelope, bounded reads. Approved. Leave room for a future kind=ci-result (STORY-2480) by keeping kind a closed enum checked per version. Implement on branch story-b6b1278890774ef993d2ebc327862470-407 and open the PR. Slice it if it''s large: the envelope generate/validate/email round trip first, intake-branch publication second.'
+  created_at: 2026-11-05T02:57:09.057647075Z
+  modified_at: 2026-11-05T02:57:09.057647075Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
   author: joe
