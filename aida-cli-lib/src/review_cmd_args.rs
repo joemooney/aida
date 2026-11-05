@@ -22,7 +22,7 @@ pub enum ReviewCommand {
         #[arg(long)]
         pr: u64,
         /// Covered spec IDs, separated by commas.
-        #[arg(long, value_delimiter = ',', required = true)]
+        #[arg(long, value_delimiter = ',', required = true, value_parser = crate::spec_arg::spec_id)]
         specs: Vec<String>,
         /// Native origin IDs of filed blocking findings, separated by commas.
         #[arg(long, value_delimiter = ',')]
@@ -35,7 +35,7 @@ pub enum ReviewCommand {
         #[arg(long)]
         pr: u64,
         /// Specs whose recorded author sessions belong to this head (CSV).
-        #[arg(long, value_delimiter = ',', required = true)]
+        #[arg(long, value_delimiter = ',', required = true, value_parser = crate::spec_arg::spec_id)]
         specs: Vec<String>,
     },
     /// Manage explicitly trusted review publishers (operator only).

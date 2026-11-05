@@ -220,7 +220,8 @@ Read-only store consumers (`load` (`aida-core/src/db/git_backend.rs:2285`), `Cac
 publications and immutable author-session publications. The operator roster's
 read/modify/write uses a pinned-head compare under the existing store writer
 lock. Evidence creation, staging and commit also use that lock; exact-ref pushes
-run after it is released. Rejected immutable pushes use the existing private-ref
-pull/rebase helper and validate the preserved receipt before retrying. No reset,
+run after it is released. Rejected immutable pushes re-enter the (reentrant)
+writer lock, run the existing private-ref pull/rebase helper inside it, and
+validate the preserved receipt before retrying. No reset,
 rollback, authority-grant export or second object writer is introduced.
 <!-- trace:STORY-2492 | ai:codex -->

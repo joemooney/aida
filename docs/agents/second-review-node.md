@@ -42,16 +42,20 @@ signing or verification process has a ten-second deadline.
 
 Use ordinary AIDA authoring sessions so their stable session IDs are recorded.
 Opening a PR through AIDA on a configured host publishes signed author-session
-evidence for that exact code head. For a PR opened outside AIDA, or after pushing
-a new head, run this on A from the checkout containing the actual PR head:
+evidence bound to the pushed tip of the PR branch (not the HEAD of the checkout
+that ran the command). AIDA republishes it whenever it pushes a new head to an
+existing PR (ship rework, orchestrator adopt). Author sessions accumulate per
+change, so a forge-side update-branch head keeps the earlier exclusions. For a
+PR opened or pushed outside AIDA, run this on A from a checkout of the PR head:
 
 ```bash
 aida review authorship --pr 123 --specs STORY-123
 ```
 
 The command requires existing author-session evidence for the named specs. It
-cannot manufacture independence from missing evidence. Publish authorship again
-at every new review head. Sync B's code and store before starting its ordinary
+cannot manufacture independence from missing evidence. If an open or push
+cannot publish (for example, the branch tip is not resolvable), the PR still
+opens and a warning prints this retry command. Sync B's code and store before starting its ordinary
 reviewer session. Its host recorder/launcher collects and validates the review
 under the existing local grant or human-review rules, then signs and persists
 an immutable publication. The contained reviewer never receives a node key.
@@ -61,11 +65,16 @@ see B's publication. The reviewer session must differ from every author session,
 including when a conversation resumes on another node. Process and lease tokens
 are node-qualified; stable session tokens remain comparable across hosts.
 The PR head must still match exactly. Syncing does not carry approval over a
-changed head.
+changed head. Readers select each change separately, at its current head: the
+caller's head, or else the tip of the reviewed branch in the local code checkout
+(`origin/<branch>`, then the local branch). Publications at other heads are stale.
+They neither block nor credit the current head. A spec-keyed read uses the newest
+change (highest number) whose publications covered the spec.
 
 Refusals that contain prose findings need filed findings with canonical origin
-IDs. The recorder retains its local verdict if publication refuses because
-those references are missing. Supply them and retry publication on B:
+IDs. The recorder keeps its local verdict and reports the publication as
+pending (a warning, not a failed record) when those references are missing.
+Supply them and retry publication on B:
 
 ```bash
 aida review publish --pr 123 --specs STORY-123 --blocking-findings TASK-node-b-12
@@ -108,16 +117,23 @@ then enroll the node with the new public key; old signatures will no longer veri
 
 Store writes use the ordinary store writer lock and exact-ref pushes. Immutable
 publication pushes retry on concurrent store advancement without resetting other
-writers. A failed push is an error and leaves local evidence pending; retry with
-store sync and `review publish`. Concurrent roster edits refuse and require the
-operator to sync and reapply the intended enrollment/removal. Keep operator roster
+writers; the rebase runs inside the store writer lock. A failed push leaves
+local evidence pending; retry with store sync and `review publish`. A roster
+push that races another operator leaves the edit committed locally. Run
+`aida sync`, then rerun the same `review nodes enroll|revoke` command. The rerun is
+idempotent: it only pushes when the roster already holds the edit. If the sync
+reports a roster conflict, drop the local roster commit and reapply. Keep operator roster
 edits serialized. Offline local evidence gives no credit to a host that has not
 received it.
 
 Readers inspect committed Git blobs rather than trusting working-tree files.
-Version 1 bounds each command's output to 1 MiB, each evidence listing to 256
-publications and aggregate receipt bytes to 8 MiB; exhausted budgets refuse.
-There is no automatic archival/retention policy in this slice.
+Evidence is stored per change under `reviews/v1/changes/<CHANGE>/publications/`
+and `.../authorship/`. Unsigned routing markers under
+`reviews/v1/specs/<spec key>/<CHANGE>` only route spec-keyed reads; the receipt
+must still verify. Version 1 bounds each command's output to 1 MiB, each change's
+evidence listing to 256 entries and its aggregate receipt bytes to 8 MiB. An
+exhausted budget or a malformed blob refuses that change only. Other changes,
+and specs reviewed only locally, are unaffected.
 
 Watcher reservations remain machine-local in slice 1. Do not run competing
 watchers against the same PR heads yet; reservation synchronization is slice 2.

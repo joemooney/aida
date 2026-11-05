@@ -1187,13 +1187,12 @@ fn choose_current(
 ) -> Option<CurrentVerdict> {
     // trace:STORY-2492 | ai:codex — canonical publications override the local derived view.
     if let Some(remote) = super::review_publication::current(start, &[key]) {
-        if file_body
-            .as_deref()
-            .is_some_and(|local| local != remote.body)
-        {
-            eprintln!(
-                "review publication/local verdict disagreement for {key}; using synced evidence"
-            );
+        let local = file_body.as_deref().and_then(parse_recorded_verdict);
+        let synced = parse_recorded_verdict(&remote.body);
+        if let (Some(local), Some(synced)) = (local, synced) {
+            if let Some(report) = super::review_publication::disagreement(key, &local, &synced) {
+                eprintln!("{report}");
+            }
         }
         return Some(remote);
     }

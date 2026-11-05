@@ -170,9 +170,9 @@ pub(crate) fn handle_review_command(
     use crate::*;
     match cmd {
         ReviewCommand::Authorship { pr, specs } => {
-            crate::gate::review_publication::publish_authorship(
+            crate::gate::review_publication::publish_checkout_authorship(
                 &std::env::current_dir()?,
-                crate::gate::ledger::ChangeKey::pr(*pr),
+                *pr,
                 specs,
             )
         }

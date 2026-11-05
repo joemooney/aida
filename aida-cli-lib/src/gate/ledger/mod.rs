@@ -209,9 +209,9 @@ pub(crate) fn record_verdict_at(
         let delivered =
             store::append_one(&store, event::verdict_event(&store, change, record, spec))?;
         // trace:STORY-2492 | ai:codex
+        // The verdict is durable: publication failure is a reported pending state.
         let labels = spec.map(|s| vec![s.label.clone()]).unwrap_or_default();
-        super::review_publication::publish(&store, change, record, &labels)
-            .map_err(std::io::Error::other)?;
+        super::review_publication::publish_reported(&store, change, record, &labels);
         return Ok(delivered);
     }
     let spec = GateSpec::resolve(&root, &key);
@@ -221,8 +221,12 @@ pub(crate) fn record_verdict_at(
                 &store,
                 event::verdict_event(&store, *change, record, Some(&spec)),
             )?;
-            super::review_publication::publish(&store, *change, record, &[spec.label.clone()])
-                .map_err(std::io::Error::other)?;
+            super::review_publication::publish_reported(
+                &store,
+                *change,
+                record,
+                &[spec.label.clone()],
+            );
             Ok(result)
         }
         None => store::append_unbound(&store, &spec, record),
@@ -272,8 +276,9 @@ pub(crate) fn record_collected_verdict(
         events.push(event::verdict_event(&root, change, body, Some(spec)));
     }
     let appended = store::append(&root, change, events)?;
-    // trace:STORY-2492 | ai:codex — collector publishes only after its local checks.
-    super::review_publication::publish(
+    // trace:STORY-2492 | ai:codex — collector publishes only after its local checks;
+    // the appended verdict stands even when the publication stays pending.
+    super::review_publication::publish_reported(
         &root,
         change,
         record,
@@ -281,8 +286,7 @@ pub(crate) fn record_collected_verdict(
             .iter()
             .map(|(spec, _)| spec.label.clone())
             .collect::<Vec<_>>(),
-    )
-    .map_err(std::io::Error::other)?;
+    );
 
     Ok(appended
         .iter()
@@ -328,6 +332,7 @@ pub(crate) fn open_change_bound(
     req: crate::forge::OpenChange,
     specs: &[String],
 ) -> anyhow::Result<crate::forge::ChangeRef> {
+    let branch = req.branch.clone();
     let change = forge.open_change(req)?;
     if change.id != 0 {
         bind_specs(
@@ -335,11 +340,15 @@ pub(crate) fn open_change_bound(
             ChangeKey::pr(change.id),
             &GateSpec::resolve_all(start, specs),
         );
-    }
-    // trace:STORY-2492 | ai:codex — publish stable author sessions with the opened head.
-    if change.id != 0 {
-        super::review_publication::publish_authorship(start, ChangeKey::pr(change.id), specs)
-            .map_err(|e| anyhow::anyhow!("{} opened at {}, but author publication failed: {e:#}; retry `aida review authorship --pr {} --specs {}` from its head checkout", change.id, change.url, change.id, specs.join(",")))?;
+        // trace:STORY-2492 | ai:claude — author sessions bind to the opened
+        // branch's pushed tip (not `start`'s HEAD); a failure is reported,
+        // never a failed open, because the PR already exists.
+        super::review_publication::publish_change_authorship(
+            start,
+            ChangeKey::pr(change.id),
+            &branch,
+            specs,
+        );
     }
     Ok(change)
 }
@@ -349,12 +358,19 @@ pub(crate) fn open_change_bound(
 /// exactly as [`open_change_bound`] would have. Binding is idempotent, so
 /// adopting a change aida already bound adds nothing.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn adopt_change_bound(start: &Path, id: u64, specs: &[String]) -> u64 {
+pub(crate) fn adopt_change_bound(start: &Path, id: u64, branch: &str, specs: &[String]) -> u64 {
     if id != 0 {
         bind_specs(
             start,
             ChangeKey::pr(id),
             &GateSpec::resolve_all(start, specs),
+        );
+        // trace:STORY-2492 | ai:claude — a push to an adopted change is a new head.
+        super::review_publication::publish_change_authorship(
+            start,
+            ChangeKey::pr(id),
+            branch,
+            specs,
         );
     }
     id

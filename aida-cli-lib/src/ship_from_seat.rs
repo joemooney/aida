@@ -950,6 +950,15 @@ fn finish_published(
     let pr = match forge.change_for_branch(branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
             eprintln!("  found open PR-{} for branch {branch}", change.id);
+            // trace:STORY-2492 | ai:claude — a rework push is a new head; its
+            // author sessions travel with it so a remote re-review can publish.
+            let message = git_text(main, &["log", "-1", "--format=%B", tip]).unwrap_or_default();
+            crate::gate::review_publication::publish_change_authorship(
+                main,
+                crate::gate::ledger::ChangeKey::pr(change.id),
+                branch,
+                &crate::extract_spec_ids_from_commit(&message),
+            );
             change.id
         }
         Ok(crate::forge::ChangeLookup::NoChange) => open_seat_pr(&*forge, main, seat, branch, tip)?,

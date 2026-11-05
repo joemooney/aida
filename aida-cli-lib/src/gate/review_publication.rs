@@ -1,7 +1,20 @@
 //! Trusted-node review publications. Only the host recorder/collector issues
 //! these after validating local authority. No grant or human receipt travels.
 //! Trust comes from the CURRENT committed roster, never the publication itself.
+//!
+//! Layout (all paths relative to the canonical store):
+//! - `reviews/v1/nodes.json`: the operator-enrolled node roster.
+//! - `reviews/v1/changes/<CHANGE>/publications/<node>/<uuid>.json`: signed
+//!   review receipts for one change.
+//! - `reviews/v1/changes/<CHANGE>/authorship/<node>/<uuid>.json`: signed
+//!   author-session evidence for one change.
+//! - `reviews/v1/specs/<spec key>/<CHANGE>`: an unsigned routing marker naming
+//!   a change a receipt covered; it confers nothing, the receipt still verifies.
+//!
+//! Every read is scoped to one change, so one malformed or oversized change
+//! never refuses a different change or a spec reviewed only locally.
 // trace:STORY-2492 | ai:codex
+// trace:STORY-2492 | ai:claude
 // mandate-gate
 use super::ledger;
 use super::{
@@ -20,12 +33,15 @@ use std::{
 use uuid::Uuid;
 
 const ROSTER: &str = "reviews/v1/nodes.json";
-const AUTHORSHIPS: &str = "reviews/v1/authorship";
-const PUBLICATIONS: &str = "reviews/v1/publications";
+const CHANGES: &str = "reviews/v1/changes";
+const SPEC_INDEX: &str = "reviews/v1/specs";
+const PUBLICATIONS: &str = "publications";
+const AUTHORSHIPS: &str = "authorship";
 const NAMESPACE: &str = "aida-review-receipt";
 const CONFIG: &str = ".aida/review-publisher.json";
 const CAP: usize = 1024 * 1024;
-const MAX_PUBLICATIONS: usize = 256;
+/// Per-change read budget. A change that exceeds it refuses only itself.
+const MAX_PER_CHANGE: usize = 256;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum NodeCommand {
@@ -177,21 +193,53 @@ fn repository(root: &Path) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(origin)))
 }
 
-/// Preserve concurrent publications. A rejected exact push rebases the immutable
-/// commit on the winner under the store writer lock; no snapshot rollback/reset.
-fn persist(store: &Path, rel: &str, bytes: &[u8], immutable: bool) -> Result<()> {
-    persist_checked(store, rel, bytes, immutable, None)
+fn evidence_dir(change: &str, kind: &str) -> String {
+    format!("{CHANGES}/{change}/{kind}")
+}
+fn evidence_path(change: &str, kind: &str, node: &str, id: Uuid) -> String {
+    format!("{}/{node}/{id}.json", evidence_dir(change, kind))
+}
+/// Committed names under `dir`, bounded per change.
+fn list(store: &Path, tip: &str, dir: &str) -> Result<Vec<String>> {
+    let names = String::from_utf8(git(
+        store,
+        &["ls-tree", "-r", "--name-only", tip, "--", dir],
+    )?)?;
+    let names: Vec<String> = names.lines().map(str::to_string).collect();
+    ensure!(
+        names.len() <= MAX_PER_CHANGE,
+        "review evidence read budget exhausted for {dir}"
+    );
+    Ok(names)
+}
+
+/// The configured publisher of this host, if it opted in.
+fn publisher(root: &Path) -> Result<Option<Publisher>> {
+    match std::fs::read(root.join(CONFIG)) {
+        Ok(bytes) => Ok(Some(serde_json::from_slice::<Publisher>(&bytes)?)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Preserve concurrent publications. A rejected exact push of immutable
+/// evidence rebases it on the winner, inside the store writer lock (the
+/// lock is reentrant, and the pull takes the sync lock beneath it), so no
+/// other local store writer interleaves between the rebase and the check.
+/// No snapshot rollback/reset is ever performed.
+fn persist(store: &Path, files: &[(String, Vec<u8>)], immutable: bool) -> Result<()> {
+    persist_checked(store, files, immutable, None)
 }
 fn persist_checked(
     store: &Path,
-    rel: &str,
-    bytes: &[u8],
+    files: &[(String, Vec<u8>)],
     immutable: bool,
     expected_head: Option<&str>,
 ) -> Result<()> {
     use aida_core::{db::with_store_write_lock, git_ops};
     // This new store writer has no enabled-WORK prepared transport adapter.
     aida_core::transport_policy::refuse_unsupported(store)?;
+    let rels: Vec<&str> = files.iter().map(|(rel, _)| rel.as_str()).collect();
     let (mut tip, branch) = with_store_write_lock(store, || -> Result<(String, String)> {
         git_ops::ensure_store_write_safe(store)?;
         ensure!(
@@ -202,17 +250,21 @@ fn persist_checked(
             git(store, &["diff", "--cached", "--name-only"])?.is_empty(),
             "store has unrelated staged changes"
         );
+        let mut args = vec!["diff", "--name-only", "--"];
+        args.extend(rels.iter().copied());
         ensure!(
-            git(store, &["diff", "--name-only", "--", rel])?.is_empty(),
+            git(store, &args)?.is_empty(),
             "review evidence has uncommitted edits"
         );
-        let path = store.join(rel);
-        if immutable && path.exists() {
-            ensure!(
-                std::fs::read(&path)? == bytes,
-                "immutable review publication collision"
-            );
-        } else {
+        for (rel, bytes) in files {
+            let path = store.join(rel);
+            if immutable && path.exists() {
+                ensure!(
+                    std::fs::read(&path)? == *bytes,
+                    "immutable review publication collision"
+                );
+                continue;
+            }
             let parent = path.parent().context("review publication parent")?;
             std::fs::create_dir_all(parent)?;
             let mut file = tempfile::NamedTempFile::new_in(parent)?;
@@ -221,12 +273,10 @@ fn persist_checked(
             file.as_file().sync_all()?;
             file.persist(&path)?;
         }
-        git_ops::add(store, &[rel])?;
+        git_ops::add(store, &rels)?;
         git_ops::commit(store, "review: publish trusted node evidence")?;
         Ok((git_ops::head_sha(store)?, git_ops::current_branch(store)?))
     })?;
-    // Network publication is outside the store writer transaction. No reset or
-    // rollback can remove another local writer's intervening commit.
     if !git_ops::has_remote(store, "origin") {
         return Ok(());
     }
@@ -236,22 +286,46 @@ fn persist_checked(
         }
         ensure!(
             immutable,
-            "roster push raced another operator; sync and reapply the enrollment/revocation"
+            "the roster edit is committed locally ({tip}) but its push raced another \
+             operator. Run `aida sync` to reconcile the store, then rerun the same \
+             command: enroll/revoke is idempotent and only pushes when the roster \
+             already holds the edit. If the sync reports a roster conflict, compare \
+             `git -C {} log origin/{branch}..HEAD` with the shared roster and drop \
+             the local roster commit before reapplying",
+            store.display()
         );
         // Distinct immutable paths rebase cleanly. Never structurally auto-merge
         // a conflicting pending operator roster edit: that could undo revocation.
-        git_ops::pull_rebase(store, "origin", &branch)?;
         tip = with_store_write_lock(store, || -> Result<String> {
             git_ops::ensure_store_write_safe(store)?;
+            git_ops::pull_rebase(store, "origin", &branch)?;
             let tip = head(store)?;
-            ensure!(
-                blob(store, &tip, rel)?.as_deref() == Some(bytes),
-                "review publication changed during synchronization"
-            );
+            for (rel, bytes) in files {
+                ensure!(
+                    blob(store, &tip, rel)?.as_deref() == Some(bytes.as_slice()),
+                    "review publication changed during synchronization"
+                );
+            }
             Ok(tip)
         })?;
     }
     bail!("review publication remains local pending sync: push rejected")
+}
+
+/// Push an already-committed local roster edit (the idempotent rerun path).
+fn push_pending_roster(store: &Path) -> Result<()> {
+    use aida_core::git_ops;
+    if !git_ops::has_remote(store, "origin") {
+        return Ok(());
+    }
+    let branch = git_ops::current_branch(store)?;
+    let tip = head(store)?;
+    ensure!(
+        git_ops::push_exact(store, "origin", &tip, &branch)?,
+        "the roster already holds this edit locally, but the push was rejected; run \
+         `aida sync` first, then rerun the command"
+    );
+    Ok(())
 }
 
 pub(crate) fn nodes(command: &NodeCommand) -> Result<()> {
@@ -274,25 +348,27 @@ pub(crate) fn nodes(command: &NodeCommand) -> Result<()> {
             let mut cmd = Command::new("ssh-keygen");
             cmd.args(["-l", "-f"]).arg(tmp.path());
             run(cmd)?;
-            ensure!(
-                !roster.nodes.contains_key(node),
-                "node already enrolled; revoke before changing its key"
-            );
+            match roster.nodes.get(node) {
+                // Rerun after a raced push: the edit is already committed.
+                Some(existing) if *existing == key => return push_pending_roster(&store),
+                Some(_) => bail!("node already enrolled with another key; revoke it first"),
+                None => {}
+            }
             roster.nodes.insert(node.clone(), key);
             persist_checked(
                 &store,
-                ROSTER,
-                &serde_json::to_vec(&roster)?,
+                &[(ROSTER.into(), serde_json::to_vec(&roster)?)],
                 false,
                 Some(&tip),
             )
         }
         NodeCommand::Revoke { node } => {
-            ensure!(roster.nodes.remove(node).is_some(), "node is not enrolled");
+            if roster.nodes.remove(node).is_none() {
+                return push_pending_roster(&store);
+            }
             persist_checked(
                 &store,
-                ROSTER,
-                &serde_json::to_vec(&roster)?,
+                &[(ROSTER.into(), serde_json::to_vec(&roster)?)],
                 false,
                 Some(&tip),
             )
@@ -344,7 +420,8 @@ fn verify(receipt: &Receipt, signed: &Signed, roster: &Roster) -> Result<()> {
         "review receipt needs exact full head"
     );
     ensure!(
-        ChangeKey::parse(&receipt.change).is_some() && !receipt.specs.is_empty(),
+        ChangeKey::parse(&receipt.change).is_some_and(|c| c.as_key() == receipt.change)
+            && !receipt.specs.is_empty(),
         "unbound review receipt"
     );
     ensure!(
@@ -420,6 +497,31 @@ fn sign(config: &Publisher, value: &impl Serialize) -> Result<Signed> {
     })
 }
 
+/// The recorder/collector hook: the verdict is already durably on the local
+/// ledger, so a publication that cannot be issued is a reported pending
+/// state with its retry command, never a failure of the recorded verdict.
+pub(crate) fn publish_reported(
+    root: &Path,
+    change: ChangeKey,
+    record: &rv::JsonObj,
+    labels: &[String],
+) {
+    if let Err(e) = publish(root, change, record, labels) {
+        eprintln!(
+            "warning: the verdict for {} is recorded locally, but its review publication \
+             is pending: {e:#}\n  retry: aida review publish --pr {} --specs {} \
+             [--blocking-findings <filed finding IDs>]",
+            change.as_key(),
+            change.number,
+            if labels.is_empty() {
+                "<SPEC-IDS>".to_string()
+            } else {
+                labels.join(",")
+            }
+        );
+    }
+}
+
 /// Called only on the host writer path. A configuration opts that node into
 /// publication. Revalidate the ordinary local authority before issuing a receipt.
 pub(crate) fn publish(
@@ -428,10 +530,8 @@ pub(crate) fn publish(
     record: &rv::JsonObj,
     labels: &[String],
 ) -> Result<()> {
-    let config = match std::fs::read(root.join(CONFIG)) {
-        Ok(bytes) => serde_json::from_slice::<Publisher>(&bytes)?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
+    let Some(config) = publisher(root)? else {
+        return Ok(());
     };
     ensure!(
         !super::ledger::contained(),
@@ -512,29 +612,27 @@ pub(crate) fn publish(
     );
     origins.sort();
     origins.dedup();
+    let tip = head(&store)?;
+    let key = change.as_key();
+    let spec_keys: Vec<SpecKey> = specs.members.iter().map(|s| s.key).collect();
     let receipt = Receipt {
         version: 1,
         node: config.node.clone(),
         publication: Uuid::new_v4(),
-        supersedes: publications(root)?
+        supersedes: load_receipts(root, &store, &tip, &key)?
             .iter()
-            .filter(|(r, _)| r.node == config.node && r.change == change.as_key())
-            .map(|(r, _)| r.publication)
+            .filter(|(r, ..)| r.node == config.node)
+            .map(|(r, ..)| r.publication)
             .collect(),
         repository: repository(root)?,
-        change: change.as_key(),
+        change: key.clone(),
         head: verdict
             .reviewed_sha
             .clone()
             .context("missing exact review head")?,
-        specs: specs.members.iter().map(|s| s.key).collect(),
+        specs: spec_keys.clone(),
         blocking_finding_origin_ids: origins,
-        authors: author_evidence(
-            root,
-            change,
-            verdict.reviewed_sha.as_deref().unwrap_or(""),
-            &specs.members.iter().map(|s| s.key).collect::<Vec<_>>(),
-        )?,
+        authors: author_evidence(root, change, &spec_keys)?,
         reviewer_actor: verdict
             .recorded_by
             .clone()
@@ -558,84 +656,94 @@ pub(crate) fn publish(
         "reviewer is an author across nodes"
     );
     let signed = sign(&config, &receipt)?;
-    verify(&receipt, &signed, &roster(&store, &head(&store)?)?)?;
-    persist(
-        &store,
-        &format!(
-            "{PUBLICATIONS}/{}/{}.json",
-            receipt.node, receipt.publication
-        ),
-        &serde_json::to_vec(&signed)?,
-        true,
-    )
+    verify(&receipt, &signed, &roster(&store, &tip)?)?;
+    let mut files = vec![(
+        evidence_path(&key, PUBLICATIONS, &receipt.node, receipt.publication),
+        serde_json::to_vec(&signed)?,
+    )];
+    // Spec routing markers: a spec-keyed reader finds its changes without
+    // reading any other change's evidence.
+    for spec in &receipt.specs {
+        files.push((
+            format!("{SPEC_INDEX}/{spec}/{key}"),
+            key.clone().into_bytes(),
+        ));
+    }
+    persist(&store, &files, true)
 }
 
-fn publications(root: &Path) -> Result<Vec<(Receipt, PathBuf)>> {
-    let Some(store) = store(root) else {
+/// Every committed receipt of one change, parsed and identity-checked (not
+/// yet signature-verified). An unreadable blob refuses this change only.
+fn load_receipts(
+    root: &Path,
+    store: &Path,
+    tip: &str,
+    change: &str,
+) -> Result<Vec<(Receipt, Signed, String)>> {
+    let names = list(store, tip, &evidence_dir(change, PUBLICATIONS))?;
+    if names.is_empty() {
         return Ok(Vec::new());
+    }
+    let repository = repository(root)?;
+    let mut out = Vec::new();
+    let mut total = 0;
+    let started = std::time::Instant::now();
+    for name in names {
+        ensure!(
+            started.elapsed() < Duration::from_secs(20),
+            "publication read deadline exhausted"
+        );
+        let bytes = blob(store, tip, &name)?.context("publication vanished")?;
+        total += bytes.len();
+        ensure!(
+            total <= 8 * CAP,
+            "review publication aggregate budget exhausted"
+        );
+        let signed: Signed = serde_json::from_slice(&bytes)
+            .with_context(|| format!("malformed review publication {name}"))?;
+        let receipt: Receipt = serde_json::from_str(&signed.payload)
+            .with_context(|| format!("malformed review receipt {name}"))?;
+        ensure!(
+            receipt.change == change
+                && name == evidence_path(change, PUBLICATIONS, &receipt.node, receipt.publication),
+            "publication identity/path mismatch"
+        );
+        if receipt.repository != repository {
+            continue;
+        }
+        out.push((receipt, signed, name));
+    }
+    Ok(out)
+}
+
+/// A local store directory that is not a Git repository has no publication
+/// authority; an attempted review namespace or explicit publisher there still
+/// goes through strict refusal.
+fn store_view(root: &Path) -> Result<Option<(PathBuf, String)>> {
+    let Some(store) = store(root) else {
+        return Ok(None);
     };
-    // A legacy/local-only store directory can be discovered without being a
-    // Git repository. It has no publication authority. Any attempted review
-    // namespace or explicit publisher there still goes through strict refusal.
     let absent = |path: &Path| matches!(std::fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
     if absent(&store.join(".git"))
         && absent(&store.join("HEAD"))
         && absent(&store.join("reviews"))
         && absent(&root.join(CONFIG))
     {
-        return Ok(Vec::new());
+        return Ok(None);
     }
     let tip = head(&store)?;
-    let names = git(
-        &store,
-        &["ls-tree", "-r", "--name-only", &tip, "--", PUBLICATIONS],
-    )?;
-    let names = String::from_utf8(names)?;
-    ensure!(
-        names.lines().count() <= MAX_PUBLICATIONS,
-        "review publication read budget exhausted"
-    );
-    let repository = if names.is_empty() {
-        String::new()
-    } else {
-        repository(root)?
-    };
-    let mut out = Vec::new();
-    let mut total = 0;
-    let started = std::time::Instant::now();
-    for name in names.lines() {
-        ensure!(
-            started.elapsed() < Duration::from_secs(20),
-            "publication read deadline exhausted"
-        );
-        let bytes = blob(&store, &tip, name)?.context("publication vanished")?;
-        total += bytes.len();
-        ensure!(
-            total <= 8 * CAP,
-            "review publication aggregate budget exhausted"
-        );
-        let signed: Signed = serde_json::from_slice(&bytes)?;
-        let receipt: Receipt = serde_json::from_str(&signed.payload)?;
-        ensure!(
-            name == format!(
-                "{PUBLICATIONS}/{}/{}.json",
-                receipt.node, receipt.publication
-            ),
-            "publication identity/path mismatch"
-        );
-        if receipt.repository != repository {
-            continue;
-        }
-        out.push((receipt, store.join(name)));
-    }
-    ensure!(
-        head(&store)? == tip,
-        "review roster/store moved during publication validation"
-    );
-    Ok(out)
+    Ok(Some((store, tip)))
 }
+
 fn reference(r: &Receipt) -> String {
-    format!("publication:{}:{}", r.node, r.publication)
+    format!("publication:{}:{}:{}", r.change, r.node, r.publication)
+}
+fn parse_reference(id: &str) -> Option<(String, String, Uuid)> {
+    let mut parts = id.strip_prefix("publication:")?.splitn(3, ':');
+    let change = ChangeKey::parse(parts.next()?)?.as_key();
+    let node = parts.next().filter(|n| node_valid(n))?.to_string();
+    let id = Uuid::parse_str(parts.next()?).ok()?;
+    Some((change, node, id))
 }
 fn body(r: &Receipt) -> Result<String> {
     let att = rv::RecorderAttestation {
@@ -655,85 +763,112 @@ fn body(r: &Receipt) -> Result<String> {
     }))?)
 }
 
-/// One current answer per node; concurrent independent refusals cannot be erased
-/// by an approval on another node. UUIDs identify publications, not wall-clock
-/// or local ledger sequence. Supersession is signed and scoped to one publisher.
-fn current_for(
+/// The change's current head as this node's code checkout knows it: the tip
+/// of the reviewed branch (`origin/<branch>`, else the local branch). When no
+/// branch resolves, publications that all name one head answer; several
+/// heads with no resolvable branch cannot be ordered and refuse this change.
+fn current_head(
     root: &Path,
-    ids: &[&str],
+    change: &str,
+    receipts: &[&(Receipt, Signed, String)],
+) -> Result<String> {
+    let mut tips = std::collections::BTreeSet::new();
+    for branch in receipts.iter().filter_map(|(r, ..)| r.branch.as_deref()) {
+        if let Some(tip) = branch_tip(root, branch) {
+            tips.insert(tip);
+        }
+    }
+    if tips.len() == 1 {
+        return Ok(tips.into_iter().next().unwrap_or_default());
+    }
+    let heads: std::collections::BTreeSet<String> = receipts
+        .iter()
+        .map(|(r, ..)| r.head.to_ascii_lowercase())
+        .collect();
+    ensure!(
+        heads.len() == 1,
+        "cannot tell which head of {change} is current: its publications name several \
+         heads and its branch is not fetched here; fetch the branch and retry"
+    );
+    Ok(heads.into_iter().next().unwrap_or_default())
+}
+fn branch_tip(root: &Path, branch: &str) -> Option<String> {
+    if branch.is_empty() || branch.starts_with('-') || branch.contains("..") {
+        return None;
+    }
+    ["refs/remotes/origin/", "refs/heads/"]
+        .iter()
+        .find_map(|prefix| {
+            git(
+                root,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "-q",
+                    &format!("{prefix}{branch}^{{commit}}"),
+                ],
+            )
+            .ok()
+            .and_then(|out| text(out).ok())
+            .filter(|sha| sha.len() == 40)
+            .map(|sha| sha.to_ascii_lowercase())
+        })
+}
+
+/// The current publication of ONE change: verified, unrevoked, causal
+/// supersession applied per node, and restricted to the change's current head
+/// (`expected_head`, else [`current_head`]). Publications at another head are
+/// stale and never block or credit this head. One current answer per node;
+/// a refusal from any node at this head wins over approvals.
+fn select(
+    root: &Path,
+    change: ChangeKey,
+    spec_ids: &[&str],
     expected_head: Option<&str>,
-) -> Result<Option<rv::CurrentVerdict>> {
-    let all = publications(root)?;
+) -> Result<Option<(Receipt, String)>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(None);
+    };
+    let key = change.as_key();
+    let all = load_receipts(root, &store, &tip, &key)?;
     if all.is_empty() {
         return Ok(None);
     }
-    let snapshot = Snapshot::at_head(root)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?
-        .context("missing canonical review snapshot")?;
-    let keys = snapshot
-        .resolve(ids)
-        .members
-        .into_iter()
-        .map(|s| s.key)
-        .collect::<Vec<_>>();
+    let roster = roster(&store, &tip)?;
     let mut relevant: Vec<_> = all
         .iter()
-        .filter(|(r, _)| {
-            ids.iter()
-                .any(|id| ChangeKey::parse(id).is_some_and(|c| c.as_key() == r.change))
-                || r.specs.iter().any(|k| keys.contains(k))
-        })
+        .filter(|(r, ..)| roster.nodes.contains_key(&r.node))
         .collect();
-    // A later publication can remove a spec from its coverage. Select the
-    // whole change's causal history before checking the surviving coverage.
-    let changes: Vec<_> = relevant.iter().map(|(r, _)| r.change.clone()).collect();
-    relevant = all
-        .iter()
-        .filter(|(r, _)| changes.contains(&r.change))
-        .collect();
-    let store = store(root).context("missing review store")?;
-    let tip = head(&store)?;
-    let roster = roster(&store, &tip)?;
-    let had_relevant = !relevant.is_empty();
-    relevant.retain(|(r, _)| roster.nodes.contains_key(&r.node));
     ensure!(
-        !had_relevant || !relevant.is_empty(),
-        "all relevant review publishing nodes were revoked"
+        !relevant.is_empty(),
+        "all review publishing nodes of {key} were revoked"
     );
-    let verification_started = std::time::Instant::now();
-    for (r, path) in &relevant {
+    let started = std::time::Instant::now();
+    for (r, signed, _) in &relevant {
         ensure!(
-            verification_started.elapsed() < Duration::from_secs(20),
+            started.elapsed() < Duration::from_secs(20),
             "review verification deadline exhausted"
         );
-        let rel = path
-            .strip_prefix(&store)?
-            .to_str()
-            .context("publication path")?;
-        let signed: Signed =
-            serde_json::from_slice(&blob(&store, &tip, rel)?.context("missing publication")?)?;
-        verify(r, &signed, &roster)?;
+        verify(r, signed, &roster)?;
     }
-    // Only verified relevant publications may supersede evidence. Unverified
-    // bodies from another spec must never erase a refusal during alias selection.
+    // Supersession is signed and scoped to one publisher of this change.
     let mut pending: Vec<_> = relevant
         .iter()
-        .map(|(r, _)| (r.node.clone(), r.publication))
+        .map(|(r, ..)| (r.node.clone(), r.publication))
         .collect();
     while !pending.is_empty() {
         let before = pending.len();
         let ready: Vec<_> = pending
             .iter()
             .filter(|(node, id)| {
-                let r = relevant
+                relevant
                     .iter()
-                    .find(|(r, _)| r.node == *node && r.publication == *id)
-                    .unwrap()
-                    .0
-                    .clone();
-                !r.supersedes
-                    .iter()
-                    .any(|old| pending.contains(&(node.clone(), *old)))
+                    .find(|(r, ..)| r.node == *node && r.publication == *id)
+                    .is_some_and(|(r, ..)| {
+                        !r.supersedes
+                            .iter()
+                            .any(|old| pending.contains(&(node.clone(), *old)))
+                    })
             })
             .cloned()
             .collect();
@@ -745,53 +880,33 @@ fn current_for(
     }
     let superseded: Vec<_> = relevant
         .iter()
-        .flat_map(|(r, _)| {
-            r.supersedes
-                .iter()
-                .map(|id| (r.node.clone(), r.change.clone(), *id))
-        })
+        .flat_map(|(r, ..)| r.supersedes.iter().map(|id| (r.node.clone(), *id)))
         .collect();
-    relevant
-        .retain(|(r, _)| !superseded.contains(&(r.node.clone(), r.change.clone(), r.publication)));
+    relevant.retain(|(r, ..)| !superseded.contains(&(r.node.clone(), r.publication)));
     ensure!(
-        !had_relevant || !relevant.is_empty(),
+        !relevant.is_empty(),
         "review publication selection lost all evidence"
     );
+    let change_head = match expected_head {
+        Some(h) => h.trim().to_ascii_lowercase(),
+        None => current_head(root, &key, &relevant)?,
+    };
+    relevant.retain(|(r, ..)| r.head.eq_ignore_ascii_case(&change_head));
     if relevant.is_empty() {
+        // Every surviving publication reviewed another head: stale here.
         return Ok(None);
     }
-    relevant.retain(|(r, _)| {
-        ids.iter()
-            .any(|id| ChangeKey::parse(id).is_some_and(|c| c.as_key() == r.change))
-            || r.specs.iter().any(|k| keys.contains(k))
-    });
-    ensure!(
-        !had_relevant || !relevant.is_empty(),
-        "current publication no longer covers these specs"
-    );
-    if let Some(head) = expected_head {
-        relevant.retain(|(r, _)| r.head.eq_ignore_ascii_case(head));
-        ensure!(
-            !had_relevant || !relevant.is_empty(),
-            "no signed review publication matches the current change head"
-        );
-    }
-    relevant.sort_by(|(a, _), (b, _)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
-    let blocking = relevant.iter().find(|(r, _)| r.decision != "approved");
-    let (receipt, path) = if let Some(blocking) = blocking {
-        *blocking
-    } else {
-        let first = relevant[0];
-        ensure!(
-            relevant
-                .iter()
-                .all(|(r, _)| r.change == first.0.change && r.head == first.0.head),
-            "concurrent review publications disagree on change/head"
-        );
-        first
-    };
+    relevant.sort_by(|(a, ..), (b, ..)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
+    let (receipt, _, rel) = relevant
+        .iter()
+        .find(|(r, ..)| r.decision != "approved")
+        .copied()
+        .unwrap_or(relevant[0]);
+    let snapshot = Snapshot::at_head(root)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .context("missing canonical review snapshot")?;
     if receipt.decision == "approved" {
-        let requested = snapshot.resolve(ids);
+        let requested = snapshot.resolve(spec_ids);
         ensure!(
             requested.unresolved.is_empty()
                 && requested.ambiguous.is_empty()
@@ -814,15 +929,110 @@ fn current_for(
         head(&store)? == tip,
         "review roster changed during selection"
     );
+    Ok(Some((receipt.clone(), rel.clone())))
+}
+
+/// The change a spec-keyed read selects: of the changes whose receipts
+/// covered the spec, the newest (highest number). An older change's
+/// refusal never answers for the spec once a newer change carries it.
+fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(None);
+    };
+    if git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty() {
+        return Ok(None);
+    }
+    let snapshot = Snapshot::at_head(root)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .context("missing canonical review snapshot")?;
+    let mut newest: Option<ChangeKey> = None;
+    for member in snapshot.resolve(spec_ids).members {
+        let dir = format!("{SPEC_INDEX}/{}", member.key);
+        for name in list(&store, &tip, &dir)? {
+            let Some(change) = name
+                .rsplit('/')
+                .next()
+                .and_then(ChangeKey::parse)
+                .filter(|c| name.ends_with(&c.as_key()))
+            else {
+                continue;
+            };
+            if newest.is_none_or(|n| change.number > n.number) {
+                newest = Some(change);
+            }
+        }
+    }
+    Ok(newest)
+}
+
+/// Change ids select their own change (spec ids are then coverage the
+/// approval must hold). Spec-only ids route through [`spec_change`].
+fn current_for(
+    root: &Path,
+    ids: &[&str],
+    expected_head: Option<&str>,
+) -> Result<Option<rv::CurrentVerdict>> {
+    let changes: Vec<ChangeKey> = ids.iter().filter_map(|id| ChangeKey::parse(id)).collect();
+    let spec_ids: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| ChangeKey::parse(id).is_none())
+        .collect();
+    let changes = if changes.is_empty() {
+        spec_change(root, &spec_ids)?.into_iter().collect()
+    } else {
+        changes
+    };
+    let mut chosen: Option<(Receipt, String)> = None;
+    for change in changes {
+        if let Some(selected) = select(root, change, &spec_ids, expected_head)? {
+            let blocks = selected.0.decision != "approved";
+            if chosen.is_none() || blocks {
+                chosen = Some(selected);
+            }
+            if blocks {
+                break;
+            }
+        }
+    }
+    let Some((receipt, rel)) = chosen else {
+        return Ok(None);
+    };
+    let store = store(root).context("missing review store")?;
     Ok(Some(rv::CurrentVerdict {
-        body: body(receipt)?,
-        source: rv::VerdictSource::File(path.clone()),
+        body: body(&receipt)?,
+        source: rv::VerdictSource::File(store.join(rel)),
         written_at: None,
     }))
 }
 
-/// Synced evidence wins. Invalid evidence becomes an explicit non-approval;
-/// Option-shaped legacy readers must never fall back to a local approval.
+/// The disagreement report between a local verdict and the synced selection
+/// at the same head (AC3). Different heads are staleness, not disagreement.
+pub(crate) fn disagreement(
+    id: &str,
+    local: &rv::RecordedVerdict,
+    remote: &rv::RecordedVerdict,
+) -> Option<String> {
+    let (Some(local_head), Some(remote_head)) = (&local.reviewed_sha, &remote.reviewed_sha) else {
+        return None;
+    };
+    if !local_head.eq_ignore_ascii_case(remote_head)
+        || (local.kind == remote.kind && local.findings == remote.findings)
+    {
+        return None;
+    }
+    Some(format!(
+        "review publication/local verdict disagreement for {id} at {}: local {:?}, synced \
+         {:?}; using the synced evidence",
+        &remote_head[..remote_head.len().min(12)],
+        local.kind,
+        remote.kind
+    ))
+}
+
+/// Synced evidence wins. Invalid evidence becomes an explicit non-approval
+/// for the affected change only; Option-shaped legacy readers must never fall
+/// back to a local approval over a refused publication.
 pub(crate) fn current(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, None)
 }
@@ -834,15 +1044,15 @@ pub(crate) fn current_at_head(root: &Path, ids: &[&str], head: &str) -> Option<r
 fn resolve_current(root: &Path, ids: &[&str], head: Option<&str>) -> Option<rv::CurrentVerdict> {
     match current_for(root, ids, head) {
         Ok(value) => {
-            if let Some(remote) = &value {
+            if let Some(remote) = value
+                .as_ref()
+                .and_then(|v| rv::parse_recorded_verdict(&v.body))
+            {
                 for id in ids {
-                    if let Some(local) = super::ledger::project::newest_verdict(root, id) {
-                        let local = rv::parse_ledger_record(&local);
-                        let remote = rv::parse_recorded_verdict(&remote.body);
-                        if matches!((local, remote), (Some(a), Some(b)) if a.kind != b.kind || a.reviewed_sha != b.reviewed_sha || a.findings != b.findings)
-                        {
-                            eprintln!("review publication/local ledger disagreement for {id}; using synced evidence");
-                        }
+                    let local = super::ledger::project::newest_verdict(root, id)
+                        .and_then(|record| rv::parse_ledger_record(&record));
+                    if let Some(report) = local.and_then(|l| disagreement(id, &l, &remote)) {
+                        eprintln!("{report}");
                     }
                 }
             }
@@ -852,7 +1062,7 @@ fn resolve_current(root: &Path, ids: &[&str], head: Option<&str>) -> Option<rv::
             eprintln!("review publication refused: {e:#}");
             Some(rv::CurrentVerdict {
                 body: serde_json::json!({"verdict":"request-changes", "summary":format!("review publication refused: {e:#}")}).to_string(),
-                source: rv::VerdictSource::File(root.join(".aida-store").join(PUBLICATIONS)), written_at: None,
+                source: rv::VerdictSource::File(root.join(".aida-store").join(CHANGES)), written_at: None,
             })
         }
     }
@@ -865,27 +1075,27 @@ pub(crate) fn verified_identity(root: &Path, verdict: &rv::RecordedVerdict) -> R
         .attestation
         .as_ref()
         .context("missing publication attestation")?;
-    let id = att
+    let (change, node, id) = att
         .receipt_id
         .as_deref()
+        .and_then(parse_reference)
         .context("missing publication reference")?;
-    let all = publications(root)?;
-    let receipt = &all
-        .iter()
-        .find(|(r, _)| reference(r) == id)
-        .context("publication not found")?
-        .0;
-    let store = store(root).context("missing publication store")?;
-    let tip = head(&store)?;
-    let rel = format!(
-        "{PUBLICATIONS}/{}/{}.json",
-        receipt.node, receipt.publication
-    );
+    let (store, tip) = store_view(root)?.context("missing publication store")?;
+    let rel = evidence_path(&change, PUBLICATIONS, &node, id);
     let signed: Signed =
-        serde_json::from_slice(&blob(&store, &tip, &rel)?.context("missing signed publication")?)?;
-    verify(receipt, &signed, &roster(&store, &tip)?)?;
+        serde_json::from_slice(&blob(&store, &tip, &rel)?.context("publication not found")?)?;
+    let receipt: Receipt = serde_json::from_str(&signed.payload)?;
+    ensure!(
+        receipt.change == change && receipt.node == node && receipt.publication == id,
+        "publication identity/path mismatch"
+    );
+    ensure!(
+        receipt.repository == repository(root)?,
+        "publication belongs to another repository"
+    );
+    verify(&receipt, &signed, &roster(&store, &tip)?)?;
     let expected =
-        rv::parse_recorded_verdict(&body(receipt)?).context("invalid publication projection")?;
+        rv::parse_recorded_verdict(&body(&receipt)?).context("invalid publication projection")?;
     ensure!(
         &expected == verdict,
         "verdict differs from its signed publication"
@@ -915,20 +1125,6 @@ pub(crate) fn verified_identity(root: &Path, verdict: &rv::RecordedVerdict) -> R
         receipt.branch.as_deref(),
         |_| None,
     );
-    ensure!(
-        !receipt.authors.is_empty()
-            && receipt
-                .authors
-                .iter()
-                .all(|tokens| tokens.iter().any(|t| t.starts_with("session:"))),
-        "missing portable author identity evidence"
-    );
-    for tokens in &receipt.authors {
-        ensure!(
-            !authority::identities_overlap(tokens, &receipt.reviewer_identity),
-            "reviewer is an author across nodes"
-        );
-    }
     for author in authors {
         let tokens: Vec<_> = author
             .tokens
@@ -944,17 +1140,20 @@ pub(crate) fn verified_identity(root: &Path, verdict: &rv::RecordedVerdict) -> R
         head(&store)? == tip,
         "review roster changed during authority check"
     );
-    let selected = current_for(root, &[&receipt.change], Some(&receipt.head))?
+    let change_key = ChangeKey::parse(&change).context("publication change")?;
+    let (selected, _) = select(root, change_key, &[], Some(&receipt.head))?
         .context("publication is no longer current")?;
     ensure!(
-        selected.body == body(receipt)?,
+        selected == receipt,
         "publication was superseded or opposed by a refusal"
     );
     Ok(receipt.reviewer_identity.clone())
 }
 
-/// Portable author identity asserted by the trusted host opening a change.
-/// Contains only session identities, not grant/receipt/process authority.
+/// Portable author identity asserted by the trusted host opening or pushing a
+/// change. Contains only session identities, not grant/receipt/process
+/// authority. Authors accumulate per change: every head pushed through AIDA
+/// adds its author sessions, and a reviewer must differ from all of them.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Authorship {
@@ -964,20 +1163,31 @@ struct Authorship {
     repository: String,
     change: String,
     head: String,
+    branch: Option<String>,
     specs: Vec<SpecKey>,
     authors: Vec<Vec<String>>,
 }
 
-pub(crate) fn publish_authorship(start: &Path, change: ChangeKey, labels: &[String]) -> Result<()> {
+/// Publish author sessions for `change` at exactly `head` (the opened or
+/// pushed branch tip, never the caller checkout's HEAD).
+pub(crate) fn publish_authorship(
+    start: &Path,
+    change: ChangeKey,
+    labels: &[String],
+    head_sha: &str,
+    branch: Option<&str>,
+) -> Result<()> {
     let root = super::ledger::store_root(start)?;
-    let config = match std::fs::read(root.join(CONFIG)) {
-        Ok(bytes) => serde_json::from_slice::<Publisher>(&bytes)?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
+    let Some(config) = publisher(&root)? else {
+        return Ok(());
     };
     ensure!(
         !super::ledger::contained(),
         "contained callers cannot publish authorship"
+    );
+    ensure!(
+        head_sha.len() == 40 && head_sha.bytes().all(|b| b.is_ascii_hexdigit()),
+        "authorship needs the exact full head"
     );
     let store = store(&root).context("authorship requires distributed store")?;
     let (_, error) = authority::load_ledger_checked(&root);
@@ -1012,7 +1222,8 @@ pub(crate) fn publish_authorship(start: &Path, change: ChangeKey, labels: &[Stri
         publication: Uuid::new_v4(),
         repository: repository(start)?,
         change: change.as_key(),
-        head: head(start)?,
+        head: head_sha.to_ascii_lowercase(),
+        branch: branch.map(str::to_string),
         specs: set.members.iter().map(|s| s.key).collect(),
         authors,
     };
@@ -1020,64 +1231,105 @@ pub(crate) fn publish_authorship(start: &Path, change: ChangeKey, labels: &[Stri
     verify_signature(&config.node, &signed, &roster(&store, &head(&store)?)?)?;
     persist(
         &store,
-        &format!(
-            "{AUTHORSHIPS}/{}/{}.json",
-            evidence.node, evidence.publication
-        ),
-        &serde_json::to_vec(&signed)?,
+        &[(
+            evidence_path(
+                &evidence.change,
+                AUTHORSHIPS,
+                &evidence.node,
+                evidence.publication,
+            ),
+            serde_json::to_vec(&signed)?,
+        )],
         true,
     )
 }
+
+/// The host hook for every AIDA open of or push to a change: bind author
+/// sessions to the pushed branch tip. Non-fatal: the change already exists
+/// on the forge, so a failure is reported with its retry, never a failed
+/// open (which would invite a duplicate PR).
+pub(crate) fn publish_change_authorship(
+    start: &Path,
+    change: ChangeKey,
+    branch: &str,
+    specs: &[String],
+) {
+    let configured = super::ledger::store_root(start)
+        .ok()
+        .and_then(|root| publisher(&root).ok().flatten())
+        .is_some();
+    if !configured || change.number == 0 {
+        return;
+    }
+    let result = branch_tip(start, branch)
+        .with_context(|| format!("cannot resolve the pushed tip of {branch}"))
+        .and_then(|tip| publish_authorship(start, change, specs, &tip, Some(branch)));
+    if let Err(e) = result {
+        eprintln!(
+            "warning: {} is open, but its author publication is pending: {e:#}\n  retry from \
+             a checkout of {branch}: aida review authorship --pr {} --specs {}",
+            change.as_key(),
+            change.number,
+            specs.join(",")
+        );
+    }
+}
+
+/// The CLI form: bind the current checkout's HEAD and branch.
+pub(crate) fn publish_checkout_authorship(start: &Path, pr: u64, specs: &[String]) -> Result<()> {
+    let sha = head(start)?;
+    let branch = text(git(start, &["rev-parse", "--abbrev-ref", "HEAD"])?)?;
+    let branch = (branch != "HEAD").then_some(branch);
+    publish_authorship(start, ChangeKey::pr(pr), specs, &sha, branch.as_deref())
+}
+
+/// Signed author sessions for `change`, unioned over every head published
+/// for it (authors only accumulate, so a rework or update-branch head keeps
+/// the earlier heads' exclusions). Only enrolled-node signed evidence counts.
 fn author_evidence(
     root: &Path,
     change: ChangeKey,
-    sha: &str,
     required_specs: &[SpecKey],
 ) -> Result<Vec<Vec<String>>> {
     let store = store(root).context("missing author store")?;
     let tip = head(&store)?;
     let roster = roster(&store, &tip)?;
-    let names = text(git(
-        &store,
-        &["ls-tree", "-r", "--name-only", &tip, "--", AUTHORSHIPS],
-    )?)?;
-    ensure!(
-        names.lines().count() <= MAX_PUBLICATIONS,
-        "authorship read budget exhausted"
-    );
+    let key = change.as_key();
+    let names = list(&store, &tip, &evidence_dir(&key, AUTHORSHIPS))?;
     let repository = repository(root)?;
     let mut authors = Vec::new();
     let mut covered = Vec::new();
     let started = std::time::Instant::now();
     let mut bytes_read = 0;
-    for name in names.lines() {
+    for name in names {
         ensure!(
             started.elapsed() < Duration::from_secs(20),
             "authorship read deadline exhausted"
         );
-        let bytes = blob(&store, &tip, name)?.context("missing authorship")?;
+        let bytes = blob(&store, &tip, &name)?.context("missing authorship")?;
         bytes_read += bytes.len();
         ensure!(bytes_read <= 8 * CAP, "authorship byte budget exhausted");
         let signed: Signed = serde_json::from_slice(&bytes)?;
         let value: Authorship = serde_json::from_str(&signed.payload)?;
         ensure!(
             value.version == 1
-                && name == format!("{AUTHORSHIPS}/{}/{}.json", value.node, value.publication),
+                && value.change == key
+                && name == evidence_path(&key, AUTHORSHIPS, &value.node, value.publication),
             "invalid authorship identity/version"
         );
         ensure!(
             serde_json::to_string(&value)? == signed.payload,
             "noncanonical authorship"
         );
-        if value.repository != repository || value.change != change.as_key() || value.head != sha {
+        if value.repository != repository {
             continue;
         }
         verify_signature(&value.node, &signed, &roster)?;
         covered.extend(value.specs);
         authors.extend(value.authors);
     }
-    // Only signed exact-change/head evidence establishes the author set.
-    // Unrelated local leases cannot fill missing remote author evidence.
+    // Only signed change evidence establishes the author set. Unrelated
+    // local leases cannot fill missing remote author evidence.
     ensure!(
         required_specs.iter().all(|key| covered.contains(key)),
         "missing portable author spec coverage"
@@ -1091,7 +1343,7 @@ fn author_evidence(
             && authors
                 .iter()
                 .all(|a| a.iter().any(|t| t.starts_with("session:"))),
-        "missing portable author identity evidence; publish authorship at the current head first"
+        "missing portable author identity evidence; publish authorship for the change first"
     );
     ensure!(
         head(&store)? == tip,
@@ -1131,25 +1383,15 @@ pub(crate) fn overlay_view(
     set: &super::canon::CanonicalSet,
     view: &mut super::effective::LedgerView,
 ) -> Result<()> {
-    let Some(remote) = current_for(root, &[&change.as_key()], None)? else {
+    let Some((receipt, _)) = select(root, change, &[], None)? else {
         return Ok(());
     };
-    let verdict =
-        rv::parse_recorded_verdict(&remote.body).context("invalid publication projection")?;
+    let text = body(&receipt)?;
+    let verdict = rv::parse_recorded_verdict(&text).context("invalid publication projection")?;
     if verdict.kind.approves() {
         verified_identity(root, &verdict)?;
     }
-    let obj: rv::JsonObj = serde_json::from_str(&remote.body)?;
-    let all = publications(root)?;
-    let att = verdict
-        .attestation
-        .as_ref()
-        .context("missing review publication identity")?;
-    let receipt = &all
-        .iter()
-        .find(|(r, _)| att.receipt_id.as_deref() == Some(reference(r).as_str()))
-        .context("missing review publication")?
-        .0;
+    let obj: rv::JsonObj = serde_json::from_str(&text)?;
     view.change_events.retain(|event| {
         !matches!(
             event.body,
