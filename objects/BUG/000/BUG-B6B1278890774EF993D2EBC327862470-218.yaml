@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T09:49:38.583922620Z
+modified_at: 2026-11-05T09:49:41.622566801Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -40,6 +40,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Empty-rework classification, one retry with a brief, and the advisor escalation are implemented and unit-tested. But the --required checks probe hard-errors when a PR head has no checks, so a CONFLICTING PR whose head never got CI fails the lane with an error instead of being requeued. CI was still pending at review time.. Triage reason: Address the request-changes review on #3413 (see the PR''s latest Review comment and .aida/review-verdicts/BUG-2452.json); push to branch bug-b6b1278890774ef993d2ebc327862470-218, no new branch.'
   created_at: 2026-11-05T09:49:38.583919194Z
   modified_at: 2026-11-05T09:49:38.583919194Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1d-3900-7750-96f5-518ba0849c7b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 618889ca0842
+    Recorded: 2026-11-05T07:46:02.913386792+00:00
+    Findings:
+    1. standalone_empty_rework.rs:117-131 (inspect): the 'gh pr checks --required' branch passes non-JSON output to forge::required_checks_from_output, which only accepts gh's 'no required checks reported' stderr. When the PR head has no checks at all, gh prints 'no checks reported on the <branch> branch' and exits 1. That bails with 'train required-check read failed', inspect() returns Err, and run()'s '?' fails the lane with a generic error: no auto-brief, no requeue, no receipt. GitHub does not run pull_request workflows on a PR with merge conflicts, so this hits the CONFLICTING trigger from acceptance (1)/(2) directly. The configured-checks branch a few lines below already treats this output as 'no rows' via pr_ship::gh_pr_checks_output_is_unregistered; use the same handling here (or treat it as empty rows), and add a test with a gh stub that prints 'no checks reported' together with mergeable=CONFLICTING.
+    2. standalone_empty_rework.rs:94-104 (inspect): when seat.pushed_since(launch.head) is None (the seat's git cannot tell), the guard falls back to comparing forge heads. LaunchSeat::is_stale's own comment says the forge PR head lags a push by seconds. Both reads (after and confirmed) happen right after the lane exits, so a lane that did push can still see the old head and be wrongly classified as an empty rework (spurious brief and requeue; a second false hit escalates to the advisor). Either skip the guard when pushed_since is None, or re-read after a short bounded delay before classifying. Add a test for the pushed_since=None case.
+    3. standalone_empty_rework.rs:66 (reasons): a blocking verdict with no summary falls back to verdict.raw, the whole recorded verdict JSON, which then gets embedded in the auto-brief, the queue note and the advisor mail. Use a short fallback such as the verdict kind instead (cosmetic).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:49:41.504011192Z
+  modified_at: 2026-11-05T09:49:41.504011192Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
