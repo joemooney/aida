@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T15:56:28.080591154Z
+modified_at: 2026-11-05T15:56:30.566138436Z
 req_type: Task
 tags:
 - area:containment
@@ -121,6 +121,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 code addresses all four prior findings (named per-check unsupported_reason, mocked stream/log tests, no --mode auto in adapter, Refs title), but the merge would still COMPLETE TASK-3048 via ship''s branch-name fallback, contradicting the PR''s deliberate non-completion; CI build jobs still queued at this head.. No triage reason was given.'
   created_at: 2026-11-05T15:56:28.080587673Z
   modified_at: 2026-11-05T15:56:28.080587673Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac6d-0d73-7fa3-9584-f85d3b54a210
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3426):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5a91eba5c63b
+    Recorded: 2026-11-05T13:47:45.379963072+00:00
+    Findings:
+    1. BLOCKING (completion leak): the PR intends no completion, but 'aida pr ship' would complete TASK-3048 on merge. Title '...; Refs STORY-2460; Refs TASK-3048' has no trailing paren group, so pr_ship.rs derive_squash_trailer (l.314-401) finds no title ids and no '(Refs …)' group (refs_spec_ids_in_text only reads paren groups, l.798), then falls back to the branch name 'task-b6b1278890774ef993d2ebc327862470-786'. extract_spec_ids_from_text (l.174, case-insensitive) maps it to TASK-B6B…-786, which resolves to TASK-3048 (verified with 'aida show'). TASK-3048 has no open slice children, so completion_held does not withhold it. Fix with PR metadata only: end the title with '(Refs STORY-2460, TASK-3048)' (BUG-2203 path, l.360-367) or add a whole-line 'aida: no-complete' marker to the PR body (NO_COMPLETE_BODY_MARKERS, l.224).
+    2. BLOCKING (same root, rebase path): branch commit 2d4a4f979f4 still has the subject '[AI:codex] fix: address CI failures and review findings (TASK-3048)' with a completing trailer. A rebase/merge-commit landing puts that subject on main, where merge-time auto-bump can complete TASK-3048. The squash body (repo squash_merge_commit_message=COMMIT_MESSAGES) also repeats it. Either reword that commit (rebase -i is unavailable to agents, so squash the branch into one commit titled '...; Refs STORY-2460 (Refs TASK-3048)') or confirm ship is squash-only for this PR and the title/body marker covers it.
+    3. EVIDENCE GAP (non-code): the Rust changes (launch/agy.rs tests, session.rs agy short-circuit, three updated refusal assertions) were never run locally (untested=true, check-ci-fast interrupted). At 5a91eba5c63 every CI build job (cli-0/1, lib-0/1, contracts, gates, rest) was still pending. A re-review must cite green CI at the new head, specifically launch::agy::tests, task_2631_containment_tests and bug_2144_2146 tests.
+    4. MINOR (acceptance not claimed, record only): TASK-3048 acceptance 'conformance harness passes for agy' remains unmet. Advisor host run at 2d4a4f979f4 reported C0-C4 unknown; auth host inventory incomplete (approved_auth_hosts empty); browser/URL/MCP disablement and private runtime are data-only in an unlaunchable adapter. That is correct for this Refs-only slice, but TASK-3048 must stay open: hence findings 1-2.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T15:56:30.451163339Z
+  modified_at: 2026-11-05T15:56:30.451163339Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
