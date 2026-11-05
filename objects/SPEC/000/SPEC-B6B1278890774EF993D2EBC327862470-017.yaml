@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-017
 agreed_id: TASK-2887
 title: Queue done skips its PR check when native seat branch lookup is refused
 description: 'While completing TASK-2852 from the standalone implementer clone /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-803, git branch --show-current and commit/push succeeded, but aida queue done TASK-2852 warned: queue-done PR-check skipped: current_branch_at returned None ... Gate did not fire. It then marked the task done and dequeued it. This appears to be another caller swallowing host_git_command''s seat-clone safety refusal (TASK-2852 fixes pr hold''s diagnostic only). Investigate preserving lookup errors and refusing or explicitly handling unavailable PR-check evidence rather than silently skipping the gate. No publication authority change was attempted in TASK-2852.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T17:05:53.929122922Z
-modified_at: 2026-11-05T18:57:00.987735800Z
+modified_at: 2026-11-05T19:30:17.702348229Z
 req_type: Task
 tags:
 - from-implementer:TASK-2852
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-11-05T18:22:04.314339713Z
   modified_at: 2026-11-05T18:22:04.314339713Z
   session_id: 01a1acea5bcc
+- id: 01a1ad30-c7e6-77b1-8dc2-359de29c2b6f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix logic is correct (branch-lookup failure now refuses queue done before mutation, error preserved, covered by unit + seat-clone tests), but the PR turns two CI gates red: portability ratchet (new /tmp literal) and CLI-manual drift guard (bare --skip-pr-check cited under the aida done section).. It was punted on: blocked-dependency: Implementation and validation complete (85 tests, formatting and diff checks passed), but this native seat mounts .git read-only: git add fails creating .git/index.lock with Read-only file system. Cannot commit, push, open a PR, or legitimately complete/dequeue. Please perform host-side commit and PR handoff from this dirty seat; detailed implementation and validation are in spec comments.. No triage reason was given.'
+  created_at: 2026-11-05T19:30:17.702346462Z
+  modified_at: 2026-11-05T19:30:17.702346462Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1acd1-6e75-7751-bfde-a9d6216d0d60
   author: joe
@@ -84,20 +90,14 @@ history:
   session_id: 01a1ad101604
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ad30-c7e6-77b1-8dc2-3580d89c4817
+  author: joe
+  timestamp: 2026-11-05T19:30:17.702328891Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70a5d68133a
-attention_reason:
-  category: blocked-dependency
-  detail: 'Implementation and validation complete (85 tests, formatting and diff checks passed), but this native seat mounts .git read-only: git add fails creating .git/index.lock with Read-only file system. Cannot commit, push, open a PR, or legitimately complete/dequeue. Please perform host-side commit and PR handoff from this dirty seat; detailed implementation and validation are in spec comments.'
-  lean: Publish the existing seven-file change from the host, then complete the queue item with the updated branch-lookup gate.
-  raised_by: implementer
-  raised_at: 2026-11-05T18:22:06.301315402Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fix logic is correct (branch-lookup failure now refuses queue done before mutation, error preserved, covered by unit + seat-clone tests), but the PR turns two CI gates red: portability ratchet (new /tmp literal) and CLI-manual drift guard (bare --skip-pr-check cited under the aida done section).'
-  recovery_hint: address the review findings, move TASK-2887 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T18:57:00.987735800Z
