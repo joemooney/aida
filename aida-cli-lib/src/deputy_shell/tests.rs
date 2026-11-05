@@ -649,21 +649,26 @@ fn wait_refuses_an_interrupted_claim_after_the_grace_expires() {
     let j = f.submit("true");
     std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
     std::fs::rename(f.q.incoming_job(&j.id), f.q.job_json(&j.id)).unwrap();
-    let begun = std::time::Instant::now();
+    let grace = Duration::from_millis(300);
     // No caller timeout: the claim grace itself must bound this wait.
     let q = f.q.clone();
     let id = j.id.clone();
     let (tx, rx) = std::sync::mpsc::channel();
     let waiter = std::thread::spawn(move || {
         let mut out = Vec::new();
-        let result = crate::deputy_shell_cmd::wait(&q, &id, None, &mut out);
-        let _ = tx.send((result, out));
+        let begun = std::time::Instant::now();
+        let result = crate::deputy_shell_cmd::wait_with_grace(&q, &id, None, grace, &mut out);
+        let _ = tx.send((result, out, begun.elapsed()));
     });
     // Keep a regression that removes the grace bound from hanging the suite.
-    let (result, out) = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    let (result, out, elapsed) = rx.recv_timeout(Duration::from_secs(5)).unwrap();
     waiter.join().unwrap();
     let err = result.unwrap_err();
-    assert!(begun.elapsed() >= Duration::from_secs(10));
+    assert!(elapsed >= grace, "refused before claim grace: {elapsed:?}");
+    assert!(
+        elapsed < grace + Duration::from_secs(1),
+        "refusal exceeded claim grace margin: {elapsed:?}"
+    );
     assert!(
         err.to_string().contains(&format!("no script job {}", j.id)),
         "{err}"
