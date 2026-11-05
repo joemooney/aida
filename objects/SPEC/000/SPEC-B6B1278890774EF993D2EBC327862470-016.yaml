@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:49:13.714847256Z
-modified_at: 2026-11-05T19:41:07.182422200Z
+modified_at: 2026-11-05T19:41:11.918840464Z
 req_type: Task
 tags:
 - from-implementer:TASK-2861
@@ -44,6 +44,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design is sound (random tempfile homes, boot+pidns-scoped sweep, live unshare regression), but all 3 CI failures at 072f3f0 are caused by this PR: raw kill(0) trips the TASK-1750 guard, raw current_exe() trips the TASK-1262 guard, and homes are not 0700 so the new ownership test fails.. No triage reason was given.'
   created_at: 2026-11-05T19:41:07.182420649Z
   modified_at: 2026-11-05T19:41:07.182420649Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad3a-c2c6-78d3-8308-089b82ab9fbb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2886):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 072f3f03d0c4
+    Recorded: 2026-11-05T18:58:35.366720142+00:00
+    Findings:
+    1. CI lib-1 FAIL (task_1750 production_code_has_no_raw_kill_zero_liveness_probe): aida-cli-lib/src/test_home.rs pid_is_alive (~L152-160) reintroduces a raw libc::kill(pid, 0) in production code (test_home.rs is outside #[cfg(test)] mod). Either route through aida_core::liveness (e.g. add a namespace-local ESRCH-only primitive there) or add a justified ALLOWED entry in aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs explaining why procfs-based liveness is unsound here; do not weaken the guard otherwise.
+    2. CI lib-0 FAIL (resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup): concurrent_pid_namespaces_keep_their_own_homes uses std::env::current_exe() (test_home.rs ~L718); the TASK-1262 ratchet scans every .rs under src/ including tests, allowing it only in aida_bin.rs/kernel.rs. Re-exec the test binary another way (e.g. std::env::args_os().next(), or /proc/self/exe read_link) or reuse an existing test-binary helper, without editing the ratchet's allow-list.
+    3. CI lib-0 FAIL (test_home::tests::unique_homes_and_sweeps_respect_namespace_ownership, test_home.rs:842): homes are not private. tempfile 3.25 Builder::tempdir_in only applies a mode when .permissions(...) is set (tempfile src/dir/imp/unix.rs), so the dir gets 0777&umask = 0755 on CI; the seat passed only because its umask was 077. Set .permissions(std::fs::Permissions::from_mode(0o700)) on the Builder in create_test_home_in (cfg(unix)) so the 'atomic, private' claim in the comment holds and the 0o700 assertion passes on any umask.
+    4. Cross-namespace regression can silently no-op: concurrent_pid_namespaces_keep_their_own_homes returns early with an eprintln SKIP when 'unshare --user --map-root-user --pid' fails (common on Ubuntu 24.04 runners with apparmor_restrict_unprivileged_userns=1). The spec asks for a concurrent cross-namespace regression; in the PR body/spec comment, state whether it actually ran on CI (cite log), and preferably make the skip visible (e.g. gate on an explicit env opt-out or assert availability when AIDA_REQUIRE_USERNS=1) so the regression is not a permanent green no-op.
+    5. Missing SAFETY comment on the new unsafe { libc::geteuid() } in sweep_stale_test_homes (test_home.rs ~L215) — every other new unsafe block has one; add a one-line SAFETY note (geteuid is always-successful, no preconditions).
+    6. Cosmetic: commit/PR subject '[AI:codex] fix: address CI failures and review findings (TASK-2886)' does not describe the change; the implementer's own requested subject was 'fix(tests): isolate lib homes across PID namespaces (TASK-2886)'. Retitle the PR so the squash subject is meaningful. Also note in the PR body that legacy PID-only aida-lib-test-home-<pid> dirs are now never swept (one-time manual cleanup of /tmp), which is acceptable but should be stated.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:41:11.750530762Z
+  modified_at: 2026-11-05T19:41:11.750530762Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
