@@ -9,12 +9,12 @@ description: |-
 
   PR: #3439
   Reviewed sha: 8ad9cd904437967d687eea6dce59a8856d78b7b1
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T19:25:00.132410097Z
-modified_at: 2026-11-05T20:26:50.531243565Z
+modified_at: 2026-11-05T20:26:53.590897663Z
 req_type: Task
 tags:
 - carried-from:TASK-3112
@@ -33,6 +33,14 @@ history:
   author: joe
   timestamp: 2026-11-05T20:25:34.015641953Z
   changes: []
+- id: 01a1ad64-9916-7f11-ba7d-0424b453babb
+  author: joe
+  timestamp: 2026-11-05T20:26:53.590895532Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main
