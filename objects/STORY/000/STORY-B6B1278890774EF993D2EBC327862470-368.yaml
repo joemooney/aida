@@ -24,12 +24,12 @@ description: |-
   - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
 
   Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T18:41:50.452059006Z
+modified_at: 2026-11-05T19:56:06.539627637Z
 req_type: Story
 relationships:
 - rel_type:
@@ -268,6 +268,14 @@ history:
   author: joe
   timestamp: 2026-11-05T18:41:51.752444084Z
   changes: []
+- id: 01a1ad48-6a9b-73a3-b510-5b497c6a80bf
+  author: joe
+  timestamp: 2026-11-05T19:56:06.684002599Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
