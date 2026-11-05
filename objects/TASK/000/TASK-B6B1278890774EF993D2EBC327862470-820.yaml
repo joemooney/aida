@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T16:07:18.560402482Z
+modified_at: 2026-11-05T16:15:31.875545132Z
 req_type: Task
 tags:
 - docs:impacted
@@ -208,6 +208,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ac7e-7823-7d80-bf96-1dc425b45d38
+  author: joe
+  timestamp: 2026-11-05T16:15:31.875564156Z
+  session_id: 01a1ac76d6a7
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -216,3 +224,9 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 3 finding 5 and mandatory new-commit publication blocked: git add cannot create .git/index.lock (read-only filesystem); this lease has no lane job runner. Findings 1–4 are fixed in the four-file working tree, including regression tests and corrections for the observed prior CI display-ID and portability ratchets. No new commit or green CI is claimed. Host-side commit/test/push to existing PR #3415 required.'
+  lean: Use the sanctioned host-side seat commit and publication path, run task_3096_intake_transport and bug_1502_format_json_audit plus fast gates, then independent review; retain supervised merge hold.
+  raised_by: implementer
+  raised_at: 2026-11-05T16:15:31.875545132Z
