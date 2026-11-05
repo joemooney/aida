@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:58:48.015622951Z
+modified_at: 2026-11-05T13:00:50.153492878Z
 req_type: Task
 tags:
 - area:containment
@@ -71,6 +71,19 @@ comments:
   created_at: 2026-11-05T12:57:17.136716828Z
   modified_at: 2026-11-05T12:57:17.136716828Z
   session_id: 01a1abbc157d
+- id: 01a1abcc-3869-7db1-a43a-d577e920d987
+  author: joe
+  content: |-
+    **Advisor host evidence at head 2d4a4f979f4 (deputy 3, 2026-11-05 05:59):** agy conformance still produces C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts.
+
+    - The fixture-scoped `permissions.allow` settings are generated and loaded correctly: `cli_setting_manager.go: CLI settings initialized: permissions=&{Allow:[write_file(<workspace>) command(...runner.py...)]}`.
+    - The denial comes from a different layer: `Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"`. It fires because `--mode auto` is unavailable for this account ("continuing in the default mode").
+    - So AC (1) of the brief (probes execute under headless agy) is **not met** by a permissions rule alone. Options for the implementer: drive the probes only through the allowed `command(... runner.py ...)` tool (no `write_file` dependency), or report agy as `unknown/unsupported: default-mode tool safety` with a named reason in the report instead of silent unknowns. Do not use `--dangerously-skip-permissions`.
+
+    Evidence: `~/aida-conformance-agy-PR3426-20261105/` (report.json, runtime/log/cli-*.log).
+  created_at: 2026-11-05T13:00:50.153492878Z
+  modified_at: 2026-11-05T13:00:50.153492878Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
