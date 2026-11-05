@@ -980,7 +980,7 @@
     }
   },
   "reassessment": {
-    "harness_sha256": "2e7349862fe8fc6f696ae8f98b1a86b7689c461093911fe3b5219d9ce0173f7d",
+    "harness_sha256": "f692a8eba927750f0a695e6524c224c606311eea09758cf05c15d7aae7681925",
     "new_vendor_execution": false,
     "reason": "Legacy payload was writable by replacement; before/after hashes do not exclude transient swaps. Withdraw all positive credit. C1/C2 also lack file-tool denial evidence and legacy EXDEV renames do not prove denial. Parent-observed violations remain failures.",
     "vendors": {
@@ -1183,7 +1183,7 @@
                 "result": "allowed"
               }
             },
-            "terminal_status": "fail"
+            "terminal_status": "unknown"
           },
           "C1": {
             "status": "unknown",

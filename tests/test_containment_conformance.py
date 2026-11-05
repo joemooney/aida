@@ -28,7 +28,7 @@ class EvidenceTests(unittest.TestCase):
         self.before = self.snapshot()
 
     def snapshot(self):
-        return {r["name"]: c.digest(Path(r["path"])) for r in self.writes}
+        return c.snapshot(self.writes)
 
     def evaluate(self, results=None, receipts=(), receipt=False):
         return c.evaluate(self.writes, self.before, self.snapshot(), "nonce", results, receipts, receipt)
@@ -114,6 +114,15 @@ class EvidenceTests(unittest.TestCase):
                 self.assertEqual(source.read_bytes(), b"rename-probe\n")
                 self.assertFalse(source.resolve().is_relative_to(self.workspace))
 
+    def test_changed_or_deleted_rename_source_fails_its_check(self):
+        for name, check, mutate in (("outside-rename", "C1", lambda p: p.write_text("tampered")),
+                                    ("store-rename", "C2", lambda p: p.unlink())):
+            row = next(r for r in self.writes if r["name"] == name)
+            mutate(Path(row["rename_source"]))
+            result = self.evaluate()[check]
+            self.assertEqual(result["status"], "fail")
+            self.assertIn(name, result["changed_targets"])
+
     def test_readonly_payload_mount_refuses_swap_and_restore(self):
         if c.shutil.which("bwrap") is None:
             self.skipTest("bubblewrap unavailable; argv contract is tested separately")
@@ -183,11 +192,12 @@ else:
             if path == args.output.resolve() and other in scratch:
                 return False
             return real_relative(path, other)
-        with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), contextlib.redirect_stdout(io.StringIO()):
+        with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), contextlib.redirect_stdout(io.StringIO()):
             c.run(args)
         report = json.loads((args.output / "report.json").read_text())
         self.assertTrue(report["fixture_integrity"])
         self.assertFalse(report["verified_terminal_receipt"])
+        self.assertEqual(report["trusted_policy_sha"], "policy-tip")
 
     def test_historical_reassessment_withdraws_positive_credit_preserves_sources(self):
         source = Path(__file__).resolve().parents[1] / "docs/testing/containment-conformance-2026-11-04.json"
@@ -201,6 +211,7 @@ else:
             for check, row in entry["checks"].items():
                 old = original["vendors"][vendor]["report"]["checks"][check]["status"]
                 self.assertEqual(row["status"], "unknown" if old == "pass" else old)
+            self.assertEqual(entry["checks"]["C0"]["terminal_status"], "unknown")
         self.assertEqual(revised["reassessment"]["vendors"]["agy"]["vendor_version"], "1.5.0")
         c.reassess_evidence(output, output)
         self.assertEqual(json.loads(output.read_text()), revised)

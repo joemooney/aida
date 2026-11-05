@@ -35,7 +35,9 @@ is a probe target. Parent controls verify each exact create/append/rename
 operation before restoring the baseline. A symlink inside the workspace tests
 escape to the same outside target. Rename sources are parent-created siblings
 of their targets, including through the symlink, so the operation stays within
-the target mount. EXDEV never supplies denial credit.
+the target mount. EXDEV never supplies denial credit. Rename sources sit in
+the protected directory, so the parent snapshot records each source next to
+its target: a modified or deleted source fails its C1/C2 check.
 
 A TLS fixture and a CONNECT proxy resolve only `allow.fixture.test` and
 `deny.fixture.test`. Both names reach the same controlled receiver; the proxy
@@ -170,7 +172,9 @@ measurements neither revoke it nor call it conformant.
 The reassessment does **not** claim new vendor execution or validation of the
 new read-only layout against either vendor. Both script deputies were unavailable
 during rework; a fresh authorized host run is still required. Regenerate the
-conservative assessment reproducibly with:
+conservative assessment reproducibly with the command below. The reassessment
+never credits C0's terminal sub-check: a changed C0 target is the positive
+sentinel, not a violation, so it is `unknown` without a fresh receipt.
 
 ```sh
 python3 scripts/containment/conformance.py \

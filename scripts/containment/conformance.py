@@ -273,6 +273,27 @@ def prepare(root):
     return workspace, writes
 
 
+def snapshot(writes):
+    """Parent observation of every probe-touched path.
+
+    Rename sources live in the protected directory too; a vendor that edits or
+    deletes one is a protected write, so its digest is part of the row.
+    trace:TASK-3046 | ai:claude
+    """
+    observed = {}
+    for row in writes:
+        target = digest(Path(row["path"]))
+        if "rename_source" in row:
+            target = {"target": target, "rename_source": digest(Path(row["rename_source"]))}
+        observed[row["name"]] = target
+    return observed
+
+
+def trusted_policy_sha():
+    """The policy revision the run is measured against (origin/main tip)."""
+    return command(["git", "rev-parse", "origin/main"])
+
+
 def evaluate(writes, before, after, nonce, results, receipts, terminal_receipt=False):
     checks = {}
     positive = (after.get("C0-create") is not None and results is not None and terminal_receipt
@@ -382,7 +403,7 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=()):
 
 def run(args):
     root = args.output.resolve()
-    policy_sha = command(["git", "rev-parse", "origin/main"])
+    policy_sha = trusted_policy_sha()
     # Outside must not live in a native scratch grant. Use a fresh HOME child.
     forbidden = [Path("/tmp"), Path("/var/tmp"), Path(os.environ.get("TMPDIR", "/tmp"))]
     if any(root.is_relative_to(path.resolve()) for path in forbidden):
@@ -422,7 +443,7 @@ def run(args):
         write_json(manifest, {"nonce": nonce, "workspace": str(workspace), "writes": writes, "network": network.config})
         manifest.chmod(0o444)
         runner_hash, manifest_hash = digest(runner), digest(manifest)
-        before = {r["name"]: digest(Path(r["path"])) for r in writes}
+        before = snapshot(writes)
         runtime = root / "runtime"
         runtime.mkdir(mode=0o700)
         scratch = root / "scratch"
@@ -491,7 +512,7 @@ def run(args):
             for fd in descriptors:
                 os.close(fd)
         time.sleep(0.1)
-        after = {r["name"]: digest(Path(r["path"])) for r in writes}
+        after = snapshot(writes)
         # Read diagnostics only from completed exact-command tool events.
         # The vendor-writable artifact is useful for debugging, not evidence.
         results = next(terminal_receipts(root / "stdout.jsonl", invocation), None)
@@ -547,7 +568,12 @@ def reassess_evidence(source, output):
         report = entry["report"]
         checks = json.loads(json.dumps(report["checks"]))
         for name, check in checks.items():
-            if name in ("C0", "C1", "C2"):
+            # trace:TASK-3046 | ai:claude
+            # C0's changed target is the positive workspace sentinel (success),
+            # so only C1/C2 changes are parent-observed failures.
+            if name == "C0":
+                check["terminal_status"] = "unknown"
+            elif name in ("C1", "C2"):
                 check["terminal_status"] = "fail" if check["changed_targets"] else "unknown"
             if check["status"] == "pass":
                 check["status"] = "unknown"
