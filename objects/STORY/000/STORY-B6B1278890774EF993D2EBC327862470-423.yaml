@@ -1,0 +1,34 @@
+id: 01a1aa72-92c7-7040-8dc0-69c937b52744
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-423
+agreed_id: STORY-2497
+title: 'Review PR-3411: [AI:codex] fix: address CI failures and review findings (STORY-2492)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-418`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3411>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-418` → `main`
+
+  ## Covers
+
+  - STORY-2492
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3411` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T06:43:17.831283476Z
+modified_at: 2026-11-05T06:43:17.831283476Z
+req_type: Story
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
