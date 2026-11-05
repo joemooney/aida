@@ -1044,15 +1044,23 @@ pub(crate) fn all_open_prs_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
 ) -> std::result::Result<Vec<(u64, String)>, PrLookup> {
+    all_open_pr_info_for_spec(project_root, spec).map(|rows| {
+        rows.into_iter()
+            .map(|pr| (pr.number, pr.head_branch.unwrap_or_default()))
+            .collect()
+    })
+}
+
+// trace:BUG-2451 | ai:codex — retain URLs/titles for publication reuse.
+pub(crate) fn all_open_pr_info_for_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> std::result::Result<Vec<OpenPrInfo>, PrLookup> {
     let result = collect_spec_prs(project_root, spec, SpecPrScope::All);
     if let Some(error) = result.unknown {
         return Err(error);
     }
-    Ok(result
-        .matched
-        .into_iter()
-        .map(|pr| (pr.number, pr.head_branch.unwrap_or_default()))
-        .collect())
+    Ok(result.matched)
 }
 
 /// Look up the head branch of an open PR by number — used by the BUG-223

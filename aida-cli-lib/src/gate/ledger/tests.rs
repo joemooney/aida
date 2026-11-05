@@ -2261,3 +2261,37 @@ fn bug_2451_train_publication_accepts_only_its_listed_riders() {
     assert_eq!(train.id, 99);
     assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_publication_refuses_two_found_changes_even_from_original_head() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.all_for_spec = Some(
+        [42, 43]
+            .into_iter()
+            .map(|id| crate::forge::ChangeRef {
+                id,
+                branch: format!("head-{id}"),
+                url: String::new(),
+                base: "main".into(),
+                title: None,
+            })
+            .collect(),
+    );
+    for branch in ["head-42", "head-43", "new-head"] {
+        let req = crate::forge::OpenChange {
+            branch: branch.into(),
+            base: "main".into(),
+            title: "fix".into(),
+            body: String::new(),
+            draft: false,
+        };
+        let error = super::open_change_bound(&forge, &root, req, &["BUG-2451".into()])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("#42") && error.contains("#43"), "{error}");
+    }
+    assert!(forge.opened.lock().unwrap().is_empty());
+}

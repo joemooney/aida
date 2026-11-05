@@ -319,28 +319,34 @@ pub(crate) fn open_change_bound_with_riders(
     // trace:BUG-2451 | ai:codex — all AIDA publication paths use this boundary.
     let mut existing = None;
     for spec in specs {
-        match forge.change_for_spec(spec)? {
-            crate::forge::ChangeLookup::NoChange => {}
-            crate::forge::ChangeLookup::Found(change) => {
-                if change.branch != req.branch && riders.contains(&change.id) {
-                    continue;
-                }
-                if change.branch != req.branch {
-                    anyhow::bail!("{spec} already has open change #{} on `{}`; refusing a second change from `{}`. Continue the existing branch.", change.id, change.branch, req.branch);
-                }
-                if existing
-                    .as_ref()
-                    .is_some_and(|prior: &crate::forge::ChangeRef| prior.id != change.id)
-                {
-                    anyhow::bail!(
-                        "credited specs belong to different open changes; refusing publication"
-                    );
-                }
-                existing = Some(change);
+        let changes: Vec<_> = forge
+            .open_changes_for_spec(spec)?
+            .into_iter()
+            .filter(|change| change.branch == req.branch || !riders.contains(&change.id))
+            .collect();
+        if changes.len() > 1 {
+            anyhow::bail!(
+                "{spec} has multiple open changes: {}; resolve duplicates before publication",
+                changes
+                    .iter()
+                    .map(|c| format!("#{} on `{}`", c.id, c.branch))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        for change in changes {
+            if change.branch != req.branch {
+                anyhow::bail!("{spec} already has open change #{} on `{}`; refusing a second change from `{}`. Continue the existing branch.", change.id, change.branch, req.branch);
             }
-            unknown => anyhow::bail!(
-                "cannot check existing changes for {spec}: {unknown:?}; refusing publication"
-            ),
+            if existing
+                .as_ref()
+                .is_some_and(|prior: &crate::forge::ChangeRef| prior.id != change.id)
+            {
+                anyhow::bail!(
+                    "credited specs belong to different open changes; refusing publication"
+                );
+            }
+            existing = Some(change);
         }
     }
     let change = match existing {

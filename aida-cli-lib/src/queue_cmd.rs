@@ -8991,7 +8991,8 @@ pub(crate) fn preclaim_branch_state(
 ///
 /// BUG-1763 narrowed the branch arm: only an **unmerged** branch refuses.
 /// A merged local branch is the normal residue of this repo's retention
-/// policy and must not block re-pickup.
+/// policy and must not block re-pickup. Session allocation uses a dated name
+/// after confirming the merge and absence of an open change for that branch.
 // trace:BUG-1761 | ai:codex
 // trace:BUG-1763 | ai:claude
 pub(crate) fn preclaim_collision_check(
@@ -11883,11 +11884,16 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
-    let rework_pr = rework_pr_head_branch_override(
-        &*crate::forge::forge_for_open_change(&project_root),
-        &plan,
-        branch_override,
-    )?;
+    // trace:BUG-2451 | ai:codex — session listing allocates nothing.
+    let rework_pr = if list_sessions {
+        None
+    } else {
+        rework_pr_head_branch_override(
+            &*crate::forge::forge_for_open_change(&project_root),
+            &plan,
+            branch_override,
+        )?
+    };
     // BUG-022: say which existing branch the rework must continue.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
     if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {

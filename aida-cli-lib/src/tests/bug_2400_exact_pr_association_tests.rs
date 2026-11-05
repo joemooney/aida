@@ -912,3 +912,31 @@ fn bug_2400_many_unrelated_open_prs_under_latency() {
     ));
     assert!(logged().contains("pulls/5000"));
 }
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_github_pickup_sees_all_open_prs_instead_of_first_match() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let rows = format!(
+        "{}{}",
+        row(42, "fix (BUG-2392)", "original"),
+        row(43, "fix (BUG-2392)", "duplicate")
+    );
+    std::fs::write(root.join("search"), &rows).unwrap();
+    std::fs::write(root.join("all"), &rows).unwrap();
+    let forge = crate::forge::GitHubForge::new(root);
+    use crate::forge::Forge as _;
+    let changes = forge.open_changes_for_spec("BUG-2392").unwrap();
+    assert_eq!(changes.len(), 2);
+    assert!(changes
+        .iter()
+        .all(|c| c.url.starts_with("https://example.test/pr/")));
+    let error = crate::session_start::pickup_pr_branch(&forge, "BUG-2392", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("#42") && error.contains("#43"), "{error}");
+}

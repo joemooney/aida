@@ -401,24 +401,39 @@ pub(crate) fn pickup_pr_branch(
     spec: &str,
     explicit: Option<&str>,
 ) -> Result<Option<(u64, String)>> {
-    use crate::forge::ChangeLookup;
     // Cluster, feature and path ownership have no single PR head.
     if !single_spec_pickup_scope(spec) {
         return Ok(None);
     }
-    match forge.change_for_spec(spec)? {
-        ChangeLookup::NoChange => Ok(None),
-        ChangeLookup::Found(change) => {
-            if change.branch.trim().is_empty() {
-                anyhow::bail!("open change #{} for {spec} has no head branch; refusing pickup", change.id);
-            }
-            if explicit.is_some_and(|branch| branch != change.branch) {
-                anyhow::bail!("{spec} has open change #{} on `{}`; --branch cannot fork its rework onto `{}`", change.id, change.branch, explicit.unwrap());
-            }
-            Ok(Some((change.id, change.branch)))
-        }
-        unknown => anyhow::bail!("cannot establish the open change for {spec}: {unknown:?}; retry before allocating a branch"),
+    let mut changes = forge.open_changes_for_spec(spec)?;
+    if changes.len() > 1 {
+        anyhow::bail!(
+            "{spec} has multiple open changes: {}; resolve duplicates before pickup",
+            changes
+                .iter()
+                .map(|c| format!("#{} on `{}`", c.id, c.branch))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
+    let Some(change) = changes.pop() else {
+        return Ok(None);
+    };
+    if change.branch.trim().is_empty() {
+        anyhow::bail!(
+            "open change #{} for {spec} has no head branch; refusing pickup",
+            change.id
+        );
+    }
+    if explicit.is_some_and(|branch| branch != change.branch) {
+        anyhow::bail!(
+            "{spec} has open change #{} on `{}`; --branch cannot fork its rework onto `{}`",
+            change.id,
+            change.branch,
+            explicit.unwrap()
+        );
+    }
+    Ok(Some((change.id, change.branch)))
 }
 
 /// TASK-245: decide whether `aida session start` should check out an
@@ -719,8 +734,8 @@ pub(crate) fn effective_force_claim_for_session_start(
 mod preflight_spec_status_tests;
 
 /// Walk a candidate list of branch names and return the first that's free
-/// locally and on origin. Auto uses only the scope slug; explicit date style
-/// permits dated collision suffixes. Bails when the candidates collide —
+/// locally and on origin. Auto uses the scope slug, or a dated name after a
+/// confirmed merge with no open change. Explicit date style permits suffixes. Bails when the candidates collide —
 /// that's a strong signal the user wants an explicit --branch.
 /// trace:STORY-65 | ai:claude
 pub(crate) fn resolve_session_branch(
@@ -750,18 +765,23 @@ pub(crate) fn resolve_session_branch(
             return Ok(cand.clone());
         }
     }
-    let merged = if branch_style == "auto" {
-        match crate::forge::forge_for_open_change(project_root).merged_change_for_branch(slug) {
-            Ok(crate::forge::ChangeLookup::Found(change)) => {
-                format!("; merged PR #{} retained this branch", change.id)
-            }
-            _ => String::new(),
+    // A retained merged branch is ordinary repository residue. Only a
+    // confirmed merge plus confirmed absence of an open change permits dating.
+    // trace:BUG-2451 BUG-1763 | ai:codex
+    if branch_style == "auto" {
+        let forge = crate::forge::forge_for_open_change(project_root);
+        if matches!(
+            forge.merged_change_for_branch(slug),
+            Ok(crate::forge::ChangeLookup::Found(_))
+        ) && matches!(
+            forge.change_for_branch(slug),
+            Ok(crate::forge::ChangeLookup::NoChange)
+        ) {
+            return resolve_session_branch(project_root, slug, "date");
         }
-    } else {
-        String::new()
-    };
+    }
     anyhow::bail!(
-        "all {} candidate branch names are taken (slug `{}`){merged}; pass --branch explicitly or --branch-style date",
+        "all {} candidate branch names are taken (slug `{}`); pass --branch explicitly",
         candidates.len(),
         slug
     )
@@ -2044,7 +2064,7 @@ pub(crate) fn session_start_with_receipt(
     let is_review_session = session_start_is_review_session(review_target, launch_role.as_deref());
 
     // An open change fixes the branch; otherwise use the explicit name or
-    // the scope slug. Only explicit date style permits generated suffixes.
+    // the scope slug. Confirmed merged residue also permits a dated name.
     // trace:STORY-65 | ai:claude
     // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
     let existing_pr = if review_target.is_none() && !is_review_session {
