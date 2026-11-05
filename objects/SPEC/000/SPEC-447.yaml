@@ -2,12 +2,12 @@ id: 01a1403f-ecb1-7412-bd8a-56dd869eb0b2
 spec_id: SPEC-447
 title: Investigate exact floating-rate validation across regen control and consensus JSON roundtrips
 description: TASK-1734 author self-check reproduced a serde_json roundtrip mismatch for the mathematically valid ratio1/11. Its optional display reader is now tolerant within8*f64::EPSILON and recomputes rates from counts. The strict scoring/control eligibility code still compares floating pass_rate with integer division exactly (e.g. regen/score/controls.rs::require_execution). Investigate whether valid committed control/consensus evidence can be refused after JSON persistence; cover1/11 and other representable ratios in real committed fixtures. If confirmed, design a bounded consistency check retaining integer-count and provenance validation, NaN/materially wrong rejection, and existing authority gates. Do not silently apply the display policy to strict gates. This is a separate investigation, not a claim of completed reproduction through a live control execution. Search of roundtrip/floating found no matching existing spec.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-11-04T21:04:41.769556256Z
+modified_at: 2026-11-05T00:21:56.390083652Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
@@ -42,6 +42,12 @@ comments:
   content: 'Publication handoff: native Codex lane cannot write .git/index.lock (read-only filesystem), so no commit, push, or PR was created in-lane. Following TASK-2712 native_post_exit_spec/post_exit_seat_commit procedure, pending edits are left for the host-side exit commit. Desired subject: [AI:codex] test(regen): investigate committed fractional-rate refusals (SPEC-447). Prepared PR body: /tmp/spec-447-pr-body.md. Host/operator publication can use the documented aida ship --from-seat workflow from the main checkout. Queue done succeeded and canonical spec now reports Done with no queue membership; its session-manifest update warned and the store mutation was queued for host commit. Production gate repair remains the separate draft SPEC-b6b1278890774ef993d2ebc327862470-011. No ship/merge/review-record action taken.'
   created_at: 2026-11-04T19:28:28.390972726Z
   modified_at: 2026-11-04T19:28:28.390972726Z
+- id: 01a1a915-6e26-71f1-a497-3ebfab410a44
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 SPEC-447 investigation criteria met (test-only + plan doc, no production change), but CI gates is red: git auto-maintenance ratchet counts the new git commit at controls.rs:730 (8 > baseline 7). No triage reason was given.'
+  created_at: 2026-11-05T00:21:56.390082203Z
+  modified_at: 2026-11-05T00:21:56.390082203Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a154db-eb1a-7e22-97df-21cd34a4604f
   author: joe
@@ -105,6 +111,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a915-6e26-71f1-a497-3eafa9a89ea8
+  author: joe
+  timestamp: 2026-11-05T00:21:56.390068057Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
@@ -119,12 +133,4 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check passed
   implemented_at: 2026-11-04T19:27:57.469200845Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 5 SPEC-447 investigation criteria met (test-only + plan doc, no production change), but CI gates is red: git auto-maintenance ratchet counts the new git commit at controls.rs:730 (8 > baseline 7)'
-  recovery_hint: address the review findings, move SPEC-447 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T21:04:41.769556256Z
 interface_changes: {}
