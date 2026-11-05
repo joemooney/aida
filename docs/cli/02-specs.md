@@ -426,7 +426,7 @@ comment recovery are planned separately; these local commands do not publish.
 Check a typed condition without changing requirements:
 
 ```bash
-aida condition check 'spec:STORY-12=completed'
+aida condition check 'spec:<spec-id>=completed'
 aida condition check 'pr:2577=merged' --json
 aida condition check 'release:>=0.17'
 aida condition check 'date:2026-12-01'
@@ -442,10 +442,13 @@ a handoff or resurface a spec. `manual` always waits for the named person.
 
 Dates use UTC. Releases compare the highest local dotted numeric Git tag,
 ignoring prerelease and non-version tags; this does not fetch remote tags.
+With no release tags, every release comparison is `not-met`, including `<`
+and `<=`; no implicit zero version is assumed.
 Queries combine tag, status, type and feature filters with AND and count only
 non-archived specs. Comparisons accept `>=`, `>`, `<=`, `<`, and `=`.
 Spec and query checks read canonical objects strictly (or an explicit YAML
-`--file`); archived SQLite stores must be migrated first.
+store selected with the top-level `aida --file` option); archived SQLite stores
+must be migrated first.
 
 This first slice supplies the language and read-only checker. Deferral write
 gates, migration, scheduled resurfacing and relay/recurrence integration follow

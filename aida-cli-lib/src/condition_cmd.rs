@@ -87,14 +87,15 @@ fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsSt
 }
 
 // A successful process exit alone is not an observation of a PR state.
+// Keep the forge-only parameter spelling explicit for the launch-site ratchet.
 // trace:STORY-2402 | ai:codex
 fn read_pr_state(
     root: &Path,
-    binary: &Path,
+    gh_bin: &Path,
     number: u64,
     timeout: std::time::Duration,
 ) -> Option<bool> {
-    let mut command = std::process::Command::new(binary);
+    let mut command = std::process::Command::new(gh_bin);
     command
         .current_dir(root)
         .args(["pr", "view", &number.to_string(), "--json", "state"]);
