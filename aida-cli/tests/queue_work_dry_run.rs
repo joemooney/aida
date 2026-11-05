@@ -1439,9 +1439,13 @@ fn task_1337_held_branch_refuses_before_any_pickup_mutation() {
             held.to_str().unwrap(),
         ],
     );
+    // Reach branch occupancy with valid child-delegation authority.
+    // trace:BUG-2455 TASK-1337 | ai:codex
+    let grant = advisor_grant(&repo, &home);
     let output = aida(&repo, &home)
         .env("AIDA_HOME", &home)
-        .env("AIDA_SESSION_ROLE", "implementer")
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", grant)
         .args([
             "queue",
             "work",
@@ -1449,6 +1453,8 @@ fn task_1337_held_branch_refuses_before_any_pickup_mutation() {
             "--guided",
             "--fresh",
             "--no-pull",
+            "--role",
+            "implementer",
             "--branch",
             "held",
         ])
