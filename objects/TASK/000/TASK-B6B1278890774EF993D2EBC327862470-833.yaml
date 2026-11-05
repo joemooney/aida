@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T17:22:04.906350437Z
+modified_at: 2026-11-05T17:30:02.710126722Z
 req_type: Task
 tags:
 - from-advisor
@@ -46,6 +46,12 @@ comments:
   content: 'Validation update: make check-ci-fast completed successfully: all 37 fast-tier gates PASS, including no-default-features CLI compilation, standalone TUI compilation, 19 containment evidence tests, formatting, and trace/header guards. Some guards could not fetch because Git metadata is read-only but passed against existing local refs. A direct targeted cargo test --profile agent -p aida-cli-lib --lib -- story_423_asciinema_tests was also attempted through the normal build-slot wrapper after the lane-job refusal; it acquired a slot and is compiling (not yet a test pass). Publication remains blocked by native seat read-only Git metadata; no completion claimed.'
   created_at: 2026-11-05T17:22:04.906350437Z
   modified_at: 2026-11-05T17:22:04.906350437Z
+  session_id: 01a1acb0c9c3
+- id: 01a1acc2-b056-7121-a941-9ca1b8a886da
+  author: joe
+  content: 'Final handoff: all 37 make check-ci-fast gates PASS; standalone Python conformance suite 19 tests PASS; cargo fmt --all -- --check, explicit rustfmt checks of both touched include files, and git diff --check PASS. Targeted Rust unit tests remain untested=true: lane-job dispatch refused (no runner); direct cargo test --profile agent -p aida-cli-lib --lib -- story_423_asciinema_tests acquired a normal shared slot but was interrupted during compilation after an extended wait (exit 130), with no tests executed or result claimed. Eight source/test/doc files remain uncommitted, as the native-seat publication refusal explicitly requires. No PR exists and no queue-done/review-record/merge occurred. Host exit should commit and publish one PR using [AI:codex] fix(containment): resolve harness and documentation nits (TASK-3114). PR body must note TASK-2863 is already resolved by STORY-2460 advisor ruling/fresh-run evidence at 2026-11-05 12:29/12:41 UTC and that further AGY acceptance remains TASK-3048. Implemented TASK-2864, TASK-2865, TASK-2870 and TASK-2871; local origin/main matches the starting checkout, remote freshness is not claimed. Run the targeted Rust tests on the host/CI before final acceptance. Publication recovery is aida ship TASK-3114 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-833 --commit-pending with the subject above. Stop at PR-open for independent review.'
+  created_at: 2026-11-05T17:30:02.710126722Z
+  modified_at: 2026-11-05T17:30:02.710126722Z
   session_id: 01a1acb0c9c3
 history:
 - id: 01a1ac7a-9749-7001-82e3-4961ecdfe225
