@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
+  position: 128000
+  added_by: role:implementer
+  note: 'CI red at 0a192b2: lib-0 pr_train::verified::bug2406::* panic at bug2406_train_tests.rs:292:48 (many cases), plus CI (gates). Fix on the PR branch, push, no new branch.'
+  added_at: 2026-11-05T09:48:06.897392796Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
   position: 129000
   added_by: role:implementer
@@ -9,12 +16,6 @@
   position: 130000
   added_by: role:implementer
   added_at: 2026-11-05T09:01:12.397999377Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
-  position: 132000
-  added_by: role:implementer
-  added_at: 2026-11-05T07:55:41.609983430Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
