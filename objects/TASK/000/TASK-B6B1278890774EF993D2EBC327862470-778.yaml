@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T02:03:19.970139915Z
+modified_at: 2026-11-05T02:12:56.374479575Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -27,6 +27,12 @@ comments:
   content: Updated bug2438_refuses, shared by both requested regressions, to require the full merge error chain to contain 'train source has a refusing review'; retained the no-transport assertion and added TASK-2831 trace. Formatting and diff whitespace checks pass. Targeted bug2438 tests are compiling. The native seat's .git is read-only (git add refused index.lock), so commit/publication must use the host's post-exit seat workflow.
   created_at: 2026-11-05T02:03:19.970139915Z
   modified_at: 2026-11-05T02:03:19.970139915Z
+  session_id: 01a1a97013e5
+- id: 01a1a97b-0db6-7412-bfda-132c5d240793
+  author: joe
+  content: 'The strengthened assertions exposed an earlier gate in the old-head test: changing the approval SHA to main made approval carry-over refuse before supersession. Updated that case to retain its original attested approval, advance main, merge main into the source branch, push both fixture refs, and update simulated PR metadata. This supplies a valid off-head carry-over while keeping every source verdict off the current head. Re-running the four bug2438 regressions.'
+  created_at: 2026-11-05T02:12:56.374479575Z
+  modified_at: 2026-11-05T02:12:56.374479575Z
   session_id: 01a1a97013e5
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
