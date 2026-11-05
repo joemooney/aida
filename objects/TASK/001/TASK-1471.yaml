@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T00:25:31.859556524Z
+modified_at: 2026-11-05T00:28:42.863909928Z
 req_type: Task
 relationships:
 - rel_type:
@@ -66,6 +66,11 @@ comments:
   content: 'PUNT / unable to publish — no advisor finding is disputed. All three fixes are implemented locally. Final targeted cargo test -p aida-cli-lib --lib task_1471_show_docs passed (2 tests); make check-ci-fast exited 0 with all 36 gates passed; formatting and git diff --check pass. Rebase/commit/push are blocked by the sandbox''s read-only .git: fetch refuses FETCH_HEAD and staging refuses index.lock. Two changed files remain in /home/joe/ai/aida-worktrees/aida-seat-aida-task-1471; complete recovery patch is /tmp/task-1471-rework.patch. PR #3367 is still open at 4b0807520f13. Host recovery: rebase on origin/main, commit [AI:codex] fix(show): resolve newly linked Docs without cached degrees (TASK-1471), push, and request separate review. The structured post_punt tool was rejected because it requires approval while approval policy is never; this comment records the punt without a lifecycle status transition. TASK-1471 remains In Progress. No ship, review record, or merge-hold clearance was attempted.'
   created_at: 2026-11-04T19:23:35.148199564Z
   modified_at: 2026-11-04T19:23:35.148199564Z
+- id: 01a1a91b-a1ef-7e93-9d28-bfac1b57f71f
+  author: mcp
+  content: 'Follow-up rework session: verified all three advisor findings are implemented in existing recovery commit 661f6314fd2 (always scan reverse Docs; propagate target/list errors; real doc add + registered run_show tests). git rebase origin/main succeeded, yielding local head 595e51d2224. Added stronger byte-identical JSON/TOON regression coverage after adding another reverse Doc when a direct Doc is already linked. Publication is now blocked: the sandbox mounts .git read-only and git merge failed on ORIG_HEAD.lock. No finding is disputed. Structured post_punt was rejected: ''MCP tool call requires approval, but approval policy is never''. Recovery patch /tmp/task-1471-followup.patch. Targeted Cargo test and make check-ci-fast in progress; final results to follow.'
+  created_at: 2026-11-05T00:28:42.863892890Z
+  modified_at: 2026-11-05T00:28:42.863892890Z
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
