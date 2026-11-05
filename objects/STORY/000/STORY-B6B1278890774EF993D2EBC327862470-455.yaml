@@ -1,0 +1,33 @@
+id: 01a1ad82-6acf-7422-9519-4efbff1e2b65
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-455
+agreed_id: STORY-2532
+title: 'Review PR-3452: [AI:codex] docs(review): sketch portable review authority and distributed admission (TASK-2860)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ad77`) for branch `task-b6b1278890774ef993d2ebc327862470-805`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3452>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-805` → `main`
+
+  ## Covers
+
+  - TASK-2860
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3452` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T20:59:27.823660370Z
+modified_at: 2026-11-05T20:59:27.823660370Z
+req_type: Story
+filed_at:
+  code_sha: 0b0f8a6b701d61070c28481226836b48cb257fe4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70e10d2b449
+  vendor: claude
