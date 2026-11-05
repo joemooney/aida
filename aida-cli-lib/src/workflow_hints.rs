@@ -664,8 +664,6 @@ pub fn commits_ahead_unresolved_lines(display_id: &str, branch: &str, reason: &s
 pub enum SkipReason {
     /// `find_project_root` failed — no `.aida/` anchor to resolve git from.
     ProjectRootNotFound,
-    /// The current branch couldn't be read at the project root.
-    BranchUndetectable,
     // BUG-775: `CommitsAheadFailed` used to live here — an unresolvable
     // branch-vs-default-branch comparison SKIPPED the gate with a warning.
     // On a repo with no `origin` remote that meant the gate never fired at
@@ -685,7 +683,7 @@ pub enum SkipReason {
 ///
 /// Resolution order (each step can short-circuit to a `SilentSkip`):
 ///   1. `project_root` — `Err` → `SilentSkip { ProjectRootNotFound }`.
-///   2. `branch_at_root` — `None` → `SilentSkip { BranchUndetectable }`.
+///   2. `branch_at_root` — `Err` → `Refuse`, preserving the lookup error.
 ///   3. `commits_ahead_of_main` — `CommitsAhead::Unknown` → `Refuse` (BUG-775:
 ///      an unresolvable comparison used to warn-and-continue, which is how a
 ///      repo with no `origin` remote got no gate at all).
@@ -698,15 +696,15 @@ pub enum SkipReason {
 ///      - else delegate to [`queue_done_precheck_error`]: `Some(lines)` →
 ///        `Refuse(lines)`, `None` → `Proceed`.
 ///
-/// No behavior change vs the inline tree (PR-242): same warnings, same
-/// refusals. The closures let the caller keep using the real
-/// `find_project_root` / `current_branch_at` / `branch_commits_ahead_main` /
+/// Branch lookup failures refuse before completion (TASK-2887). The closures
+/// let the caller keep using the real
+/// `find_project_root` / `current_branch_at_checked` / `branch_commits_ahead_main` /
 /// `change_lookup_for_branch` helpers while tests inject fakes.
 /// trace:TASK-500 | ai:claude
 pub fn queue_done_precheck_diagnose(
     display_id: &str,
     project_root: anyhow::Result<PathBuf>,
-    branch_at_root: impl FnOnce(&Path) -> Option<String>,
+    branch_at_root: impl FnOnce(&Path) -> anyhow::Result<String>,
     commits_ahead_of_main: impl FnOnce(&Path, &str) -> CommitsAhead,
     pr_lookup_for_branch: impl FnOnce(&Path, &str) -> PrState,
 ) -> QueueDoneGateDiagnose {
@@ -725,19 +723,21 @@ pub fn queue_done_precheck_diagnose(
         Ok(root) => root,
     };
 
+    // trace:TASK-2887 | ai:codex
     let branch = match branch_at_root(&project_root) {
-        None => {
-            return QueueDoneGateDiagnose::SilentSkip {
-                reason: SkipReason::BranchUndetectable,
-                warning_line: format!(
-                    "{} queue-done PR-check skipped: current_branch_at returned None \
-                     in {}. Gate did not fire.",
-                    "warning:".yellow().bold(),
+        Err(e) => {
+            return QueueDoneGateDiagnose::Refuse(vec![
+                format!(
+                    "queue done refused: cannot determine the current branch for {display_id} in {}: {e:#}",
                     project_root.display()
                 ),
-            };
+                "Restore branch lookup access, then re-run; the spec and queue are unchanged.".to_string(),
+                format!(
+                    "Override when you know the work shipped another way: `aida queue done {display_id} --skip-pr-check`."
+                ),
+            ]);
         }
-        Some(branch) => branch,
+        Ok(branch) => branch,
     };
 
     // BUG-775: the three outcomes are now distinct. Being ON the default
@@ -1409,25 +1409,25 @@ mod tests {
         }
     }
 
-    // SkipReason::BranchUndetectable — current branch couldn't be read.
+    // trace:TASK-2887 | ai:codex
     #[test]
-    fn diagnose_skips_when_branch_undetectable() {
+    fn diagnose_refuses_when_branch_lookup_fails() {
         let result = queue_done_precheck_diagnose(
-            "BUG-249",
+            "TASK-2887",
             root_ok(),
-            |_| None,
-            |_, _| panic!("commits-ahead must not run when branch is undetectable"),
+            |_| Err(anyhow::anyhow!("host git refused: seat clone")),
+            |_, _| panic!("commits-ahead must not run when branch lookup failed"),
             |_, _| panic!("pr lookup must not run"),
         );
         match result {
-            QueueDoneGateDiagnose::SilentSkip {
-                reason,
-                warning_line,
-            } => {
-                assert_eq!(reason, SkipReason::BranchUndetectable);
-                assert!(warning_line.contains("current_branch_at returned None"));
+            QueueDoneGateDiagnose::Refuse(lines) => {
+                let text = lines.join("\n");
+                assert!(text.contains("queue done refused"), "{text}");
+                assert!(text.contains("host git refused: seat clone"), "{text}");
+                assert!(text.contains("/tmp/fake-project"), "{text}");
+                assert!(text.contains("TASK-2887 --skip-pr-check"), "{text}");
             }
-            other => panic!("expected SilentSkip(BranchUndetectable), got {other:?}"),
+            other => panic!("expected refusal, got {other:?}"),
         }
     }
 
@@ -1439,7 +1439,7 @@ mod tests {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
-            |_| Some("feature-x".to_string()),
+            |_| Ok("feature-x".to_string()),
             |_, _| CommitsAhead::Unknown("rev-list failed".to_string()),
             |_, _| panic!("pr lookup must not run when commits-ahead is unknown"),
         );
@@ -1462,7 +1462,7 @@ mod tests {
             let result = queue_done_precheck_diagnose(
                 "BUG-249",
                 root_ok(),
-                |_| Some(branch.to_string()),
+                |_| Ok(branch.to_string()),
                 |_, _| CommitsAhead::OnDefaultBranch,
                 |_, _| panic!("pr lookup must not run on the default branch"),
             );
@@ -1481,7 +1481,7 @@ mod tests {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
-            |_| Some("feature-x".to_string()),
+            |_| Ok("feature-x".to_string()),
             |_, _| CommitsAhead::Ahead(2),
             |_, _| PrState::Unknown,
         );
@@ -1504,7 +1504,7 @@ mod tests {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
-            |_| Some("feature-x".to_string()),
+            |_| Ok("feature-x".to_string()),
             |_, _| CommitsAhead::Ahead(1),
             |_, _| PrState::Absent,
         );
@@ -1533,7 +1533,7 @@ mod tests {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
-            |_| Some("feature-x".to_string()),
+            |_| Ok("feature-x".to_string()),
             |_, _| CommitsAhead::Ahead(3),
             |_, _| PrState::Open(42),
         );
@@ -1547,7 +1547,7 @@ mod tests {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
-            |_| Some("feature-x".to_string()),
+            |_| Ok("feature-x".to_string()),
             |_, _| CommitsAhead::Ahead(0),
             |_, _| panic!("pr lookup must not run when nothing is ahead"),
         );

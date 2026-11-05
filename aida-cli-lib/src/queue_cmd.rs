@@ -5144,9 +5144,8 @@ pub(crate) fn handle_queue_command(
             // different already-merged branch) and when the BUG-232 hint
             // detector itself can't decide (gh missing / unauthenticated /
             // network failure) — proceeding is the safe default when we
-            // can't prove "no PR." Likewise skip when commits_ahead
-            // resolution fails (None) so a missing origin/main never blocks
-            // a legitimate done. `--yes` does NOT bypass — it's the
+            // can't prove "no PR." Branch lookup and commits-ahead failures
+            // refuse before mutation. `--yes` does NOT bypass — it's the
             // confirmation-skip for the prompt below, not a gate override.
             // trace:BUG-269 BUG-285 | ai:claude
             let bypass_pr_check =
@@ -5165,7 +5164,8 @@ pub(crate) fn handle_queue_command(
                 let diagnose = workflow_hints::queue_done_precheck_diagnose(
                     display_id,
                     find_project_root(),
-                    |root| current_branch_at(root),
+                    // trace:TASK-2887 | ai:codex
+                    crate::gate::kernel_deps::current_branch_at_checked,
                     // BUG-775: the tri-state form — the gate must be able to
                     // tell "on the default branch" from "comparison failed".
                     |root, branch| branch_commits_ahead_default(root, branch),

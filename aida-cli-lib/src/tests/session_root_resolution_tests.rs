@@ -201,3 +201,17 @@ fn current_branch_at_returns_branch_name() {
     assert_eq!(current_branch_at(&main).as_deref(), Some("main"));
     assert_eq!(current_branch_at(&linked).as_deref(), Some("feature"));
 }
+
+// trace:TASK-2887 | ai:codex
+#[test]
+fn checked_branch_lookup_preserves_branch_and_detached_head_failure() {
+    let (_tmp, main, linked) = fixture_with_linked_worktree();
+    let checked = crate::gate::kernel_deps::current_branch_at_checked;
+    assert_eq!(checked(&main).unwrap(), "main");
+    assert_eq!(checked(&linked).unwrap(), "feature");
+    git(&linked, &["checkout", "--detach", "--quiet"]);
+    let error = checked(&linked).unwrap_err().to_string();
+    assert!(error.contains("not a symbolic ref"), "{error}");
+    assert!(error.contains(&linked.display().to_string()), "{error}");
+    assert_eq!(current_branch_at(&linked), None);
+}

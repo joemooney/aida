@@ -84,6 +84,24 @@ fn routine_status_and_drain_paths_run_no_host_git_in_a_seat_clone() {
     assert_eq!(crate::dispatch_health_ps::current_branch_at(&clone), None);
     let _ = crate::dispatch_health_ps::is_protected_branch_at(&clone, "feat");
     assert_eq!(crate::worktree_gc::current_branch_at(&clone), None);
+    // The completion gate must retain the real refusal, not turn None into
+    // a warning and mark the spec done. No host Git may run in the clone.
+    // trace:TASK-2887 | ai:codex
+    let expected = aida_core::seat_clone_detect::host_git_refusal(&clone);
+    let result = crate::workflow_hints::queue_done_precheck_diagnose(
+        "TASK-2887",
+        Ok(clone.clone()),
+        crate::gate::kernel_deps::current_branch_at_checked,
+        |_, _| panic!("branch refusal must stop before commits-ahead"),
+        |_, _| panic!("branch refusal must stop before forge lookup"),
+    );
+    match result {
+        crate::workflow_hints::QueueDoneGateDiagnose::Refuse(lines) => {
+            assert!(lines.join("\n").contains(&expected), "{lines:?}");
+        }
+        other => panic!("expected branch refusal, got {other:?}"),
+    }
+
     assert_eq!(crate::worktree_gc::detect_default_branch_ref(&clone), None);
     assert!(crate::worktree_gc::git_output_lossy(&clone, &["diff", "HEAD"]).is_empty());
     let _ = crate::burndown_run::worktree_last_activity(&clone);
