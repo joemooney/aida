@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T11:39:32.262303253Z
+modified_at: 2026-11-05T13:22:57.987360217Z
 req_type: Task
 tags:
 - docs:impacted
@@ -164,6 +164,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1abe0-7bae-7ba1-9e90-2471c8c966ea
+  author: joe
+  timestamp: 2026-11-05T13:22:58.094330448Z
+  session_id: 01a1abde20ac
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -172,3 +178,11 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 findings 1, 2 and 4 are resolved: publish-before-accept removes the two-site divergence, and writer failures recover. Finding 3''s checkpoint is defeated on every pull that advances: sync() re-validates the old tip in full. Push failures are mislabelled as lost races, and HTTPS enrollment has no credential path. CI is still pending at the head.'
+  recovery_hint: address the review findings, move TASK-3096 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T13:22:57.987360217Z
