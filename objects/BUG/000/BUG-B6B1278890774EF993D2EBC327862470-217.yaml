@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-217
 agreed_id: BUG-2451
 title: Rework lanes start on a fresh -N branch off main instead of the open PR's branch, producing duplicate incomplete PRs
 description: 'Observed 2026-11-04, five times on both vendors: TASK-2708 (-658-2), TASK-3046 (-784-2, dup PR #3397), BUG-2439 (-208-2 → #3401 and a lost -208-3), TASK-1715 (task-1715-2 → #3404), STORY-2475 (-403-2 → dup PR #3407). When `aida queue work` is launched for a spec whose open PR''s branch is still held by an old seat or lease, or the branch exists without a matching local seat, pickup allocates <branch>-2 from main. The lane then implements only the rework delta on top of main and publishes a second PR missing the original commits. Folding that back needs a cherry-pick, which often conflicts, plus another lane. Acceptance: (1) a rework or queue-work for a spec with an open PR always seats that PR''s head branch; if the branch is held, it reclaims a clean, pushed holder (see BUG-2450) or refuses, naming the holder, and never allocates -N; (2) -N allocation is only for a spec with no open PR, and only when explicitly requested; (3) publication refuses to open a second open PR for the same spec, and pushes to the existing one or errors; (4) regression tests for the held-branch and the stale-seat cases.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T08:01:02.696886758Z
+modified_at: 2026-11-05T08:12:10.419681164Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,12 @@ comments:
   created_at: 2026-11-05T07:55:40.914955536Z
   modified_at: 2026-11-05T07:55:40.914955536Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aac3-853b-71f2-b538-6aff632eae14
+  author: joe
+  content: 'Round 3: findings 1-4 implemented in the current working tree: confirmed merged/no-open retained branches use dated names, pickup/publication enumerate all matching GitHub PRs and refuse duplicates by number, list-sessions skips forge lookup. Corrected the CI clone reentry fixture to name its existing branch explicitly, and guarded fixture Git commit/push calls; actual gates failure was the Git maintenance ratchet, not the intentionally failing lane fixture. Python fixture ratchets: 15 passed; formatting passes; Rust tests compiling. Cannot create required round-3 commit or push: git add fails creating .git/index.lock with Read-only file system because this native seat protects .git. CI finding 5 remains blocked until a writable Git seat commits and pushes.'
+  created_at: 2026-11-05T08:11:42.779124432Z
+  modified_at: 2026-11-05T08:11:42.779124432Z
+  session_id: 01a1aab9b220
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
   author: joe
@@ -177,6 +183,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aac3-f133-7482-8301-9b34973454ef
+  author: joe
+  timestamp: 2026-11-05T08:12:10.419709218Z
+  session_id: 01a1aab9b220
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -189,3 +203,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T05:50:26.596521283Z
   implemented_by: joe
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-3 finding 5 and the mandatory new-commit contract are blocked by the native seat permission profile: git add cannot create .git/index.lock (Read-only file system). Findings 1-4 and both actual CI regressions are implemented in the working tree, with tests added. No finding is disputed. A writable Git seat/host must commit and push the changes to PR #3409 and obtain green CI before approval; the supervised merge hold remains in place. Rust validation is still compiling; final results will be added to this spec.'
+  lean: Preserve the working tree and have the launcher commit/push it; do not reopen a duplicate PR or clear the merge hold.
+  raised_by: implementer
+  raised_at: 2026-11-05T08:12:10.419681164Z
