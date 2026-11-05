@@ -1789,9 +1789,34 @@ mod containment_tests {
             std::fs::create_dir_all(root.join(".aida")).unwrap();
             std::fs::write(
                 root.join(".aida/config.toml"),
-                "[contained]\nenable = false\n",
+                "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
             )
             .unwrap();
+            // Launch policy is read from the trusted default branch, even
+            // when this fixture requests an uncontained child.
+            // trace:BUG-2439 | ai:codex
+            for args in [
+                vec!["init", "-q", "-b", "main"],
+                vec!["add", ".aida/config.toml"],
+                vec!["commit", "-qm", "trusted native policy"],
+                vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+                vec![
+                    "symbolic-ref",
+                    "refs/remotes/origin/HEAD",
+                    "refs/remotes/origin/main",
+                ],
+            ] {
+                let output = crate::test_git::git_command()
+                    .current_dir(root)
+                    .args(&args)
+                    .env("GIT_AUTHOR_NAME", "test")
+                    .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                    .env("GIT_COMMITTER_NAME", "test")
+                    .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                    .output()
+                    .unwrap();
+                assert!(output.status.success(), "{args:?}: {output:?}");
+            }
             let vendor = std::env::var("AIDA_TEST_COMPETE_VENDOR").unwrap();
             let fake = root.join("vendor");
             crate::test_exec::write_executable(&fake, "#!/bin/sh\nexec /bin/sleep 30\n");
