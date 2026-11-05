@@ -19,6 +19,7 @@ use crate::deputy_shell::{
 };
 
 /// How long `wait` treats a job dir with no state as a claim in progress.
+// trace:TASK-2832 | ai:codex
 const CLAIM_GRACE: Duration = Duration::from_secs(10);
 /// The seats a refreshed grant may delegate unless `--delegate-seat` says.
 const DEFAULT_DELEGATE_SEATS: [&str; 4] = ["advisor", "implementer", "reviewer", "integrator"];
@@ -354,6 +355,18 @@ pub(crate) fn wait(
     limit: Option<Duration>,
     out: &mut dyn Write,
 ) -> Result<i32> {
+    wait_with_grace(q, id, limit, CLAIM_GRACE, out)
+}
+
+// Inject the claim grace so expiry regressions need not wait ten seconds.
+// trace:TASK-2832 | ai:codex
+pub(crate) fn wait_with_grace(
+    q: &Queue,
+    id: &str,
+    limit: Option<Duration>,
+    claim_grace: Duration,
+    out: &mut dyn Write,
+) -> Result<i32> {
     let begun = std::time::Instant::now();
     let mut last_note = std::time::Instant::now();
     let mut claiming_since: Option<std::time::Instant> = None;
@@ -365,8 +378,9 @@ pub(crate) fn wait(
             // (bounded, so an interrupted claim still errors) instead of
             // reporting a live job as missing.
             // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+            // trace:TASK-2832 | ai:codex
             let since = *claiming_since.get_or_insert_with(std::time::Instant::now);
-            if q.job_dir(id).is_dir() && since.elapsed() < CLAIM_GRACE {
+            if q.job_dir(id).is_dir() && since.elapsed() < claim_grace {
                 std::thread::sleep(Duration::from_millis(50));
                 continue;
             }
