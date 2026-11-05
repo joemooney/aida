@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T19:12:52.156502860Z
+modified_at: 2026-11-05T19:28:51.256679133Z
 req_type: Task
 tags:
 - architecture
@@ -304,6 +304,13 @@ comments:
   created_at: 2026-11-05T18:23:26.092201635Z
   modified_at: 2026-11-05T18:23:26.092201635Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad2f-7638-7201-8005-ff6c26e85b72
+  author: joe
+  content: 'AC(1) slice opened as PR #3449 (head e1c8b80db0b, Refs TASK-2708). The 02:58 UTC #3307 merge brief was stale: #3307 had already landed as 96c521861aa, so I worked the 11:25 F-a amendment ruling. Filter/broker items 1-4 are implemented. Item 4 is tightened: the broker connects the exact socket it inspected (pidfd_getfd + SIOCGSKNS), not CONTINUE, to close an fd-swap TOCTOU. Claude is now a data row on PreparedLaunch: settings item 5, C7 RO credentials leaf, private CLAUDE_CONFIG_DIR/TMPDIR, 05:47 pre-launch refresh with named refusals. Selection: trusted [contained.vendors] claude = "aida" routes headless Claude through the wrapper. Unset keeps the Claude-native boundary until the operator flips it, and under the opt-in, interactive/--bg/coordinator/resume refuse by name. untested=true: cargo test timed out twice at the 900s runner default compiling the test binary, and the AIDA_CARGO_TIMEOUT override was refused in this session. cargo check --tests passes. Live tests PENDING the advisor-host required-live run at the exact head.'
+  created_at: 2026-11-05T19:28:51.256679133Z
+  modified_at: 2026-11-05T19:28:51.256679133Z
+  session_id: 01a1ad03267f
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
