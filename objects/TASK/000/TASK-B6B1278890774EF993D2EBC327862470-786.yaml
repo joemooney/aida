@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:25:10.898250740Z
+modified_at: 2026-11-05T12:26:49.386885231Z
 req_type: Task
 tags:
 - area:containment
@@ -25,6 +25,13 @@ relationships:
   target_id: 01a1a7b3-5233-7033-9bbb-750072f402c1
   created_at: 2026-11-04T17:55:41.549012593Z
   created_by: joe
+comments:
+- id: 01a1abad-14aa-7520-a8f8-caed95d7ba76
+  author: joe
+  content: 'Pickup investigation (2026-11-05): selected posture is A/shared AIDA boundary per STORY-2460 signoff and S1 evidence. No production enablement performed. Blocking evidence: docs/testing/containment-conformance.md explicitly says C3 has no pass rule, C1/C2 cannot attest native file-tool denial, and whole_lane_pass/production_launcher_credit are always false. The latest STORY-2460 comment requests an advisor ruling on TASK-3046 review finding 3: fresh host runs of the shipped harness versus historical/offline reassessment plus a named follow-up; no subsequent ruling is recorded. Host auth inventory is explicitly incomplete (only daily-cloudcode-pa.googleapis.com observed). Both aida-deputy-shell list 3 3 and list 2 1 currently report runner: NOT running; no host job was queued and no real credentials/model calls were used. Current launch/contained.rs is Codex-specific: OPENAI_API_KEY/auth handling, generated native profile, sandbox seat preflight, and raw .aida-store writable grants; contained_store_deny_write_paths protects Git metadata but not objects. These cannot be presented as the signed Q2 AGY policy. Recovery: resolve the outstanding S1 evidence ruling, restore the authorized host script deputy for a scoped private-runtime auth/refresh-host measurement (no token copying/logging), then implement the AGY shared-boundary adapter with raw store denial/mediated writes and integrated C0-C4 validation. Keep agy=aida/native refused until real all-tool conformance passes. Working tree remains clean; no commit, PR, queue-done, review verdict or ship was attempted.'
+  created_at: 2026-11-05T12:26:49.386885231Z
+  modified_at: 2026-11-05T12:26:49.386885231Z
+  session_id: 01a1abaae052
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
