@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
+  position: 107000
+  added_by: role:implementer
+  note: '#3398 at e2491c9 conflicts with main again after #3425: aida-cli-lib/src/queue_cmd.rs (2 hunks) and src/tests/queue_work_tests.rs. Main added BUG-057 detect_main_conflict (a conflicting rework PR makes the merge the lane''s first task) and BUG-2451 rework_pr_head_branch_override; this PR adds rework_conflict_route / ReworkConflictLaunch for the same situation. Merge origin/main into the PR branch (merge commit, no force) and UNIFY them: one conflict-detection path (prefer main''s detect_main_conflict as the detector), with this PR''s routing (Claude-required notice, refuse non-Claude resume) applied to its result; keep both test suites, dedupe overlapping cases. One targeted cargo test (queue_work_tests story_2475 bug_2451) plus make check-ci-fast. Push to story-b6b1278890774ef993d2ebc327862470-403.'
+  added_at: 2026-11-05T13:21:00.793988091Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a4e6-791e-7941-8078-89f2a342722e
   position: 108000
   added_by: role:implementer
@@ -39,13 +46,6 @@
   added_by: role:implementer
   note: 'Address the latest review on #3421 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-221 (no new branch). LIGHT gate.'
   added_at: 2026-11-05T13:19:16.233722199Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
-  position: 114000
-  added_by: role:implementer
-  note: '#3398 at d6fe567 conflicts with main again, in .github/workflows/ci.yml only (2 hunks in the live-bwrap step). Merge origin/main into the PR branch (merge, no rebase/force) and COMBINE both sides: keep this PR''s --logfile result-file counting (lib_results/cli_results, ''^ok <name>$'' matching) AND main''s TASK-2708 additions: the task_2707_ filter on the lib cargo test line and the required task_2707 count, with ran_2707 counted from $lib_results (''^ok .*task_2707_...$'') instead of the console $log, keeping not_required_2707 excluded on both sides and the task_2706_egress_ipc_live check against $lib_results. Run make check-ci-fast, push to the same branch.'
-  added_at: 2026-11-05T12:46:09.767529941Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
