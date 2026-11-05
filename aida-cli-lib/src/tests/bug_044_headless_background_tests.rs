@@ -1038,6 +1038,33 @@ fn story_2475_all_codex_lane_exits_publish_after_child_exit() {
             let observed = Arc::new(AtomicUsize::new(0));
             let calls = observed.clone();
             let marker = fx.path("child-exited");
+            let child = format!("touch '{}'\n", marker.display());
+            // Reproduce the CI refusal: resumes validate policy in the seat,
+            // so an unrelated empty repository must not inherit the host opt-in.
+            // trace:STORY-2475 | ai:codex
+            if mode == 2 && vendor == HeadlessVendor::Codex && contained {
+                let error = fx
+                    .run_mode(&child, vendor, contained, mode)
+                    .expect_err("an unprovisioned seat has no trusted native policy");
+                assert!(
+                    format!("{error:#}").contains("cannot run an AIDA-contained session"),
+                    "{error:#}"
+                );
+                assert!(!marker.exists(), "the refused resume must not launch");
+            }
+            // A real seated clone carries origin/main and its trusted policy.
+            // Keep the policy check intact and repair the fixture for every case.
+            std::fs::remove_dir_all(&fx.worktree).unwrap();
+            fx.git(
+                &fx.project,
+                &[
+                    "clone",
+                    "-q",
+                    fx.project.to_str().unwrap(),
+                    fx.worktree.to_str().unwrap(),
+                ],
+            );
+            fx.git(&fx.worktree, &["checkout", "-qb", "claude/story-9"]);
             let check_marker = marker.clone();
             let expected_tree = fx.worktree.clone();
             si::TEST_PR.with(|p| *p.borrow_mut() = Some(None));
@@ -1051,19 +1078,20 @@ fn story_2475_all_codex_lane_exits_publish_after_child_exit() {
                     calls.fetch_add(1, Ordering::SeqCst);
                     PostExitCommit::NotASeat
                 }),
-                || {
-                    fx.run_mode(
-                        &format!("touch '{}'\n", marker.display()),
-                        vendor,
-                        contained,
-                        mode,
-                    )
-                },
+                || fx.run_mode(&child, vendor, contained, mode),
             );
             si::TEST_PR.with(|p| *p.borrow_mut() = None);
-            assert_eq!(result.is_ok(), mode != 0, "{result:?}");
-            assert!(marker.exists(), "mock child must have run: {result:?}");
-            assert_eq!(observed.load(Ordering::SeqCst), count, "{result:?}");
+            assert_eq!(
+                result.is_ok(),
+                mode != 0,
+                "mode={mode} vendor={vendor:?} contained={contained}: {result:?}"
+            );
+            assert!(marker.exists(), "mock child must have run: mode={mode} vendor={vendor:?} contained={contained}: {result:?}");
+            assert_eq!(
+                observed.load(Ordering::SeqCst),
+                count,
+                "mode={mode} vendor={vendor:?} contained={contained}: {result:?}"
+            );
         }
     }
 }

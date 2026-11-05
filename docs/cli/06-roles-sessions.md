@@ -589,6 +589,23 @@ mail, or vendor-preflight failures stop the launch. A resume with pending
 edits preserves them and skips the merge attempt; an unfinished merge still
 refuses. Clean resumes use the normal merge and conflict checks.
 
+The conflict check runs after session setup has provisioned the seat and minted
+its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
+that reroutes keeps that same seat (including a clone seat) and lease. Before
+launch it installs the Claude vendor override, repeats vendor and containment
+preflight, clears the Codex model selection, and appends the conflict task to
+the prompt. It does not rebuild the seat for Claude. A refusal before spawn
+uses the ordinary setup rollback.
+
+This also applies to interactive implementer pickups without `--no-human`:
+a fresh conflicting pickup launches interactive Claude in the seated tree;
+an existing Codex resume refuses and prints the fresh Claude command. Guided,
+plan-only and `--no-launch` pickups skip this automatic preparation. Current
+automated coverage tests the merge, route/refusal and publication helpers;
+it does not exercise the complete `handle_queue_work` pickup through an
+interactive exec or a Claude launch from a clone provisioned for Codex. That
+integration boundary still needs a manual exercise or a command-level test.
+
 After a contained Codex headless implementer exits, its host commits pending
 seat edits and publishes through `ship --from-seat`, updating the existing
 PR or opening one. Standalone, drain and explicit resume launches share this

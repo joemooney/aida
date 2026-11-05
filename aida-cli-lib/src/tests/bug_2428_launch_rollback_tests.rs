@@ -125,7 +125,7 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     }
     // Counted at the spawn, not pre-marked: a failed spawn rolls back.
     let resume = body
-        .find("session::spawn_vendor_headless_resume(")
+        .find("run_queue_resume_to_exit(")
         .expect("the implementer resume");
     let last_mark = body[..resume]
         .rfind("agent.starting();")
@@ -133,6 +133,20 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     assert!(
         body[last_mark..resume].contains('}'),
         "the resume is not pre-marked"
+    );
+    // The publication wrapper must leave counting to the actual spawn.
+    // trace:STORY-2475 TASK-2807 | ai:codex
+    let resume_wrapper = include_str!("../queue_cmd.rs")
+        .split_once("pub(crate) fn run_queue_resume_to_exit(")
+        .expect("resume publication wrapper exists")
+        .1
+        .split_once("\n}\n")
+        .expect("resume publication wrapper ends")
+        .0;
+    assert!(resume_wrapper.contains("session::spawn_vendor_headless_resume("));
+    assert!(
+        !resume_wrapper.contains("agent.starting()"),
+        "the resume wrapper must leave counting to the spawn"
     );
     let reviewer = include_str!("../queue_cmd.rs")
         .split_once("pub(crate) fn run_standalone_reviewer(")

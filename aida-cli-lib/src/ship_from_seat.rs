@@ -455,7 +455,7 @@ fn finish_queue_exit(
 /// Queue the request when the advisor has no current reader.
 // trace:STORY-2475 | ai:codex
 pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Result<()> {
-    let mut cmd = std::process::Command::new(std::env::current_exe()?);
+    let mut cmd = std::process::Command::new(crate::resolve_aida_exe());
     cmd.current_dir(main).args([
         "mailbox",
         "send",

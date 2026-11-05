@@ -312,7 +312,7 @@ jobs:
       # including T7: seat-planted hooks never run on the host) joins the gate.
       # trace:TASK-2053 | ai:claude
       # TASK-2161: a passing filter run is not proof each test ran, so the step
-      # requires one `... ok` line per `bug_2169_bwrap_`/`task_2053_bwrap_` test
+      # requires one libtest success record per `bug_2169_bwrap_`/`task_2053_bwrap_` test
       # in the source and no bwrap skip; other skips (e.g. git too old for
       # reftable) are listed. trace:TASK-2161 | ai:claude
       # BUG-1934: the real-namespace seat-grant presenter (`bug_1934_bwrap_`,
@@ -344,22 +344,27 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           log="$RUNNER_TEMP/live-bwrap.log"
+          lib_results="$RUNNER_TEMP/live-bwrap-lib.results"
+          cli_results="$RUNNER_TEMP/live-bwrap-cli.results"
           set -o pipefail
           # TASK-2705 nested userns is host-attested; keep its normal shard mode.
           # TASK-2706 slice B is required-live on this runner. trace:TASK-2706 | ai:codex
-          AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
+          # Count libtest's dedicated result files: concurrent --nocapture stderr
+          # can split a passing test's console line. Keep console output for skips.
+          # trace:STORY-2475 | ai:codex
+          AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture --logfile "$lib_results" \
             bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ containment::tests::task_2706_egress_ipc_live 2>&1 | tee "$log"
-          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
+          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture --logfile "$cli_results" \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
           expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
-          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          ran=$(grep -hE '^ok .*' "$lib_results" "$cli_results" | grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+$' | sort -u | wc -l)
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
           if [ "$ran" -ne "$expected" ]; then echo "::error::only $ran of $expected live bwrap tests ran ok"; exit 1; fi
           # trace:TASK-2706 | ai:codex — a typo/zero-match filter cannot count
           # as egress/IPC acceptance. This regression has no skip arm.
-          grep -q 'containment::tests::task_2706_egress_ipc_live \.\.\. ok$' "$log"
+          grep -q '^ok containment::tests::task_2706_egress_ipc_live$' "$lib_results"
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction
