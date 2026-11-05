@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T11:33:24.437017486Z
+modified_at: 2026-11-05T11:39:28.491253504Z
 req_type: Task
 tags:
 - docs:impacted
@@ -80,6 +80,12 @@ comments:
   created_at: 2026-11-05T11:33:24.437017486Z
   modified_at: 2026-11-05T11:33:24.437017486Z
   session_id: 01a1ab59f36b
+- id: 01a1ab81-bb6b-7002-ad00-338a8ea21741
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 2 finding 1: the approved STORY-2479 contract explicitly requires fast-forward-only pull and refusal of divergent writes, while review requires recovering the normal process-local-receipt versus remote-publication race. Additive replay would change that approved contract. Request advisor authorization to validate both immutable histories, refuse conflicting filenames, and append only local-only digest-addressed files atop the validated incoming tip, retaining an explicit backup ref until publication; no content merge, force push, or spec replay. Other independent round-2 fixes are being prepared on the existing PR.. Triage reason: #3415 at 6a4eb20 conflicts with main (update-branch fails). Rebase the PR branch onto origin/main, resolve conflicts keeping both sides, one targeted test (task_3096) plus make check-ci-fast, push to the same branch.'
+  created_at: 2026-11-05T11:39:28.491250810Z
+  modified_at: 2026-11-05T11:39:28.491250810Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
@@ -142,6 +148,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ab81-bb6b-7002-ad00-3379affd834e
+  author: joe
+  timestamp: 2026-11-05T11:39:28.491235958Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -150,9 +164,3 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: design-fork
-  detail: 'Round 2 finding 1: the approved STORY-2479 contract explicitly requires fast-forward-only pull and refusal of divergent writes, while review requires recovering the normal process-local-receipt versus remote-publication race. Additive replay would change that approved contract. Request advisor authorization to validate both immutable histories, refuse conflicting filenames, and append only local-only digest-addressed files atop the validated incoming tip, retaining an explicit backup ref until publication; no content merge, force push, or spec replay. Other independent round-2 fixes are being prepared on the existing PR.'
-  lean: 'Authorize additive file replay on pull with immutable-byte collision refusal and retained old tip; regression: sender publishes between receiver process and publish.'
-  raised_by: implementer
-  raised_at: 2026-11-05T11:03:34.821972588Z
