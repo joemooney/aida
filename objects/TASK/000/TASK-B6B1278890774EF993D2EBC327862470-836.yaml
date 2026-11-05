@@ -12,12 +12,12 @@ description: |
   - Vendors the shared launch does not support yet (claude before TASK-2708 AC1, agy) refuse with a named reason; no fallback.
   - One offline test with a fake vendor binary, plus a recorded host run for codex (the advisor runs it through deputy 3).
   - LIGHT gate.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-05T19:14:14.649579464Z
+modified_at: 2026-11-05T19:31:14.988639987Z
 req_type: Task
 tags:
 - area:containment
@@ -42,6 +42,13 @@ history:
   timestamp: 2026-11-05T19:14:16.098201284Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1ad31-a7ac-7ec2-8a14-a47f5429bd84
+  author: aida-session-start
+  timestamp: 2026-11-05T19:31:14.988637436Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
