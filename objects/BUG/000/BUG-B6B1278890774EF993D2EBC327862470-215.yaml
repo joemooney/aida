@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-215
 agreed_id: BUG-2449
 title: Advisor inbox suddenly shows 683 historical messages as unread (Oct 25 onward); previously read mail resurfaced
 description: 'Observed 2026-11-04 19:54. At 19:15 `aida mailbox inbox` for the advisor listed 6 unread. At 19:54 it listed 683: 172 from implementer, 162 from integrator, 33 from antigravity-implementer-1, 32 from codex2, and so on, dating back to 2026-10-25 (e.g. 7db9934a BUG-2221 PR #2928 rework, PR-2924 two-round review cap). Between those times only PR merges landed: #3384 SPEC-447, #3372 TASK-1954, #3336 TASK-2032 seat-clone anchor; #3373 is training. No mailbox changes were made by hand. Likely the inbox scope or receipt anchor changed (a different identity or worktree set is resolved, so the old read receipts no longer match), or receipts were lost. Impact: a real request is buried under hundreds of stale items, and the stall check''s mail signal becomes useless. Acceptance: find the cause (bisect the merges above), restore the prior read state without re-sending, and add a regression test that a receipt survives a seat-clone or worktree change.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T02:55:47.844000604Z
-modified_at: 2026-11-05T02:56:23.498162725Z
+modified_at: 2026-11-05T16:13:08.226029338Z
 req_type: Bug
 comments:
 - id: 01a1a9a2-9799-79c3-8dc0-7fc0458a497a
@@ -23,6 +23,14 @@ history:
   timestamp: 2026-11-05T02:56:23.629164496Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1ac7c-4702-75c0-a400-51b15ddefbf4
+  author: joe
+  timestamp: 2026-11-05T16:13:08.226024122Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
