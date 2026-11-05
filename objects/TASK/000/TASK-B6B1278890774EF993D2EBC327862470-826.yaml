@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T22:44:03.653949015Z
+modified_at: 2026-11-05T22:53:20.062467031Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -73,6 +73,38 @@ comments:
   content: 'Implementation prepared in the assigned native seat: added native pickup/finish handoff prompts (command, skill and default role launch), deferred native queue done before committed-only diagnostics using the recorded lease branch, preserved Refs/non-completion for post-exit host commits, and reconciled newer remote PR heads through the existing sandbox before publication. Live-owner and pinned-directory checks are retained; conflicts abort without pushing; punt/hold vetoes are unchanged. Added targeted regressions and updated CLI documentation. Formatting and whitespace checks pass. Targeted Cargo tests are still compiling from a cold local target; lane job runner is unavailable in this launch. Work remains uncommitted because native Git metadata is read-only; final validation and host recovery command will follow before exit.'
   created_at: 2026-11-05T22:44:03.653949015Z
   modified_at: 2026-11-05T22:44:03.653949015Z
+  session_id: 01a1add6baf6
+- id: 01a1adea-ab3e-7881-83d7-696fbea02c28
+  author: joe
+  content: |
+    Final implementation handoff (TASK-2879)
+
+    Changed files:
+    - aida-cli-lib/src/agent_launch_prompt.rs: default implementer native finish clause and regression.
+    - aida-cli-lib/src/standalone_implementer.rs: native-specific stop contract selected from resolved launch posture.
+    - aida-core/templates/commands/aida-pickup.md and aida-core/templates/skills/aida-pickup.md: native finish override, tested edits left uncommitted, final handoff, host publication before queue completion.
+    - aida-cli-lib/src/queue_cmd.rs and queue_misc.rs: preserve lifecycle refusal first; native seat queue-done then resolves the recorded lease branch and refuses before committed-only diagnostics/status/queue mutation.
+    - aida-cli-lib/src/ship_from_seat.rs: preserve non-completing Refs PR trailers in host-created pending commits (unknown title evidence is conservative), fetch a remote branch into an invocation-private ref without changing FETCH_HEAD, and reconcile through the sandbox before bundling/pushing. Ordinary push remains non-force.
+    - aida-cli-lib/src/seat_clone.rs: sandboxed remote-head merge using host identity, disabled hooks, pinned directory checks, clean branch admission and conflict abort.
+    - aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs and story_1662_standalone_implementer_tests.rs: queue/prompt/production sandbox regressions.
+    - docs/cli/03-work-autonomy.md and 06-roles-sessions.md: document the post-exit boundary and recovery.
+
+    Validation on final source:
+    PASS cargo test --profile agent -p aida-cli-lib --lib task_2879 -- --nocapture (7 passed, including real sandbox merge; no skips).
+    PASS cargo test --profile agent -p aida-cli-lib --lib seat_clone::seat_publish_tests -- --nocapture (33 passed; includes live-owner refusal, host commit/recovery, bad-message checks, host identity and planted-hook protection).
+    PASS cargo test --profile agent -p aida-cli-lib --lib ship_from_seat:: (5 passed; includes punt/hold publication vetoes and fail-closed dispatch).
+    PASS cargo test --profile agent -p aida-cli-lib --lib standalone_implementer:: (39 passed).
+    PASS cargo test --profile agent -p aida-cli-lib --lib seat_clone::rework_merge_tests:: (5 passed).
+    PASS cargo fmt --all -- --check and git diff --check.
+    The lane job runner was unavailable in this launch; the tests above ran directly via bounded exec sessions. The initial cold build took 10m48s and the final incremental rebuild took 4m50s.
+
+    Publication boundary: this native seat has read-only Git metadata. Edits remain uncommitted and no PR was opened, no shipping/merge/review-record command was run, and queue completion was not attempted. The existing live-owner check must remain in force until this process exits. From the host main checkout after exit, publish with:
+
+    aida ship TASK-2879 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-826 --commit-pending '[AI:codex] fix(launch): hand native finishes to the host (TASK-2879)'
+
+    If the launcher's existing post-exit step has already committed, the same command observes no pending edits and publishes that commit. Run queue completion on the host only after the PR exists, then hand the PR to a separate reviewer/merge seat. TASK-2879 remains In Progress pending publication. Full CI was not run. A conflicting remote merge refuses publication and preserves the local commit; a remote update after the pinned fetch can still refuse the ordinary non-force push. Existing merge-first rework remains BUG-2456's scope.
+  created_at: 2026-11-05T22:53:20.062467031Z
+  modified_at: 2026-11-05T22:53:20.062467031Z
   session_id: 01a1add6baf6
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
