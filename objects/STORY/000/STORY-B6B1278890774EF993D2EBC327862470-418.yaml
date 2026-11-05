@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T04:49:14.663327027Z
+modified_at: 2026-11-05T04:57:12.404634716Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -158,6 +158,12 @@ comments:
   created_at: 2026-11-05T04:49:14.663327027Z
   modified_at: 2026-11-05T04:49:14.663327027Z
   session_id: 01a1aa06b62b
+- id: 01a1aa11-71d4-7613-acef-d219e83fd46a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 22:02) on sketch 914dcbec540: RECOMMENDED OPTION APPROVED. A versioned, immutable review-publication receipt, issued by the host-side recorder/collector only after its ordinary local authority validation. The consuming node trusts the publisher''s validation for that exact publication and gains no remote role grant. Do not export or copy grant/receipt evidence. Trust enrollment: (1) the operator explicitly enrolls each publishing node in a store-held node roster (node id plus public key; reuse the STORY-2238 grant-keyring signing primitives, no new crypto); (2) receipts are signed by the node key and name PR, head SHA, canonical spec keys, decision, blocking finding origin IDs, reviewer actor and node; (3) a consumer accepts a receipt only when it is from an enrolled, unrevoked node, verifies, matches the PR''s current head, and the reviewer differs from the author across nodes; (4) revocation means removal from the roster; receipts from a revoked node are refused from then on, with no retroactive un-merge. Ordering uses (node, publication id), not the local seq. Implement on story-b6b1278890774ef993d2ebc327862470-418. Slice 1: roster, signing, receipt and consume-side check with the two-clone test. Watcher reservation sync is slice 2.'
+  created_at: 2026-11-05T04:57:12.404634716Z
+  modified_at: 2026-11-05T04:57:12.404634716Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
