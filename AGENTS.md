@@ -456,6 +456,12 @@ mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.
 Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup.md.
 <!-- trace:TASK-2705 TASK-2707 | ai:codex -->
 
+Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
+evidence. GitHub UNKNOWN mergeability stays pending; new raw GitHub spawns outside
+`forge.rs` are guarded by a per-file ratchet. Legacy reads and later destructive
+transition migration remain; see [forge observations](OVERVIEW.md#forge-observations).
+<!-- trace:STORY-2401 | ai:codex -->
+
 ## Child launch containment
 
 Headless and interactive reviewer/resume launches strictly inherit

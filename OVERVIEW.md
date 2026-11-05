@@ -587,6 +587,24 @@ constituent commit trailers still participate in the landing scan.
 
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
+### Forge observations
+
+`forge_observed::Observed<T>` distinguishes settled `Known` values from
+`Pending` computation and `Transient` read failures. `Forge::observe_*` exposes
+status, metadata, check rows and branch lookup through this type; an empty check
+rollup is pending. GitHub's `UNKNOWN` mergeability stays pending, and incomplete
+status output is transient. Ship preflight retries unsettled mergeability three
+times, two seconds apart, and refuses mergeability only on a settled false;
+the forge still enforces conflicts at merge time. The wave gate distinguishes
+a settled GitHub conflict from unknown evidence.
+
+Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
+ratchet freezes remaining raw GitHub reads outside that boundary. This first
+slice retains legacy `Result` readers; confirmed-negative destructive transitions,
+train journaling and workflow-digest evidence remain later slices of the approved
+story.
+<!-- trace:STORY-2401 | ai:codex -->
+
 ### Autonomy & escalation
 
 The autonomous-collaboration layer — the three-mode autonomy ladder (default / `--zen` / `--no-human`), the implementer → advisor → human escalation cascade, the advisor's Type A/B/C resolve-vs-escalate calibration, and the file-based handshakes that coordinate the tiers — is described in [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md). For the practical user guide to `--auto-complete` and `--no-human` see [docs/autonomous-drain.md](docs/autonomous-drain.md); for the MCP transport layer over the same filesystem substrate see [docs/architecture/mcp-coordination-surface.md](docs/architecture/mcp-coordination-surface.md). The **resilient-drain primitive** is EPIC-28 (`docs/autonomous-drain.md` → "Shelving on failure"): a shelvable phase failure parks the spec in `NeedsAttention` with a structured `FailureReason` and the batch drain continues past it, with dependents skipped automatically via the `BlockedBy` pickability gate (STORY-333) — exit 2 + `aida findings list` for triage.
