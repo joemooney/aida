@@ -11,6 +11,20 @@ pub enum SuperviseCommand {
     /// Nudge a live advisor about transiently parked work, or fall back to
     /// operator notification when no advisor is live.
     Nudge,
+    /// Observe independent pipeline-idle and ready-without-train alarms.
+    /// Run every few minutes; default is a side-effect-free preview.
+    // trace:STORY-2476 | ai:codex
+    Stalls {
+        /// Continuous observation window in minutes (minimum 15).
+        #[clap(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(15..))]
+        threshold_mins: u32,
+        /// Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications.
+        #[clap(long)]
+        execute: bool,
+        /// Print the alarm report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Re-drive transiently-parked specs (typed tooling causes) on a capped,
     /// backed-off loop; leave genuine needs-human parks for escalation. Lets an
     /// unattended drain self-recover. Reads parks from the store and its attempt
@@ -55,10 +69,57 @@ pub enum SuperviseCommand {
         // trace:BUG-1623 | ai:claude
         #[clap(long)]
         execute: bool,
-        /// Repeat the pass every N seconds (default: a single pass then exit).
+        /// Repeat every N seconds (maximum 900 with --execute; default: one pass).
         #[clap(long)]
         interval: Option<u64>,
+        /// Pipeline alarm observation window in minutes (minimum 15).
+        // trace:STORY-2476 | ai:codex
+        #[clap(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(15..))]
+        threshold_mins: u32,
         #[clap(long)]
         json: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::supervise_cmd::SuperviseArgs;
+    use clap::Parser;
+
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn alarm_threshold_defaults_and_gap_floor_apply_to_stalls_and_watch() {
+        for command in ["stalls", "watch"] {
+            let args = SuperviseArgs::try_parse_from(["supervise", command]).unwrap();
+            assert!(matches!(
+                args.inner,
+                SuperviseCommand::Stalls {
+                    threshold_mins: 30,
+                    ..
+                } | SuperviseCommand::Watch {
+                    threshold_mins: 30,
+                    ..
+                }
+            ));
+            for minutes in ["15", "45"] {
+                assert!(SuperviseArgs::try_parse_from([
+                    "supervise",
+                    command,
+                    "--threshold-mins",
+                    minutes
+                ])
+                .is_ok());
+            }
+            for minutes in ["0", "14", "-1", "invalid"] {
+                assert!(SuperviseArgs::try_parse_from([
+                    "supervise",
+                    command,
+                    "--threshold-mins",
+                    minutes
+                ])
+                .is_err());
+            }
+        }
+    }
 }

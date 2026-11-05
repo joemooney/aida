@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 pub(crate) mod supervise_cmd_args;
 pub(crate) use supervise_cmd_args::*;
 
+#[path = "pipeline_stall.rs"]
+mod pipeline_stall;
+
 use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -56,6 +59,23 @@ pub(crate) fn handle_supervise_command(
 ) -> Result<()> {
     match cmd {
         SuperviseCommand::Nudge => handle_supervise_nudge(backend, store_path),
+        SuperviseCommand::Stalls {
+            execute,
+            json,
+            threshold_mins,
+        } => {
+            let root = store_path.parent().context("missing project root")?;
+            let root = crate::main_worktree_root_from(root);
+            let report = pipeline_stall::run(&root, *execute, *threshold_mins, &mut |body| {
+                nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
+            })?;
+            if *json {
+                println!("{}", serde_json::to_string(&report)?);
+            } else {
+                println!("{}", report.summary());
+            }
+            Ok(())
+        }
         // trace:STORY-1051 | ai:claude
         SuperviseCommand::Redrive {
             execute,
@@ -81,6 +101,7 @@ pub(crate) fn handle_supervise_command(
             objective,
             execute,
             interval,
+            threshold_mins,
             json,
         } => handle_supervise_watch(
             backend,
@@ -88,13 +109,14 @@ pub(crate) fn handle_supervise_command(
             objective.as_deref(),
             *execute,
             *interval,
+            *threshold_mins,
             *json,
         ),
     }
 }
 
 fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<()> {
-    if let Some(line) = nudge_pass(backend, store_path)? {
+    if let Some(line) = nudge_pass(backend, store_path, None)? {
         println!("{line}");
     }
     Ok(())
@@ -103,10 +125,41 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
 /// One nudge pass. Returns the one-line outcome for the caller to print
 /// (`None` when nothing was due), so `watch --json` can keep it off stdout.
 // trace:BUG-1623 | ai:claude
-fn nudge_pass(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<Option<String>> {
+fn nudge_pass(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &Path,
+    alarm_body: Option<&str>,
+) -> Result<Option<String>> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+    // trace:STORY-2476 | ai:codex — alarms share the existing request delivery.
+    if let Some(body) = alarm_body {
+        let root = crate::main_worktree_root_from(project_root);
+        if let Some(advisor) = live_advisor_recipient(&root) {
+            send_advisor_body(&root, &advisor, body.to_owned())?;
+            return Ok(Some(format!("pipeline alarm delivered to {advisor}")));
+        }
+        // Separate alarm sets do not consume the parked-work notification cooldown.
+        let rule = format!(
+            "supervise_pipeline_{}",
+            body.lines().next().unwrap_or("alarm")
+        );
+        let outcome = notify::send_direct_bounded(
+            &root,
+            &rule,
+            "aida: pipeline needs advisor",
+            body,
+            Some(std::time::Duration::from_secs(10)),
+        )?;
+        return Ok(match outcome.delivery() {
+            notify::DirectDelivery::Sent => Some("pipeline alarm delivered to operator".into()),
+            notify::DirectDelivery::Deferred => {
+                Some("pipeline alarm queued for operator after quiet hours".into())
+            }
+            _ => None,
+        });
+    }
     let store = backend.load()?;
     let titles = store
         .requirements
@@ -304,10 +357,12 @@ fn live_advisor_recipient(project_root: &Path) -> Option<String> {
 }
 
 fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -> Result<()> {
-    use aida_core::mailbox::{Intent, Message, Recipient};
+    send_advisor_body(project_root, advisor, format_nudge_body(items))
+}
 
+fn send_advisor_body(project_root: &Path, advisor: &str, body: String) -> Result<()> {
+    use aida_core::mailbox::{Intent, Message, Recipient};
     let id = uuid::Uuid::new_v4().to_string();
-    let body = format_nudge_body(items);
     // trace:BUG-1533 | ai:claude
     let (from, from_source) = crate::resolve_mail_sender_identity(None);
     // trace:BUG-1592 | ai:claude
@@ -397,20 +452,48 @@ struct WatchReport {
     redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
 }
 
+#[cfg(test)]
+#[test]
+fn executing_watch_refuses_intervals_that_reset_alarm_episodes() {
+    assert!(validate_watch_interval(true, Some(900)).is_ok());
+    assert!(validate_watch_interval(true, Some(901)).is_err());
+    assert!(validate_watch_interval(true, None).is_ok());
+    assert!(validate_watch_interval(false, Some(901)).is_ok());
+}
+
+// trace:STORY-2476 | ai:codex
+fn validate_watch_interval(execute: bool, interval: Option<u64>) -> Result<()> {
+    anyhow::ensure!(
+        !execute || interval.is_none_or(|secs| secs <= 900),
+        "--execute requires --interval <= 900 seconds so pipeline alarm observations do not reset"
+    );
+    Ok(())
+}
+
 fn handle_supervise_watch(
     backend: &aida_core::CachedGitBackend,
     store_path: &Path,
     objective: Option<&str>,
     execute: bool,
     interval: Option<u64>,
+    threshold_mins: u32,
     json: bool,
 ) -> Result<()> {
+    validate_watch_interval(execute, interval)?;
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
     let objective = resolve_objective(objective, project_root)?;
     loop {
-        run_watch_pass(backend, store_path, project_root, &objective, execute, json)?;
+        run_watch_pass(
+            backend,
+            store_path,
+            project_root,
+            &objective,
+            execute,
+            threshold_mins,
+            json,
+        )?;
         match interval {
             Some(secs) if secs > 0 => std::thread::sleep(std::time::Duration::from_secs(secs)),
             _ => break,
@@ -450,6 +533,7 @@ fn run_watch_pass(
     project_root: &Path,
     objective: &str,
     execute: bool,
+    threshold_mins: u32,
     json: bool,
 ) -> Result<()> {
     let queued = queued_spec_ids();
@@ -462,11 +546,21 @@ fn run_watch_pass(
         &mut queue_add_implementer,
     )?;
 
+    // trace:STORY-2476 | ai:codex
+    let root = crate::main_worktree_root_from(project_root);
+    let stalls = pipeline_stall::run_for_watch(&root, execute, threshold_mins, &mut |body| {
+        nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
+    });
+    if json {
+        eprintln!("{}", serde_json::to_string(&stalls)?);
+    } else {
+        println!("{}", stalls.summary());
+    }
     emit_pass_output(
         &report,
         execute,
         json,
-        &mut || nudge_pass(backend, store_path).ok().flatten(),
+        &mut || nudge_pass(backend, store_path, None).ok().flatten(),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
     )?;
@@ -849,3 +943,28 @@ pub(crate) static SUPERVISE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Store(run_supervise),
     };
+
+#[cfg(test)]
+mod pipeline_delivery_tests {
+    use super::*;
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn pipeline_digest_uses_existing_urgent_request_mail_writer() {
+        let root = tempfile::tempdir().unwrap();
+        send_advisor_body(
+            root.path(),
+            "advisor-test",
+            "Pipeline needs attention: pipeline-idle".into(),
+        )
+        .unwrap();
+        let rows = crate::mailbox_store::read_local_messages(root.path()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].intent, aida_core::mailbox::Intent::Request);
+        assert!(rows[0].urgent);
+        assert_eq!(
+            rows[0].to,
+            aida_core::mailbox::Recipient::Agent("advisor-test".into())
+        );
+        assert!(rows[0].body.contains("pipeline-idle"));
+    }
+}
