@@ -13,6 +13,9 @@
 
 // TASK-2708: the contained (AIDA bubblewrap) headless launch. trace:TASK-2708 | ai:claude
 pub(crate) mod contained;
+// AGY adapter policy is present, but its admission gate remains closed.
+// trace:TASK-3048 | ai:codex
+pub(crate) mod agy;
 pub(crate) mod context;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude
 #[allow(dead_code)]

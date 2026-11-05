@@ -3417,6 +3417,13 @@ const SUPPORTED_CONTAINMENT_VENDORS: &str = "Supported [contained.vendors] setti
 // trace:TASK-2631 | ai:codex
 // trace:TASK-3047 | ai:codex
 fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<ContainmentPosture> {
+    // trace:TASK-3048 | ai:codex
+    if HeadlessVendor::parse(vendor) == Some(HeadlessVendor::Agy) {
+        return crate::launch::agy::AGY
+            .require_conformance()
+            .map(|()| ContainmentPosture::Aida)
+            .map_err(|error| anyhow::anyhow!("{error}. {SUPPORTED_CONTAINMENT_VENDORS}"));
+    }
     match (HeadlessVendor::parse(vendor), setting) {
         (Some(HeadlessVendor::Claude), None | Some("aida")) => Ok(ContainmentPosture::Aida),
         (Some(HeadlessVendor::Codex), Some("aida")) => Ok(ContainmentPosture::Aida),
