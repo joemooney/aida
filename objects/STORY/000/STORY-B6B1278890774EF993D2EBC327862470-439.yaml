@@ -1,0 +1,33 @@
+id: 01a1acbe-87fb-73e2-a239-dc81fda98a4d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-439
+agreed_id: STORY-2516
+title: 'Review PR-3435: [AI:codex] fix(pr): preserve hold branch lookup refusals (TASK-2852)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ac93`) for branch `task-b6b1278890774ef993d2ebc327862470-803`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3435>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-803` → `main`
+
+  ## Covers
+
+  - TASK-2852
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3435` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T17:25:30.235270930Z
+modified_at: 2026-11-05T17:25:30.235270930Z
+req_type: Story
+filed_at:
+  code_sha: b66ec0831851a66cca11ce10a840fb60d9aee7d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70a5d68133a
+  vendor: claude
