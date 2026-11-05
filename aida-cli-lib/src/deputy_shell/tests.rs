@@ -606,6 +606,85 @@ fn wait_on_a_job_nobody_runs_times_out_with_75() {
     assert!(String::from_utf8(out).unwrap().contains("still queued"));
 }
 
+// trace:TASK-2832 | ai:codex
+#[test]
+fn wait_recovers_when_a_claim_publishes_its_state() {
+    let f = Fixture::new("t");
+    let j = f.submit("exit 7");
+    let mut state = f.q.locate(&j.id).unwrap().unwrap().state;
+    // Reproduce the runner's claim window without racing the actual runner:
+    // job.json has moved, but state.json has not been published yet.
+    std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
+    std::fs::rename(f.q.incoming_job(&j.id), f.q.job_json(&j.id)).unwrap();
+    assert!(f.q.locate(&j.id).unwrap().is_none());
+    let q = f.q.clone();
+    let id = j.id.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        let result = crate::deputy_shell_cmd::wait(&q, &id, None, &mut out);
+        tx.send((result, out)).unwrap();
+    });
+    assert!(matches!(
+        rx.recv_timeout(Duration::from_millis(150)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    ));
+    state.state = JobState::Done;
+    state.rc = Some(7);
+    state.reason = Some("exit".into());
+    std::fs::write(f.q.transcript_path(&j.id), "claim completed\n").unwrap();
+    f.q.write_state(&j.id, &state).unwrap();
+    let (result, out) = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    waiter.join().unwrap();
+    assert_eq!(result.unwrap(), 7);
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.starts_with("claim completed\n"), "{out}");
+    assert!(out.contains("done rc 7 (exit)"), "{out}");
+}
+
+// trace:TASK-2832 | ai:codex
+#[test]
+fn wait_refuses_an_interrupted_claim_after_the_grace_expires() {
+    let f = Fixture::new("t");
+    let j = f.submit("true");
+    std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
+    std::fs::rename(f.q.incoming_job(&j.id), f.q.job_json(&j.id)).unwrap();
+    let begun = std::time::Instant::now();
+    // No caller timeout: the claim grace itself must bound this wait.
+    let q = f.q.clone();
+    let id = j.id.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        let result = crate::deputy_shell_cmd::wait(&q, &id, None, &mut out);
+        let _ = tx.send((result, out));
+    });
+    // Keep a regression that removes the grace bound from hanging the suite.
+    let (result, out) = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    waiter.join().unwrap();
+    let err = result.unwrap_err();
+    assert!(begun.elapsed() >= Duration::from_secs(10));
+    assert!(
+        err.to_string().contains(&format!("no script job {}", j.id)),
+        "{err}"
+    );
+    assert!(out.is_empty());
+}
+
+// trace:TASK-2832 | ai:codex
+#[test]
+fn wait_refuses_an_unknown_job_without_a_claim_directory() {
+    let f = Fixture::new("t");
+    let id = crate::deputy::new_job_id();
+    let begun = std::time::Instant::now();
+    let err = crate::deputy_shell_cmd::wait(&f.q, &id, None, &mut Vec::new()).unwrap_err();
+    assert!(
+        err.to_string().contains(&format!("no script job {id}")),
+        "{err}"
+    );
+    assert!(begun.elapsed() < Duration::from_secs(10));
+}
+
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
 #[cfg(unix)]
 #[test]
