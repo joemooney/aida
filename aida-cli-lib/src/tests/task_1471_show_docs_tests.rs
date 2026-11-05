@@ -152,20 +152,10 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
     assert!(human.contains("Reverse-linked exposition"), "{human}");
 
     // JSON: the only change is the new edge itself (plus write bookkeeping).
-    // No key appears or disappears, so no Documentation projection leaked in.
-    let json_after_direct = show(root, "json");
-    let before: serde_json::Value = serde_json::from_str(&json_before_direct).unwrap();
-    let after: serde_json::Value = serde_json::from_str(&json_after_direct).unwrap();
-    let (before, after) = (before.as_object().unwrap(), after.as_object().unwrap());
-    let keys = |m: &serde_json::Map<String, serde_json::Value>| {
-        m.keys().cloned().collect::<std::collections::BTreeSet<_>>()
-    };
-    assert_eq!(keys(before), keys(after), "JSON key set changed");
-    let changed: std::collections::BTreeSet<&str> = after
-        .iter()
-        .filter(|(k, v)| before.get(*k) != Some(*v))
-        .map(|(k, _)| k.as_str())
-        .collect();
+    // No key disappears, and the only keys that may appear are edge-delta
+    // fields serialized skip-if-empty (a first edge introduces
+    // `relationships`), so no Documentation projection leaked in.
+    // trace:TASK-1471 | ai:claude
     const EDGE_DELTA: &[&str] = &[
         "relationships",
         "out_degree",
@@ -174,6 +164,29 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
         "updated_at",
         "history",
     ];
+    let json_after_direct = show(root, "json");
+    let before: serde_json::Value = serde_json::from_str(&json_before_direct).unwrap();
+    let after: serde_json::Value = serde_json::from_str(&json_after_direct).unwrap();
+    let (before, after) = (before.as_object().unwrap(), after.as_object().unwrap());
+    let keys = |m: &serde_json::Map<String, serde_json::Value>| {
+        m.keys().cloned().collect::<std::collections::BTreeSet<_>>()
+    };
+    let (keys_before, keys_after) = (keys(before), keys(after));
+    assert!(
+        keys_before.is_subset(&keys_after),
+        "JSON lost keys: {:?}",
+        keys_before.difference(&keys_after).collect::<Vec<_>>()
+    );
+    let added: Vec<&String> = keys_after.difference(&keys_before).collect();
+    assert!(
+        added.iter().all(|k| EDGE_DELTA.contains(&k.as_str())),
+        "unexpected JSON keys added: {added:?}"
+    );
+    let changed: std::collections::BTreeSet<&str> = after
+        .iter()
+        .filter(|(k, v)| before.get(*k) != Some(*v))
+        .map(|(k, _)| k.as_str())
+        .collect();
     assert!(changed.contains("relationships"), "{changed:?}");
     assert!(
         changed.iter().all(|k| EDGE_DELTA.contains(k)),
