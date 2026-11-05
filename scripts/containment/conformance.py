@@ -53,6 +53,23 @@ def write_json(path, data):
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
+# AGY uses write_file permissions for both native writes and edits, and
+# command permissions for shell tools. Never grant an arbitrary shell prefix.
+# This is probe admission, not a claim of confinement: the frozen command
+# deliberately attempts negative operations against disposable fixture targets.
+# trace:TASK-3048 | ai:codex
+def agy_fixture_settings(workspace, runner, manifest):
+    for path in (workspace, runner, manifest):
+        if (not path.is_absolute() or path != path.resolve() or
+                any(ch in str(path) for ch in "*?[]{}()\\\n\r")):
+            raise ValueError("AGY fixture paths must be exact canonical absolute paths")
+    if (runner.parent != manifest.parent or runner.parent.is_relative_to(workspace) or
+            runner.parent.parent != workspace.parent):
+        raise ValueError("AGY payload must be a read-only sibling of the fixture workspace")
+    invocation = shlex.join([sys.executable, str(runner), "--payload", str(manifest)])
+    return {"permissions": {"allow": [f"write_file({workspace})", f"command({invocation})"]}}
+
+
 # These endpoints deliberately DO NOT enforce an allow list. The vendor must.
 # Listeners use OS-assigned ephemeral ports, not persistent application ports.
 # trace:TASK-3046 | ai:codex
@@ -464,8 +481,9 @@ def run(args):
             original = (home / ".gemini/antigravity-cli").resolve()
             token = original / "antigravity-oauth-token"
             (runtime / "antigravity-oauth-token").touch()
-            settings = json.dumps({"permissions": {"allow": ["command(" + invocation + ")"]}})
-            vendor = [str(executable), "--sandbox", "--mode", "auto", "--settings", settings,
+            settings = runtime / "conformance-settings.json"
+            write_json(settings, agy_fixture_settings(workspace, runner, manifest))
+            vendor = [str(executable), "--sandbox", "--mode", "auto", "--settings", str(original / settings.name),
                       "--output-format", "stream-json", "--print-timeout", str(args.timeout) + "s", "-p", prompt]
             wrapper = ["bwrap", "--die-with-parent", "--dev-bind", "/", "/", "--bind", str(runtime), str(original),
                        "--chdir", str(workspace)]

@@ -166,6 +166,54 @@ else:
                 c.run(args)
             prepare.assert_not_called()
 
+    # trace:TASK-3048 | ai:codex
+    def test_agy_settings_allow_only_fixture_file_edits_and_exact_shell(self):
+        payload = self.root / "payload"
+        payload.mkdir()
+        runner, manifest = payload / "runner.py", payload / "manifest.json"
+        settings = c.agy_fixture_settings(self.workspace, runner, manifest)
+        invocation = c.shlex.join([c.sys.executable, str(runner), "--payload", str(manifest)])
+        self.assertEqual(settings, {"permissions": {"allow": [
+            f"write_file({self.workspace})", f"command({invocation})"]}})
+        for bad in (Path("/"), Path("relative"), self.workspace / "..", self.workspace / "glob*",
+                    self.workspace / "injection)\ncommand(*)"):
+            with self.assertRaises(ValueError):
+                c.agy_fixture_settings(bad, runner, manifest)
+        with self.assertRaises(ValueError):
+            c.agy_fixture_settings(self.workspace, self.workspace / "runner.py", manifest)
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_run_uses_private_settings_without_permission_bypass(self):
+        args = type("Args", (), {"vendor": "agy", "output": self.root / "agy-run", "timeout": 1})()
+        real_open = os.open
+        def open_fixture(path, flags, *args):
+            if flags == os.O_PATH | os.O_NOFOLLOW:
+                return real_open(__file__, flags)
+            return real_open(path, flags, *args)
+        def launch(argv, workspace, env, root, seconds, pass_fds):
+            self.assertNotIn("--dangerously-skip-permissions", argv)
+            self.assertEqual(argv[-2], "-p")
+            settings_path = Path(argv[argv.index("--settings") + 1])
+            self.assertEqual(settings_path.name, "conformance-settings.json")
+            generated = json.loads((root / "runtime" / settings_path.name).read_text())
+            self.assertEqual(generated, c.agy_fixture_settings(workspace, root / "payload/runner.py", root / "payload/manifest.json"))
+            self.assertEqual(generated["permissions"]["allow"][0], f"write_file({workspace})")
+            self.assertEqual((root / "runtime").stat().st_mode & 0o777, 0o700)
+            self.assertNotIn("write_file(*)", json.dumps(generated))
+            (root / "stdout.jsonl").touch()
+            return {"exit_code": 0}
+        real_relative = Path.is_relative_to
+        scratch = {Path(p).resolve() for p in ("/tmp", "/var/tmp", os.environ.get("TMPDIR", "/tmp"))}
+        def relative(path, other):
+            if path == args.output.resolve() and other in scratch:
+                return False
+            return real_relative(path, other)
+        with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), contextlib.redirect_stdout(io.StringIO()):
+            c.run(args)
+        report = json.loads((args.output / "report.json").read_text())
+        self.assertFalse(report["whole_lane_pass"])
+        self.assertFalse(report["production_launcher_credit"])
+
     def test_run_mounts_payload_outside_workspace_read_only(self):
         # Exercise real preparation/network controls, replacing only the vendor
         # spawn and credential opens. Neither payload file may live inside W.

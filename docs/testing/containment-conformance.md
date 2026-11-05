@@ -58,9 +58,18 @@ not evidence those tools are disabled: all-tool coverage remains unknown.
 
 A private vendor runtime is bind-mounted over the normal runtime directory;
 this overlay is **not** the tested enforcement boundary. Host filesystem and
-device access otherwise remain unchanged. AGY gets `--sandbox`, an exact
-session-local command permission, and read-only mounts of its existing token
-and operator settings. Codex gets AIDA's workspace-write/never/network-enabled
+device access otherwise remain unchanged. AGY gets `--sandbox`, a session-local
+exact payload-command permission and a `write_file` permission
+for only the canonical fixture workspace (AGY uses that permission for native
+writes and edits). These two rules live in `conformance-settings.json` in the
+private runtime; `--settings` points at its overlay path. The command executes
+only the immutable sibling payload and manifest, with its requested Cwd set to
+the fixture workspace. The payload intentionally attempts negative operations
+on disposable fixture siblings; this permission is probe admission, not proof
+of a shell write boundary. No arbitrary command prefix, outside file-tool
+grant, or `--dangerously-skip-permissions` is provided. AGY has read-only mounts
+of its existing token and operator settings. Codex gets AIDA's
+workspace-write/never/network-enabled
 preset and disposable equivalents of the TASK-2712 store/cache/mail/deputy
 write grants. Credentials are opened with `O_PATH` and mounted read-only,
 never read by the harness, copied, or printed. No operator settings change.
@@ -72,6 +81,28 @@ sibling artifacts. Candidate invocations mirror native settings, **not** the
 production AIDA launcher: the report explicitly grants no production-launch
 credit. In particular, AGY's production launcher must remain refused until S2
 provides and independently proves the selected adapter.
+
+### AGY shared-boundary adapter preparation
+
+<!-- trace:TASK-3048 | ai:codex -->
+The binding 2026-11-05 advisor ruling limits this slice to fixture permissions
+and adapter data, while the advisor owns fresh host measurements. The shared
+launcher's `launch/agy.rs` records posture A, the private runtime/credential
+layout, safe option order before final `-p <prompt>`, allowed write classes,
+raw Git/store denial with mediated-only operations, and browser/URL/MCP/delegated
+tool disablement requirements. It introduces no separate enforcement engine.
+Candidate data must not be passed through the existing Codex preparation arm,
+which has a different auth model and grants raw store writes.
+
+`daily-cloudcode-pa.googleapis.com` is observed evidence only. Approved auth
+hosts remain empty and the inventory remains explicitly incomplete. The table
+does not grant network access or mount credentials. All AGY containment requests,
+including trusted `agy = "aida"` or `"native"`, fail with a named pending-all-tool
+conformance refusal. There is no config switch to unlock the adapter. A future
+integrated launch must enforce the table through the shared pinned filesystem,
+IPC and egress boundary and demonstrate mediated-write positive controls and
+fresh all-tool conformance before that gate can change. This slice does not
+claim an integrated launch or complete the parent story's real-lane acceptance.
 
 ## Result rules
 
