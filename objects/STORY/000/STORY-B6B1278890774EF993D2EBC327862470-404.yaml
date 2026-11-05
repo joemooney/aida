@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T06:37:15.633727029Z
+modified_at: 2026-11-05T06:37:18.356885062Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -159,6 +159,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings 1-4 and 6 fixed with tests; AC1/AC3 met. AC2''s digest is still wrong on this repo''s real GitHub data: every held PR fails merge-hold-gate, so it is reported as red CI with an ''aida queue rework'' command, and those logs use up the 4-log failing-test budget. CI code jobs were still in progress at review time.. No triage reason was given.'
   created_at: 2026-11-05T06:37:15.633724374Z
   modified_at: 2026-11-05T06:37:15.633724374Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa6d-162a-7330-b416-85acc14e782b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2476):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4dc37ff76f74
+    Recorded: 2026-11-05T06:08:40.359510371+00:00
+    Findings:
+    1. (major) AC2 / round-2 finding #5 not met on real data. merge-hold-gate is a required check (gh api .../branches/main/protection returns [merge-hold-gate, Build (ubuntu-latest)]) and it FAILS on every aida:merge-hold PR. 11 of 14 open PRs are affected, e.g. PR-3342 and PR-3392, which have all CI (*) and Build green. So pr.ci_rollup == 'fail', and pr_digest (pipeline_stall.rs:607-628) adds 'red CI [merge-hold-gate]; aida queue rework <SPEC>; gh pr checks N' next to the correct merge-hold line, telling the advisor to rework a green PR blocked only by its hold. failure_details (pipeline_stall.rs:539-575) and observe (:407-409) also queue those merge-hold-gate jobs for log fetches, which can use all 4 log slots before any real failing test. Fix: in the detector, treat the merge-hold-gate check as the hold signal (already reported via pr_has_merge_hold), not as CI failure, both in the rollup used for blocked/ready and in failure_details. Add a pr_digest/observe test whose rollup has merge-hold-gate FAILURE next to green CI on a held PR: assert no 'queue rework', no 'red CI', and no log fetch.
+    2. (minor) Duplicate check runs are not deduped. GitHub's statusCheckRollup keeps superseded runs of the same check: PR-3409/3408 show merge-hold-gate FAILURE, FAILURE, SUCCESS. summarize_status_check_rollup marks any FAILURE row as fail, so a check that later re-ran green still makes the PR 'fail' (blocked and never ready). That can keep ready-without-train from firing and mislabel the blocker. In parse_stall_prs, keep only the latest run per check name (by completedAt/startedAt) before summarizing, and test the FAILURE-then-SUCCESS case.
+    3. (cosmetic) train_pr_running (pipeline_stall.rs:517-535): pr_train::train_abandoned returns None both for unknown owners and for owners that are provably alive, so a live train PR gets the 'owner liveness unknown ... gh pr close N' line. Tell the two apart, e.g. a live owner yields Some(true) with no close suggestion, or reword the line so it does not suggest closing a running train.
+    4. (cosmetic) failure_details only matches check['conclusion'], but pr_digest also accepts StatusContext 'state' FAILURE/ERROR. A red StatusContext-only PR is named in the blocker line but gets no 'failing tests unavailable' line. Match the same predicate in both places.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T06:37:18.250324Z
+  modified_at: 2026-11-05T06:37:18.250324Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
