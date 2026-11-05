@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-const COMMON: &str = include_str!("egress_probe.py");
-const LANE: &str = include_str!("contained_lane.py");
-const HOST: &str = include_str!("contained_host.py");
+const COMMON: &str = include_str!("../containment/egress_probe.py");
+const LANE: &str = include_str!("../containment/contained_lane.py");
+const HOST: &str = include_str!("../containment/contained_host.py");
 // TOOL_ENV is deliberately independent of this transport list. Never add
 // registry/launch tokens, arbitrary proxy values, or parent grant context.
 const ENV: &[&str] = &[
@@ -875,5 +875,5 @@ impl Drop for ContainedChild {
 // trace:TASK-2708 | ai:claude — under tests/, which the TASK-1752 grant-env
 // ratchet skips; the #[cfg(test)] gate is what keeps that skip honest.
 #[cfg(test)]
-#[path = "tests/launch_tests.rs"]
+#[path = "../containment/tests/launch_tests.rs"]
 mod tests;

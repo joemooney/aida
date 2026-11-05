@@ -1319,7 +1319,7 @@ This diagnostic remains separate from ordinary launch receipts. See [the tracer 
 ### Foreground headless Codex boundary
 
 Trusted `[contained.vendors] codex = "aida"` routes fresh headless implementer
-and reviewer phases through `containment/launch.rs`. `/usr/bin/python3 -I -S`
+and reviewer phases through `launch/contained.rs`. `/usr/bin/python3 -I -S`
 and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;

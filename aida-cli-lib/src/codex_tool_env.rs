@@ -266,9 +266,14 @@ fn codex_argv_start(child: &Command) -> Result<usize> {
 /// Translate only sandbox/config options, never model/prompt flags. Current
 /// Codex sandbox uses permission profiles rather than the model CLI's -s.
 fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
-    use std::ffi::OsString;
     let all_args: Vec<_> = child.get_args().collect();
-    let args = &all_args[codex_argv_start(child)?..];
+    sandbox_args_from(&all_args[codex_argv_start(child)?..])
+}
+
+/// [`sandbox_args`] over a bare Codex argv (no program, no bwrap prefix).
+// trace:TASK-2708 | ai:claude
+fn sandbox_args_from(args: &[&std::ffi::OsStr]) -> Result<Vec<std::ffi::OsString>> {
+    use std::ffi::OsString;
     let mut out = vec![OsString::from("sandbox")];
     let mut i = 0;
     while i < args.len() {
@@ -608,9 +613,9 @@ pub(crate) fn tool_env_keys_for_test() -> &'static [&'static str] {
 
 // trace:TASK-2707 | ai:codex
 pub(crate) fn sandbox_args_for_contained(args: &[String]) -> Result<Vec<String>> {
-    let mut cmd = Command::new("codex");
-    cmd.args(args);
-    sandbox_args(&cmd)?
+    // TASK-2708: an argv, not a child; no Command is built here (STORY-2326).
+    let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+    sandbox_args_from(&args)?
         .into_iter()
         .map(|v| {
             v.into_string()

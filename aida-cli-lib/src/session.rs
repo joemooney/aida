@@ -2061,14 +2061,8 @@ fn spawn_vendor_headless_forking(
     let posture = containment_posture(vendor, contained)?; // trace:TASK-2631 | ai:codex
     let ctx = headless_launch_context(vendor, program, args, posture)?; // trace:STORY-2326 | ai:claude
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
-        &headless_worktree_root(),
-        seat.as_str(),
-        &crate::current_user_id(None),
-        // trace:TASK-2708 | ai:claude
-        sandboxed_child_grant(vendor, contained)?,
-    )?;
+    // TASK-2708: the headless env sits beside its compose_headless_command
+    // build (BUG-342); the child grant is issued just after.
     cmd.env("AIDA_HEADLESS", "1")
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
@@ -2078,6 +2072,14 @@ fn spawn_vendor_headless_forking(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    let child_grant = crate::gate::seat_authority::issue_launch_child(
+        &headless_worktree_root(),
+        seat.as_str(),
+        &crate::current_user_id(None),
+        // trace:TASK-2708 | ai:claude
+        sandboxed_child_grant(vendor, contained)?,
+    )?;
     // trace:BUG-2187 | ai:codex
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();

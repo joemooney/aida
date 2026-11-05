@@ -196,9 +196,8 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
         );
     }
     assert!(
-        fn_body(dispatch, "build_implementer_launch_command").contains(
-            "DispatchVendor::Codex => {\n            unreachable!("
-        ),
+        fn_body(dispatch, "build_implementer_launch_command")
+            .contains("DispatchVendor::Codex => {\n            unreachable!("),
         "dispatch.rs::build_implementer_launch_command grew a direct Codex arm: \
          finalize it through prepare_launch and record it in CODEX_SPAWN_PATHS"
     );

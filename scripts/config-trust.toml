@@ -958,7 +958,7 @@ inspection = "policy"
 # Private vendor-state config is generated, not a branch-local authority read.
 # Egress comes from the already-pinned trusted project snapshot.
 # trace:TASK-2707 | ai:codex
-[readers."aida-cli-lib/src/containment/launch.rs"]
+[readers."aida-cli-lib/src/launch/contained.rs"]
 channels = ["other-file", "write", "trusted"]
 sites = 1
 

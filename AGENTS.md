@@ -447,7 +447,7 @@ Antigravity session communication semantics.
 The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
 and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.
-The separate `containment/launch.rs` owner handles trusted Codex AIDA-posture
+The separate `launch/contained.rs` owner handles trusted Codex AIDA-posture
 fresh foreground headless phases with exact env transport, private state, a
 mandatory connect broker and host-attested receipts before vendor exec. API-key
 mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.

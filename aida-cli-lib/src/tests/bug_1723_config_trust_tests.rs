@@ -677,7 +677,7 @@ const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
     ),
     // trace:TASK-2708 | ai:claude
     (
-        "aida-cli-lib/src/containment/launch.rs",
+        "aida-cli-lib/src/launch/contained.rs",
         "writes generated vendor state (a private per-launch Codex config.toml \
          in its own tempdir), never the project config",
     ),

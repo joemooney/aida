@@ -3,7 +3,9 @@
 //! production receipt before releasing the contained vendor exec barrier.
 // trace:TASK-2705 | ai:codex
 mod filesystem;
-pub(crate) mod launch;
+// TASK-2708 / STORY-2326: the contained launcher lives in `launch/`; this
+// alias keeps `containment::launch::…` paths. trace:TASK-2708 | ai:claude
+pub(crate) use crate::launch::contained as launch;
 mod supervisor;
 
 use serde::{Deserialize, Serialize};
