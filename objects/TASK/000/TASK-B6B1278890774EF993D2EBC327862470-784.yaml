@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-784
 agreed_id: TASK-3046
 title: 'STORY-2460 S1: containment conformance harness (C0-C4) plus host-run probes of agy --sandbox and codex native'
 description: 'Implement the vendor-neutral conformance contract from SKETCH v1 sections 1-2 as a host-runnable harness, as ruled at signoff 2026-11-04 11:05 (Q1, Q2, Q4). Run it host-side through the script deputy against agy --sandbox (private runtime dir, no credential copying) and against codex native. Record per-check results on STORY-2460, and the posture S1 selects for agy. File a defect for each Codex failure (Q5). Acceptance: the harness exists with tests; both vendors have recorded results; the posture decision is recorded.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T02:36:11.702090909Z
+modified_at: 2026-11-05T02:36:41.720993951Z
 req_type: Task
 tags:
 - area:containment
@@ -81,6 +81,12 @@ comments:
   created_at: 2026-11-05T02:36:11.702090909Z
   modified_at: 2026-11-05T02:36:11.702090909Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a990-cd78-7952-8a16-649190610d0c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round-2 findings 1 and 4 need fresh authorized host evidence and this round requires a new commit. Code/tests/docs fixes for findings 1-7 are prepared, 15 tests pass including live bwrap swap/restore, but deputies 2/3 are NOT running and the native seat refuses Git writes (.git/index.lock read-only). No finding is disputed. Historical positive credit is withdrawn via reproducible reassessment; no fresh vendor execution or commit is claimed. Launcher must commit pending work after this process exits, reconcile publication with PR #3392, and run the updated host harness. Round-two patch against ed410b432a94: /tmp/task3046-round2.patch; subject: /tmp/task3046-round2-commit-message.txt. Do not release the merge hold or record a reviewer verdict.. No triage reason was given.'
+  created_at: 2026-11-05T02:36:41.720992694Z
+  modified_at: 2026-11-05T02:36:41.720992694Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
   author: joe
@@ -146,6 +152,14 @@ history:
   timestamp: 2026-11-05T02:32:14.728533089Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a990-cd78-7952-8a16-64882aeb9c12
+  author: joe
+  timestamp: 2026-11-05T02:36:41.720981934Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -154,8 +168,3 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round-2 findings 1 and 4 need fresh authorized host evidence and this round requires a new commit. Code/tests/docs fixes for findings 1-7 are prepared, 15 tests pass including live bwrap swap/restore, but deputies 2/3 are NOT running and the native seat refuses Git writes (.git/index.lock read-only). No finding is disputed. Historical positive credit is withdrawn via reproducible reassessment; no fresh vendor execution or commit is claimed. Launcher must commit pending work after this process exits, reconcile publication with PR #3392, and run the updated host harness. Round-two patch against ed410b432a94: /tmp/task3046-round2.patch; subject: /tmp/task3046-round2-commit-message.txt. Do not release the merge hold or record a reviewer verdict.'
-  raised_by: implementer
-  raised_at: 2026-11-05T02:30:33.812363947Z
