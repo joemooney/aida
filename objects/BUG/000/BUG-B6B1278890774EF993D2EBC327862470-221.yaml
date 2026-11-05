@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-221
 agreed_id: BUG-2455
 title: An exited implementer lane's seat clone keeps holding the PR branch, so the next rework pickup (--force-claim --branch) refuses
 description: 'Hit 4 times on 2026-11-05 (TASK-2832, STORY-2492, STORY-2475, TASK-2995 worktree). After a headless Codex lane exits, its lease and seat clone survive; ''aida queue work SPEC --role implementer --force-claim --branch <PR branch>'' then fails ''branch ... is held by a contained seat''s private clone ... before pickup setup''. The advisor must hand-verify the clone, publish any pending edits, and ''session end --force'' it. Sibling of BUG-2450 (reviewer side). Acceptance: (1) --force-claim on a branch held by an exited (dead-pid) lane''s clean, pushed clone retires that clone and lease automatically; (2) a dirty clone is published (commit-pending to the PR branch) or refused with the exact path and diff stat; (3) regression test covers both.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T13:50:02.589971240Z
+modified_at: 2026-11-05T13:50:11.610831365Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -114,6 +114,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1abf9-689a-7222-be69-9e4d019415fe
+  author: joe
+  timestamp: 2026-11-05T13:50:11.610853338Z
+  session_id: 01a1abdf1077
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
@@ -126,6 +134,12 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T12:13:10.815802032Z
   implemented_by: joe
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-2 findings 1-5 are addressed in the retained working tree and not disputed, but publication is blocked: git add cannot create .git/index.lock (Read-only file system) under this native Codex lane. No new commit or push was possible. Required-live BUG-2455 tests: 6/6 pass; original held-branch test passes; fmt and maintenance guard pass. Broader queue suite: 14/15, with rollback lease-removal regression also failing in isolation and without ambient AIDA variables (baseline not checked). Host must publish the retained patch to existing PR #3421 using aida ship --from-seat with --commit-pending; no merge or review record requested. Patch: /tmp/bug2455-round2.patch.'
+  lean: Publish from the host main checkout after reviewing the patch; retain the separate rollback-test finding for triage.
+  raised_by: implementer
+  raised_at: 2026-11-05T13:50:11.610831365Z
 interface_changes:
   cli:
   - queue work --force-claim --branch retires clean, pushed private clones owned by exited lanes; unsafe clones are retained with path and diff-stat diagnostics.
