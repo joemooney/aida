@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T09:48:53.471184990Z
+modified_at: 2026-11-05T09:48:56.275499107Z
 req_type: Task
 tags:
 - docs:impacted
@@ -43,6 +43,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Intake isolation, publication, hostile-history validation and journaled create/comment are solid and tested, but the normal two-site flow wedges on divergence and a failed child write wedges an observation permanently; CI was still pending at review time.. Triage reason: CI red at 395eea7: task1169_launcher_sets_ceiling_guardrail (every_headless_spawn_site_disables_background_tasks / sets_the_background_wait_ceiling), bug_2181 task_2001_every_host_remote_call_routes_its_credentials, resolve_aida_exe no_cli_source_outside_the_resolver. New spawn site must go through the shared launcher/resolver.'
   created_at: 2026-11-05T09:48:53.471182767Z
   modified_at: 2026-11-05T09:48:53.471182767Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1c-87eb-7ff1-9ede-ead6f7fa9f1d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3096):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 395eea71d48a
+    Recorded: 2026-11-05T08:43:28.882231039+00:00
+    Findings:
+    1. MAJOR aida-cli-lib/src/intent_intake.rs:545-605 (push/pull) + 778-786 (process): the normal two-site flow deadlocks. Home runs 'process' (commits receipts/<sha>.json locally, not pushed). Work then publishes another observation. Home 'publish' is refused as non-fast-forward, and home 'pull' refuses with 'Intake diverged'. No command recovers. The 'separate clone' advice drops the local receipts, and a fresh clone has no journal, so re-running '--action create' there duplicates the spec. concurrent_duplicate_publication_serializes_and_divergence_refuses only covers two publishers and asserts the refusal. Fix: let pull re-apply local-only immutable, digest-addressed receipt/observation files on top of the validated incoming tip (an additive replay, not a content rebase), or keep receipts on a home-local ref, or push the receipt atomically inside process with a defined retry. Add a test where the sender publishes between the receiver's process and publish. Advisor decision needed if this changes the approved never-rebase wording.
+    2. MINOR→MAJOR aida-cli-lib/src/intent_intake.rs:700-773: a definite spec-writer failure wedges the observation for good. The journal is written before the child 'aida add'/'aida comment add' runs, and the child's stderr is discarded (transport_process::bounded sets Stdio::null). Wedge cases: the writer refuses (no role grant, store refusal, a title it rejects); spawn fails before the child exists (an envelope title containing a JSON-escaped NUL makes Command::arg fail and '?' returns early); the 30s timeout kills it. Every later 'process' for that checksum, including --action pending and dismiss, then fails with 'Ambiguous prior spec write'. There is no reconcile command, and docs/cli/02-specs.md says not to delete the journal. Fix: when the child never spawned, or has exited and a fresh evidence() scan finds no marker, remove the journal (or mark it retryable), show the child's stderr, and add an explicit reconcile path. Add a test for a refused writer followed by a successful retry.
+    3. MINOR aida-cli-lib/src/intent_intake.rs:339-476, 485-551: intake stops working permanently once fixed limits are hit, and nothing rotates or compacts it. Every operation re-validates the full history: publish validates it 3 times (files(), history(commit), push), with 2 git spawns per commit, all inside a 30s deadline. The caps are 4096 commits, 8192 files and 32 MiB of blobs, and each processed observation costs 2 commits. So intake hits 'deadline exceeded' or a cap after a few hundred to about 2000 observations (only 256 maximum-size envelopes fit in 32 MiB), and pull/list/process all refuse. Fix: cache the validated tip and validate only new commits, and either document the lifetime limit with a rotation procedure or add one.
+    4. COSMETIC aida-cli-lib/src/intent_intake.rs:794-855: the --json flags on enroll/publish/pull/process do nothing. These commands always print JSON, even in human mode. Human 'list' prints the title JSON-quoted. Receipts and the list view show the internal requirement UUID as destination instead of the spec ID the operator passed with --target. Give these commands a human rendering, or drop the dead flags and say so in docs/cli-format-json-audit.md.
+    5. UNVERIFIED: PR CI at 395eea71d48a (run 41995861126: cli-0, cli-1, lib-0, lib-1, gates, contracts, rest) was still pending at review time. The rework head needs every shard green, including bug_1502_format_json_audit, which the implementer could not run locally.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:48:56.171073478Z
+  modified_at: 2026-11-05T09:48:56.171073478Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
