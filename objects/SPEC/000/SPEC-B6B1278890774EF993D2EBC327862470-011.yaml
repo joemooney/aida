@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T19:25:59.128821503Z
-modified_at: 2026-11-04T19:25:59.128821503Z
+modified_at: 2026-11-05T00:28:43.114390749Z
 req_type: Task
 tags:
 - from-implementer:SPEC-447
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a1a91b-a2ea-7c42-a980-80aa1706ad18
+  author: joe
+  content: 'Round-2 SPEC-447 review: evaluate enabling serde_json/float_roundtrip as a candidate repair before adding a 2-ULP comparator. It is expected to remove the default-parser drift at its source, allowing the existing exact rate comparison to remain zero-tolerance. Check dependency-wide feature unification and rerun committed fractional fixtures plus wrong-count, nonfinite, materially wrong rate and provenance/authority-gate negatives. The scalar survey characterization changed > 0 is expected to flip to changed == 0 when this feature is enabled. No parser feature or production gate change is made by SPEC-447.'
+  created_at: 2026-11-05T00:28:43.114390749Z
+  modified_at: 2026-11-05T00:28:43.114390749Z
+  session_id: 01a1a91a4d9c
 history:
 - id: 01a1a82b-89cd-70d2-a673-a09b91b6b3ba
   author: joe
