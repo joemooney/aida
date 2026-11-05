@@ -8,12 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-04T20:49:03.561923054Z
+modified_at: 2026-11-05T00:28:00.889732287Z
 req_type: Story
 tags:
 - area:deputy
 - needs-sketch
 - security
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1a91a-c32a-7110-a8be-e6d7dab7be82
+  created_at: 2026-11-05T00:28:00.889728589Z
+  created_by: joe
 comments:
 - id: 01a1a32e-2231-7322-b7ed-34f1bddeecb7
   author: joe
@@ -275,6 +281,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a91b-03bb-7482-8fbc-a3a104ac85d7
+  author: joe
+  timestamp: 2026-11-05T00:28:02.363272480Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes: []
 filed_at:
   code_sha: cfee54e5aabfce342a2e385a63dc2deb7d3c1d96
   branch: story-2338-sketch
