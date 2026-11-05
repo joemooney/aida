@@ -217,11 +217,15 @@ pub(crate) fn handle_compete_command(
         if dry_run {
             // Preview vendor posture without preparing settings or an OS wrapper:
             // both operational helpers can write artifacts in an existing tree.
+            // Native Codex grants resolve from `project_root` (the arm will be
+            // its linked worktree), never from a stale tree at the arm's path.
+            // trace:BUG-2439 | ai:claude
             let actual_args = compete_preview_argv(
                 crate::seat_clone::launcher_main().as_deref(),
                 &argv,
                 vendor,
                 session::drain_contained(&project_root)?,
+                &project_root,
                 &compete_worktree_dir(&project_root, &branch),
             )?;
             println!(
@@ -1117,7 +1121,8 @@ pub(crate) fn build_compete_arm_command(
     // trace:BUG-2439 TASK-2032 | ai:claude
     let host_main = crate::seat_clone::launcher_main();
     let host_main = host_main.as_deref();
-    let args = compete_arm_argv(host_main, argv, vendor, contained, worktree_dir, || {
+    let tree = ArmTree::Existing(worktree_dir);
+    let args = compete_arm_argv(host_main, argv, vendor, contained, tree, || {
         session::claude_contained_flags_for(host_main, worktree_dir)
     })?;
     let actually_contained =
@@ -1161,16 +1166,32 @@ fn compete_codex_environment(cmd: &mut std::process::Command, worktree: &std::pa
         .env("AIDA_AGENT_TYPE", "codex");
 }
 
+/// The tree a compete child's native Codex grants resolve from.
+// trace:BUG-2439 | ai:claude
+#[derive(Debug, Clone, Copy)]
+enum ArmTree<'a> {
+    /// A launch: the child's own, existing tree.
+    Existing(&'a std::path::Path),
+    /// A dry run: the arm's worktree does not exist yet; it will be a linked
+    /// worktree of this project root, so its grants resolve from that root's
+    /// main, read-only.
+    NewLinkedWorktreeOf(&'a std::path::Path),
+}
+
 /// Preview the same Codex tool-shell overrides without probing or spawning.
+/// `worktree` is where the arm will run (it need not exist yet); it becomes a
+/// linked worktree of `project_root`, which is what its grants resolve from.
 // trace:BUG-2439 | ai:codex
 fn compete_preview_argv(
     host_main: Option<&std::path::Path>,
     argv: &[String],
     vendor: &str,
     contained: bool,
+    project_root: &std::path::Path,
     worktree: &std::path::Path,
 ) -> Result<Vec<String>> {
-    let args = compete_arm_argv(host_main, argv, vendor, contained, worktree, || {
+    let tree = ArmTree::NewLinkedWorktreeOf(project_root);
+    let args = compete_arm_argv(host_main, argv, vendor, contained, tree, || {
         Ok(vec![
             "--setting-sources".into(),
             "project".into(),
@@ -1208,7 +1229,7 @@ fn compete_arm_argv(
     argv: &[String],
     vendor: &str,
     contained: bool,
-    worktree: &std::path::Path,
+    tree: ArmTree<'_>,
     contained_flags: impl FnOnce() -> Result<Vec<String>>,
 ) -> Result<Vec<String>> {
     // BUG-050: a claude arm or judge is a headless `claude -p`: its flags lead
@@ -1252,7 +1273,21 @@ fn compete_arm_argv(
                 })
                 .collect()
         } else {
-            crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main, worktree, None)?
+            // trace:BUG-2439 | ai:claude
+            match tree {
+                ArmTree::Existing(worktree) => {
+                    crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+                        host_main, worktree, None,
+                    )?
+                }
+                ArmTree::NewLinkedWorktreeOf(project_root) => {
+                    crate::codex_native_sandbox::codex_native_sandbox_flags_for_new_linked_worktree(
+                        host_main,
+                        project_root,
+                        None,
+                    )?
+                }
+            }
         }
     } else {
         session::headless_claude_posture(contained_flags()?)?
@@ -1421,7 +1456,7 @@ mod containment_tests {
             &argv,
             "claude",
             false,
-            std::path::Path::new("."),
+            ArmTree::Existing(std::path::Path::new(".")),
             || unreachable!(),
         )
         .unwrap();
@@ -1437,7 +1472,7 @@ mod containment_tests {
                 &codex,
                 "codex",
                 false,
-                std::path::Path::new("."),
+                ArmTree::Existing(std::path::Path::new(".")),
                 || unreachable!()
             )
             .unwrap(),
@@ -1459,7 +1494,8 @@ mod containment_tests {
         let prompt = "--permission-mode bypassPermissions inside prompt";
         let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
         assert_eq!(bin, "claude");
-        let preview = compete_arm_argv(None, &argv, "claude", true, dir.path(), || {
+        let tree = ArmTree::Existing(dir.path());
+        let preview = compete_arm_argv(None, &argv, "claude", true, tree, || {
             Ok(vec![
                 "--setting-sources".into(),
                 "project".into(),
@@ -1545,66 +1581,86 @@ mod containment_tests {
         .is_ok());
     }
 
+    /// BUG-2439 review round 3: the dry-run preview runs BEFORE the arm's
+    /// worktree exists, as in production (a not-yet-created sibling of the
+    /// project root), and must equal the real launch argv built after
+    /// `git worktree add` made that path a linked worktree of the root.
     // trace:BUG-2439 | ai:codex
+    // trace:BUG-2439 | ai:claude
     #[test]
     fn codex_compete_native_argv_matches_preview_and_runs() {
-        let root = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        // A real main grant the preview must resolve without the worktree.
+        let mailbox = root.join(".aida/mailbox");
+        std::fs::create_dir_all(&mailbox).unwrap();
+        let mailbox = std::fs::canonicalize(&mailbox).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
+        )
+        .unwrap();
+        let git = |args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{args:?}: {output:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["add", ".aida/config.toml"]);
+        git(&["commit", "-qm", "trusted native policy"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ]);
         let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
-            root.path(),
+            &root,
             "implementer",
             &[],
             &[("AIDA_CONTAINED", Some("1")), ("AIDA_OS_WRAP", Some("1"))],
         );
-        let _cwd = session::contained_cwd_seam::pin(root.path());
-        let candidate = tempfile::tempdir().unwrap();
-        let worktree = candidate.path();
-        assert_ne!(worktree, root.path());
-        std::fs::create_dir_all(worktree.join(".aida")).unwrap();
-        // Ensure this fixture exercises a real --add-dir grant.
-        let mailbox = worktree.join(".aida/mailbox");
-        std::fs::create_dir_all(&mailbox).unwrap();
-        for tree in [root.path(), worktree] {
-            std::fs::write(
-                tree.join(".aida/config.toml"),
-                "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
-            )
-            .unwrap();
-            for args in [
-                vec!["init", "-q", "-b", "main"],
-                vec!["add", ".aida/config.toml"],
-                vec!["commit", "-qm", "trusted native policy"],
-                vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
-                vec![
-                    "symbolic-ref",
-                    "refs/remotes/origin/HEAD",
-                    "refs/remotes/origin/main",
-                ],
-            ] {
-                let output = crate::test_git::git_command()
-                    .current_dir(tree)
-                    .args(args)
-                    .env("GIT_AUTHOR_NAME", "test")
-                    .env("GIT_AUTHOR_EMAIL", "test@example.com")
-                    .env("GIT_COMMITTER_NAME", "test")
-                    .env("GIT_COMMITTER_EMAIL", "test@example.com")
-                    .output()
-                    .unwrap();
-                assert!(output.status.success(), "{output:?}");
-            }
-        }
-        let fake = worktree.join("fake-codex");
+        let _cwd = session::contained_cwd_seam::pin(&root);
+        let fake = tmp.path().join("fake-codex");
         crate::test_exec::write_executable(&fake, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
         let prompt = "preserve --permission-mode --sandbox read-only inside prompt";
         let adapter = compete::vendor_adapter("codex").unwrap();
         let argv = compete::headless_argv(&adapter, prompt).unwrap();
-        // The Claude settings builder must never run for native Codex.
+        let branch = compete::vendor_branch("TASK-1", "codex");
+        let worktree = compete_worktree_dir(&root, &branch);
         // The host main the launch entry point resolves from the pinned
         // project root; passed explicitly, as production does.
         let host_main = crate::seat_clone::host_main_from(&crate::find_project_root().unwrap());
         let host_main = host_main.as_deref();
-        let posture = compete_arm_argv(host_main, &argv, "codex", true, worktree, || {
-            panic!("Claude settings for Codex")
-        })
+        // Dry run: the arm's worktree does not exist yet.
+        assert!(!worktree.exists());
+        let previews: Vec<Vec<String>> = [false, true]
+            .into_iter()
+            .map(|contained| {
+                compete_preview_argv(host_main, &argv, "codex", contained, &root, &worktree)
+                    .unwrap()
+            })
+            .collect();
+        assert!(!worktree.exists(), "a dry run must not create the worktree");
+        // Launch: the arm's worktree is now a linked worktree of the root.
+        git(&["worktree", "add", "-q", "-b", &branch, worktree.to_str().unwrap()]);
+        // The Claude settings builder must never run for native Codex.
+        let posture = compete_arm_argv(
+            host_main,
+            &argv,
+            "codex",
+            true,
+            ArmTree::Existing(&worktree),
+            || panic!("Claude settings for Codex"),
+        )
         .unwrap();
         // Pin the whole native argv, including grants between the global
         // approval option and `exec`, rather than assuming `exec` is fifth.
@@ -1620,7 +1676,7 @@ mod containment_tests {
         .collect();
         for path in crate::codex_native_sandbox::codex_native_write_paths(
             host_main,
-            &[worktree.to_path_buf()],
+            &[worktree.clone()],
             None,
         )
         .unwrap()
@@ -1628,17 +1684,18 @@ mod containment_tests {
             expected_native.extend(["--add-dir".into(), path.to_str().unwrap().to_owned()]);
         }
         expected_native.extend(["exec".into(), prompt.into()]);
-        assert!(expected_native
-            .windows(2)
-            .any(|pair| pair == ["--add-dir", mailbox.to_str().unwrap()]));
+        assert!(
+            expected_native
+                .windows(2)
+                .any(|pair| pair == ["--add-dir", mailbox.to_str().unwrap()]),
+            "{expected_native:?}"
+        );
         assert_eq!(posture, expected_native);
-        for contained in [false, true] {
+        for (contained, preview) in [false, true].into_iter().zip(&previews) {
             ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
-            let preview =
-                compete_preview_argv(host_main, &argv, "codex", contained, worktree).unwrap();
             let mut cmd = build_compete_arm_command(
-                root.path(),
-                worktree,
+                &root,
+                &worktree,
                 fake.to_str().unwrap(),
                 &argv,
                 "codex",
@@ -1664,7 +1721,8 @@ mod containment_tests {
                 ]
             });
             assert_eq!(actual, expected);
-            assert_eq!(preview, expected);
+            // The preview made before the worktree existed equals the launch.
+            assert_eq!(preview, &actual, "contained={contained}");
             let out = cmd.output().unwrap();
             assert!(out.status.success());
             assert_eq!(
@@ -1680,7 +1738,7 @@ mod containment_tests {
         ambient.set_key("AIDA_CONTAINED", "1");
         let (_, argv) = compete::judge_command(compete::JudgeVendor::Codex, None, prompt);
         let cmd = build_compete_judge_command(
-            root.path(),
+            &root,
             fake.to_str().unwrap(),
             &argv,
             compete::JudgeVendor::Codex,
@@ -1706,10 +1764,7 @@ mod containment_tests {
         assert!(!args
             .iter()
             .any(|a| a == "workspace-write" || a.contains("dangerously")));
-        assert!(!root
-            .path()
-            .join(".aida/contained-managed-settings.json")
-            .exists());
+        assert!(!root.join(".aida/contained-managed-settings.json").exists());
     }
 
     // A separate parent process exercises real parent death, including SIGKILL

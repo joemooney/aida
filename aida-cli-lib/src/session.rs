@@ -4578,6 +4578,48 @@ pub(crate) fn contained_write_set(
     host_main: Option<&Path>,
     write_roots: &[PathBuf],
 ) -> Result<ContainedWriteSet> {
+    contained_write_set_with(host_main, write_roots, WriteSetMode::Launch)
+}
+
+/// BUG-2439: the write set a lane will get once it runs in a linked worktree
+/// of `project_root` that does not exist yet (a `compete --dry-run` arm).
+/// Such a worktree resolves the same main as `project_root`, so its grants
+/// are derived from `project_root`'s write roots. Nothing is written: no
+/// legacy cache migration, no store hook install, no store marking. A linked
+/// worktree is never a host-recorded seat clone, so no clone grants either.
+/// A legacy cache layout the launch would migrate first is the one case
+/// where the preview can show one grant fewer than the launch.
+// trace:BUG-2439 | ai:claude
+pub(crate) fn contained_write_set_for_new_linked_worktree(
+    host_main: Option<&Path>,
+    project_root: &Path,
+) -> Result<ContainedWriteSet> {
+    contained_write_set_with(
+        host_main,
+        &contained_session_write_roots_from(project_root),
+        WriteSetMode::PreviewNewLinkedWorktree,
+    )
+}
+
+/// Whether [`contained_write_set_with`] prepares the host for a launch or
+/// only reads it to preview one.
+// trace:BUG-2439 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WriteSetMode {
+    /// A real launch in `write_roots[0]`: migrate, install hooks, mark.
+    Launch,
+    /// A read-only preview for a not-yet-created linked worktree of
+    /// `write_roots[0]` (see [`contained_write_set_for_new_linked_worktree`]).
+    PreviewNewLinkedWorktree,
+}
+
+// trace:TASK-2712 trace:BUG-2439 | ai:claude
+fn contained_write_set_with(
+    host_main: Option<&Path>,
+    write_roots: &[PathBuf],
+    mode: WriteSetMode,
+) -> Result<ContainedWriteSet> {
+    let launch = mode == WriteSetMode::Launch;
     // trace:BUG-1928 | ai:claude
     // BUG-1929: the main checkout's store and cache, so the session's `aida`
     // writes (claim, comment, queue done) land. Priming first makes the
@@ -4614,13 +4656,15 @@ pub(crate) fn contained_write_set(
             // cache into it before launch. Nothing is created here (a missing
             // directory is a doctor gap, as a missing cache file was).
             // trace:TASK-2707 | ai:claude
-            aida_core::db::migrate_legacy_cache_layout(&main.join(".aida"));
+            if launch {
+                aida_core::db::migrate_legacy_cache_layout(&main.join(".aida"));
+            }
             // Host-owned hooks must exist before the sandbox makes the common
             // git directory read-only. Every later store write re-verifies them
             // and refuses on failure; the write boundary is never widened.
             // trace:BUG-1929 | ai:codex
             let store = main.join(".aida-store");
-            if store.is_dir() {
+            if launch && store.is_dir() {
                 if let Err(error) = aida_core::git_ops::resolve_store_hooks_dir(&store) {
                     eprintln!("{error:#}");
                 }
@@ -4633,8 +4677,13 @@ pub(crate) fn contained_write_set(
             // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
             // trace:TASK-1775 | ai:claude
-            let mut paths =
-                contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained);
+            // A preview assumes the launch's marking succeeds and writes nothing.
+            // trace:BUG-2439 | ai:claude
+            let mut paths = if launch {
+                contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained)
+            } else {
+                contained_store_grant(&main, &store, |_| Ok(()))
+            };
             // trace:BUG-2218 | ai:codex
             paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
                 &main,
@@ -4651,8 +4700,11 @@ pub(crate) fn contained_write_set(
     // target directory, builds with no compiler wrapper, and may never
     // rewrite the host leases that vouch for it.
     // trace:BUG-2169 | ai:claude
+    // A new linked worktree is never a recorded seat clone, even when the
+    // root it is previewed from is one. trace:BUG-2439 | ai:claude
     let clone = write_roots
         .first()
+        .filter(|_| launch)
         .and_then(|root| crate::seat_clone::recorded_clone_for(host_main, root));
     let (mut store_paths, mut extra_deny) = (store_paths, main_git_deny);
     // TASK-2772: sandboxed Bash in a lane may write the cargo slot locks and
