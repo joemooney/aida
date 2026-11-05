@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-04T02:34:47.712236232Z
+modified_at: 2026-11-05T18:48:31.521764377Z
 req_type: Story
 tags:
 - architecture
@@ -286,6 +286,12 @@ comments:
   created_at: 2026-11-04T02:34:47.712236232Z
   modified_at: 2026-11-04T02:34:47.712236232Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1ad0a-8a21-7b82-a292-89cb7eb4ced7
+  author: joe
+  content: 'ADVISOR 2026-11-05 11:55 MST: the PR-C precondition is NOT met. ''aida own show --compare'' reports about 30 UNEXPLAINED rows, all with judge ''alive: pid 2013 is running'', and pid 2013 is systemd --user (the subreaper of detached lanes). Filed BUG-2458 (high): the holder identity must be the owning process, not a subreaper. PR-C stays blocked until BUG-2458 merges and a re-run of the compare shows zero unexplained rows.'
+  created_at: 2026-11-05T18:48:31.521764377Z
+  modified_at: 2026-11-05T18:48:31.521764377Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
