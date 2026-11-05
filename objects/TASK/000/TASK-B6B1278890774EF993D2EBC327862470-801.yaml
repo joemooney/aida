@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T18:07:44.526355328Z
+modified_at: 2026-11-05T18:11:28.897107137Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -23,6 +23,15 @@ comments:
     Publication is blocked by this native Codex seat's read-only Git metadata. aida ship TASK-3075 --no-merge --dry-run explicitly directs host-side exit commit/publication; edits remain uncommitted for that handoff. No review verdict or pr ship action performed.
   created_at: 2026-11-05T18:06:23.783611700Z
   modified_at: 2026-11-05T18:06:23.783611700Z
+  session_id: 01a1acca079a
+- id: 01a1ace8-a001-7440-adb2-93a9f3e54c5e
+  author: joe
+  content: |-
+    Final validation: all 56 supervise_cmd tests passed, including all 24 pipeline detector tests and the six new regressions. The previous digest wording failure was corrected and the full supervisor filter rerun passed. All 37 make check-ci-fast gates passed, including no-default-features CLI, TUI seam, configuration/launch/fixture guards, formatting and Rust portability; git diff --check passed. TASK-3075 is now Done and dequeued, with CLI interface and verification metadata captured.
+    The queue-done native branch-lookup warning was already tracked by TASK-2887; this recurrence was added there. No bypass option was supplied.
+    Publication handoff: this native seat cannot write Git metadata. The four implementation/doc files remain uncommitted for the host-side exit commit. No PR was opened, no merge or review verdict was attempted. Host operator command from the main checkout: aida ship TASK-3075 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-801 --commit-pending 'feat(supervise): extend independent pipeline alarms (TASK-3075)' --no-merge. Leave independent review and merge to separate seats.
+  created_at: 2026-11-05T18:11:28.897107137Z
+  modified_at: 2026-11-05T18:11:28.897107137Z
   session_id: 01a1acca079a
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
