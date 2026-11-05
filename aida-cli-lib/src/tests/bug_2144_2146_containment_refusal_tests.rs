@@ -282,7 +282,8 @@ fn contained_agent_new_refuses_codex_agy_and_unknown_tools_even_with_per_tool_fl
     )
     .expect_err("contained agy with per-tool flags is refused");
     assert!(
-        format!("{err:#}").contains("refusing to launch it"),
+        format!("{err:#}")
+            .contains("agy shared AIDA boundary is pending fresh all-tool conformance"),
         "{err:#}"
     );
 }
