@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-404
 agreed_id: STORY-2476
 title: 'Pipeline stall alarm: mail the advisor when nothing is in flight and no PR can ship'
 description: 'On 2026-11-04 main went 3h without a merge. All 9 open PRs were red or had request-changes, no implementer lanes ran, and the advisor''s waits only polled for ''ready to ship''. Nothing in AIDA flagged that the pipeline was idle and blocked. Acceptance: (1) a due job, or the oversight loop, detects for N minutes (default 30): in-flight implementers == 0 AND no PR is ship-ready AND (an open PR has request-changes or red CI OR the queue is non-empty); (2) it mails the advisor one actionable digest: each blocked PR with its blocker (verdict, failing tests, conflict, stale lease) and the command that unblocks it (queue rework / session end / release); (3) the alarm stays silent while any lane runs or a PR is ready.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T06:01:20.959534812Z
+modified_at: 2026-11-05T06:08:41.330680686Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -276,6 +276,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aa52-e372-70c0-bf2d-140f1227937b
+  author: aida-orchestrator
+  timestamp: 2026-11-05T06:08:41.330708015Z
+  session_id: 01a1aa4fa00c
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -284,3 +293,11 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 findings 1-4 and 6 fixed with tests; AC1/AC3 met. AC2''s digest is still wrong on this repo''s real GitHub data: every held PR fails merge-hold-gate, so it is reported as red CI with an ''aida queue rework'' command, and those logs use up the 4-log failing-test budget. CI code jobs were still in progress at review time.'
+  recovery_hint: address the review findings, move STORY-2476 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T06:08:41.330680686Z
