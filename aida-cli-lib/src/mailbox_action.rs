@@ -241,9 +241,18 @@ mod tests {
         ] {
             for mode in ["text", "json"] {
                 let case = format!("{state}-{mode}");
-                let output = std::process::Command::new(std::env::current_exe().unwrap())
-                    .args(["--exact", "mailbox_action::tests::mailbox_read_handler_projects_action_in_text_and_json", "--nocapture"])
-                    .env(CHILD, &case).output().unwrap();
+                let output = std::process::Command::new(
+                    crate::aida_bin::current_executable_path()
+                        .expect("resolve current test executable"),
+                )
+                .args([
+                    "--exact",
+                    "mailbox_action::tests::mailbox_read_handler_projects_action_in_text_and_json",
+                    "--nocapture",
+                ])
+                .env(CHILD, &case)
+                .output()
+                .unwrap();
                 assert!(output.status.success(), "{case}: {output:?}");
                 let stdout = String::from_utf8(output.stdout).unwrap();
                 if state.starts_with("recorded") {

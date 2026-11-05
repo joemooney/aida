@@ -502,7 +502,8 @@ fn ended_session_binding_cannot_commit_prepared_response() {
     let row = root.join("seat.toml");
     let pid = std::process::id();
     let start = crate::liveness::process_start_identity(pid).unwrap();
-    let body = format!("id = \"seat\"\nagent_type = \"codex\"\npid = {pid}\npid_start = \"{start}\"\nname = \"seat-a\"\n");
+    let start = crate::toml_quote::toml_string(&start);
+    let body = format!("id = \"seat\"\nagent_type = \"codex\"\npid = {pid}\npid_start = {start}\nname = \"seat-a\"\n");
     std::fs::write(&row, &body).unwrap();
     let env = IdentityEnv::fixture("operator", &[], None);
     let binding = SessionBindingFacts::verify(&row, &env).unwrap();
