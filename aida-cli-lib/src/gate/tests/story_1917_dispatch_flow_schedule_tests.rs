@@ -2875,6 +2875,20 @@ fn story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its
 // trace:BUG-2398 | ai:codex
 #[test]
 fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // The real CLI child qualifies its presenter by its actual PID namespace.
+    // Mint fixture grants in that same namespace instead of the unit-test
+    // default host namespace; keep production validation intact.
+    // trace:TASK-2861 | ai:codex
+    let ns = aida_core::local_pid_ns();
+    crate::gate::review_authority::with_pid_namespace(ns.as_deref(), || {
+        ungranted_artifact_requires_fresh_authorized_review_in_namespace();
+    });
+}
+
+fn ungranted_artifact_requires_fresh_authorized_review_in_namespace() {
     use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
     let mut f = FlowFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
