@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-208
 agreed_id: BUG-2439
 title: aida compete passes Claude-only flags to codex exec
 description: 'Observed 2026-11-04 05:55 MST on live be275c31: aida compete TASK-1715 --vendors codex,claude ran ''codex exec --permission-mode dontAsk --setting-sources project --settings {...}''. Codex exited at once with: unexpected argument ''--permission-mode'' found (log: ~/.aida/compete/compete-task-1715-codex/codex.log). The --dry-run prints the same argv. The compete vendor-argv path applies the Claude settings and permission wrapper to every vendor, instead of building the codex argv the way queue work --vendor codex does. Also: killing the compete parent leaves the claude leg running as an orphan. Acceptance: (1) a codex leg runs with a valid codex exec argv, and a regression test pins it; (2) the --dry-run argv equals the real one; (3) the vendor child dies with compete. Why: the operator wants routine cross-vendor bake-offs to measure relative implementation quality.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T09:04:16.102073025Z
+modified_at: 2026-11-05T09:48:10.110658371Z
 req_type: Bug
 tags:
 - area:compete
@@ -159,6 +159,12 @@ comments:
   modified_at: 2026-11-05T08:34:23.666617132Z
   session_id: 01a1aab824d1
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1ab1b-d3fe-7810-aaf3-2170a014d69f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2439 acceptance (1)-(3) met in code and pinned by tests that pass in CI lib-0/lib-1 at a9ea09fa, incl. the round-3 dry-run==launch linked-worktree case; but CI (gates) is red on this PR''s own rustfmt drift in compete_cmd.rs, so Build is red.. Triage reason: CI red at a9ea09f: CI (gates) failing. Read the gates log, fix on the PR branch. After it lands close #3382.'
+  created_at: 2026-11-05T09:48:10.110653880Z
+  modified_at: 2026-11-05T09:48:10.110653880Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
@@ -319,6 +325,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ab1b-d3fe-7810-aaf3-21604b5727cc
+  author: joe
+  timestamp: 2026-11-05T09:48:10.110638609Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: be275c313c1482b990ba38f323bdc67304f1d15c
   branch: main
@@ -332,11 +346,3 @@ implementation_info:
   implemented_at: 2026-11-04T20:00:49.095793592Z
   implemented_by: joe
   reopened_at_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2439 acceptance (1)-(3) met in code and pinned by tests that pass in CI lib-0/lib-1 at a9ea09fa, incl. the round-3 dry-run==launch linked-worktree case; but CI (gates) is red on this PR's own rustfmt drift in compete_cmd.rs, so Build is red.
-  recovery_hint: address the review findings, move BUG-2439 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T09:04:16.102073025Z
