@@ -1122,8 +1122,9 @@ fn task1993_initial_root_ignores_ambient_git_routing() {
 
 // Queue work's deterministic refusals (STORY-281 stale-overlap bail, TASK-480
 // intermediate-only gate, a reviewer lease already held, the launch-boundary
-// revalidation) are observed exits: terminal, capacity freed, never relaunched
-// for that head, and a later head still dispatches.
+// revalidation) get one setup retry, then retain a terminal diagnostic while
+// freeing capacity. A later head can still dispatch.
+// trace:BUG-2450 | ai:codex
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
@@ -1162,7 +1163,21 @@ fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
         assert!(recorded.diagnostic.as_deref().unwrap().contains(refusal));
         let retried = dispatch(select(&store, &c, None, 1).unwrap());
         assert_ne!(retried.token, attempt.token);
-        complete(&store, &c, &retried);
+        execute_reservation(
+            &store,
+            &c.key(),
+            &retried.token,
+            |_| Ok(()),
+            |_| anyhow::bail!("persistent setup refusal: {refusal}"),
+        )
+        .unwrap_err();
+        // Re-read durable state on every tick: no unlimited relaunch loop.
+        for _ in 0..10 {
+            assert!(
+                matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+                if reason.contains("persistent setup refusal") && reason.contains("--release"))
+            );
+        }
         // The single global slot is free again for another change...
         let other = dispatch(select(&store, &change(id + 10, 1, false), None, 1).unwrap());
         complete(&store, &change(id + 10, 1, false), &other);
@@ -1214,6 +1229,7 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             spawning: false,
                             worker: None,
                             reviewer_spawning: false,
+                            setup_retry: false,
                             reviewer: None,
                             pgid: None,
                             supersede: None,

@@ -53,6 +53,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
         .env("AIDA_OUTPUT_FORMAT", "human")
         .env("NO_COLOR", "1");
     hermetic(&mut cmd);
+    // These fixtures own all relevant processes inside their test namespace.
+    // trace:BUG-2450 | ai:codex
+    cmd.env("AIDA_TRUST_PID_NAMESPACE", "1");
     cmd
 }
 
@@ -120,6 +123,14 @@ impl Session {
         git(&repo, &["config", "user.email", "test@example.com"]);
         git(&repo, &["config", "user.name", "Live Process Test"]);
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        // trace:BUG-2450 | ai:codex — cleanup requires remote commit coverage.
+        let origin = repo.parent().unwrap().join("origin.git");
+        git(&repo, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+        git(
+            &repo,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        git(&repo, &["push", "-q", "origin", "main"]);
         let mut init = aida(&repo, &home);
         init.args([
             "init",
@@ -188,6 +199,13 @@ impl Session {
                 })
                 .unwrap_or_else(|| panic!("no worktree_path in lease:\n{lease}"));
             assert!(worktree.is_dir(), "worktree {} missing", worktree.display());
+            // Pool setup may commit its baseline; these tests protect live
+            // holders and salvage, with the baseline already published.
+            // trace:BUG-2450 | ai:codex
+            git(
+                &worktree,
+                &["push", "-q", "origin", "HEAD:refs/heads/pooled-baseline"],
+            );
             return Session {
                 _temp: temp,
                 repo,

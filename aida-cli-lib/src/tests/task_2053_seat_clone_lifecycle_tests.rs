@@ -1732,7 +1732,19 @@ fn bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses() {
         end_session(id, true).is_err(),
         "a host-only local branch is not remote coverage"
     );
-    git_ok(&fx.main, &["push", "-q", "origin", "wip/local"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "wip/local",
+        ],
+    );
 
     std::fs::write(clone.join("README.md"), "stashed\n").unwrap();
     git_ok(
@@ -2306,26 +2318,51 @@ fn bug2450_bwrap_remote_coverage_protects_host_only_side_branches() {
     }
     let fx = fixture();
     let clone = seat(&fx, "remote-coverage", "b2450c0ffee1");
-    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 0);
+    assert_eq!(
+        remote_missing_commits(&fx.main, &clone, true, "").unwrap(),
+        0
+    );
     git_ok(&clone, &["checkout", "-q", "-b", "only-local"]);
     seat_commit(&clone, "precious.txt");
     git_ok(&clone, &["checkout", "-q", "feat"]);
-    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 1);
+    assert_eq!(
+        remote_missing_commits(&fx.main, &clone, true, "").unwrap(),
+        1
+    );
     // Copy it to a host-local ref. Salvage accounting excuses this, but
     // teardown still needs a remote copy, independent of upstream config.
     git_ok(
         &fx.main,
         &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "fetch",
             "-q",
             clone.to_str().unwrap(),
             "only-local:host-copy",
         ],
     );
-    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 1);
+    assert_eq!(
+        remote_missing_commits(&fx.main, &clone, true, "").unwrap(),
+        1
+    );
     git_ok(
         &fx.main,
-        &["push", "-q", "origin", "host-copy:published-copy"],
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "host-copy:published-copy",
+        ],
     );
-    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 0);
+    assert_eq!(
+        remote_missing_commits(&fx.main, &clone, true, "").unwrap(),
+        0
+    );
 }

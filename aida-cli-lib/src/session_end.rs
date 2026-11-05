@@ -2638,6 +2638,7 @@ pub(crate) fn guard_remote_commits(
         main,
         &lease.worktree_path,
         lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+        &lease.branch,
     )
     .context("cannot establish remote commit coverage; session was NOT ended")?;
     anyhow::ensure!(count == 0,

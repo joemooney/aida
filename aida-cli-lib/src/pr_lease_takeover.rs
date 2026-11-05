@@ -150,7 +150,8 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
     }
     let seat = read_seat(main, lease, pr_branch);
     // A finished seat can have moved to another pushed branch since the
-    // PR head. Remote coverage of every local branch protects that work too;
+    // PR head. Remote coverage of the seat's HEAD and lease branch (all local
+    // branches for a private clone) protects that work too;
     // comparing only HEAD to this PR incorrectly refuses a clean pushed seat.
     // trace:BUG-2450 | ai:codex
     if matches!(&seat, SeatReading::Read { dirty, .. } if dirty.is_empty()) {
@@ -158,6 +159,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
             main,
             &lease.worktree_path,
             lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+            &lease.branch,
         ) {
             Ok(0) => return PrLeaseCheck::SafeToForceEnd,
             Ok(n) => {

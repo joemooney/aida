@@ -1422,11 +1422,17 @@ fn probe_run(
         .map_err(|failure| failure.to_string())
 }
 
-/// Count commits held by HEAD or any local branch but by no remote. Unlike
-/// salvage accounting, a local host ref or base pin never excuses a commit.
+/// Count commits held by the seat but by no remote: HEAD and the lease branch
+/// for worktrees, all local branches for private clones. Unlike salvage
+/// accounting, a local host ref or base pin never excuses a commit.
 /// Clone Git stays inside the existing read-only probe sandbox.
 // trace:BUG-2450 | ai:codex
-pub(crate) fn remote_missing_commits(main: &Path, seat: &Path, is_clone: bool) -> Result<u64> {
+pub(crate) fn remote_missing_commits(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+) -> Result<u64> {
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1513,7 +1519,28 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
                 .context("cannot validate unborn HEAD")?;
             anyhow::ensure!(out.status.code() == Some(1), "HEAD is unreadable");
         }
-        cmd.args(["rev-list", "--count", "--branches"]);
+        // Worktrees share refs/heads with every other seat. Only this
+        // seat's current HEAD and its recorded branch belong to this lease.
+        // HEAD also covers a different branch currently checked out here.
+        // trace:BUG-2450 | ai:codex
+        let lease_ref = format!("refs/heads/{lease_branch}");
+        let mut exists = aida_core::git_ops::host_git_command(seat);
+        exists.args(["show-ref", "--verify", "--quiet", &lease_ref]);
+        let status = crate::command_output_with_timeout(exists, std::time::Duration::from_secs(5))
+            .context("cannot validate lease branch")?
+            .status;
+        anyhow::ensure!(
+            matches!(status.code(), Some(0 | 1)),
+            "cannot read lease branch"
+        );
+        let has_branch = status.success();
+        if !has_head && !has_branch {
+            return Ok(0);
+        }
+        cmd.args(["rev-list", "--count"]);
+        if has_branch {
+            cmd.arg(&lease_ref);
+        }
         if has_head {
             cmd.arg("HEAD");
         }
