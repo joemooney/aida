@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T11:05:54.381678885Z
+modified_at: 2026-11-05T11:11:34.854217499Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -78,6 +78,11 @@ comments:
   content: 'Round 2 implementation committed as 02e4bd31791e3f8814ba4f63341d6e2b709a59c3 ([AI:codex] test(train): assert case-specific review refusals (TASK-2831)). bug2438_refuses accepts the expected error substring; old-head fixture expects ''The approval did not carry over'', malformed-SHA fixture retains ''train source has a refusing review''. Helper and case comments now accurately describe the separate gates. Production code/gate order is unchanged. cargo fmt --all -- --check and git diff --check pass. The fresh targeted test build is still compiling. PR #3395 title/body updated, explicitly disclosing that 2e8fa0b09100 was previously published with a known-failing test. Ordinary git commit succeeded in this seat, so the documented post-exit commit fallback is unnecessary.'
   created_at: 2026-11-05T11:05:54.381667501Z
   modified_at: 2026-11-05T11:05:54.381667501Z
+- id: 01a1ab68-31c6-7c72-a9ae-17e2bb3d6154
+  author: mcp
+  content: 'Targeted validation passed: cargo test -p aida-cli-lib --lib bug2438_ -- --test-threads=1 => 4 passed, 0 failed (77.21s). This includes the previously failing bug2438_old_head_refusal_without_current_head_verdict_refuses and both malformed SHA variants. Running the 54-test surrounding pr_train::verified:: suite before publication.'
+  created_at: 2026-11-05T11:11:34.854209078Z
+  modified_at: 2026-11-05T11:11:34.854209078Z
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
   author: joe
