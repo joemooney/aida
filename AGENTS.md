@@ -456,6 +456,12 @@ mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.
 Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup.md.
 <!-- trace:TASK-2705 TASK-2707 | ai:codex -->
 
+Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
+evidence. GitHub UNKNOWN mergeability stays pending; new raw GitHub spawns outside
+`forge.rs` are guarded by a per-file ratchet. Legacy reads and later destructive
+transition migration remain; see [forge observations](OVERVIEW.md#forge-observations).
+<!-- trace:STORY-2401 | ai:codex -->
+
 ## Child launch containment
 
 Headless and interactive reviewer/resume launches strictly inherit
@@ -529,6 +535,16 @@ Global role queues use permanent `~/.aida/queue/<role>.lock` sidecars and
 atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
 snapshot-save writer. Corrupt queues fail closed on mutation; position
 placement is still computed by callers outside the lock. See OVERVIEW.md.
+
+## Trusted cross-node review publications
+
+Configured host recorders publish immutable OpenSSH-signed review receipts to
+`reviews/v1/` in the shared store after local authority validation. Consumers use
+the current operator-enrolled node roster, exact PR head, canonical spec keys and
+portable author/reviewer sessions. Grants and human receipts stay local. Synced
+refusals override local approvals; watcher reservation sync remains deferred.
+See [second-node setup](docs/agents/second-review-node.md).
+<!-- trace:STORY-2492 | ai:codex -->
 
 ## Local observation envelopes
 
