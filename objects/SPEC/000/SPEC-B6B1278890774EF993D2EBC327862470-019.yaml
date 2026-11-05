@@ -1,0 +1,18 @@
+id: 01a1ad25-891f-76c3-8950-586e00b6e646
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-019
+title: Complete BUG-2458 host migration and compare verification after publishing native-seat changes
+description: 'BUG-2458 implementation is in the native Codex seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-224. This sandbox mounts .git read-only: git add failed creating .git/index.lock (Read-only file system), so the lane cannot commit/push/open a PR itself. AIDA''s native-seat post-exit commit path is the intended host handoff. After reviewing/publishing the change and building the updated host binary, run aida own migrate --dry-run, then aida own migrate --execute from a permitted host terminal with no drain running, then aida own show --compare. Verify no UNEXPLAINED row is caused by a launcher/systemd holder PID. This live-host acceptance cannot be established from this sandbox PID namespace; do not infer it from fixture tests or old-binary compare output.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T19:18:00.735366850Z
+modified_at: 2026-11-05T19:18:00.735366850Z
+req_type: Task
+tags:
+- from-implementer:BUG-2458
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
