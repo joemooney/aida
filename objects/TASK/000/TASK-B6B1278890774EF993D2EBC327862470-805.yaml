@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T20:42:35.919135037Z
+modified_at: 2026-11-05T20:45:42.996834763Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -205,6 +205,22 @@ comments:
   content: 'ADVISOR SIGNOFF 2026-11-05 12:00 MST on the first-round sketch (da96608, branch task-...-805): APPROVED. Topology fork ruled: the SINGLE authoritative admission hub is GitHub origin (github.com/joemooney/aida), ref refs/aida/review-admission. The work GitLab remote is a MIRROR only: it distributes evidence and can never admit. The hourly reconcile bridge copies, it does not admit. Never infer authority from a node''s origin alias; the hub URL and ref are explicit config ([review] admission_hub, admission_ref). No failover during a partition: if the hub is unreachable, admission refuses with a named error. A topology change is an operator migration with admission stopped. The publication contract and the reservation state table are approved as written, with the OpenSSH sshsig signer per the STORY-2492 amendment. Next: incorporate this ruling into the plan doc and open the docs PR titled ''(TASK-2860)''. Implementation belongs to STORY-2492 slice 2, not this task.'
   created_at: 2026-11-05T18:48:57.954344010Z
   modified_at: 2026-11-05T18:48:57.954344010Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad75-d441-7b50-ab43-a8fcdc046e9d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2860):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: da9660869575
+    Recorded: 2026-11-05T20:42:35.440109866+00:00
+    Findings:
+    1. docs/plans/2026-11-05-task-2860-portable-review-authority.md:90-98 — the advisor signoff (TASK-2860 comment 3) says to 'incorporate this ruling into the plan doc', but the doc still says 'Reservation proposal requiring topology confirmation' / 'Recommend one explicitly configured authoritative hub/ref'. State the ruling as decided: the single admission hub is GitHub origin (github.com/joemooney/aida), ref refs/aida/review-admission; GitLab is a mirror only and never admits; the hourly reconcile bridge copies but never admits; the hub URL and ref are explicit config ([review] admission_hub, admission_ref) and never inferred from a node's origin alias; if the hub is unreachable, admission refuses with a named error and does not fail over; a topology change is an operator migration with admission stopped. The PR body claims this was incorporated, but the diff does not contain it.
+    2. docs/plans/2026-11-05-task-2860-portable-review-authority.md:5-7,159-166 — the status text is stale after the signoff. 'also posted on TASK-2860 for advisor review', 'Before slice 2 starts, record the authoritative-hub/ref decision' and 'The additional topology/recovery detail is proposed for advisor confirmation' should instead cite the 2026-11-05 12:00 MST APPROVED signoff: the publication contract and the reservation state table are approved as written, with the OpenSSH sshsig signer. Keep the hand-off line saying that implementation belongs to STORY-2492 slice 2 (own acceptance-backed spec linked to STORY-2492).
+    3. docs/plans/2026-11-05-task-2860-portable-review-authority.md:22-27,160-162 — the baseline claims are stale. The doc says docs/plans/2026-11-04-story-2492-cross-machine-review.md and the slice-1 implementation are absent from baseline c8721a696fc, and it tells readers to keep a story reference on 'slice-1 PR #3411'. #3411 has since merged to origin/main (0b0f8a6b701), and that plan file is on main. The branch is 7 commits behind main. Update the branch from main and rewrite these lines to point at the slice-1 code that has landed (roster, signed receipts, consume-side check), so slice 2 builds on it, not on a description of absent work.
+    4. docs/plans/2026-11-05-task-2860-portable-review-authority.md:112-118 — 'The authority must enforce fast-forward/CAS ref updates with no force writers' does not say how this holds on the ruled hub. GitHub branch protection and rulesets target branches and tags, so I believe a custom ref under refs/aida/ cannot be server-protected against force pushes. Either state that CAS comes from client-side 'git push --force-with-lease=<ref>:<expected>' by AIDA writers only (and name the trust assumption that no other writer force-pushes), or choose a ref namespace that a GitHub ruleset can protect. Otherwise slice 2 inherits an invariant the hub cannot enforce.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T20:45:42.849590318Z
+  modified_at: 2026-11-05T20:45:42.849590318Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aa76-52e6-7370-b6c4-2f6dbc6d878a
