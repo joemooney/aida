@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:55:47.844000604Z
-modified_at: 2026-11-05T16:48:39.750931855Z
+modified_at: 2026-11-05T17:29:06.119230001Z
 req_type: Bug
 comments:
 - id: 01a1a9a2-9799-79c3-8dc0-7fc0458a497a
@@ -27,6 +27,21 @@ comments:
     Implementation now excludes unknown IDs from own-inbox projections and core unread_ids, retains the incomplete-view warning and ACK refusal, and keeps explicit ID reads addressable. Existing receipts remain untouched. Regression fixtures cover a corrupt/refused ledger hiding 100 historical messages while independent new mail remains visible, corrupt per-ID source receipts, oversized ledger reads, retry recovery from the same bytes, and an ACK read back from primary/linked-worktree/second-seat-clone after removing the first clone's compatibility receipt. Validation is running.
   created_at: 2026-11-05T16:48:39.750931855Z
   modified_at: 2026-11-05T16:48:39.750931855Z
+  session_id: 01a1ac949eba
+- id: 01a1acc1-d347-7d80-ac9e-543c4d4038c0
+  author: joe
+  content: |
+    Implementation complete in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-215. Final validation: 27 logical-mailbox tests, 16 ACK tests and 27 own-inbox/seat-clone tests passed (70 distinct targeted tests); cargo fmt --all -- --check passed. The awaiting-channel regression now expects zero confirmed unread plus partial=true when an unavailable worktree may hold the receipt. No receipt rewrite/re-send was performed.
+
+    Publication boundary: git add and git commit refused .git/index.lock with Read-only file system. Native Codex explicitly keeps its seat .git read-only; docs/cli/04-git-lifecycle.md documents leaving edits for the launcher's post-exit host commit. No attempt was made to bypass this boundary. The branch still has uncommitted modifications in six files; some earlier index entries may contain an intermediate version, so publication must stage all final changes (the host commit_pending helper does this).
+
+    Prepared PR body: /tmp/bug-2449-pr.md. Proposed subject: [AI:codex] fix(mailbox): withhold mail with unknown receipt state (BUG-2449).
+
+    Host publication recovery (run from the primary checkout after this lane exits and its lease is eligible):
+    aida ship BUG-2449 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-215 --commit-pending '[AI:codex] fix(mailbox): withhold mail with unknown receipt state (BUG-2449)'
+    This documented --from-seat path commits/publishes and never merges. If the launcher already committed the final tree, omit --commit-pending. Opening the PR and aida queue done BUG-2449 remain pending; no completion/merge claim is made here.
+  created_at: 2026-11-05T17:29:06.119230001Z
+  modified_at: 2026-11-05T17:29:06.119230001Z
   session_id: 01a1ac949eba
 history:
 - id: 01a1a9a2-d64d-77f3-8930-351f4a298400
