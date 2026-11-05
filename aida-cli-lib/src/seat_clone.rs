@@ -2280,6 +2280,242 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Host preparation of a rework. Clone Git runs only in AIDA's writable
+/// sandbox with the host identity; ordinary linked worktrees use host Git.
+/// The host never resolves a conflict: collect its paths and abort it.
+// trace:STORY-2475 | ai:codex
+pub(crate) fn prepare_rework_merge(main: &Path, tree: &Path, branch: &str) -> Result<Vec<String>> {
+    use std::ffi::{OsStr, OsString};
+    let clone = host_recorded_clone(tree);
+    let pinned = dir_identity(tree)?;
+    if let Some(seat) = &clone {
+        anyhow::ensure!(
+            seat.main == main.canonicalize()?,
+            "rework clone belongs to another host"
+        );
+    }
+    let host_value = |key: &str| -> Result<String> {
+        let mut cmd = git(main);
+        cmd.args(["config", "--get", key]);
+        let value = run(cmd, "read host merge identity")?;
+        anyhow::ensure!(!value.is_empty(), "missing host {key}");
+        Ok(value)
+    };
+    let name = host_value("user.name")?;
+    let email = host_value("user.email")?;
+    let identity: [(&'static str, OsString); 4] = [
+        ("GIT_AUTHOR_NAME", name.clone().into()),
+        ("GIT_AUTHOR_EMAIL", email.clone().into()),
+        ("GIT_COMMITTER_NAME", name.into()),
+        ("GIT_COMMITTER_EMAIL", email.into()),
+    ];
+    let execute = |args: &[&str]| -> Result<String> {
+        ensure_dir_identity(tree, pinned)?;
+        if clone.is_some() {
+            let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+            run_commit_sandboxed(tree, main, &args, &identity)
+                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+                .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))
+        } else {
+            let mut cmd = aida_core::git_ops::host_git_command(tree);
+            cmd.args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "core.fsmonitor=false",
+            ])
+            .args(args)
+            .envs(identity.iter().map(|(key, value)| (*key, value)))
+            .stdin(std::process::Stdio::null());
+            match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
+            {
+                crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
+                    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+                }
+                crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+                    "rework Git failed: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                ),
+                _ => anyhow::bail!("rework Git timed out"),
+            }
+        }
+    };
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "rework seat is not on the PR head branch {branch}"
+    );
+    anyhow::ensure!(
+        execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty(),
+        "rework seat has pending changes; merge refused"
+    );
+    anyhow::ensure!(
+        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
+        "rework seat already has an unfinished merge"
+    );
+    // Fetch in the trusted host, never through a seat-controlled origin.
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .args([
+            "fetch",
+            "--no-write-fetch-head",
+            "origin",
+            "+refs/heads/main:refs/remotes/origin/main",
+            &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    anyhow::ensure!(
+        crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
+            .is_some_and(|out| out.status.success()),
+        "could not fetch origin/main for rework"
+    );
+    let mut resolve = git(main);
+    resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
+    let base = run(resolve, "pin rework base")?;
+    let mut resolve_head = git(main);
+    resolve_head.args([
+        "rev-parse",
+        "--verify",
+        &format!("refs/remotes/origin/{branch}^{{commit}}"),
+    ]);
+    let pr_head = run(resolve_head, "pin rework PR head")?;
+    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
+        "seated rework branch is behind the PR head; retry pickup with its current head",
+    )?;
+    finish_rework_merge(&execute, &base)
+}
+
+// trace:STORY-2475 | ai:codex
+fn finish_rework_merge(
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    base: &str,
+) -> Result<Vec<String>> {
+    match execute(&["merge", "--no-edit", "--no-verify", base]) {
+        Ok(_) => Ok(Vec::new()),
+        Err(why) => {
+            let files = execute(&["diff", "--name-only", "--diff-filter=U", "-z"]);
+            // Conflict paths always require a successful abort. Even a
+            // timed-out merge with no paths may have a MERGE_HEAD to clear.
+            if files.as_ref().is_ok_and(|paths| !paths.is_empty())
+                || execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok()
+            {
+                execute(&["merge", "--abort"])
+                    .context("could not abort rework merge; no vendor launched")?;
+            }
+            let files: Vec<String> = files?
+                .split('\0')
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+            anyhow::ensure!(
+                !files.is_empty(),
+                "rework merge failed without conflict paths: {why:#}"
+            );
+            Ok(files)
+        }
+    }
+}
+
+#[cfg(test)]
+mod rework_merge_tests {
+    use super::*;
+    #[test]
+    fn story_2475_real_merge_commits_clean_or_restores_conflicting_branch() {
+        for conflicting in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let execute = |args: &[&str]| -> Result<String> {
+                let out = crate::test_git::git_command()
+                    .arg("-C")
+                    .arg(root.path())
+                    .args([
+                        "-c",
+                        "user.name=Test",
+                        "-c",
+                        "user.email=test@example.test",
+                        "-c",
+                        "core.hooksPath=/dev/null",
+                        "-c",
+                        "commit.gpgsign=false",
+                    ])
+                    .args(args)
+                    .output()?;
+                anyhow::ensure!(
+                    out.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+            };
+            execute(&["init", "-b", "main"]).unwrap();
+            std::fs::write(root.path().join("shared"), "base\n").unwrap();
+            execute(&["add", "."]).unwrap();
+            execute(&["commit", "-m", "base"]).unwrap();
+            execute(&["checkout", "-b", "rework"]).unwrap();
+            std::fs::write(root.path().join("shared"), "rework\n").unwrap();
+            execute(&["commit", "-am", "rework"]).unwrap();
+            let before = execute(&["rev-parse", "HEAD"]).unwrap();
+            execute(&["checkout", "main"]).unwrap();
+            std::fs::write(
+                root.path()
+                    .join(if conflicting { "shared" } else { "other" }),
+                "main\n",
+            )
+            .unwrap();
+            execute(&["add", "."]).unwrap();
+            execute(&["commit", "-m", "main update"]).unwrap();
+            let base = execute(&["rev-parse", "HEAD"]).unwrap();
+            execute(&["checkout", "rework"]).unwrap();
+            let files = finish_rework_merge(&execute, &base).unwrap();
+            assert_eq!(execute(&["status", "--porcelain"]).unwrap(), "");
+            assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+            if conflicting {
+                assert_eq!(files, ["shared"]);
+                assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
+                assert_eq!(
+                    std::fs::read_to_string(root.path().join("shared")).unwrap(),
+                    "rework\n"
+                );
+            } else {
+                assert!(files.is_empty());
+                assert_eq!(execute(&["rev-parse", "HEAD^1"]).unwrap(), before);
+                assert_eq!(execute(&["rev-parse", "HEAD^2"]).unwrap(), base);
+            }
+        }
+    }
+
+    #[test]
+    fn story_2475_conflicts_abort_before_return_and_failures_refuse() {
+        use std::cell::RefCell;
+        let calls = RefCell::new(Vec::new());
+        let files = finish_rework_merge(
+            &|args| {
+                calls.borrow_mut().push(args.join(" "));
+                match args[0] {
+                    "merge" if args[1] != "--abort" => anyhow::bail!("conflict"),
+                    "diff" => Ok("a.rs\0b.rs\0".into()),
+                    _ => Ok("head".into()),
+                }
+            },
+            "base",
+        )
+        .unwrap();
+        assert_eq!(files, ["a.rs", "b.rs"]);
+        assert_eq!(calls.borrow().last().unwrap(), "merge --abort");
+        assert!(finish_rework_merge(&|_| anyhow::bail!("unavailable"), "base").is_err());
+        assert!(finish_rework_merge(
+            &|args| if args == ["merge", "--abort"] {
+                anyhow::bail!("abort failed")
+            } else if args[0] == "merge" {
+                anyhow::bail!("conflict")
+            } else {
+                Ok("path\0".into())
+            },
+            "base"
+        )
+        .is_err());
+    }
+}
+
 /// TASK-2712 (the advisor's N3 fallback): commit the seat's pending work for
 /// a native Codex seat, which cannot commit inside its own sandbox (Codex
 /// re-protects `<clone>/.git`). Every git run is AIDA's own bwrap job: the

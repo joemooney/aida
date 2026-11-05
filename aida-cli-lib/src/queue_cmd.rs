@@ -11929,7 +11929,6 @@ pub(crate) fn handle_queue_work(
     if let Some(model) = &resolved_model {
         std::env::set_var("AIDA_AGENT_MODEL", model);
     }
-    let headless_vendor = no_human.then_some(launch_vendor);
 
     // trace:TASK-1337 | ai:codex
     // Resolve role, branch, and delegation before calibration, cleanup, pull,
@@ -11945,15 +11944,7 @@ pub(crate) fn handle_queue_work(
              pass --branch <name> to start a new branch instead"
         );
     }
-    // BUG-057: a rework PR that conflicts with main makes the merge the
-    // lane's first task. trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
-    let rework_conflict = rework_pr
-        .as_ref()
-        .filter(|_| !list_sessions && !plan_only && !guided)
-        .and_then(|(pr, branch)| {
-            crate::rework_direction::detect_main_conflict(&project_root, *pr, branch)
-        });
-    let rework_branch_override = rework_pr.map(|(_, branch)| branch);
+    let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
     // --path or --branch naming another one refuses rather than guess.
@@ -12334,7 +12325,7 @@ pub(crate) fn handle_queue_work(
             guided,
             review_findings: review_findings.as_deref(),
             spec_comments: &spec_comments,
-            conflict: rework_conflict.as_ref(),
+            conflict: None, // Host prepares the merge before launch (STORY-2475).
             ci_failures: ci_failures.as_deref(),
         });
     // Interactive implementers and every headless phase receive the same
@@ -13408,6 +13399,68 @@ pub(crate) fn handle_queue_work(
             )
         })?;
         minted_lease_id = Some(lease.id.clone());
+        // The PR branch has been seated by session_start. Prepare it before
+        // any vendor, red run, child grant or resume is started.
+        // trace:STORY-2475 | ai:codex
+        let mut launch_vendor = launch_vendor;
+        let mut resolved_model = resolved_model.clone();
+        let mut prompt = prompt.clone();
+        if !no_launch && !plan_only && !guided && role == "implementer" {
+            if let Some((pr, branch)) = rework_pr.as_ref() {
+                let files = crate::seat_clone::prepare_rework_merge(
+                    &project_root,
+                    &lease.worktree_path,
+                    branch,
+                )?;
+                if !files.is_empty() {
+                    crate::ship_from_seat::advisor_request(
+                        &project_root,
+                        "Rework merge conflicts routed to Claude",
+                        &format!(
+                            "{} PR #{pr} conflicts with origin/main in: {}. The host aborted \
+                             the merge and will not launch Codex. Routing conflict resolution \
+                             to Claude on branch {branch}. Fresh route: aida queue work {} \
+                             --vendor claude --fresh --no-human.",
+                            plan.scope,
+                            files.join(", "),
+                            plan.scope
+                        ),
+                    )?;
+                    // A recorded Codex thread cannot resume as Claude. Refuse
+                    // with a concrete fresh-launch route instead of resuming it.
+                    if matches!(launch, Some(QueueWorkLaunch::Resume(_)))
+                        && launch_vendor != session::HeadlessVendor::Claude
+                    {
+                        anyhow::bail!(
+                            "conflicting rework requires a fresh Claude lane: \
+                            aida queue work {} --vendor claude --fresh --no-human",
+                            plan.scope
+                        );
+                    }
+                    session::install_headless_vendor_override("claude");
+                    launch_vendor = session::resolve_enabled_headless_vendor(&project_root)?;
+                    session::preflight_launch_vendor(launch_vendor, !no_human)?;
+                    session::require_vendor_containment(
+                        launch_vendor,
+                        contained,
+                        "conflict rework",
+                    )?;
+                    std::env::remove_var("AIDA_AGENT_MODEL");
+                    resolved_model = None;
+                    prompt.push_str(&format!(
+                        "\n\n{}",
+                        crate::rework_direction::conflict_task(
+                            &crate::rework_direction::MainConflict {
+                                pr: *pr,
+                                base: "main".into(),
+                                files
+                            }
+                        )
+                    ));
+                }
+            }
+        }
+        let headless_vendor = no_human.then_some(launch_vendor);
 
         // STORY-1386: opt-in pre-implementation red run, in this lane's own
         // freshly created worktree and BEFORE the implementer agent launches.
@@ -13960,6 +14013,19 @@ pub(crate) fn handle_queue_work(
                         // trace:BUG-1808 | ai:claude — the seat the preflight validated.
                         &crate::canonical_role_name(&role),
                     )?;
+                    // trace:STORY-2475 | ai:codex
+                    if vendor == session::HeadlessVendor::Codex
+                        && contained
+                        && crate::canonical_role_name(&role) == "implementer"
+                    {
+                        crate::ship_from_seat::publish_queue_exit(
+                            &project_root,
+                            &lease.worktree_path,
+                            &plan.scope,
+                            &lease.id,
+                            status.success(),
+                        )?;
+                    }
                     std::process::exit(status.code().unwrap_or(1));
                 }
                 eprintln!(

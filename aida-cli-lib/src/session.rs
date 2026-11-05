@@ -6243,6 +6243,24 @@ pub(crate) fn exec_vendor_headless(
         revoke_headless_child_grant(id);
     }
     let status = result?;
+    // trace:STORY-2475 | ai:codex
+    if vendor == HeadlessVendor::Codex && contained {
+        if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+            let scope = crate::list_leases(&main_root)
+                .into_iter()
+                .find(|l| l.id == lease)
+                .context("publication lease disappeared")?
+                .scope;
+            crate::ship_from_seat::publish_queue_exit(
+                &main_root,
+                tree,
+                &scope,
+                lease,
+                status.success(),
+            )?;
+        }
+    }
+
     std::process::exit(status.code().unwrap_or(1));
 }
 

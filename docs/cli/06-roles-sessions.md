@@ -571,6 +571,30 @@ SessionStart and statusline warnings remain available. See
 <!-- trace:TASK-1744 | ai:antigravity -->
 <!-- trace:TASK-2253 | ai:claude -->
 
+## Headless Codex reworks and exit publication
+
+For a single-spec pickup with an open PR, `queue work` selects that PR's
+head branch even when the spec is Approved and has no Rework hold. Before
+launching an implementer, the host fetches `origin/main` and attempts its
+merge into the seated PR branch. A clean merge is committed with the host's
+identity. Clone Git runs inside AIDA's sandbox with hooks disabled.
+
+The host never resolves conflicts. It lists the conflicting files, aborts
+the merge, sends the advisor a request, and routes a fresh launch to Claude.
+A conflicting Codex resume refuses with a fresh Claude launch command;
+a Codex thread cannot resume under another vendor. Fetch, merge, abort,
+mail, or vendor-preflight failures stop the launch.
+
+After a contained Codex headless implementer exits, its host commits pending
+seat edits and publishes through `ship --from-seat`, updating the existing
+PR or opening one. Standalone, drain and explicit resume launches share this
+step. Failed exits retain salvage-only `Refs` commit trailers. Explicit
+punts and manual holds veto automatic publication. No-change exits send an
+advisor request, including when an existing PR remains red; any unpushed
+commits are published first. Publication failures retain the seat for recovery.
+This host step replaces the advisor's manual auto-publish workaround.
+<!-- trace:STORY-2475 | ai:codex -->
+
 ## Watching for new review heads
 
 `aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and
