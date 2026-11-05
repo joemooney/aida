@@ -508,10 +508,10 @@ sites can interleave publications and receipts freely, and nobody needs to pull
 before writing.
 
 Because of that, `process` needs the intake destination to be reachable
-(`pending` does not). If the receipt cannot be published after a create or
-comment, the operation journal stays. Rerun the same `process` command: it finds
-the confirmed spec write by its marker and publishes the receipt without writing
-again. `aida intent publish` without `--file` pulls and then pushes the accepted
+(`pending` does not, unless `--reconcile` is supplied). If the receipt cannot be
+published after a create or comment, the operation journal stays. Rerun the same
+`process` command: it finds the confirmed spec write by its marker and publishes
+the receipt without writing again. `aida intent publish` without `--file` pulls and then pushes the accepted
 tip, which is a no-op when the remote already has it. Divergence is only possible
 when the remote history was rewritten outside AIDA (for example a force push).
 `pull` and every write then refuse and leave the accepted branch unchanged.
@@ -522,8 +522,8 @@ no spec write and creates no receipt. Dismiss creates a receipt only. Create
 explicitly creates a draft task, while comment appends the title and body to an
 existing spec. Both require an attached git-canonical home store and use the
 ordinary authorized CLI writers. Receipts contain exactly `version: 1`, the full
-`checksum`, `action`, and a destination UUID for create/comment, under
-`receipts/<sha256>.json`. Receipts are immutable and never enter envelopes.
+`checksum`, `action`, `operation` (a UUID), and a destination UUID for create/comment
+under `receipts/<sha256>.json`. Receipts are immutable and never enter envelopes.
 Processing writes a private durable operation journal before crossing into the
 store; the task tag or comment marker records its random operation identity.
 Retry recovers a confirmed successful write without repeating it. After a writer
@@ -532,19 +532,21 @@ operation marker. If absent, the journal is removed and retry is available; writ
 stderr is bounded and shown on failure. If evidence cannot be read or is ambiguous,
 the journal remains and automatic replay refuses. If a receipt already exists,
 retry compares any retained local journal's store evidence with the receipt's
-action and destination. A match clears the journal left after a successful push.
-A different destination reports the orphaned duplicate spec for operator
-reconciliation and retains the journal; it never silently adopts another clone's
-receipt after a local spec write.
+operation UUID, action and destination. A match clears the journal left after a
+successful push. A different operation reports the orphaned duplicate write
+(including comments on the same target) for operator reconciliation and retains
+the journal; it never silently adopts another clone's receipt after a local spec
+write.
 
 For a journal left by a crashed parent, first independently confirm that the old
 writer and its helpers have stopped. Then run
 `aida intent process <checksum> --action pending --reconcile` to check current
 store evidence and clear only an unconfirmed journal. `--reconcile` is the explicit
-assertion that the old writer has stopped. If a marker exists, use the original
-create/comment action and target to recover its receipt instead. Different-store
-or ambiguous markers refuse. Never remove journals manually and blindly repeat a
-store write.
+assertion that the old writer has stopped. It also clears an unconfirmed journal
+when another clone has already published a receipt, returning that receipt without
+a new store write. If a marker exists, use the original create/comment action and
+target to recover its receipt instead. Different-store or ambiguous markers refuse.
+Never remove journals manually and blindly repeat a store write.
 
 All intake commands honor `--json` and global `--format json`; otherwise they
 print human-readable results. Receipt destination UUIDs remain stable in the wire

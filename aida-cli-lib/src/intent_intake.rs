@@ -105,6 +105,8 @@ struct Receipt {
     version: u32,
     checksum: String,
     action: Action,
+    /// Identity of the operation that published this immutable receipt.
+    operation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     destination: Option<String>,
 }
@@ -202,9 +204,17 @@ fn git_result(root: &Path, args: &[&str], input: &[u8], cap: usize) -> Result<(b
 }
 
 fn git(root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
-    let (ok, bytes) = git_result(root, args, input, CAP)?;
-    if !ok {
-        bail!("Intake Git operation refused ({}); inspect the independent intake repository; no force/rebase is performed", args[0]);
+    // trace:TASK-3096 | ai:codex
+    let mut cmd = git_command(root);
+    cmd.args(args);
+    let (status, bytes, stderr) = transport_process::bounded_with_stderr(
+        cmd,
+        input,
+        CAP,
+        Instant::now() + Duration::from_secs(30),
+    )?;
+    if !status.success() {
+        bail!("Intake Git operation refused ({}): {}; inspect the independent intake repository; no force/rebase is performed", args[0], String::from_utf8_lossy(&stderr));
     }
     Ok(bytes)
 }
@@ -488,6 +498,7 @@ impl Intake {
                         .map_err(|_| anyhow::anyhow!("Invalid intake receipt schema or JSON"))?;
                     if receipt.version != 1
                         || receipt.checksum != checksum
+                        || uuid::Uuid::parse_str(&receipt.operation).is_err()
                         || receipt.action == Action::Pending
                         || matches!(receipt.action, Action::Create | Action::Comment)
                             != receipt.destination.is_some()
@@ -676,7 +687,8 @@ impl Intake {
             return Ok(());
         };
         self.history(&tip)?;
-        if !self.push_commit(&tip, Some(&tip))? {
+        let base = self.remote_tip()?;
+        if !self.push_commit(&tip, base.as_deref())? {
             bail!("Intake push refused; the accepted local branch is unchanged. Retry; the tool never forces, merges or rebases");
         }
         Ok(())
@@ -810,7 +822,7 @@ fn process(
     if (action == Action::Comment) != target.is_some() {
         bail!("Only --action comment requires --target");
     }
-    if action != Action::Pending {
+    if action != Action::Pending || reconcile {
         // A receipt is published as part of processing, so see every receipt
         // another site already published before deciding anything.
         // trace:TASK-3096 | ai:claude
@@ -840,19 +852,28 @@ fn process(
             {
                 bail!("Invalid processing journal; inspect manually");
             }
-            let destination = evidence(&journal)?
-                .context("Receipt exists but local operation evidence is missing; journal retained for manual reconciliation")?;
-            if receipt.action != journal.action
-                || receipt.destination.as_deref() != Some(destination.as_str())
-            {
-                let (_, store) = canonical_store()?;
-                let spec = store
-                    .get_requirement_unambiguous(&destination)?
-                    .context("Local operation destination not found")?
-                    .friendly_id();
-                bail!("Orphaned duplicate spec write {spec} ({destination}): published receipt belongs to another operation destination; journal retained for operator reconciliation");
+            match evidence(&journal)? {
+                None if reconcile => {} // Explicit assertion that the old writer stopped.
+                None => bail!("Receipt exists but local operation evidence is missing; journal retained for manual reconciliation; rerun with --reconcile after confirming the old writer stopped"),
+                Some(destination) => {
+                    if receipt.operation != journal.operation
+                        || receipt.action != journal.action
+                        || receipt.destination.as_deref() != Some(destination.as_str())
+                    {
+                        let (_, store) = canonical_store()?;
+                        let spec = store
+                            .get_requirement_unambiguous(&destination)?
+                            .context("Local operation destination not found")?
+                            .friendly_id();
+                        bail!("Orphaned duplicate spec write {spec} ({destination}): published receipt belongs to another operation; journal retained for operator reconciliation");
+                    }
+                }
             }
             intake.private.remove(&journal_name)?;
+        }
+        if reconcile && action == Action::Pending {
+            print_receipt(&receipt, json)?;
+            return Ok(());
         }
         if receipt.action != action {
             bail!("Observation already processed with another action");
@@ -902,6 +923,7 @@ fn process(
         return Ok(());
     }
     let mut destination = None;
+    let mut operation = uuid::Uuid::new_v4().to_string();
     if matches!(action, Action::Create | Action::Comment) {
         let (store_path, store) = canonical_store()?;
         let target = target
@@ -940,6 +962,7 @@ fn process(
                 .write(&journal_name, &serde_json::to_vec(&journal)?)?;
             journal
         };
+        operation = journal.operation.clone();
         destination = evidence(&journal)?;
         if destination.is_none() {
             if existing.is_some() {
@@ -1008,6 +1031,7 @@ fn process(
         version: 1,
         checksum: checksum.into(),
         action,
+        operation,
         destination,
     };
     // The receipt is published before it becomes local history. If that fails
@@ -1016,12 +1040,13 @@ fn process(
     // second write. trace:TASK-3096 | ai:claude
     intake
         .append(&receipt_path, &serde_json::to_vec(&receipt)?)
-        .with_context(|| {
-            if receipt.destination.is_some() {
+        .map_err(|error| {
+            let recovery = if receipt.destination.is_some() {
                 "Spec write confirmed but its receipt is not published yet; rerun the same process command to publish it (no second spec write)"
             } else {
                 "Receipt not published; nothing changed, rerun the same process command"
-            }
+            };
+            anyhow::anyhow!("{recovery}: {error:#}")
         })?;
     // Receipt is durable before journal cleanup; retry after either crash is safe.
     intake.private.remove(&journal_name)?;

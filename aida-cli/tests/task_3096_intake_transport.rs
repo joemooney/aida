@@ -590,7 +590,7 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
         .get_requirement_unambiguous(destination)
         .unwrap()
         .unwrap();
-    assert_eq!(receipt["destination"], req.display_id());
+    assert_eq!(receipt["destination"], req.friendly_id());
     assert_eq!(req.title, "--an-untrusted-title");
     assert_eq!(req.status, aida_core::RequirementStatus::Draft);
     let count = first.requirements.len();
@@ -751,7 +751,7 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
         .unwrap();
     let out = f.run(&["intent", "process", &duplicate, "--action", "create"]);
     bad(&out, "Orphaned duplicate spec write");
-    bad(&out, &duplicate_spec.display_id());
+    bad(&out, &duplicate_spec.friendly_id());
     assert!(private
         .read(&format!("operation-{duplicate}.json"))
         .unwrap()
@@ -866,7 +866,7 @@ fn hostile_file_modes_and_orphan_receipts_are_not_accepted() {
                 } else {
                     checksum.clone()
                 };
-                let mut receipt = json!({"version":1,"checksum":fake,"action":"dismiss"});
+                let mut receipt = json!({"version":1,"checksum":fake,"action":"dismiss","operation":uuid::Uuid::new_v4().to_string()});
                 if attack == "receipt-unknown" {
                     receipt["SECRET-RECEIPT-KEY"] = json!("sensitive");
                 }
@@ -1240,4 +1240,278 @@ fn moved_remote_tip_retries_publication_after_an_actual_push_race() {
             .len(),
         3
     );
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn published_receipt_reconciles_a_crash_before_the_local_writer() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    let other = Fixture::new();
+    f.enroll(&remote);
+    other.enroll(&remote);
+    f.git(&["branch", "-D", "aida-store"]);
+    good(&f.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let checksum = f.note("Crash before writer");
+    good(&f.publish());
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&f.root).unwrap();
+    let backend = aida_core::GitBackend::new(&store_path).unwrap();
+    let before = aida_core::DatabaseBackend::load(&backend)
+        .unwrap()
+        .requirements
+        .len();
+    let private =
+        aida_core::transport_policy::Private::open(&f.root.join(".git/aida-intake")).unwrap();
+    let name = format!("operation-{checksum}.json");
+    private.write(&name, &serde_json::to_vec(&json!({"version":1,"checksum":checksum,"action":"create","target":null,"operation":uuid::Uuid::new_v4().to_string(),"store":store_path.canonicalize().unwrap()})).unwrap()).unwrap();
+    good(&other.run(&["intent", "process", &checksum, "--action", "dismiss"]));
+    bad(
+        &f.run(&["intent", "process", &checksum, "--action", "dismiss"]),
+        "journal retained",
+    );
+    good(&f.run(&[
+        "intent",
+        "process",
+        &checksum,
+        "--action",
+        "pending",
+        "--reconcile",
+    ]));
+    assert!(private.read(&name).unwrap().is_none());
+    good(&f.run(&["intent", "process", &checksum, "--action", "dismiss"]));
+    assert_eq!(
+        aida_core::DatabaseBackend::load(&backend)
+            .unwrap()
+            .requirements
+            .len(),
+        before
+    );
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn concurrent_comments_on_one_target_report_the_losing_operation() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let a = Fixture::new();
+    let b = Fixture::new();
+    for f in [&a, &b] {
+        f.enroll(&remote);
+        f.git(&["branch", "-D", "aida-store"]);
+        good(&f.run(&[
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ]));
+    }
+    good(&a.run(&[
+        "add",
+        "--title=Shared target",
+        "--type",
+        "task",
+        "--status",
+        "draft",
+    ]));
+    let a_path = aida_core::store_locate::detect_distributed_store_from(&a.root).unwrap();
+    let a_backend = aida_core::GitBackend::new(&a_path).unwrap();
+    let target_req = aida_core::DatabaseBackend::load(&a_backend)
+        .unwrap()
+        .requirements
+        .into_iter()
+        .find(|r| r.title == "Shared target")
+        .unwrap();
+    let target = target_req.id.to_string();
+    let b_path = aida_core::store_locate::detect_distributed_store_from(&b.root).unwrap();
+    let b_backend = aida_core::GitBackend::new(&b_path).unwrap();
+    // Model two home clones with the same canonical target history. Importing
+    // via Git preserves allocation provenance instead of minting a foreign ID.
+    git(&b_path, &["fetch", a_path.to_str().unwrap(), "HEAD"]);
+    git(&b_path, &["reset", "--hard", "FETCH_HEAD"]);
+    let checksum = a.note("Concurrent comment");
+    good(&a.publish());
+    good(&b.run(&["intent", "pull"]));
+    let hook = remote.join("hooks/pre-receive");
+    fs::write(&hook, "#!/bin/sh\nif mkdir comment-first 2>/dev/null; then\n i=0\n while [ ! -f comment-release ]; do\n  i=$((i+1)); [ \"$i\" -le 200 ] || exit 1; sleep 0.1\n done\nfi\n").unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o700)).unwrap();
+    let args = [
+        "intent", "process", &checksum, "--action", "comment", "--target", &target,
+    ];
+    let first = a
+        .cmd(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !remote.join("comment-first").exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let reached_hook = remote.join("comment-first").exists();
+    let second = b
+        .cmd(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let second_wrote = loop {
+        let store = aida_core::DatabaseBackend::load(&b_backend).unwrap();
+        let wrote = store
+            .get_requirement_unambiguous(&target)
+            .unwrap()
+            .unwrap()
+            .comments
+            .iter()
+            .any(|c| c.content.contains("[intake-op:"));
+        if wrote || Instant::now() >= deadline {
+            break wrote;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    // Git can refuse the losing update before invoking pre-receive. Store
+    // evidence is the barrier: both writers must commit before the first push
+    // is released, without requiring the loser to reach a server-side hook.
+    fs::write(remote.join("comment-release"), b"").unwrap();
+    let first = first.wait_with_output().unwrap();
+    let second = second.wait_with_output().unwrap();
+    assert!(
+        reached_hook && second_wrote,
+        "both comments must precede receipt publication: {first:?} {second:?}"
+    );
+    assert_ne!(first.status.success(), second.status.success());
+    let (winner, loser, loser_backend) = if first.status.success() {
+        (&a, &b, &b_backend)
+    } else {
+        (&b, &a, &a_backend)
+    };
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(winner.intake().join(format!("receipts/{checksum}.json"))).unwrap(),
+    )
+    .unwrap();
+    let name = format!("operation-{checksum}.json");
+    let private =
+        aida_core::transport_policy::Private::open(&loser.root.join(".git/aida-intake")).unwrap();
+    let journal: Value = serde_json::from_slice(&private.read(&name).unwrap().unwrap()).unwrap();
+    assert_ne!(receipt["operation"], journal["operation"]);
+    bad(&loser.run(&args), "Orphaned duplicate spec write");
+    bad(
+        &loser.run(&[
+            "intent",
+            "process",
+            &checksum,
+            "--action",
+            "comment",
+            "--target",
+            &target,
+            "--reconcile",
+        ]),
+        "Orphaned duplicate spec write",
+    );
+    assert!(private.read(&name).unwrap().is_some());
+    let store = aida_core::DatabaseBackend::load(loser_backend).unwrap();
+    let comments = &store
+        .get_requirement_unambiguous(&target)
+        .unwrap()
+        .unwrap()
+        .comments;
+    assert_eq!(
+        comments
+            .iter()
+            .filter(|c| c.content.contains("[intake-op:"))
+            .count(),
+        1
+    );
+    good(&winner.run(&args));
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn sync_failures_preserve_git_stderr_and_local_ahead_push_keeps_policy_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let unavailable = temp.path().join("missing.git");
+    let f = Fixture::new();
+    f.enroll(&unavailable);
+    let out = f.run(&["intent", "pull"]);
+    bad(&out, "Intake Git operation refused (ls-remote)");
+    bad(&out, "does not appear to be a git repository");
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    f.enroll(&remote);
+    f.note("Initial");
+    good(&f.publish());
+    let shim = temp.path().join("shim");
+    fs::create_dir(&shim).unwrap();
+    // Resolve before adding the shim so its delegation cannot recurse.
+    let git_path = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|dir| dir.join("git"))
+        .find(|path| path.is_file())
+        .unwrap()
+        .canonicalize()
+        .unwrap();
+    let wrapper = shim.join("git");
+    fs::write(&wrapper, format!("#!/bin/sh\nfor arg do\n if [ \"$arg\" = fetch ]; then echo 'fixture fetch authentication denied' >&2; exit 1; fi\ndone\nexec '{}' \"$@\"\n", git_path.display())).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    let path = format!("{}:{}", shim.display(), std::env::var("PATH").unwrap());
+    let out = f
+        .cmd(&["intent", "pull"])
+        .env("PATH", &path)
+        .output()
+        .unwrap();
+    bad(&out, "Intake Git operation refused (fetch)");
+    bad(&out, "fixture fetch authentication denied");
+    fs::remove_file(wrapper).unwrap();
+    let ssh = shim.join("ssh");
+    fs::write(
+        &ssh,
+        "#!/bin/sh\necho 'Permission denied (publickey).' >&2\nexit 255\n",
+    )
+    .unwrap();
+    fs::set_permissions(&ssh, fs::Permissions::from_mode(0o700)).unwrap();
+    let ssh_site = Fixture::new();
+    good(&ssh_site.run(&[
+        "intent",
+        "enroll",
+        "--remote",
+        "ssh://git@example.invalid/intake.git",
+        "--reviewed",
+    ]));
+    let out = ssh_site
+        .cmd(&["intent", "pull"])
+        .env("PATH", &path)
+        .output()
+        .unwrap();
+    bad(&out, "Intake Git operation refused (ls-remote)");
+    bad(&out, "Permission denied (publickey)");
+    let hook = remote.join("hooks/pre-receive");
+    fs::write(&hook, "#!/bin/sh\necho 'ahead policy denied' >&2\nexit 1\n").unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o700)).unwrap();
+    let checksum = f.note("Retained ahead commit");
+    fs::copy(
+        f.root.join("envelope.json"),
+        f.intake().join(format!("observations/{checksum}.json")),
+    )
+    .unwrap();
+    git(&f.intake(), &["add", "."]);
+    git(
+        &f.intake(),
+        &["commit", "-qm", "Record reviewed intake data"],
+    );
+    let tip = git(&f.intake(), &["rev-parse", "HEAD"]);
+    let out = f.run(&["intent", "publish"]);
+    bad(&out, "ahead policy denied");
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("Retry;"));
+    assert_eq!(tip, git(&f.intake(), &["rev-parse", "HEAD"]));
 }
