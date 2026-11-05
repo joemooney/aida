@@ -936,6 +936,7 @@ pub(crate) fn handle_intake_command(
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
         let (program, args) = session::coordinator_headless_preview(
+            crate::seat_clone::launcher_main().as_deref(),
             vendor,
             &prompt,
             mode,
@@ -987,7 +988,10 @@ pub(crate) fn handle_intake_command(
     // Prepare before issuing authority: a filesystem refusal leaves no grant.
     // trace:BUG-2218 TASK-2328 | ai:codex
     if session::containment_applied(vendor, contained, None) {
-        crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
+        crate::session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &project_root,
+        )?;
     }
     // The builder reserves the child's handle; it is released unless the
     // child actually spawns. trace:BUG-2389 | ai:claude
@@ -1049,7 +1053,10 @@ pub(crate) fn build_autopilot_intake_command(
     contained: bool,
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
+    // TASK-2032: intake runs at the host project root, never in a seat.
+    // trace:TASK-2032 | ai:claude
     let mut command = session::build_coordinator_headless_command(
+        crate::seat_clone::launcher_main().as_deref(),
         vendor,
         prompt,
         mode,

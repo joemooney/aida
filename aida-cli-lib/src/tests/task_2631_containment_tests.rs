@@ -190,7 +190,7 @@ fn containment_agent_new_codex_uses_native_flags() {
         std::fs::write(root.path().join(".aida/agents.toml"), defaults).unwrap();
         let mut launch = config("codex");
         crate::apply_agent_default_flags(&mut launch, root.path(), crate::AgentDefaultFlagOptions::new(true, Vec::new(), None), false).unwrap();
-        let expected = crate::tool_contained_flags("codex").unwrap();
+        let expected = crate::tool_contained_flags(None, "codex").unwrap();
         assert_eq!(&launch.default_args[..expected.len()], expected);
         assert!(!launch.default_args.iter().any(|a| a == "--dangerously-bypass-approvals-and-sandbox"));
         assert!(!launch.contained);
@@ -236,6 +236,7 @@ fn containment_native_headless_child_launches_without_aida_marker() {
     );
     for seat in ["implementer", "reviewer"] {
         let mut cmd = session::build_exec_vendor_headless_command(
+            None,
             HeadlessVendor::Codex,
             "prompt",
             "sid",
@@ -250,13 +251,19 @@ fn containment_native_headless_child_launches_without_aida_marker() {
         assert!(output.status.success());
         let text = String::from_utf8(output.stdout).unwrap();
         assert!(text.contains("posture=native\ncontained=unset\n"), "{text}");
+        // TASK-2712: the native posture is now followed by the contained
+        // write set (`--add-dir …`) before `exec`, so the two are asserted
+        // separately rather than as one contiguous run.
+        // trace:TASK-2712 | ai:claude
         assert!(
-            text.contains("--sandbox\nworkspace-write\n--ask-for-approval\nnever\nexec\n--json"),
+            text.contains("--sandbox\nworkspace-write\n--ask-for-approval\nnever\n"),
             "{text}"
         );
+        assert!(text.contains("\nexec\n--json"), "{text}");
         assert!(!text.contains("dangerously-bypass"), "{text}");
     }
     let args = session::headless_vendor_args_contained_in(
+        None,
         HeadlessVendor::Codex,
         "p",
         "sid",
@@ -267,6 +274,7 @@ fn containment_native_headless_child_launches_without_aida_marker() {
     .unwrap();
     assert!(!args.iter().any(|a| a.contains("dangerously-bypass")));
     let review = session::interactive_reviewer_launch_plan(
+        None,
         HeadlessVendor::Codex,
         None,
         None,
@@ -292,16 +300,35 @@ fn containment_codex_opt_in_preserves_claude_bytes() {
     ]);
     let _cwd = session::contained_cwd_seam::pin(root.path());
     policy(root.path(), "");
-    let interactive = crate::tool_contained_flags("claude").unwrap();
-    let headless =
-        session::headless_vendor_args(HeadlessVendor::Claude, "p", "sid", true, None, None)
-            .unwrap();
+    let host_main = crate::seat_clone::launcher_main();
+    let interactive = crate::tool_contained_flags(host_main.as_deref(), "claude").unwrap();
+    let headless = session::headless_vendor_args(
+        host_main.as_deref(),
+        HeadlessVendor::Claude,
+        "p",
+        "sid",
+        true,
+        None,
+        None,
+    )
+    .unwrap();
     policy(root.path(), "codex = \"native\"");
-    assert_eq!(interactive, crate::tool_contained_flags("claude").unwrap());
+    assert_eq!(
+        interactive,
+        crate::tool_contained_flags(host_main.as_deref(), "claude").unwrap()
+    );
     assert_eq!(
         headless,
-        session::headless_vendor_args(HeadlessVendor::Claude, "p", "sid", true, None, None)
-            .unwrap()
+        session::headless_vendor_args(
+            host_main.as_deref(),
+            HeadlessVendor::Claude,
+            "p",
+            "sid",
+            true,
+            None,
+            None
+        )
+        .unwrap()
     );
     assert!(session::containment_applied(
         HeadlessVendor::Claude,
@@ -349,9 +376,12 @@ fn containment_doctor_and_permission_reports_distinguish_native() {
     let codex = report.agents.iter().find(|r| r.agent == "codex").unwrap();
     assert!(!codex.refused_under_containment);
     assert_eq!(codex.net_effect, "native sandbox, not AIDA-contained");
+    // TASK-2712: the report shows the posture; the launch appends the
+    // tree-specific `--add-dir` write set after it.
+    // trace:TASK-2712 | ai:claude
     assert_eq!(
         codex.headless_flags,
-        crate::tool_contained_flags("codex").unwrap()
+        crate::tool_contained_flags(None, "codex").unwrap()[..4]
     );
     assert!(
         !crate::config_cmd::scan_permission_posture_findings(root.path())
@@ -412,4 +442,52 @@ fn containment_claude_rejects_native_even_for_generated_explicit_flags() {
         crate::statusline_cmd::native_containment_statusline_segment(root.path(), Some("claude"))
             .is_none()
     );
+}
+
+// Refusals must offer only supported vendor policies, never suggest that agy
+// can be enabled by choosing another contained.vendors value.
+// trace:TASK-3047 | ai:codex
+#[test]
+fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
+    let root = tempfile::tempdir().unwrap();
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let supported = "Supported [contained.vendors] settings: claude = \"aida\" (AIDA containment), codex = \"native\" (explicit opt-in in the trusted default-branch config; native sandbox, not AIDA-contained). Use --vendor claude or AIDA_HEADLESS_VENDOR=claude for AIDA containment.";
+
+    for setting in ["", "agy = \"aida\"", "agy = \"native\""] {
+        policy(root.path(), setting);
+        let error = session::containment_posture_in(root.path(), "agy", true).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("agy"), "{message}");
+        assert!(message.contains("refusing to launch"), "{message}");
+        assert!(message.ends_with(supported), "{message}");
+        assert!(!message.contains("fix [contained.vendors]"), "{message}");
+
+        for (child, error) in [
+            (
+                "implementer",
+                session::require_vendor_containment(HeadlessVendor::Agy, true, "implementer")
+                    .unwrap_err(),
+            ),
+            (
+                "reviewer",
+                session::child_containment_preflight(HeadlessVendor::Agy, true, true, "reviewer")
+                    .unwrap_err(),
+            ),
+            (
+                "reviewer",
+                session::child_containment_preflight(HeadlessVendor::Agy, true, false, "reviewer")
+                    .unwrap_err(),
+            ),
+        ] {
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "the `agy` vendor cannot run a contained session: {supported}\n  [contained] refusing to launch the {child} uncontained"
+                )
+            );
+        }
+        session::require_vendor_containment(HeadlessVendor::Agy, false, "implementer").unwrap();
+        session::child_containment_preflight(HeadlessVendor::Agy, false, false, "reviewer")
+            .unwrap();
+    }
 }

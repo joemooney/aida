@@ -727,6 +727,7 @@ Run explicit host-fact checks stored on constraint rows:
 aida verify constraints
 aida verify constraints --json
 aida verify constraints --fail-on-drift
+aida verify constraints --fail-on-drift --fail-on-unknown
 ```
 
 Use this after a host change to find assumptions that drifted. It runs only
@@ -738,7 +739,11 @@ block are skipped. Rejected, superseded and archived constraints report
 `--fail-on-drift`; the human view prints only their count unless `--verbose`
 is given, and JSON always lists them. Reports do not edit requirements or status. Results exit
 successfully unless drift exists and `--fail-on-drift` was supplied; store load
-and command errors still fail normally.
+and command errors still fail normally. Add `--fail-on-unknown` (with
+`--fail-on-drift`) for CI gates: it also fails on `unknown` or `invalid` rows,
+so a host without `/proc` or a mistyped block cannot pass the gate. Probe paths
+must start with a single `/`; a leading `//` (a Windows network share) is
+`invalid`.
 
 Author a block on an existing constraint in a canonical store:
 

@@ -15,13 +15,14 @@
 //! `[presence]` config block — `consumers` (master switch), `away_drain`
 //! (consumer a: `aida burndown run` drain mode), `escalation` (consumer b: the
 //! punt-handling default when away, its OWN knob decoupled from `away_drain` —
-//! see `resolve_drain_mode`), and `home_offer` (consumer d: home-side keystone
-//! surfacing). Presence is ADVISORY only: explicit per-command flags always win
-//! and integrity gates (CI / merge-on-green / authority) always apply. Still
-//! un-wired: consumer (c) `aida questions` quiet-when-away accumulation, which
-//! is gated on the questions inbox (STORY-555).
+//! see `resolve_drain_mode`), `questions` (consumer c: whether the `aida
+//! questions` decision inbox surfaces proactively in `aida status` while away —
+//! see `surface_questions`), and `home_offer` (consumer d: home-side keystone
+//! surfacing). Presence is ADVISORY only: explicit per-command flags always win,
+//! the explicit `aida questions list` read is never gated, and integrity gates
+//! (CI / merge-on-green / authority) always apply.
 //!
-// trace:TASK-756 trace:STORY-561 trace:TASK-769 | ai:claude
+// trace:TASK-756 trace:STORY-561 trace:TASK-769 trace:TASK-1059 | ai:claude
 
 use std::path::{Path, PathBuf};
 
@@ -555,6 +556,20 @@ pub(crate) enum HomeOffer {
     DontBlock,
 }
 
+/// P3 — `presence.questions` (consumer c, TASK-1059): how the `aida questions`
+/// decision inbox SURFACES proactively (the pending-decisions nudge in `aida
+/// status`). `QuietWhenAway` (default) lets decisions accumulate quietly while
+/// the operator is away and surfaces them once home; `AlwaysSurface` nudges in
+/// both states. Advisory only: it never gates the explicit `aida questions
+/// list` read and never changes WHICH specs need a decision (the sweep is
+/// presence-blind). trace:TASK-1059 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum QuestionsSurfacing {
+    #[default]
+    QuietWhenAway,
+    AlwaysSurface,
+}
+
 /// The parsed `[presence]` consumer policy. Defaults make presence-driven
 /// mode-selection work with zero config; the block is opt-out / tuning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -566,6 +581,8 @@ pub(crate) struct PresenceConfig {
     /// `Some(_)` = the operator picked escalation independently of the rung.
     pub escalation: Option<Escalation>,
     pub home_offer: HomeOffer,
+    /// P3 — decision-inbox surfacing while away (consumer c, TASK-1059).
+    pub questions: QuestionsSurfacing,
 }
 
 impl ConsumersMode {
@@ -612,6 +629,31 @@ impl HomeOffer {
     }
 }
 
+impl QuestionsSurfacing {
+    // trace:TASK-1059 | ai:claude
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "quiet-when-away" | "quiet" => Some(Self::QuietWhenAway),
+            "always-surface" | "always" => Some(Self::AlwaysSurface),
+            _ => None,
+        }
+    }
+}
+
+/// PURE: should `aida status` proactively surface the pending-decision count?
+/// Consumer (c) of STORY-561. Home always surfaces; away surfaces only under
+/// `questions = always-surface`. The `consumers = off` master switch is honored
+/// by the caller (`aida status` skips its whole presence-consumer section, as
+/// it always has), so this only decides the consumers-on case. Gates the
+/// PROACTIVE nudge only — never the `aida questions list` read.
+/// trace:TASK-1059 | ai:claude
+pub(crate) fn surface_questions(presence: Presence, cfg: &PresenceConfig) -> bool {
+    match presence {
+        Presence::Home => true,
+        Presence::Away => cfg.questions == QuestionsSurfacing::AlwaysSurface,
+    }
+}
+
 /// Read the `[presence]` consumer policy from a project's `.aida/config.toml`,
 /// falling back to safe defaults for any absent / unparseable key. A missing
 /// file or `[presence]` block → all defaults. trace:STORY-561 | ai:claude
@@ -647,6 +689,12 @@ pub(crate) fn read_presence_config(config_path: &Path) -> PresenceConfig {
     if let Some(s) = table.get("home_offer").and_then(|v| v.as_str()) {
         if let Some(m) = HomeOffer::from_config_str(s) {
             cfg.home_offer = m;
+        }
+    }
+    // TASK-1059: consumer (c). Bad/missing → the quiet-when-away default.
+    if let Some(s) = table.get("questions").and_then(|v| v.as_str()) {
+        if let Some(m) = QuestionsSurfacing::from_config_str(s) {
+            cfg.questions = m;
         }
     }
     cfg
@@ -1558,6 +1606,83 @@ mod tests {
         assert_eq!(cfg.consumers, ConsumersMode::Off); // parsed
     }
 
+    // trace:TASK-1059 | ai:claude
+    #[test]
+    fn presence_config_parses_questions_knob() {
+        // Missing → quiet-when-away default.
+        assert_eq!(
+            PresenceConfig::default().questions,
+            QuestionsSurfacing::QuietWhenAway
+        );
+        let f = write_config("[presence]\nconsumers = \"on\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).questions,
+            QuestionsSurfacing::QuietWhenAway
+        );
+        let f = write_config("[presence]\nquestions = \"always-surface\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).questions,
+            QuestionsSurfacing::AlwaysSurface
+        );
+        // Underscore normalization + case-insensitivity.
+        let f = write_config("[presence]\nquestions = \"Always_Surface\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).questions,
+            QuestionsSurfacing::AlwaysSurface
+        );
+        let f = write_config("[presence]\nquestions = \"quiet-when-away\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).questions,
+            QuestionsSurfacing::QuietWhenAway
+        );
+        // Bad value → default, without poisoning sibling knobs.
+        let f =
+            write_config("[presence]\nquestions = \"nonsense\"\naway_drain = \"headless-park\"\n");
+        let cfg = read_presence_config(f.path());
+        assert_eq!(cfg.questions, QuestionsSurfacing::QuietWhenAway);
+        assert_eq!(cfg.away_drain, AwayDrain::HeadlessPark);
+        // Non-string value → default, never errors.
+        let f = write_config("[presence]\nquestions = 3\n");
+        assert_eq!(
+            read_presence_config(f.path()).questions,
+            QuestionsSurfacing::QuietWhenAway
+        );
+    }
+
+    // trace:TASK-1059 | ai:claude
+    #[test]
+    fn surface_questions_quiet_when_away_by_default() {
+        let quiet = PresenceConfig::default();
+        assert!(surface_questions(Presence::Home, &quiet));
+        assert!(!surface_questions(Presence::Away, &quiet));
+
+        let always = PresenceConfig {
+            questions: QuestionsSurfacing::AlwaysSurface,
+            ..quiet
+        };
+        assert!(surface_questions(Presence::Home, &always));
+        assert!(surface_questions(Presence::Away, &always));
+    }
+
+    /// Acceptance #3: the explicit `aida questions` read is never gated by
+    /// presence — the questions module must not consult the presence state.
+    /// trace:TASK-1059 | ai:claude
+    #[test]
+    fn questions_read_path_is_presence_blind() {
+        let src = include_str!("questions.rs");
+        for needle in [
+            "presence::",
+            "current_presence",
+            "read_presence_config",
+            "surface_questions",
+        ] {
+            assert!(
+                !src.contains(needle),
+                "questions.rs must not consult presence (`{needle}`): the inbox read is never gated"
+            );
+        }
+    }
+
     // trace:TASK-769 | ai:claude
     #[test]
     fn presence_config_parses_escalation_knob() {
@@ -1600,6 +1725,7 @@ mod tests {
             home_offer: HomeOffer::Surface,
             away_drain: AwayDrain::HeadlessBoth,
             escalation: Some(Escalation::Park),
+            questions: QuestionsSurfacing::QuietWhenAway,
         };
         let r = resolve_drain_mode(None, false, false, away, &cfg);
         assert_eq!(r.no_human.as_deref(), Some("both"));
@@ -1635,6 +1761,7 @@ mod tests {
             home_offer: HomeOffer::Surface,
             away_drain: AwayDrain::HeadlessBoth,
             escalation: None,
+            questions: QuestionsSurfacing::QuietWhenAway,
         };
         // headless-both → both + escalate defaults
         let r = resolve_drain_mode(None, false, false, away, &on);

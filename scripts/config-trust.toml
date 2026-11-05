@@ -284,7 +284,10 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 1
+# TASK-1472 adds a probe site: project_is_aida_initialized only tests whether
+# .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# trace:TASK-1472 | ai:claude
+sites = 2
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]

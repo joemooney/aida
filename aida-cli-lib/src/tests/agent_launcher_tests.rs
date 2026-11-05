@@ -1160,7 +1160,8 @@ fn tool_bypass_flags_per_agent() {
 
 #[test]
 fn tool_contained_flags_for_claude_keep_interactive_prompts() {
-    let flags = tool_contained_flags("claude").unwrap();
+    let flags =
+        tool_contained_flags(crate::seat_clone::launcher_main().as_deref(), "claude").unwrap();
     assert!(!claude_args_request_dontask(&flags), "{flags:?}");
     assert!(flags.contains(&"--setting-sources".to_string()));
     assert!(flags.contains(&"project".to_string()));
@@ -1187,10 +1188,11 @@ fn interactive_claude_dontask_guard_refuses_unpromptable_mode() {
     let args = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
     let err = guard_interactive_claude_dontask("claude", &args).unwrap_err();
     assert!(format!("{err:?}").contains("interactive Claude"));
-    assert!(
-        guard_interactive_claude_dontask("claude", &tool_contained_flags("claude").unwrap())
-            .is_ok()
-    );
+    assert!(guard_interactive_claude_dontask(
+        "claude",
+        &tool_contained_flags(crate::seat_clone::launcher_main().as_deref(), "claude").unwrap()
+    )
+    .is_ok());
 }
 
 // trace:BUG-1178 | ai:codex
@@ -1298,15 +1300,23 @@ fn bug_2131_contained_launch_refuses_on_old_git() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
-    let flags = tool_contained_flags("codex").unwrap();
+    let flags = tool_contained_flags(None, "codex").unwrap();
     assert_eq!(
-        flags,
-        vec![
+        &flags[..4],
+        &[
             "--sandbox",
             "workspace-write",
             "--ask-for-approval",
             "never"
         ]
+    );
+    // TASK-2712: anything after the posture is the shared write set.
+    // trace:TASK-2712 | ai:claude
+    assert!(
+        flags[4..]
+            .chunks(2)
+            .all(|pair| pair[0] == "--add-dir" && pair.len() == 2),
+        "{flags:?}"
     );
     assert!(!flags
         .iter()
@@ -1600,7 +1610,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn codex_bypass_flag_only_comes_from_bypass_posture() {
-    let contained = tool_contained_flags("codex").unwrap();
+    let contained = tool_contained_flags(None, "codex").unwrap();
     assert!(!contained
         .iter()
         .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
@@ -2877,6 +2887,159 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].status, agent_registry::AgentStatus::Stale);
     assert!(views[0].ended_at.is_some());
+}
+
+/// Advisor F3 (foreground): `run_tracked_agent` -> `native_post_exit_spec`
+/// -> the post-exit step. A native Codex implementer whose fake child left
+/// pending work in its tree and exited 0 ends with the host's commit, with a
+/// completing trailer; a reviewer lane, and an implementer launched without
+/// the native posture, never reach the step.
+// trace:TASK-2712 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2712_foreground_lane_commits_pending_work_after_exit() {
+    use std::sync::{Arc, Mutex};
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["implementer", "reviewer"],
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        crate::gate::seat_authority::GRANT_ENV,
+        Some(grant_id.as_str()),
+    )]);
+    let fake_bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&fake_bin).unwrap();
+    let fake_agent = fake_bin.join("agent");
+    crate::test_exec::write_executable(
+        &fake_agent,
+        "#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\necho work >> pending.txt\nexit 0\n",
+    );
+    let host_git = |dir: &std::path::Path, args: &[&str]| -> String {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "core.hooksPath=/dev/null"])
+            .args(["-c", "user.name=host", "-c", "user.email=host@localhost"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let native: Vec<String> = crate::codex_native_sandbox::CODEX_NATIVE_POSTURE
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let run = |name: &str, role: &str, default_args: Vec<String>| {
+        let tree = tmp.path().join(name);
+        std::fs::create_dir_all(&tree).unwrap();
+        crate::test_git::commit_fixture(&tree);
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args,
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: tree.clone(),
+            role: Some(role.into()),
+            role_instance: RoleInstanceKind::Driver,
+            current_spec: Some("STORY-433".into()),
+            name: format!("codex-{name}"),
+            lease_id: None,
+            native_session_id: None,
+            resumed_from: None,
+        };
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&calls);
+        let step: Box<crate::ship_from_seat::PostExitStep> = Box::new(
+            move |_main: &std::path::Path,
+                  tree: &std::path::Path,
+                  spec: &str,
+                  lane: &str,
+                  clean: bool| {
+                seen.lock()
+                    .unwrap()
+                    .push((tree.to_path_buf(), spec.to_string(), clean));
+                host_git(tree, &["add", "-A"]);
+                let message = crate::ship_from_seat::post_exit_message(spec, lane, clean);
+                host_git(tree, &["commit", "-q", "--no-verify", "-m", &message]);
+                crate::ship_from_seat::PostExitCommit::Committed(host_git(
+                    tree,
+                    &["rev-parse", "HEAD"],
+                ))
+            },
+        );
+        let prompt_args =
+            agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
+        crate::ship_from_seat::with_post_exit_step(step, || {
+            // BUG-423: retry a transient spawn failure of the fresh binary.
+            let mut result = run_tracked_agent(
+                &fake_agent,
+                &config,
+                &plan,
+                None,
+                &prompt_args,
+                None,
+                false,
+                false,
+            );
+            for _ in 0..5 {
+                if result.is_ok() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                result = run_tracked_agent(
+                    &fake_agent,
+                    &config,
+                    &plan,
+                    None,
+                    &prompt_args,
+                    None,
+                    false,
+                    false,
+                );
+            }
+            result.expect("run_tracked_agent");
+        });
+        let calls = calls.lock().unwrap().clone();
+        let subject = host_git(&tree, &["log", "-1", "--format=%s"]);
+        let pending = !host_git(&tree, &["status", "--porcelain"]).is_empty();
+        (tree, calls, subject, pending)
+    };
+
+    let (tree, calls, subject, pending) = run("native-impl", "implementer", native.clone());
+    assert_eq!(calls, vec![(tree, "STORY-433".to_string(), true)]);
+    assert!(!pending, "the child's work is committed");
+    assert!(subject.ends_with("(STORY-433)"), "{subject}");
+
+    // The role gate: a reviewer lane never reaches the post-exit step.
+    let (_, calls, subject, pending) = run("native-rev", "reviewer", native);
+    assert!(calls.is_empty(), "{calls:?}");
+    assert!(pending);
+    assert_eq!(subject, "fixture");
+
+    // The native-posture gate: a bypass-posture implementer is not a seat.
+    let (_, calls, _, pending) = run(
+        "bypass-impl",
+        "implementer",
+        vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+    );
+    assert!(calls.is_empty(), "{calls:?}");
+    assert!(pending);
 }
 
 #[cfg(unix)]

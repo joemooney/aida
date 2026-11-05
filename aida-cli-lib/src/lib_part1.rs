@@ -151,6 +151,10 @@ mod task_1562_worktree_reclaim_tests;
 #[cfg(test)]
 #[path = "tests/bug_1723_config_trust_tests.rs"]
 mod bug_1723_config_trust_tests;
+// trace:TASK-1472 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1472_bare_aida_picker_tests.rs"]
+mod task_1472_bare_aida_picker_tests;
 
 /// The commands whose store and cache lock waits run under the fail-fast
 /// deadline ([`aida_core::io_pressure::FAIL_FAST_LOCK_BUDGET`]).
@@ -1420,6 +1424,64 @@ pub(crate) fn rewrite_groom_alias(args: &[String]) -> (Vec<String>, Option<Strin
     (args.to_vec(), None)
 }
 
+/// TASK-1472: what a bare `aida` (no arguments) does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BareAidaAction {
+    /// Interactive terminal inside an initialized AIDA project: open the
+    /// `aida agent new` agent picker.
+    AgentPicker,
+    /// Agent-output mode (non-TTY stdout / `AIDA_AGENT_OUTPUT`): the TASK-970
+    /// `aida status` snapshot + top queued.
+    StatusSnapshot,
+    /// Everything else (outside an AIDA project, or a non-interactive stdin
+    /// with human output): the getting-started onboarding menu.
+    Onboarding,
+}
+
+/// TASK-1472: decide what bare `aida` does. Pure so every branch is
+/// unit-testable without a terminal. `interactive` means stdin AND stdout are
+/// terminals (the picker needs to read a keypress); `initialized` means the
+/// enclosing project has AIDA set up.
+// trace:TASK-1472 | ai:claude
+pub(crate) fn bare_aida_action(
+    agent_mode: bool,
+    interactive: bool,
+    initialized: bool,
+) -> BareAidaAction {
+    if agent_mode {
+        BareAidaAction::StatusSnapshot
+    } else if interactive && initialized {
+        BareAidaAction::AgentPicker
+    } else {
+        BareAidaAction::Onboarding
+    }
+}
+
+/// TASK-1472: whether `root` is an initialized AIDA project — the same three
+/// markers the docs name: `.aida/config.toml`, a legacy `requirements.db`, or
+/// a `.aida-store` worktree. trace:TASK-1472 | ai:claude
+pub(crate) fn project_is_aida_initialized(root: &std::path::Path) -> bool {
+    root.join(".aida").join("config.toml").is_file()
+        || root.join("requirements.db").is_file()
+        // symlink_metadata, so a dangling `.aida-store` symlink (store moved
+        // or not yet materialized) still marks the project as initialized.
+        || std::fs::symlink_metadata(root.join(".aida-store")).is_ok()
+}
+
+/// TASK-1472: whether the current directory sits in an initialized AIDA
+/// project. Only an existence probe — no store is opened, so bare `aida`
+/// stays ahead of `run()`'s early-dispatch storage boundary.
+/// trace:TASK-1472 | ai:claude
+fn cwd_in_initialized_aida_project() -> bool {
+    find_project_root().is_ok_and(|root| project_is_aida_initialized(&root))
+}
+
+/// TASK-1472: the argv bare `aida` is rewritten to when it opens the picker.
+/// trace:TASK-1472 | ai:claude
+pub(crate) fn bare_aida_picker_argv(argv0: &str) -> Vec<String> {
+    vec![argv0.to_string(), "agent".to_string(), "new".to_string()]
+}
+
 /// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
 /// `aida agent new`, git-style, forwarding any flags/args to `new`. The
 /// recognized subcommands (`new`, `register`, `list`, `ls`, `status`, `gc`,
@@ -1726,6 +1788,7 @@ pub(crate) fn run() -> Result<()> {
     // legacy `aida help-all`). Intercepting here is required because bare
     // `aida` otherwise fails clap parsing (subcommand required → exit 2).
     // trace:STORY-556
+    let mut bare_picker = false;
     {
         let first = raw_args.get(1).map(String::as_str);
         // Args after the `help` verb (empty for bare `aida`).
@@ -1779,16 +1842,30 @@ pub(crate) fn run() -> Result<()> {
             return print_help_topic(topic);
         }
         // TASK-970: content-first bare `aida` in AGENT MODE. A human at a TTY
-        // keeps the getting-started menu (the Trojan-horse first impression);
+        // gets the agent picker inside an AIDA project (TASK-1472) and the
+        // getting-started menu elsewhere (the Trojan-horse first impression);
         // an agent (non-TTY / `AIDA_AGENT_OUTPUT`) gets the `aida status`
         // snapshot + top queued instead, since CLAUDE.md names `aida status`
         // as the entry point and a help dump is noise to a coding agent. The
         // explicit `aida help` verb is unchanged in both modes.
         // trace:TASK-970
-        if is_bare && agent_output_mode() {
-            return handle_bare_agent_status();
+        // TASK-1472: bare `aida` at an interactive terminal inside an
+        // initialized AIDA project is a shortcut for `aida agent new` (the
+        // agent picker); agent-output / non-interactive callers keep the
+        // TASK-970 status snapshot, and outside a project it stays onboarding.
+        // trace:TASK-1472 | ai:claude
+        if is_bare {
+            let agent_mode = agent_output_mode();
+            let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin())
+                && std::io::IsTerminal::is_terminal(&std::io::stdout());
+            let initialized = !agent_mode && interactive && cwd_in_initialized_aida_project();
+            match bare_aida_action(agent_mode, interactive, initialized) {
+                BareAidaAction::StatusSnapshot => return handle_bare_agent_status(),
+                BareAidaAction::AgentPicker => bare_picker = true,
+                BareAidaAction::Onboarding => {}
+            }
         }
-        if is_help_verb || is_bare {
+        if is_help_verb || (is_bare && !bare_picker) {
             let want_all = rest.iter().any(|a| a == "--all" || a == "-a");
             if want_all {
                 print_help_all();
@@ -1798,6 +1875,14 @@ pub(crate) fn run() -> Result<()> {
             return Ok(());
         }
     }
+    // TASK-1472: the picker shortcut flows through the normal pipeline as the
+    // literal `aida agent new`, so it is the same picker, flags and all.
+    // trace:TASK-1472 | ai:claude
+    let raw_args = if bare_picker {
+        bare_aida_picker_argv(&raw_args[0])
+    } else {
+        raw_args
+    };
 
     // TASK-822 / TASK-824 / STORY-623: pre-clap argv rewrites so aliases pass
     // every downstream flag through unchanged. `aida list <lens>` → its command

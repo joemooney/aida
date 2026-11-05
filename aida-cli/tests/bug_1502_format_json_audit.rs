@@ -617,6 +617,25 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
                             "unsupported catalog path silently succeeded: {path}\n{}",
                             String::from_utf8_lossy(&out.stdout)
                         );
+                        // The failure must be the refusal itself, not some
+                        // other error: the unsupported-pin message (or a
+                        // renamed local --format's), or a clap usage error
+                        // for missing operands. trace:TASK-1954 trace:TASK-1969 | ai:claude
+                        // A JSON pin may route the error envelope to stdout.
+                        let combined = format!(
+                            "{}{}",
+                            String::from_utf8_lossy(&out.stdout),
+                            String::from_utf8_lossy(&out.stderr)
+                        );
+                        let pin_refused = combined.contains("has no JSON projection")
+                            || combined.contains("sets the CLI output format");
+                        let usage_error =
+                            out.status.code() == Some(2) && combined.contains("Usage:");
+                        assert!(
+                            pin_refused || usage_error,
+                            "unsupported catalog path failed without the JSON refusal: {path}\nexit {:?}\n{combined}",
+                            out.status.code()
+                        );
                     }
                 })
             })

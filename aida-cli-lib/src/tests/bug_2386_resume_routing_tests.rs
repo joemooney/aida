@@ -342,7 +342,14 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
     codex_native_policy(root.path(), false);
     // `--sandbox` alone (no env, no knob) still runs Codex's native sandbox,
     // and a bypass request never widens a contained resume.
-    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, true).unwrap();
+    // trace:TASK-2712 | ai:claude — the resumed lane's own tree.
+    let lane = session::CodexLane {
+        tree: root.path(),
+        role: None,
+        host_main: None,
+    };
+    let cmd =
+        session::build_codex_resume_command("019a-thread", true, false, None, true, lane).unwrap();
     let args = args_of(&cmd);
     assert!(
         args.windows(2)
@@ -358,7 +365,8 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
         "{args:?}"
     );
     // Without the flag, the bypass request maps to Codex's bypass flag.
-    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, false).unwrap();
+    let cmd =
+        session::build_codex_resume_command("019a-thread", true, false, None, false, lane).unwrap();
     assert!(
         args_of(&cmd)
             .iter()
@@ -369,8 +377,9 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
     // BUG-2394: a resumed `--plan-only` lane keeps the read-only sandbox on
     // both postures; bypass and workspace-write never survive it.
     for contained in [true, false] {
-        let cmd = session::build_codex_resume_command("019a-thread", true, true, None, contained)
-            .unwrap();
+        let cmd =
+            session::build_codex_resume_command("019a-thread", true, true, None, contained, lane)
+                .unwrap();
         let args = args_of(&cmd);
         assert!(
             args.windows(2).any(|w| w == ["--sandbox", "read-only"]),
@@ -439,7 +448,12 @@ fn session_resume_codex_arm_builds_a_codex_resume_command() {
         id: "019a-thread".to_string(),
         worktree: None,
     };
-    let cmd = session::codex_session_resume_command(&target, false).unwrap();
+    let cmd = session::codex_session_resume_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        &target,
+        false,
+    )
+    .unwrap();
     assert!(
         cmd.get_program().to_string_lossy().ends_with("codex"),
         "{:?}",
@@ -483,7 +497,12 @@ fn session_resume_codex_arm_builds_a_codex_resume_command() {
         id: "--last".to_string(),
         ..target
     };
-    assert!(session::codex_session_resume_command(&bad, false).is_err());
+    assert!(session::codex_session_resume_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        &bad,
+        false
+    )
+    .is_err());
 }
 
 // ── headless Codex resume spawn ─────────────────────────────────────────────
@@ -496,6 +515,7 @@ fn headless_resume_refuses_agy_by_name() {
         label: None,
     };
     let err = session::spawn_vendor_headless_resume_granted(
+        crate::seat_clone::launcher_main().as_deref(),
         &session::HeadlessResume {
             vendor: HeadlessVendor::Agy,
             session_id: "sid",
@@ -554,6 +574,7 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
         label: None,
     };
     let (status, grant) = session::spawn_vendor_headless_resume_granted(
+        crate::seat_clone::launcher_main().as_deref(),
         &session::HeadlessResume {
             vendor: HeadlessVendor::Codex,
             session_id: "aida-sid",

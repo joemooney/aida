@@ -413,7 +413,10 @@ pub(crate) struct PreparedLaunch {
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
-    pub(crate) fn prepare(child: &Command, root: &Path) -> Result<Self> {
+    /// `host_main` is the launcher's main checkout, resolved once at the
+    /// launch entry point (TASK-2032); `None` recognises no seat clone.
+    // trace:TASK-2708 TASK-2032 | ai:claude
+    pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
         anyhow::ensure!(
             explicit(child, "AIDA_HEADLESS").as_deref() == Some("1"),
             "Codex AIDA posture currently supports foreground headless launches only (PR2 pending)"
@@ -510,13 +513,13 @@ impl PreparedLaunch {
         let mut profile = WriteProfile::new();
         profile.add(&root, true)?;
         let main = crate::main_worktree_root_from(&root);
-        crate::session::verify_linked_worktree_main(&root, &main)?;
+        crate::session::verify_linked_worktree_main(host_main, &root, &main)?;
         for p in crate::contained_boundary::contained_store_write_paths(&main) {
             let p =
                 std::fs::canonicalize(p).context("required store/cache directory unavailable")?;
             profile.add(&p, true)?;
         }
-        if let Some(clone) = crate::seat_clone::host_recorded_clone(&root) {
+        if let Some(clone) = crate::seat_clone::recorded_clone_for(host_main, &root) {
             for path in crate::seat_clone::seat_extra_write_paths(&clone) {
                 profile.add(&path, true)?;
             }
@@ -546,7 +549,7 @@ impl PreparedLaunch {
             }
             let git = base.join(".git");
             if git.exists() {
-                if base == &root && crate::seat_clone::host_recorded_clone(&root).is_some() {
+                if base == &root && crate::seat_clone::recorded_clone_for(host_main, &root).is_some() {
                     // Explicit native carve-out: the native workspace default
                     // protects .git even when its parent is writable.
                     profile.add(&git, true)?;
@@ -632,7 +635,7 @@ impl PreparedLaunch {
             root.join("target").to_string_lossy().into_owned(),
         );
         env.insert("RUSTC_WRAPPER".into(), String::new());
-        if let Some(clone) = crate::seat_clone::host_recorded_clone(&root) {
+        if let Some(clone) = crate::seat_clone::recorded_clone_for(host_main, &root) {
             for (name, value) in crate::seat_clone::seat_build_env(&clone) {
                 env.insert(name.into(), value);
             }

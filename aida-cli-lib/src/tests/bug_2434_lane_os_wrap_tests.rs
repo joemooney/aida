@@ -100,7 +100,7 @@ fn offer_with_bwrap_live_and_os_wrap_unset_gives_the_lane_a_runner_and_leaks_not
     assert!(!crate::session::os_wrap_enabled(seat.path()));
     assert_eq!(os_wrap_explicit(seat.path()), None);
     let (program, args) =
-        crate::session::os_wrapped_program_and_args(seat.path(), "claude", vec!["-p".into()])
+        crate::session::os_wrapped_program_and_args(None, seat.path(), "claude", vec!["-p".into()])
             .unwrap();
     assert_eq!(
         (program.as_str(), args),

@@ -161,6 +161,11 @@ pub(crate) fn validate_request(req: &CodexBgRequest) -> Result<()> {
 /// Bypass, raw sandbox or approval overrides are refused outright, never
 /// silently dropped: they would weaken the requested native posture.
 pub(crate) fn refuse_posture_overrides(args: &[String]) -> Result<()> {
+    // TASK-2712: a write root outside AIDA's own `--add-dir` run (e.g. a
+    // passthrough `--add-dir /`) widens the native sandbox.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_foreign_add_dir(args)
+        .map_err(|e| anyhow::anyhow!("`--bg` {e:#}"))?;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -660,6 +665,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
         // trace:BUG-2390 | ai:claude — dispatch take/impl name the lane branch.
+        // TASK-2712: a native Codex lane runs in a seat clone (`true`), whose
+        // pending work the host commits and publishes.
+        // trace:TASK-2712 | ai:claude
         prepare_agent_launch_attempt_on_branch(
             &project_root,
             role,
@@ -667,13 +675,21 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             "codex",
             name,
             cwd_ref,
-            false,
+            true,
             LaneBranch {
                 branch: req.branch.clone(),
                 base: req.base.clone(),
             },
         )?
     };
+    // TASK-2712: the shared write set, scoped to the lane's own tree.
+    // trace:TASK-2712 | ai:claude
+    crate::agent_launch::rescope_contained_settings(
+        &mut config,
+        &plan.launch_cwd,
+        plan.role.as_deref(),
+    )?;
+    refuse_posture_overrides(&config.default_args)?;
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {
         let (dir, root, attempt, me) = (
@@ -1690,6 +1706,21 @@ pub(crate) fn supervise_until_exit(
     if let Some(why) = exit_occupancy(dir, &init.project_root, attempt) {
         problems.push(why);
     }
+    // TASK-2712 (advisor ruling F1): the native child cannot commit (Codex
+    // keeps `<clone>/.git` read-only), so this host-side post-exit step
+    // commits what an implementer lane left pending in its seat clone. Only
+    // once the exit scan proved nothing of the lane still runs (no writer
+    // races the commit). A refused or failed commit leaves the work
+    // uncommitted and is reported; it does not hold the scope.
+    // trace:TASK-2712 | ai:claude
+    let clean_exit = terminal.unknown.is_none() && terminal.code == Some(0);
+    let failure = match post_exit_seat_commit(init, problems.is_empty(), clean_exit) {
+        Some(note) => Some(match failure {
+            Some(why) => format!("{why}; {note}"),
+            None => note,
+        }),
+        None => failure,
+    };
     let uncertain = terminal.unknown.is_some() || !problems.is_empty();
     let me = me.clone();
     receipt::compare_update(
@@ -1716,6 +1747,44 @@ pub(crate) fn supervise_until_exit(
         },
     )?;
     Ok(())
+}
+
+/// TASK-2712: the detached lane's post-exit commit of its seat's pending
+/// work ([`crate::ship_from_seat::post_exit_commit_reported`]), for an
+/// implementer lane whose exit scan came back clear. A note for the
+/// receipt when the commit was refused or failed; `None` otherwise.
+/// `clean_exit` (status 0) decides a completing vs `(Refs SPEC)` trailer.
+// trace:TASK-2712 | ai:claude
+fn post_exit_seat_commit(
+    init: &SupervisorInit,
+    exit_clear: bool,
+    clean_exit: bool,
+) -> Option<String> {
+    if aida_core::team::canonical_role(&init.role) != "implementer" {
+        return None;
+    }
+    if !exit_clear {
+        // TASK-2032: anchored on the lane's recorded host project, never the
+        // supervisor's cwd. trace:TASK-2032 | ai:claude
+        let main = crate::main_worktree_root_from(&init.project_root);
+        return crate::seat_clone::host_recorded_clone(&main, &init.worker.cwd).map(|_| {
+            "the lane's pending seat work was not committed: the exit scan could not prove \
+             the lane over"
+                .to_string()
+        });
+    }
+    match crate::ship_from_seat::post_exit_commit_reported(
+        &init.project_root,
+        &init.worker.cwd,
+        &init.spec,
+        &init.agent_name,
+        clean_exit,
+    ) {
+        crate::ship_from_seat::PostExitCommit::Failed(why) => Some(format!(
+            "the lane's pending seat work was not committed: {why}"
+        )),
+        _ => None,
+    }
 }
 
 /// How long the normal exit waits for signalled work to leave before it

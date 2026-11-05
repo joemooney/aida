@@ -266,7 +266,10 @@ fn fork_and_run_to(
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
     // trace:BUG-2393 | ai:claude
     let contained = session::drain_contained(project_root)?;
+    // TASK-2032: advisor-watch runs at the host project root.
+    // trace:TASK-2032 | ai:claude
     let status = session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         prompt,
         &plan.fork_uuid,
         &log_path,
@@ -638,6 +641,7 @@ mod tests {
         };
         assert_eq!(thread, THREAD);
         let (_, argv) = session::advisor_tier_program_and_args_with_posture(
+            None,
             HeadlessVendor::Codex,
             true,
             "seeded advise",

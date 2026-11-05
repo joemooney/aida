@@ -1883,6 +1883,21 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
 type Launch = (PathBuf, String, String, String);
 thread_local! {
     static LAUNCH: std::cell::RefCell<Option<Launch>> = const { std::cell::RefCell::new(None) };
+    // TASK-2807: agent processes this thread actually spawned, so a pickup
+    // launch tells "the spawn failed" (rolled back) from "an agent ran".
+    // trace:TASK-2807 | ai:claude
+    static SPAWNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// TASK-2807: how many agent processes this thread has spawned through
+/// [`reviewer_status_on_spawn`]. Bumped only once `spawn` returned a child.
+// trace:TASK-2807 | ai:claude
+pub(crate) fn agent_spawn_count() -> u64 {
+    SPAWNED.with(std::cell::Cell::get)
+}
+
+fn note_agent_spawned() {
+    SPAWNED.with(|n| n.set(n.get() + 1));
 }
 
 /// Run the reviewer process queue work launches. Inside a watch launch, mark
@@ -1903,12 +1918,14 @@ pub(crate) fn reviewer_status_on_spawn(
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
+        note_agent_spawned();
         on_spawn();
         return child.wait();
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
     let mut child = cmd.spawn_retrying_etxtbsy()?;
+    note_agent_spawned();
     on_spawn();
     match Identity::of(child.id()) {
         Ok(reviewer) => {
@@ -1987,9 +2004,12 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
                 Err(error) => eprintln!("{key}: refused: {error:#}"),
             }
         }
+        // One lazy classification per pass, rather than one /proc scan per PR.
+        // trace:BUG-2442 | ai:codex
+        let authors = update::AuthorLiveness::default();
         for change in changes {
             let key = change.key();
-            match watch_change(&root, &repo, &store, args, &mut children, change) {
+            match watch_change(&root, &repo, &store, args, &mut children, &authors, change) {
                 Ok(()) => {}
                 Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
                 Err(error) if stops_watcher(&error, args.once) => {
@@ -2085,6 +2105,7 @@ fn watch_change(
     store: &Store,
     args: &ReviewWatchArgs,
     children: &mut Vec<Dispatcher>,
+    authors: &update::AuthorLiveness,
     mut change: forge::Change,
 ) -> Result<()> {
     let key = change.key();
@@ -2104,7 +2125,7 @@ fn watch_change(
         root,
         store,
         &change,
-        &|c| update::author_live(root, c),
+        &|c| authors.author_live(root, c),
         &|c| update::forge_update(root, repo, c),
     )? {
         eprintln!("{key}: {reason}");

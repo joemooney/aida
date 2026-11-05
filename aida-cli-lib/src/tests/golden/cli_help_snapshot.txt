@@ -2123,6 +2123,10 @@ Run by: anyone, when: you want to see what's pending (read-only).
 List the decision inbox — every spec with a recorded DecisionRequest, pending ones first. The pure
 read; never prompts (scripting/scanning).
 
+Always shows the full inbox, home or away. Presence only shapes the proactive nudge in `aida
+status`: while away, pending decisions accumulate quietly unless `[presence] questions =
+"always-surface"` (default `"quiet-when-away"`) in `.aida/config.toml`.
+
 Usage: aida questions list [OPTIONS]
 
 Options:
@@ -15255,6 +15259,11 @@ Options:
           check its commit trailers, push it and open the PR. The seat's hooks never run. Never
           merges. With --dry-run, nothing is imported or pushed
 
+      --commit-pending <MSG>
+          With --from-seat: first commit the seat's uncommitted changes with this message, inside
+          AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex
+          seat, which cannot commit in its own sandbox. The message must carry the spec trailer
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -18027,7 +18036,8 @@ win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always apply
 `[presence]` in `.aida/config.toml`: consumers  = "on" | "off"            (master switch; default
 on) away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain) home_offer =
-"surface" | "dont-block" (home-side; default surface)
+"surface" | "dont-block" (home-side; default surface) questions  = "quiet-when-away" |
+"always-surface" (decision-inbox nudge in `aida status` while away; default quiet-when-away)
 
 Hidden alias for `aida presence away` (kept for muscle memory).
 
@@ -25514,10 +25524,13 @@ Commands:
   completed  Specs that entered Completed in the window, one row each: when, then its `aida list`
              row with its CURRENT status (a spec reopened since shows its status now)
   rejected   Specs that entered Rejected in the window, one row each, with their CURRENT status
-  approved   Specs that entered Approved in the window, one row each, with their CURRENT status
+  approved   Specs that entered Approved in the window, one row each, with their CURRENT status. Any
+             move into Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed
+             spec reopened
   closed     Specs that entered a terminal status in the window: Completed, Rejected or Superseded.
-             Archiving is housekeeping, not an outcome, so it does not count. One row each, with
-             their CURRENT status
+             Archiving is housekeeping, not an outcome, so it does not count. Done (finished on a
+             branch, not yet merged) does not count either, though `aida list closed` shows Done
+             rows. One row each, with their CURRENT status
   help       Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -26194,7 +26207,7 @@ Usage: aida history opened [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26216,8 +26229,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26373,7 +26386,7 @@ Usage: aida history completed [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26395,8 +26408,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26551,7 +26564,7 @@ Usage: aida history rejected [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26573,8 +26586,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26721,7 +26734,8 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida history approved
-Specs that entered Approved in the window, one row each, with their CURRENT status.
+Specs that entered Approved in the window, one row each, with their CURRENT status. Any move into
+Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed spec reopened.
 
 Example: `aida history approved --since 3d --priority high`
 
@@ -26729,7 +26743,7 @@ Usage: aida history approved [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26751,8 +26765,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26900,7 +26914,9 @@ Options:
           Print help (see a summary with '-h')
 ===== aida history closed
 Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is
-housekeeping, not an outcome, so it does not count. One row each, with their CURRENT status.
+housekeeping, not an outcome, so it does not count. Done (finished on a branch, not yet merged) does
+not count either, though `aida list closed` shows Done rows. One row each, with their CURRENT
+status.
 
 Example: `aida history closed --since 7d --tags cli`
 
@@ -26908,7 +26924,7 @@ Usage: aida history closed [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26930,8 +26946,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -27203,6 +27219,10 @@ Options:
 
       --fail-on-drift
           Return a nonzero exit only when a row reports drift
+
+      --fail-on-unknown
+          With --fail-on-drift, also fail when a row is unknown (host data unavailable) or invalid
+          (bad block), so a CI gate cannot pass on a host that could not check anything
 
   -v, --verbose
           Also list rejected, superseded and archived constraints, which are never probed. JSON
@@ -45695,6 +45715,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "commit-pending",
+        "takes_value": true,
+        "help": "With --from-seat: first commit the seat's uncommitted changes with this message, inside AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex seat, which cannot commit in its own sandbox. The message must carry the spec trailer"
+      },
+      {
         "name": "dry-run",
         "takes_value": false,
         "help": "Print the resolved finish sequence without executing any of it"
@@ -56914,7 +56939,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -56934,7 +56959,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57095,7 +57120,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57115,7 +57140,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57276,7 +57301,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57296,7 +57321,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57337,7 +57362,7 @@ Working on aida itself
       "history",
       "approved"
     ],
-    "about": "Specs that entered Approved in the window, one row each, with their CURRENT status",
+    "about": "Specs that entered Approved in the window, one row each, with their CURRENT status. Any move into Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed spec reopened",
     "flags": [
       {
         "name": "all",
@@ -57457,7 +57482,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57477,7 +57502,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57518,7 +57543,7 @@ Working on aida itself
       "history",
       "closed"
     ],
-    "about": "Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is housekeeping, not an outcome, so it does not count. One row each, with their CURRENT status",
+    "about": "Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is housekeeping, not an outcome, so it does not count. Done (finished on a branch, not yet merged) does not count either, though `aida list closed` shows Done rows. One row each, with their CURRENT status",
     "flags": [
       {
         "name": "all",
@@ -57638,7 +57663,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57658,7 +57683,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57811,6 +57836,11 @@ Working on aida itself
         "name": "fail-on-drift",
         "takes_value": false,
         "help": "Return a nonzero exit only when a row reports drift"
+      },
+      {
+        "name": "fail-on-unknown",
+        "takes_value": false,
+        "help": "With --fail-on-drift, also fail when a row is unknown (host data unavailable) or invalid (bad block), so a CI gate cannot pass on a host that could not check anything"
       },
       {
         "name": "format",
