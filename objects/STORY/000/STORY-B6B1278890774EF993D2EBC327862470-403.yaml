@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T12:47:54.481495946Z
+modified_at: 2026-11-05T13:07:28.909261209Z
 req_type: Story
 relationships:
 - rel_type:
@@ -163,6 +163,13 @@ comments:
   created_at: 2026-11-05T12:46:07.326307301Z
   modified_at: 2026-11-05T12:46:07.326307301Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abd2-4e0d-7361-bfbf-912b20817af7
+  author: joe
+  content: 'Round 3 (3a4cd8f371b): findings 1/2/3/5 were already fixed on the branch in 8f9d6de09f9 (resolve_aida_exe; the TASK-2807 ratchet finds run_queue_resume_to_exit and asserts its body still calls spawn_vendor_headless_resume), f5d669012d8 (story_2475 Codex resume fixture: a delegated parent grant plus a sandbox-preflight ack), and d6fe5674036 (an integration test of the seated conflict reroute, headless and interactive). Finding 4: the live bwrap gate now counts libtest --logfile records instead of console lines, which the concurrent --nocapture panic output can split. It also names each missing test, so a repeat identifies it. untested=true: the lane job timed out after 900s while still compiling, and CI has not started a run for pushes after 08:15Z.'
+  created_at: 2026-11-05T13:07:28.909261209Z
+  modified_at: 2026-11-05T13:07:28.909261209Z
+  session_id: 01a1abc34e6e
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
