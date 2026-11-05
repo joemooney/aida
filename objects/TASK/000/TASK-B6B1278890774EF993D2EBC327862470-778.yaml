@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T02:12:56.374479575Z
+modified_at: 2026-11-05T02:17:31.366219092Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -33,6 +33,12 @@ comments:
   content: 'The strengthened assertions exposed an earlier gate in the old-head test: changing the approval SHA to main made approval carry-over refuse before supersession. Updated that case to retain its original attested approval, advance main, merge main into the source branch, push both fixture refs, and update simulated PR metadata. This supplies a valid off-head carry-over while keeping every source verdict off the current head. Re-running the four bug2438 regressions.'
   created_at: 2026-11-05T02:12:56.374479575Z
   modified_at: 2026-11-05T02:12:56.374479575Z
+  session_id: 01a1a97013e5
+- id: 01a1a97f-3fe6-7d10-bbc9-a996e6e3a484
+  author: joe
+  content: 'Verification: cargo test -p aida-cli-lib --lib bug2438_ -- --test-threads=1 ran four tests twice; three passed and old_head_refusal_without_current_head_verdict_refuses failed both times. The minimal requested assertion fails first at approval carry-over (main is not a reviewed source head). An experiment preserving the attested source approval and advancing it ONLY via a clean main merge passed carry-over, then failed earlier at the ordinary corpus gate: recorded review verdicts do not approve its current head / a head move alone does not lift a recorded refusal. collect() invokes live.gate() and enforce_corpus_gate_before_merge() before the train-specific supersession loop, so that exact train error is unreachable for this no-current-head-refusal case under current gates. Removed the experimental fixture changes; left the minimal assertion change as a failing reproducer. No production code changed. Recommend testing the train-specific effective-verdict policy through a narrow shared policy seam, while retaining integration coverage of the earlier corpus refusal; alternatively explicitly authorize gate reordering. Native .git is read-only, so no commit or PR was created.'
+  created_at: 2026-11-05T02:17:31.366219092Z
+  modified_at: 2026-11-05T02:17:31.366219092Z
   session_id: 01a1a97013e5
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
