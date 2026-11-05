@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-016
 agreed_id: TASK-2886
 title: Top-level lib test homes still use PID-only names across native PID namespaces
 description: While validating TASK-2861, dispatch neighboring tests intermittently lost advisor/reviewer grant files (14/19 passed in a parallel module run; 9/19 in another namespace). test_home.rs create_test_home uses /tmp/aida-lib-test-home-<pid> and removes an existing same-name directory; sweep_stale_test_homes probes bare PIDs from its own namespace. Separate native tool invocations share /tmp but reuse local PIDs, so neither operation establishes ownership of another namespace's home. A private TMPDIR made the named dispatch regression pass. TASK-2861 gives run_path_isolated_test children a unique private TMPDIR; top-level non-isolated lib test binaries remain exposed unless their runner supplies a private TMPDIR. Follow up with namespace-safe unique home ownership/cleanup and a concurrent cross-namespace regression, without weakening authority checks. This is a source-supported diagnosis; no outside-seat baseline was run.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:49:13.714847256Z
-modified_at: 2026-11-05T18:58:36.617308881Z
+modified_at: 2026-11-05T19:41:07.182422200Z
 req_type: Task
 tags:
 - from-implementer:TASK-2861
@@ -39,6 +39,12 @@ comments:
   created_at: 2026-11-05T18:17:41.439667519Z
   modified_at: 2026-11-05T18:17:41.439667519Z
   session_id: 01a1acde43fb
+- id: 01a1ad3a-b0ee-7293-abb9-a9ed411a3f94
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design is sound (random tempfile homes, boot+pidns-scoped sweep, live unshare regression), but all 3 CI failures at 072f3f0 are caused by this PR: raw kill(0) trips the TASK-1750 guard, raw current_exe() trips the TASK-1262 guard, and homes are not 0700 so the new ownership test fails.. No triage reason was given.'
+  created_at: 2026-11-05T19:41:07.182420649Z
+  modified_at: 2026-11-05T19:41:07.182420649Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
   author: joe
@@ -78,14 +84,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ad3a-b0ee-7293-abb9-a9d0b1289024
+  author: joe
+  timestamp: 2026-11-05T19:41:07.182405835Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70a5d68133a
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design is sound (random tempfile homes, boot+pidns-scoped sweep, live unshare regression), but all 3 CI failures at 072f3f0 are caused by this PR: raw kill(0) trips the TASK-1750 guard, raw current_exe() trips the TASK-1262 guard, and homes are not 0700 so the new ownership test fails.'
-  recovery_hint: address the review findings, move TASK-2886 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T18:58:36.617308881Z
