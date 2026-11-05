@@ -96,7 +96,14 @@ impl Evidence {
         let mut line = Vec::new();
         let mut overflow = false;
         loop {
-            let bytes = reader.fill_buf()?;
+            let bytes = match reader.fill_buf() {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    eprintln!("AGY outcome: incomplete stdout evidence: {error}");
+                    evidence.invalid = true;
+                    break;
+                }
+            };
             if bytes.is_empty() {
                 if !line.is_empty() || overflow {
                     evidence.invalid = true; // truncated JSONL is not terminal evidence
@@ -106,8 +113,14 @@ impl Evidence {
             let end = bytes.iter().position(|b| *b == b'\n');
             let count = end.map_or(bytes.len(), |i| i + 1);
             if let Some(writer) = forward.as_deref_mut() {
-                writer.write_all(&bytes[..count])?;
-                writer.flush()?;
+                if let Err(error) = writer
+                    .write_all(&bytes[..count])
+                    .and_then(|()| writer.flush())
+                {
+                    eprintln!("AGY outcome: log forwarding failed: {error}");
+                    evidence.invalid = true;
+                    forward = None;
+                }
             }
             if !overflow && line.len() + count <= MAX_LINE {
                 line.extend_from_slice(&bytes[..count]);
@@ -165,141 +178,97 @@ pub(crate) fn log_status(path: &Path, process: ExitStatus) -> ExitStatus {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::os::unix::process::ExitStatusExt;
+// trace:TASK-2838 | ai:codex
+// Only incomplete AGY evidence may proceed to the existing fresh-verdict gate.
+pub(crate) fn reviewer_may_check_verdict(
+    vendor: crate::session::HeadlessVendor,
+    status: ExitStatus,
+) -> bool {
+    status.success()
+        || (vendor == crate::session::HeadlessVendor::Agy && status.code() == Some(INCOMPLETE))
+}
 
-    const SUCCESS: &str =
-        "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"response\":\"\"}}\n";
-    const ERROR: &str = "{\"event\":\"step_update\",\"step_update\":{\"step_type\":\"tool\",\"tool_name\":\"run_command\",\"step_index\":2,\"state\":\"ERROR\",\"tool_info\":{\"error\":{\"type\":\"TOOL_ERROR\",\"message\":\"agentapi: read-only file system\"}}}}\n";
-    const RETRY: &str = "{\"event\":\"step_update\",\"step_update\":{\"step_type\":\"tool\",\"tool_name\":\"run_command\",\"step_index\":3,\"state\":\"DONE\"}}\n";
-    const DENIED: &str = "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"response\":\"\",\"denied_actions\":[{\"action\":\"command\",\"display_name\":\"RunCommand\"}]}}\n";
+// A descendant can retain stdout after the vendor exits. Polling allows the
+// reader to be cancelled without leaking a blocked thread or killing helpers.
+struct CoordinatorPipe {
+    output: std::process::ChildStdout,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
 
-    fn outcome(stream: &str, code: i32) -> i32 {
-        Evidence::read(stream.as_bytes(), None, false)
-            .unwrap()
-            .status(ExitStatus::from_raw(code << 8))
-            .code()
-            .unwrap()
-    }
-
-    #[test]
-    fn task_2838_structured_evidence_and_launch_wiring() {
-        assert_eq!(outcome(SUCCESS, 0), 0);
-        assert_eq!(
-            crate::headless_linger::parse_final_result(SUCCESS)
-                .unwrap()
-                .is_error,
-            false
-        );
-        assert_eq!(outcome(&format!("{DENIED}{SUCCESS}"), 0), INCOMPLETE);
-        assert_eq!(
-            outcome(
-                &format!(
-                    "{ERROR}{}{SUCCESS}",
-                    RETRY.replace("step_index\":3", "step_index\":2")
-                ),
-                0
-            ),
-            INCOMPLETE
-        );
-        assert_eq!(outcome(DENIED, 0), INCOMPLETE);
-        assert_eq!(outcome(&format!("{ERROR}{SUCCESS}"), 0), INCOMPLETE);
-        assert_eq!(outcome(&format!("{ERROR}{RETRY}{SUCCESS}"), 0), 0);
-        // A different successful tool is not recovery of run_command.
-        assert_eq!(
-            outcome(
-                &format!(
-                    "{ERROR}{}{SUCCESS}",
-                    RETRY.replace("run_command", "view_file")
-                ),
-                0
-            ),
-            INCOMPLETE
-        );
-        for stream in [
-            "",
-            "{}\n",
-            "not json\n",
-            "{\"event\":\"result\"}\n",
-            SUCCESS.trim_end(),
-        ] {
-            assert_eq!(outcome(stream, 0), INCOMPLETE, "{stream}");
+impl Read for CoordinatorPipe {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        use std::os::fd::AsRawFd;
+        use std::sync::atomic::Ordering;
+        loop {
+            if self.stop.load(Ordering::Acquire) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "stdout remained open after AGY exited",
+                ));
+            }
+            let mut fd = libc::pollfd {
+                fd: self.output.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // SAFETY: fd points to one initialized pollfd for the owned pipe.
+            let ready = unsafe { libc::poll(&mut fd, 1, 50) };
+            if ready > 0 {
+                return self.output.read(bytes);
+            }
+            if ready < 0 {
+                let error = std::io::Error::last_os_error();
+                if error.kind() != std::io::ErrorKind::Interrupted {
+                    return Err(error);
+                }
+            }
         }
-        assert_eq!(outcome(&SUCCESS.replace("SUCCESS", "ERROR"), 0), 1);
-        assert_eq!(
-            outcome(
-                &format!("{SUCCESS}{}", SUCCESS.replace("SUCCESS", "FAILED")),
-                0
-            ),
-            1
-        );
-        assert_eq!(outcome(SUCCESS, 7), 7);
-        assert_eq!(outcome(DENIED, 7), 7);
-        assert_eq!(
-            outcome(&format!("{}\n{SUCCESS}", "x".repeat(MAX_LINE + 1)), 0),
-            INCOMPLETE
-        );
-        // Arbitrary output/prose mentioning tool errors is not a tool event.
-        assert_eq!(
-            outcome(
-                &SUCCESS.replace(
-                    "\"response\":\"\"",
-                    "\"response\":\"TOOL_ERROR run_command\""
-                ),
-                0
-            ),
-            0
-        );
-
-        // Historical errors coexist with the existing trusted PR handshake.
-        let incomplete = outcome(&format!("{ERROR}{SUCCESS}"), 0);
-        let (line, code) = crate::standalone_implementer::report(
-            &crate::standalone_implementer::Outcome::PrOpened {
-                pr: 42,
-                head: Some("abc".into()),
-            },
-            Some(incomplete),
-            None,
-        );
-        assert_eq!(code, 0);
-        assert!(line.contains("pr-opened"));
-
-        // Exercise the real coordinator spawn/status seam, with no live vendor,
-        // grants, environment changes, model polling or sandbox expansion.
-        let dir = tempfile::tempdir().unwrap();
-        for (stream, expected) in [
-            (DENIED.to_owned(), INCOMPLETE),
-            (format!("{ERROR}{SUCCESS}"), INCOMPLETE),
-            (format!("{ERROR}{RETRY}{SUCCESS}"), 0),
-        ] {
-            let input = dir.path().join("input.jsonl");
-            let output = dir.path().join("output.jsonl");
-            std::fs::write(&input, &stream).unwrap();
-            let mut command = std::process::Command::new("/bin/sh");
-            command
-                .args(["-c", "cat -- \"$1\"", "stream-json"])
-                .arg(&input);
-            let status = crate::session::coordinator_status_with_handle_guard(
-                crate::session::HeadlessVendor::Agy,
-                &mut command,
-                dir.path(),
-                Some(std::fs::File::create(&output).unwrap()),
-                None,
-            )
-            .unwrap();
-            assert_eq!(status.code(), Some(expected));
-            assert_eq!(std::fs::read_to_string(output).unwrap(), stream);
-            assert_eq!(
-                log_status(&input, ExitStatus::from_raw(0)).code(),
-                Some(expected)
-            );
-        }
-        let args = crate::session::agy_headless_args_with_effort("prompt", Some("high"));
-        assert_eq!(&args[args.len() - 2..], &["-p", "prompt"]);
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--output-format", "stream-json"]));
     }
 }
+
+// trace:TASK-2838 | ai:codex
+pub(crate) fn coordinator_status(
+    child: &mut std::process::Child,
+    mut forward: Option<std::fs::File>,
+) -> std::io::Result<ExitStatus> {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let output = CoordinatorPipe {
+        output: child.stdout.take().expect("AGY stdout was piped"),
+        stop: stop.clone(),
+    };
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        let quiet = forward.is_none();
+        let evidence = Evidence::read(
+            output,
+            forward.as_mut().map(|file| file as &mut dyn Write),
+            quiet,
+        );
+        let _ = send.send(evidence);
+    });
+    let status = child.wait();
+    let received = receive.recv_timeout(std::time::Duration::from_millis(250));
+    stop.store(true, Ordering::Release);
+    let _ = reader.join();
+    // Cancellation retains any terminal failure already parsed before the
+    // incomplete tail. It must never turn explicit failure into exit 65.
+    let evidence = match received.or_else(|_| receive.try_recv().map_err(|_| ())) {
+        Ok(Ok(evidence)) => evidence,
+        other => {
+            eprintln!("AGY outcome: incomplete stdout evidence: {other:?}");
+            Evidence {
+                invalid: true,
+                ..Evidence::default()
+            }
+        }
+    };
+    Ok(evidence.status(status?))
+}
+
+#[cfg(test)]
+#[path = "tests/task_2838_agy_outcome_tests.rs"]
+mod tests;

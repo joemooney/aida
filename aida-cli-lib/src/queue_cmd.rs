@@ -15008,12 +15008,7 @@ pub(crate) fn run_standalone_reviewer(
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
     // A fresh trusted verdict can settle incomplete AGY execution evidence;
     // actual process/terminal failure still propagates. trace:TASK-2838 | ai:codex
-    if let Some(code) = status.code().filter(|c| {
-        *c != 0
-            && !(launch_vendor == session::HeadlessVendor::Agy
-                && *c == crate::agy_outcome::INCOMPLETE
-                && outcome.is_ok())
-    }) {
+    if let Some(code) = reviewer_vendor_exit_code(launch_vendor, status, outcome.is_ok()) {
         // No verdict: return the vendor's code with the recovery text, so
         // the draft reaches the caller like any other error.
         // trace:BUG-2187 | ai:claude
@@ -15023,6 +15018,19 @@ pub(crate) fn run_standalone_reviewer(
         std::process::exit(code);
     }
     outcome.map_err(|message| anyhow::Error::new(NoReviewVerdict { message }))
+}
+
+// trace:TASK-2838 | ai:codex
+pub(crate) fn reviewer_vendor_exit_code(
+    vendor: session::HeadlessVendor,
+    status: std::process::ExitStatus,
+    collected_verdict: bool,
+) -> Option<i32> {
+    status.code().filter(|code| {
+        *code != 0
+            && !(collected_verdict
+                && crate::agy_outcome::reviewer_may_check_verdict(vendor, status))
+    })
 }
 
 /// The verdict body the standalone summary shows: this run's collected

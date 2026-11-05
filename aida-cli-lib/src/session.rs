@@ -6397,15 +6397,7 @@ pub(crate) fn coordinator_status_with_handle_guard(
         guard.disarm();
     }
     if agy_stream {
-        let output = child.stdout.take().expect("AGY stdout was piped");
-        let quiet = forward.is_none();
-        let evidence = crate::agy_outcome::Evidence::read(
-            output,
-            forward.as_mut().map(|file| file as &mut dyn std::io::Write),
-            quiet,
-        );
-        let status = child.wait()?;
-        return Ok(evidence?.status(status));
+        return Ok(crate::agy_outcome::coordinator_status(&mut child, forward)?);
     }
     Ok(child.wait()?)
 }
