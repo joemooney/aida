@@ -152,10 +152,11 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
     assert!(human.contains("Reverse-linked exposition"), "{human}");
 
     // JSON: the only change is the new edge itself (plus write bookkeeping).
-    // No key disappears, and the only keys that may appear are edge-delta
-    // fields serialized skip-if-empty (a first edge introduces
-    // `relationships`), so no Documentation projection leaked in.
-    // trace:TASK-1471 | ai:claude
+    // No key disappears, and any added or changed fields must be edge-delta
+    // fields. The relationships key is always present, even for an empty
+    // list; adding the first edge changes its value, not its presence.
+    // This ensures no Documentation projection leaked in.
+    // trace:TASK-1471 | ai:claude ai:codex
     const EDGE_DELTA: &[&str] = &[
         "relationships",
         "out_degree",
@@ -193,7 +194,7 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
         "unexpected JSON delta: {changed:?}"
     );
     let rels = after["relationships"].to_string();
-    assert!(rels.contains(&direct.id.to_string()), "{rels}");
+    assert!(rels.contains(&direct.display_id()), "{rels}");
 
     // TOON: same top-level fields before and after; the new edge is visible
     // and the human-only section is not.
