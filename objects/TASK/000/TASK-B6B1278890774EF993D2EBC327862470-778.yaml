@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T02:17:31.366219092Z
+modified_at: 2026-11-05T02:17:39.719973977Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -65,6 +65,14 @@ history:
   timestamp: 2026-11-05T02:01:28.577485964Z
   session_id: 01a1a97013e5
   changes: []
+- id: 01a1a97f-6087-7ae3-83cc-d5b3bb5eb7b6
+  author: joe
+  timestamp: 2026-11-05T02:17:39.719993115Z
+  session_id: 01a1a97013e5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
@@ -72,3 +80,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c514dc9e625
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'The requested train-specific error assertion is unreachable in the old-head/no-current-head integration case: the existing fixture fails approval carry-over first; a valid clean-base-merge fixture passes carry-over but the ordinary corpus gate rejects the old refusal before train supersession is evaluated. Both targeted runs produced 3 passed / 1 failed. Minimal assertion-only failing reproducer remains in the seat; failure evidence is recorded in spec comments. No production changes or PR.'
+  lean: Extract and test the existing train supersession policy through a narrow shared function, keeping integration coverage of the earlier corpus refusal. Avoid reordering production gates solely to satisfy a test.
+  raised_by: implementer
+  raised_at: 2026-11-05T02:17:39.719973977Z
