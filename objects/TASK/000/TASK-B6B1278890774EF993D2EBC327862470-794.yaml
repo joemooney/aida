@@ -1,0 +1,29 @@
+id: 01a1a96d-d2ca-7680-b863-e4e2bbfd7338
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-794
+title: '[minor][non-blocking][BUG-2129] aida-cli-lib/src/usage.rs:363 root_flag_arity h…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1954, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor][non-blocking][BUG-2129] aida-cli-lib/src/usage.rs:363 root_flag_arity hard-codes the GlobalArgs flag list, so a newly added root flag silently logs as <root> again. Attached short values (-pFOO, -sFOO) also fall through to <root>. A test that derives the flag list from the clap Command would stop the drift.
+
+  PR: #3372
+  Reviewed sha: 46d1064a19079a7a9503a76289ce3436d5640ba6
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T01:58:29.322896020Z
+modified_at: 2026-11-05T01:58:29.322896020Z
+req_type: Task
+tags:
+- carried-from:TASK-1954
+- finding-hash:075779e3
+- from-review:PR-3372
+- kind:carried-forward
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
