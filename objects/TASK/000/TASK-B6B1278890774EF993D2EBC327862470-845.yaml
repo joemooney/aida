@@ -1,0 +1,29 @@
+id: 01a1ad2b-fc8b-7cb3-a777-25a9df599674
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-845
+title: 'cosmetic (non-blocking): history_views.rs:398/408 uses created_floor.is_some() …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3112, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): history_views.rs:398/408 uses created_floor.is_some() as the 'opened view' signal for both the when-substitution and the re-sort; the new test drives select_rows directly, so run()'s MIN_UTC wiring and the ordering are untested.
+
+  PR: #3439
+  Reviewed sha: 8ad9cd904437967d687eea6dce59a8856d78b7b1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T19:25:03.499415555Z
+modified_at: 2026-11-05T19:25:03.499415555Z
+req_type: Task
+tags:
+- carried-from:TASK-3112
+- finding-hash:df92c9e9
+- from-review:PR-3439
+- kind:carried-forward
+filed_at:
+  code_sha: 70e10d2b449f980b725a733bf35159164941039b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
+  vendor: claude
