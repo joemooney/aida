@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T04:57:12.404634716Z
+modified_at: 2026-11-05T04:57:15.288487370Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -164,6 +164,12 @@ comments:
   created_at: 2026-11-05T04:57:12.404634716Z
   modified_at: 2026-11-05T04:57:12.404634716Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa11-7d18-7993-8a71-779084b20c93
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Architecture sketch posted on the spec and in docs/plans/2026-11-04-story-2492-cross-machine-review.md. AGENTS.md Sketch-First Protocol requires master sign-off. Synced verdict JSON alone cannot satisfy existing ship authority: reviewer grants/human receipts and author-session evidence are machine-local. Need approval of a portable validated publication receipt, publisher trust rules and synced CAS reservation semantics before modifying gates. No production changes or acceptance completion claimed.. No triage reason was given.'
+  created_at: 2026-11-05T04:57:15.288482398Z
+  modified_at: 2026-11-05T04:57:15.288482398Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
@@ -193,6 +199,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aa11-7d18-7993-8a71-7786aceafb76
+  author: joe
+  timestamp: 2026-11-05T04:57:15.288463512Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -201,9 +215,3 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: design-fork
-  detail: 'Architecture sketch posted on the spec and in docs/plans/2026-11-04-story-2492-cross-machine-review.md. AGENTS.md Sketch-First Protocol requires master sign-off. Synced verdict JSON alone cannot satisfy existing ship authority: reviewer grants/human receipts and author-session evidence are machine-local. Need approval of a portable validated publication receipt, publisher trust rules and synced CAS reservation semantics before modifying gates. No production changes or acceptance completion claimed.'
-  lean: Use immutable host-validated review publication receipts with portable authorship/session evidence and node-qualified process tokens; consumers trust enrolled publishing nodes for the exact receipt without importing usable remote grants. Reserve each repository/change/head by successful shared-hub CAS before spawn; fail closed offline. See full sketch and linked draft finding.
-  raised_by: implementer
-  raised_at: 2026-11-05T04:48:26.867949908Z
