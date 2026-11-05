@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T11:19:24.365544456Z
+modified_at: 2026-11-05T11:19:28.595098522Z
 req_type: Story
 relationships:
 - rel_type:
@@ -144,6 +144,12 @@ comments:
   created_at: 2026-11-05T10:55:45.594746483Z
   modified_at: 2026-11-05T10:55:45.594746483Z
   session_id: 01a1ab1ee084
+- id: 01a1ab6f-6b67-7673-8a71-ca9ddb5a3984
+  author: joe
+  content: '#3398 conflicts with main (update-branch fails). Rebase the PR branch onto origin/main, resolve conflicts keeping both sides'' behavior, run one targeted test plus make check-ci-fast, push.'
+  created_at: 2026-11-05T11:19:28.359005650Z
+  modified_at: 2026-11-05T11:19:28.359005650Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
