@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:07:36.061610524Z
-modified_at: 2026-11-05T17:09:29.548091181Z
+modified_at: 2026-11-05T17:22:44.931661090Z
 req_type: Task
 tags:
 - from-advisor
@@ -58,6 +58,13 @@ relationships:
   target_id: 01a1ab22-f33d-77a0-a6cb-aef1b6cded9e
   created_at: 2026-11-05T16:10:12.962609988Z
   created_by: joe
+comments:
+- id: 01a1acbc-0243-74d2-8190-e71bae744238
+  author: joe
+  content: 'Implementation is in the assigned native Codex seat, with all eleven carried-forward findings confirmed applicable at launch baseline b66ec083185. Added targeted regressions; local Rust validation is still running. Publication is host-owned: git add failed with read-only .git/index.lock. Per docs/cli/04-git-lifecycle.md (TASK-2712), the launcher must commit pending seat edits after exit and publish via aida ship --from-seat; no attempt will bypass the native sandbox. The task remains In Progress until publication. PR description prepared at /tmp/task3112-pr-body.md.'
+  created_at: 2026-11-05T17:22:44.931661090Z
+  modified_at: 2026-11-05T17:22:44.931661090Z
+  session_id: 01a1acaef563
 history:
 - id: 01a1ac77-9411-73c0-9829-8b1bfe90d2c0
   author: joe
