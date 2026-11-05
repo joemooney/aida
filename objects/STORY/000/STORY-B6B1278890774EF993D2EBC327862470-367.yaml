@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-05T12:41:14.513405681Z
+modified_at: 2026-11-05T13:03:32.808330624Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -118,6 +118,11 @@ comments:
   content: 'Rework pickup: the canonical story currently contains slice-2 signoff and the previous publication blocker, but no STORY-2401 review findings/verdict or open PR could be located. Restored approved slice 2 from 33fd0f2c69c onto current main in branch story-b6b1278890774ef993d2ebc327862470-367-2. Added defensive GitHub status parsing: incomplete output or an unknown state stays Transient rather than becoming a known open PR. Running the LIGHT gate (story_2401 tests and make check-ci-fast). Publication is blocked by this lane''s read-only .git: git add refuses index.lock creation with Read-only file system. No merge/review-record action will be attempted; the story remains In Progress for the later approved slices.'
   created_at: 2026-11-05T12:41:14.513388949Z
   modified_at: 2026-11-05T12:41:14.513388949Z
+- id: 01a1abce-b3c8-7c61-952d-385f5bafdadd
+  author: mcp
+  content: 'Slice-2 rework validation complete on branch story-b6b1278890774ef993d2ebc327862470-367-2 (base 9f572b1f0d1): cargo test --profile agent -p aida-cli-lib --lib story_2401 passed 11/11; make check-ci-fast passed all 37 gates; the regenerated external-prose classifier inventory --check passed; the standalone scanner harness passed 8/8; git diff --check passed. Restored approved PR A from 33fd0f2c69c and hardened malformed GitHub status reads, HTTP 5xx/429 and signal-exit classification. Initial ratchet baseline now includes pipeline_stall and standalone_empty_rework reads already present on current main. AGENTS/OVERVIEW describe the incremental migration. No STORY-2401 review verdict or open PR was found. Publication remains blocked: git add cannot create .git/index.lock (Read-only file system). Changes remain uncommitted in the supplied worktree; complete patch /tmp/story-2401-rework.patch and ready PR body /tmp/story-2401-pr-body.txt are available for the launcher/host. Open with a Refs STORY-2401 title so this slice does not complete the story. No pr ship, review record, queue done or later slice work was performed.'
+  created_at: 2026-11-05T13:03:32.808321057Z
+  modified_at: 2026-11-05T13:03:32.808321057Z
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
