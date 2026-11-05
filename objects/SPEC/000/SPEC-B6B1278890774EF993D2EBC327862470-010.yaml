@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-010
 agreed_id: TASK-2838
 title: AGY headless exits successfully after denied or uninitialized command tools
 description: 'Observed while executing STORY-2460''s sketch-only native sandbox experiment with agy 1.4.12. Run a0d7722d-d013-4ddf-91a2-2ec38ad0db30 exited 0 with result.status=SUCCESS, empty response and denied_actions=[command] after print-mode permission refusal. Run 80ae5463-0380-4f26-9d8b-e75388580679, with an exact session-local command allow rule, exited 0/status SUCCESS despite run_command TOOL_ERROR before payload execution: ~/.gemini/antigravity-cli/bin/agentapi was read-only under outer Codex lane. No test sentinels were created. These are not empirical native sandbox passes. Triage whether AIDA''s AGY adapter must classify denied_actions/tool errors/absent positive completion evidence instead of trusting process exit. Preserve explicit pending/failed outcome without interpreting every recoverable tool error as final failure. Full bounded-run evidence and limits are in SKETCH v1 on STORY-2460; transient artifacts /tmp/story2460-pdqj_i8_/. No production changes made.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-05T19:07:30.510489742Z
+modified_at: 2026-11-05T19:11:40.664909398Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -148,6 +148,15 @@ history:
   author: joe
   timestamp: 2026-11-05T19:07:31.603163714Z
   changes: []
+- id: 01a1ad1f-bc78-7183-a7e3-8afe4fc17e44
+  author: aida-orchestrator
+  timestamp: 2026-11-05T19:11:40.664929375Z
+  session_id: 01a1ad1c07c8
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e422daaa1a4
@@ -159,6 +168,14 @@ implementation_info:
     cargo fmt --all -- --check; git diff HEAD --check: passed
   implemented_at: 2026-11-05T19:04:56.661188528Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AGY outcome classification matches the advisor ruling and the real recorded AGY stream shapes, but the inline test in agy_outcome.rs calls coordinator_status_with_handle_guard( from a production-source file, which deterministically trips the bug_2398 LAUNCH_INVENTORY ratchet; plus pipe-EOF wait and untested reviewer carve-outs.
+  recovery_hint: address the review findings, move TASK-2838 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T19:11:40.664909398Z
 interface_changes:
   cli:
   - AGY headless reports denied, unresolved tool-error, and missing terminal evidence as incomplete (exit 65); quiet coordinator output stays readable
