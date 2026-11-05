@@ -2140,13 +2140,8 @@ fn spawn_vendor_headless_forking(
     // trace:STORY-2326 TASK-2032 | ai:claude
     let ctx = headless_launch_context(host_main, vendor, program, args, posture)?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
-        &headless_worktree_root(),
-        seat.as_str(),
-        &crate::current_user_id(None),
-        containment_applied(vendor, contained),
-    )?;
+    // TASK-2708: the headless env sits beside its compose_headless_command
+    // build (BUG-342); the child grant is issued just after.
     cmd.env("AIDA_HEADLESS", "1")
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
@@ -2156,6 +2151,14 @@ fn spawn_vendor_headless_forking(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    let child_grant = crate::gate::seat_authority::issue_launch_child(
+        &headless_worktree_root(),
+        seat.as_str(),
+        &crate::current_user_id(None),
+        // trace:TASK-2708 | ai:claude
+        sandboxed_child_grant(vendor, contained)?,
+    )?;
     // trace:BUG-2187 | ai:codex
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
@@ -2175,10 +2178,45 @@ fn spawn_vendor_headless_forking(
     if vendor == HeadlessVendor::Codex {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
-            revoke_headless_child_grant(&child_grant.id);
-            return Err(error);
+        if posture != ContainmentPosture::Aida {
+            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+                revoke_headless_child_grant(&child_grant.id);
+                return Err(error);
+            }
         }
+    }
+    // trace:TASK-2707 | ai:codex
+    if vendor == HeadlessVendor::Codex && posture == ContainmentPosture::Aida {
+        let result = (|| -> Result<_> {
+            let mut run = crate::containment::launch::PreparedLaunch::prepare(
+                &cmd,
+                &headless_worktree_root(),
+                host_main,
+            )?
+            .spawn(Stdio::from(log))?;
+            anyhow::ensure!(
+                containment_applied(vendor, true, Some(run.receipt())),
+                "missing applied receipt"
+            );
+            if let Some(guard) = &mut handle_guard {
+                guard.disarm();
+            }
+            // trace:TASK-2708 | ai:claude
+            crate::gate::seat_authority::bind_contained_launch_worker(
+                &child_grant.id,
+                run.receipt(),
+            )?;
+            run.release()?;
+            run.child
+                .wait()
+                .context("failed to wait for contained Codex")
+        })();
+        tee.stop();
+        record_headless_session_end(&headless_worktree_root(), session_id);
+        if result.is_err() {
+            revoke_headless_child_grant(&child_grant.id);
+        }
+        return result.map(|status| (status, child_grant.id));
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
@@ -3044,7 +3082,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 contained,
                 None,
             )?,
-            contained: containment_applied(vendor, contained),
+            contained: containment_applied(vendor, contained, None),
             host_main: host_main.map(Path::to_path_buf),
         }),
         HeadlessVendor::Codex => {
@@ -3072,7 +3110,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 } else {
                     codex_session_args(prompt, bypass, None)
                 },
-                contained: containment_applied(vendor, contained),
+                contained: containment_applied(vendor, contained, None),
                 host_main: host_main.map(Path::to_path_buf),
             })
         }
@@ -3301,13 +3339,41 @@ impl HeadlessVendor {
     }
 }
 
-/// Returns whether containment is actually supported and applied for `vendor`.
-/// Only Claude applies AIDA containment. Use [`containment_posture`] to distinguish
-/// an explicitly opted-in Codex native sandbox from no containment.
-// trace:TASK-2631 | ai:codex
-// trace:BUG-2006 | ai:antigravity
-pub fn containment_applied(vendor: HeadlessVendor, contained: bool) -> bool {
-    vendor == HeadlessVendor::Claude && contained
+/// Applied credit is launch evidence, never a configured vendor preference.
+/// ClaudeNative preserves the legacy Claude behavior until PR3.
+// trace:TASK-2707 | ai:codex
+pub fn containment_applied(
+    vendor: HeadlessVendor,
+    contained: bool,
+    receipt: Option<&crate::containment::launch::ContainmentReceipt>,
+) -> bool {
+    enum Evidence<'a> {
+        ClaudeNative,
+        Receipt(&'a crate::containment::launch::ContainmentReceipt),
+        None,
+    }
+    let evidence = match (vendor, contained, receipt) {
+        (HeadlessVendor::Claude, true, _) => Evidence::ClaudeNative,
+        (HeadlessVendor::Codex, true, Some(receipt)) => Evidence::Receipt(receipt),
+        _ => Evidence::None,
+    };
+    match evidence {
+        Evidence::ClaudeNative => true,
+        Evidence::Receipt(receipt) => receipt.is_accepted(),
+        Evidence::None => false,
+    }
+}
+
+/// Whether a launch child's grant is minted (and its key preflighted) as a
+/// sandboxed grant. A Codex child under the `aida` posture is credited before
+/// its receipt exists, since the receipt is only produced at spawn; every mint
+/// and preflight site asks this one question so they cannot disagree.
+/// Only Codex consults the posture, so other vendors never fail here.
+// trace:TASK-2708 | ai:claude
+pub fn sandboxed_child_grant(vendor: HeadlessVendor, contained: bool) -> Result<bool> {
+    Ok(containment_applied(vendor, contained, None)
+        || (vendor == HeadlessVendor::Codex
+            && containment_posture(vendor, contained)? == ContainmentPosture::Aida))
 }
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
@@ -3353,6 +3419,7 @@ const SUPPORTED_CONTAINMENT_VENDORS: &str = "Supported [contained.vendors] setti
 fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<ContainmentPosture> {
     match (HeadlessVendor::parse(vendor), setting) {
         (Some(HeadlessVendor::Claude), None | Some("aida")) => Ok(ContainmentPosture::Aida),
+        (Some(HeadlessVendor::Codex), Some("aida")) => Ok(ContainmentPosture::Aida),
         (Some(HeadlessVendor::Codex), Some("native")) => Ok(ContainmentPosture::Native),
         (_, Some("native")) => anyhow::bail!(
             "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it. {SUPPORTED_CONTAINMENT_VENDORS}"
@@ -3788,7 +3855,7 @@ pub fn headless_vendor_args(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
-    let actually_contained = containment_applied(vendor, contained);
+    let actually_contained = containment_applied(vendor, contained, None);
     Ok(match vendor {
         HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
             host_main,
@@ -5735,6 +5802,16 @@ pub(crate) fn os_wrapped_program_and_args(
     program: &str,
     program_args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
+    // trace:TASK-2707 | ai:codex — AIDA Codex is owned by containment::launch,
+    // independently of the legacy optional os_wrap switch.
+    if program_args
+        .windows(2)
+        .any(|p| p[0] == "--sandbox" && p[1] == "workspace-write")
+        && Path::new(program).file_name().is_some_and(|n| n == "codex")
+        && containment_posture_in(worktree_root, "codex", true)? == ContainmentPosture::Aida
+    {
+        return Ok((program.to_string(), program_args));
+    }
     if !os_wrap_enabled(worktree_root) {
         return Ok((program.to_string(), program_args));
     }
@@ -6988,7 +7065,68 @@ fn run_vendor_headless_child(
         if let Some(id) = lease_id {
             child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, id);
         }
-        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
+        if containment_posture(vendor, contained)? != ContainmentPosture::Aida {
+            crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
+        }
+    }
+    // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
+    // broker and proxy until the wrapper is reaped. No model before receipt.
+    if vendor == HeadlessVendor::Codex
+        && containment_posture(vendor, contained)? == ContainmentPosture::Aida
+    {
+        // trace:TASK-2708 | ai:claude — every exit past the tee start, success
+        // or error, finishes the lane record it registered and stops the tee;
+        // a dropped ContainedChild kills the wrapper.
+        let mut registered = false;
+        let result = (|| -> Result<std::process::ExitStatus> {
+            let mut run = crate::containment::launch::PreparedLaunch::prepare(
+                &child_cmd,
+                &headless_worktree_root(),
+                host_main,
+            )?
+            .spawn(Stdio::from(log))?;
+            anyhow::ensure!(
+                containment_applied(vendor, true, Some(run.receipt())),
+                "missing applied receipt"
+            );
+            let worker = run.receipt().worker_pid();
+            if let Some(guard) = &mut handle_guard {
+                guard.disarm();
+            }
+            if let Some(on_spawn) = hooks.on_spawn {
+                on_spawn(worker);
+            }
+            if let Some(id) = lease_id {
+                stamp_lease_active_pid(id, worker)?;
+            }
+            crate::lane_liveness::register_headless_lane_for_child(
+                log_path,
+                lease_id,
+                vendor.as_str(),
+                worker,
+            );
+            registered = true;
+            // trace:TASK-2708 | ai:claude
+            crate::gate::seat_authority::bind_contained_launch_worker(grant_env, run.receipt())?;
+            run.release()?;
+            crate::headless_linger::wait_reaping_after_result_holding(
+                &mut run.child,
+                log_path,
+                crate::headless_linger::result_grace(),
+                hooks.hold_reap.unwrap_or(&|| false),
+            )
+            .map(|w| w.status)
+            .context("failed to wait for contained Codex")
+        })();
+        if registered {
+            crate::lane_liveness::finish_headless_lane_for_child(
+                log_path,
+                lease_id,
+                result.as_ref().ok().copied(),
+            );
+        }
+        tee.stop();
+        return result;
     }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
@@ -7743,6 +7881,9 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    // trace:TASK-2708 | ai:claude — hoisted so the shared argv builder stays
+    // beside the headless env stamp below.
+    let sandboxed_grant = sandboxed_child_grant(vendor, contained)?;
     // Same order as the Claude resume path: the argv comes from the shared
     // headless builder right beside the launch (BUG-342 ratchet).
     // trace:BUG-2386 | ai:claude
@@ -7773,7 +7914,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         cwd,
         seat,
         &crate::current_user_id(None),
-        containment_applied(vendor, contained),
+        sandboxed_grant,
     )?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
@@ -13503,12 +13644,27 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn containment_applied_reports_only_claude_as_contained() {
-        assert!(containment_applied(HeadlessVendor::Claude, true));
-        assert!(!containment_applied(HeadlessVendor::Claude, false));
-        assert!(!containment_applied(HeadlessVendor::Codex, true));
-        assert!(!containment_applied(HeadlessVendor::Codex, false));
-        assert!(!containment_applied(HeadlessVendor::Agy, true));
-        assert!(!containment_applied(HeadlessVendor::Agy, false));
+        assert!(containment_applied(HeadlessVendor::Claude, true, None));
+        assert!(!containment_applied(HeadlessVendor::Claude, false, None));
+        assert!(!containment_applied(HeadlessVendor::Codex, true, None));
+        assert!(!containment_applied(HeadlessVendor::Codex, false, None));
+        assert!(!containment_applied(HeadlessVendor::Agy, true, None));
+        assert!(!containment_applied(HeadlessVendor::Agy, false, None));
+    }
+
+    /// M2: the one mint/preflight question. Claude credits as before; only
+    /// Codex consults the posture, so Agy never fails here; contained Codex
+    /// with no trusted opt-in fails closed instead of minting an unsandboxed
+    /// grant. (The `aida` posture arm runs under the TASK-2708 policy tests.)
+    // trace:TASK-2708 | ai:claude
+    #[test]
+    fn task_2708_sandboxed_child_grant_is_the_one_mint_question() {
+        assert!(sandboxed_child_grant(HeadlessVendor::Claude, true).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Claude, false).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Codex, false).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Agy, true).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Agy, false).unwrap());
+        assert!(sandboxed_child_grant(HeadlessVendor::Codex, true).is_err());
     }
 
     // trace:BUG-2006 | ai:antigravity

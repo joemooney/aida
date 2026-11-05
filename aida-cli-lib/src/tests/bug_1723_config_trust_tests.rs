@@ -675,6 +675,12 @@ const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
         "aida-core/src/adoption_projection.rs",
         "the projection itself, under its own ownership checks",
     ),
+    // trace:TASK-2708 | ai:claude
+    (
+        "aida-cli-lib/src/launch/contained.rs",
+        "writes generated vendor state (a private per-launch Codex config.toml \
+         in its own tempdir), never the project config",
+    ),
 ];
 
 /// Text that names the project config path.

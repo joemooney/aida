@@ -11,6 +11,8 @@
 //! clears the environment.
 // trace:STORY-2326 | ai:claude
 
+// TASK-2708: the contained (AIDA bubblewrap) headless launch. trace:TASK-2708 | ai:claude
+pub(crate) mod contained;
 pub(crate) mod context;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude
 #[allow(dead_code)]

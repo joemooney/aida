@@ -212,6 +212,7 @@ fn outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error() {
         PUNTED_EXIT_CODE,
         HELD_EXIT_CODE,
         CAP_EXIT_CODE,
+        EMPTY_REWORK_EXIT_CODE, // trace:BUG-2452 | ai:codex
     ] {
         assert_eq!(
             table.iter().filter(|(c, _)| *c == code).count(),

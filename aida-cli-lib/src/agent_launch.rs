@@ -244,7 +244,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             return_to_pool,
             remove,
             include_in_use,
-        } => session_end(
+            discard_unpushed,
+        } => crate::session_end::session_end_with_discard_unpushed(
             id.as_deref(),
             spec.as_deref(),
             branch.as_deref(),
@@ -257,6 +258,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *return_to_pool,
             *remove,
             *include_in_use,
+            *discard_unpushed,
         ),
         SessionCommand::Leases {
             verbose,
@@ -2549,7 +2551,7 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
         return Ok(());
     }
     let containable = session::HeadlessVendor::parse(config.agent_type)
-        .is_some_and(|v| session::containment_applied(v, true));
+        .is_some_and(|v| session::containment_applied(v, true, None));
     if !containable {
         anyhow::bail!(
             "[contained] this session is contained (AIDA_CONTAINED), but `{}` cannot run an \
@@ -6575,7 +6577,7 @@ pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
         Some(v) => v,
         None => return false,
     };
-    session::containment_applied(vendor, config.contained)
+    session::containment_applied(vendor, config.contained, None)
 }
 
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
