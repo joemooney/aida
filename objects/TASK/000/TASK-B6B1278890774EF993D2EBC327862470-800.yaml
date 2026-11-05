@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T21:57:44.885753407Z
+modified_at: 2026-11-05T21:59:56.971541269Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -102,6 +102,12 @@ comments:
   content: 'Round 2 handler regression caught an additional finding-3 path: logical snapshots redact withdrawn body/subject before mailbox read inspects action evidence. Preserving only the fixed action fingerprint before that redaction in SnapshotRecord, then matching the receipt against that captured hash. Display redaction stays intact. This adds mailbox_logical.rs to the narrow fix scope; no serialized snapshot/ledger schema or write authority change. Handler tests now assert redacted JSON/text plus retained receipts. Initial 15 core tests and feature-disabled check passed; final core/CLI runs include this correction.'
   created_at: 2026-11-05T21:57:44.885753407Z
   modified_at: 2026-11-05T21:57:44.885753407Z
+  session_id: 01a1ada9fd48
+- id: 01a1adb9-cb2b-7f83-a26d-e77791025ca3
+  author: joe
+  content: 'Correction to the prior redaction implementation note: actual Retract also physically clears the stored body, so a pre-redaction snapshot hash alone is insufficient. Kept mailbox_logical.rs unchanged. Each newly authorized receipt retains its full immutable fingerprint plus an optional withdrawn-projection fingerprint, both derived from the same explicit field set; only retracted reads may match that redacted projection. No payload is restored or retained in the receipt, and other immutable metadata must still match. The optional field is bounded/validated on read. Tests clear the stored body, verify display redaction, retain receipts, and reject a replaced thread identity. Final suites rerunning.'
+  created_at: 2026-11-05T21:59:56.971541269Z
+  modified_at: 2026-11-05T21:59:56.971541269Z
   session_id: 01a1ada9fd48
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
