@@ -1,0 +1,18 @@
+{
+  "id": "45c3ed16-db58-4ff4-a8a8-8afa52ee4801",
+  "thread_id": "45c3ed16-db58-4ff4-a8a8-8afa52ee4801",
+  "from": "aida-mail-backlog-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-05"
+  },
+  "timestamp": 1793857543410,
+  "body": "You have 2 unread request/handoff message(s) older than the mail-backlog threshold:\n\n- advisor: unread [request] from claude-reviewer-955, 71h38m old: Review of PR-3206 (BUG-2401) round 3 at 47867159: request-changes, but only for …\n- advisor: unread [request] from claude-implementer-764, 65h50m old: BUG-2383 sketch ready for signoff (Codex transport + AC2 ext4)\n\nRead them with `aida mailbox inbox` and act on each.",
+  "subject": "Unread mail waiting: 2 message(s)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
