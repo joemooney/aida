@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T06:14:14.134309892Z
+modified_at: 2026-11-05T06:41:32.941256667Z
 req_type: Story
 tags:
 - docs:impacted
@@ -205,6 +205,16 @@ comments:
   content: 'Direct native validation: both real-OpenSSH two-clone collector/ship-gate tests passed (2/2), covering exact-head approval without B''s local receipt on A, stale-head refusal, request-changes findings, concurrent store advancement, local-approval disagreement, revocation, resumed author rejection, invalid authority, unsupported schema and committed symlink refusal. CLI help snapshot regenerated; broader touched-area and fast CI checks are underway. Publication boundary: `aida ship STORY-2492 --no-merge --dry-run` explicitly refuses this native Codex seat and directs leaving edits uncommitted for the lane''s host-side exit step. No attempt to bypass that refusal, no PR, review record, merge or ship action. `aida lane job run` also reports that this standalone lease has no lane runner (formal untested=true); direct Cargo checks are best-effort evidence, separately reported.'
   created_at: 2026-11-05T06:11:29.219879877Z
   modified_at: 2026-11-05T06:11:29.219879877Z
+- id: 01a1aa70-f90d-7a33-8a6a-7fefef89a91d
+  author: mcp
+  content: |-
+    Slice 1 implementation complete in the native seat, pending host publication. It uses the approved OpenSSH amendment, with enrolled public keys, canonical signed receipts/author-session evidence, exact head and canonical spec coverage, current-roster revocation, per-node causal supersession, local disagreement reporting and no copied grants/human receipts. The watcher reservation work remains slice 2; overall story status is left In Progress.
+
+    Validation: final receipt suite 3 passed (real two clones/bare hub/OpenSSH/collector/gates, stale head and missing canonical coverage, local-approval conflict, request-changes finding origins, revocation, resumed author, malformed evidence and roster-race preservation). Fast CI: 36 checks passed. Broader gate run: 1278 passed, 3 failed, 2 ignored; the three residual native fixture/context failures are filed as draft TASK-b6b1278890774ef993d2ebc327862470-810 with from-implementer/kind/severity tags. No claim that the broad run is green. Matching CLI was built for process fixtures. Help snapshot regenerated and verified; formatting/static manual checks run. Formal untested=true because `aida lane job run` explicitly reports this standalone lease has no lane runner; direct checks are separate evidence.
+
+    `git add` refuses .git/index.lock (read-only). `aida ship STORY-2492 --no-merge --dry-run` explicitly refuses native seat publication and requires uncommitted edits to be left for host-side exit. No commit/push/PR/review-record/merge was performed; the temporary unused publication clone was removed after the native refusal. Host handoff (from main checkout): aida ship STORY-2492 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-418 --commit-pending '[AI:codex] feat(review): sync trusted review publications (STORY-2492)'. This from-seat path never merges. Also commit queued store metadata, including the docs:impacted tag. All implementation edits are retained for that host action.
+  created_at: 2026-11-05T06:41:32.941247952Z
+  modified_at: 2026-11-05T06:41:32.941247952Z
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
