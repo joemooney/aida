@@ -9892,6 +9892,8 @@ Usage: aida supervise [OPTIONS] <COMMAND>
 Commands:
   nudge    Nudge a live advisor about transiently parked work, or fall back to operator notification
            when no advisor is live
+  stalls   Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes;
+           default is a side-effect-free preview
   redrive  Re-drive transiently-parked specs (typed tooling causes) on a capped, backed-off loop;
            leave genuine needs-human parks for escalation. Lets an unattended drain self-recover.
            Reads parks from the store and its attempt history from the event log, so it recovers a
@@ -9927,6 +9929,40 @@ advisor is live
 Usage: aida supervise nudge [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida supervise stalls
+Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes; default is
+a side-effect-free preview
+
+Usage: aida supervise stalls [OPTIONS]
+
+Options:
+      --threshold-mins <THRESHOLD_MINS>
+          Continuous observation window in minutes (minimum 15)
+          
+          [default: 30]
+
+      --execute
+          Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications
+
+      --json
+          Print the alarm report as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -10005,7 +10041,12 @@ Options:
           report of what it WOULD do
 
       --interval <INTERVAL>
-          Repeat the pass every N seconds (default: a single pass then exit)
+          Repeat every N seconds (maximum 900 with --execute; default: one pass)
+
+      --threshold-mins <THRESHOLD_MINS>
+          Pipeline alarm observation window in minutes (minimum 15)
+          
+          [default: 30]
 
       --json
           
@@ -40559,6 +40600,47 @@ Working on aida itself
     "path": [
       "aida",
       "supervise",
+      "stalls"
+    ],
+    "about": "Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes; default is a side-effect-free preview",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "execute",
+        "takes_value": false,
+        "help": "Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the alarm report as JSON"
+      },
+      {
+        "name": "threshold-mins",
+        "takes_value": true,
+        "help": "Continuous observation window in minutes (minimum 15)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "supervise",
       "redrive"
     ],
     "about": "Re-drive transiently-parked specs (typed tooling causes) on a capped, backed-off loop; leave genuine needs-human parks for escalation. Lets an unattended drain self-recover. Reads parks from the store and its attempt history from the event log, so it recovers a park regardless of which drain parked it or whether that drain crashed",
@@ -40632,7 +40714,7 @@ Working on aida itself
       {
         "name": "interval",
         "takes_value": true,
-        "help": "Repeat the pass every N seconds (default: a single pass then exit)"
+        "help": "Repeat every N seconds (maximum 900 with --execute; default: one pass)"
       },
       {
         "name": "json",
@@ -40643,6 +40725,11 @@ Working on aida itself
         "name": "objective",
         "takes_value": true,
         "help": "The objective to keep work aligned to (an epic id). When omitted, falls back to the `[oversight] objective` config value"
+      },
+      {
+        "name": "threshold-mins",
+        "takes_value": true,
+        "help": "Pipeline alarm observation window in minutes (minimum 15)"
       }
     ],
     "hidden": false
