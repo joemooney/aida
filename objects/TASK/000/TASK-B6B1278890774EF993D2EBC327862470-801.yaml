@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T21:12:40.323159336Z
+modified_at: 2026-11-05T21:28:16.508923469Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -97,6 +97,12 @@ comments:
   content: 'Round 3 approach: accept finding 1 and track each empty-rework receipt key/head in its own durable episode, preserving acceptance and unresolved delivery through membership changes. Add a real two-PR receipt/CI regression for A -> A+B -> B -> A+B (exactly two deliveries), plus failed post-send persistence coverage across membership changes. Expected files: pipeline_stall.rs and pipeline_stall_signals.rs. Finding 2: full-suite CI is still queued at the reviewed head; retain the supervised merge hold and report actual CI state without claiming green evidence. No design fork or disputed finding.'
   created_at: 2026-11-05T21:12:40.323159336Z
   modified_at: 2026-11-05T21:12:40.323159336Z
+  session_id: 01a1ad8c9940
+- id: 01a1ad9c-cb7c-75a1-aa06-9cbfd34ad2f0
+  author: joe
+  content: 'Round 3 finding 1 addressed and published as 623301f922b on existing PR #3443: each empty-rework receipt key/head now owns a durable episode; membership changes cannot re-arm accepted or unresolved heads. Legacy aggregate state migrates to member episodes. Added two-PR A -> A+B -> B -> A+B coverage (two sends), post-send persistence failure coverage, fresh-head rearming, and migration coverage. CLI guide clarifies per-head suppression. All 37 make check-ci-fast gates, formatting and staged whitespace checks passed. Full supervise_cmd test build is still running; no unit-test pass or full-suite CI success claimed yet. Finding 2 remains a CI observation, with the supervised merge hold preserved. Direct Git commit/push succeeded despite AIDA ship refusing native publication; Git only failed to update its local remote-tracking ref after origin accepted the new commit. No pr ship or review record performed.'
+  created_at: 2026-11-05T21:28:16.508923469Z
+  modified_at: 2026-11-05T21:28:16.508923469Z
   session_id: 01a1ad8c9940
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
