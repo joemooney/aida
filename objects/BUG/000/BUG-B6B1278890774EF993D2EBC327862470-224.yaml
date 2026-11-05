@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:06:16.127465510Z
+modified_at: 2026-11-05T21:06:23.734210861Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -85,6 +85,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-5 addressed (worker-only witness, injectable write-time refusal, HostFacts-gated judge, generation-pinned repairs, detached test), but the new session-start snapshot names the short-lived aida CLI pid as holder, which reads Dead while the lease is Live (new UNEXPLAINED rows; reclaimable live work after cutover); AC5 host evidence still absent; CI pending at head.. It was punted on: design-fork: Round 2 findings 5 and 6 remain open: production HostFacts validation is centralized, but generic remote Linux subreaper detection cannot be provided by PR_GET_CHILD_SUBREAPER (self only) or ordinary procfs; current refusal covers PID 1 and known init executables. Finding 6 requires host-terminal migrate --execute and host compare evidence; this lane is a foreign PID namespace and execute refused, and repaired no-lease orphans still need operator-reviewed lifecycle repair rather than reclassification. Publication is also blocked: git add refuses .git/index.lock with Read-only file system, so this lane cannot produce the requested new commit or push. Findings 1-4 and the constructor portion of 5 are implemented in the worktree; regression verification is running. Please retain the merge hold, decide the generic-subreaper/orphan-release policy, and publish the reviewed worktree changes from the authorized host.. No triage reason was given.'
   created_at: 2026-11-05T21:06:16.127463204Z
   modified_at: 2026-11-05T21:06:16.127463204Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad88-c307-71d3-8b49-ff027abf9612
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2458):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 22c4fce90ead
+    Recorded: 2026-11-05T20:54:38.381445205+00:00
+    Findings:
+    1. MAJOR (AC1/AC5): dual.rs starting_lease_snapshot (via lease_started, session_start.rs:3433) records std::process::id() — the 'aida session start' CLI process — as the holder witness whenever no worker is stamped. That process exits milliseconds later, so judge_owner returns Dead (judge.rs:164) while the legacy lease is Live; compare.rs:101 classifies (Live, Dead) as Unexplained. Every interactive/role-enter session start (no queue-work worker stamp) therefore creates a new UNEXPLAINED compare row, and after PR-C cutover a Dead verdict would let live interactive work be reclaimed. The AIDA invocation is not the owning process. Fix: record no witness (Unknown) until a worker is stamped, or capture the actual long-lived owner (e.g. the agent/seat process) — and replace session_start_snapshot_names_setup_itself_and_preserves_a_stamped_worker, which currently asserts the defect, with a test showing an unstamped session never judges Dead while its lease is Live.
+    2. MINOR (consistency): the setup-pid witness is ephemeral and inconsistent across writers: any later lease_written with the on-disk lease (no active_pid) replaces it with zero witnesses, and migrate::repair_holders (lease found, no active_pid) also strips it. Whatever the fix for the finding above, make dual-write and migrate derive the same holder from the same lease so repair is idempotent with the writer.
+    3. AC5 (ac1d6672) unverified: no host evidence that 'aida own migrate --execute' then 'aida own show --compare' leaves zero UNEXPLAINED holder-pid rows. Docs (06-roles-sessions.md:1144-1148) state repaired orphan rows deliberately stay UNEXPLAINED 'never released'. Either attach operator-run host output on the spec with the residual rows classified as non-holder-pid causes, or narrow AC5 by advisor ruling; the spec cannot complete with this criterion open.
+    4. Criteria tracing: aida criteria reports all five ACs (ac85e105, ac86ffc0, ac797761, ac236c2c, ac1d6672) untraced. Tests exist for AC1-AC4 (worker_is_the_only_witness_even_when_exited_or_unproven, init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans, migrate_repairs_worker_identity_without_changing_phase_and_skips_newer_writes, detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit) but carry only 'trace:BUG-2458'; add per-criterion trace IDs so the criteria gate links them.
+    5. CI: all PR CI jobs were still pending at 22c4fce90ead when reviewed (round-1 lib-1 failure not yet re-proven green); merge-hold-gate failure is the expected supervised hold, not a code defect. Re-review must cite a green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T21:06:23.623809934Z
+  modified_at: 2026-11-05T21:06:23.623809934Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
