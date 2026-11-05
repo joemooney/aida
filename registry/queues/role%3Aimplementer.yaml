@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
+  position: 125000
+  added_by: role:implementer
+  note: 'CI red at 1cd3882: story_2475_all_codex_lane_exits_publish_after_child_exit, resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup, bug_2428_launch_rollback_tests::every_spawning_launch_is_marked_and_no_exec_is, plus CI (gates). Fix on the PR branch.'
+  added_at: 2026-11-05T09:48:26.445725843Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
   position: 126000
   added_by: role:implementer
@@ -54,12 +61,6 @@
   position: 142000
   added_by: role:implementer
   added_at: 2026-11-05T05:36:24.652590919Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
-  position: 143000
-  added_by: role:implementer
-  added_at: 2026-11-05T04:56:32.832530632Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a66b-94c4-7ba3-a261-04362aaab859
