@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T00:41:49.125588182Z
+modified_at: 2026-11-05T01:02:54.266278363Z
 req_type: Task
 tags:
 - architecture
@@ -197,6 +197,12 @@ comments:
   created_at: 2026-11-05T00:39:41.444699576Z
   modified_at: 2026-11-05T00:39:41.444699576Z
   session_id: 01a1a92438bf
+- id: 01a1a93a-ef3a-7263-9e9c-6c380c1b7b74
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 18:05, PR #3307 head b33ef636019). Push a commit; don''t stop at ''nothing changed''. CI is red for two concrete reasons on the merged head: (1) headless_hint_tests::headless_env_launches_route_through_shared_argv_builders: ''session.rs: AIDA_HEADLESS claude launch at line 2072 does not use a shared headless argv builder''. Route that launch through the shared headless argv builder the other sites use. (2) story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger: the PR adds vendor-child/protected-key sites outside launch/. Route them through launch::spawn_agent / assign_seat. Do NOT grow LEDGER (counts may only shrink). Then check the CI (gates) job''s task_2707/live-bwrap count steps: run the exact step from .github/workflows/ci.yml. Gate: those two tests by name, plus make check-ci-fast, then push.'
+  created_at: 2026-11-05T01:02:54.266278363Z
+  modified_at: 2026-11-05T01:02:54.266278363Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
