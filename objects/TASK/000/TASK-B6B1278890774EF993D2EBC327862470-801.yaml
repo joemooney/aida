@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T19:44:38.880633599Z
+modified_at: 2026-11-05T19:44:46.201081289Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -43,6 +43,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Four new detector kinds are implemented and tested, but age/event alarms lose their accepted-delivery state after a single unknown or false tick, so the same merge, mail or head is mailed again. This contradicts the documented retain-across-gaps policy and the spec''s ''own suppression'' requirement.. No triage reason was given.'
   created_at: 2026-11-05T19:44:38.880630945Z
   modified_at: 2026-11-05T19:44:38.880630945Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad3e-07f8-7532-909d-644692564fd5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3075):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 150b0a749ce7
+    Recorded: 2026-11-05T18:51:16.511107326+00:00
+    Findings:
+    1. BLOCKING (dedup): pipeline_stall.rs tick_with_writer removes the episode whenever a predicate is not Some(true) ('state.episodes.remove(kind)'), including for identity-keyed age/event kinds (no-merge-90m, stale-advisor-mail, empty-rework-exit). One transient 'gh pr list --state merged' failure or timeout (last_merge -> None), or a partial mail inspection, drops accepted=true; the next conclusive tick re-sends urgent advisor mail for the SAME merge timestamp, mail ID or head. Over a quiet night with ticks every few minutes, every forge blip re-alarms. docs/cli/06-roles-sessions.md says 'Age/event kinds retain accepted delivery across observation gaps for the same evidence identity', and the test new_kinds_deliver_independently_and_preview_preserves_state (pipeline_stall_signals.rs:586-595) asserts the duplicate re-send. Fix: for identity-keyed kinds, keep the episode (or an accepted-identity tombstone) on unknown ticks; re-arm only when the identity changes. Update the test to assert no re-send after unknown->same identity.
+    2. MINOR (empty-rework re-alarm): empty_rework() reports false when an unchanged head's CI goes pending during a re-run (ci_rollup != fail, pr_ready Some). That clears the episode, and the head is alarmed again when CI goes red again. Same root cause as the blocking finding: the identity tombstone should survive a transient false for the same head.
+    3. MINOR (self-alarm exclusion by subject): oldest_unread (pipeline_stall_signals.rs:251) excludes any message whose subject equals 'Pipeline stall alarm'. A message from another sender with that subject is silently excluded from stale-mail evidence. Match on the detector's sender, or on a dedicated marker, as well as the subject.
+    4. MINOR (coverage): stale-advisor-mail is unknown, not active, when no live advisor is registered (ensure!(found)). That is the case where advisor mail goes stale most often. Accept and document this explicitly, or route it to the operator fallback. No test covers the no-advisor path or the operator fallback for the new kinds.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:44:46.072224781Z
+  modified_at: 2026-11-05T19:44:46.072224781Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
