@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:36.411397250Z
-modified_at: 2026-11-05T02:19:48.764631749Z
+modified_at: 2026-11-05T02:19:51.580211720Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2-4 met (exited lane with live creator now reads stale; skip log names lease id), but AC1 only partly: live_leases drops Dormant leases, which the leases view does not mark stale, so a shell-only session with a live creator loses branch protection. CI still pending at review time.. It was punted on: blocked-dependency: Tested implementation is ready, but publishing is blocked: .git is read-only (git add cannot create index.lock); command deputy runs at main checkout with no cwd option; script deputy explicitly refuses implementer seat. Three modified tracked Rust files remain in the assigned worktree. Host publication required before PR and queue completion.. No triage reason was given.'
   created_at: 2026-11-05T02:19:48.764629191Z
   modified_at: 2026-11-05T02:19:48.764629191Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a981-62da-79b3-a2f1-60f1b45e7fd9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2442):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4fd5c3cb598c
+    Recorded: 2026-11-05T01:33:05.883220127+00:00
+    Findings:
+    1. AC1 divergence / regression: status_prs.rs live_leases (around line 1224) keeps only LeaseState::Live|Unknown. classify_session_leases also returns Dormant: worktree present, no active_pid, no claude in the worktree, under 24h. The leases view shows Dormant with the in-flight glyph, not the stale marker (leases.rs:2463-2464), and lease_visible_in_default_listing treats every non-Stale state as current (leases.rs:725). Before this PR, a lease with no active_pid and a live creator (an aida session start from a human shell, before or without claude) counted as owned. Now it does not, so author_live returns None, follow_up update-branches the author's PR, sweep_orphaned_reviews claims it for review, and status_awaiting reports it unowned. Fix: filter on !matches!(state, LeaseState::Stale), the same verdict as the stale marker.
+    2. Missing refusal-path tests: the diff says Unknown (foreign PID namespace) ownership stays protected, but no test pins author_live returning Some for an Unknown-classified lease. None pins a Dormant lease either. Add a regression for each non-stale state, e.g. a lease whose pid_namespace differs from the current one, and a lease with no active_pid and a fresh existing worktree, asserting author_live returns Some(id) and the branch is not updated.
+    3. Efficiency (minor): author_live runs once per stale change per watcher pass. Each call now goes through classify_session_leases, which runs probe_live_claude_sessions (a full /proc scan) and agent_registry::load_live_entries. The old version probed only the recorded pids. Classify once per tick, or memoise per pass, so a large open-PR list does not do N full process scans.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T02:19:51.386809113Z
+  modified_at: 2026-11-05T02:19:51.386809113Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-0e7e-7b01-8e98-3f6cd4cac68d
