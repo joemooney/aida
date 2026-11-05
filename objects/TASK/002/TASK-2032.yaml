@@ -6,12 +6,12 @@ description: |
   seat_clone_detect::is_host_main (aida-core/src/seat_clone_detect.rs:92) checks against a process-wide HOST_MAINS set: every non-clone main ever resolved via main_worktree_root_from (worktree_gc.rs:758), plus the cwd git root. It does not check the launcher's main. No host path that resolves a seat-chosen dir was found, but a long-lived process widens the set. Pass the launcher's main into host_recorded_clone explicitly.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-05T01:00:44.165168294Z
+modified_at: 2026-11-05T01:58:15.129424980Z
 req_type: Task
 tags:
 - contained
@@ -310,6 +310,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a96d-9b56-7f10-97b2-1c09d53d10c7
+  author: aida-auto-bump
+  timestamp: 2026-11-05T01:58:15.126207515Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1a96d-9b59-70d2-89b5-5f186c82a06e
+  timestamp: 2026-11-05T01:58:15.129422546Z
+  agent: aida
+  commit_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  summary: 'All TASK-2032 criteria and advisor ruling items met: host_recorded_clone anchors on an explicit caller-passed main (HOST_MAINS/is_host_main removed), host main pinned before the seat chdir in session start and every queue-work arm (incl. LaunchContext), forged-main refusals tested, cwd-lookup ratchet in place; CI green on all build shards at a6a91e6b (merge-hold-gate is the supervised-spec policy hold, not a code failure).'
+  review_verdict: approved
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
@@ -322,11 +336,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:25:29.357042790Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Anchor design is right (host_recorded_clone(main, root) at seat_clone.rs:846, no HOST_MAINS trust, resume_lease_tree anchored on the host main), but CI is red at head 8212a38 (lib-0, lib-1, gates): no commit since 0648fb1c fixes the round-4 failures (8212a38 is a main merge only), and the session start --launch codex arm still loses the pinned main after the chdir.'
-  recovery_hint: address the review findings, move TASK-2032 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T00:35:22.034532102Z
+  completed_at: 2026-11-05T01:58:15.126201969Z
+  completion_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
