@@ -8,12 +8,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T17:47:16.412411639Z
+modified_at: 2026-11-05T18:21:02.380336991Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
 - kind:observation
 - linked:STORY-1651
+- recurrence:2
 - severity:minor
 relationships:
 - rel_type: Supersedes
@@ -61,6 +62,12 @@ comments:
   created_at: 2026-11-05T17:47:16.412411639Z
   modified_at: 2026-11-05T17:47:16.412411639Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acf1-602c-7a22-9ba2-ca3d835ce71d
+  author: joe
+  content: 'Recurrence #2 by joe 2026-11-05: Recurred during standalone native BUG-2457 implementation on 2026-11-05: git add of the three changed implementation/test files refused .git/index.lock with Read-only file system. The prompt still requires commit/push/open-PR before exit. Work is retained uncommitted for host publication; no ship or review record attempted.'
+  created_at: 2026-11-05T18:21:02.380336991Z
+  modified_at: 2026-11-05T18:21:02.380336991Z
+  session_id: 01a1ace2e7a1
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
   author: joe
