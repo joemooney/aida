@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T07:50:49.544241602Z
+modified_at: 2026-11-05T18:49:28.911033878Z
 req_type: Story
 tags:
 - architecture
@@ -470,6 +470,12 @@ comments:
   created_at: 2026-11-04T07:44:31.476585865Z
   modified_at: 2026-11-04T07:44:31.476585865Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1ad0b-6a4f-77d2-a185-24042ebabcd3
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 12:02 MST: next slice PR-B, titled ''(Refs STORY-2326)''. STORY-2238 PR1 (#3307) has landed. Convert the Codex and agy native/None-posture spawn sites to launch::spawn_agent: dispatch.rs codex lane builder (--full-auto), compete_cmd codex/agy arms, phase_driver*, and the session.rs codex builders. Add the resources.rs slot-dir and settings-file rules per amendment 7. Add table tests for the posture flags, and shrink the story_2326_launch_ratchet LEDGER and CEILING by the converted sites (never raise them). Delete set_contained_env_for_children (session.rs) if PR-B removes its last caller. Resume paths, AIDA_AGENT_CMD, launch explain and env-clear-for-all stay in PR-C and PR-D. LIGHT gate: cargo test -p aida-cli-lib --lib story_2326 plus make check-ci-fast; >10 files adds make test-touched.'
+  created_at: 2026-11-05T18:49:28.911033878Z
+  modified_at: 2026-11-05T18:49:28.911033878Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
