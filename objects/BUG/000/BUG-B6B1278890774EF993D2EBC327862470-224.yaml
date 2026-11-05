@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:54:41.418609344Z
+modified_at: 2026-11-05T21:06:16.127465510Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -80,6 +80,12 @@ comments:
   created_at: 2026-11-05T20:22:40.396977177Z
   modified_at: 2026-11-05T20:22:40.396977177Z
   session_id: 01a1ad52961b
+- id: 01a1ad88-a5bf-7a01-853a-f401eaecbcbe
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-5 addressed (worker-only witness, injectable write-time refusal, HostFacts-gated judge, generation-pinned repairs, detached test), but the new session-start snapshot names the short-lived aida CLI pid as holder, which reads Dead while the lease is Live (new UNEXPLAINED rows; reclaimable live work after cutover); AC5 host evidence still absent; CI pending at head.. It was punted on: design-fork: Round 2 findings 5 and 6 remain open: production HostFacts validation is centralized, but generic remote Linux subreaper detection cannot be provided by PR_GET_CHILD_SUBREAPER (self only) or ordinary procfs; current refusal covers PID 1 and known init executables. Finding 6 requires host-terminal migrate --execute and host compare evidence; this lane is a foreign PID namespace and execute refused, and repaired no-lease orphans still need operator-reviewed lifecycle repair rather than reclassification. Publication is also blocked: git add refuses .git/index.lock with Read-only file system, so this lane cannot produce the requested new commit or push. Findings 1-4 and the constructor portion of 5 are implemented in the worktree; regression verification is running. Please retain the merge hold, decide the generic-subreaper/orphan-release policy, and publish the reviewed worktree changes from the authorized host.. No triage reason was given.'
+  created_at: 2026-11-05T21:06:16.127463204Z
+  modified_at: 2026-11-05T21:06:16.127463204Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
@@ -143,6 +149,14 @@ history:
   session_id: 01a1ad7bd3eb
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ad88-a5bf-7a01-853a-f3f1fc4c5e0f
+  author: joe
+  timestamp: 2026-11-05T21:06:16.127446649Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -155,17 +169,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
-attention_reason:
-  category: design-fork
-  detail: 'Round 2 findings 5 and 6 remain open: production HostFacts validation is centralized, but generic remote Linux subreaper detection cannot be provided by PR_GET_CHILD_SUBREAPER (self only) or ordinary procfs; current refusal covers PID 1 and known init executables. Finding 6 requires host-terminal migrate --execute and host compare evidence; this lane is a foreign PID namespace and execute refused, and repaired no-lease orphans still need operator-reviewed lifecycle repair rather than reclassification. Publication is also blocked: git add refuses .git/index.lock with Read-only file system, so this lane cannot produce the requested new commit or push. Findings 1-4 and the constructor portion of 5 are implemented in the worktree; regression verification is running. Please retain the merge hold, decide the generic-subreaper/orphan-release policy, and publish the reviewed worktree changes from the authorized host.'
-  lean: Keep known-init rejection and fail-closed orphan records; require host migration evidence before PR-C cutover.
-  raised_by: implementer
-  raised_at: 2026-11-05T20:17:27.701803338Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 findings 1-5 addressed (worker-only witness, injectable write-time refusal, HostFacts-gated judge, generation-pinned repairs, detached test), but the new session-start snapshot names the short-lived aida CLI pid as holder, which reads Dead while the lease is Live (new UNEXPLAINED rows; reclaimable live work after cutover); AC5 host evidence still absent; CI pending at head.
-  recovery_hint: address the review findings, move BUG-2458 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T20:54:41.418609344Z
