@@ -1,0 +1,29 @@
+id: 01a1aa8a-e034-72e3-a487-a95294f8a7b4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-818
+title: 'non-blocking cosmetic: aida-cli-lib/src/observation_envelope.rs:121-125 - read_…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3077, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking cosmetic: aida-cli-lib/src/observation_envelope.rs:121-125 - read_bounded maps every open error (ENOENT, EACCES, ELOOP) to 'Cannot open input as a non-symlink regular file', so a plain missing --file reports a misleading cause; distinguish NotFound/permission from the O_NOFOLLOW refusal without echoing the path.
+
+  PR: #3403
+  Reviewed sha: 237881b4083d63ab331d7c0ee9b679410a4bb5ac
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T07:09:50.516227522Z
+modified_at: 2026-11-05T07:09:50.516227522Z
+req_type: Task
+tags:
+- carried-from:TASK-3077
+- finding-hash:d46c35f5
+- from-review:PR-3403
+- kind:carried-forward
+filed_at:
+  code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
