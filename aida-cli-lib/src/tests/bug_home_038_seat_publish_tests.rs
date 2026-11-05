@@ -1446,3 +1446,62 @@ fn story_2475_final_seat_state_reads_recorded_clone_through_its_host() {
         }
     }
 }
+
+// trace:TASK-2879 | ai:codex
+#[test]
+fn task_2879_native_queue_done_uses_lease_branch_before_diagnostics() {
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "native-done", "c0ffee287901", "pending");
+    let branch = git_ok(&clone, &["branch", "--show-current"]);
+    let why = crate::queue_misc::refuse_native_queue_done(&clone)
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains(&format!("branch `{branch}`")), "{why}");
+    assert!(why.contains("no status or queue entry was changed"));
+    assert!(!why.contains("current_branch_at returned None"));
+    assert!(!why.contains("no test file"));
+    assert!(clone.join("native-done.txt").exists());
+    crate::queue_misc::refuse_native_queue_done(&fx.main).unwrap();
+}
+
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_publication_merge_uses_host_identity_without_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "publish-merge", "c0ffee287902", "publish-merge");
+    test_commit(&fx.main, &clone, "publish-merge", "lane work (Refs BUG-1)").unwrap();
+    let lane_head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("remote.txt"), "remote change\n").unwrap();
+    git_ok(&fx.main, &["add", "remote.txt"]);
+    git_ok(&fx.main, &["commit", "-qm", "remote work"]);
+    let remote = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let sentinel = fx.root.join("merge-hook-ran");
+    plant_hooks(&clone, &sentinel, &fx.root);
+    let message = "merge remote PR head (Refs BUG-1)";
+    let pinned =
+        crate::ship_from_seat::pending_commit_preflight(&fx.main, &clone, Some("BUG-1"), message)
+            .unwrap();
+    crate::seat_clone::merge_publication_head(
+        &fx.main,
+        &clone,
+        "publish-merge",
+        &remote,
+        message,
+        pinned.pinned,
+    )
+    .unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^1"]), lane_head);
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+    assert_eq!(
+        git_ok(&clone, &["log", "-1", "--format=%an <%ae>"]),
+        git_ok(&fx.main, &["log", "-1", "--format=%an <%ae>"])
+    );
+    assert!(
+        !sentinel.exists(),
+        "a seat hook ran during publication merge"
+    );
+}

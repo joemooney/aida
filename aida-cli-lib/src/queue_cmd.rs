@@ -5094,6 +5094,16 @@ pub(crate) fn handle_queue_command(
                 ));
             }
 
+            // A native seat cannot publish its pending edits. Resolve the
+            // branch from the host lease, then defer completion before any
+            // committed-only ownership/PR/test diagnostics or mutation.
+            // trace:TASK-2879 | ai:codex
+            if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
+                if let Ok(root) = find_project_root() {
+                    crate::queue_misc::refuse_native_queue_done(&root)?;
+                }
+            }
+
             // BUG-1244: fail closed before any lifecycle mutation when a
             // branch names another spec, commit evidence exclusively names
             // other specs, or the since-merge-base range cannot be read.
