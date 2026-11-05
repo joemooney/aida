@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T19:24:57.053467496Z
-modified_at: 2026-11-05T19:24:57.053467496Z
+modified_at: 2026-11-05T20:26:58.712943147Z
 req_type: Task
 tags:
 - carried-from:TASK-3112
 - finding-hash:3eca54de
 - from-review:PR-3439
 - kind:carried-forward
+comments:
+- id: 01a1ad64-ad18-7d12-96a8-c16d4ac44840
+  author: joe
+  content: 'Advisor triage 2026-11-05 13:40: non-blocking finding from a PR that has already merged; ACCEPTED as-is under the 2026-10-28 operator ruling (rule once, no follow-up PR per review round).'
+  created_at: 2026-11-05T20:26:58.712943147Z
+  modified_at: 2026-11-05T20:26:58.712943147Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad63-628f-7942-a1bb-0429e6d00537
   author: joe
