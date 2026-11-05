@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T21:08:15.994538408Z
+modified_at: 2026-11-05T21:08:34.169379124Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -77,6 +77,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 are addressed for a single PR, but empty-rework-exit identity is the comma-joined set of every blocked PR, so any change in set membership re-mails heads already alarmed. Separately, CI at the head is still queued.. It was punted on: other: Round 2 findings 1 (unknown-tick dedup), 2 (same-head CI rerun re-alarm), 3 (self-alarm subject exclusion), and 4 (no-advisor/operator-fallback coverage) are all addressed and none is disputed. Work is validated: 59 supervisor tests and all 37 CI gates passed. Unable to create the required new source commit or complete queue-done inside this native Codex seat: Git metadata is read-only, and queue done refuses because HEAD remains the reviewed 150b0a749ce7. The four edited files are ready for the launcher host-side exit commit. No force override or review record used.. No triage reason was given.'
   created_at: 2026-11-05T21:08:15.994536125Z
   modified_at: 2026-11-05T21:08:15.994536125Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad8a-c099-7061-a3bd-b9e395215999
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3075):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5b82ccacabdb
+    Recorded: 2026-11-05T21:04:23.610394438+00:00
+    Findings:
+    1. MINOR (dedup, multiplicity N>1): pipeline_stall_signals.rs:128-132 gives the empty-rework-exit alarm one identity, ids.join(","), across all blocked PRs, and pipeline_stall.rs tick_with_writer re-arms whenever that identity changes. Scenario: PR-A blocked → alarm (identity 'A'). PR-B becomes blocked → re-alarm ('A,B'). B pushes a new head or A's CI goes pending on a rerun → identity 'A' or 'B' → a THIRD urgent mail, for a head already accepted. A then goes red again → 'A,B' → a fourth. This is the round-1 finding 1/2 duplicate-send failure, still present whenever more than one PR is blocked. The new test only covers one PR (empty_exit_requires_receipt_matching_a_still_blocked_head). Fix: track accepted identities per receipt key/head. For example, keep a set of accepted '<key>-<head>' members in the episode and treat the predicate as due only when a member is not yet accepted. Add a two-PR regression: A then A+B then B then A+B must send exactly two mails (A, then B).
+    2. CI GATE: at head 5b82ccacabdb, the CI workflow (cli-0/1, contracts, gates, lib-0/1, rest) was still queued when this review ended, so there is no green full-suite evidence at the reviewed head. CI at the prior code commit 150b0a749c passed. merge-hold-gate is red only because of the supervised-spec hold, which needs the human/advisor clear path; that is not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T21:08:34.073560212Z
+  modified_at: 2026-11-05T21:08:34.073560212Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
