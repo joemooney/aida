@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:11:52.939825693Z
+modified_at: 2026-11-05T21:16:10.338109445Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -187,6 +187,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ad91-b6e2-74e2-ab1c-bcd6050745cb
+  author: joe
+  timestamp: 2026-11-05T21:16:10.338128131Z
+  session_id: 01a1ad89e4a0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -199,3 +207,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
+attention_reason:
+  category: missing-context
+  detail: 'Round 3 findings 3 and 5 remain open, and the required new commit cannot be produced in this native lane: git add refuses .git/index.lock with Read-only file system. Finding 3 / AC5 needs operator-run host own migrate --execute followed by own show --compare with residual rows classified; execute refuses without an operator terminal and this lane is PID namespace 4026533032, so its output is not host evidence. No criterion narrowing or orphan-release policy is assumed. Finding 5 needs green CI at the new head, which requires host publication first. Findings 1, 2 and 4 are addressed locally: setup no longer stamps its ephemeral CLI PID; startup/write/repair share worker-only derivation; replacement regression covers Unknown/live compare and repair idempotence; all five criteria now have canonical test traces. Tests are running, final validation will be appended. Keep the merge hold.'
+  lean: 'Retain these three worktree changes, validate and commit them on the authorized host as [AI:codex] fix(ownership): leave unstamped sessions without a holder witness (BUG-2458), push PR #3450, attach host migration/compare evidence or obtain advisor AC5 ruling, then obtain green CI and independent re-review. No ship or review record from this implementer.'
+  raised_by: implementer
+  raised_at: 2026-11-05T21:16:10.338109445Z
