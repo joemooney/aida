@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-05T12:29:51.890887926Z
+modified_at: 2026-11-05T12:41:50.843972115Z
 req_type: Story
 tags:
 - area:containment
@@ -195,6 +195,12 @@ comments:
   content: 'ADVISOR RULING 2026-11-05 05:32 on TASK-3046 review finding 3: option (a). Historical reports predate the shipped harness, so they cannot satisfy S1. The advisor runs the shipped harness fresh for codex and agy through script deputy 3 (job conformance-fresh.job.sh, outputs ~/aida-conformance-{codex,agy}-FRESH-20261105) and records both report.json results here. TASK-3048 proceeds on that evidence; agy stays refused until real all-tool conformance passes.'
   created_at: 2026-11-05T12:29:51.890887926Z
   modified_at: 2026-11-05T12:29:51.890887926Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abba-d5fb-7453-92bb-4196d57cffe4
+  author: joe
+  content: 'FRESH CONFORMANCE (advisor, deputy 3, shipped harness, 2026-11-05 05:40): codex 0.166.0 -> C0 pass, C1 unknown, C2 fail, C3 fail, C4 fail, whole_lane_pass=false (~/aida-conformance-codex-FRESH-20261105/report.json). agy -> C0-C4 all unknown, whole_lane_pass=false, because agy headless auto-denied write_file (''a tool required the write_file permission that headless mode cannot prompt for''; 0 vendor receipts) (~/aida-conformance-agy-FRESH-20261105). Conclusions: (1) Codex native does not earn a contained posture; shared AIDA boundary stays the path (consistent with the BUG-2446..2448 rulings). (2) The agy run is not evidence either way: the harness must provision an agy permissions.allow rule (scoped to the fixture workspace, never --dangerously-skip-permissions) so the probes execute. That harness fix is folded into TASK-3048.'
+  created_at: 2026-11-05T12:41:50.843972115Z
+  modified_at: 2026-11-05T12:41:50.843972115Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
