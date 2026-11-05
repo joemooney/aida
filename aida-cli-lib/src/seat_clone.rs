@@ -1302,6 +1302,36 @@ impl std::fmt::Display for SandboxFailure {
     }
 }
 
+/// Operator diagnostics for a refused force-claim, through the same bounded
+/// read-only sandbox as the state probe. Include staged and unstaged changes
+/// against HEAD; untracked paths are named by the accompanying dirty listing.
+// trace:BUG-2455 | ai:codex
+pub(crate) fn pending_diff_stat(main: &Path, clone: &Path) -> Result<String> {
+    anyhow::ensure!(
+        host_recorded_clone(main, clone).is_some(),
+        "the host does not recognise this seat clone"
+    );
+    let args: Vec<&std::ffi::OsStr> = [
+        "diff",
+        "--stat",
+        "--no-ext-diff",
+        "--no-textconv",
+        "HEAD",
+        "--",
+    ]
+    .iter()
+    .map(std::ffi::OsStr::new)
+    .collect();
+    let out = run_sandboxed(clone, main, "git", &args, PROBE_OUTPUT_CAP)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let text = String::from_utf8_lossy(&out).trim().replace('\n', "; ");
+    Ok(if text.is_empty() {
+        "no tracked changes (see untracked paths above)".into()
+    } else {
+        text
+    })
+}
+
 /// Run `program args…` in the probe sandbox for `clone`, keeping at most
 /// `cap` bytes of its stdout.
 // trace:TASK-2053 | ai:claude
@@ -3234,3 +3264,7 @@ mod seat_publish_tests;
 #[cfg(test)]
 #[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
 mod seat_clone_handshake_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2455_force_claim_clone_tests.rs"]
+mod bug_2455_force_claim_clone_tests;

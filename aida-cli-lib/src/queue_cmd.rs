@@ -11388,6 +11388,18 @@ pub(crate) fn preflight_queue_work_branch_adopting(
     branch: Option<&str>,
     adopting: Option<&std::path::Path>,
 ) -> Result<()> {
+    preflight_queue_work_branch_reclaiming(root, branch, adopting, false)
+}
+
+/// Explicit force-claim can retire an exited lane before the branch occupancy
+/// refusal. Resume adoption and ordinary preflights remain read-only.
+// trace:BUG-2455 | ai:codex
+pub(crate) fn preflight_queue_work_branch_reclaiming(
+    root: &std::path::Path,
+    branch: Option<&str>,
+    adopting: Option<&std::path::Path>,
+    force_claim: bool,
+) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
     };
@@ -11412,10 +11424,14 @@ pub(crate) fn preflight_queue_work_branch_adopting(
     // it too. It is never offered for `git worktree remove` (not a linked
     // worktree); ending its session salvages and removes it.
     // trace:TASK-2053 | ai:claude
-    if let Some(clone) = clone_seat_trees(root)
+    for clone in clone_seat_trees(root)
         .into_iter()
-        .find(|wt| wt.branch.as_deref() == Some(branch) && !adopted(&wt.path))
+        .filter(|wt| wt.branch.as_deref() == Some(branch) && !adopted(&wt.path))
     {
+        if force_claim {
+            reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            continue;
+        }
         anyhow::bail!(
             "branch `{branch}` is held by a contained seat's private clone at {} before pickup \
              setup. Continue it in that seat, end that seat's session first (`aida session end`), \
@@ -11452,6 +11468,80 @@ pub(crate) fn preflight_queue_work_branch_adopting(
         );
     }
     Ok(())
+}
+
+/// Reuse the PR relaunch evidence and conservative clone teardown. Unlike
+/// --steal, force-claim never discards or salvages unpublished work for removal.
+// trace:BUG-2455 | ai:codex
+fn reclaim_exited_branch_clone(
+    root: &std::path::Path,
+    branch: &str,
+    path: &std::path::Path,
+) -> Result<()> {
+    let leases: Vec<_> = list_leases(root)
+        .into_iter()
+        .filter(|l| {
+            crate::worktree::canonical_or_self(&l.worktree_path)
+                == crate::worktree::canonical_or_self(path)
+        })
+        .collect();
+    anyhow::ensure!(
+        leases.len() == 1,
+        "cannot force-claim branch `{branch}`: private clone {} has ambiguous lease ownership; inspect its sessions before retrying",
+        path.display()
+    );
+    let lease = &leases[0];
+    anyhow::ensure!(
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone && lease.branch == branch,
+        "cannot force-claim branch `{branch}`: private clone {} no longer has the expected lease",
+        path.display()
+    );
+    match crate::pr_lease_takeover::check_pr_lease(root, lease, branch) {
+        crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => {}
+        other => {
+            let reason = match other {
+                crate::pr_lease_takeover::PrLeaseCheck::Live => {
+                    "its owning session is still live".to_string()
+                }
+                crate::pr_lease_takeover::PrLeaseCheck::NotProvable(why)
+                | crate::pr_lease_takeover::PrLeaseCheck::Refuse(why) => why,
+                crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => unreachable!(),
+            };
+            let stat = crate::seat_clone::pending_diff_stat(root, path)
+                .unwrap_or_else(|e| format!("unavailable ({e:#})"));
+            anyhow::bail!(
+                "cannot force-claim branch `{branch}`: retained lease {} and private clone {}: {reason}. Diff stat: {stat}. Commit and push pending work there, or resume that session, then retry",
+                lease.id, path.display()
+            );
+        }
+    }
+    // KeepUnshipped re-probes immediately before teardown and checks live
+    // holders. Any new dirty or unpushed work retains the clone and lease.
+    match crate::seat_clone::destroy(
+        root,
+        path,
+        crate::seat_clone::DestroyMode::KeepUnshipped,
+        None,
+    )? {
+        crate::seat_clone::Destroyed::Removed { .. } => {
+            crate::session_reap::release_lease_files(root, &lease.id);
+            anyhow::ensure!(
+                !crate::lease_path(root, &lease.id).exists(),
+                "retired private clone {} but could not release lease {}",
+                path.display(),
+                lease.id
+            );
+            eprintln!(
+                "  retired exited lease {} and clean, pushed private clone {} (--force-claim)",
+                lease.id,
+                path.display()
+            );
+            Ok(())
+        }
+        crate::seat_clone::Destroyed::Kept { reason, .. } => {
+            anyhow::bail!("cannot force-claim branch `{branch}`: retained lease {} and private clone {}: {reason}", lease.id, path.display())
+        }
+    }
 }
 
 /// BUG-2145: `aida queue work --auto-complete --sandbox` contains the whole
@@ -12037,11 +12127,6 @@ pub(crate) fn handle_queue_work(
             let review_branch = plan
                 .review_target
                 .map(|(forge, n)| forge.local_branch_for(n));
-            preflight_queue_work_branch_adopting(
-                &project_root,
-                session_branch_override.or(review_branch.as_deref()),
-                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
-            )?;
             // trace:BUG-1808 | ai:claude
             // Preflight every launch path that later mints a child grant —
             // including the `--no-human` resume and standalone-reviewer
@@ -12111,6 +12196,15 @@ pub(crate) fn handle_queue_work(
                     crate::standalone_implementer::configured_cap(&project_root),
                 )?);
             }
+            // Force-claim may retire a dead clone, so delegation and launch
+            // capacity must succeed before this preflight mutates anything.
+            // trace:BUG-2455 | ai:codex
+            preflight_queue_work_branch_reclaiming(
+                &project_root,
+                session_branch_override.or(review_branch.as_deref()),
+                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
+                force_claim,
+            )?;
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
             for entry in &plan.entries {

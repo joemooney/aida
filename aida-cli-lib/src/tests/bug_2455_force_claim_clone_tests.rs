@@ -1,0 +1,195 @@
+//! Explicit force-claim recovers an exited implementer clone before branch
+//! occupancy blocks pickup, without losing unpublished work.
+// trace:BUG-2455 | ai:codex
+use super::s4_host_git_tests::leased_clone_on;
+use super::tests::{fixture, git_ok};
+use super::*;
+
+fn set_owner(main: &Path, pid: Option<u32>) {
+    let mut lease = crate::list_leases(main).into_iter().next().unwrap();
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    lease.active_pid = pid;
+    lease.active_pid_start_time = pid.and_then(crate::process_probe::process_start_identity);
+    std::fs::write(
+        crate::lease_path(main, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+}
+
+fn dead_pid() -> u32 {
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    pid
+}
+
+fn reclaim(main: &Path) -> Result<()> {
+    crate::queue_cmd::preflight_queue_work_branch_reclaiming(main, Some("rework"), None, true)
+}
+
+fn bwrap_live() -> bool {
+    let live = std::process::Command::new("bwrap")
+        .args([
+            "--unshare-all",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "true",
+        ])
+        .status()
+        .is_ok_and(|s| s.success());
+    assert!(live || std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none());
+    if !live {
+        eprintln!("SKIP (bwrap unavailable)");
+    }
+    live
+}
+
+#[test]
+fn bug2455_force_claim_retires_clean_pushed_dead_clone_and_lease() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let clone = leased_clone_on(&fx, "2455", "2455c1", "rework");
+    // A seat-local commit must be covered on origin, not merely in main.
+    std::fs::write(clone.join("done.txt"), "published\n").unwrap();
+    git_ok(&clone, &["add", "done.txt"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-qm",
+            "work",
+        ],
+    );
+    git_ok(
+        &clone,
+        &[
+            "push",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/heads/rework",
+        ],
+    );
+    set_owner(&fx.main, Some(dead_pid()));
+    let pin = pin_ref(&clone).unwrap();
+    assert!(crate::queue_cmd::preflight_queue_work_branch(&fx.main, Some("rework")).is_err());
+    assert!(clone.exists());
+    reclaim(&fx.main).unwrap();
+    assert!(!clone.exists());
+    assert!(crate::list_leases(&fx.main).is_empty());
+    assert!(!super::tests::ref_exists(&fx.main, &pin));
+}
+
+#[test]
+fn bug2455_dirty_clone_refuses_with_path_and_diff_stat_and_keeps_work() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let clone = leased_clone_on(&fx, "2455dirty", "2455c2", "rework");
+    set_owner(&fx.main, Some(dead_pid()));
+    std::fs::write(clone.join("README.md"), "seed\npending\n").unwrap();
+    std::fs::write(clone.join("new.txt"), "untracked\n").unwrap();
+    let lease_before = std::fs::read(crate::lease_path(&fx.main, "2455c2")).unwrap();
+    let err = reclaim(&fx.main).unwrap_err().to_string();
+    assert!(err.contains(&clone.display().to_string()), "{err}");
+    assert!(
+        err.contains("Diff stat:") && err.contains("insertion"),
+        "{err}"
+    );
+    assert!(
+        err.contains("README.md") && err.contains("new.txt"),
+        "{err}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(clone.join("README.md")).unwrap(),
+        "seed\npending\n"
+    );
+    assert!(clone.join("new.txt").exists());
+    assert_eq!(
+        std::fs::read(crate::lease_path(&fx.main, "2455c2")).unwrap(),
+        lease_before
+    );
+}
+
+#[test]
+fn bug2455_clean_unpushed_clone_is_retained() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let clone = leased_clone_on(&fx, "2455unpushed", "2455c3", "rework");
+    set_owner(&fx.main, Some(dead_pid()));
+    std::fs::write(clone.join("only-copy.txt"), "precious\n").unwrap();
+    git_ok(&clone, &["add", "only-copy.txt"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-qm",
+            "unpublished",
+        ],
+    );
+    let err = reclaim(&fx.main).unwrap_err().to_string();
+    assert!(err.contains("no remote has"), "{err}");
+    assert!(clone.join("only-copy.txt").exists());
+    assert_eq!(crate::list_leases(&fx.main).len(), 1);
+}
+
+#[test]
+fn bug2455_live_or_unprovable_owners_and_adopted_clones_are_retained() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let clone = leased_clone_on(&fx, "2455live", "2455c4", "rework");
+    set_owner(&fx.main, Some(std::process::id()));
+    let err = reclaim(&fx.main).unwrap_err().to_string();
+    assert!(err.contains("still live"), "{err}");
+    set_owner(&fx.main, None);
+    assert!(reclaim(&fx.main).is_err());
+    set_owner(&fx.main, Some(dead_pid()));
+    crate::queue_cmd::preflight_queue_work_branch_reclaiming(
+        &fx.main,
+        Some("rework"),
+        Some(&clone),
+        true,
+    )
+    .unwrap();
+    assert!(clone.exists());
+    assert_eq!(crate::list_leases(&fx.main).len(), 1);
+}
