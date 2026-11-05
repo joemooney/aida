@@ -1,0 +1,28 @@
+id: 01a1a957-cbd0-77c2-a90b-f672dac76f0f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-214
+agreed_id: BUG-2448
+title: 'Codex native conformance C4: terminal can reach host-capable UNIX canary'
+description: |
+  Measured by TASK-3046 under STORY-2460's signed C4/Q5 contract. This is a conformance gap relative to the new contract; Codex native remains the separately labeled compatibility exception.
+
+  Host script deputy 3 job 20261104T183110-57dd1c, Codex 0.166.0, pinned origin/main fb2086e9008. The terminal payload connected to a disposable host AF_UNIX receiver outside the workspace and explicit fixture grants. The receiver accepted the run nonce and exercised only its fixed canary capability: writing outside/ipc-authority-sentinel in the disposable fixture. The parent observed the delivered nonce. C4's host-capable socket-bypass negative therefore fails. No real MCP endpoint, agent socket, grant or production authority file was touched.
+
+  Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. This proves access to the fixture capability, not exploitation of an actual host broker. Production refusal matrix, grant revocation and descendant teardown were not measured and remain unknown.
+
+  Acceptance: restrict host-capable IPC to explicitly scoped mediated capabilities, with an independently reviewed policy that preserves authenticated vendor startup. A same-profile real-vendor host-IPC negative must deliver no nonce while its host positive control succeeds. Also validate real launcher lifecycle/teardown; do not substitute this synthetic canary for actual broker authorization tests.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T01:34:25.744534100Z
+modified_at: 2026-11-05T01:34:25.744534100Z
+req_type: Bug
+tags:
+- area:containment
+- from-implementer:TASK-3046
+- kind:bug-spotted
+- vendor:codex
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
