@@ -1,0 +1,33 @@
+id: 01a1aba7-8745-7f13-ac5e-90b9c2bd1631
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-428
+agreed_id: STORY-2504
+title: 'Review PR-3420: [AI:codex] fix(session): release unreadable clone leases with explicit discard (BUG-2454)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ab92`) for branch `bug-b6b1278890774ef993d2ebc327862470-220`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3420>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-220` → `main`
+
+  ## Covers
+
+  - BUG-2454
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3420` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T12:20:45.509098701Z
+modified_at: 2026-11-05T12:20:45.509098701Z
+req_type: Story
+filed_at:
+  code_sha: ea4ee0c15c4a708a9c5569179591c1dd5538e555
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c9166da8a3c
+  vendor: claude
