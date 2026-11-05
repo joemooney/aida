@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-05T19:29:48.387122648Z
+modified_at: 2026-11-05T19:58:55.012687503Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -95,6 +95,12 @@ comments:
   created_at: 2026-11-05T19:15:59.187108176Z
   modified_at: 2026-11-05T19:15:59.187108176Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad4a-fc24-7b73-a219-23c1ef5e4145
+  author: joe
+  content: 'Round 2 addressed all four review findings in 26a173a39f8: relocated AGY tests into the scanner-excluded tests directory with explicit Linux guards; coordinator evidence collection now runs on a cancellable reader with 250 ms post-exit grace, preserving parsed terminal failures; forwarding errors stop logging while draining/classifying and preserve the vendor exit status; shared reviewer predicate and queue exit-filter coverage pin AGY 65 with/without a fresh verdict, terminal failure 1 with a verdict, and other vendors. Validation: four TASK-2838 tests, launch-inventory ratchet, eight existing AGY argv tests, formatting, portability ratchet, and all 37 make check-ci-fast gates passed. Pushed to existing PR #3448. Remote push succeeded; sandbox refused only the local remote-tracking ref refresh. Existing merge hold retained for independent review; no ship or review record invoked.'
+  created_at: 2026-11-05T19:58:55.012687503Z
+  modified_at: 2026-11-05T19:58:55.012687503Z
+  session_id: 01a1ad304b08
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
   author: joe
