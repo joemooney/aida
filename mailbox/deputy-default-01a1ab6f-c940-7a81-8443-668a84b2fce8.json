@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1ab6f-c940-7a81-8443-668a84b2fce8",
+  "thread_id": "deputy-01a1ab6f-c940-7a81-8443-668a84b2fce8",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793877593099,
+  "body": "Deputy \"default\" finished job 01a1ab6f-c940-7a81-8443-668a84b2fce8: rc 1 (exit).\nCommand: aida ship TASK-3096 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-820 --commit-pending [AI:codex] fix(intent): recover writers and checkpoint validation (TASK-3096) --dry-run\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1ab6f-c940-7a81-8443-668a84b2fce8.out\nRead it with `aida deputy log 01a1ab6f-c940-7a81-8443-668a84b2fce8`.\n`aida awaiting` lists it until you run `aida deputy ack 01a1ab6f-c940-7a81-8443-668a84b2fce8`.\n",
+  "subject": "deputy job 01a1ab6f FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
