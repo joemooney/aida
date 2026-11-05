@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-05T02:19:56.326127979Z
+modified_at: 2026-11-05T02:19:59.434970211Z
 req_type: Story
 tags:
 - area:deputy
@@ -167,6 +167,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and diff meet AC1-AC3 (socket.rs attest/serve_one; verdict refused:unattested; tests a_socket_submit_records_the_kernel_peer..., attest_compares_bindings..., a_file_dropped_where_submitters_used_to_write..., every_unattributable table), but CI lib-1 ''Run tests'' is red at the reviewed head (run 41941547520) and was red on d12c6fef624 too (run 41910234263), while main is green at the merge base; the spec''s gate is CI''s full suite. AC status: (1) code verified, test unconfirmed while lib-1 is red; (2) verified by code (incoming/ removed, accepted/ runner-only, claim refuses no-peer); (3) hermetic tests present, CI-green unverified.. It was punted on: blocked-dependency: Accepted implementation d12c6fef624 is present and clean, but LIGHT cannot execute: lease 01a1a82222c5 names no lane job runner. The profile-agent cargo test request is refused before job creation, and the runner also rejects make check-ci-fast because it accepts cargo only. untested=true; no code changes or new push/PR. See the gate-result comment for exact commands and errors.. No triage reason was given.'
   created_at: 2026-11-05T02:19:56.326126447Z
   modified_at: 2026-11-05T02:19:56.326126447Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a981-81c9-7a13-9770-2d03157c7a1d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2343):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ecbc72d64622
+    Recorded: 2026-11-05T00:48:42.138240563+00:00
+    Findings:
+    1. BLOCKER: CI (lib-1) 'Run tests' fails at the reviewed head ecbc72d6462 (run 41941547520, job 126963343474). It also failed at d12c6fef624 (run 41910234263, job 126855539765). main at the merge base 47e9f216d3 is green (run 41918572425), and lib-0/cli-0/cli-1/rest/gates/contracts pass. Per the 2026-11-04 14:08 advisor ruling, CI's full suite is this PR's gate. The reviewer sandbox could not download the job log, so the failing test is unnamed. Read 'gh run view 41941547520 --log-failed', fix the failure (most likely one of the new or changed deputy_shell tests: a_socket_submit_records_the_kernel_peer_and_a_peer_outside_the_grant_is_refused, submit_wait_and_wait_return_the_jobs_exit_code, a_stale_socket_is_replaced_under_the_lock_and_a_non_socket_is_refused, the every_unattributable table), and push until lib-1 is green.
+    2. minor: socket.rs peer_pidfd falls back to pidfd_open(cred.pid) when SO_PEERPIDFD is unavailable (kernels before 6.5). A peer that writes its request and exits can have its pid recycled before the pidfd is taken. The recycled process is then pinned and walked, and the dead peer's bytes are attested to it. docs/deputies.md says 'a reused pid cannot pass'. Refuse when SO_PEERPIDFD is unavailable, or check that the pinned process's start time predates the accept.
+    3. minor: socket.rs serve() runs serve_one inline on the single accept thread with a 30s IO_TIMEOUT. One same-uid client that connects and never half-closes stalls every other submit and cancel for 30s per connection. Use a per-connection thread or a much shorter read deadline.
+    4. minor: socket.rs Request::Cancel checks only the peer's uid; job-owner enforcement exists only client-side in deputy_shell_cmd::cancel. Any unsandboxed same-uid process can cancel another session's job over the socket. Enforce it server-side with the same attestation used for submit, or document the residual in docs/deputies.md.
+    5. minor: jobs left in a pre-upgrade incoming/ directory are silently ignored: never claimed, refused or audited, and status/wait report them as unknown. Have the runner emit a one-time warning or audit row at start when incoming/ is non-empty.
+    6. cosmetic: deputy_shell_cmd.rs:362 comment still says the runner moves the job out of 'incoming/'; it is 'accepted/' now.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T02:19:59.305734063Z
+  modified_at: 2026-11-05T02:19:59.305734063Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
