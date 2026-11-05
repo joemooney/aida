@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T06:40:01.062763049Z
+modified_at: 2026-11-05T07:12:48.513551275Z
 req_type: Task
 tags:
 - architecture
@@ -229,6 +229,13 @@ comments:
   created_at: 2026-11-05T06:37:10.778333533Z
   modified_at: 2026-11-05T06:37:10.778333533Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa8d-9781-72f2-a456-7b51812d7976
+  author: joe
+  content: 'Rework 20:03 brief + 23:37 review pushed to PR #3307 at 9217493301d (untested=true locally). (1) Merged origin/main d561213a36f (STORY-2343 deputy socket) cleanly as af13daa3b11, with no conflicts; main''s launch/ structure unchanged. (2) launch/contained.rs:549 is rustfmt-clean, and cargo fmt --all --check passes. (3) BUG-2440 fixture (tests/bug_2398_codex_tool_env_tests.rs bug_2440_wrapped_codex_prepares_with_explicit_command_separator): the child now carries AIDA_CONTAINMENT_POSTURE=native, the stamp the real launcher writes. Its root is a non-repo dir, so M1''s fail-closed check refused it correctly; M1 is unchanged. Tests NOT run locally: two lane jobs (j20261105T064149232-10-0, j20261105T065703621-3-0) of cargo test --lib bug_2440 bug_2398 task_2707_ task_2708_ task_1752 + the two 18:05 ratchet tests both timed out at 900s compiling the aida-cli-lib test binary. The AIDA_CARGO_TIMEOUT=3600 override was denied in this session. make check-ci-fast was not run (its first gate is a cargo check that runs past the 60s tool cap); only the formatting gate ran locally. Pushed per the 04:17 brief rule (local timeout: push and say so; CI shards gate).'
+  created_at: 2026-11-05T07:12:48.513551275Z
+  modified_at: 2026-11-05T07:12:48.513551275Z
+  session_id: 01a1aa6f8804
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
