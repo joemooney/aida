@@ -26,6 +26,15 @@ pub mod mcp_translate;
 pub mod refresh;
 mod settings;
 
+// Shared by core and CLI scaffold writers. trace:TASK-3112 | ai:codex
+pub fn is_executable_artifact(rel_path: &std::path::Path) -> bool {
+    let s = rel_path.to_string_lossy();
+    s.starts_with(".git/hooks/")
+        || s.starts_with(".claude/hooks/")
+        || rel_path.starts_with(codex_hooks::HOOKS_DIR_REL)
+        || s.ends_with(".sh")
+}
+
 pub use aida_md::{
     aida_md_matches, extract_aida_block, extract_memory_reflex_block, merge_agents_md_aida_block,
     merge_memory_reflex_block, AgentsMdBlockMerge, MemoryReflexBlockMerge,
@@ -2946,10 +2955,10 @@ aida show <SPEC-ID>
                 written_files.push(artifact.path.clone());
                 continue;
             }
-            // A git hook is staged, fsynced, set 0755 and renamed into place,
-            // so git never runs a partial or non-executable one.
+            // Executable artifacts are staged, fsynced, set 0755 and renamed
+            // into place so hook runners never see a partial executable.
             // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
-            let written = if artifact.path.starts_with(".git/hooks/") {
+            let written = if is_executable_artifact(&artifact.path) {
                 crate::git_ops::write_hook_file(&full_path, artifact.content.as_bytes())
             } else {
                 fs::write(&full_path, &artifact.content)
@@ -2958,27 +2967,6 @@ aida show <SPEC-ID>
                 path: full_path.clone(),
                 message: e.to_string(),
             })?;
-
-            // Make git hooks and Claude Code / Codex hooks executable on Unix
-            // trace:BUG-2395 | ai:claude
-            #[cfg(unix)]
-            if artifact.path.starts_with(".git/hooks/")
-                || artifact.path.starts_with(".claude/hooks/")
-                || artifact.path.starts_with(codex_hooks::HOOKS_DIR_REL)
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&full_path)
-                    .map_err(|e| ScaffoldError::IoError {
-                        path: full_path.clone(),
-                        message: e.to_string(),
-                    })?
-                    .permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&full_path, perms).map_err(|e| ScaffoldError::IoError {
-                    path: full_path.clone(),
-                    message: e.to_string(),
-                })?;
-            }
 
             written_files.push(artifact.path.clone());
         }
@@ -4541,6 +4529,53 @@ mod tests {
         assert!(content.contains("AIDA_AGENT_OUTPUT=toon aida search"));
         assert!(content.contains("<!-- AIDA-MEMORY-REFLEX-END -->"));
         assert!(content.contains("## Project\n\nNotes."));
+    }
+
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_core_scaffold_atomically_replaces_all_executable_artifacts() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let dir = TempDir::new().unwrap();
+        assert!(crate::test_git::git_command()
+            .args(["init", "-q"])
+            .arg(dir.path())
+            .status()
+            .unwrap()
+            .success());
+        let mut scaffolder = Scaffolder::new(dir.path().to_path_buf(), ScaffoldConfig::default());
+        let mut preview = scaffolder.preview(&create_test_store());
+        preview.artifacts = [
+            ".git/hooks/pre-commit",
+            ".claude/hooks/custom",
+            ".codex/hooks/custom",
+            "scripts/custom.sh",
+        ]
+        .into_iter()
+        .map(|name| ScaffoldArtifact {
+            path: name.into(),
+            content: "#!/bin/sh\nexit 0\n".into(),
+            description: "fixture".into(),
+            exists: true,
+            file_status: FileStatus::Unmodified,
+        })
+        .collect();
+        let mut old = Vec::new();
+        for artifact in &preview.artifacts {
+            let path = dir.path().join(&artifact.path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "old").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+            // Keep the old inode alive to exclude inode reuse after rename.
+            old.push(fs::File::open(path).unwrap());
+        }
+        scaffolder.apply(&preview).unwrap();
+        for (artifact, old) in preview.artifacts.iter().zip(old) {
+            let path = dir.path().join(&artifact.path);
+            let meta = fs::metadata(&path).unwrap();
+            assert_ne!(meta.ino(), old.metadata().unwrap().ino());
+            assert_eq!(meta.permissions().mode() & 0o777, 0o755);
+            assert_eq!(fs::read_to_string(path).unwrap(), artifact.content);
+        }
     }
 
     #[test]

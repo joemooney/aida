@@ -8458,6 +8458,17 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
             _ => None,
         });
     if let Some(id) = review {
+        // Match run_pr's forge-specific normalization. trace:TASK-3112 | ai:codex
+        let root = crate::find_project_root()
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        let Ok(id) = review_change_id(&id, crate::forge::resolve_forge_kind(&root)) else {
+            return crate::command_registry::CmdPolicy {
+                stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+                per_write_auto_push: false,
+                skip_role_restore_prompt: false,
+                team_identity_write: false,
+            };
+        };
         let queue = <crate::queue_cmd::QueueArgs as clap::CommandFactory>::command()
             .try_get_matches_from(review_queue_argv(&id));
         if let Ok(queue) = queue {
