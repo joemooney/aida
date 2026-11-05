@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T03:03:09.799612336Z
+modified_at: 2026-11-05T03:10:08.890792389Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -143,6 +143,12 @@ comments:
   created_at: 2026-11-05T02:57:11.809954386Z
   modified_at: 2026-11-05T02:57:11.809954386Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9af-6dfa-78d1-8e0a-9c1dd6338b1f
+  author: joe
+  content: 'Implementing the advisor-authorized first slice only: note/validate/export plus bounded strict envelope validation and email round trips. Filed child TASK-3077 to distinguish this delivery from remaining intake enrollment/publication/pull, receipts/processing and comment recovery. Parent remains in progress. Existing store-only transport profile is untouched.'
+  created_at: 2026-11-05T03:10:08.890792389Z
+  modified_at: 2026-11-05T03:10:08.890792389Z
+  session_id: 01a1a9a8fe02
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
   author: joe
