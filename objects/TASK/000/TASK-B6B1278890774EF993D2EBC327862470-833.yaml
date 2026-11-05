@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T19:55:29.883856972Z
+modified_at: 2026-11-05T19:57:51.505674911Z
 req_type: Task
 tags:
 - from-advisor
@@ -79,6 +79,12 @@ comments:
   created_at: 2026-11-05T19:54:15.151915823Z
   modified_at: 2026-11-05T19:54:15.151915823Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad4a-0411-7a62-85c1-c256365d87b7
+  author: joe
+  content: 'Round 2: committed 1bc5e284dc5 and pushed it to the existing PR #3438 branch. Finding 1 fixed: the outside-cwd policy test initializes a temporary Git repository, commits a fixture scripts/containment/conformance.py, creates refs/remotes/origin/main there, patches c.__file__, and compares the returned SHA with fixture HEAD; it never reads real checkout refs. All 23 Python conformance evidence tests PASS; git diff --check PASS. Finding 2 fixed: PR body now lists all five superseded findings and explicitly cites STORY-2460 comments[9]/[10] at 2026-11-05 12:29/12:41 UTC resolving TASK-2863, with further AGY work under TASK-3048 and later advisor context. Optional finding 3 (title-parser edge cases) is deferred and disclosed in the PR body. Remote push accepted abe29b03f3c..1bc5e284dc5; local remote-tracking ref refresh was refused by the read-only filesystem. No review verdict, hold clearance, merge, or queue completion claimed; stop at the open PR for independent review.'
+  created_at: 2026-11-05T19:57:51.505674911Z
+  modified_at: 2026-11-05T19:57:51.505674911Z
+  session_id: 01a1ad47cdf6
 history:
 - id: 01a1ac7a-9749-7001-82e3-4961ecdfe225
   author: joe
