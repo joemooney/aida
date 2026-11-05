@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-05T15:56:38.956347187Z
+modified_at: 2026-11-05T15:56:41.896981919Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -128,6 +128,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 2 (Refs STORY-2401): Observed<T>, observe_* reads and the TASK-2794 UNKNOWN->Pending fix are sound and unit-tested, but the gh-read ratchet can be bypassed through generic gh helpers exported from forge.rs, the ship-preflight decision that consumes the fix is untested, and settled refusals are labelled Transient. AC1 partial (in-slice); AC2-4 deferred to slices 3-5 per advisor signoff. CI was still pending at this head; merge-hold-gate red is the supervised hold, not code.. No triage reason was given.'
   created_at: 2026-11-05T15:56:38.956345664Z
   modified_at: 2026-11-05T15:56:38.956345664Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac6d-39c4-7850-af10-516d1cf69492
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3427):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7c199712d351
+    Recorded: 2026-11-05T13:44:23.804012271+00:00
+    Findings:
+    1. [major] Ratchet bypass (AC1): forge.rs:1166 train_gh_api_read and forge.rs:1182 train_gh_stdout are pub(crate) generic 'gh <any args>' runners that return anyhow::Result / a raw Output, not Observed<T>. Any module can call crate::forge::train_gh_stdout(root, &["pr","view",..]) and branch on its Err (= raw gh exit status) without story_2401_no_new_raw_gh_reads_outside_forge counting a site, because the scanner (story_2401_forge_read_ratchet_tests.rs raw_gh_sites) only matches resolve_gh_binary / Command::new("gh"). The train itself still branches on raw exit status through them (pr_train.rs:2089 assert_head -> TrainCiReadError, :1614 train listing, :1664 rider-gate body read). Fix: have the ratchet also count calls to these pass-through helpers outside pr_train.rs (or make them train-private, e.g. pr_train-only visibility or a narrow typed API), and add a scanner unit case proving a new caller is caught.
+    2. [minor] Untested ship decision (TASK-2794 consumer): ship_status_settled (pr_cmd.rs:2115) and the ship_preflight_gates branch (pr_cmd.rs:2155-2172: Known(false) -> ShipRefusal::NotMergeable, Pending after 3 reads -> proceed with a note, all reads Transient -> error) have no test. The tests only cover github_mergeable/parse_github_change_status. Add a stub-forge test (StubForge in story_2401_forge_observed_tests.rs already fits; SHIP_STATUS_BACKOFF can be made injectable) covering: settled false refuses, Pending-then-Known settles in the loop, persistent Pending proceeds, persistent Transient errs.
+    3. [minor] Settled refusal labelled Transient: observe_gh_stdout (forge_observed.rs:144-149) maps Known(GhReply::Refused) to Transient, and GitHubForge::observe_change_status (forge.rs ~2118) is built on it. So a definitive gh answer (PR not found, 404, auth refused) becomes 'Transient: re-read later'. That contradicts the type's documented meaning ('a reason unrelated to the answer'). ship_status_settled then retries it 3x with 2s sleeps before failing, and slice-3 confirmed_negative callers would treat a settled no-such-PR as unconfirmed. Use observe_gh in observe_change_status and keep Refused distinguishable (a Known error/absent outcome), or document and test why a refusal is deliberately Transient for that read.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T15:56:41.796336210Z
+  modified_at: 2026-11-05T15:56:41.796336210Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
