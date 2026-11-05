@@ -657,7 +657,7 @@ and headless launches. It is shown as “native sandbox, not AIDA-contained” b
 permission reports, doctor, launch banners and statusline. Native sandboxing
 does not apply AIDA's tool rules, write boundaries or network allowlist.
 
-AIDA supplies native Codex launches with `--add-dir` grants for the shared
+AIDA supplies native Codex launches with Codex add-dir grants for the shared
 store, cache directory (`<main>/.aida/cache-db`), mailbox, deputy inbox and
 applicable build directories. The cache grant includes SQLite's sidecars and
 locks, including when the lane's `.aida/cache-db` links to the main checkout.
@@ -666,8 +666,8 @@ Ordinary CLI coordination such as `aida edit`, `aida comment add` and
 also receives the gate-ledger directory; an implementer does not.
 
 If CLI coordination reports that the shared cache is outside writable roots,
-check `aida dev status` for the launcher's binary and relaunch from a current
-build. A running lane retains the filesystem grants established at launch;
+check the launcher's version with `aida --version`, upgrade AIDA if needed,
+and relaunch the lane. A running lane retains the filesystem grants established at launch;
 upgrading the binary alone cannot add them. Report a recurrence with the launch
 command, binary version and resolved cache path rather than adding broader
 write roots. Git metadata remains protected separately; see
