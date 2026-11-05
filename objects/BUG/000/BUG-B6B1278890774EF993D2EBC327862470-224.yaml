@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T19:25:58.313401260Z
+modified_at: 2026-11-05T19:27:41.575105388Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -31,6 +31,12 @@ comments:
     - protocol: bug — missing test-file change (layer: type; no test file in the diff)
   created_at: 2026-11-05T19:25:58.223994714Z
   modified_at: 2026-11-05T19:25:58.223994714Z
+  session_id: 01a1ad1ae5d5
+- id: 01a1ad2e-6607-7ef0-ae31-764d7cd013b0
+  author: joe
+  content: 'Implemented worker-only ownership witnesses (creator no longer masks an exited active worker), init/systemd holder validation through the shared process identity probe, ownership refresh after regular/detached worker stamping and subagent adoption, and generation-pinned migration repairs preserving session/phase/tree. Added four regression tests including a genuinely detached/reparented process; all 44 ownership tests and 2 existing PID-stamping tests pass. cargo fmt --all -- --check, scripts/check-portability.sh, full CLI manual verification and static flag checks pass. One existing BUG-2130 adoption fixture fails before the added code because it lacks pid_namespace under this sandbox; filed separately. aida queue done succeeded (Done/dequeued); its branch/diff inspection skipped in this native seat and warned about missing traces/test changes despite the changed writer_tests.rs. Git staging is blocked by the sandbox read-only .git/index.lock, so no commit/push/PR was possible here; native host post-exit commit/publication and host aida own migrate --execute followed by own show --compare remain required and have a draft finding. Suggested subject: [AI:codex] fix(ownership): track worker identity instead of launcher lifetime (BUG-2458).'
+  created_at: 2026-11-05T19:27:41.575105388Z
+  modified_at: 2026-11-05T19:27:41.575105388Z
   session_id: 01a1ad1ae5d5
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
