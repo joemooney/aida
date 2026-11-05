@@ -12,6 +12,7 @@
 // trace:STORY-2326 | ai:claude
 
 pub(crate) mod context;
+pub(crate) mod parent;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude
 #[allow(dead_code)]
 pub(crate) mod resources;
