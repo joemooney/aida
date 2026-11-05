@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:22:40.396977177Z
+modified_at: 2026-11-05T20:54:41.418609344Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -137,6 +137,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ad7e-0dbd-7b43-8721-510a4a9540ad
+  author: joe
+  timestamp: 2026-11-05T20:54:41.853516963Z
+  session_id: 01a1ad7bd3eb
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -155,3 +161,11 @@ attention_reason:
   lean: Keep known-init rejection and fail-closed orphan records; require host migration evidence before PR-C cutover.
   raised_by: implementer
   raised_at: 2026-11-05T20:17:27.701803338Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round-1 findings 1-5 addressed (worker-only witness, injectable write-time refusal, HostFacts-gated judge, generation-pinned repairs, detached test), but the new session-start snapshot names the short-lived aida CLI pid as holder, which reads Dead while the lease is Live (new UNEXPLAINED rows; reclaimable live work after cutover); AC5 host evidence still absent; CI pending at head.
+  recovery_hint: address the review findings, move BUG-2458 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T20:54:41.418609344Z
