@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-800
 agreed_id: TASK-3074
 title: Track acted-on request dispositions and unresolved stall escalation
 description: 'Follow-up to STORY-2476 advisor ruling: define and approve explicit acted, declined and deferred dispositions tied to message IDs. Preserve seen/read ACK distinctions. Add authorized receipts and unresolved alarm escalation through the existing operator notifier; reading or wake acceptance never proves action.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T22:14:54.773451396Z
+modified_at: 2026-11-05T22:41:24.298063077Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -115,6 +115,12 @@ comments:
   created_at: 2026-11-05T22:14:44.626970718Z
   modified_at: 2026-11-05T22:14:44.626970718Z
   session_id: 01a1ada9fd48
+- id: 01a1addf-bf4a-7a61-af96-bedf21782c95
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 2 finding 1 remains partly open: PR #3458 title and new local commit 536846a3386 use the required (Refs TASK-3074), but published commit 1b20cf87e817 still carries the completing trailer. Rewording published history requires the operator-authorized force push required by the Git workflow. Final source fixes for findings 2-6 passed 22 targeted tests plus feature-disabled/format/whitespace checks; four final correction files need host capture because the native sandbox refuses .git writes. Use /tmp/task3074-round2-publication.md and its exact non-completing subject. Keep the existing merge hold; PR-B and independent review/merge remain outstanding.. No triage reason was given.'
+  created_at: 2026-11-05T22:41:24.298061751Z
+  modified_at: 2026-11-05T22:41:24.298061751Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
@@ -206,14 +212,16 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1addf-bf4a-7a61-af96-bec257e23239
+  author: joe
+  timestamp: 2026-11-05T22:41:24.298053512Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: codex
   session: 01a1a96dc251
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 2 finding 1 remains partly open: PR #3458 title and new local commit 536846a3386 use the required (Refs TASK-3074), but published commit 1b20cf87e817 still carries the completing trailer. Rewording published history requires the operator-authorized force push required by the Git workflow. Final source fixes for findings 2-6 passed 22 targeted tests plus feature-disabled/format/whitespace checks; four final correction files need host capture because the native sandbox refuses .git writes. Use /tmp/task3074-round2-publication.md and its exact non-completing subject. Keep the existing merge hold; PR-B and independent review/merge remain outstanding.'
-  lean: Host capture/publish the final seat source with the exact Refs subject, then have the operator resolve the historical-subject rewrite before merge.
-  raised_by: implementer
-  raised_at: 2026-11-05T22:14:54.773451396Z
