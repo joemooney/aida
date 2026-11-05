@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T21:28:16.508923469Z
+modified_at: 2026-11-05T21:34:32.141339102Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -103,6 +103,12 @@ comments:
   content: 'Round 3 finding 1 addressed and published as 623301f922b on existing PR #3443: each empty-rework receipt key/head now owns a durable episode; membership changes cannot re-arm accepted or unresolved heads. Legacy aggregate state migrates to member episodes. Added two-PR A -> A+B -> B -> A+B coverage (two sends), post-send persistence failure coverage, fresh-head rearming, and migration coverage. CLI guide clarifies per-head suppression. All 37 make check-ci-fast gates, formatting and staged whitespace checks passed. Full supervise_cmd test build is still running; no unit-test pass or full-suite CI success claimed yet. Finding 2 remains a CI observation, with the supervised merge hold preserved. Direct Git commit/push succeeded despite AIDA ship refusing native publication; Git only failed to update its local remote-tracking ref after origin accepted the new commit. No pr ship or review record performed.'
   created_at: 2026-11-05T21:28:16.508923469Z
   modified_at: 2026-11-05T21:28:16.508923469Z
+  session_id: 01a1ad8c9940
+- id: 01a1ada2-86cd-73c2-b151-fd90d2dd24f6
+  author: joe
+  content: 'Final Round 3 validation at pushed commit 623301f922bc40075fdfc8845a36bae3451fc391: cargo test -p aida-cli-lib --lib supervise_cmd --profile agent passed all 62 tests (0 failed), including both new two-PR/member-state regressions. All 37 make check-ci-fast gates passed; cargo fmt --all -- --check and whitespace checks passed. GitHub confirms PR #3443 is OPEN at this new commit, and the working tree is clean. Finding 1 is addressed; none disputed. Finding 2: no green full-suite CI claim is made; leave CI evaluation, supervised hold clearance, independent review and merge to their separate seats. No pr ship or review record performed.'
+  created_at: 2026-11-05T21:34:32.141339102Z
+  modified_at: 2026-11-05T21:34:32.141339102Z
   session_id: 01a1ad8c9940
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
