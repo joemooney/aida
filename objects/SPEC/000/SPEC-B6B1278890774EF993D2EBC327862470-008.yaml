@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-008
 agreed_id: TASK-2836
 title: Standalone Codex lane still cannot mutate linked shared AIDA cache
 description: 'Observed during BUG-2440 pickup in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-209: `aida edit BUG-2440 --status in-progress` refuses because .aida/cache-db links to /home/joe/ai/aida/.aida/cache-db outside the writable roots. Spec was already In Progress; AIDA MCP add_comment succeeds, so work continued using the connector. Related prior finding TASK-2792 is superseded; advisor should determine whether the launch boundary fix needs reopening or this is intended connector-only mutation. No boundary changes made in this bug fix.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T16:00:53.147986638Z
-modified_at: 2026-11-04T16:00:53.147986638Z
+modified_at: 2026-11-05T16:13:12.588775435Z
 req_type: Task
 tags:
 - from-implementer:BUG-2440
@@ -19,6 +19,14 @@ history:
   author: joe
   timestamp: 2026-11-04T16:34:48.784665648Z
   changes: []
+- id: 01a1ac7c-580c-77a1-a185-f8e50f794818
+  author: joe
+  timestamp: 2026-11-05T16:13:12.588772788Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: c19294416a9
