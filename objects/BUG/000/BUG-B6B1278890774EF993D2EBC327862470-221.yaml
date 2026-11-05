@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-221
 agreed_id: BUG-2455
 title: An exited implementer lane's seat clone keeps holding the PR branch, so the next rework pickup (--force-claim --branch) refuses
 description: 'Hit 4 times on 2026-11-05 (TASK-2832, STORY-2492, STORY-2475, TASK-2995 worktree). After a headless Codex lane exits, its lease and seat clone survive; ''aida queue work SPEC --role implementer --force-claim --branch <PR branch>'' then fails ''branch ... is held by a contained seat''s private clone ... before pickup setup''. The advisor must hand-verify the clone, publish any pending edits, and ''session end --force'' it. Sibling of BUG-2450 (reviewer side). Acceptance: (1) --force-claim on a branch held by an exited (dead-pid) lane''s clean, pushed clone retires that clone and lease automatically; (2) a dirty clone is published (commit-pending to the PR branch) or refused with the exact path and diff stat; (3) regression test covers both.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T12:18:09.412502431Z
+modified_at: 2026-11-05T13:19:12.611568134Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-11-05T12:09:50.233610276Z
   modified_at: 2026-11-05T12:09:50.233610276Z
   session_id: 01a1ab913020
+- id: 01a1abdd-0ae3-7bb3-bba0-09c41b178471
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic is sound and fail-closed (dead+clean+pushed only, KeepUnshipped re-probe, release_lease_files), but the four bwrap-dependent regression tests are outside CI''s forced-live bwrap gate, so acceptance (3) has no CI proof; plus minor message/coverage nits. CI still pending at review time.. Triage reason: Address the latest review on #3421 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-221 (no new branch). LIGHT gate.'
+  created_at: 2026-11-05T13:19:12.611565734Z
+  modified_at: 2026-11-05T13:19:12.611565734Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
   author: joe
@@ -70,6 +76,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1abdd-0ae3-7bb3-bba0-09bce3021aec
+  author: joe
+  timestamp: 2026-11-05T13:19:12.611548060Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
@@ -82,14 +96,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T12:13:10.815802032Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Logic is sound and fail-closed (dead+clean+pushed only, KeepUnshipped re-probe, release_lease_files), but the four bwrap-dependent regression tests are outside CI's forced-live bwrap gate, so acceptance (3) has no CI proof; plus minor message/coverage nits. CI still pending at review time.
-  recovery_hint: address the review findings, move BUG-2455 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T12:18:09.412502431Z
 interface_changes:
   cli:
   - queue work --force-claim --branch retires clean, pushed private clones owned by exited lanes; unsafe clones are retained with path and diff-stat diagnostics.
