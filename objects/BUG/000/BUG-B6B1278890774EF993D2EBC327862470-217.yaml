@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-217
 agreed_id: BUG-2451
 title: Rework lanes start on a fresh -N branch off main instead of the open PR's branch, producing duplicate incomplete PRs
 description: 'Observed 2026-11-04, five times on both vendors: TASK-2708 (-658-2), TASK-3046 (-784-2, dup PR #3397), BUG-2439 (-208-2 → #3401 and a lost -208-3), TASK-1715 (task-1715-2 → #3404), STORY-2475 (-403-2 → dup PR #3407). When `aida queue work` is launched for a spec whose open PR''s branch is still held by an old seat or lease, or the branch exists without a matching local seat, pickup allocates <branch>-2 from main. The lane then implements only the rework delta on top of main and publishes a second PR missing the original commits. Folding that back needs a cherry-pick, which often conflicts, plus another lane. Acceptance: (1) a rework or queue-work for a spec with an open PR always seats that PR''s head branch; if the branch is held, it reclaims a clean, pushed holder (see BUG-2450) or refuses, naming the holder, and never allocates -N; (2) -N allocation is only for a spec with no open PR, and only when explicitly requested; (3) publication refuses to open a second open PR for the same spec, and pushes to the existing one or errors; (4) regression tests for the held-branch and the stale-seat cases.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T08:59:03.460857633Z
+modified_at: 2026-11-05T09:48:03.462989310Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -108,6 +108,12 @@ comments:
   created_at: 2026-11-05T08:33:24.066465640Z
   modified_at: 2026-11-05T08:33:24.066465640Z
   session_id: 01a1aab9b220
+- id: 01a1ab1b-ba06-7701-af40-a0d05d445319
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 source changes close all four round-2 findings (dated merged-retained branch on queue work, duplicate open PRs refused in pickup+publication, list-sessions offline, BUG-1763 comment reconciled), and AC1-AC4 have test coverage. PR CI at 0a192b2e is red: lib-0 Run tests fails (it has failed on every run of this branch while main is green) and gates fails Check formatting. AC status: AC1 verified by bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes, bug_2451_pickup_pins_existing_pr_even_without_a_seat, bug_2451_queue_pickup_uses_pr_head_at_every_workable_status; AC2 verified by auto_branch slug-only resolver + bug_2451_retained_branch_requires_confirmed_absence_of_open_pr (dated auto name only on confirmed merge plus no open PR, per round-2 direction); AC3 verified by ledger bug_2451_publication_* and train-rider tests; AC4 verified by bug_2451_pickup_entry_tests through real session_start/handle_queue_work. None of this is CI-proven while lib-0 is red.. It was punted on: blocked-dependency: Round-3 finding 5 and the mandatory new-commit contract are blocked by the native seat permission profile: git add cannot create .git/index.lock (Read-only file system). Findings 1-4 and both actual CI regressions are implemented in the working tree, with tests added. No finding is disputed. A writable Git seat/host must commit and push the changes to PR #3409 and obtain green CI before approval; the supervised merge hold remains in place. Rust validation is still compiling; final results will be added to this spec.. Triage reason: CI red at 0a192b2: lib-0 pr_train::verified::bug2406::* panic at bug2406_train_tests.rs:292:48 (many cases), plus CI (gates). Fix on the PR branch, push, no new branch.'
+  created_at: 2026-11-05T09:48:03.462986851Z
+  modified_at: 2026-11-05T09:48:03.462986851Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
   author: joe
@@ -209,6 +215,14 @@ history:
   session_id: 01a1aadc29e6
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ab1b-ba06-7701-af40-a0cfcfeddfce
+  author: joe
+  timestamp: 2026-11-05T09:48:03.462968021Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -221,17 +235,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T05:50:26.596521283Z
   implemented_by: joe
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round-3 finding 5 and the mandatory new-commit contract are blocked by the native seat permission profile: git add cannot create .git/index.lock (Read-only file system). Findings 1-4 and both actual CI regressions are implemented in the working tree, with tests added. No finding is disputed. A writable Git seat/host must commit and push the changes to PR #3409 and obtain green CI before approval; the supervised merge hold remains in place. Rust validation is still compiling; final results will be added to this spec.'
-  lean: Preserve the working tree and have the launcher commit/push it; do not reopen a duplicate PR or clear the merge hold.
-  raised_by: implementer
-  raised_at: 2026-11-05T08:12:10.419681164Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-3 source changes close all four round-2 findings (dated merged-retained branch on queue work, duplicate open PRs refused in pickup+publication, list-sessions offline, BUG-1763 comment reconciled), and AC1-AC4 have test coverage. PR CI at 0a192b2e is red: lib-0 Run tests fails (it has failed on every run of this branch while main is green) and gates fails Check formatting. AC status: AC1 verified by bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes, bug_2451_pickup_pins_existing_pr_even_without_a_seat, bug_2451_queue_pickup_uses_pr_head_at_every_workable_status; AC2 verified by auto_branch slug-only resolver + bug_2451_retained_branch_requires_confirmed_absence_of_open_pr (dated auto name only on confirmed merge plus no open PR, per round-2 direction); AC3 verified by ledger bug_2451_publication_* and train-rider tests; AC4 verified by bug_2451_pickup_entry_tests through real session_start/handle_queue_work. None of this is CI-proven while lib-0 is red.'
-  recovery_hint: address the review findings, move BUG-2451 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T08:59:03.460857633Z
