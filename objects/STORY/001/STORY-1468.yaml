@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-05T19:52:52.010125592Z
+modified_at: 2026-11-05T20:32:30.974468575Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -151,3 +151,15 @@ history:
   timestamp: 2026-11-05T19:13:20.953599528Z
   session_id: 01a1ad20639a
   changes: []
+- id: 01a1ad69-bf71-75c2-aa82-a8f7be125491
+  author: joe
+  timestamp: 2026-11-05T20:32:31.089898029Z
+  session_id: 01a1ad20639a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T20:32:30.974468575Z
+  implemented_by: joe
