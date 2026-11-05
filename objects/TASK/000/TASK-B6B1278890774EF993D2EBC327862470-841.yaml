@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T19:24:50.018024034Z
-modified_at: 2026-11-05T20:27:17.534532796Z
+modified_at: 2026-11-05T20:27:18.979287398Z
 req_type: Task
 tags:
 - carried-from:TASK-2842
 - finding-hash:5eb020cb
 - from-review:PR-3436
 - kind:carried-forward
+comments:
+- id: 01a1ad64-fc43-7890-a097-106e54055a07
+  author: joe
+  content: 'Advisor triage 2026-11-05 13:40: APPROVED as a systemic fix, not a per-PR nit. Codex rework lanes and auto-publish open PRs titled ''fix: address CI failures and review findings (SPEC)'', and those titles become squash subjects on main (see #3432, #3434, #3436, #3439). Fix at the source: when ship --from-seat opens or retitles a PR, derive the title from the spec''s conventional type and scope plus its title, and never use the generic rework string. Folded TASK-2898.'
+  created_at: 2026-11-05T20:27:18.979287398Z
+  modified_at: 2026-11-05T20:27:18.979287398Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad63-61de-7b02-a9f2-463108532a66
   author: joe
