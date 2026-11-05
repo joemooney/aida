@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-05T16:04:34.368104427Z
+modified_at: 2026-11-05T16:37:25.025769601Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -144,6 +144,15 @@ comments:
   created_at: 2026-11-05T15:56:41.796336210Z
   modified_at: 2026-11-05T15:56:41.796336210Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac92-81a1-7b73-adc1-e9dffad24d9f
+  author: joe
+  content: |-
+    Round-2 PR #3427 rework from reviewed head 7c199712d351: all three findings accepted and implemented. Ratchet counts train_gh_stdout/train_gh_api_read references and aliases outside pr_train.rs, with regression cases for new callers. Ship production mergeability preflight now has injectable backoff and StubForge tests for settled false refusal, Pending-to-Known settling, persistent Pending proceeding, and persistent Transient error, including exact read bounds. GitHub status observations preserve definitive refusals as Known(Err(reason)) via observe_gh; ship stops immediately on these and the wave consumer only uses Known(Ok(status)). Tests cover missing PR, HTTP 404/auth refusal, successful status and HTTP 500. OVERVIEW describes the contract.
+    Validation: 14/14 story_2401 focused unit tests passed; make check-ci-fast passed all 37 gates on rerun; formatting, standalone portability, external-classifier inventory, and staged/unstaged diff whitespace checks passed. The first local fast run exposed two existing stderr checks beyond the classifier marker's 12-line window; moving that existing marker closer fixed the guard without changing behavior. Full fast-check log: /tmp/story-2401-round2-fast-checks.log. CI itself remains unverified; no CI test failure was guessed.
+    Native seat publication handoff: git add is refused because .git is read-only (index.lock). Pending changes are ready for the documented host post-exit commit and publication path. Full recovery patch: /tmp/story-2401-round2.patch. No finding is disputed. No pr ship, review record, queue done, merge or later slice work was attempted. The MCP audit-comment call failed with Transport closed, so this note uses the CLI fallback.
+  created_at: 2026-11-05T16:37:25.025769601Z
+  modified_at: 2026-11-05T16:37:25.025769601Z
+  session_id: 01a1ac74671d
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
