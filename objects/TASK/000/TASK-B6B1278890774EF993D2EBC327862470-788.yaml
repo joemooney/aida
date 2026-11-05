@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-788
 agreed_id: TASK-2841
 title: Train fixture approval receipts intermittently fail under parallel tests
 description: 'While validating BUG-2441, cargo test -p aida-cli-lib --lib bug2406 -- --nocapture ran 54 tests: 49 passed, including all five BUG-2441 regressions; five existing forged-build tests (message/order/patch/source/tip) failed during Fixture::opened_on at live.gate(11), before reaching the forged-build assertion or the changed verified collect path. Refusal said the fixture independent human receipt did not re-validate. Each test already uses run_path_isolated_test. A serial rerun is in progress to determine repeatability. Investigate fixture receipt/setup behavior under parallel load; cause is not established.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T19:21:39.461941007Z
-modified_at: 2026-11-05T17:01:42.881316142Z
+modified_at: 2026-11-05T19:24:06.720491399Z
 req_type: Task
 tags:
 - area:train
@@ -80,6 +80,20 @@ history:
   timestamp: 2026-11-05T17:01:44.340417182Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ad2b-1e8a-76b1-9f29-d2c7271fe048
+  author: aida-auto-bump
+  timestamp: 2026-11-05T19:24:06.666580817Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1ad2b-1ec0-7f90-8803-50ba2e944303
+  timestamp: 2026-11-05T19:24:06.720485786Z
+  agent: aida
+  commit_sha: 70e10d2b449f980b725a733bf35159164941039b
+  summary: 'Root cause confirmed in test_home::install: env_clear dropped AIDA_LIB_TEST_REAL_HOMES so the isolated child ran top-level install (fenced its assigned HOME, made a PID-named home, swept stale homes). Forwarding the fence routes the child through install_nested, keeping the parent''s tempdir HOME. Regression fails without the fix (child gitconfig email differs). CI green at head run 42070446080.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e44c9e595a7
@@ -89,3 +103,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T16:59:52.714842277Z
   implemented_by: joe
+  completed_at: 2026-11-05T19:24:06.666573211Z
+  completion_sha: 70e10d2b449f980b725a733bf35159164941039b
