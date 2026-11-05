@@ -3,12 +3,12 @@ spec_id: TASK-1471
 agreed_id: TASK-1471
 title: Show linked documentation in human-format aida show
 description: 'Make human-readable aida show output surface linked narrative Docs and human-authored expositions that reference the displayed spec. Acceptance: (1) aida show <SPEC> in human format includes a clearly labeled Documentation or Explanations section when linked Docs exist; (2) each entry shows its Doc ID, title, audience/scenario/tags where available, and an actionable command such as aida doc show <DOC-ID>; (3) entries are absent when none exist; (4) reverse References links are resolved without changing canonical spec content; (5) default machine-oriented formats remain stable and do not gain prose unless their schema explicitly includes a documentation field; (6) the output distinguishes human-authored exposition from generated or other documentation provenance; (7) add coverage for direct and reverse documentation links, including STORY-1472 -> DOC-1-174.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T13:50:40.770868407Z
+modified_at: 2026-11-05T16:48:19.505663093Z
 req_type: Task
 relationships:
 - rel_type:
@@ -405,7 +405,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1ac9c-7e22-7462-a3f9-d6c45070c3e2
+  author: aida-auto-bump
+  timestamp: 2026-11-05T16:48:19.490222598Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1ac9c-7e31-7b93-948a-8b8333e4d14a
+  timestamp: 2026-11-05T16:48:19.505657787Z
+  agent: b83457ff-84e3-46cb-8f68-4be531a63422
+  brief_ref: .aida/agent-briefs/advisor/TASK-1471-2026-11-05T132006Z.md
+  commit_sha: b66ec0831851a66cca11ce10a840fb60d9aee7d0
+  summary: 'All 7 ACs met: human-only Documentation section (show_docs.rs + run_show:7466-7497) resolves direct and reverse References Docs without the cached-degree gate, propagates read errors, groups by tag provenance, omits archived/Rejected/Superseded; unit + e2e run_show tests prove immediate reverse link after doc add and JSON/TOON stability; CI run 42039352258 green at head (only merge-hold-gate red).'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-04T11:57:50.448772116Z
   implemented_by: joe
+  completed_at: 2026-11-05T16:48:19.490216101Z
+  completion_sha: b66ec0831851a66cca11ce10a840fb60d9aee7d0
