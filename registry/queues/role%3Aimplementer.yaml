@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
+  position: 127000
+  added_by: role:implementer
+  note: 'CI red at a9ea09f: CI (gates) failing. Read the gates log, fix on the PR branch. After it lands close #3382.'
+  added_at: 2026-11-05T09:48:13.900968754Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
   position: 128000
   added_by: role:implementer
@@ -16,12 +23,6 @@
   position: 130000
   added_by: role:implementer
   added_at: 2026-11-05T09:01:12.397999377Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
-  position: 133000
-  added_by: role:implementer
-  added_at: 2026-11-05T07:55:35.712157066Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a91e-a1e8-7e81-981e-cba544d1ee9c
