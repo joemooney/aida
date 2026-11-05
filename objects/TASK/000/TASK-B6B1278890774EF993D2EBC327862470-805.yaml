@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T18:18:38.482816606Z
+modified_at: 2026-11-05T18:21:26.824028378Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -22,6 +22,178 @@ comments:
   created_at: 2026-11-05T16:13:05.204851893Z
   modified_at: 2026-11-05T16:13:05.204851893Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1acf1-bfa8-7e03-98f0-35e25d83fa47
+  author: joe
+  content: |
+    # Portable review authority and distributed admission
+
+    <!-- trace:TASK-2860 | ai:codex -->
+
+    First-round sketch for TASK-2860, supporting STORY-2492. Documentation only;
+    this task's 2026-11-05 triage explicitly excludes production implementation.
+    The complete sketch is also posted on TASK-2860 for advisor review.
+
+    ## Decisions already recorded
+
+    STORY-2492's master sign-off at 2026-11-05 05:19 UTC approved the portable
+    publication receipt, operator enrollment and synced CAS reservation direction.
+    Its 05:35:54 UTC amendment (the ruling labeled 22:40 local) specifies OpenSSH
+    signatures, not the grant-keyring secret-possession API. Use canonical JSON
+    and detached `sshsig`, namespace `aida-review-receipt`, with an Ed25519 node
+    key and roster-derived allowed signers whose principal is the node ID.
+    The timestamp label in the ruling, rather than a new signer design, is the
+    authority for this choice. Slice 1 is receipts/roster/consumers; slice 2 is
+    watcher discovery and distributed head reservations. Neither slice by itself
+    completes the entire story.
+
+    The original sketch is preserved in STORY-2492's first comment and on its
+    implementation branch at `docs/plans/2026-11-04-story-2492-cross-machine-review.md`.
+    That file and the slice-1 implementation are absent from this task's baseline
+    `c8721a696fc`. Later implementation/review comments on the story are handoff
+    evidence, not proof that slice 1 has landed on this baseline. Integrate with
+    that work rather than implementing a second receipt format here.
+
+    ## Existing trust boundary
+
+    `gate/review_authority.rs::verified_authority_keys` validates grants and their
+    delegation/roster context or local human receipts. `author_sessions_at` and
+    `all_author_sessions` depend on leases and the local authorship ledger.
+    Copying verdict JSON to another machine supplies neither validation.
+
+    `review_watch.rs::Store::history` reads local verdict files/archives and
+    returns early when the verdict directory is absent. Its runtime reservation
+    protects local dispatch only. `schedule_ledger.rs` has a useful exact-push CAS
+    pattern, but deliberately treats an offline local commit as pending success;
+    that behavior cannot admit a remote reviewer.
+
+    ## Portable publication contract
+
+    An operator explicitly enrolls a node/public-key pair. The host-side
+    recorder/collector alone signs a publication after its normal local recorder
+    authority checks succeed. Node trust means trusting that host to make that
+    validation; a signed document never grants a consumer a remote seat or grant.
+    Keep keys private on the publishing host; do not export grants, parents,
+    human receipts or signing secrets. Use the amended slice-1 key lifecycle.
+
+    The signed payload binds schema/version, repository and forge identity,
+    change number, full head SHA, complete bound canonical spec set, publication
+    ID, publisher node, reviewer actor/session identity, decision, recording time,
+    blocking finding origin IDs and references to signed authorship evidence.
+    Sign all security-relevant fields using slice 1's canonicalization. Reject
+    unknown versions, duplicate/ambiguous fields, invalid signatures and
+    unresolved finding identities before awarding credit. Publication identity
+    is `(node, publication ID)`; local ledger sequence and wall-clock time do
+    not order publications from different nodes.
+
+    Authorship evidence must bind the actual change/head and bound spec set,
+    including multi-spec PRs. Preserve authoring sessions across rework heads;
+    publish fresh evidence on open, adopt and each relevant push. A receiving
+    node combines portable evidence with locally known authors. Missing or
+    incomplete coverage cannot prove independence. Node-qualified process IDs
+    prevent PID collisions; persistent harness/session identities prevent an
+    author resumed on another node from becoming an independent reviewer.
+    Apply existing actor/session independence rules, not a new rule that all
+    sessions under the same human account are automatically identical.
+
+    Verify against the current enrolled, unrevoked roster, exact current change
+    head and complete spec coverage on every consuming node. Revocation removes
+    future authority without retroactively undoing merges. Use one checked
+    projection for ship, train, readiness, aliases and watcher history. Bound
+    reads by change/head and existing safe-file rules; unrelated malformed
+    history must not disable the entire repository. A malformed relevant record
+    cannot yield approval or restore a contradictory cached approval. Distinguish
+    absent evidence (including stale/revoked-only evidence) from unsafe evidence,
+    and report the former so an ordinary fresh authorized review can recover.
+
+    Synced verdicts govern the derived local verdict view and disagreements are
+    reported. Preserve local audit and unrelated hold/train events. A reviewer
+    may explicitly supersede its own prior publication through causal links;
+    an independent refusal remains blocking until explicitly resolved under the
+    approved review policy. No timestamp-only winner may erase it. Publication
+    failure preserves a durable local pending result, reports an actionable retry,
+    and awards no remote approval. Normal request-changes must carry filed finding
+    origin IDs through the real recorder and collector without manual JSON edits.
+
+    ## Reservation proposal requiring topology confirmation
+
+    Recommend one explicitly configured authoritative hub/ref for admission.
+    All reviewing nodes must reach that same authority; mirrors distribute
+    evidence but cannot independently admit work. A successful CAS against one
+    of several independently writable hubs does not prevent another hub from
+    accepting the same head. Do not infer authority from a node's `origin` alias.
+    Do not silently fail over during a partition. A topology change requires an
+    operator-controlled migration with admission stopped and old claims reconciled.
+
+    The logical key is `(repository, forge, change, exact head)`; each generation
+    has an unpredictable claim token, owner node/session, signed transition and
+    explicit predecessor. Proposed transitions are:
+
+    | State | Allowed next state | Admission effect |
+    | --- | --- | --- |
+    | Absent/terminal | Reserved, with a new generation/token | None until authoritative acceptance |
+    | Reserved | Running, same owner/token | One dispatcher consumes the accepted token |
+    | Reserved | Cancelled after proven pre-spawn failure | Retry allowed after accepted cancellation |
+    | Running | Terminal with publication/exit receipt | Releases that generation |
+    | Reserved/Running | Recovery after explicit owner/operator reconciliation | Never infer exit from age or a remote PID |
+
+    Under the existing store writer lock, fetch/pin the authoritative tip, inspect
+    current synced verdicts and claims, apply one transition, commit and perform
+    the exact expected-tip push. On rejection, reload the winner and reconstruct
+    the transition; do not union-merge conflicting admission records or blindly
+    rebase a losing claim into a new accepted claim. Preserve unrelated writers.
+    The authority must enforce fast-forward/CAS ref updates with no force writers.
+    Bound retries; exhaustion means no spawn.
+
+    Require a definite successful push and confirmation of the accepted token
+    before dispatch. A lost response, offline push or uncertain child spawn keeps
+    the claim occupied and permits no retry spawn until reconciliation. Local
+    token consumption retains the existing process/start binding and permanent
+    runtime lock discipline. A crash between acceptance and spawn leaks capacity
+    safely. A remote PID, elapsed lease time or clock disagreement never proves
+    the old child stopped. Recovery records who verified cessation and fences the
+    old token before a new generation is admitted; it does not terminate processes.
+
+    Keep the existing local two-review ceiling. Before admitting a new head of the
+    same change, resolve any older active generation; a changed head does not
+    allow overlapping reviewers to bypass that rule. A terminal refusal is review
+    history, not permission to repeatedly review the same head. Discovery obtains
+    open changes from the forge after store synchronization, then consults synced
+    history even when the local verdict directory does not exist. Offline cached
+    history can explain state but cannot authorize a fresh distributed admission.
+
+    ## Validation and implementation handoff
+
+    Use two isolated clones/homes, real throwaway OpenSSH keys, one bare hub and
+    fake forge transport. Exercise actual recorder/collector and ship/ready/train
+    entry points; testing only a pure approval predicate is insufficient.
+
+    - Independent B approval is consumed by A at the exact head without B's local
+      grant or human receipt; A's ship/train path can land it.
+    - Ordinary B request-changes publishes findings by origin ID; A sees the
+      refusal and findings despite different display aliases. Test multi-spec PRs.
+    - Stale heads, resumed authors, incomplete authorship, invalid signatures,
+      revoked nodes, unsafe paths, unknown schemas and bounded-read failures
+      never supply approval. Recovery permits a fresh authorized review.
+    - A synced refusal overrides a contradictory local approval and the gate
+      emits the disagreement report. Local holds remain enforced.
+    - Simultaneous claims yield one accepted token and at most one spawn. Inject
+      rejected pushes, response loss, disconnect, crashes before/after spawn,
+      reboot, equal PIDs on different nodes and superseded heads.
+    - Two writable hubs under partition cannot each admit: only the designated
+      authority may accept claims. A loser reloads without resurrecting its claim;
+      unrelated store changes survive retry and explicit recovery.
+
+    Before slice 2 starts, record the authoritative-hub/ref decision and file its
+    own acceptance-backed implementation spec; link it to STORY-2492. Retain a
+    non-completing story reference on slice-1 PR #3411 until all story acceptance
+    is satisfied. Do not weaken gates to make the end-to-end test pass.
+
+    This sketch delivers the requested first round. Existing receipt/signing
+    approval stands. The additional topology/recovery detail is proposed for
+    advisor confirmation; no production gate, schema or reservation is activated.
+  created_at: 2026-11-05T18:21:26.824028378Z
+  modified_at: 2026-11-05T18:21:26.824028378Z
+  session_id: 01a1acef1adb
 history:
 - id: 01a1aa76-52e6-7370-b6c4-2f6dbc6d878a
   author: joe
@@ -42,6 +214,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1acef-9b81-7b71-a025-bc3dffcc6532
+  author: joe
+  timestamp: 2026-11-05T18:19:06.497630977Z
+  session_id: 01a1acef1adb
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1fc3f06903
