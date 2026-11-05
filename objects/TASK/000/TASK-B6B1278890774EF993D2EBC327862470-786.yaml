@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:43:15.135899188Z
+modified_at: 2026-11-05T12:45:45.853875499Z
 req_type: Task
 tags:
 - area:containment
@@ -44,6 +44,12 @@ comments:
   created_at: 2026-11-05T12:41:58.190616541Z
   modified_at: 2026-11-05T12:41:58.190616541Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abbe-6bfd-7b32-b573-3166efc41df9
+  author: joe
+  content: 'Implementation approach under binding 2026-11-05 ruling: add a session-only AGY write_file permission for the exact fixture workspace plus only the immutable fixture payload command, with offline integration coverage of generated private settings and argv. Add an explicitly gated AGY adapter data table alongside the shared launcher describing posture A, private runtime/auth evidence, safe argv order, disabled host-capable tool surfaces, and raw-store denial with mediated-only writes. Route AGY posture refusals through its named conformance gate; no production enablement, real credentials, host measurement or deputies. Validate with offline conformance tests, targeted Rust containment tests and LIGHT checks. Open Refs STORY-2460 PR if publication is available; otherwise retain a concrete publication handoff.'
+  created_at: 2026-11-05T12:45:45.853875499Z
+  modified_at: 2026-11-05T12:45:45.853875499Z
+  session_id: 01a1abbc157d
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
