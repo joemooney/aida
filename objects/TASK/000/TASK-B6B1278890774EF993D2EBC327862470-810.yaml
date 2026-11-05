@@ -1,5 +1,6 @@
 id: 01a1aa6f-dd61-71e1-b2e4-f9af70102007
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-810
+agreed_id: TASK-2861
 title: Make isolated gate fixtures hermetic in native standalone Codex seats
 description: |-
   Observed while implementing STORY-2492 in a native standalone Codex seat. After building the matching CLI and clearing AIDA_PROJECT_ROOT/AIDA_DRIVE_ROOT/AIDA_REVIEW_VERDICT_FILE for the test process, the gate-area run had 1278 passing tests and three remaining fixture failures:
@@ -22,6 +23,11 @@ tags:
 - from-implementer:STORY-2492
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1aa76-531f-7571-925b-879aa618ebf9
+  author: joe
+  timestamp: 2026-11-05T06:47:23.679281144Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
