@@ -1,0 +1,34 @@
+id: 01a1aa6e-d99d-7312-bac5-203f4a0d6a9c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-422
+agreed_id: STORY-2496
+title: 'Review PR-3404: [AI:claude] docs(pr): help golden, format-json audit row and lifecycle entry for aida pr review (TASK-1715)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a999`) for branch `task-1715-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3404>
+  - Branch: `task-1715-2` → `main`
+
+  ## Covers
+
+  - TASK-1715
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3404` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T06:39:13.821927504Z
+modified_at: 2026-11-05T06:39:13.821927504Z
+req_type: Story
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
