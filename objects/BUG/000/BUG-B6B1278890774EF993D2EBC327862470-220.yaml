@@ -1,0 +1,20 @@
+id: 01a1ab4e-71e0-7650-94bb-27eb1598d920
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-220
+agreed_id: BUG-2454
+title: session end cannot end a lease whose seat clone state read times out (sandboxed sh over 120s), even with --force --discard-unpushed
+description: 'Lease 01a1aa6e87e1 (TASK-2832) in clean, fully pushed seat clone aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-779-2: ''aida session end --force --discard-unpushed'' refuses because ''the sandboxed sh did not finish within 120s''. The lease keeps holding the PR branch, so queue work --force-claim --branch refuses and the PR-3394 review fails. Acceptance: timed-out sandboxed read falls back to an unsandboxed read-only git check or names the hanging step; explicit discard ends the lease when state is unreadable; regression test with a stubbed hanging sandbox.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T10:43:27.328808534Z
+modified_at: 2026-11-05T10:43:27.328808534Z
+req_type: Bug
+filed_at:
+  code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c9166da8a3c
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
