@@ -8,17 +8,27 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T12:41:58.353194121Z
+modified_at: 2026-11-05T15:59:59.376896653Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
 - kind:observation
 - linked:STORY-1651
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1a753-8703-77a3-98cd-65a508fadb4f
+  created_at: 2026-11-05T15:59:59.376892334Z
+  created_by: joe
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
   author: joe
   timestamp: 2026-11-05T12:50:35.734365180Z
+  changes: []
+- id: 01a1ac70-4205-7d41-b3d9-fdd5560ddf3a
+  author: joe
+  timestamp: 2026-11-05T16:00:00.517097591Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
 filed_at:
   code_sha: 9f572b1f0d1fb80300d25c2eaa21cdda507fc1e8
