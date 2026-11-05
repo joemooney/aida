@@ -1,0 +1,20 @@
+id: 01a1ab3d-5aed-7573-b9d2-88605fcf96b6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-219
+agreed_id: BUG-2453
+title: session end cannot end a lease whose seat clone state read times out (sandboxed sh >120s), even with --force --discard-unpushed
+description: 'Observed 2026-11-05 03:20 MST. Lease 01a1aa6e87e1 (TASK-2832) works in seat clone /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-779-2. Clone is clean and fully pushed (seat-safe-to-end.sh exit 0, run unsandboxed). ''aida session end 01a1aa6e87e1 --force [--discard-unpushed]'' refuses: ''whose state could not be read (the sandboxed sh did not finish within 120s). The session was NOT ended''. The lease then keeps the PR branch held, so ''aida queue work TASK-2832 --force-claim --branch <PR branch>'' refuses (''held by a contained seat''s private clone ... before pickup setup'') and the review watcher also fails on PR-3394. Acceptance: (1) a timed-out sandboxed state read falls back to an unsandboxed read-only git status/rev-list of the clone (or reports which step hangs); (2) --discard-unpushed with an explicit operator flag ends the lease when the state cannot be read; (3) regression test with a stubbed hanging sandbox.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T10:24:47.341591642Z
+modified_at: 2026-11-05T10:24:47.341591642Z
+req_type: Bug
+filed_at:
+  code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c9166da8a3c
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
