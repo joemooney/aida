@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-833
 agreed_id: TASK-3114
 title: 'Nit sweep C: containment harness and docs findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2863 TASK-2864 TASK-2865 TASK-2870 TASK-2871'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T19:54:15.289217168Z
+modified_at: 2026-11-05T19:55:29.883856972Z
 req_type: Task
 tags:
 - from-advisor
@@ -144,6 +144,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ad47-dadb-7be0-9360-a8337c672827
+  author: aida-session-start
+  timestamp: 2026-11-05T19:55:29.883851944Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
