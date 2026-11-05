@@ -58,16 +58,15 @@ pub(crate) struct FromSeatOptions {
 pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClone> {
     aida_core::seat_clone_detect::note_host_main(main);
     let main = main.canonicalize().unwrap_or_else(|_| main.to_path_buf());
-    crate::seat_clone::host_recorded_clone(clone)
-        .filter(|seat| seat.main == main)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "refusing to publish from {}: it is not a seat clone this checkout recorded \
+    // trace:TASK-2032 | ai:claude
+    crate::seat_clone::host_recorded_clone(&main, clone).ok_or_else(|| {
+        anyhow::anyhow!(
+            "refusing to publish from {}: it is not a seat clone this checkout recorded \
                  (no `clone` session lease in {} names it)",
-                clone.display(),
-                main.display()
-            )
-        })
+            clone.display(),
+            main.display()
+        )
+    })
 }
 
 /// The branch and scope of `seat`'s `clone` lease, read from the host-side
@@ -271,7 +270,9 @@ pub(crate) fn post_exit_commit(
 ) -> PostExitCommit {
     let main = crate::main_worktree_root_from(main);
     aida_core::seat_clone_detect::note_host_main(&main);
-    if crate::seat_clone::host_recorded_clone(tree).is_none() {
+    // TASK-2032: anchored on the host main the lane recorded, never the cwd.
+    // trace:TASK-2032 | ai:claude
+    if crate::seat_clone::host_recorded_clone(&main, tree).is_none() {
         return PostExitCommit::NotASeat;
     }
     match commit_seat_pending(

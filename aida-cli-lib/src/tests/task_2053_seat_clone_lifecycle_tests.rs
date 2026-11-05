@@ -1736,6 +1736,8 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
     }
     let fx = fixture();
     aida_core::seat_clone_detect::note_host_main(&fx.main);
+    // trace:TASK-2032 | ai:claude
+    let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
     let clone = seat(&fx, "orphan", "c0ffee000023");
     assert!(clone.join(MARKER_RELATIVE).exists());
     let lease = crate::list_leases(&fx.main)
@@ -1899,6 +1901,8 @@ fn bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed() {
     }
     let fx = fixture();
     aida_core::seat_clone_detect::note_host_main(&fx.main);
+    // trace:TASK-2032 | ai:claude
+    let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
     let id = "c0ffee000053";
     let clone = ancestor_of_origin_seat(&fx, "bug051c", id);
     let lease = crate::list_leases(&fx.main)

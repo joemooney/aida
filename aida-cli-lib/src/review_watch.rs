@@ -2004,9 +2004,12 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
                 Err(error) => eprintln!("{key}: refused: {error:#}"),
             }
         }
+        // One lazy classification per pass, rather than one /proc scan per PR.
+        // trace:BUG-2442 | ai:codex
+        let authors = update::AuthorLiveness::default();
         for change in changes {
             let key = change.key();
-            match watch_change(&root, &repo, &store, args, &mut children, change) {
+            match watch_change(&root, &repo, &store, args, &mut children, &authors, change) {
                 Ok(()) => {}
                 Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
                 Err(error) if stops_watcher(&error, args.once) => {
@@ -2102,6 +2105,7 @@ fn watch_change(
     store: &Store,
     args: &ReviewWatchArgs,
     children: &mut Vec<Dispatcher>,
+    authors: &update::AuthorLiveness,
     mut change: forge::Change,
 ) -> Result<()> {
     let key = change.key();
@@ -2121,7 +2125,7 @@ fn watch_change(
         root,
         store,
         &change,
-        &|c| update::author_live(root, c),
+        &|c| authors.author_live(root, c),
         &|c| update::forge_update(root, repo, c),
     )? {
         eprintln!("{key}: {reason}");

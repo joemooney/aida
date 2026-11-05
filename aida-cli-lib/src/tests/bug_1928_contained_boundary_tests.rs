@@ -269,7 +269,11 @@ fn pool_worktree_announcement_matches_rule_path() {
     assert!(rules.iter().all(|r| !r.contains(&requested_str)));
 
     // The full launch flags carry the same rules.
-    let flags = crate::session::claude_contained_flags_for(&worktree).unwrap();
+    let flags = crate::session::claude_contained_flags_for(
+        crate::seat_clone::launcher_main().as_deref(),
+        &worktree,
+    )
+    .unwrap();
     let pos = flags.iter().position(|f| f == "--settings").unwrap();
     let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
     let allow: Vec<String> = v["permissions"]["allow"]
@@ -456,7 +460,8 @@ fn symlinked_worktree_announcement_matches_settings_roots() {
 
     let announced = announced_roots(&crate::session::contained_write_boundary_announcement());
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags().unwrap(),
+        &crate::session::claude_contained_flags(crate::seat_clone::launcher_main().as_deref())
+            .unwrap(),
     ));
     assert_eq!(announced, in_settings);
     // Both spellings of the symlinked tree, and nothing else.
@@ -496,7 +501,10 @@ fn outside_git_contained_session_has_no_write_roots() {
     let _cwd = crate::session::contained_cwd_seam::pin(&outside);
     let roots = crate::session::contained_session_write_roots();
     assert!(roots.is_empty(), "outside git, no write roots: {roots:?}");
-    let allow = allow_rules_in_flags(&crate::session::claude_contained_flags().unwrap());
+    let allow = allow_rules_in_flags(
+        &crate::session::claude_contained_flags(crate::seat_clone::launcher_main().as_deref())
+            .unwrap(),
+    );
     assert!(
         allow.iter().all(|r| !r.starts_with("Edit(")),
         "no Edit allow rule outside git: {allow:?}"
@@ -572,7 +580,8 @@ fn queue_work_boundary_line_uses_the_launch_roots_not_the_lease_path() {
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].starts_with("workspace: "), "{lines:?}");
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags().unwrap(),
+        &crate::session::claude_contained_flags(crate::seat_clone::launcher_main().as_deref())
+            .unwrap(),
     ));
     assert_eq!(announced_roots(&lines[1]), in_settings);
     assert!(!lines[1].contains("aida-requested"), "{lines:?}");
@@ -596,8 +605,13 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
     );
     let sub = worktree.join("src");
     assert!(crate::session::contained_resume_write_roots(&sub).is_empty());
-    let args =
-        crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub)).unwrap();
+    let args = crate::session::claude_headless_resume_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        "p",
+        "sid",
+        Some(&sub),
+    )
+    .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -615,9 +629,13 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
 #[test]
 fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     let (_tmp, _parent, worktree) = pool_fixture();
-    let args =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree))
-            .unwrap();
+    let args = crate::session::claude_headless_resume_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        "proceed",
+        "sid",
+        Some(&worktree),
+    )
+    .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -644,7 +662,8 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     // The uncontained resume carries no contained boundary: its one
     // `--settings` is the headless posture alone (no sandbox, no allow rules).
     let plain =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None).unwrap();
+        crate::session::claude_headless_resume_args_with_posture(None, "proceed", "sid", None)
+            .unwrap();
     crate::session::assert_headless_posture(&plain, false, "uncontained resume");
     assert!(no_allow_rules(&plain), "{plain:?}");
     assert!(
@@ -754,7 +773,10 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
     let wt_roots = vec![linked_wt.clone(), wt_gitdir.clone()];
     // trace:TASK-1952 | trace:TASK-1989 | ai:claude
     assert_eq!(
-        contained_main_checkout_git_deny_paths(&wt_roots),
+        contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &wt_roots
+        ),
         vec![linked_wt.join(".git")],
         "a linked worktree denies only its own .git pointer, never its gitdir"
     );
@@ -782,7 +804,11 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
     let non_checkout = parent.join("plain-scratch");
     std::fs::create_dir_all(&non_checkout).unwrap();
     assert!(
-        contained_main_checkout_git_deny_paths(std::slice::from_ref(&non_checkout)).is_empty(),
+        contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            std::slice::from_ref(&non_checkout)
+        )
+        .is_empty(),
         "non-checkout directory must not emit a .git deny rule"
     );
     let non_checkout_settings = settings_for(&non_checkout);
@@ -817,9 +843,13 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
         "[contained]\nos_wrap = true\n",
     )
     .unwrap();
-    let err =
-        crate::session::os_wrapped_program_and_args(&non_checkout, "/bin/echo", vec!["hi".into()])
-            .expect_err("outside-git os_wrap root must refuse");
+    let err = crate::session::os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        &non_checkout,
+        "/bin/echo",
+        vec!["hi".into()],
+    )
+    .expect_err("outside-git os_wrap root must refuse");
     let msg = format!("{err:#}");
     assert!(
         msg.contains("not inside a git repository"),
@@ -848,7 +878,10 @@ fn main_checkout_git_denied_even_with_seat_clone_marker() {
         "fixture must look like a seat clone"
     );
 
-    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&marked));
+    let denied = contained_main_checkout_git_deny_paths(
+        crate::seat_clone::launcher_main().as_deref(),
+        std::slice::from_ref(&marked),
+    );
     assert!(
         denied.contains(&marked.join(".git")),
         "main checkout .git must be denied whatever the seat-clone marker says: {denied:?}"
@@ -981,7 +1014,10 @@ fn linked_worktree_gitdir_requires_commondir_pointing_back() {
     let main = parent.join("main-fake-wt");
     std::fs::create_dir_all(main.join("src")).unwrap();
     std::fs::write(main.join(".git"), format!("gitdir: {}\n", fake.display())).unwrap();
-    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    let denied = contained_main_checkout_git_deny_paths(
+        crate::seat_clone::launcher_main().as_deref(),
+        std::slice::from_ref(&main),
+    );
     assert!(denied.contains(&fake), "{denied:?}");
     assert!(denied.contains(&main.join(".git")), "{denied:?}");
     assert!(crate::session::main_git_deny_paths(&main).contains(&fake));
@@ -1019,7 +1055,10 @@ fn main_checkout_git_symlink_to_gitfile_is_denied() {
     std::fs::create_dir_all(main.join("src")).unwrap();
     std::os::unix::fs::symlink(&gitfile, main.join(".git")).unwrap();
 
-    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    let denied = contained_main_checkout_git_deny_paths(
+        crate::seat_clone::launcher_main().as_deref(),
+        std::slice::from_ref(&main),
+    );
     assert!(denied.contains(&main.join(".git")), "{denied:?}");
     assert!(denied.contains(&gitfile), "symlink's gitfile: {denied:?}");
     assert!(denied.contains(&sep), "gitdir target: {denied:?}");
@@ -1157,6 +1196,7 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
 
     // 1. contained = true -> forwards Some(cwd), producing dontAsk + worktree allow rules
     let status = crate::session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         "proceed",
         "sid-1",
         &log_path,
@@ -1189,6 +1229,7 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
     // 2. contained = false -> forwards None: bypassPermissions, and the only
     // `--settings` is the headless posture (no contained boundary).
     let status = crate::session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         "proceed",
         "sid-2",
         &log_path,
@@ -1261,7 +1302,10 @@ fn planted_commondir_in_main_git_directory_does_not_exempt_it() {
     let main = parent.join("main-planted-commondir");
     std::fs::create_dir_all(main.join(".git/hooks")).unwrap();
     std::fs::write(main.join(".git/commondir"), "..\n").unwrap();
-    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    let denied = contained_main_checkout_git_deny_paths(
+        crate::seat_clone::launcher_main().as_deref(),
+        std::slice::from_ref(&main),
+    );
     assert!(denied.contains(&main.join(".git")), "{denied:?}");
     let settings = settings_for(&main);
     for tool in WRITE_TOOLS {
@@ -1291,7 +1335,11 @@ fn unexpressible_computed_main_git_deny_grants_no_writes() {
     let main = parent.join("main-unexpressible");
     std::fs::create_dir_all(main.join("src")).unwrap();
     std::fs::write(main.join(".git"), format!("gitdir: {}\n", sep.display())).unwrap();
-    assert!(contained_main_checkout_git_deny_paths(std::slice::from_ref(&main)).contains(&sep));
+    assert!(contained_main_checkout_git_deny_paths(
+        crate::seat_clone::launcher_main().as_deref(),
+        std::slice::from_ref(&main)
+    )
+    .contains(&sep));
     let settings = settings_for(&main);
     let allow = settings["permissions"]["allow"].as_array().unwrap();
     assert!(

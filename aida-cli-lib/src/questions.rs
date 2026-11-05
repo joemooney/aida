@@ -1609,7 +1609,12 @@ pub(crate) fn questions_clarify(
     if dry_run {
         // A preview must not reserve a child identity or probe a harness version.
         // trace:BUG-2389 | ai:codex ai:claude
-        let plan = session::advisor_interactive_launch_plan(vendor, &prompt, contained)?;
+        let plan = session::advisor_interactive_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
+            vendor,
+            &prompt,
+            contained,
+        )?;
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
         println!("  {} {:?}", plan.program, plan.args);
         return Ok(());
@@ -1655,7 +1660,15 @@ pub(crate) fn build_questions_clarify_command(
     contained: bool,
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
-    session::build_advisor_interactive_command(vendor, prompt, child_grant_id, contained)
+    // TASK-2032: `questions clarify` runs at the host project root.
+    // trace:TASK-2032 | ai:claude
+    session::build_advisor_interactive_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        vendor,
+        prompt,
+        child_grant_id,
+        contained,
+    )
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring

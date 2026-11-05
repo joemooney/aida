@@ -40,14 +40,18 @@ pub enum HistoryCommand {
     // trace:STORY-1664 | ai:claude
     Rejected(HistoryViewArgs),
     /// Specs that entered Approved in the window, one row each, with
-    /// their CURRENT status.
+    /// their CURRENT status. Any move into Approved counts: a draft
+    /// approved, a NeedsAttention spec un-punted, a closed spec reopened.
     ///
     /// Example: `aida history approved --since 3d --priority high`
     // trace:STORY-1664 | ai:claude
+    // trace:TASK-1954 trace:TASK-1762 | ai:claude
     Approved(HistoryViewArgs),
     /// Specs that entered a terminal status in the window: Completed,
     /// Rejected or Superseded. Archiving is housekeeping, not an outcome,
-    /// so it does not count. One row each, with their CURRENT status.
+    /// so it does not count. Done (finished on a branch, not yet merged)
+    /// does not count either, though `aida list closed` shows Done rows.
+    /// One row each, with their CURRENT status.
     ///
     /// Example: `aida history closed --since 7d --tags cli`
     // trace:STORY-1664 | ai:claude
@@ -63,14 +67,15 @@ pub enum HistoryCommand {
 // trace:STORY-1664 | ai:claude
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct HistoryViewArgs {
-    /// Only specs whose CURRENT priority is this.
+    /// Only specs whose CURRENT priority is this (high, medium, low).
     #[clap(long)]
     pub priority: Option<String>,
     /// Only specs carrying every one of these tags (comma-separated).
     #[clap(long, value_delimiter = ',')]
     pub tags: Vec<String>,
-    /// Only specs whose CURRENT status is this. The status column is
-    /// always the current status, not the status at the event.
+    /// Only specs whose CURRENT status is this: a status, a comma list,
+    /// or the `open` / `closed` groups. The status column is always the
+    /// current status, not the status at the event.
     #[clap(long, value_name = "STATUS")]
     pub status: Option<String>,
     /// One row per matching event instead of one per spec: a spec

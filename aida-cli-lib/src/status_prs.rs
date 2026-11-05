@@ -1202,46 +1202,39 @@ pub(crate) fn sweep_orphaned_reviews(project_root: &std::path::Path) -> Vec<Stri
     lines
 }
 
-// TASK-192: shared ownership fact for the green orphan-review sweep and the
-// red unowned-repair awaiting channel. A lease is ownership only while either
-// recorded process identity is still alive.
-// trace:TASK-192 | ai:codex
+// Shared ownership fact for orphan review and unowned repair. Use the same
+// classification as `session leases`, including registry and namespace evidence.
+// trace:TASK-192 trace:BUG-2442 | ai:codex
 pub(crate) fn live_owned_branches(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
-    branches_of_live_leases(list_leases(project_root))
-}
-
-/// [`live_owned_branches`], failing closed: an unreadable lease directory or
-/// a lease file that stays unparseable is an error (ownership unknown), not a
-/// silently missing owner.
-// trace:TASK-2813 | ai:claude
-pub(crate) fn live_owned_branches_strict(
-    project_root: &std::path::Path,
-) -> Result<std::collections::HashSet<String>, String> {
-    crate::leases::list_leases_strict_all(project_root).map(branches_of_live_leases)
-}
-
-fn branches_of_live_leases(
-    leases: Vec<crate::leases::SessionLease>,
-) -> std::collections::HashSet<String> {
-    leases
+    live_leases(project_root, list_leases(project_root))
         .into_iter()
-        .filter(|lease| {
-            lease.active_pid.is_some_and(|pid| {
-                process_probe::process_identity_is_alive(
-                    pid,
-                    lease.active_pid_start_time.as_deref(),
-                )
-            }) || lease.creator_pid.is_some_and(|pid| {
-                process_probe::process_identity_is_alive(
-                    pid,
-                    lease.creator_pid_start_time.as_deref(),
-                )
-            })
-        })
         .map(|lease| lease.branch)
         .filter(|branch| !branch.is_empty())
+        .collect()
+}
+
+/// Fail closed on unreadable or persistently unparseable lease records.
+/// Retain lease IDs so watcher skip diagnostics identify the actual owner.
+// trace:TASK-2813 trace:BUG-2442 | ai:codex
+pub(crate) fn live_owned_leases_strict(
+    project_root: &std::path::Path,
+) -> Result<Vec<crate::leases::SessionLease>, String> {
+    crate::leases::list_leases_strict_all(project_root)
+        .map(|leases| live_leases(project_root, leases))
+}
+
+// Every non-stale lease remains protected, exactly as in the leases view.
+// trace:BUG-2442 | ai:codex
+fn live_leases(
+    project_root: &std::path::Path,
+    leases: Vec<crate::leases::SessionLease>,
+) -> Vec<crate::leases::SessionLease> {
+    crate::leases::classify_session_leases(project_root, &leases)
+        .into_iter()
+        .filter(|(_, state, _)| !matches!(state, LeaseState::Stale))
+        .map(|(lease, _, _)| lease)
         .collect()
 }
 

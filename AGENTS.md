@@ -119,12 +119,14 @@ object snapshot; the home exclusion ledger retains its separate trust checks. Se
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
-closed built-in Linux probes. It never runs stored shell commands or probes
+closed built-in probes (four read Linux procfs/sysfs; the path and PATH probes
+are portable). It never runs stored shell commands or probes
 from sync/drain/hooks, and reports match/drift/unknown/invalid without status
 mutation. Canonical `edit --verify <JSON>` / `--clear-verify` author blocks;
 archived writers refuse unsupported blocks. See
 [constraint verification](docs/cli/08-reporting.md#aida-verify).
 <!-- trace:STORY-1673 | ai:codex -->
+<!-- trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude -->
 
 Regeneration completeness checks installed required tools before the oracle and
 rechecks file content after quarantining helper writes. Incomplete trials keep

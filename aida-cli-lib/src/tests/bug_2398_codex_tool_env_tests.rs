@@ -92,6 +92,7 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
     // Pure argv builders for other vendors retain their prior behavior.
     assert_eq!(
         crate::session::headless_vendor_args(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Agy,
             "fixture",
             "session",
@@ -102,8 +103,16 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
         .unwrap(),
         crate::session::agy_headless_args("fixture")
     );
-    let claude =
-        crate::session::claude_session_args(None, None, Some("hello"), None, false, None).unwrap();
+    let claude = crate::session::claude_session_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        None,
+        None,
+        Some("hello"),
+        None,
+        false,
+        None,
+    )
+    .unwrap();
     assert!(!claude.join(" ").contains("shell_environment_policy"));
 }
 
@@ -1993,7 +2002,7 @@ fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
             let executable = format!("/opt/vendor/{vendor}");
             let args = vec!["exec".into(), "--".into(), "prompt mentioning codex".into()];
             let (program, wrapped) =
-                crate::session::os_wrapped_program_and_args(&root, &executable, args.clone())
+                crate::session::os_wrapped_program_and_args(None, &root, &executable, args.clone())
                     .unwrap();
             assert_eq!(program, "bwrap");
             let separator = wrapped.iter().position(|arg| arg == "--").unwrap();

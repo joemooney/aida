@@ -1758,7 +1758,10 @@ fn post_exit_seat_commit(
         return None;
     }
     if !exit_clear {
-        return crate::seat_clone::host_recorded_clone(&init.worker.cwd).map(|_| {
+        // TASK-2032: anchored on the lane's recorded host project, never the
+        // supervisor's cwd. trace:TASK-2032 | ai:claude
+        let main = crate::main_worktree_root_from(&init.project_root);
+        return crate::seat_clone::host_recorded_clone(&main, &init.worker.cwd).map(|_| {
             "the lane's pending seat work was not committed: the exit scan could not prove \
              the lane over"
                 .to_string()

@@ -517,7 +517,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // After the BUG-2180 commit above this sweeps only what it left (older
         // dirt, deletions) and fails loudly on an embedded-repo plant.
         // trace:BUG-2140 | ai:antigravity
-        self.commit_contained_child_store_changes("implementer phase")?;
+        // TASK-1625: on a watchdog trip the commit is best-effort, as in the
+        // reviewer phase, so a store-commit refusal cannot preempt the
+        // shelvable BUG-420 Watchdog failure (and its BUG-1299 hint) below.
+        // trace:TASK-1954 trace:TASK-1625 | ai:claude
+        if matches!(outcome, exit_signal::ExitOutcome::WatchdogTripped(_)) {
+            let _ = self.commit_contained_child_store_changes("implementer phase");
+        } else {
+            self.commit_contained_child_store_changes("implementer phase")?;
+        }
         // BUG-2383 AC3: a headless implementer that ran no local test to
         // completion says so in phase 1's result, as a standalone lane does.
         // trace:BUG-2383 | ai:claude
@@ -3282,7 +3290,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             None,
         )
         .and_then(|resume_id| {
+            // TASK-2032: the orchestrator runs at the host project root.
+            // trace:TASK-2032 | ai:claude
             session::spawn_vendor_headless_resume(
+                crate::seat_clone::launcher_main().as_deref(),
                 &session::HeadlessResume {
                     vendor,
                     session_id: &session_id,
@@ -3767,7 +3778,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
+        // TASK-2032: the orchestrator runs at the host project root; its host
+        // main is resolved once for every builder below.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         let fix_args = match session::headless_vendor_args_contained_in(
+            host_main.as_deref(),
             vendor,
             &prompt,
             &fix_uuid,
@@ -3787,6 +3803,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         };
         let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
+            host_main.as_deref(),
             vendor,
             self.contained,
             contained_in,
@@ -3809,7 +3826,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         // trace:BUG-2218 TASK-2328 | ai:codex
         if self.contained {
-            if let Err(error) = session::prepare_contained_mailbox_for_launch(&worktree) {
+            if let Err(error) =
+                session::prepare_contained_mailbox_for_launch(host_main.as_deref(), &worktree)
+            {
                 tee.stop();
                 eprintln!("CI-fix mailbox: {error:#}; leaving the CI failure standing");
                 return false;

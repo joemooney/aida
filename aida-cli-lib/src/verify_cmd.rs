@@ -48,6 +48,7 @@ pub(crate) fn handle_verify_command(command: &VerifyCommand, file: Option<&str>)
     let VerifyCommand::Constraints {
         json,
         fail_on_drift,
+        fail_on_unknown,
         verbose,
     } = command;
     let path = match file {
@@ -75,6 +76,11 @@ pub(crate) fn handle_verify_command(command: &VerifyCommand, file: Option<&str>)
         !fails_on_drift(&rows, *fail_on_drift),
         "constraint host drift detected"
     );
+    // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+    anyhow::ensure!(
+        !fails_on_unknown(&rows, *fail_on_unknown),
+        "constraint verification could not check every row (unknown or invalid)"
+    );
     Ok(())
 }
 
@@ -101,6 +107,15 @@ fn read_requirements(path: &std::path::Path) -> Result<Vec<aida_core::Requiremen
 
 fn fails_on_drift(rows: &[ConstraintResult], enabled: bool) -> bool {
     enabled && rows.iter().any(|row| row.status == Status::Drift)
+}
+
+/// `--fail-on-unknown`: an unknown or invalid row fails the gate too.
+/// Skipped (retired) rows never do. trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+fn fails_on_unknown(rows: &[ConstraintResult], enabled: bool) -> bool {
+    enabled
+        && rows
+            .iter()
+            .any(|row| matches!(row.status, Status::Unknown | Status::Invalid))
 }
 
 fn render(rows: &[ConstraintResult], json: bool, verbose: bool) -> Result<String> {
@@ -173,6 +188,7 @@ mod tests {
                 inner: VerifyCommand::Constraints {
                     json: true,
                     fail_on_drift: true,
+                    fail_on_unknown: false,
                     verbose: false
                 }
             }
@@ -221,6 +237,12 @@ mod tests {
             );
             assert!(!fails_on_drift(&rows, false));
             assert_eq!(fails_on_drift(&rows, true), status == Status::Drift);
+            // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+            assert!(!fails_on_unknown(&rows, false));
+            assert_eq!(
+                fails_on_unknown(&rows, true),
+                matches!(status, Status::Unknown | Status::Invalid)
+            );
         }
         assert_eq!(render(&[], true, false).unwrap(), "[]");
         assert!(render(&[], false, false).unwrap().contains("No constraint"));
@@ -248,6 +270,24 @@ mod tests {
             serde_json::from_str(&render(&rows, true, false).unwrap()).unwrap();
         assert_eq!(output[1]["status"], "skipped");
         assert!(!fails_on_drift(&rows, true));
+        assert!(!fails_on_unknown(&rows, true));
+        // --fail-on-unknown is opt-in on top of --fail-on-drift.
+        // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "verify",
+            "constraints",
+            "--fail-on-unknown"
+        ])
+        .is_err());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "verify",
+            "constraints",
+            "--fail-on-drift",
+            "--fail-on-unknown"
+        ])
+        .is_ok());
         assert!(crate::command_registry::try_parse_from([
             "aida",
             "verify",

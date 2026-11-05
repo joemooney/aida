@@ -2224,3 +2224,15 @@ fn cargo_tty_env_is_set_only_for_a_terminal_and_never_overrides() {
     assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WHEN"), None);
     assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WIDTH"), None);
 }
+
+// trace:TASK-1954 | ai:claude  trace:TASK-1771 | ai:claude
+#[test]
+fn rustc_wrapper_for_prefers_the_child_override() {
+    let mut cmd = Command::new("cargo");
+    cmd.env("RUSTC_WRAPPER", "");
+    assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some(""));
+    cmd.env("RUSTC_WRAPPER", "sccache");
+    assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some("sccache"));
+    cmd.env_remove("RUSTC_WRAPPER");
+    assert_eq!(rustc_wrapper_for(&cmd), None);
+}
