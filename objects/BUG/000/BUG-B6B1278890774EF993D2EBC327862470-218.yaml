@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T09:51:07.730080471Z
+modified_at: 2026-11-05T09:56:12.847379336Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-11-05T09:49:41.504011192Z
   modified_at: 2026-11-05T09:49:41.504011192Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab23-31af-78c1-8a45-7817be1cf4f8
+  author: joe
+  content: 'Round 2 changes prepared: recognize gh no-checks-reported output as empty rows in the --required probe; skip empty-rework classification when local pushed_since is unknown because forge heads can lag; normalize summary-free blocking reviews to the verdict kind. Added focused regressions for conflicting PRs with absent CI on stdout/stderr and configured checks, unknown local push evidence, and summary-free verdict aliases. Standalone implementer tests are compiling in the seat target directory. Native sandbox now refuses git index.lock writes; launcher post-exit commit/publication handoff will be required if this persists.'
+  created_at: 2026-11-05T09:56:12.847379336Z
+  modified_at: 2026-11-05T09:56:12.847379336Z
+  session_id: 01a1ab1e7ddb
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
   author: joe
