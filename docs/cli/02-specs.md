@@ -489,10 +489,25 @@ history. If a cap or divergence has already prevented synchronization, stop and
 reconcile both histories and store markers with an advisor before moving data;
 starting over without receipts can duplicate spec writes.
 
-A failed push retains its local commit. `aida intent publish` without `--file`
-retries publication and sends any local processing receipts. Pull first when
-another clone has advanced the remote. Divergence refuses and requires manual
-review of both histories in a separate clone; the tool never merges or rebases.
+Every write publishes before it becomes local history. `publish --file` and
+`process` (dismiss, create or comment) first pull and validate the remote, build
+one new commit on that tip, and push it; the accepted local branch moves only
+after the remote accepts the push. If another clone published in between, the
+push is refused as a non-fast-forward. The command then pulls again and builds a
+fresh commit on the new tip (up to four attempts). Accepted commits are never
+rewritten, and the tool never forces, merges or rebases. So sender and receiver
+sites can interleave publications and receipts freely, and nobody needs to pull
+before writing.
+
+Because of that, `process` needs the intake destination to be reachable
+(`pending` does not). If the receipt cannot be published after a create or
+comment, the operation journal stays. Rerun the same `process` command: it finds
+the confirmed spec write by its marker and publishes the receipt without writing
+again. `aida intent publish` without `--file` pulls and then pushes the accepted
+tip, which is a no-op when the remote already has it. Divergence is only possible
+when the remote history was rewritten outside AIDA (for example a force push).
+`pull` and every write then refuse and leave the accepted branch unchanged.
+Review both histories with an advisor.
 
 `list` defaults to pending; `--all` includes processed entries. Pending performs
 no spec write and creates no receipt. Dismiss creates a receipt only. Create

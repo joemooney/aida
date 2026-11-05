@@ -36,6 +36,9 @@ untouched_factor = 1.5
 "aida-cli::task_3096_intake_transport explicit_create_comment_and_recovery_do_not_repeat_spec_writes" = 40  # 18.71s
 "aida-cli::task_3096_intake_transport writer_refusal_is_diagnostic_and_successful_retry_does_not_duplicate" = 30  # 13.66s
 "aida-cli::task_3096_intake_transport escaped_nul_spawn_failure_leaves_pending_and_dismiss_available" = 20  # 8.41s
+# Two-site interleaving and receipt-publication retry (round 3); trace:TASK-3096 | ai:claude
+"aida-cli::task_3096_intake_transport two_site_process_and_publication_interleave_without_divergence" = 40
+"aida-cli::task_3096_intake_transport unpublishable_receipt_retries_without_a_second_spec_write" = 40
 # Real implementer launch: the production watchdog checks on a 30s cadence.
 # trace:TASK-1954 trace:TASK-1625 | ai:codex
 "aida-cli-lib phase_gates::real_phase_driver_wiring_tests::task_1625_implementer_watchdog_survives_store_commit_refusal" = 65  # 30s watchdog interval plus fixture/driver work, x2 with headroom

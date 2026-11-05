@@ -527,25 +527,52 @@ impl Intake {
         }
     }
 
-    fn add_file(&self, path: &str, bytes: &[u8]) -> Result<()> {
-        let tip = self.tip()?;
-        let files = self.files()?;
-        if let Some(old) = files.get(path) {
-            if old != bytes {
-                bail!("Conflicting bytes for immutable intake filename");
+    /// Append one immutable file and publish it before the accepted branch
+    /// moves. The new commit is built on the freshly synchronized tip and only
+    /// becomes local history after the remote accepted it, so no site ever holds
+    /// an unpublished local commit that a later remote write could diverge from.
+    /// A refused push (another writer won the race) re-synchronizes and builds a
+    /// fresh commit on the new tip: accepted commits are never rewritten.
+    // trace:TASK-3096 | ai:claude
+    fn append(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        for _ in 0..4 {
+            self.sync()?;
+            let tip = self.tip()?;
+            let files = self.files()?;
+            if let Some(old) = files.get(path) {
+                if old != bytes {
+                    bail!("Conflicting bytes for immutable intake filename");
+                }
+                return self.push();
             }
-            return Ok(());
+            let commit = self.build(tip.as_deref(), path, bytes)?;
+            if self.push_commit(&commit)? {
+                git(
+                    &self.worktree,
+                    &["update-ref", BRANCH, &commit, tip.as_deref().unwrap_or("")],
+                    &[],
+                )?;
+                // Materialize only validated files in the private checkout. No
+                // product checkout/index/ref is ever involved. Safely repeatable.
+                git(
+                    &self.worktree,
+                    &["read-tree", "--reset", "-u", &commit],
+                    &[],
+                )?;
+                return Ok(());
+            }
         }
+        bail!("Intake publication lost the race to other writers repeatedly; the accepted local branch is unchanged. Retry the same command")
+    }
+
+    /// Build and validate a commit adding `path` on `tip`, without referencing it.
+    fn build(&self, tip: Option<&str>, path: &str, bytes: &[u8]) -> Result<String> {
         // Plumbing uses this repository's index only; reset from the accepted
         // tree each time so an interrupted update cannot smuggle extra files.
-        match &tip {
-            Some(tip) => {
-                git(&self.worktree, &["read-tree", tip], &[])?;
-            }
-            None => {
-                git(&self.worktree, &["read-tree", "--empty"], &[])?;
-            }
-        }
+        match tip {
+            Some(tip) => git(&self.worktree, &["read-tree", tip], &[])?,
+            None => git(&self.worktree, &["read-tree", "--empty"], &[])?,
+        };
         let blob = text(git(
             &self.worktree,
             &["hash-object", "-w", "--stdin"],
@@ -563,7 +590,7 @@ impl Intake {
         )?;
         let tree = text(git(&self.worktree, &["write-tree"], &[])?)?;
         let mut args = vec!["commit-tree", tree.as_str()];
-        if let Some(tip) = &tip {
+        if let Some(tip) = tip {
             args.extend(["-p", tip]);
         }
         let commit = text(git(
@@ -572,33 +599,73 @@ impl Intake {
             b"Record reviewed intake data\n",
         )?)?;
         self.history(&commit)?;
-        git(
-            &self.worktree,
-            &["update-ref", BRANCH, &commit, tip.as_deref().unwrap_or("")],
-            &[],
-        )?;
-        // Materialize only validated files in the private checkout. No product
-        // checkout/index/ref is ever involved. This is safely repeatable.
-        git(
-            &self.worktree,
-            &["read-tree", "--reset", "-u", &commit],
-            &[],
-        )?;
-        Ok(())
+        Ok(commit)
     }
 
-    fn push(&self) -> Result<()> {
-        let tip = self.tip()?.context("No intake commits to publish")?;
-        self.history(&tip)?;
+    /// Push one validated commit; `false` when the remote refused it (for
+    /// example a non-fast-forward because another writer published first).
+    fn push_commit(&self, commit: &str) -> Result<bool> {
+        let refspec = format!("{commit}:{BRANCH}");
         // remote-creds-ok(TASK-2001): separately enrolled URL; ambient product credentials/config are intentionally excluded.
-        git(&self.worktree, &["-c", "push.default=nothing", "push", "--no-verify", "--no-follow-tags", "--", &self.profile.remote, &format!("{tip}:{BRANCH}")], &[])
-            .context("Intake push refused; local commit retained. Pull first; divergence requires manual review in a separate clone")?;
+        let (ok, _) = git_result(
+            &self.worktree,
+            &[
+                "-c",
+                "push.default=nothing",
+                "push",
+                "--no-verify",
+                "--no-follow-tags",
+                "--",
+                &self.profile.remote,
+                &refspec,
+            ],
+            &[],
+            CAP,
+        )?;
+        Ok(ok)
+    }
+
+    /// Publish the accepted tip; a no-op when the remote already has it.
+    fn push(&self) -> Result<()> {
+        let Some(tip) = self.tip()? else {
+            return Ok(());
+        };
+        self.history(&tip)?;
+        if !self.push_commit(&tip)? {
+            bail!("Intake push refused; the accepted local branch is unchanged. Retry; the tool never forces, merges or rebases");
+        }
         Ok(())
     }
 
-    fn pull(&self) -> Result<()> {
+    fn ancestor(&self, older: &str, newer: &str) -> Result<bool> {
+        Ok(git_result(
+            &self.worktree,
+            &["merge-base", "--is-ancestor", older, newer],
+            &[],
+            128,
+        )?
+        .0)
+    }
+
+    /// Fetch into quarantine, validate all incoming history, then accept only a
+    /// fast-forward. Returns `false` when the remote has no intake branch yet.
+    // trace:TASK-3096 | ai:claude
+    fn sync(&self) -> Result<bool> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
+        // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
+        let advertised = text(git(
+            &self.worktree,
+            &["ls-remote", "--", &self.profile.remote, BRANCH],
+            &[],
+        )?)?;
+        if !advertised
+            .lines()
+            .any(|line| line.split_whitespace().nth(1) == Some(BRANCH))
+        {
+            return Ok(false);
+        }
+        let refspec = format!("{BRANCH}:{INCOMING}");
         // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
         git(
             &self.worktree,
@@ -609,7 +676,7 @@ impl Intake {
                 "--no-recurse-submodules",
                 "--",
                 &self.profile.remote,
-                &format!("{BRANCH}:{INCOMING}"),
+                &refspec,
             ],
             &[],
         )?;
@@ -621,16 +688,17 @@ impl Intake {
         self.history(&incoming)?;
         let old = self.tip()?;
         if let Some(old) = &old {
+            if *old == incoming {
+                return Ok(true);
+            }
             self.history(old)?;
-            if !git_result(
-                &self.worktree,
-                &["merge-base", "--is-ancestor", old, &incoming],
-                &[],
-                128,
-            )?
-            .0
-            {
-                bail!("Intake diverged; accepted local branch unchanged. Review both histories in a separate clone; never force-push");
+            if self.ancestor(&incoming, old)? {
+                // Local is ahead (its push failed after acceptance): keep it;
+                // publication retries it as a fast-forward.
+                return Ok(true);
+            }
+            if !self.ancestor(old, &incoming)? {
+                bail!("Intake diverged; accepted local branch unchanged. Remote history was rewritten outside AIDA (a force push); review both histories with an advisor. Never force-push");
             }
         }
         git(
@@ -648,7 +716,7 @@ impl Intake {
             &["read-tree", "--reset", "-u", &incoming],
             &[],
         )?;
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -702,6 +770,12 @@ fn process(
     }
     if (action == Action::Comment) != target.is_some() {
         bail!("Only --action comment requires --target");
+    }
+    if action != Action::Pending {
+        // A receipt is published as part of processing, so see every receipt
+        // another site already published before deciding anything.
+        // trace:TASK-3096 | ai:claude
+        intake.sync()?;
     }
     let files = intake.files()?;
     let value: Envelope = envelope::parse(
@@ -870,7 +944,19 @@ fn process(
         action,
         destination,
     };
-    intake.add_file(&receipt_path, &serde_json::to_vec(&receipt)?)?;
+    // The receipt is published before it becomes local history. If that fails
+    // after a spec write, the journal stays and the same command recovers the
+    // confirmed write from its marker and publishes the receipt without a
+    // second write. trace:TASK-3096 | ai:claude
+    intake
+        .append(&receipt_path, &serde_json::to_vec(&receipt)?)
+        .with_context(|| {
+            if receipt.destination.is_some() {
+                "Spec write confirmed but its receipt is not published yet; rerun the same process command to publish it (no second spec write)"
+            } else {
+                "Receipt not published; nothing changed, rerun the same process command"
+            }
+        })?;
     // Receipt is durable before journal cleanup; retry after either crash is safe.
     intake.private.remove(&journal_name)?;
     print_receipt(&receipt, json)?;
@@ -943,9 +1029,11 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                 }
                 let bytes = envelope::read_bounded(file, ENVELOPE_LIMIT)?;
                 let value = envelope::parse(&bytes, &intake.profile.deny_patterns)?;
-                intake.add_file(&format!("observations/{}.json", value.checksum), &bytes)?;
+                intake.append(&format!("observations/{}.json", value.checksum), &bytes)?;
+            } else {
+                intake.sync()?;
+                intake.push()?;
             }
-            intake.push()?;
             if json {
                 println!(
                     "{}",
@@ -956,14 +1044,16 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             }
         }
         IntakeCommand::Pull { .. } => {
-            intake.pull()?;
+            let found = intake.sync()?;
             if json {
                 println!(
                     "{}",
-                    serde_json::json!({"pulled": true, "branch": "aida-intent"})
+                    serde_json::json!({"pulled": true, "branch": "aida-intent", "remote_empty": !found})
                 );
-            } else {
+            } else if found {
                 println!("Pulled validated intake history.");
+            } else {
+                println!("Pulled: the intake destination has no history yet.");
             }
         }
         IntakeCommand::List { all, .. } => {

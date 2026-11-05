@@ -246,7 +246,7 @@ fn round_trip_receipts_duplicates_and_product_store_index_isolation() {
 }
 
 #[test]
-fn concurrent_duplicate_publication_serializes_and_divergence_refuses() {
+fn concurrent_duplicate_publication_serializes_interleaves_and_rewrite_refuses() {
     let temp = tempfile::tempdir().unwrap();
     let remote = remote(&temp);
     let a = Fixture::new();
@@ -270,11 +270,171 @@ fn concurrent_duplicate_publication_serializes_and_divergence_refuses() {
     good(&b.run(&["intent", "pull"]));
     a.note("two");
     good(&a.publish());
+    // b never pulled "two": publication syncs first and appends on the new tip.
+    // trace:TASK-3096 | ai:claude
     b.note("three");
-    bad(&b.publish(), "push refused");
+    good(&b.publish());
+    good(&a.run(&["intent", "pull"]));
+    assert_eq!(git(&a.intake(), &["rev-list", "--count", "HEAD"]), "3");
+    assert_eq!(
+        git(&a.intake(), &["rev-parse", "HEAD"]),
+        git(&b.intake(), &["rev-parse", "HEAD"])
+    );
+    // Divergence now only arises from a rewrite outside AIDA (force push).
+    let four = a.note("four");
+    git(&a.intake(), &["reset", "-q", "--hard", "HEAD~1"]);
+    fs::copy(
+        a.root.join("envelope.json"),
+        a.intake().join(format!("observations/{four}.json")),
+    )
+    .unwrap();
+    git(&a.intake(), &["add", "."]);
+    git(
+        &a.intake(),
+        &["commit", "-qm", "Record reviewed intake data"],
+    );
+    git(
+        &a.intake(),
+        &[
+            "push",
+            "--force",
+            remote.to_str().unwrap(),
+            "HEAD:refs/heads/aida-intent",
+        ],
+    );
     let tip = git(&b.intake(), &["rev-parse", "HEAD"]);
     bad(&b.run(&["intent", "pull"]), "diverged");
+    b.note("five");
+    bad(&b.publish(), "diverged");
     assert_eq!(tip, git(&b.intake(), &["rev-parse", "HEAD"]));
+}
+
+/// Review round 2 finding 1: the receiver processes while the sender keeps
+/// publishing without pulling. No step diverges or needs manual recovery.
+// trace:TASK-3096 | ai:claude
+#[test]
+fn two_site_process_and_publication_interleave_without_divergence() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.enroll(&remote);
+    home.enroll(&remote);
+    home.git(&["branch", "-D", "aida-store"]);
+    good(&home.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let first = work.note("First observation");
+    good(&work.publish());
+    // Home never ran pull: process synchronizes, writes, and publishes the receipt.
+    good(&home.run(&["intent", "process", &first, "--action", "create"]));
+    // Work is stale (no receipt) and publishes between home's process and publish.
+    let second = work.note("Second observation");
+    good(&work.publish());
+    good(&home.run(&["intent", "publish"]));
+    good(&home.run(&["intent", "pull"]));
+    let out = home.run(&["intent", "list", "--json"]);
+    good(&out);
+    let rows: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(rows[0]["checksum"], second);
+    good(&home.run(&["intent", "process", &second, "--action", "dismiss"]));
+    good(&work.run(&["intent", "pull"]));
+    for checksum in [&first, &second] {
+        assert!(work
+            .intake()
+            .join(format!("receipts/{checksum}.json"))
+            .is_file());
+    }
+    let published = git(
+        &remote,
+        &["ls-tree", "-r", "--name-only", "refs/heads/aida-intent"],
+    );
+    assert!(published.contains(&format!("receipts/{first}.json")));
+    assert!(published.contains(&format!("receipts/{second}.json")));
+    // Repeating the create on the synchronized home reuses the receipt.
+    good(&home.run(&["intent", "process", &first, "--action", "create"]));
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&home.root).unwrap();
+    let backend = aida_core::GitBackend::new(&store_path).unwrap();
+    let store = aida_core::DatabaseBackend::load(&backend).unwrap();
+    assert_eq!(
+        store
+            .requirements
+            .iter()
+            .filter(|r| r.title == "First observation")
+            .count(),
+        1
+    );
+}
+
+/// A receipt that cannot be published after a confirmed spec write keeps the
+/// journal; rerunning the same command publishes it without a second write.
+// trace:TASK-3096 | ai:claude
+#[test]
+fn unpublishable_receipt_retries_without_a_second_spec_write() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.enroll(&remote);
+    home.enroll(&remote);
+    home.git(&["branch", "-D", "aida-store"]);
+    good(&home.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let checksum = work.note("Receipt retry");
+    good(&work.publish());
+    // Fetch still works from a read-only object database; push cannot write.
+    let objects = remote.join("objects");
+    fs::set_permissions(&objects, fs::Permissions::from_mode(0o555)).unwrap();
+    if fs::write(objects.join("probe"), b"").is_ok() {
+        // Running as a superuser: permissions cannot simulate a refused push.
+        fs::remove_file(objects.join("probe")).unwrap();
+        fs::set_permissions(&objects, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    let failed = home.run(&["intent", "process", &checksum, "--action", "create"]);
+    fs::set_permissions(&objects, fs::Permissions::from_mode(0o755)).unwrap();
+    bad(&failed, "rerun the same process command");
+    assert!(home
+        .root
+        .join(format!(".git/aida-intake/operation-{checksum}.json"))
+        .exists());
+    assert!(!home
+        .intake()
+        .join(format!("receipts/{checksum}.json"))
+        .exists());
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&home.root).unwrap();
+    let count = || {
+        let backend = aida_core::GitBackend::new(&store_path).unwrap();
+        aida_core::DatabaseBackend::load(&backend)
+            .unwrap()
+            .requirements
+            .iter()
+            .filter(|r| r.title == "Receipt retry")
+            .count()
+    };
+    assert_eq!(count(), 1);
+    good(&home.run(&["intent", "process", &checksum, "--action", "create"]));
+    assert_eq!(count(), 1);
+    assert!(!home
+        .root
+        .join(format!(".git/aida-intake/operation-{checksum}.json"))
+        .exists());
+    good(&work.run(&["intent", "pull"]));
+    assert!(work
+        .intake()
+        .join(format!("receipts/{checksum}.json"))
+        .is_file());
 }
 
 #[test]
