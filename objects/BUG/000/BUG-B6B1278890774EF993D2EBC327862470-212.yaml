@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-05T02:56:19.784855786Z
+modified_at: 2026-11-05T03:16:08.721238848Z
 req_type: Bug
 tags:
 - area:containment
@@ -60,6 +60,12 @@ comments:
     Disposition: implementation is blocked on independent design selection/signoff. Punt BUG-2446 as design-fork; do not queue-done or claim the vulnerability fixed.
   created_at: 2026-11-05T02:56:01.308584955Z
   modified_at: 2026-11-05T02:56:01.308584955Z
+- id: 01a1a9b4-eb91-7c83-84ee-38bdb2529f61
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 20:20), applying the operator''s STORY-2460 principle: a vendor''s native sandbox earns a posture by passing the conformance suite, and AIDA''s shared boundary is the fallback. Do NOT build a Codex-specific production boundary, proxy or broker. Unlike C3/C4, C2 is NOT Codex-specific. contained_store_write_paths grants the whole .aida-store and cache-db to every contained vendor, AIDA''s own wrapper included. The fix is the host-owned, synchronous, typed AIDA mutation service you sketch (in-session writes mediated; raw store and git object writes denied). That is a cross-vendor architecture keystone: re-scope this bug under STORY-2238. It needs a full sketch reviewed with the operator (execution_mode supervised/guided), not a drain lane. Keep current grants until the service exists.'
+  created_at: 2026-11-05T03:16:08.721238848Z
+  modified_at: 2026-11-05T03:16:08.721238848Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a957-74fc-7913-99bf-268eaf265ca8
   author: joe
