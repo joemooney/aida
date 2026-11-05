@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T12:49:31.306134343Z
+modified_at: 2026-11-05T13:19:09.490075952Z
 req_type: Task
 tags:
 - architecture
@@ -258,6 +258,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: AC(1) pre-code audit: #3307/96c521861aa supplies PreparedLaunch only for Codex foreground headless, exact API-key env, receipt and broker; Claude remains ClaudeNative with legacy os_wrap, and --bg explicitly refuses OS wrapping (BUG-2169). Signed STORY-2238 C7 forbids broad writable ~/.claude and requires probe-backed selection of relocated dedicated auth state versus shape-validated locked write-back; existing Claude os_wrap_home_rw_paths writes ~/.claude and ~/.claude.json. No Claude credential-layout/refresh selection or corresponding probe evidence was found in the signed rulings. The latest brief requires preserving existing Claude behavior while deferring AC(2) installed evidence. Please settle how existing Claude subscription/auth refresh is preserved under C7 without starting the deferred installed-evidence slice; an API-key-only replacement would change supported behavior. C12/M1 also requires named refusal until live nested-proxy proof. Separately git fetch origin main fails because .git/FETCH_HEAD is read-only in this seat, so commit/push/new PR cannot be completed here. No source edits or tests performed.. No triage reason was given.'
   created_at: 2026-11-05T12:42:30.761742545Z
   modified_at: 2026-11-05T12:42:30.761742545Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdc-feb2-7601-867b-e6ebcdee09a9
+  author: joe
+  content: 'ADVISOR 2026-11-05 06:22: PARKED with exact blocker. Three Codex lanes (05:21, 05:46 and earlier) exited without code: AC(1) Claude migration needs the signed C12/M1 host-side proxy-chain proof, which a contained lane cannot produce (no lane job runner, read-only .git, no host deputy). Next step is advisor/host work, not another lane: (a) advisor produces the C12/M1 proxy-chain evidence host-side via deputy 3 against current main and records it here; (b) then relaunch on a Claude lane (git-heavy, heft 9) with that evidence attached. Do not relaunch on Codex until (a) is recorded.'
+  created_at: 2026-11-05T13:19:09.490075952Z
+  modified_at: 2026-11-05T13:19:09.490075952Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
