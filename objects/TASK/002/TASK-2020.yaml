@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-11-05T18:49:31.936955673Z
+modified_at: 2026-11-05T18:50:18.002479403Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -49,6 +49,12 @@ comments:
   content: 'ADVISOR BRIEF 2026-11-05 12:02 MST (single slice, LIGHT): (1) scripts/test-timings.py stalled(): never waive a row that has no budget entry, cap any waived overrun at 2x its entry, and catch TypeError as well as ValueError in span() (mixed naive and tz-aware timestamps). Add unit tests for each case in the existing timings tests. (2) scripts/test-time-budget.toml: replace the story_2331_bundle_air_gap estimate with a measured value, and refresh the header and entries from the last 10 gating runs'' test-timings artifacts. A Codex seat cannot download artifacts, so use the numbers the advisor posts here if you have no network access. Gate: the timings unit test plus make check-ci-fast.'
   created_at: 2026-11-05T18:49:31.936955673Z
   modified_at: 2026-11-05T18:49:31.936955673Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad0c-2a12-7d32-8fc0-7d636f34d86a
+  author: joe
+  content: 'ADVISOR DATA 2026-11-05 12:06: downloaded the test-timings artifacts (test-timings.json and test-run.log per shard: lib-0, lib-1, cli-0, cli-1, rest) for the last 10 green main CI runs, 41982757505 to 42077793813, to /home/joe/ai/aida-worktrees/task-2020-timings/<run-id>/test-timings-<shard>/. The directory is readable from the seat. Recalibrate from these 10 runs and cite them in the budget header.'
+  created_at: 2026-11-05T18:50:18.002479403Z
+  modified_at: 2026-11-05T18:50:18.002479403Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a15cb7-a1aa-72a3-a509-3930d0fc908f
