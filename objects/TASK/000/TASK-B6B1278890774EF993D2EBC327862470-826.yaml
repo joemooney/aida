@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T17:47:05.382841458Z
+modified_at: 2026-11-05T17:47:16.412411639Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -55,6 +55,12 @@ comments:
   created_at: 2026-11-05T16:16:10.683254570Z
   modified_at: 2026-11-05T16:16:10.683254570Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1acd2-763c-7820-9aff-530a82990ecc
+  author: joe
+  content: 'Advisor: folded TASK-2885. The native standalone finish prompt also tells Codex to commit/push/open the PR, which conflicts with its read-only seat .git. Fix the prompt as part of this spec.'
+  created_at: 2026-11-05T17:47:16.412411639Z
+  modified_at: 2026-11-05T17:47:16.412411639Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
   author: joe
