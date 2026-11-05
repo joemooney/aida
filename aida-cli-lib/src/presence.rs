@@ -1606,7 +1606,8 @@ mod tests {
         assert_eq!(cfg.consumers, ConsumersMode::Off); // parsed
     }
 
-    // trace:TASK-1059 | ai:claude
+    // trace:TASK-3111 | ai:codex
+    // trace:TASK-1059.Presence | ai:codex
     #[test]
     fn presence_config_parses_questions_knob() {
         // Missing → quiet-when-away default.
@@ -1649,7 +1650,8 @@ mod tests {
         );
     }
 
-    // trace:TASK-1059 | ai:claude
+    // trace:TASK-3111 | ai:codex
+    // trace:TASK-1059.acd37b11 | ai:codex
     #[test]
     fn surface_questions_quiet_when_away_by_default() {
         let quiet = PresenceConfig::default();
@@ -1666,7 +1668,8 @@ mod tests {
 
     /// Acceptance #3: the explicit `aida questions` read is never gated by
     /// presence — the questions module must not consult the presence state.
-    /// trace:TASK-1059 | ai:claude
+    /// trace:TASK-3111 | ai:codex
+    /// trace:TASK-1059.ac4014a2 | ai:codex
     #[test]
     fn questions_read_path_is_presence_blind() {
         let src = include_str!("questions.rs");

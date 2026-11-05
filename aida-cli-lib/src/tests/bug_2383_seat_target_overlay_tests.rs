@@ -534,8 +534,7 @@ fn bug_2435_bwrap_overlay_job_takes_its_slot_in_the_host_slot_dir() {
 // (a user namespace back to the host ids, no capabilities), so a host that
 // mounts the overlay but refuses the nested user namespace falls back to cold
 // instead of failing every job. A stand-in `unshare` records the argv.
-// trace:TASK-2829 | ai:claude
-// trace:TASK-2829 | ai:codex
+// trace:TASK-2829 trace:TASK-3111 | ai:codex
 #[test]
 fn task_2829_the_probe_runs_the_lane_job_bwrap_in_a_nested_userns() {
     let tmp = tempfile::tempdir().unwrap();
@@ -660,6 +659,66 @@ fn bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw() {
         assert!(!stdout.contains(refused), "{refused}: {stdout}");
     }
     assert!(stdout.contains("ROOT-STILL-RO"), "{stdout}");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "host\n");
+
+    // mount(8) checks uid before trying the syscall. Use the syscall directly
+    // for the capability control, retaining the same non-root uid and wrapper.
+    // The inherited read-only binds can also be locked by the user namespace:
+    // do not claim removing cap-drop alone makes those binds writable. A fresh
+    // job-owned read-only tmpfs demonstrates mount/remount authority separately.
+    // trace:TASK-3111 trace:TASK-2847 | ai:codex
+    let control = r#"import ctypes, errno, os
+libc = ctypes.CDLL(None, use_errno=True)
+admin = int(open('/proc/self/status').read().split('CapEff:')[1].split()[0], 16) & (1 << 21)
+# Own the mount namespace: bwrap's /dev setup may leave its namespace
+# owned by a parent user namespace, independently of effective capabilities.
+rc = libc.unshare(0x20000) # CLONE_NEWNS
+if admin:
+    assert rc == 0, ctypes.get_errno()
+else:
+    assert rc == -1 and ctypes.get_errno() == errno.EPERM
+os.mkdir('/tmp/cap-control')
+rc = libc.mount(b'tmpfs', b'/tmp/cap-control', b'tmpfs', 1, None)
+if admin:
+    assert rc == 0, ctypes.get_errno()
+    assert libc.mount(None, b'/tmp/cap-control', None, 32, None) == 0, ctypes.get_errno()
+    open('/tmp/cap-control/proof', 'w').write('private tmpfs')
+    print('REMOUNT-CONTROL')
+else:
+    assert rc == -1 and ctypes.get_errno() == errno.EPERM
+    print('CAP-DROP-REFUSED')
+"#;
+    for retain_admin in [false, true] {
+        let argv = crate::session::lane_job_bwrap_argv(
+            &lane.seat,
+            &rw,
+            &[],
+            "python3",
+            vec!["-c".into(), control.into()],
+        );
+        let (program, mut args) = wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap();
+        let drop = args.iter().position(|arg| arg == "--cap-drop").unwrap();
+        if retain_admin {
+            args.splice(
+                drop + 2..drop + 2,
+                ["--cap-add".into(), "CAP_SYS_ADMIN".into()],
+            );
+        }
+        let out = std::process::Command::new(program)
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "retain_admin={retain_admin}: {out:?}");
+        let expected = if retain_admin {
+            "REMOUNT-CONTROL"
+        } else {
+            "CAP-DROP-REFUSED"
+        };
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains(expected),
+            "{out:?}"
+        );
+    }
     assert_eq!(std::fs::read_to_string(&victim).unwrap(), "host\n");
 }
 

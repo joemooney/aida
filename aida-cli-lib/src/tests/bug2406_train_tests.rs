@@ -348,19 +348,28 @@ fn bug2441_rework_branch_trains(trailer_only: bool) {
 fixture_case!(
     bug2441_unknown_rework_branch_without_resolved_spec_refuses,
     bug2441_unresolved_member_refuses,
-    ("bug-b6b1278890774ef993d2ebc327862470-173-2", "fix: rework")
+    (
+        "bug-b6b1278890774ef993d2ebc327862470-173-2",
+        "fix: rework",
+        "unresolved train source spec BUG-B6B1278890774EF993D2EBC327862470-173-2"
+    )
 );
 fixture_case!(
     bug2441_member_without_spec_ids_refuses,
     bug2441_unresolved_member_refuses,
-    ("feature/rework", "fix: rework")
+    ("feature/rework", "fix: rework", "no resolvable spec")
 );
 fixture_case!(
     bug2441_explicit_unknown_id_with_resolved_spec_refuses,
     bug2441_unresolved_member_refuses,
-    ("feature/rework", "fix: rework (BUG-2400 TASK-999999)")
+    (
+        "feature/rework",
+        "fix: rework (BUG-2400 TASK-999999)",
+        "unresolved train source spec TASK-999999"
+    )
 );
-fn bug2441_unresolved_member_refuses((branch, title): (&str, &str)) {
+// trace:TASK-3111 trace:TASK-2845 | ai:codex
+fn bug2441_unresolved_member_refuses((branch, title, cause): (&str, &str, &str)) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -372,7 +381,41 @@ fn bug2441_unresolved_member_refuses((branch, title): (&str, &str)) {
     let error = live
         .merge_verified(&change, &train, lease.as_ref())
         .unwrap_err();
-    assert!(format!("{error:#}").contains("spec"), "{error:#}");
+    assert!(format!("{error:#}").contains(cause), "{error:#}");
+    assert!(calls(f.root()).is_empty());
+}
+
+// The branch and lease claim STORY-2220, while the title Refs BUG-2400:
+// all resolved gate IDs are filtered out, as in PR #3351.
+// trace:TASK-3111 trace:TASK-2843 trace:TASK-2845 | ai:codex
+#[test]
+fn bug2441_resolved_but_uncovered_member_names_coverage_refusal() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let branch = "story-b6b1278890774ef993d2ebc327862470-123-2";
+    let f = Fixture::with_member_metadata(true, Some(branch), Some("fix: rework (Refs BUG-2400)"));
+    let dir = crate::leases::leases_dir(f.root());
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("coverage.toml"), format!(
+        "id = \"coverage\"\nscope = \"STORY-2220\"\nslug = \"story-2220\"\nowner = \"fixture\"\nworktree_path = {:?}\nbranch = {branch:?}\nstarted_at = \"2026-11-05T00:00:00Z\"\nhostname = \"fixture\"\n",
+        f.root().to_str().unwrap()
+    )).unwrap();
+    assert_eq!(
+        crate::trailer_coverage::lease_scopes_for_branch(f.root(), branch),
+        ["STORY-2220"]
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .unwrap_err();
+    assert!(
+        format!("{error:#}").contains("coverage filter"),
+        "{error:#}"
+    );
     assert!(calls(f.root()).is_empty());
 }
 
