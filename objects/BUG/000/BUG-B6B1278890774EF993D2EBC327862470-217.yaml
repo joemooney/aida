@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-217
 agreed_id: BUG-2451
 title: Rework lanes start on a fresh -N branch off main instead of the open PR's branch, producing duplicate incomplete PRs
 description: 'Observed 2026-11-04, five times on both vendors: TASK-2708 (-658-2), TASK-3046 (-784-2, dup PR #3397), BUG-2439 (-208-2 → #3401 and a lost -208-3), TASK-1715 (task-1715-2 → #3404), STORY-2475 (-403-2 → dup PR #3407). When `aida queue work` is launched for a spec whose open PR''s branch is still held by an old seat or lease, or the branch exists without a matching local seat, pickup allocates <branch>-2 from main. The lane then implements only the rework delta on top of main and publishes a second PR missing the original commits. Folding that back needs a cherry-pick, which often conflicts, plus another lane. Acceptance: (1) a rework or queue-work for a spec with an open PR always seats that PR''s head branch; if the branch is held, it reclaims a clean, pushed holder (see BUG-2450) or refuses, naming the holder, and never allocates -N; (2) -N allocation is only for a spec with no open PR, and only when explicitly requested; (3) publication refuses to open a second open PR for the same spec, and pushes to the existing one or errors; (4) regression tests for the held-branch and the stale-seat cases.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T09:50:10.588114482Z
+modified_at: 2026-11-05T11:13:56.681420214Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -245,6 +245,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ab6a-5bc9-7510-b6d4-69a8841ded88
+  author: aida-orchestrator
+  timestamp: 2026-11-05T11:13:56.681442934Z
+  session_id: 01a1ab67ef79
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -257,3 +266,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T05:50:26.596521283Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-3 findings fixed in 2d5d8ca (lib-0 green, rustfmt clean, train/* heads excluded from duplicate count with a test); every AC is covered in source and tests. But PR CI at head 8a8ad92 is red: CI (gates) step ''Live bwrap OS-wrap confinement gate'' exits 101 after the main merge, so Build fails. The same step passed at 2d5d8ca and on main c9166da.'
+  recovery_hint: address the review findings, move BUG-2451 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T11:13:56.681420214Z
