@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-800
 agreed_id: TASK-3074
 title: Track acted-on request dispositions and unresolved stall escalation
 description: 'Follow-up to STORY-2476 advisor ruling: define and approve explicit acted, declined and deferred dispositions tied to message IDs. Preserve seen/read ACK distinctions. Add authorized receipts and unresolved alarm escalation through the existing operator notifier; reading or wake acceptance never proves action.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T23:07:18.058428262Z
+modified_at: 2026-11-05T23:07:20.454110175Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -244,8 +244,21 @@ history:
   timestamp: 2026-11-05T22:43:39.904191542Z
   session_id: 01a1ade125b6
   changes: []
+- id: 01a1adf7-7e06-79e2-be9a-256f4cae182b
+  author: joe
+  timestamp: 2026-11-05T23:07:20.454129411Z
+  session_id: 01a1ade125b6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: codex
   session: 01a1a96dc251
+attention_reason:
+  category: blocked-dependency
+  detail: 'Review finding 1: rewording published commit 1b20cf87e817 requires explicit operator authorization for force push under the Git workflow. PR #3458 title already uses Refs TASK-3074. All three current CI regressions are fixed and 36 targeted tests plus portability/format/whitespace checks passed. Native Git metadata is read-only, so three validated source files require host capture using /tmp/task3074-round3-publication.md and its exact Refs subject. Preserve the merge hold; approved PR-B remains outstanding, so no queue-done.'
+  raised_by: implementer
+  raised_at: 2026-11-05T23:07:20.454110175Z
