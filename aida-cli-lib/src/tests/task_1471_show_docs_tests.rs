@@ -44,8 +44,26 @@ fn task_1471_show_docs_child() {
     println!("SHOW_DOCS_END");
 }
 
+/// This build's libtest runner, via the process-wide resolver (a raw
+/// executable lookup outside the resolver trips the TASK-1262 ratchet). An
+/// ambient AIDA_BIN would redirect the resolver, so prove it is a test runner.
+fn test_runner() -> std::path::PathBuf {
+    let runner = crate::resolve_aida_exe();
+    assert_eq!(
+        runner
+            .parent()
+            .and_then(|deps| deps.file_name())
+            .and_then(|name| name.to_str()),
+        Some("deps"),
+        "expected this build's test runner under target/<profile>/deps, got {}; \
+         unset AIDA_BIN and re-run",
+        runner.display()
+    );
+    runner
+}
+
 fn show(root: &Path, format: &str) -> String {
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
+    let output = std::process::Command::new(test_runner())
         .args([
             "--exact",
             "requirements_cli::task_1471_show_docs_tests::task_1471_show_docs_child",
@@ -118,6 +136,10 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
     direct.req_type = RequirementType::Doc;
     direct.spec_id = Some("DOC-1-174".into());
     let direct = backend.add_requirement(direct).unwrap();
+    // Capture machine output BEFORE the direct link is written, so the
+    // comparison below measures what adding the link changed.
+    let json_before_direct = show(root, "json");
+    let toon_before_direct = show(root, "toon");
     spec.relationships.push(aida_core::models::Relationship {
         target_id: direct.id,
         rel_type: aida_core::models::RelationshipType::References,
@@ -125,16 +147,71 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
         created_by: None,
     });
     backend.update_requirement(&spec).unwrap();
-    // Human rendering must leave machine bytes unchanged when the subject
-    // has both direct and reverse Documentation links.
-    let json_with_direct = show(root, "json");
-    let toon_with_direct = show(root, "toon");
     let human = show(root, "human");
     assert!(human.contains("Direct-linked explanation"), "{human}");
     assert!(human.contains("Reverse-linked exposition"), "{human}");
-    assert_eq!(show(root, "json"), json_with_direct);
-    assert_eq!(show(root, "toon"), toon_with_direct);
-    for format in ["json", "toon"] {
-        assert!(!show(root, format).contains("Documentation:"));
+
+    // JSON: the only change is the new edge itself (plus write bookkeeping).
+    // No key appears or disappears, so no Documentation projection leaked in.
+    let json_after_direct = show(root, "json");
+    let before: serde_json::Value = serde_json::from_str(&json_before_direct).unwrap();
+    let after: serde_json::Value = serde_json::from_str(&json_after_direct).unwrap();
+    let (before, after) = (before.as_object().unwrap(), after.as_object().unwrap());
+    let keys = |m: &serde_json::Map<String, serde_json::Value>| {
+        m.keys().cloned().collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(keys(before), keys(after), "JSON key set changed");
+    let changed: std::collections::BTreeSet<&str> = after
+        .iter()
+        .filter(|(k, v)| before.get(*k) != Some(*v))
+        .map(|(k, _)| k.as_str())
+        .collect();
+    const EDGE_DELTA: &[&str] = &[
+        "relationships",
+        "out_degree",
+        "heft",
+        "modified_at",
+        "updated_at",
+        "history",
+    ];
+    assert!(changed.contains("relationships"), "{changed:?}");
+    assert!(
+        changed.iter().all(|k| EDGE_DELTA.contains(k)),
+        "unexpected JSON delta: {changed:?}"
+    );
+    let rels = after["relationships"].to_string();
+    assert!(rels.contains(&direct.id.to_string()), "{rels}");
+
+    // TOON: same top-level fields before and after; the new edge is visible
+    // and the human-only section is not.
+    let toon_after_direct = show(root, "toon");
+    let toon_keys = |s: &str| {
+        s.lines()
+            .filter(|l| !l.starts_with(char::is_whitespace))
+            .filter_map(|l| l.split(|c| c == ':' || c == '[').next())
+            .map(str::to_owned)
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let (tk_before, tk_after) = (
+        toon_keys(&toon_before_direct),
+        toon_keys(&toon_after_direct),
+    );
+    assert!(tk_before.is_subset(&tk_after), "TOON lost fields");
+    // A first edge may introduce the relationships table; nothing else may.
+    assert!(
+        tk_after
+            .difference(&tk_before)
+            .all(|k| k.starts_with("relationships")),
+        "unexpected TOON fields: {:?}",
+        tk_after.difference(&tk_before).collect::<Vec<_>>()
+    );
+    assert_ne!(toon_before_direct, toon_after_direct);
+    assert!(
+        toon_after_direct.contains(&direct.friendly_id()),
+        "{toon_after_direct}"
+    );
+    for out in [&json_after_direct, &toon_after_direct] {
+        assert!(!out.contains("Documentation:"), "{out}");
+        assert!(!out.contains("read: aida doc show"), "{out}");
     }
 }

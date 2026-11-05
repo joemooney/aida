@@ -11,7 +11,7 @@
 //! machine formats keep their existing schema.
 // trace:TASK-1471 | ai:claude
 
-use aida_core::models::{RelationshipType, Requirement, RequirementType};
+use aida_core::models::{RelationshipType, Requirement, RequirementStatus, RequirementType};
 use colored::Colorize;
 
 /// Where a Doc's prose came from, read from its tags. Authorship is a
@@ -93,7 +93,17 @@ pub(crate) fn collect_linked_docs(
     let mut out: Vec<LinkedDoc> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for doc in candidates {
-        if doc.req_type != RequirementType::Doc || doc.archived || doc.id == subject.id {
+        // Archived, declined (Rejected) and replaced (Superseded) Docs are
+        // not current documentation, so they are not listed.
+        // trace:TASK-1471 | ai:claude
+        if doc.req_type != RequirementType::Doc
+            || doc.archived
+            || matches!(
+                doc.status,
+                RequirementStatus::Rejected | RequirementStatus::Superseded
+            )
+            || doc.id == subject.id
+        {
             continue;
         }
         if !seen.insert(doc.id) {
@@ -193,9 +203,11 @@ mod tests {
         });
     }
 
-    fn plain(lines: &[String]) -> String {
+    /// Render with colour disabled BEFORE formatting, so no ANSI codes are
+    /// embedded even under CLICOLOR_FORCE=1 or a TTY.
+    fn plain(docs: &[LinkedDoc]) -> String {
         colored::control::set_override(false);
-        lines.join("\n")
+        render_linked_docs(docs).join("\n")
     }
 
     /// STORY-1472 is described by a human explanation filed with
@@ -223,7 +235,7 @@ mod tests {
         // Resolving the reverse link never edits the spec.
         assert_eq!(story.relationships, story_rels_before);
 
-        let out = plain(&render_linked_docs(&docs));
+        let out = plain(&docs);
         assert!(out.starts_with("Documentation:"), "{out}");
         assert!(out.contains("Human-authored explanations:"), "{out}");
         assert!(
@@ -260,7 +272,7 @@ mod tests {
         assert_eq!(by_id(&both_id).link, DocLink::Both);
         assert_eq!(by_id(&both_id).provenance, DocProvenance::Unrecorded);
 
-        let out = plain(&render_linked_docs(&docs));
+        let out = plain(&docs);
         assert!(out.contains("Generated documentation"), "{out}");
         assert!(
             out.contains("Other documentation (authorship not recorded)"),
@@ -292,6 +304,27 @@ mod tests {
         let docs = collect_linked_docs(&task, vec![other, unrelated_doc, archived]);
         assert!(docs.is_empty());
         assert!(render_linked_docs(&docs).is_empty());
+    }
+
+    #[test]
+    fn rejected_and_superseded_docs_are_not_current_documentation() {
+        let task = spec("TASK-9", RequirementType::Task);
+        let mut rejected = spec("DOC-7", RequirementType::Doc);
+        rejected.status = RequirementStatus::Rejected;
+        references(&mut rejected, &task);
+        let mut superseded = spec("DOC-8", RequirementType::Doc);
+        superseded.status = RequirementStatus::Superseded;
+        references(&mut superseded, &task);
+        let mut live = spec("DOC-9", RequirementType::Doc);
+        live.status = RequirementStatus::Completed;
+        references(&mut live, &task);
+        let live_id = live.friendly_id();
+
+        let docs = collect_linked_docs(&task, vec![rejected, superseded, live]);
+        assert_eq!(
+            docs.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+            vec![live_id.as_str()]
+        );
     }
 
     #[test]
