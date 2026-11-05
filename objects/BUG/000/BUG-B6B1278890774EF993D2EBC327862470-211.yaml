@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-211
 agreed_id: BUG-2442
 title: Review watcher treats a stale lease as a live author and skips the PR indefinitely
 description: 'Observed 2026-11-04: PRs #3372, #3367, #3336 and #3386 got no fresh review for hours. The watcher logged ''stale overlapping head already notified; the author''s session on <branch> is live and owns the merge'', while `aida session leases` showed those leases as ⚠ stale (the Codex lane had exited and the seats were clean and pushed). review_watch_update::author_live -> status_prs::live_owned_branches_strict counts a lease live when its active OR creator process is alive. The creator for advisor-launched lanes is a long-lived process (the deputy or advisor), so an exited lane stays ''live'' forever. Acceptance: (1) liveness for review gating uses the same verdict as the leases view''s stale marker (the lane''s own process, not the launcher); (2) a lease whose lane has exited with a clean, pushed seat is not live; (3) a regression test pins an alive creator plus a dead active process to ''not live''; (4) the watcher log names the lease id when it skips for a live author.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:36.411397250Z
-modified_at: 2026-11-05T01:28:06.189202763Z
+modified_at: 2026-11-05T01:28:08.751981776Z
 req_type: Bug
 comments:
 - id: 01a1a94f-1958-7ed3-88ca-643b76fd08f5
@@ -44,6 +44,14 @@ history:
   timestamp: 2026-11-05T01:18:18.051335671Z
   session_id: 01a1a9485113
   changes: []
+- id: 01a1a952-0b2f-7493-8e78-dca560f75b41
+  author: joe
+  timestamp: 2026-11-05T01:28:08.752000578Z
+  session_id: 01a1a9485113
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -52,3 +60,9 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: 'Tested implementation is ready, but publishing is blocked: .git is read-only (git add cannot create index.lock); command deputy runs at main checkout with no cwd option; script deputy explicitly refuses implementer seat. Three modified tracked Rust files remain in the assigned worktree. Host publication required before PR and queue completion.'
+  lean: Publish the existing tested diff through an authorized host lane publisher, then complete BUG-2442 and hand the PR to separate review.
+  raised_by: implementer
+  raised_at: 2026-11-05T01:28:08.751981776Z
