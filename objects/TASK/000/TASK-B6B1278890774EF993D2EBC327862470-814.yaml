@@ -1,0 +1,29 @@
+id: 01a1aa88-34df-70b3-9b54-f6a59e79856a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-814
+title: 'non-blocking (minor): AC ac6152c7 gate preservation is shown statically (policy…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1715, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): AC ac6152c7 gate preservation is shown statically (policy equality + source-grep test alias_reuses_the_queue_dispatch_rather_than_a_second_pipeline); no behavioral test drives a real queue-work refusal (e.g. merge hold / supervised spec) through 'aida pr review'.
+
+  PR: #3404
+  Reviewed sha: 706759e210ab463b102684f86b3a0dad92595bdd
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T07:06:55.583369190Z
+modified_at: 2026-11-05T07:06:55.583369190Z
+req_type: Task
+tags:
+- carried-from:TASK-1715
+- finding-hash:7e29321a
+- from-review:PR-3404
+- kind:carried-forward
+filed_at:
+  code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
