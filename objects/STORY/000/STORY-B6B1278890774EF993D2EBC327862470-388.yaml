@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-04T17:55:44.658877422Z
+modified_at: 2026-11-05T01:37:06.320363979Z
 req_type: Story
 tags:
 - area:containment
@@ -158,6 +158,21 @@ comments:
   created_at: 2026-11-04T17:55:44.658873538Z
   modified_at: 2026-11-04T17:55:44.658873538Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a95a-3f10-7121-b718-6c3e27d7b266
+  author: joe
+  content: |-
+    S1 host measurements complete (TASK-3046), 2026-11-04 18:36 MST. Signed Q1/Q2/Q4/Q5 followed. Host script deputy 3 final job 20261104T183426-9ca34a completed exit 0 at 2026-11-05T01:36:00Z; both final reports' payload hashes match the implementation. The runner and docs will be published by TASK-3046's PR; durable structured evidence is docs/testing/containment-conformance-2026-11-04.json.
+
+    Per-check final results:
+    AGY 1.4.12 --sandbox: C0 unknown, C1 unknown, C2 unknown, C3 unknown, C4 unknown. The exact terminal payload executed (verified completed-tool output) with explicit Cwd, but workspace C0 returned EROFS. Host HTTPS/TCP positive routes returned ECONNREFUSED inside the terminal environment; UDP send success produced no parent receipt. Separate native file-tool requests produced no observed writes. Unknown is not an OS-denial pass. Private writable runtime overlays existing runtime; credentials and operator settings mounted read-only, never copied or logged. Observed hostname only: daily-cloudcode-pa.googleapis.com (incomplete inventory, not allow-list authority).
+    Codex 0.166.0 AIDA native preset with disposable TASK-2712 store/cache/mail/deputy grant equivalents: C0 pass, C1 terminal pass, C2 fail, C3 fail, C4 host-IPC fail. Parent observed raw store create/append/rename changes; Git metadata stayed unchanged. Allowed HTTPS succeeded and denied-host, redirect, proxy-bypass, TCP and UDP receivers saw nonces. A disposable host AF_UNIX canary received the nonce and exercised only its fixed outside-write capability. No real host socket, grant or production store object was probed. Codex defects filed as draft BUG-2446 (C2), BUG-2447 (C3), BUG-2448 (C4).
+
+    POSTURE DECISION: select A (shared AIDA boundary) for AGY because native did not demonstrate C0-C3 with a usable allowed_hosts route. AGY remains refused until S2 implements/reviews/proves that boundary; reuse STORY-2238/TASK-2705/TASK-2706, no thin Claude-wrapper extension. Existing Codex native remains the separately labeled operator-approved compatibility exception; no opt-in or operator sandbox setting changed.
+
+    Scope limits: candidate native invocations mirror profiles; production AIDA launcher credit is explicitly false. Whole-lane pass is false. C4 production refusal matrix, mediated git/AIDA positive controls, descendant grant revocation and ps/doctor posture, plus complete file/edit/browser/MCP/delegated-tool confinement/disablement, remain unmeasured for integrated S2 acceptance. The fixed measurement runner cannot authorize native posture. Ten local evidence/fixture tests and cargo fmt --all -- --check pass; git diff --check passes.
+  created_at: 2026-11-05T01:37:06.320363979Z
+  modified_at: 2026-11-05T01:37:06.320363979Z
+  session_id: 01a1a949f904
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
