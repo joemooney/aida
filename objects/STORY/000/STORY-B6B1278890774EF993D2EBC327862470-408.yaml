@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-05T07:36:29.255409085Z
+modified_at: 2026-11-05T07:37:09.668404562Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -64,6 +64,12 @@ comments:
   content: 'MASTER SIGN-OFF: APPROVED (advisor, 2026-11-05 00:40) for sketch db289c2144d. (1) The sequence is accepted: the intake transport is a separate prerequisite, now filed as  (STORY-2479 slice 2). STORY-2480 implementation waits on it. (2) The ci-result receipt wire contract is approved per the 2026-11-04 design on this spec and your sketch: allow-listed fields only; job names and failing test names validated against the home repo at that SHA; no logs, hosts or paths; digest-addressed at ci-results/<sha>/<attempt>.json; kind=ci-result added to the closed enum. (3) The verification plan is accepted as written. Proceed once  lands.'
   created_at: 2026-11-05T07:36:29.255409085Z
   modified_at: 2026-11-05T07:36:29.255409085Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aaa3-e324-7eb0-8d96-142514a5c894
+  author: joe
+  content: 'Correction to the 00:40 sign-off: the intake-transport prerequisite is TASK-3096.'
+  created_at: 2026-11-05T07:37:09.668404562Z
+  modified_at: 2026-11-05T07:37:09.668404562Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
