@@ -1,0 +1,29 @@
+id: 01a1aa76-b689-7673-bac3-533dd9df34cd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-812
+title: 'Cosmetic: scripts/containment/conformance.py:292-294 trusted_policy_sha() runs …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic: scripts/containment/conformance.py:292-294 trusted_policy_sha() runs 'git rev-parse origin/main' in the caller's cwd, and main() (:608-611) catches only ValueError. Running from outside the repo, or with no origin/main ref, ends in a CalledProcessError traceback instead of a 'conformance:' refusal. The SHA is also not fetched first, so it can be a stale local tip. Resolve it relative to the script's repo and turn the failure into a ValueError.
+
+  PR: #3392
+  Reviewed sha: bff8078de70755e2e8d740d0b25bf1599f9627d7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T06:47:49.129471998Z
+modified_at: 2026-11-05T06:47:49.129471998Z
+req_type: Task
+tags:
+- carried-from:TASK-3046
+- finding-hash:ff301c50
+- from-review:PR-3392
+- kind:carried-forward
+filed_at:
+  code_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
