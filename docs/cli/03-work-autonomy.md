@@ -100,8 +100,16 @@ branches on the exit code:
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
+| 35 | `implementer: empty-rework pr=<n> head=<sha> action=requeued` | An unchanged GitHub rework head still has blocking findings, failed required checks, or conflicts. One retry was queued with a brief naming the blockers. |
+| 32 | `implementer: empty-rework pr=<n> head=<sha> action=punted` | The retry at that head was also empty; automatic implementer rows were removed and the advisor received request mail. |
 
-Every line except `punted` ends with ` untested=true` when the implementer ran
+The empty-rework check runs before an old PR can be reported as `pr-opened`
+or `no-pr`. It retains the lease and does not report success. A new pushed
+head starts a new retry allowance; explicit punts (including a disputed finding)
+and holds retain precedence. An unavailable forge probe refuses success.
+<!-- trace:BUG-2452 | ai:codex -->
+
+Every ordinary result line except `punted` ends with ` untested=true` when the implementer ran
 no local test to completion, so its push reached CI untested.
 
 Its local tests run through `aida lane job` (below).
