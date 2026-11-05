@@ -372,6 +372,10 @@ fn root_flag_arity(tok: &str) -> Option<RootFlag> {
         "--cast-title",
     ];
     const SWITCHES: &[&str] = &["--canonical-ids", "--asciinema"];
+    // Attached short values consume no following token. trace:TASK-3112 | ai:codex
+    if tok.len() > 2 && (tok.starts_with("-p") || tok.starts_with("-s")) {
+        return Some(RootFlag::Switch);
+    }
     if let Some((name, _)) = tok.split_once('=') {
         return VALUED.contains(&name).then_some(RootFlag::Switch);
     }
@@ -923,5 +927,48 @@ enabled = true
         guard.reset_unset();
         // No env, no project dir → default enabled.
         assert!(is_enabled(None));
+    }
+}
+
+#[cfg(test)]
+mod task3112_tests {
+    use super::*;
+    // Derive expected arity from clap so new GlobalArgs cannot silently drift.
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_root_flag_table_matches_clap() {
+        let command =
+            <crate::cli::GlobalArgs as clap::Args>::augment_args(clap::Command::new("aida"));
+        for arg in command.get_arguments() {
+            if arg.get_id() == "path" {
+                continue;
+            }
+            let takes_value = arg.get_action().takes_values();
+            let mut flags = Vec::new();
+            if let Some(long) = arg.get_long() {
+                flags.push(format!("--{long}"));
+            }
+            if let Some(short) = arg.get_short() {
+                flags.push(format!("-{short}"));
+            }
+            for flag in flags {
+                assert!(
+                    matches!(
+                        (root_flag_arity(&flag), takes_value),
+                        (Some(RootFlag::TakesValue), true) | (Some(RootFlag::Switch), false)
+                    ),
+                    "{flag}"
+                );
+                if takes_value {
+                    let attached = if flag.starts_with("--") {
+                        format!("{flag}=private")
+                    } else {
+                        format!("{flag}private")
+                    };
+                    let argv = vec!["aida".into(), attached, "show".into(), "TASK-1".into()];
+                    assert_eq!(derive_cmd_shape(&argv), "show", "{flag}");
+                }
+            }
+        }
     }
 }
