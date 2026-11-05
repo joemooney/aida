@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-04T09:53:08.123444362Z
+modified_at: 2026-11-05T12:41:14.513405681Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -113,6 +113,11 @@ comments:
   modified_at: 2026-11-04T09:53:08.123444362Z
   session_id: 01a1a5ded21f
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1abba-4811-7f93-be89-01d4c077c75b
+  author: mcp
+  content: 'Rework pickup: the canonical story currently contains slice-2 signoff and the previous publication blocker, but no STORY-2401 review findings/verdict or open PR could be located. Restored approved slice 2 from 33fd0f2c69c onto current main in branch story-b6b1278890774ef993d2ebc327862470-367-2. Added defensive GitHub status parsing: incomplete output or an unknown state stays Transient rather than becoming a known open PR. Running the LIGHT gate (story_2401 tests and make check-ci-fast). Publication is blocked by this lane''s read-only .git: git add refuses index.lock creation with Read-only file system. No merge/review-record action will be attempted; the story remains In Progress for the later approved slices.'
+  created_at: 2026-11-05T12:41:14.513388949Z
+  modified_at: 2026-11-05T12:41:14.513388949Z
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
@@ -149,6 +154,11 @@ history:
   timestamp: 2026-11-04T09:24:11.443133164Z
   session_id: 01a1a5ded21f
   harness_version: 2.1.318 (Claude Code)
+  changes: []
+- id: 01a1abba-32d1-78c3-b3da-569d2d419a98
+  author: joe
+  timestamp: 2026-11-05T12:41:09.073047561Z
+  session_id: 01a1abb06978
   changes: []
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
