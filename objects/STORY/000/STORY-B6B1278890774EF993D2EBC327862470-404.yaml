@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T06:41:30.558856996Z
+modified_at: 2026-11-05T06:48:59.605005414Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -176,6 +176,12 @@ comments:
   created_at: 2026-11-05T06:37:18.250324Z
   modified_at: 2026-11-05T06:37:18.250324Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa77-c9d5-7512-aaac-7927bad1a939
+  author: joe
+  content: 'Round 4 implementation: addressed all four findings in pipeline_stall.rs. Detector CI evidence now selects the latest timestamped check attempt and excludes merge-hold-gate from both the CI rollup/required set and failure-log selection; holds remain readiness blockers via pr_has_merge_hold. Digest and failure details share the same CheckRun/StatusContext failure predicate and context names. Non-abandoned train evidence now says live-or-unknown and never suggests closing it. Added regression coverage for held green PR observation/digest/no-log-fetch, superseded red runs followed by green (both input orders), newer pending attempts, StatusContext FAILURE/ERROR unavailable evidence, live train text, and preserving all four real failure-log slots despite held PRs. Updated the alarm documentation. Formatting and whitespace checks pass; focused Rust tests are building. Publication constraint: git add fails with read-only .git/index.lock; aida ship --no-merge --dry-run explicitly requires the native lane host-side exit commit. No finding is disputed. New commit/publication must use that documented host path, rather than counting the prior round commit.'
+  created_at: 2026-11-05T06:48:59.605005414Z
+  modified_at: 2026-11-05T06:48:59.605005414Z
+  session_id: 01a1aa70e71b
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
   author: joe
