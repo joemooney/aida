@@ -6,12 +6,12 @@ description: |
   seat_clone_detect::is_host_main (aida-core/src/seat_clone_detect.rs:92) checks against a process-wide HOST_MAINS set: every non-clone main ever resolved via main_worktree_root_from (worktree_gc.rs:758), plus the cwd git root. It does not check the launcher's main. No host path that resolves a seat-chosen dir was found, but a long-lived process widens the set. Pass the launcher's main into host_recorded_clone explicitly.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-05T00:24:02.297968281Z
+modified_at: 2026-11-05T00:35:22.034532102Z
 req_type: Task
 tags:
 - contained
@@ -295,6 +295,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a921-b932-7991-96c0-483765743bb4
+  author: aida-orchestrator
+  timestamp: 2026-11-05T00:35:22.034556699Z
+  session_id: 01a1a91662d4
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
@@ -307,3 +316,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:25:29.357042790Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Anchor design is right (host_recorded_clone(main, root) at seat_clone.rs:846, no HOST_MAINS trust, resume_lease_tree anchored on the host main), but CI is red at head 8212a38 (lib-0, lib-1, gates): no commit since 0648fb1c fixes the round-4 failures (8212a38 is a main merge only), and the session start --launch codex arm still loses the pinned main after the chdir.'
+  recovery_hint: address the review findings, move TASK-2032 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T00:35:22.034532102Z
