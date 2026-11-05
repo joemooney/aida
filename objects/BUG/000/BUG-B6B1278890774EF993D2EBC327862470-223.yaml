@@ -1,0 +1,24 @@
+id: 01a1ac86-e9f1-7ea2-8013-aa69c1c54112
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-223
+agreed_id: BUG-2457
+title: A completed review leaves its aida-pr-N worktree, so the review watcher's next-head review of the same PR refuses 'branch pr-N is held by worktree'
+description: 'Observed 2026-11-05 on PR-3367 and PR-3426: after a review of head H1 completed (verdict posted), the reviewer worktree ~/ai/aida-worktrees/aida-pr-N stayed (clean, no process, no merge-hold marker). When the PR got a new head H2, review watch''s pickup refused: ''branch pr-N is held by worktree .../aida-pr-N before pickup setup'', recorded the attempt as exited-without-completing and did not relaunch, so the PR silently stopped getting reviews until the advisor removed the worktree and ran aida review watch --release PR-N. BUG-2428 covered launches that fail before the agent starts; this is the post-success path. Acceptance: (1) a reviewer pickup for PR-N reuses or resets an existing aida-pr-N worktree that is clean, has no live owning process/lease, and carries no merge-hold marker (copy any marker to primary first, per BUG-2176), then checks out the new head; (2) a dirty or live one still refuses with the existing message; (3) a regression test drives two consecutive reviews of different heads of the same PR through the pickup path.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T16:24:45.297488765Z
+modified_at: 2026-11-05T16:24:45.297488765Z
+req_type: Bug
+tags:
+- area:review
+- from-advisor
+- linked:BUG-2428
+filed_at:
+  code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70a5d68133a
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
