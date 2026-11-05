@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-831
 agreed_id: TASK-3111
 title: 'Nit sweep A: test hygiene findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2833 TASK-2839 TASK-2843 TASK-2845 TASK-2846 TASK-2847 TASK-2855 TASK-2866 TASK-2869'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-05T18:30:25.570637173Z
+modified_at: 2026-11-05T18:39:34.027757795Z
 req_type: Task
 tags:
 - from-advisor
@@ -81,6 +81,12 @@ comments:
   created_at: 2026-11-05T17:53:16.158753551Z
   modified_at: 2026-11-05T17:53:16.158753551Z
   session_id: 01a1aca9561d
+- id: 01a1ad02-568b-7ea3-942d-24253bcac5d7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 9 batched findings are addressed in source, but CI at 42f8998 is red: the live bwrap confinement gate (green on main) fails on the new TASK-2847 capability control, and lib-0 Run tests fails. No triage reason was given.'
+  created_at: 2026-11-05T18:39:34.027755250Z
+  modified_at: 2026-11-05T18:39:34.027755250Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
   author: joe
@@ -160,6 +166,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1ad02-568b-7ea3-942d-24189c6372a4
+  author: joe
+  timestamp: 2026-11-05T18:39:34.027739794Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -172,11 +186,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T17:53:37.869990215Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 9 batched findings are addressed in source, but CI at 42f8998 is red: the live bwrap confinement gate (green on main) fails on the new TASK-2847 capability control, and lib-0 Run tests fails'
-  recovery_hint: address the review findings, move TASK-3111 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T18:30:25.570637173Z
