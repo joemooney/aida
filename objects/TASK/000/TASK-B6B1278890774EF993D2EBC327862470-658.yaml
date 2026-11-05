@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T12:42:26.899598331Z
+modified_at: 2026-11-05T12:42:30.761744945Z
 req_type: Task
 tags:
 - architecture
@@ -252,6 +252,12 @@ comments:
   content: 'ADVISOR RULING 2026-11-05 05:47 on the Claude auth-refresh fork under signed C7 (credentials: read roots, no broad writable roots): keep C7 strict. Claude credentials stay READ-ONLY inside the contained lane. The host launcher refreshes the Claude OAuth token BEFORE launch (one host-side refresh when the remaining lifetime is under the lane''s grant TTL), then binds the credentials read-only. If the token still expires mid-lane, the vendor call fails and the lane exits with a named refusal (''claude credentials expired inside a contained lane; relaunch''), never a silent writable fallback. Do NOT add a writable bind for ~/.claude or the credentials file in this slice; if measured lanes later outlive the token, a single-file mediated refresh is a separate sketch. Reason: C7 forbids writable credential roots, pre-launch refresh covers nearly all lanes (they are well under the token lifetime), and fail-closed is the containment floor. Git metadata being read-only in a Codex seat is expected: commit nothing from the lane if blocked; leave edits in the seat and the advisor''s auto-publish commits and pushes them host-side. Scope otherwise unchanged from the 05:25 brief (AC1 only, Refs TASK-2708, STRICT review, operator merge floor).'
   created_at: 2026-11-05T12:42:24.532343260Z
   modified_at: 2026-11-05T12:42:24.532343260Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abbb-71e9-7012-a9f0-0879f4c586b7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: AC(1) pre-code audit: #3307/96c521861aa supplies PreparedLaunch only for Codex foreground headless, exact API-key env, receipt and broker; Claude remains ClaudeNative with legacy os_wrap, and --bg explicitly refuses OS wrapping (BUG-2169). Signed STORY-2238 C7 forbids broad writable ~/.claude and requires probe-backed selection of relocated dedicated auth state versus shape-validated locked write-back; existing Claude os_wrap_home_rw_paths writes ~/.claude and ~/.claude.json. No Claude credential-layout/refresh selection or corresponding probe evidence was found in the signed rulings. The latest brief requires preserving existing Claude behavior while deferring AC(2) installed evidence. Please settle how existing Claude subscription/auth refresh is preserved under C7 without starting the deferred installed-evidence slice; an API-key-only replacement would change supported behavior. C12/M1 also requires named refusal until live nested-proxy proof. Separately git fetch origin main fails because .git/FETCH_HEAD is read-only in this seat, so commit/push/new PR cannot be completed here. No source edits or tests performed.. No triage reason was given.'
+  created_at: 2026-11-05T12:42:30.761742545Z
+  modified_at: 2026-11-05T12:42:30.761742545Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
@@ -514,6 +520,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1abbb-71e9-7012-a9f0-086276f91427
+  author: joe
+  timestamp: 2026-11-05T12:42:30.761731315Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -521,9 +535,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-attention_reason:
-  category: design-fork
-  detail: 'AC(1) pre-code audit: #3307/96c521861aa supplies PreparedLaunch only for Codex foreground headless, exact API-key env, receipt and broker; Claude remains ClaudeNative with legacy os_wrap, and --bg explicitly refuses OS wrapping (BUG-2169). Signed STORY-2238 C7 forbids broad writable ~/.claude and requires probe-backed selection of relocated dedicated auth state versus shape-validated locked write-back; existing Claude os_wrap_home_rw_paths writes ~/.claude and ~/.claude.json. No Claude credential-layout/refresh selection or corresponding probe evidence was found in the signed rulings. The latest brief requires preserving existing Claude behavior while deferring AC(2) installed evidence. Please settle how existing Claude subscription/auth refresh is preserved under C7 without starting the deferred installed-evidence slice; an API-key-only replacement would change supported behavior. C12/M1 also requires named refusal until live nested-proxy proof. Separately git fetch origin main fails because .git/FETCH_HEAD is read-only in this seat, so commit/push/new PR cannot be completed here. No source edits or tests performed.'
-  lean: Authorize a narrowly scoped model-free synthetic-HOME Claude auth-layout/refresh probe to select C7(i) or C7(ii), retaining M1 named refusal until the separately arranged live proof. Resume implementation with a writable Git/host-commit path; keep AC(2)/AC(3) deferred.
-  raised_by: implementer
-  raised_at: 2026-11-05T12:27:49.711985038Z
