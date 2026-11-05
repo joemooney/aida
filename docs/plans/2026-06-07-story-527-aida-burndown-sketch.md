@@ -7,7 +7,7 @@ Complexity: design-only; estimated build ~1 skill + ~1 CLI subcommand (`aida bur
 
 <!--
   DESIGN SKETCH for STORY-527, per the sketch-first-pays-for-itself discipline.
-  The companion doc (docs/aida/discipline/autonomous-burndown.md, TASK-695) already
+  The companion doc (.aida/discipline/autonomous-burndown.md, TASK-695) already
   shipped — this is the "how do we actually build the runnable command" pass that
   the master/operator signs off BEFORE implementation, not at review time.
   Prefer SYMBOL refs over LINE refs. trace:TASK-92
@@ -280,7 +280,7 @@ skill text + the already-shipped companion doc must say so without ambiguity:
 - `aida-cli/src/main.rs` (new `burndown plan` verb + pickability gate)
 - `aida-core/templates/skills/aida-burndown.md`
 - `aida-core/templates/commands/aida-burndown.md`
-- `docs/aida/discipline/autonomous-burndown.md` (already shipped — only "The
+- `.aida/discipline/autonomous-burndown.md` (already shipped — only "The
   command" section may need a one-line sync once the CLI verb name is final)
 
 ## Reusable helpers (do not reimplement)
@@ -360,7 +360,7 @@ TMP=$(mktemp -d); cd "$TMP" && git init -q && "$AIDA_BIN" init >/dev/null
 ## Related
 
 - Encodes: memory `feedback_parallel_implementer_fanout_burndown` (the drain that works).
-- Companion: `docs/aida/discipline/autonomous-burndown.md` (TASK-695, shipped — the why+rules).
+- Companion: `.aida/discipline/autonomous-burndown.md` (TASK-695, shipped — the why+rules).
 - Positioned-against (not competing): `aida queue work --auto-complete` / EPIC-33
   (orchestrator hardening, BUG-431/STORY-492).
 - Structural reference: `.claude/workflows/panel-review.js` (saved-Workflow lane).

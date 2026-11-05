@@ -262,7 +262,7 @@ rm -f .aida/autopilot-log.jsonl
 
 ## Related
 
-- TASK-0429 (envelope), `.aida/punts.jsonl` / `PuntRecord`, `aida findings`, `aida history events`, `docs/aida/discipline/substrate-as-bouncer.md`.
+- TASK-0429 (envelope), `.aida/punts.jsonl` / `PuntRecord`, `aida findings`, `aida history events`, `.aida/discipline/substrate-as-bouncer.md`.
 
 ## Recommendation + smallest first slice
 

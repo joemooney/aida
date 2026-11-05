@@ -26,8 +26,8 @@ class AudienceTests(unittest.TestCase):
             with patch.object(inventory, "TSV", str(table)), patch.object(inventory, "tracked_paths", return_value=paths), contextlib.redirect_stdout(io.StringIO()):
                 return inventory.check()
 
-    def test_new_doc_requires_inventory_entry(self):
-        self.assertEqual(self.check_rows(["docs/getting-started.md"], []), 1)
+    def test_new_doc_uses_path_derived_audience_without_report_edit(self):
+        self.assertEqual(self.check_rows(["docs/getting-started.md", "crate/README.md"], []), 0)
 
     def test_duplicate_invalid_stale_and_wrong_audience_refuse(self):
         for rows in [
@@ -43,8 +43,44 @@ class AudienceTests(unittest.TestCase):
         paths = ["docs/getting-started.md", "docs/advanced/mailbox.md", "docs/internal/monitor-contract.md"]
         self.assertEqual(self.check_rows(paths, list(zip(paths, ["adopter", "advanced", "internal"]))), 0)
 
+    def test_docs_top_level_allow_list(self):
+        # plans is explicitly retained by scope 3; aida contains protected ADRs only.
+        allowed = inventory.ADOPTER_PAGES | {
+            "advanced", "internal", "archive", "cli", "agents", "showcase", "images",
+            "tui", "plans", "aida", "book.toml", "style.css", "mermaid-init.js", "mermaid.min.js",
+            "user-guide.html", "user-guide-dark.html", "book",
+        }
+        self.assertEqual({p.name for p in (ROOT / "docs").iterdir()} - allowed, set())
+        self.assertEqual({p.name for p in (ROOT / "docs/aida").iterdir()}, {"05-decisions"})
+
+    def test_uncategorized_doc_refuses_without_report_row(self):
+        self.assertEqual(self.check_rows(["docs/new-topic.md"], []), 1)
+
+    def test_generated_pickups_and_operator_session_audience(self):
+        self.assertEqual(inventory.audience("docs/agents/codex-brief-pickup.md"), "generated")
+        self.assertEqual(inventory.audience("docs/agents/antigravity-brief-pickup.md"), "generated")
+        self.assertEqual(inventory.audience("docs/advanced/session-communication.md"), "advanced")
+
     def test_unknown_top_level_topic_needs_audience_decision(self):
         self.assertIsNone(inventory.audience("docs/new-unclassified-topic.md"))
+
+    def test_tracked_path_guard_rejects_prose_code_and_template_references(self):
+        spec = importlib.util.spec_from_file_location("doc_paths", ROOT / "scripts/check-doc-paths.py")
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = "docs/retired.md"
+            (root / "docs").mkdir()
+            (root / target).write_text("still exists but moved")
+            for source in ("OVERVIEW.md", "src/lib.rs", "aida-core/templates/skills/example.md"):
+                for text in (f"`{target}`", f'include_str!("{target}")', "docs/missing.md"):
+                    self.assertTrue(guard.violations(source, text, {target: "docs/archive/retired.md"}, {}, root))
+            # Output exceptions are source-specific and counted; new copies still fail.
+            allowed = {("src/lib.rs", target): 1}
+            self.assertFalse(guard.violations("src/lib.rs", target, {target: "docs/archive/retired.md"}, allowed, root))
+            self.assertTrue(guard.violations("src/lib.rs", target + " " + target, {target: "docs/archive/retired.md"}, allowed, root))
+            self.assertTrue(guard.violations("OTHER.md", target, {target: "docs/archive/retired.md"}, allowed, root))
 
     def test_book_excludes_non_markdown_contributor_assets(self):
         import tomllib

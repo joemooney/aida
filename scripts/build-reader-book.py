@@ -6,6 +6,9 @@ including unlisted internal HTML reports. Only the generated book is pruned.
 """
 # trace:STORY-1651 | ai:codex
 from pathlib import Path
+import functools
+import http.server
+import sys
 import shutil
 import subprocess
 
@@ -34,6 +37,12 @@ def main():
         raise ValueError("Book output must be an ordinary directory")
     subprocess.run(["mdbook", "build", "docs"], cwd=ROOT, check=True)
     prune(output)
+    if "--serve" in sys.argv:
+        # Serve exactly the publication output. Port 0 uses an available ephemeral port.
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(output))
+        with http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
+            print(f"Reader book: http://127.0.0.1:{server.server_port}", flush=True)
+            server.serve_forever()
 
 
 if __name__ == "__main__":

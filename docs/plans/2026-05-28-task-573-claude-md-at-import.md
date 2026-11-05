@@ -1,4 +1,4 @@
-# Plan: TASK-573 — `@docs/aida/discipline/README.md` in scaffolded CLAUDE.md
+# Plan: TASK-573 — `@.aida/discipline/README.md` in scaffolded CLAUDE.md
 
 Date: 2026-05-28
 Specs: TASK-573
@@ -8,7 +8,7 @@ Complexity: ~10 prod LOC, ~5 test LOC, 1 commit, risk low
 ## Approach
 
 Replace the inlined "Discipline for AIDA-using sessions" pointer list in the
-scaffolded `CLAUDE.md` with a stub heading + `@docs/aida/discipline/README.md`
+scaffolded `CLAUDE.md` with a stub heading + `@.aida/discipline/README.md`
 import. Claude Code expands `@`-imports recursively at session start, so the
 canonical pointer table in the pack's README becomes the single source of
 truth. Removes a ~32-line duplicate-maintenance hazard from the scaffolder
@@ -50,12 +50,12 @@ without losing in-session discoverability.
 
 - `fn discipline_section`: collapse the 35-line raw-string body to a 3-line
   stub (`## Discipline for AIDA-using sessions` heading + blank +
-  `@docs/aida/discipline/README.md`). Doc comment gains a `trace:TASK-573`
+  `@.aida/discipline/README.md`). Doc comment gains a `trace:TASK-573`
   line referencing this change.
 - `mod tests::generated_claude_md_has_discipline_section`: replace the
   bullet-content asserts (`advisor-role.md`, `machinery-glossary.md`,
   `tag-conventions.md` substrings) with two new asserts — positive on
-  `@docs/aida/discipline/README.md`, negative on `- **Roles**` and
+  `@.aida/discipline/README.md`, negative on `- **Roles**` and
   `- **Start here**` (to lock the inlined-bullets regression out).
 
 ## Critical Files
@@ -74,7 +74,7 @@ without losing in-session discoverability.
 
 1. **Risk**: Claude Code's `@`-import has nuances — e.g., it may not resolve
    relative paths when CLAUDE.md is read from a non-project-root CWD.
-   **Mitigation**: The path is project-relative (`docs/aida/discipline/README.md`),
+   **Mitigation**: The path is project-relative (`.aida/discipline/README.md`),
    which is the documented pattern. Same shape as the existing
    `@.claude/AIDA.md` import, which has shipped since FR-1-035 without
    reports of resolution failures.
@@ -91,7 +91,7 @@ without losing in-session discoverability.
 ## Tests (named, not "add tests")
 
 - `generated_claude_md_has_discipline_section` — updated. Positive asserts
-  on heading + `@docs/aida/discipline/README.md`; negative asserts on the
+  on heading + `@.aida/discipline/README.md`; negative asserts on the
   removed `- **Roles**` and `- **Start here**` bullets.
 
 ## Verification
@@ -104,9 +104,9 @@ TMP=$(mktemp -d); cd "$TMP" && git init -q && \
   git config user.email "smoke@test.local" && \
   git config user.name "smoke"
 "$WORKTREE/target/release/aida" init >/dev/null 2>&1
-grep -q '^@docs/aida/discipline/README.md$' CLAUDE.md   # positive
+grep -q '^@.aida/discipline/README.md$' CLAUDE.md   # positive
 ! grep -q '^- \*\*Roles\*\*' CLAUDE.md                  # negative
-test -f docs/aida/discipline/README.md                  # import target exists
+test -f .aida/discipline/README.md                  # import target exists
 wc -l CLAUDE.md                                          # expect ~18 lines
 ```
 
@@ -125,7 +125,7 @@ against a throwaway `/tmp/aida-task-573-smoke` project.
 | -------------------------------------------- | ------------------- | ----------------- | ---------------- |
 | Scaffolded `CLAUDE.md` source                | 47 lines / 2,262 B  | 18 lines / 433 B  | −29 lines / −81% |
 | Inline discipline pointer content            | ~35 lines / ~1,650 B | 1 `@`-import line | −34 lines        |
-| `docs/aida/discipline/README.md` (unchanged) | 44 lines / 3,485 B  | 44 lines / 3,485 B | 0                |
+| `.aida/discipline/README.md` (unchanged) | 44 lines / 3,485 B  | 44 lines / 3,485 B | 0                |
 | Net loaded-context (CLAUDE.md + imported README) | ~47 lines | ~58 lines       | +11 lines        |
 
 **Net loaded-context delta is small and slightly positive (~+11 lines),

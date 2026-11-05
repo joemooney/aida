@@ -32,9 +32,11 @@ with `python3 scripts/build-reader-book.py` (also used by `make book`): it build
 copies even when they are absent from the navigation. Raw `mdbook build docs`
 is a preview, not the publication command.
 
-The cleanup inventory assigns every tracked Markdown/HTML document one audience:
-`adopter`, `advanced`, `internal`, `archive` or `generated`. After adding or moving
-a document, stage it and regenerate the inventory:
+Path rules assign every tracked Markdown/HTML document one audience:
+`adopter`, `advanced`, `internal`, `archive` or `generated`. New documents in
+recognized directories need no shared report edit. The inventory TSV is a
+generated historical report; regenerate it when intentionally refreshing that
+report or recording a move:
 
 ```sh
 python3 docs/archive/2026-10-cleanup/inventory.py
@@ -44,8 +46,21 @@ make check-ci-fast
 
 In a native Codex lane with a read-only Git index, use `--working-tree` when
 regenerating and checking pending files before the host stages the changes.
-The CI gate checks the tracked file list and rejects missing, duplicate,
-stale or invalid audience entries.
+The CI gate rejects unclassified paths and duplicate, stale or incorrect report
+rows. Tests enforce the top-level allow-list (with retained plans and normative
+ADRs) and reader-only navigation. `make book-serve` serves the same pruned output.
+
+`python3 scripts/check-doc-paths.py` checks literal repository paths in all tracked
+non-archive text, including code, templates and backtick mentions. Rename history
+comes from the TSV. Exact source/target/count exceptions in
+`scripts/doc-path-exceptions.json` describe project outputs, synthetic fixtures
+and historical proposals; they do not exempt new sources or extra occurrences.
+The landing-page smoke test runs the documented commands in a fresh temporary
+Git project using `AIDA_TEST_BIN` (or installed `aida`):
+
+```sh
+python3 -m unittest tests/test_docs_landing_smoke.py
+```
 
 Historical records retain their original claims; path retargeting does not
 certify their content as current. Retired material remains in [the archive](../archive/README.md).

@@ -232,7 +232,7 @@ impl UltraplanMode {
 /// TASK-697: which heuristic the `suggested` mode uses to decide a spec is
 /// worth a planning prompt.
 ///
-/// SPIKE-8 (`docs/internal/spikes/2026-06-07-spike-8-ultraplan-comparison.md`) found
+/// SPIKE-8 (`docs/archive/spikes/2026-06-07-spike-8-ultraplan-comparison.md`) found
 /// that `aida ultraplan`'s value is a *context-assembly* aid: it helps most on
 /// thin / under-specified specs and least on well-formed ones (which already
 /// carry their own `## Proposed shape` + Acceptance — the spec *is* the plan).
@@ -747,7 +747,7 @@ pub(crate) fn init_worktree_config_section() -> &'static str {
 /// `aida session start` (and the agent-new / queue-work / orchestrator paths)
 /// reuse a recycled warm worktree instead of `git worktree add`, keeping the
 /// build cache warm across fan-out (~30× faster per-spec builds — see
-/// docs/internal/research/2026-06-29-warm-pool-build-delta.md).
+/// docs/archive/research/2026-06-29-warm-pool-build-delta.md).
 // trace:TASK-985 | ai:claude
 pub(crate) fn init_worktree_pool_config_section() -> &'static str {
     "\n# Worktree warm-pool (STORY-714). Pooling is ON by default: a session's\n\

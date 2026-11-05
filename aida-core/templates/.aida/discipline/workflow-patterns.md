@@ -540,7 +540,7 @@ When working in this project, capture documentation seeds as comments on relevan
 
 ---
 
-*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/internal/positioning/` chapters.*
+*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/positioning/` chapters.*
 ```
 
 **Add as a comment via:**
@@ -693,11 +693,11 @@ with [[feedback_declare_the_seat_when_dispatching]].
 
 The agent-collaboration tooling landscape moves fast — heavyweights (claude-flow, gastown) ship monthly; smaller projects emerge constantly; Anthropic's own primitives (Agent Teams, etc.) evolve. A one-shot competitive analysis goes stale within months. Treat the analysis as a **living document** with refresh cadence, not a single output.
 
-**Why** (2026-05-16): Dialog session produced a comprehensive comparative analysis of AIDA vs ~15 marketplace tools (claude-flow, gastown, ralph-orchestrator, loki-mode, Claude Squad, crystal, vibe-kanban, vibe-tree, cmux, Conductor, agent-orchestrator, swarm-protocol, wit, skillfold, wshobson/agents, barkain plugin). User correctly pushed back: this analysis needs to be MAINTAINED, not just produced once. Filed STORY-260 (\`docs/internal/competitive-analysis/\` with cadence) + TASK-288 (TUI prior-art study) + SPIKE-6 (skillfold compatibility) + TASK-289 (README niche statement).
+**Why** (2026-05-16): Dialog session produced a comprehensive comparative analysis of AIDA vs ~15 marketplace tools (claude-flow, gastown, ralph-orchestrator, loki-mode, Claude Squad, crystal, vibe-kanban, vibe-tree, cmux, Conductor, agent-orchestrator, swarm-protocol, wit, skillfold, wshobson/agents, barkain plugin). User correctly pushed back: this analysis needs to be MAINTAINED, not just produced once. Filed STORY-260 (\`docs/competitive-analysis/\` with cadence) + TASK-288 (TUI prior-art study) + SPIKE-6 (skillfold compatibility) + TASK-289 (README niche statement).
 
 **The discipline:**
 
-1. **Each analysis session writes a dated snapshot** (\`docs/internal/competitive-analysis/YYYY-MM-DD-market-snapshot.md\`). Don't overwrite previous; retain as historical record.
+1. **Each analysis session writes a dated snapshot** (\`docs/competitive-analysis/YYYY-MM-DD-market-snapshot.md\`). Don't overwrite previous; retain as historical record.
 2. **Maintain category summaries** (\`category-summaries/swarm-orchestrators.md\`, etc.) that update incrementally as observations accumulate.
 3. **Refresh quarterly** OR on signals: new heavyweight reaches 10k stars, Anthropic ships a foundational primitive (Agent Teams, Skills, etc.), a cross-platform standardization emerges (skillfold-like).
 4. **Signals-to-watch list** (\`signals-to-watch.md\`) names specific projects + triggers; updated as the landscape evolves.
@@ -713,7 +713,7 @@ Dialog produces analysis → writes dated snapshot + updates category summaries 
 
 **Generic for AIDA-using projects:**
 
-Every project that wants to know \"how do we position vs the alternatives?\" benefits from this discipline. Not just AIDA. The propagation channel: \`docs/internal/competitive-analysis/\` template scaffolded by \`aida init\` (or \`aida init --with-positioning-docs\`), with a README that explains the cadence + contribution pattern.
+Every project that wants to know \"how do we position vs the alternatives?\" benefits from this discipline. Not just AIDA. The propagation channel: \`docs/competitive-analysis/\` template scaffolded by \`aida init\` (or \`aida init --with-positioning-docs\`), with a README that explains the cadence + contribution pattern.
 
 **Composes with:**
 
@@ -2671,7 +2671,7 @@ classification. Treating "autonomy" as a single on/off switch misses it.
 questions separately — presence and consultation-appetite. Tag prompts by
 kind so the runtime can route by mode. Make the first option of every
 prompt the smallest-valuable-slice / safe default, since auto-resolve
-picks option 1. See `docs/aida-discipline/skill-prompt-kinds.md`,
+picks option 1. See `.aida/discipline/skill-prompt-kinds.md`,
 `docs/advanced/autonomous-drain.md`, STORY-287. Related:
 [[feedback_pause_for_design_input]], [[feedback_pushback_on_overengineering]].
 

@@ -106,11 +106,11 @@ none is read at run time:
 - 59 backtick path mentions inside historical records (policy rule 3).
   Resolve them with the inventory's `path_before_cleanup` column.
 - Code comments: `aida-cli-lib/src/lib.rs` cites
-  `docs/internal/spikes/2026-06-07-spike-8-ultraplan-comparison.md` and
-  `docs/internal/research/2026-06-29-warm-pool-build-delta.md` (now under
+  `docs/archive/spikes/2026-06-07-spike-8-ultraplan-comparison.md` and
+  `docs/archive/research/2026-06-29-warm-pool-build-delta.md` (now under
   `docs/archive/spikes/` and `docs/archive/research/`).
   `.aida/discipline/glossary.yaml` and its template master cite
-  `docs/internal/competitive-analysis/2026-05-26-agent-memory-libraries.md` (now
+  `docs/archive/competitive-analysis/2026-05-26-agent-memory-libraries.md` (now
   under `docs/archive/competitive-analysis/`). These were left unchanged to
   keep the cleanup to documentation files.
 - `aida-cli-lib/src/tests/bug708_under_specified_tests.rs` names

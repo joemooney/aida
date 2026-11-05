@@ -185,7 +185,7 @@ work, not a parallel implementation: it reuses `status_display`'s palette,
 - `docs/lifecycle.md` (regenerated mermaid pin via `aida lifecycle --diagram
   --check --write`, plus a new "two terminal off-ramps" section and a glossary
   row), `README.md` "Spec lifecycle", `CLAUDE.md` status list + ADR bullet,
-  `aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`.
+  `aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`.
 
 ## Critical Files
 
@@ -216,7 +216,7 @@ work, not a parallel implementation: it reuses `status_display`'s palette,
 - `docs/lifecycle.md`
 - `README.md`
 - `CLAUDE.md`
-- `aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`
+- `aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`
 - `docs/plans/2026-07-22-task-1176-superseded-decision-state.md` (new)
 
 ## Reusable helpers (do not reimplement)
@@ -345,4 +345,4 @@ cd - >/dev/null && "$AIDA_BIN" lifecycle --diagram --check   # expect: pin OK
 ## Related
 
 - Builds on: BUG-751 (approved = accepted for decisions), BUG-781 (accepted decisions render terminal and leave the open lens), BUG-784 (knowledge-class types omitted from candidate/ready), BUG-764 (resolved children excluded from the epic rollup denominator)
-- See also: `docs/lifecycle.md`, `aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`
+- See also: `docs/lifecycle.md`, `aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`

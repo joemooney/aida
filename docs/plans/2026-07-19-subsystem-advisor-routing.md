@@ -28,7 +28,7 @@ AIDA already has the ingredients, but not one first-class model:
 - `docs/internal/architecture/autonomy-and-escalation.md` defines cold-boot advisor,
   fork-from-live advisor, conservative Type A/B/C calibration, and master
   human escalation.
-- `docs/aida/discipline/docs-lane.md` proves a single-writer scope lane by
+- `.aida/discipline/docs-lane.md` proves a single-writer scope lane by
   convention for docs work.
 - Specs already use `feature`, tags, parent relationships, queues, roles, and
   local leases, but those are separate signals.

@@ -164,7 +164,7 @@ The biggest volume lever. These are real-but-low-priority — archiving them to 
 - **TASK-354** (Low) — TASK-297: audit the remaining skill templates for headless-aware punt/auto paths
 - **TASK-355** (Low) — `--max-budget-usd` / `--model` cost knobs for the headless drain (SPIKE-7)
 - **TASK-356** (Low) — STORY-287: fold `--no-human=both`'s design-fork→punt into the three-mode taxonomy
-- **TASK-357** (Low) — `docs/aida-discipline/skill-prompt-kinds.md`: document the headless punt rule
+- **TASK-357** (Low) — `.aida/discipline/skill-prompt-kinds.md`: document the headless punt rule
 - **TASK-360** (Low) — Opt-in heartbeat: worker touches `.aida/worker.heartbeat`, kills a child whose mtime goes stale
 - **TASK-361** (Low) — `aida worker` controls beyond `directives` — e.g. `aida worker pause` / `aida worker stop` as typed wrappers over editing `worker.cmd`
 - **TASK-362** (Low) — Promote EPIC-30 if the file-directive channel hits real multi-user / multi-machine limits

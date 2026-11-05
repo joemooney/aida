@@ -17,8 +17,8 @@ When a convention evolves — a glyph swap, a vocabulary update, a palette unifi
 | Living guidance (CLAUDE.md, skill templates, `.aida/discipline/`, README) | **YES** — update to current truth |
 | Code (Rust source, configs, templates that compile/scaffold) | **YES** — update to current truth |
 | Plan files in `docs/plans/` (active or recent) | YES if still load-bearing; NO once the work shipped and the plan is historical |
-| Dated SPIKE outputs (`docs/internal/spikes/YYYY-MM-DD-*.md`) | **NO** — dated record of empirical findings |
-| Dated competitive-analysis snapshots (`docs/internal/competitive-analysis/YYYY-MM-DD-*.md`) | **NO** — snapshot at time T |
+| Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** — dated record of empirical findings |
+| Dated competitive-analysis snapshots (`docs/competitive-analysis/YYYY-MM-DD-*.md`) | **NO** — snapshot at time T |
 | Spec descriptions / acceptance bullets | YES if work hasn't started; OR file follow-up + comment per [[refinements-must-be-acceptance-criteria]] |
 | Spec comments | **NO** — chronological record |
 | Git commit messages | **NO** — immutable record |

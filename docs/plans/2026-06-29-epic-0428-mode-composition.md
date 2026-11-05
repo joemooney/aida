@@ -177,7 +177,7 @@ presence-marker is the closest analog and the right composition partner.
 - `aida-cli/src/main.rs`, `aida-cli/src/cli.rs`
 - `docs/internal/architecture/autonomy-and-escalation.md`
 - `docs/advanced/solo-mode.md`
-- `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
+- `aida-core/templates/.aida/discipline/machinery-glossary.md`
 
 ## Reusable helpers (do not reimplement)
 

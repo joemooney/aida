@@ -44,7 +44,7 @@ ensure_discipline_pack_scaffold (single runtime touch-point), embed_directory (g
 
 ## New test
 
-discipline_pack_lands_under_docs_aida_namespace — scaffolds + asserts docs/aida/discipline/README.md exists AND docs/aida-discipline/ is NOT created (guards fallback regression).
+discipline_pack_lands_under_docs_aida_namespace — scaffolds + asserts .aida/discipline/README.md exists AND docs/aida-discipline/ is NOT created (guards fallback regression).
 
 ## Composes with
 

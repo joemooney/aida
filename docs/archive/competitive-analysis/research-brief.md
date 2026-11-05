@@ -27,7 +27,7 @@ Keep AIDA's strategic picture from rotting in a landscape that moves weekly. Eac
 Do not start from a blank page — you will re-derive what we already know and miss the deltas. Read, in order:
 
 - `OVERVIEW.md` — what AIDA is and the Trojan-horse framing.
-- `docs/internal/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — **the current keystone synthesis**. Your job is to find what changed *since* this.
+- `docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — **the current keystone synthesis**. Your job is to find what changed *since* this.
 - `docs/internal/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md` — the wedge, pressure-tested (and where it's dangerous).
 - `docs/internal/competitive-analysis/positioning.md` + the relevant `docs/internal/positioning/vs-*.md` for your lane's competitors.
 - `docs/internal/competitive-analysis/signals-to-watch.md` — the standing tripwires; check each.

@@ -49,11 +49,11 @@
           "diff_sha256": "9a8c026bc63515686334dd033e244c0877ae3191d8a0f747f22bcfeaf55f8146"
         },
         {
-          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path": "aida-cli-lib/src/gate/review_verdict.rs",
           "diff_sha256": "37daca50cc99f73a497838e5ce8de1f626e2ef9fbca7beea110533992ee3f67c"
         },
         {
-          "path": "aida-cli-lib/src/tests/review_verdict_tests.rs",
+          "path": "aida-cli-lib/src/gate/tests/review_verdict_tests.rs",
           "diff_sha256": "ff7945ff7e7f127c575a6f23104f066d3f91b3655f8a7b27208fe9ac9cb7bf8a"
         }
       ],
@@ -351,7 +351,7 @@
               ]
             },
             {
-              "path": "aida-cli-lib/src/review_verdict.rs",
+              "path": "aida-cli-lib/src/gate/review_verdict.rs",
               "side": "base",
               "blob_sha256": "58867151284c363b90a693568f7804b096aafa7800f3cd934aa98e8ce26e25c8",
               "scoped_selected": false,
@@ -364,7 +364,7 @@
               ]
             },
             {
-              "path": "aida-cli-lib/src/review_verdict.rs",
+              "path": "aida-cli-lib/src/gate/review_verdict.rs",
               "side": "head",
               "blob_sha256": "1bb641ab29a52c8752d6c19b33f1fd66c9ead08b6eeb78b5f2c316fee4cfbac9",
               "scoped_selected": true,

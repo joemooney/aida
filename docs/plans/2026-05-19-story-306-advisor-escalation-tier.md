@@ -297,7 +297,7 @@ are the advisor tier and need STORY-276 merged first.
 
 - `docs/advanced/autonomous-drain.md` — the three-tier cascade, the `--escalate-*` flags,
   the advisor's escalate-by-default bias.
-- `aida-core/templates/docs/aida-discipline/advisor-role.md` — the
+- `aida-core/templates/.aida/discipline/advisor-role.md` — the
   headless-advisor seat as an extension of the advisor role; the A/B/C
   calibration. (Master template — scaffolded into `docs/aida-discipline/`.)
 - `CLAUDE.md`, `README.md` — `--escalate-blocks`/`--escalate-defaults`, the
@@ -316,7 +316,7 @@ are the advisor tier and need STORY-276 merged first.
 - `aida-core/templates/skills/aida-pickup.md`
 - `aida-core/templates/skills/aida-review.md`
 - `docs/advanced/autonomous-drain.md`
-- `aida-core/templates/docs/aida-discipline/advisor-role.md`
+- `aida-core/templates/.aida/discipline/advisor-role.md`
 
 ## Reusable helpers (do not reimplement)
 

@@ -327,7 +327,7 @@ trace:STORY-1033 | ai:codex
 > — is **Claude-Code-harness-only**: it depends on the harness's native
 > subagent fan-out (`Agent(isolation: "worktree")`), a primitive no other
 > vendor exposes. Non-Claude vendors therefore drain the *serial* way described
-> here. See `docs/aida/discipline/autonomous-burndown.md` for the fan-out path
+> here. See `.aida/discipline/autonomous-burndown.md` for the fan-out path
 > and the Claude-only caveat in full.
 
 ### Why a shelved spec can start again after re-queue
@@ -390,7 +390,7 @@ prompt-classification. Skill templates tag each prompt with a `kind:`
 annotation (`confirmation` vs `design-fork`); under `$AIDA_ZEN` the skill
 auto-resolves the `confirmation` prompts and still surfaces the
 `design-fork` ones. The classification rules live in
-`docs/aida/discipline/skill-prompt-kinds.md`.
+`.aida/discipline/skill-prompt-kinds.md`.
 
 ### Exiting a `--zen` session — the graceful-exit sentinel (TASK-329)
 
@@ -411,7 +411,7 @@ still presses Ctrl+D; under `--zen` the orchestrator reaps the REPL within
 ~100ms of the skill touching the sentinel — no keystroke, no hang. The
 polling and grace windows are tunable via `AIDA_EXIT_POLL_MS` /
 `AIDA_EXIT_GRACE_MS`. Full protocol:
-`docs/aida/discipline/skill-prompt-kinds.md`.
+`.aida/discipline/skill-prompt-kinds.md`.
 
 ## What runs headless
 

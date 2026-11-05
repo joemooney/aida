@@ -405,7 +405,7 @@ Practical consequence for a migrating team: a flow that relied on Claude's
 Confirm your team's headless approval flows do not assume in-session deferral on Codex. The
 full mapping table (`allow`/`deny`/`ask`/`defer`, input/output rewriting) is in
 `docs/archive/audits/porting-claude-code-to-codex.md`; the cross-agent pause/abort/defer semantics
-are in `docs/agents/session-communication.md`. Do not assume a later hook can ask whether to
+are in `docs/advanced/session-communication.md`. Do not assume a later hook can ask whether to
 continue after an earlier hook has halted the run.
 
 ### 9c — Sandbox posture is explicit, not inherited

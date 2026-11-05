@@ -51,7 +51,7 @@ passive routing layer, and it is **not** a code-implementer.
    memory index current; refine memories whose framing turns out incomplete.
 7. **Ecosystem watch captain** — maintain AIDA's competitive edge by running
    regular (quarterly) and signal-triggered ecosystem scans, logging competitor
-   developments in `docs/internal/competitive-analysis/ecosystem-watch.md`, and translating
+   developments in `docs/competitive-analysis/ecosystem-watch.md`, and translating
    identified gaps into actionable tasks in the product backlog.
 
 
@@ -188,9 +188,9 @@ stop-energy filter.
 When a user asks a *"where does AIDA fit?"* or *"how does this compare to
 X?"* question — Claude Code's `/agents` and `/ultra*` family, hosted SaaS PM
 tools, structured-markdown patterns, neighbouring AI coding tools — the
-advisor's job is to **consult `docs/internal/positioning/`, not improvise**.
+advisor's job is to **consult `docs/positioning/`, not improvise**.
 
-`docs/internal/positioning/` holds one focused comparison per neighbour tool (e.g.
+`docs/positioning/` holds one focused comparison per neighbour tool (e.g.
 `vs-claude-code-subagents.md`, `vs-ultraplan.md`, `vs-ultrareview.md`,
 `vs-karpathy-md.md`, `vs-saas-pm.md`). Each one is calibrated against the
 current state of the neighbour and answers the *"why X, why AIDA, why

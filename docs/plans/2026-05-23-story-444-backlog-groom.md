@@ -305,7 +305,7 @@ skill drives the conversation).
   into `aida-core/templates/`). Don't hand-author either side — the
   templates are the source.
 
-### 10. `docs/aida-discipline/backlog-grooming.md` (NEW)
+### 10. `.aida/discipline/backlog-grooming.md` (NEW)
 - Add `propagation: scaffolding-pack` frontmatter so it joins the
   starter memory pack on the next build (per CLAUDE.md's "Starter
   discipline pack" section).
@@ -323,7 +323,7 @@ skill drives the conversation).
 - `aida-core/src/scaffolding/mod.rs`
 - `aida-core/templates/skills/aida-backlog-groom.md` (new)
 - `aida-core/templates/commands/aida-backlog-groom.md` (new)
-- `docs/aida-discipline/backlog-grooming.md` (new)
+- `.aida/discipline/backlog-grooming.md` (new)
 - `.claude/skills/aida-backlog-groom.md` (symlink, created via `make sync-templates`)
 - `.claude/commands/aida-backlog-groom.md` (symlink, created via `make sync-templates`)
 

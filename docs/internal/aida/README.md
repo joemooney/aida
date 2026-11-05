@@ -11,7 +11,7 @@ To re-render after editing requirements: `aida docs build`.
 - [Constitution](00-constitution.md) — 1 principles
 - [Vision](01-vision.md) — 1 item(s)
 - [Constraints](02-constraints.md) — 1 constraint(s)
-- [Decisions](05-decisions/README.md) — 1 ADR(s)
+- [Decisions](../../aida/05-decisions/README.md) — 1 ADR(s)
 - [Quality requirements](07-quality.md) — 0 NFR(s)
 - [Glossary](10-glossary.md) — 1 term(s)
 

@@ -8,7 +8,7 @@
 > NOT yet confirmed against primary sources — treat as proposals to validate
 > before implementing:
 > - The **`InstructionsLoaded`** hook event is **unverified** against the
->   Claude Code hook taxonomy (`docs/agents/session-communication.md` documents
+>   Claude Code hook taxonomy (`docs/advanced/session-communication.md` documents
 >   SessionStart/SessionEnd/PreToolUse/PostToolUse/Stop/PreCompact). Re-confirm
 >   it exists before wiring an integration to it.
 > - The commands `aida snapshot`, `aida lease validate`/`check`, and

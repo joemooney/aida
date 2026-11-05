@@ -81,4 +81,4 @@ These three are the qualitative seed. The live logger now turns that anecdote st
 - `aida-cli/src/field_study.rs` — slices 1-2 (the retrospective git-log sensor)
 - `docs/internal/research/ablations/2026-06-20-field-instrumentation-spike-67.md` — slice-1 findings + first harvest
 - `aida-cli/src/auto_complete_telemetry.rs` — the TASK-266 drain telemetry this hooks alongside
-- `aida-core/templates/docs/aida/discipline/substrate-as-bouncer.md` — the thesis
+- `aida-core/templates/.aida/discipline/substrate-as-bouncer.md` — the thesis

@@ -2403,7 +2403,7 @@ Options:
       --artifact-dir <ARTIFACT_DIR>
           Directory for the dated analysis + decision-sidecar artifacts
           
-          [default: docs/internal/research]
+          [default: docs/research]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =

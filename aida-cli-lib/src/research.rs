@@ -185,18 +185,15 @@ mod tests {
 
     #[test]
     fn artifact_paths_lowercase_slug_and_dated() {
-        let (analysis, sidecar) = research_artifact_paths(
-            Path::new("docs/internal/research"),
-            "SPIKE-53",
-            "2026-06-12",
-        );
+        let (analysis, sidecar) =
+            research_artifact_paths(Path::new("docs/research"), "SPIKE-53", "2026-06-12");
         assert_eq!(
             analysis,
-            PathBuf::from("docs/internal/research/2026-06-12-spike-53-research.md")
+            PathBuf::from("docs/research/2026-06-12-spike-53-research.md")
         );
         assert_eq!(
             sidecar,
-            PathBuf::from("docs/internal/research/2026-06-12-spike-53-decision.json")
+            PathBuf::from("docs/research/2026-06-12-spike-53-decision.json")
         );
     }
 
@@ -206,13 +203,13 @@ mod tests {
             "SPIKE-53",
             "Evaluate X",
             "## Acceptance\n- [ ] decide",
-            Path::new("docs/internal/research/r.md"),
-            Path::new("docs/internal/research/d.json"),
+            Path::new("docs/research/r.md"),
+            Path::new("docs/research/d.json"),
         );
         // Reuses the skill (not a reimplementation) and pins both artifacts.
         assert!(prompt.contains("deep-research"));
-        assert!(prompt.contains("docs/internal/research/r.md"));
-        assert!(prompt.contains("docs/internal/research/d.json"));
+        assert!(prompt.contains("docs/research/r.md"));
+        assert!(prompt.contains("docs/research/d.json"));
         // Carries the spike context + the propose-only guardrail.
         assert!(prompt.contains("SPIKE-53 — Evaluate X"));
         assert!(prompt.contains("- [ ] decide"));
@@ -283,12 +280,9 @@ mod tests {
 
     #[test]
     fn provenance_comment_tags_lane_and_points_at_artifact() {
-        let c = provenance_comment(
-            "docs/internal/research/2026-06-12-spike-53-research.md",
-            "the gist",
-        );
+        let c = provenance_comment("docs/research/2026-06-12-spike-53-research.md", "the gist");
         assert!(c.contains("[research-lane]"));
         assert!(c.contains("the gist"));
-        assert!(c.contains("docs/internal/research/2026-06-12-spike-53-research.md"));
+        assert!(c.contains("docs/research/2026-06-12-spike-53-research.md"));
     }
 }

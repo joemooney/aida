@@ -160,7 +160,7 @@ itself past) is preserved and extended.
 
 - Document the envelope as the grooming-time application of the §2 cascade + §3 calibration. (TASK-0432 owns the precise edit; flagged here for build-order.)
 
-### `aida-core/templates/docs/aida/discipline/advisor-role.md` — vocabulary
+### `aida-core/templates/.aida/discipline/advisor-role.md` — vocabulary
 
 - Add "autopilot envelope" to the advisor seat's documented authority.
 

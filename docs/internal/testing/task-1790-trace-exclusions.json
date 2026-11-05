@@ -510,7 +510,7 @@
       "fallback_paths": [
         "aida-cli-lib/src/leases.rs",
         "aida-cli-lib/src/queue_cmd.rs",
-        "aida-cli-lib/src/review_verdict.rs",
+        "aida-cli-lib/src/gate/review_verdict.rs",
         "aida-cli-lib/src/status_sections.rs",
         "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs"
       ]
@@ -725,7 +725,7 @@
         "aida-cli-lib/src/pr_cmd.rs",
         "aida-cli-lib/src/pr_ship.rs",
         "aida-cli-lib/src/review_authority.rs",
-        "aida-cli-lib/src/review_verdict.rs",
+        "aida-cli-lib/src/gate/review_verdict.rs",
         "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs",
         "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs",
         "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs",
@@ -1058,7 +1058,7 @@
       "newly_refused_full": true,
       "newly_refused_scoped": true,
       "fallback_paths": [
-        "aida-cli-lib/src/review_verdict.rs"
+        "aida-cli-lib/src/gate/review_verdict.rs"
       ]
     }
   ],

@@ -85,7 +85,7 @@ for `--help`; `trace:` marker on a plain `//` line (TASK-268).
 Add an identical "Autonomy mode (`$AIDA_ZEN`)" section + `<!-- kind:* -->`
 annotations above each prompt. Edit masters only; `make sync-templates`.
 
-### `docs/aida-discipline/skill-prompt-kinds.md` — NEW
+### `.aida/discipline/skill-prompt-kinds.md` — NEW
 Skill-author convention doc: the two kinds, classification guidance,
 option-1 convention, annotation form.
 

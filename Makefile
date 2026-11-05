@@ -343,8 +343,8 @@ check-book-glossary: ## Fail if docs/cli/12-glossary.md differs from `aida docs 
 book: book-glossary ## Build the AIDA Book (mdBook) — regenerates the Glossary chapter first
 	python3 scripts/build-reader-book.py
 
-book-serve: book-glossary ## Serve the AIDA Book locally with live reload (regenerates the Glossary first)
-	mdbook serve docs --open
+book-serve: book-glossary ## Serve the pruned AIDA Book locally (run make book again after edits)
+	python3 scripts/build-reader-book.py --serve
 
 user-guide: cli ## Open user guide in browser
 	./target/debug/aida user-guide

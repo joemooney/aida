@@ -12,7 +12,7 @@ Some artifacts go stale fast — a competitive analysis especially. The tooling 
 
 **How to apply:**
 
-1. Each analysis session writes a **dated snapshot** (`docs/internal/competitive-analysis/YYYY-MM-DD-snapshot.md`) — don't overwrite previous ones; retain them as a historical record.
+1. Each analysis session writes a **dated snapshot** (`docs/competitive-analysis/YYYY-MM-DD-snapshot.md`) — don't overwrite previous ones; retain them as a historical record.
 2. Maintain category summaries that update incrementally as observations accumulate.
 3. Refresh on a cadence (e.g. quarterly) OR on signals — a competitor reaches a milestone, a foundational primitive ships, a standard emerges.
 4. Keep a signals-to-watch list naming specific projects and triggers.

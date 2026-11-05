@@ -10,7 +10,7 @@ every place AIDA currently depends on a Claude-specific surface, what the
 surface does, the nearest non-Claude (Codex) equivalent, and the concrete gap
 plus the spec that covers it. The companion conceptual analysis is
 `docs/archive/audits/porting-claude-code-to-codex.md`; the durable hook/defer reference
-is `docs/agents/session-communication.md`. This file is deliberately concrete:
+is `docs/advanced/session-communication.md`. This file is deliberately concrete:
 file and symbol references so a future implementer can find the exact code that
 hardcodes a vendor.
 
@@ -94,7 +94,7 @@ shortcuts (`/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`,
 | Surface | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `CLAUDE.md` (repo root) | Primary durable instruction surface for Claude sessions | guidance | `AGENTS.md` (Codex-native) + `docs/aida/discipline/` | `aida init` already scaffolds both `CLAUDE.md` and `AGENTS.md`. The risk is drift: agent-neutral discipline that lives only in `CLAUDE.md`. Coverage: TASK-0424 (template completeness) + TASK-b6b1278890774ef993d2ebc327862470-261 (positioning/cold-reader clarity) |
-| `CLAUDE.md` `@`-imports (discipline README) | Transitively loads `docs/aida/discipline/README.md` into context | guidance | `AGENTS.md` references; Codex has no identical `@`-import transitive-load semantics | The discipline pack is plain markdown, so it ports as references. The auto-load mechanic is Claude-specific but non-load-bearing. Coverage: TASK-0424 |
+| `CLAUDE.md` `@`-imports (discipline README) | Transitively loads `.aida/discipline/README.md` into context | guidance | `AGENTS.md` references; Codex has no identical `@`-import transitive-load semantics | The discipline pack is plain markdown, so it ports as references. The auto-load mechanic is Claude-specific but non-load-bearing. Coverage: TASK-0424 |
 
 ## 5. The headless path — `claude -p` vs `codex exec`
 
@@ -215,7 +215,7 @@ bite — everything else is convenience or already covered.
 ## References
 
 - `docs/archive/audits/porting-claude-code-to-codex.md` — conceptual migration analysis
-- `docs/agents/session-communication.md` — durable hook/defer/resume reference
+- `docs/advanced/session-communication.md` — durable hook/defer/resume reference
 - `docs/agents/cross-agent-onboarding.md` — MCP onboarding for non-Claude agents
 - `docs/agents/codex-mcp-setup.md` — working Codex MCP registration
 - `docs/agents/per-agent-config.md` — per-agent permission posture + `os_wrap`

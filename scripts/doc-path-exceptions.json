@@ -1,0 +1,1124 @@
+[
+  {
+    "source": ".aida/discipline/advisor-role.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".aida/discipline/git-sync-and-review.md",
+    "target": "docs/recipes/divergent-branches.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".aida/discipline/workflow-patterns.md",
+    "target": "docs/competitive-analysis/YYYY-MM-DD-market-snapshot.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/commands/aida-docs-review.md",
+    "target": "docs/review-report.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/commands/aida-docs.md",
+    "target": "docs/SKILL.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/commands/aida-ecosystem-scan.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-code-review/SKILL.md",
+    "target": "docs/code-review-report.md",
+    "count": 2,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-code-review/SKILL.md",
+    "target": "docs/code-review-report.html",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-docs-review/SKILL.md",
+    "target": "docs/review-report.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-docs-review/SKILL.md",
+    "target": "docs/review-report.html",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-docs/SKILL.md",
+    "target": "docs/reports/requirements-status.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-ecosystem-scan/SKILL.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": ".claude/skills/aida-pickup/SKILL.md",
+    "target": "docs/plans/...md",
+    "count": 7,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "CHANGELOG.md",
+    "target": "docs/aida-discipline/autonomous-drain.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "aida-cli-lib/src/advisor_code_gate.rs",
+    "target": "docs/plans/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/advisor_code_gate.rs",
+    "target": "docs/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/do_dispatch.rs",
+    "target": "docs/internal/spikes/2026-09-18-night.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/doctor_cmd.rs",
+    "target": "docs/scaffold-report.html",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/external_import_bleed.rs",
+    "target": "docs/aida/discipline/README.md",
+    "count": 6,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/field_study.rs",
+    "target": "docs/readme.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/init_cmd.rs",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/intake.rs",
+    "target": "docs/guide.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/mcp.rs",
+    "target": "docs/plans/2026-06-07-story-536.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/plan_cmd.rs",
+    "target": "docs/plans/x.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/plan_followups.rs",
+    "target": "docs/plans/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/plan_report.rs",
+    "target": "docs/plans/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/plan_report.rs",
+    "target": "docs/plans/...md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/pr_rebase.rs",
+    "target": "docs/c.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/pr_rebase.rs",
+    "target": "docs/build/notes.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/spikes/notes.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/spikes/2026-09-23-cache-probe.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/spikes/2026-01-02-legacy.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/internal/spikes/2026-01-02-x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/spikes/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/protocol_gate.rs",
+    "target": "docs/spikes/sub/2026-01-02-x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/regen.rs",
+    "target": "docs/design.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/research.rs",
+    "target": "docs/research/2026-06-12-spike-53-research.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/research.rs",
+    "target": "docs/research/2026-06-12-spike-53-decision.json",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/research.rs",
+    "target": "docs/research/r.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/research.rs",
+    "target": "docs/research/d.json",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/scaffold_init.rs",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/session_manifest.rs",
+    "target": "docs/plans/2026-05-11-bug-73.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/session_manifest.rs",
+    "target": "docs/plans/x.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/state_snapshot.rs",
+    "target": "docs/plans/...md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/state_snapshot.rs",
+    "target": "docs/plans/2026-05-20-task-391.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug708_under_specified_tests.rs",
+    "target": "docs/flow-smoke.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug_046_doctor_renumber_tests.rs",
+    "target": "docs/a/b.yaml",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug_1633_pull_push_followups_tests.rs",
+    "target": "docs/plans/some-other-plan.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug_1633_pull_push_followups_tests.rs",
+    "target": "docs/plans/x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug_1633_pull_push_followups_tests.rs",
+    "target": "docs/plans/b.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/bug_1633_pull_push_followups_tests.rs",
+    "target": "docs/plans/a.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/handle_pull_command_tests.rs",
+    "target": "docs/plans/x.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/handle_pull_command_tests.rs",
+    "target": "docs/plans/other.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plan.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/a.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/b.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/solo.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/2026-06-30-shared.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/2026-06-30-spike-70.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/2026-06-30-other.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/2026-06-01-foo.md",
+    "count": 4,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/statusline_tests.rs",
+    "target": "docs/plans/...md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_1426_contradictions_tests.rs",
+    "target": "docs/plans/entry.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/plans/2026-10-31-x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/a.md",
+    "count": 32,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/b.md",
+    "count": 11,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/deleted.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/x.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/showcase/b.html",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/c.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/cli/d.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/showcase/a.html",
+    "count": 4,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/other.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
+    "target": "docs/mirror/a.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/story_255_discipline_pack_tests.rs",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/tests/task_492_brief_tests.rs",
+    "target": "docs/plans/2026-06-05-x.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/build.rs",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/src/report.rs",
+    "target": "docs/usage.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/src/scaffolding/codex_md.rs",
+    "target": "docs/agents/session-communication.md",
+    "count": 3,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/src/scaffolding/mod.rs",
+    "target": "docs/agents/session-communication.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/src/scaffolding/refresh.rs",
+    "target": "docs/thing.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/src/workspace.rs",
+    "target": "docs/handoff.tmp.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "aida-core/templates/.aida/discipline/advisor-role.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+    "target": "docs/recipes/divergent-branches.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+    "target": "docs/competitive-analysis/YYYY-MM-DD-market-snapshot.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/commands/aida-docs-review.md",
+    "target": "docs/review-report.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/commands/aida-docs.md",
+    "target": "docs/SKILL.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/commands/aida-ecosystem-scan.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/docs/agents/claude-surfaces-codex-parity.md",
+    "target": "docs/agents/session-communication.md",
+    "count": 2,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/docs/agents/codex-validation-runbook.md",
+    "target": "docs/agents/session-communication.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/docs/agents/cross-agent-onboarding.md",
+    "target": "docs/agents/session-communication.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/docs/agents/cross-agent-onboarding.md",
+    "target": "docs/writeups/2026-05-20-autonomy-keystone-day.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/memories/feedback_competitive_analysis_is_living_doc.md",
+    "target": "docs/competitive-analysis/YYYY-MM-DD-snapshot.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/memories/feedback_fetch_before_commit.md",
+    "target": "docs/recipes/divergent-branches.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-code-review.md",
+    "target": "docs/code-review-report.md",
+    "count": 2,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-code-review.md",
+    "target": "docs/code-review-report.html",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-docs-review.md",
+    "target": "docs/review-report.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-docs-review.md",
+    "target": "docs/review-report.html",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-docs.md",
+    "target": "docs/reports/requirements-status.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-ecosystem-scan.md",
+    "target": "docs/competitive-analysis/ecosystem-watch.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "aida-core/templates/skills/aida-pickup.md",
+    "target": "docs/plans/...md",
+    "count": 7,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/agents/cross-agent-onboarding.md",
+    "target": "docs/writeups/2026-05-20-autonomy-keystone-day.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/internal/agents/aida-repository-guide.md",
+    "target": "docs/plans/2026-06-12-repositioning-governance-layer.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/internal/competitive-analysis/marketplace-roster.md",
+    "target": "docs/reference/mcp.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/internal/positioning/README.md",
+    "target": "docs/internal/positioning/vs-X.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/internal/presentation/README.md",
+    "target": "docs/internal/presentation/build/index.html",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/SKILL.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/agents/session-communication.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/00-constitution.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/01-vision.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/02-constraints.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/07-quality.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/10-glossary.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/README.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/cache-locks.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/doctor.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/aida/multi-source-coordination.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/casts/2026-05-24T025421Z-task-508.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/casts/20260630_211851_story-744.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/casts/20260630_224110_zen_solo_TASK-841.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/casts/20260630_231139_zen_solo_STORY-698.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-29-documentation-inventory.csv",
+    "target": "docs/showcase/overview-template.html",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/SKILL.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/agents/session-communication.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/00-constitution.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/01-vision.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/02-constraints.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/07-quality.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/10-glossary.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/README.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/cache-locks.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/doctor.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/aida/multi-source-coordination.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/casts/2026-05-24T025421Z-task-508.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/casts/20260630_211851_story-744.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/casts/20260630_224110_zen_solo_TASK-841.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/internal/reports/2026-10-30-completion-inventory.csv",
+    "target": "docs/casts/20260630_231139_zen_solo_STORY-698.cast",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-02-22-rename-aida-gui-to-aida-desktop.md",
+    "target": "docs/DEVELOPER_GUIDE.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-02-22-rename-aida-gui-to-aida-desktop.md",
+    "target": "docs/unified-gui-plan.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-02-22-rename-aida-gui-to-aida-desktop.md",
+    "target": "docs/unified-storage-architecture.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-02-22-rename-aida-gui-to-aida-desktop.md",
+    "target": "docs/AI_INTEGRATION_DESIGN.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-03-17-code-review-skill-research.md",
+    "target": "docs/code-review-report.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-03-17-docs-review.md",
+    "target": "docs/tutorials.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-09-documentation-layers-module.md",
+    "target": "docs/INDEX.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-codex-driven-aida-improvement.md",
+    "target": "docs/experiments/agent-lift/README.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-codex-driven-aida-improvement.md",
+    "target": "docs/codex-quickstart.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/README.md",
+    "count": 3,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/benchmark-template.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/run-notes-template.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/review-rubric-template.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/result-summary-template.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/codex-quickstart.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-1-agent-lift-evaluation.md",
+    "target": "docs/experiments/agent-lift/summary.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-2-traceability-governance.md",
+    "target": "docs/traceability-governance.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-22-track-3-codex-local-workflow.md",
+    "target": "docs/codex-quickstart.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-05-23-story-444-backlog-groom.md",
+    "target": "docs/plans/2026-01-01-x.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-06-25-codex-sandbox-posture-design.md",
+    "target": "docs/agents/codex-sandbox.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-06-29-epic-0428-product-role-integration.md",
+    "target": "docs/aida/discipline/product-role.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-02-spike-91-protected-broker-worker-boundary-package.md",
+    "target": "docs/kernel-policy.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-02-spike-91-protected-broker-worker-boundary-package.md",
+    "target": "docs/vsock.md",
+    "count": 2,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-19-backlog-triage.tsv",
+    "target": "docs/regeneration/aida-feedback.md",
+    "count": 4,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-19-backlog-triage.tsv",
+    "target": "docs/ci-self-hosted.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-19-backlog-triage.tsv",
+    "target": "docs/internal/positioning/vs-beads.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "docs/plans/2026-10-19-backlog-triage.tsv",
+    "target": "docs/internal/presentations/aida-overview.md",
+    "count": 1,
+    "reason": "Historical proposal or snapshot; records a proposed/retired path, not a current repository link."
+  },
+  {
+    "source": "scripts/paper-pdf.sh",
+    "target": "docs/internal/research/foo.md",
+    "count": 1,
+    "reason": "Project output, example or proposed artifact; not a checked-in repository document."
+  },
+  {
+    "source": "scripts/split-lib/tests/test_verify_stack.py",
+    "target": "docs/plans/other-manifest.toml",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_advisor_code_gate.sh",
+    "target": "docs/plan.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_analyze_code_growth.py",
+    "target": "docs/internal/monitor-contract-fixtures/a.json",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_analyze_code_growth.py",
+    "target": "docs/cli/01.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_analyze_code_growth.py",
+    "target": "docs/a.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_bug238_edit_followups.sh",
+    "target": "docs/plans/2026-05-20-test1.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_bug238_edit_followups.sh",
+    "target": "docs/plans/2026-05-20-test2.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_bug238_edit_followups.sh",
+    "target": "docs/plans/2026-05-20-test4.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_bug238_edit_followups.sh",
+    "target": "docs/plans/2026-05-20-test5.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_check_removed_flags.sh",
+    "target": "docs/guide.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_doc_audiences.py",
+    "target": "docs/new-topic.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_doc_audiences.py",
+    "target": "docs/new-unclassified-topic.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_doc_audiences.py",
+    "target": "docs/retired.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_doc_audiences.py",
+    "target": "docs/missing.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_doc_audiences.py",
+    "target": "docs/archive/retired.md",
+    "count": 4,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_prose_classification_rule.py",
+    "target": "docs/outside.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_showcase_build.py",
+    "target": "docs/guide.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_showcase_publish.py",
+    "target": "docs/showcase/assets/x.svg",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_showcase_publish.py",
+    "target": "docs/showcase/untracked.html",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_skill_discovery.py",
+    "target": "docs/plans/helper-missing.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_skill_discovery.py",
+    "target": "docs/plans/missing.md",
+    "count": 1,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "tests/test_test_touched.py",
+    "target": "docs/a.md",
+    "count": 2,
+    "reason": "Synthetic test fixture or generated output path; not a repository document."
+  }
+]

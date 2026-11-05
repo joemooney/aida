@@ -88,7 +88,7 @@ fn main() {
     embed_file(
         &mut code,
         "templates/docs/competitive-analysis/ecosystem-watch.md",
-        "docs/internal/competitive-analysis/ecosystem-watch.md",
+        "docs/competitive-analysis/ecosystem-watch.md",
     );
 
     // Starter memory pack — generic AIDA-using discipline written to the
@@ -134,7 +134,7 @@ fn main() {
         "    (\"docs/extending-skills.md\", \"Per-project skill extension guide scaffolded into docs/\"),\n",
     );
     code.push_str(
-        "    (\"docs/internal/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
+        "    (\"docs/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
     );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("    (\"gates\", \"Gate library - named checklists invoked by `aida gate` and `aida add --gates`\"),\n");

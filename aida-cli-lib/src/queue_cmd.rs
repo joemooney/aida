@@ -10653,7 +10653,7 @@ pub(crate) fn derive_queue_work_prompt_with_round(
             .starts_with("SPIKE-")
         {
             pickup.push_str(
-                "\n\nResearch-lane contract: produce the source-grounded deliverable as a dated `docs/internal/spikes/<date>-<slug>.md` report, commit it, and open a PR for normal CI and review. Do not make or apply a product/design decision inside the report; surface any decision for the advisor. This is the research lane, not the implementer lane."
+                "\n\nResearch-lane contract: produce the source-grounded deliverable as a dated `docs/spikes/<date>-<slug>.md` report, commit it, and open a PR for normal CI and review. Do not make or apply a product/design decision inside the report; surface any decision for the advisor. This is the research lane, not the implementer lane."
             );
         }
         if let Some(findings) = review_findings {

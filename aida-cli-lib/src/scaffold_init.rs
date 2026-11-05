@@ -334,7 +334,7 @@ pub(crate) fn remove_empty_parent_dirs(
     Ok(())
 }
 
-/// Scaffold a starter `docs/internal/competitive-analysis/ecosystem-watch.md` with
+/// Scaffold a starter `docs/competitive-analysis/ecosystem-watch.md` with
 /// today's local date stamped into the `Last updated` line. Idempotent:
 /// leaves an existing file alone unless `force` is set. Returns `true` if
 /// the file was written.
@@ -497,13 +497,13 @@ pub(crate) fn git_origin_url(root: &std::path::Path) -> Option<String> {
 
 pub(crate) fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
     // trace:STORY-1651 | ai:codex
-    let dir = root.join("docs/internal/competitive-analysis");
+    let dir = root.join("docs/competitive-analysis");
     let dest = dir.join("ecosystem-watch.md");
     if dest.exists() && !force {
         return Ok(false);
     }
     let Some(template) = aida_core::templates::EMBEDDED_TEMPLATES
-        .get("docs/internal/competitive-analysis/ecosystem-watch.md")
+        .get("docs/competitive-analysis/ecosystem-watch.md")
     else {
         return Ok(false);
     };

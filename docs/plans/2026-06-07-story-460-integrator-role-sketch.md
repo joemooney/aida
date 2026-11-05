@@ -93,7 +93,7 @@ aida agent new claude --role integrator
   `aida-core/templates/roles/` directory exists. Inventing a parallel markdown
   role-file format would fork the substrate. **Recommended shape**: (a) the
   durable integrator discipline lives as a discipline-pack page
-  (`aida-core/templates/docs/aida/discipline/integrator-role.md`, mirroring
+  (`aida-core/templates/.aida/discipline/integrator-role.md`, mirroring
   `advisor-role.md` / `implementer-discipline.md`); (b) the launch-time guidance
   comes from a new `integrator` arm in `role_guidance_for` plus an optional
   scaffolded `.aida/roles/integrator.toml` whose `system_prompt` points at that
@@ -157,7 +157,7 @@ deciding what the code should mean?"* Yes → in-scope. No → escalate.
 
 Three artifacts, all riding the EPIC-31 launcher/registry pass:
 
-1. **Discipline page** — `aida-core/templates/docs/aida/discipline/integrator-role.md`
+1. **Discipline page** — `aida-core/templates/.aida/discipline/integrator-role.md`
    (master template, embedded via `build.rs`, mirrored to
    `.aida/roles/` consumers via the discipline pack). Sibling of
    `advisor-role.md` / `implementer-discipline.md`. Add a row to the discipline
@@ -236,7 +236,7 @@ Per `feedback_one_master_advisor_until_subsystems`:
 ### Smallest valuable slice (when EPIC-31 unparks)
 
 1. `integrator` arm in `role_guidance_for` (closes the fallback gap).
-2. `aida-core/templates/docs/aida/discipline/integrator-role.md` + README
+2. `aida-core/templates/.aida/discipline/integrator-role.md` + README
    pointer-table row.
 3. `.aida/roles/integrator.toml` scaffold (idempotent), `system_prompt` →
    discipline page.
@@ -277,7 +277,7 @@ Deliberately OUT of the smallest slice (STORY-460 already defers): the
 - STORY-460 (this spec), EPIC-31 (launcher/registry cluster this rides)
 - STORY-459, TASK-542, TASK-541 (compose-with: dispatch / names / ordered briefs)
 - `docs/internal/architecture/autonomy-and-escalation.md` (escalation cascade substrate)
-- `aida-core/templates/docs/aida/discipline/advisor-role.md`,
+- `aida-core/templates/.aida/discipline/advisor-role.md`,
   `implementer-discipline.md` (sibling discipline pages / format)
 - `feedback_one_master_advisor_until_subsystems`,
   `feedback_trust_reviewer_over_dialog_intuition`,

@@ -54,7 +54,7 @@ templates/skills/aida-pr/examples/… ──────────────
    new `…/aida-pr/examples/pr-description-template.md`; SKILL.md references it.
 5. `.claude/skills/aida-pr.md` symlink → `.claude/skills/aida-pr` dir symlink.
 6. `Makefile` — `sync-templates` / `check-templates` handle folder-form skills.
-7. `aida-core/templates/docs/aida/discipline/skill-prompt-kinds.md` — document
+7. `aida-core/templates/.aida/discipline/skill-prompt-kinds.md` — document
    the helper-folder pattern.
 
 ## Critical Files

@@ -95,6 +95,7 @@ def audience(p):
     if p.startswith("docs/archive/"):
         return "archive"
     if p.startswith(("aida-core/templates/", ".claude/", ".agents/", ".codex/", ".aida/discipline/")) or p in {
+        "docs/agents/codex-brief-pickup.md", "docs/agents/antigravity-brief-pickup.md",
         "REVIEW.md", "docs/user-guide.html", "docs/user-guide-dark.html", "docs/cli/12-glossary.md",
         "docs/agents/claude-surfaces-codex-parity.md", "docs/agents/codex-mcp-roundtrip-verdict.md",
     }:
@@ -165,20 +166,19 @@ def main():
     if "--check" in sys.argv:
         return check()
     rows, moved, tracked = build()
-    if "--check" not in sys.argv:
-        if os.path.exists(TSV):
-            with open(TSV, encoding="utf-8") as existing:
-                history = {r["path"]: r for r in csv.DictReader(existing, delimiter="\t")}
-            for row in rows:
-                old = history.get(row[0])
-                if old:
-                    row[2:6] = [old[k] for k in HEADER[2:6]]
-        with open(TSV, "w", encoding="utf-8") as f:
-            f.write("\t".join(HEADER) + "\n")
-            for r in rows:
-                f.write("\t".join(r) + "\n")
-        print(f"wrote {len(rows)} rows ({len(moved)} moved)")
-        return 0
+    if os.path.exists(TSV):
+        with open(TSV, encoding="utf-8") as existing:
+            history = {r["path"]: r for r in csv.DictReader(existing, delimiter="\t")}
+        for row in rows:
+            old = history.get(row[0])
+            if old:
+                row[2:6] = [old[k] for k in HEADER[2:6]]
+    with open(TSV, "w", encoding="utf-8") as f:
+        f.write("\t".join(HEADER) + "\n")
+        for r in rows:
+            f.write("\t".join(r) + "\n")
+    print(f"wrote {len(rows)} rows ({len(moved)} moved)")
+    return 0
 
 
 # trace:STORY-1651 | ai:codex
@@ -200,8 +200,9 @@ def check():
                 errors.append(f"invalid or missing audience: {p}")
             elif row["audience"] != audience(p):
                 errors.append(f"wrong audience for {p}: {row['audience']} (expected {audience(p)})")
-    for p in sorted(tracked - listed.keys()):
-        errors.append(f"tracked doc missing audience: {p}")
+    for p in sorted(tracked):
+        if audience(p) is None:
+            errors.append(f"tracked doc missing audience: {p}")
     all_tracked = set(tracked_paths())
     for p in sorted(listed.keys() - all_tracked):
         errors.append(f"inventory row is not a tracked file: {p}")

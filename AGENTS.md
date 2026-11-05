@@ -443,7 +443,7 @@ queue/orchestrator, and an MCP server that exposes the same graph to
 non-Claude agents. Use `OVERVIEW.md` for product and architecture
 context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
-context, and `docs/agents/session-communication.md` for Claude/Codex/
+context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
 The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
@@ -723,7 +723,7 @@ runtime behavior contradicts current source.
 
 For hook-level pause/abort/resume semantics, especially Claude Code
 `PreToolUse` / `PostToolUse`, `continue: false`, `ask`, and `defer`, use
-`docs/agents/session-communication.md`. Do not assume a later hook can ask
+`docs/advanced/session-communication.md`. Do not assume a later hook can ask
 whether to continue after an earlier hook has halted the run.
 
 ## Known Codex Pitfalls

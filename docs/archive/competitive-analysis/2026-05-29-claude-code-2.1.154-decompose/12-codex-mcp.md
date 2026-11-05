@@ -154,7 +154,7 @@ agent scenarios. The moment AIDA offers remote MCP, it needs:
    the Codex session was closed, but the AIDA CLI brief path worked. That is a
    real reliability requirement, not just a convenience.
 5. Do not overfit Codex docs to Claude Code hook semantics. Link to
-   `docs/agents/session-communication.md` for client-specific pause/abort
+   `docs/advanced/session-communication.md` for client-specific pause/abort
    behavior.
 6. For future remote MCP, split docs and possibly tools into read-only and
    write-capable operational profiles. AIDA's current local stdio setup assumes

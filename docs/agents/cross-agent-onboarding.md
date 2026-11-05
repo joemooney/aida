@@ -5,7 +5,7 @@
 This brief is what you need to know to participate productively in an AIDA project. It assumes you can speak MCP, run shell commands, and read/write files in a worktree.
 
 For agent-session communication details that cut across Claude, Codex, and
-Antigravity, see `docs/agents/session-communication.md`. That file is the
+Antigravity, see `docs/advanced/session-communication.md`. That file is the
 durable reference for hook pause/abort/defer behavior, brief routing, and
 which substrate channel to use when an agent must stop, ask, or resume.
 
@@ -283,7 +283,7 @@ In priority order for an agent boarding the project:
 6. **`docs/advanced/multi-advisor-coordination.md`** — SPIKE-10 verdict on subsystem-scoping + sibling-advisor initiation. The shape this brief is the first concrete instance of.
 7. **`docs/writeups/2026-05-20-autonomy-keystone-day.md`** — narrative of the autonomy keystone shipping. Useful context for how the project ships work end-to-end.
 8. **`OVERVIEW.md`** — strategic vision, public face, surface inventory.
-9. **`aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`** — the precise verbs (Draft / Approved / Planned / In Progress / Done / Completed / Released) and the auto-bump mechanics that turn Done → Completed.
+9. **`aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`** — the precise verbs (Draft / Approved / Planned / In Progress / Done / Completed / Released) and the auto-bump mechanics that turn Done → Completed.
 
 ## The strategic context — why this matters
 

@@ -114,7 +114,7 @@ short reason per mode call ("guided: carries keystone tag") so a wrong
 classification is visible in review.
 
 **Spikes are classified by deliverable, not by their human-only type default.**
-When a spike names a concrete `docs/internal/spikes/<date>-<slug>.md` report path and
+When a spike names a concrete `docs/spikes/<date>-<slug>.md` report path and
 acceptance/evidence criteria, propose `drain` if no requirement has a
 `BlockedBy` edge to it. If a dependent does, propose `drive` so the advisor
 reads the report before merge, and name that dependent in the reason. A spike

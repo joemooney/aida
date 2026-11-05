@@ -2570,7 +2570,7 @@
           "change_kind": "M"
         },
         {
-          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path": "aida-cli-lib/src/gate/review_verdict.rs",
           "path_class": "Rust source",
           "change_kind": "M"
         },
@@ -3760,7 +3760,7 @@
           "change_kind": "A"
         },
         {
-          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path": "aida-cli-lib/src/gate/review_verdict.rs",
           "path_class": "Rust source",
           "change_kind": "M"
         },
@@ -5754,7 +5754,7 @@
       ],
       "fallback_paths": [
         {
-          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path": "aida-cli-lib/src/gate/review_verdict.rs",
           "path_class": "Rust source",
           "change_kind": "M"
         }

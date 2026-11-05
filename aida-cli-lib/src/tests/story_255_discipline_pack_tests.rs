@@ -112,7 +112,7 @@ fn discipline_pack_scaffolds_nested_keys() {
 
 #[test]
 fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
-    // trace:TASK-126 — fresh init must plant docs/internal/competitive-analysis/
+    // trace:TASK-126 — fresh init must plant docs/competitive-analysis/
     // ecosystem-watch.md with today's local date in the `Last updated`
     // line so `scripts/release.sh`'s ecosystem-watch verification has a
     // file to read on a fresh project's first major/minor cut.
@@ -122,8 +122,10 @@ fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
 
     let dest = root
         .path()
-        .join("docs/internal/competitive-analysis/ecosystem-watch.md");
+        .join("docs/competitive-analysis/ecosystem-watch.md");
     assert!(dest.is_file(), "missing ecosystem-watch.md");
+    // trace:STORY-1651 | ai:codex — repo organization must not change adopter output.
+    assert!(!root.path().join("docs/internal/competitive-analysis").exists());
     let body = std::fs::read_to_string(&dest).unwrap();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     assert!(

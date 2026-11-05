@@ -309,7 +309,7 @@ cmd-aida-history: |
 # ── Memory taxonomy (cognitive-science vocabulary) ─────────────────────
 #
 # Imported from the agent-memory-libraries competitive analysis
-# (docs/internal/competitive-analysis/2026-05-26-agent-memory-libraries.md).
+# (docs/archive/competitive-analysis/2026-05-26-agent-memory-libraries.md).
 # Five kinds of memory, each backed by a different AIDA substrate.
 # trace:DOC-1-101 | ai:claude
 

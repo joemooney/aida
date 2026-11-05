@@ -31,7 +31,7 @@ amortizes.
 hand-back so each agent's compiled `target/` cache survives, instead of
 destroy-and-recreate (a cold `target/` per agent).
 
-**Measurement** (2026-06-29, `docs/internal/research/2026-06-29-warm-pool-build-delta.md`):
+**Measurement** (2026-06-29, `docs/archive/research/2026-06-29-warm-pool-build-delta.md`):
 
 | Flow | Cold build | Warm reuse |
 |---|---|---|
@@ -156,7 +156,7 @@ moving) being practical rather than a money fire.
 
 ## Sources
 
-- `docs/internal/research/2026-06-29-warm-pool-build-delta.md` — compute measurement
+- `docs/archive/research/2026-06-29-warm-pool-build-delta.md` — compute measurement
 - `bench/agent-surface/results/report.md` — the 72-cell surface benchmark
 - `docs/plans/2026-06-29-story-712-zero-token-supervision.md` — supervision design + token math
 - `docs/internal/positioning/vs-axi.md` — the surface-cost positioning

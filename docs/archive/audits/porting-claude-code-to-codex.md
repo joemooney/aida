@@ -244,7 +244,7 @@ for the deferred-approval pattern on Codex, use external orchestration — recor
 the pending decision in AIDA, stop or fail closed, and start/resume a new
 Codex/AIDA run after approval.
 
-See `docs/agents/session-communication.md` for the durable AIDA reference on
+See `docs/advanced/session-communication.md` for the durable AIDA reference on
 Claude `ask`, `continue: false`, and `defer` semantics.
 
 ## The `defer`/Resume Primitive, And What AIDA Actually Depends On
@@ -899,7 +899,7 @@ named-team UX — Codex subagents are spawned-on-request fan-out, not a standing
 
 ## References
 
-- `docs/agents/session-communication.md`
+- `docs/advanced/session-communication.md`
 - `docs/internal/agents/claude-bubblewrap-sandbox.md`
 - `docs/agents/codex-mcp-setup.md`
 - `docs/agents/codex-brief-pickup.md`

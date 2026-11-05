@@ -1180,7 +1180,7 @@ pub(crate) fn session_start_status_bump_preconditions_met(
 /// Resolve whether a session should pool its worktree: the explicit
 /// `--pool`/`--no-pool` flag wins; otherwise `[worktree_pool] enabled` in the
 /// repo config decides. Default is now **ON** (TASK-985): the build-delta
-/// measurement (docs/internal/research/2026-06-29-warm-pool-build-delta.md) showed ~30×
+/// measurement (docs/archive/research/2026-06-29-warm-pool-build-delta.md) showed ~30×
 /// faster per-spec builds on fan-out, so pooling is the default and `--no-pool`
 /// / `[worktree_pool] enabled = false` are the escape hatches.
 // trace:STORY-714 trace:TASK-985 | ai:claude

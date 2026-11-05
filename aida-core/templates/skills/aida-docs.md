@@ -78,7 +78,7 @@ For slideshow presentations:
 
 ```bash
 # Basic status report
-aida list > docs/internal/reports/requirements-status.md
+aida list > docs/reports/requirements-status.md
 
 # Filter by status
 aida list --status draft

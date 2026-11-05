@@ -69,7 +69,7 @@ and agent docs are links or generated mirrors. Edit the template master, then ru
 | Product and architecture | `OVERVIEW.md` |
 | Full repository/storage/CLI guide | `docs/internal/agents/aida-repository-guide.md` |
 | Worktree, review, and sync discipline | `.aida/discipline/README.md` |
-| Agent communication | `docs/agents/session-communication.md` |
+| Agent communication | `docs/advanced/session-communication.md` |
 | MCP/client setup | `docs/agents/aida-mcp-install-matrix.md` |
 | CLI reference | `docs/cli/` or `aida <command> --help` |
 | Call-graph navigation (what calls/uses a symbol) | `codegraph callers`/`callees`/`impact` when installed — it skips source files over 1 MiB (none currently are, but large modules approach it); confirm a "no callers" result with `rg` |
