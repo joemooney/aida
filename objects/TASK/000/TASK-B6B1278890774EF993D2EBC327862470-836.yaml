@@ -1,0 +1,32 @@
+id: 01a1ad21-7574-7121-8c62-78fbfbb767db
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-836
+agreed_id: TASK-3131
+title: 'Conformance harness: score C0-C4 with a vendor running under AIDA''s shared boundary (--boundary aida)'
+description: |
+  ## Why
+  BUG-2447 (C3 egress) and BUG-2448 (C4 host UNIX canary) close only when the same-profile probe passes for Codex under AIDA's SHARED boundary (advisor rulings 2026-11-04 20:20). TASK-2708 will need the same evidence for Claude and agy. scripts/containment/conformance.py (TASK-3046) only runs a vendor's native sandbox (`--vendor codex|agy`), so there is no way to produce that evidence today.
+
+  ## Acceptance
+  - `conformance.py --vendor codex --boundary aida` runs the same closed payload and C0-C4 probes through the production contained launch (launch/contained.rs path, the one #3307 shipped for headless Codex), not a re-implementation of it. The report records boundary=aida, the ContainmentReceipt digest and the policy SHA.
+  - `--boundary native` (the default) is byte-identical to today's behaviour; existing harness tests stay green.
+  - Vendors the shared launch does not support yet (claude before TASK-2708 AC1, agy) refuse with a named reason; no fallback.
+  - One offline test with a fake vendor binary, plus a recorded host run for codex (the advisor runs it through deputy 3).
+  - LIGHT gate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T19:13:33.556939585Z
+modified_at: 2026-11-05T19:13:33.556939585Z
+req_type: Task
+tags:
+- area:containment
+- vendor:codex
+filed_at:
+  code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
