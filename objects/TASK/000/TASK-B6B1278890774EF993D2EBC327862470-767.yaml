@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T13:20:09.504552459Z
+modified_at: 2026-11-05T13:20:12.132874078Z
 req_type: Task
 tags:
 - docs
@@ -55,6 +55,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 and AC3 met (features.html linked from index.html and both engineering-audit copies; 59 skills and 22 hooks match the template directories exactly; no spec IDs in public prose; showcase build and tests green in CI). AC2 is partial: the ''server'' command family is credited to the aida-server crate, but it is a remote client implemented in aida-cli-lib. The embedded command inventory is also 5 routes behind the PR head.. Triage reason: Address the latest review on #3342 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch agy2/task-2995-features-page (no new branch). LIGHT gate.'
   created_at: 2026-11-05T13:20:09.504551159Z
   modified_at: 2026-11-05T13:20:09.504551159Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdd-f2f5-7403-a223-6fbb883229c2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2995):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f44de0cb8861
+    Recorded: 2026-11-05T11:33:54.989769301+00:00
+    Findings:
+    1. AC2 (actual owning crate): docs/showcase/features.html:964 COMMAND_FAMILIES stamps root=server with crate aida-server, and the aida-server card claims it (line 686 bullet 'Dual-Protocol Service (aida server, rest.rs): Serves gRPC, gRPC-Web, and REST JSON endpoints'; line 690 'Owns 1 CLI Command Family (server)'; line 691 'Filter Server Commands'; line 882 pill 'aida-server (1)'; line 859 lists aida-server as an owning crate). But 'aida server {status,list,get,ping}' is implemented in aida-cli-lib/src/server_cmd.rs + server_cmd_args.rs as a client that dispatches remote calls via crate::client (see the server_cmd.rs module doc: 'The actual server lives in the aida-server crate; this handler just dispatches remote-client calls'). aida-cli-lib/Cargo.toml has no aida-server dependency, and aida-server is a separate binary named 'aida-server' (aida-server/src/main.rs:187). This is the same defect class as the round-2 terminal finding. Fix: set server's crate to aida-cli-lib. Update counts to aida-cli-lib 164 / aida-tui 1 at lines 633, 646, 647, 880 and anywhere else that says 163. Remove the aida-server crate pill and its Filter button, or show 0 families, and drop it from the line-859 owning-crate list. Rewrite the line-686 bullet and line-690 footer so they describe the standalone aida-server binary rather than the 'aida server' CLI family. Also correct the PR body's ownership claim.
+    2. Stale CLI inventory (AC2 'all ... routes from aida commands --json --flags --hidden'): the embedded COMMAND_FAMILIES has 165 families / 776 routes. 'aida commands --json --flags --hidden' from a binary built at main c9166da8a3c, which is the main this PR head merges, returns 165 families / 781 routes. Five routes present at head are missing: 'aida intent export', 'aida intent note', 'aida intent validate', 'aida supervise stalls', 'aida pr review'. Fix: regenerate COMMAND_FAMILIES from the current binary. Then update every hardcoded count: title line 6, nav line 277 'CLI Explorer (776)', hero line 297, KPI cells lines 306-312 (public/internal split 542/234), section 03 heading, search placeholder, and the All/Public/Hidden pills. Reconcile with the spec too: TASK-2995's acceptance text still says 163 families / 752 routes. Either the advisor updates the spec text to the regenerated snapshot, or the page states its generation commit/date so the counts are clearly a snapshot.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T13:20:12.021898704Z
+  modified_at: 2026-11-05T13:20:12.021898704Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a4ee-75d9-73f1-810d-e41d3e072f38
