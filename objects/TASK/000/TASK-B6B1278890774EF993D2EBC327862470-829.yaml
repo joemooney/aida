@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-829
 agreed_id: TASK-3110
 title: Investigate queue-work rollback retaining a lease after reporting successful setup rollback
 description: 'Found during BUG-2455 round-2 validation: queue_work_dry_run passes 14/15 tests, but task_1337_post_setup_launch_error_rolls_back_the_owned_setup fails at line 1541 because a spec-scoped session lease remains after the command reports no agent was launched and the owned setup was rolled back. Reproduces as an isolated test and with all ambient AIDA variables removed. The held-branch test and all six required-live BUG-2455 tests pass. This rework does not change rollback logic; baseline reproduction was not performed. Inspect cleanup/retention diagnostics before changing behavior. Logs: /tmp/bug2455-cli-full.log, /tmp/bug2455-cli-rollback.log, /tmp/bug2455-cli-hermetic.log.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:50:30.827731392Z
-modified_at: 2026-11-05T16:49:48.413820932Z
+modified_at: 2026-11-05T18:23:00.709405189Z
 req_type: Task
 tags:
 - finding
@@ -77,6 +77,20 @@ history:
   author: joe
   timestamp: 2026-11-05T16:49:49.868913342Z
   changes: []
+- id: 01a1acf3-2e37-75b0-8c5c-bcbe3e3af6c3
+  author: aida-auto-bump
+  timestamp: 2026-11-05T18:23:00.663659930Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1acf3-2e65-7270-ba88-03f57af711c3
+  timestamp: 2026-11-05T18:23:00.709400620Z
+  agent: aida
+  commit_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
+  summary: 'Test-only fix: task_1337 rollback fixture opts into AIDA_TRUST_PID_NAMESPACE=1 (matches 5 existing teardown fixtures; trust_pid_namespace() accepts "1"; cmd.env overrides a parent 0) and appends captured launch output to the lease assertion. No production code changed. CI at 3e69e75: cli-0, cli-1, lib-0, lib-1, gates, rest, contracts all success.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: c38a77db609
@@ -86,4 +100,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T16:35:47.640196349Z
   implemented_by: joe
+  completed_at: 2026-11-05T18:23:00.663654860Z
+  completion_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
 interface_changes: {}
