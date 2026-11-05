@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T01:19:47.281651860Z
+modified_at: 2026-11-05T01:38:11.427092065Z
 req_type: Task
 tags:
 - area:containment
@@ -21,6 +21,19 @@ relationships:
   target_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   created_at: 2026-11-04T17:55:35.804236567Z
   created_by: joe
+comments:
+- id: 01a1a95a-4222-7de0-b3bb-19cfe189e398
+  author: joe
+  content: Implemented the host measurement runner and 10 tests; both final native runs and posture decision recorded on STORY-2460, with structured evidence in docs/testing/containment-conformance-2026-11-04.json. Codex draft defects BUG-2446/BUG-2447/BUG-2448 filed. Preparing sanctioned host commit/publication; no merge or reviewer verdict will be attempted.
+  created_at: 2026-11-05T01:37:07.106769694Z
+  modified_at: 2026-11-05T01:37:07.106769694Z
+  session_id: 01a1a949f904
+- id: 01a1a95b-3d63-7c73-bb06-8c4685f1bce9
+  author: joe
+  content: 'Implementation and validation are ready, but publication is not complete. Authorized host script deputy 3 job 20261104T183742-967bbb invoked the sanctioned aida ship --from-seat --commit-pending path and was refused before any commit: live lease owner process 3463756 may still be writing. No guard was bypassed, no lease ended, no PR opened and queue done did not run. Leave In Progress until the launcher post-exit host commit/publication finishes. After this lane exits, recover from the main checkout with: aida ship TASK-3046 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-784 --commit-pending "[AI:codex] test(containment): measure native vendor conformance (TASK-3046)". The fuller prepared message remains /tmp/task3046-commit-message.txt and reviewed publication script /tmp/task3046-publish.sh. Both native reports are durable in docs/testing/containment-conformance-2026-11-04.json and the posture decision is on STORY-2460. This headless turn must exit rather than wait on its own lease.'
+  created_at: 2026-11-05T01:38:11.427092065Z
+  modified_at: 2026-11-05T01:38:11.427092065Z
+  session_id: 01a1a949f904
 history:
 - id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
   author: joe
