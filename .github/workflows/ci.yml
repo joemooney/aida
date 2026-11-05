@@ -339,6 +339,8 @@ jobs:
       # the nested-bwrap overlay probe and the no-remount-under-cap-drop check
       # (both `bug_2435_bwrap_`) join under the existing prefixes and count.
       # trace:TASK-2825 | ai:claude
+      # Force-claim clone regressions must run, never silently skip.
+      # trace:BUG-2455 | ai:codex
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
@@ -348,11 +350,11 @@ jobs:
           # TASK-2705 nested userns is host-attested; keep its normal shard mode.
           # TASK-2706 slice B is required-live on this runner. trace:TASK-2706 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
-          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
-          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
+          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
