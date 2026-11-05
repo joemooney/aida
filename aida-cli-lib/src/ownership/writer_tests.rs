@@ -276,12 +276,12 @@ fn handoff_moves_spec_and_change_to_in_pr_in_one_write() {
     // The judge frees an in-PR key without touching the tree (A7).
     let r = store.load(&spec(1)).unwrap().unwrap();
     let probe = |_: &ProcessIdentity| aida_core::process_probe::Probe::Alive;
-    let host = HostFacts {
-        host: "host-a".into(),
-        boot: Some(BOOT.into()),
-        pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
-        probe: &probe,
-    };
+    let host = HostFacts::for_test(
+        "host-a".into(),
+        Some(BOOT.into()),
+        Some(INITIAL_PID_NAMESPACE_INODE),
+        &probe,
+    );
     assert_eq!(
         judge(
             &r,
@@ -341,7 +341,7 @@ fn a1_witnesses_are_recorded_from_the_host_view_only() {
     let l = lease(
         "l1",
         "STORY-1",
-        "creator_pid = 42\ncreator_pid_start_time = \"linux-starttime:9\"\n",
+        "active_pid = 42\nactive_pid_start_time = \"linux-starttime:9\"\n",
     );
     assert!(dual::holder_for_lease(&l, &sandboxed_writer(), now())
         .witnesses
@@ -620,7 +620,7 @@ fn a4_migration_never_records_alive_without_a_live_probe() {
     let l = lease(
         "a",
         "STORY-1",
-        "creator_pid = 42\ncreator_pid_start_time = \"linux-starttime:9\"\n",
+        "active_pid = 42\nactive_pid_start_time = \"linux-starttime:9\"\n",
     );
     let f = facts(l.clone(), Some((spec(1), Phase::Leased)));
     let p = classify(&f);
@@ -719,7 +719,7 @@ fn migrate_prefers_a_live_lease_over_an_unknown_one_for_one_key() {
     let l = lease(
         "live",
         "STORY-1",
-        "creator_pid = 42\ncreator_pid_start_time = \"linux-starttime:9\"\n",
+        "active_pid = 42\nactive_pid_start_time = \"linux-starttime:9\"\n",
     );
     let w = host_writer()
         .witness(42, Some("linux-starttime:9"), now())
@@ -1032,12 +1032,9 @@ fn worker_is_the_only_witness_even_when_exited_or_unproven() {
         .witnesses
         .is_empty());
     l.active_pid = None;
-    assert_eq!(
-        dual::holder_for_lease(&l, &host_writer(), now())
-            .witnesses
-            .len(),
-        1
-    );
+    assert!(dual::holder_for_lease(&l, &host_writer(), now())
+        .witnesses
+        .is_empty());
     l.hostname = "another-host".into();
     assert!(dual::holder_for_lease(&l, &host_writer(), now())
         .witnesses
@@ -1059,6 +1056,24 @@ fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
         fake.add(pid, 1, name, 'S', 9, &[cmd, "--user"]);
         let id = source.capture(pid).unwrap();
         assert_eq!(source.probe(&id), Probe::Alive);
+        // Exercise both write-time entry points with the same procfs fixture.
+        assert!(host_writer()
+            .witness_with_source(pid, Some(&id.start), now(), &source)
+            .is_none());
+        for active in [false, true] {
+            let mut l = lease("invalid", "STORY-1", "");
+            l.creator_pid = Some(pid);
+            l.creator_pid_start_time = Some(id.start.clone());
+            if active {
+                l.active_pid = Some(pid);
+                l.active_pid_start_time = Some(id.start.clone());
+            }
+            assert!(
+                dual::holder_for_lease_with_source(&l, &host_writer(), now(), &source)
+                    .witnesses
+                    .is_empty()
+            );
+        }
         let w = Witness {
             kind: WitnessKind::Process {
                 host: "host-a".into(),
@@ -1067,13 +1082,13 @@ fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
             },
             recorded_at: now(),
         };
-        let probe = |id: &ProcessIdentity| super::process::probe(&source, id);
-        let host = HostFacts {
-            host: "host-a".into(),
-            boot: Some(BOOT.into()),
-            pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
-            probe: &probe,
-        };
+
+        let host = HostFacts::new(
+            "host-a".into(),
+            Some(BOOT.into()),
+            Some(INITIAL_PID_NAMESPACE_INODE),
+            &source,
+        );
         assert!(
             matches!(judge_owner(&Holder { witnesses: vec![w.clone()], ..holder("orphan") }, &host, now()), OwnerVerdict::Unknown { why } if why.contains("holder identity invalid"))
         );
@@ -1088,6 +1103,11 @@ fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
         let repairs = migrate::repair_holders(&[r], &[], &host_writer(), &source, now());
         assert_eq!(repairs.len(), 1);
         assert!(repairs[0].holder.as_ref().unwrap().witnesses.is_empty());
+        // Removing a false witness cannot invent the missing lifecycle release.
+        let owner = judge_owner(repairs[0].holder.as_ref().unwrap(), &host, now());
+        assert!(
+            matches!(orphan_outcome(&repairs[0], &owner), Some(Outcome::Unexplained(why)) if why.contains("never released"))
+        );
     }
     // A reused PID keeps its ordinary dead proof, rather than classifying its new occupant.
     assert!(matches!(
@@ -1272,15 +1292,42 @@ fn detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit() {
         pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
     };
     let h = dual::holder_for_lease(&l, &writer, now());
-    let probe = |id: &ProcessIdentity| super::process::probe(&source, id);
-    let host = HostFacts {
-        host: writer.host.clone(),
-        boot: writer.boot.clone(),
-        pid_ns: writer.pid_ns,
-        probe: &probe,
-    };
+
+    let host = HostFacts::new(
+        writer.host.clone(),
+        writer.boot.clone(),
+        writer.pid_ns,
+        &source,
+    );
     assert!(matches!(
         judge_owner(&h, &host, now()),
         OwnerVerdict::Dead { .. }
     ));
+}
+
+// trace:BUG-2458 | ai:codex
+#[test]
+fn session_start_snapshot_names_setup_itself_and_preserves_a_stamped_worker() {
+    let source = aida_core::process_probe::ProbeSource::system();
+    let l = lease(
+        "setup",
+        "STORY-1",
+        "creator_pid = 2013\ncreator_pid_start_time = \"linux-starttime:9\"\n",
+    );
+    let snapshot = dual::starting_lease_snapshot(&l);
+    assert_eq!(snapshot.active_pid, Some(std::process::id()));
+    assert_eq!(
+        snapshot.active_pid_start_time,
+        Some(source.capture(std::process::id()).unwrap().start)
+    );
+    assert!(
+        l.active_pid.is_none(),
+        "legacy lease liveness remains unchanged"
+    );
+    let mut worker = l;
+    worker.active_pid = Some(42);
+    worker.active_pid_start_time = Some("linux-starttime:10".into());
+    let snapshot = dual::starting_lease_snapshot(&worker);
+    assert_eq!(snapshot.active_pid, worker.active_pid);
+    assert_eq!(snapshot.active_pid_start_time, worker.active_pid_start_time);
 }

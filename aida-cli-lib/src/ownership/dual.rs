@@ -103,8 +103,19 @@ impl WriterFacts {
         start: Option<&str>,
         now: DateTime<Utc>,
     ) -> Option<Witness> {
+        self.witness_with_source(pid, start, now, &ProbeSource::system())
+    }
+
+    // trace:BUG-2458 | ai:codex
+    pub(super) fn witness_with_source(
+        &self,
+        pid: u32,
+        start: Option<&str>,
+        now: DateTime<Utc>,
+        source: &ProbeSource,
+    ) -> Option<Witness> {
         let id = identity_from_record(pid, start?, self.boot.as_deref()?)?;
-        if super::process::invalid_holder(&ProbeSource::system(), &id).is_some() {
+        if super::process::invalid_holder(source, &id).is_some() {
             return None;
         }
         super::process_witness(self.pid_ns, &self.host, id, now)
@@ -186,6 +197,16 @@ pub(crate) fn holder_for_lease(
     writer: &WriterFacts,
     now: DateTime<Utc>,
 ) -> Holder {
+    holder_for_lease_with_source(lease, writer, now, &ProbeSource::system())
+}
+
+// trace:BUG-2458 | ai:codex
+pub(super) fn holder_for_lease_with_source(
+    lease: &crate::SessionLease,
+    writer: &WriterFacts,
+    now: DateTime<Utc>,
+    source: &ProbeSource,
+) -> Holder {
     let role = if lease.review_verb {
         Role::Reviewer
     } else {
@@ -223,11 +244,8 @@ pub(crate) fn holder_for_lease(
             lease.active_pid_start_time.as_deref(),
             lease.active_pid_ns.as_deref(),
         ),
-        None => (
-            lease.creator_pid,
-            lease.creator_pid_start_time.as_deref(),
-            lease.creator_pid_ns.as_deref(),
-        ),
+        // Creator PID is shell routing metadata, never ownership evidence.
+        None => (None, None, None),
     };
     let namespace_matches = origin_ns.map_or_else(
         || {
@@ -242,7 +260,7 @@ pub(crate) fn holder_for_lease(
         },
     );
     let witnesses = if lease.hostname == writer.host && namespace_matches {
-        pid.and_then(|pid| writer.witness(pid, start, now))
+        pid.and_then(|pid| writer.witness_with_source(pid, start, now, source))
             .into_iter()
             .collect()
     } else {
@@ -299,6 +317,25 @@ fn store_for(project_root: &Path) -> Option<OwnershipStore> {
             None
         }
     }
+}
+
+/// Setup itself owns the initial snapshot until the actual worker is stamped.
+/// Keep the legacy shell-routing lease unchanged: its creator is not the owner.
+// trace:BUG-2458 | ai:codex
+pub(crate) fn lease_started(project_root: &Path, lease: &crate::SessionLease) {
+    lease_written(project_root, &starting_lease_snapshot(lease));
+}
+
+pub(super) fn starting_lease_snapshot(lease: &crate::SessionLease) -> crate::SessionLease {
+    let mut snapshot = lease.clone();
+    if snapshot.active_pid.is_none() {
+        let source = ProbeSource::system();
+        let pid = std::process::id();
+        snapshot.active_pid = Some(pid);
+        snapshot.active_pid_start_time = source.capture(pid).ok().map(|id| id.start);
+        snapshot.active_pid_ns = source.pid_namespace(pid).ok().map(|ns| ns.to_string());
+    }
+    snapshot
 }
 
 /// A lease was written: its holder acquires the work it names.

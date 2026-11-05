@@ -622,14 +622,12 @@ fn file_names(dir: &Path) -> Vec<String> {
 pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
     let writer = WriterFacts::here();
     let probe_src = aida_core::process_probe::ProbeSource::system();
-    let probe =
-        |id: &aida_core::process_probe::ProcessIdentity| super::process::probe(&probe_src, id);
-    let host = HostFacts {
-        host: writer.host.clone(),
-        boot: writer.boot.clone(),
-        pid_ns: writer.pid_ns,
-        probe: &probe,
-    };
+    let host = HostFacts::new(
+        writer.host.clone(),
+        writer.boot.clone(),
+        writer.pid_ns,
+        &probe_src,
+    );
     let mut gaps = Vec::new();
     let store = crate::load_store_for_lookup(main);
     if store.is_none() {
@@ -745,7 +743,8 @@ pub(super) fn repair_holders(
             let mut witnesses = holder.witnesses.clone();
             if let Some(lease) = lease {
                 // Use the recorded worker even after exit; never recapture a recycled PID.
-                witnesses = dual::holder_for_lease(lease, writer, now).witnesses;
+                witnesses =
+                    dual::holder_for_lease_with_source(lease, writer, now, source).witnesses;
                 witnesses.extend(
                     holder
                         .witnesses

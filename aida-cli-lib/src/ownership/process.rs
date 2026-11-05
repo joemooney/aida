@@ -11,12 +11,15 @@ pub(super) fn invalid_holder(source: &ProbeSource, id: &ProcessIdentity) -> Opti
     if facts.identity != *id {
         return None;
     }
+    // Linux PR_GET_CHILD_SUBREAPER queries only the calling process. There is
+    // no remote procfs flag: these are known init executables, not a generic
+    // kernel subreaper test. Never claim that an arbitrary subreaper is covered.
     let name = facts.command_label();
     if ["systemd", "init", "tini", "dumb-init"].contains(&name.as_str())
         || ["systemd", "init"].contains(&facts.name.as_str())
     {
         Some(format!(
-            "holder identity invalid: {name} is an init/subreaper process"
+            "holder identity invalid: {name} is a known init/subreaper executable"
         ))
     } else {
         None

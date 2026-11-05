@@ -125,7 +125,7 @@ fn judge_process(
     if id.pid <= 1 {
         return WitnessReading::Unknown("holder identity invalid: init cannot own a lane".into());
     }
-    match (host.probe)(id) {
+    match host.probe(id) {
         Probe::Alive => WitnessReading::Alive,
         Probe::Dead(why) => WitnessReading::Dead(why),
         Probe::Unknown(why) => WitnessReading::Unknown(why),

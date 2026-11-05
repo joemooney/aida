@@ -140,7 +140,54 @@ pub(crate) struct HostFacts<'a> {
     /// could not be read.
     pub pid_ns: Option<u64>,
     /// Probes one recorded process from the reader's namespace.
-    pub probe: &'a dyn Fn(&ProcessIdentity) -> Probe,
+    probe: HolderProbe<'a>,
+}
+
+// Keep raw process probes out of production HostFacts: every judge uses holder validation.
+// trace:BUG-2458 | ai:codex
+enum HolderProbe<'a> {
+    Source(&'a aida_core::process_probe::ProbeSource),
+    #[cfg(test)]
+    Test(&'a dyn Fn(&ProcessIdentity) -> Probe),
+}
+
+impl<'a> HostFacts<'a> {
+    pub(crate) fn new(
+        host: String,
+        boot: Option<String>,
+        pid_ns: Option<u64>,
+        source: &'a aida_core::process_probe::ProbeSource,
+    ) -> Self {
+        Self {
+            host,
+            boot,
+            pid_ns,
+            probe: HolderProbe::Source(source),
+        }
+    }
+
+    pub(crate) fn probe(&self, id: &ProcessIdentity) -> Probe {
+        match self.probe {
+            HolderProbe::Source(source) => super::process::probe(source, id),
+            #[cfg(test)]
+            HolderProbe::Test(probe) => probe(id),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(
+        host: String,
+        boot: Option<String>,
+        pid_ns: Option<u64>,
+        probe: &'a dyn Fn(&ProcessIdentity) -> Probe,
+    ) -> Self {
+        Self {
+            host,
+            boot,
+            pid_ns,
+            probe: HolderProbe::Test(probe),
+        }
+    }
 }
 
 /// What the reader found at the holder's tree. Mirrors

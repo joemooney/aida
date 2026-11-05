@@ -175,14 +175,12 @@ pub(crate) fn run(main: &Path, filter: Option<&str>, compare: bool, json: bool) 
     let (records, malformed) = store.list();
     let writer = dual::WriterFacts::here();
     let probe_src = aida_core::process_probe::ProbeSource::system();
-    let probe =
-        |id: &aida_core::process_probe::ProcessIdentity| super::process::probe(&probe_src, id);
-    let host = HostFacts {
-        host: writer.host.clone(),
-        boot: writer.boot.clone(),
-        pid_ns: writer.pid_ns,
-        probe: &probe,
-    };
+    let host = HostFacts::new(
+        writer.host.clone(),
+        writer.boot.clone(),
+        writer.pid_ns,
+        &probe_src,
+    );
     let now = Utc::now();
     let judged = |rec: &Ownership| {
         rec.holder

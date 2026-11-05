@@ -16056,8 +16056,8 @@ Commands:
   show     Show the ownership records: who holds each piece of work, the phase it is in, and whether
            its holder is still running. Read-only
   migrate  One-time rewrite of the existing session, review and train records into ownership
-           records. Only adds records; never changes, archives or deletes an existing record,
-           worktree or branch
+           records, repairing existing holder process witnesses. Never changes a worktree, branch or
+           legacy record
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -16112,8 +16112,8 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida own migrate
-One-time rewrite of the existing session, review and train records into ownership records. Only adds
-records; never changes, archives or deletes an existing record, worktree or branch
+One-time rewrite of the existing session, review and train records into ownership records, repairing
+existing holder process witnesses. Never changes a worktree, branch or legacy record
 
 Usage: aida own migrate [OPTIONS]
 
@@ -46717,7 +46717,7 @@ Working on aida itself
       "own",
       "migrate"
     ],
-    "about": "One-time rewrite of the existing session, review and train records into ownership records. Only adds records; never changes, archives or deletes an existing record, worktree or branch",
+    "about": "One-time rewrite of the existing session, review and train records into ownership records, repairing existing holder process witnesses. Never changes a worktree, branch or legacy record",
     "flags": [
       {
         "name": "canonical-ids",

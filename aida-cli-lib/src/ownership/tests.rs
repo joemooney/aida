@@ -27,12 +27,12 @@ fn now() -> DateTime<Utc> {
 }
 
 fn host() -> HostFacts<'static> {
-    HostFacts {
-        host: HOST.to_string(),
-        boot: Some(BOOT.to_string()),
-        pid_ns: Some(HOST_NS),
-        probe: &probe,
-    }
+    HostFacts::for_test(
+        HOST.to_string(),
+        Some(BOOT.to_string()),
+        Some(HOST_NS),
+        &probe,
+    )
 }
 
 fn ident(pid: u32, boot: &str) -> ProcessIdentity {
@@ -161,9 +161,10 @@ fn process_witness_matrix() {
         (
             "this host's boot id unreadable",
             local(2),
-            HostFacts {
-                boot: None,
-                ..host()
+            {
+                let mut facts = host();
+                facts.boot = None;
+                facts
             },
             "unknown",
         ),
@@ -182,18 +183,20 @@ fn process_witness_matrix() {
         (
             "reader's own namespace unreadable",
             local(2),
-            HostFacts {
-                pid_ns: None,
-                ..host()
+            {
+                let mut facts = host();
+                facts.pid_ns = None;
+                facts
             },
             "unknown",
         ),
         (
             "reader sandboxed, owner on the host",
             local(2),
-            HostFacts {
-                pid_ns: Some(SANDBOX_NS),
-                ..host()
+            {
+                let mut facts = host();
+                facts.pid_ns = Some(SANDBOX_NS);
+                facts
             },
             "unknown",
         ),

@@ -870,7 +870,7 @@ rework exits are follow-up work; reading or accepting a wake is not action.
 `aida own show --compare` compares session leases with the new ownership
 records. Process witnesses use the worker PID and its recorded start identity;
 a launcher does not keep an exited worker alive. Init and known init/subreaper
-processes, including `systemd --user`, report `holder identity invalid`.
+processes, including the per-user systemd instance, report `holder identity invalid`.
 
 `aida own migrate --dry-run` reports missing records and the number of holder
 witness repairs. `aida own migrate --execute` adds missing records and repairs existing process
@@ -879,3 +879,16 @@ records with invalid holders and use generation checks to retain concurrent
 writes. Execution still requires a host terminal outside containment with no
 drain running. Legacy leases, worktrees and branches are untouched.
 <!-- trace:BUG-2458 | ai:codex -->
+
+Ownership never uses the creator shell as a witness. Session setup initially
+records the AIDA invocation itself; launching or adopting a worker replaces that
+identity. Legacy creator-only leases have no provable worker and remain unknown
+until a worker is stamped. Linux exposes the subreaper flag only to the process
+itself; remote holder validation rejects PID 1 and known init executables, not
+arbitrary processes that may have enabled that flag.
+
+Repairing an invalid orphan witness does not release its record. Such rows still
+report “never released” pending an operator-reviewed lifecycle repair for the
+missing lease. This migration provides no orphan-release command and does not
+satisfy the cutover gate while those rows remain. It preserves this distinction:
+removing a false liveness claim is not proof that its work or tree is safe.
