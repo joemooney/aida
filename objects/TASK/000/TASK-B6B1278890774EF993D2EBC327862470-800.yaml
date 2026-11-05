@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T20:31:33.597338686Z
+modified_at: 2026-11-05T20:44:59.177750103Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -43,6 +43,12 @@ comments:
   created_at: 2026-11-05T18:42:54.631233431Z
   modified_at: 2026-11-05T18:42:54.631233431Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad75-29a9-79d1-ba0e-2b65ed6b7f7e
+  author: joe
+  content: 'Implementing approved PR-A only (advisor signoff 2026-11-05 18:42 UTC). Added separate versioned request-action ledger, recipient-authorized acted/declined/deferred CLI, message inspection/JSON projection and core/adapter regressions. Reuses read-ACK source-generation/replica validation without ACK writes; rechecks selected session identity and people-catalog evidence under Lifecycle -> action-ledger locks. Default-feature cargo check passed; focused tests and no-default-feature/fast guards are still building. Native publication dry-run explicitly refuses Git metadata writes and directs the host-side lane exit commit. Required commit/PR subject: [AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074). Do not mark TASK-3074 Done on PR-A; approved PR-B must add typed delivery correlation and unresolved/persistent escalation.'
+  created_at: 2026-11-05T20:44:59.177750103Z
+  modified_at: 2026-11-05T20:44:59.177750103Z
+  session_id: 01a1ad68128d
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
