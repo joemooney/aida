@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T05:55:20.056681704Z
+modified_at: 2026-11-05T06:23:39.264823845Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -196,6 +196,16 @@ comments:
     None. Reviewer permits refusing late alias dispatch; select this bounded fix to preserve startup isolation.
   created_at: 2026-11-05T05:55:20.056664501Z
   modified_at: 2026-11-05T05:55:20.056664501Z
+- id: 01a1aa60-9700-7610-a686-0dd588a9314a
+  author: mcp
+  content: |-
+    PR #3403 round 2: all five findings have source/test/documentation fixes in the seat's pending work. local_entry now uses try_parse_from and falls through on parse errors; extensions preserve intent/export arguments and exit status; run_intent refuses late local commands with direct-spelling guidance rather than running after startup or hard-coding the output format. Legacy parsing now rejects clap exit 2 and requires a store-discovery error (clearing only the guest sentinel for that probe); help explicitly lists both forms. Read the actual cli-0 log: BUG-1502 failed because the new intent commands were missing from the audit. Regenerated the audit and added real JSON probes for all three local commands.
+
+    Validation: envelope integration 11/11; command-registry 21/21 including full regenerated snapshot; late-dispatch unit regression 1/1; manual verifier 13/13; formatting/whitespace passed; second audit generation matches exactly. Full BUG-1502 execution is blocked locally at existing fixture grant setup: fixture proc token lacks PID-namespace qualification whereas production presenter qualifies it, before any audit assertions. CI must run the full audit. Root hygiene reports read-only sandbox .aws.
+
+    Publication BLOCKED: supported host-cwd aida ship STORY-2479 --from-seat <this seat> --commit-pending refused while snapshotting the index: .git/index.lock is read-only. No new commit or push occurred. All 10 edited files remain pending for the documented launcher commit-on-exit handoff. Intended subject: [AI:codex] fix(intent): address envelope review and JSON audit (STORY-2479 TASK-3077). Prepared updated PR body is /tmp/story2479-pr-round2.md. No findings are disputed; finding 1's fresh-commit/green-CI requirement remains unverified until the launcher publishes and CI runs. Merge hold retained; no ship/review-record action performed.
+  created_at: 2026-11-05T06:23:39.264814823Z
+  modified_at: 2026-11-05T06:23:39.264814823Z
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
   author: joe
