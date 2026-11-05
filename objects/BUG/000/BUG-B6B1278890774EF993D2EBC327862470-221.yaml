@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-221
 agreed_id: BUG-2455
 title: An exited implementer lane's seat clone keeps holding the PR branch, so the next rework pickup (--force-claim --branch) refuses
 description: 'Hit 4 times on 2026-11-05 (TASK-2832, STORY-2492, STORY-2475, TASK-2995 worktree). After a headless Codex lane exits, its lease and seat clone survive; ''aida queue work SPEC --role implementer --force-claim --branch <PR branch>'' then fails ''branch ... is held by a contained seat''s private clone ... before pickup setup''. The advisor must hand-verify the clone, publish any pending edits, and ''session end --force'' it. Sibling of BUG-2450 (reviewer side). Acceptance: (1) --force-claim on a branch held by an exited (dead-pid) lane''s clean, pushed clone retires that clone and lease automatically; (2) a dirty clone is published (commit-pending to the PR branch) or refused with the exact path and diff stat; (3) regression test covers both.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T13:51:00.020969713Z
+modified_at: 2026-11-05T16:48:13.569588237Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -128,6 +128,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ac9c-66df-7801-b8c8-cfd99b6bf996
+  author: aida-auto-bump
+  timestamp: 2026-11-05T16:48:13.535162457Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1ac9c-6701-78e3-8dee-4ae3280bebcb
+  timestamp: 2026-11-05T16:48:13.569583486Z
+  agent: aida
+  commit_sha: 0debeb7b118e6f501ecbd789e91ccc4833225733
+  summary: All 3 BUG-2455 acceptance criteria met; all 5 round-1 findings fixed. Force-claim retires a clone only when its owner has exited and it is clean and pushed. It checks every clone before retiring any. Dirty, unpushed, live, unprovable, orphan or ambiguous clones are refused with path and diff stat. The 5 bug_2455_bwrap_ tests run under the required-live bwrap gate, which fails on any skip or count mismatch (passed at ea00aed). All 7 CI shards are green. merge-hold-gate is a supervised-spec process hold, not a code defect.
+  review_verdict: approved
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
@@ -140,6 +154,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T12:13:10.815802032Z
   implemented_by: joe
+  completed_at: 2026-11-05T16:48:13.535155158Z
+  completion_sha: 0debeb7b118e6f501ecbd789e91ccc4833225733
 attention_reason:
   category: blocked-dependency
   detail: 'Round-2 findings 1-5 are addressed in the retained working tree and not disputed, but publication is blocked: git add cannot create .git/index.lock (Read-only file system) under this native Codex lane. No new commit or push was possible. Required-live BUG-2455 tests: 6/6 pass; original held-branch test passes; fmt and maintenance guard pass. Broader queue suite: 14/15, with rollback lease-removal regression also failing in isolation and without ambient AIDA variables (baseline not checked). Host must publish the retained patch to existing PR #3421 using aida ship --from-seat with --commit-pending; no merge or review record requested. Patch: /tmp/bug2455-round2.patch.'
