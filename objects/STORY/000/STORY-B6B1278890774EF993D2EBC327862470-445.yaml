@@ -1,0 +1,34 @@
+id: 01a1ace9-65e4-75c2-bf02-a9c9478f3989
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-445
+agreed_id: STORY-2522
+title: 'Review PR-3443: [AI:codex] fix: address CI failures and review findings (TASK-3075)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-801`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3443>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-801` → `main`
+
+  ## Covers
+
+  - TASK-3075
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3443` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T18:12:19.556673030Z
+modified_at: 2026-11-05T18:12:19.556673030Z
+req_type: Story
+filed_at:
+  code_sha: c8721a696fcc18157c296a5fdd190fdc9b501bf8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
