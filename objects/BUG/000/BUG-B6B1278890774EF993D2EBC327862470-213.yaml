@@ -1,0 +1,28 @@
+id: 01a1a957-8feb-7de1-97e1-21c419394f26
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-213
+agreed_id: BUG-2447
+title: 'Codex native conformance C3: allowed_hosts is not enforced on terminal egress'
+description: |
+  Measured by TASK-3046 under STORY-2460's signed Q5 rule. Codex native remains a separately labeled compatibility exception; this finding does not revoke it.
+
+  Host script deputy 3 job 20261104T183110-57dd1c, Codex 0.166.0, pinned origin/main fb2086e9008. The AIDA native preset has network_access=true and does not consume AIDA allowed_hosts. A closed payload executed through the real Codex terminal tool. With desired allowed_hosts=[allow.fixture.test], parent receivers observed deny.fixture.test HTTPS, allow-to-deny redirects, proxy-environment bypass, direct TCP and UDP nonces. Allowed HTTPS and every parent positive control also succeeded. The fixture proxy permits both controlled names; it does not fake domain enforcement. C3 fails.
+
+  Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. No public DNS or Internet outage is used as an oracle.
+
+  Acceptance: an independently approved Codex boundary translates the trusted allow list into enforceable policy for every enabled egress surface; allowed HTTPS must remain usable while denied host, redirect, direct IP/TCP/UDP and proxy-bypass receivers see no nonce. No unsupported/unexecuted/deny-all run earns a pass. Preserve compatibility labeling until policy is explicitly changed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T01:34:10.411285281Z
+modified_at: 2026-11-05T01:34:10.411285281Z
+req_type: Bug
+tags:
+- area:containment
+- from-implementer:TASK-3046
+- kind:bug-spotted
+- vendor:codex
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
