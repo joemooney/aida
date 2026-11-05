@@ -4552,6 +4552,10 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
 fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
+    // HOME is pinned to the fixture, so the test runs in its own process.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git = |dir: &std::path::Path, args: &[&str]| -> String {
@@ -4571,7 +4575,7 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
     crate::test_exec::write_executable(&fake_claude, "#!/bin/sh\nexit 0\n");
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
@@ -4618,7 +4622,7 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
                 &["worktree", "add", "-q", seat.to_str().unwrap(), branch],
             );
             let head = git(&seat, &["rev-parse", "HEAD"]);
-            std::env::set_var("AIDA_AGENT_MODEL", "gpt-codex");
+            env.set_key("AIDA_AGENT_MODEL", "gpt-codex");
             crate::session::set_headless_vendor_override(None);
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
