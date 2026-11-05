@@ -1,0 +1,29 @@
+id: 01a1aa8a-cf53-72c0-b3af-a1485e32d7f9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-817
+title: 'non-blocking minor (test gap): aida-cli/tests/story_2479_observation_envelopes.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3077, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking minor (test gap): aida-cli/tests/story_2479_observation_envelopes.rs:253-266 - the note-side --deny-pattern refusal asserts only failure and empty stdout; unlike validate/export it never asserts stderr omits the pattern ('private') or title text, so AC4's no-echo claim is unproven for note.
+
+  PR: #3403
+  Reviewed sha: 237881b4083d63ab331d7c0ee9b679410a4bb5ac
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T07:09:46.195995280Z
+modified_at: 2026-11-05T07:09:46.195995280Z
+req_type: Task
+tags:
+- carried-from:TASK-3077
+- finding-hash:c9ce1424
+- from-review:PR-3403
+- kind:carried-forward
+filed_at:
+  code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
