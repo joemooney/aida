@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:31:31.437788824Z
+modified_at: 2026-11-05T21:31:48.372236752Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -251,6 +251,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ada0-0714-75a2-9903-271704f128ee
+  author: joe
+  timestamp: 2026-11-05T21:31:48.372254728Z
+  session_id: 01a1ad9dc6e4
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -263,3 +271,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 4 finding 1 (AC5) remains blocked on operator/advisor action: this foreign-PID-namespace implementer cannot supply host acceptance, and aida own migrate --execute explicitly refuses without an operator terminal. Please run migrate --execute followed by own show --compare on the host and attach output assigning every residual UNEXPLAINED row a non-holder-pid cause, or record an advisor ruling narrowing AC5. No criterion is disputed or silently waived. Findings 3-5 are fixed in pushed commit 8cb06e6020a on existing PR #3450. Finding 2 also remains unverified: CI at the reviewed head was in progress and new-head run 42113364332 is queued; no green run is claimed. Retain the supervised merge hold pending host evidence and green CI; do not repeatedly return the host-only acceptance step to an implementer lane.'
+  raised_by: implementer
+  raised_at: 2026-11-05T21:31:48.372236752Z
