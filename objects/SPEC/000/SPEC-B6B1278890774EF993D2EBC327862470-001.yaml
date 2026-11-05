@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T17:53:02.548885864Z
+modified_at: 2026-11-05T18:48:36.757959942Z
 req_type: Task
 tags:
 - architecture
@@ -893,6 +893,12 @@ comments:
   created_at: 2026-11-04T17:51:09.993814344Z
   modified_at: 2026-11-04T17:51:09.993814344Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1ad0a-9e95-7b40-935a-7ff270c2e8d0
+  author: joe
+  content: 'ADVISOR 2026-11-05 11:55 MST: the remaining AC1 gap (no push/PR after the host post-exit commit for exec_codex_session and headless --no-human lanes) is exactly what STORY-2475 (#3398, approved earlier, re-review at the merge head) and TASK-2879 deliver. Do not open a TASK-2712 PR-2 that duplicates them. When #3398 and TASK-2879 merge, the advisor re-checks AC1/AC4 and completes TASK-2712 with the host smoke evidence.'
+  created_at: 2026-11-05T18:48:36.757959942Z
+  modified_at: 2026-11-05T18:48:36.757959942Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
