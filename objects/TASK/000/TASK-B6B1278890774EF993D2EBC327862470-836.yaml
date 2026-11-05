@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-05T19:33:26.866362510Z
+modified_at: 2026-11-05T20:29:16.712822822Z
 req_type: Task
 tags:
 - area:containment
@@ -31,6 +31,13 @@ relationships:
   target_id: 01a1a957-cbd0-77c2-a90b-f672dac76f0f
   created_at: 2026-11-05T19:14:14.649574256Z
   created_by: joe
+comments:
+- id: 01a1ad66-c828-7e92-a4b7-b9f7ca36bee6
+  author: joe
+  content: 'ADVISOR RULING 2026-11-05 13:50 MST on the fixture-policy fork: use a DISPOSABLE FIXTURE with REAL production context. The harness creates its fixture repository with its own committed trusted policy selecting codex = "aida", plus a real seat and lease for it, created through the production commands (aida init or worktree add, and the seat preflight) inside that fixture and never by writing files that imitate them. It then launches through the unchanged production contained launcher. Never bypass or stub the policy check or the seat preflight. The evidence claim is: ''the production launcher, under a committed policy that selects aida, enforces C0-C4 for Codex.'' That is exactly what closes BUG-2447 and BUG-2448. The report records the fixture policy''s commit SHA, the ContainmentReceipt digest and the AIDA binary SHA; the host repository''s own policy (native) is irrelevant and stays untouched. If the production commands cannot create the seat inside a throwaway fixture without the operator''s TTY, refuse by name and report it; do not invent a shortcut.'
+  created_at: 2026-11-05T20:29:16.712822822Z
+  modified_at: 2026-11-05T20:29:16.712822822Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad21-f58b-7aa2-8855-03f913ad7538
   author: joe
