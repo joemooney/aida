@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T11:18:30.534168027Z
+modified_at: 2026-11-05T12:26:11.632320920Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -152,6 +152,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1abac-80f2-77d0-8b4c-95026dcf4fab
+  author: aida-auto-bump
+  timestamp: 2026-11-05T12:26:11.570900719Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1abac-8130-7310-9149-68dba40842ba
+  timestamp: 2026-11-05T12:26:11.632316904Z
+  agent: implementer
+  commit_sha: 9f572b1f0d1fb80300d25c2eaa21cdda507fc1e8
+  summary: 'Round-2 fix direction (a) implemented: bug2438_refuses takes the expected refusal; malformed-SHA case asserts ''train source has a refusing review'' (proves the supersession fail-closed guard), old-head case asserts its actual carry-over refusal; comments corrected; PR body discloses prior failing head; CI lib-0/lib-1/cli/gates/rest/Build green at 02e4bd3. Non-blocking: old-head case still does not isolate the supersession policy (option b seam not built).'
+  review_verdict: approved
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
@@ -159,3 +173,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c514dc9e625
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T12:26:11.570895358Z
+  completion_sha: 9f572b1f0d1fb80300d25c2eaa21cdda507fc1e8
