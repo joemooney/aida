@@ -15,7 +15,7 @@ fn s(v: &[&str]) -> Vec<String> {
 /// no `--add-dir` at all: the write set fails closed.
 #[test]
 fn no_write_roots_means_the_bare_posture() {
-    let flags = codex_native_sandbox_flags_for_roots(&[], Some("reviewer")).unwrap();
+    let flags = codex_native_sandbox_flags_for_roots(None, &[], Some("reviewer")).unwrap();
     assert_eq!(flags, s(&CODEX_NATIVE_POSTURE));
     assert!(carries_native_posture(&flags));
 }
@@ -39,7 +39,7 @@ fn rescope_replaces_only_the_emitted_add_dir_run() {
         "--model",
         "m",
     ]);
-    rescope_codex_native_flags(&mut args, tmp.path(), None).unwrap();
+    rescope_codex_native_flags(None, &mut args, tmp.path(), None).unwrap();
     assert_eq!(
         args,
         s(&[
@@ -59,7 +59,7 @@ fn rescope_replaces_only_the_emitted_add_dir_run() {
         "/x",
     ]);
     let before = other.clone();
-    rescope_codex_native_flags(&mut other, tmp.path(), None).unwrap();
+    rescope_codex_native_flags(None, &mut other, tmp.path(), None).unwrap();
     assert_eq!(other, before);
 }
 
@@ -84,7 +84,7 @@ fn rescope_strips_every_user_add_dir() {
         "/",
         "--add-dir=/etc",
     ]);
-    rescope_codex_native_flags(&mut args, tmp.path(), Some("reviewer")).unwrap();
+    rescope_codex_native_flags(None, &mut args, tmp.path(), Some("reviewer")).unwrap();
     assert_eq!(
         args,
         s(&[
@@ -167,6 +167,7 @@ fn a_native_resume_uses_the_resumed_lanes_tree() {
     let lane = crate::session::CodexLane {
         tree: tmp.path(),
         role: Some("reviewer"),
+        host_main: None,
     };
     let args =
         crate::session::codex_interactive_resume_args("t-1", Some(lane), false, false).unwrap();
@@ -287,7 +288,9 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
         .split_whitespace()
         .collect();
     assert!(
-        launch.contains("\"codex\"=>crate::codex_native_sandbox::codex_native_sandbox_flags()?"),
+        launch.contains(
+            "\"codex\"=>crate::codex_native_sandbox::codex_native_sandbox_flags(host_main)?"
+        ),
         "tool_contained_flags(\"codex\") must delegate to the shared helper"
     );
     assert!(
@@ -328,30 +331,33 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     let session: String = production_source("session.rs").split_whitespace().collect();
     assert!(
         session.contains(
-            "rescope_native_codex_for_seat(vendor,&mutargs,&headless_worktree_root(),seat.as_str())?"
+            "rescope_native_codex_for_seat(host_main,vendor,&mutargs,&headless_worktree_root(),seat.as_str(),)?"
         ),
         "the headless spawn must rescope by its seat"
     );
     assert!(
-        session.contains("rescope_native_codex_for_seat(vendor,&mutargs,cwd,seat)?"),
+        session.contains("rescope_native_codex_for_seat(host_main,vendor,&mutargs,cwd,seat)?"),
         "the headless resume must rescope by its seat, in the resumed tree"
     );
     assert!(
         session.contains(
-            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root(),Some(\"reviewer\"),)?"
+            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main,&headless_worktree_root(),Some(\"reviewer\"),)?"
         ),
         "the interactive reviewer plan must ask for the reviewer write set"
     );
     assert!(
         session.contains(
-            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root(),role,)?"
+            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main,&headless_worktree_root(),role,)?"
         ),
         "exec_codex_session must pass its role"
     );
     assert_eq!(
         session
-            .matches("crate::tool_contained_flags(\"codex\")")
-            .count(),
+            .matches("crate::tool_contained_flags(None,\"codex\")")
+            .count()
+            + session
+                .matches("crate::tool_contained_flags(host_main,\"codex\")")
+                .count(),
         2,
         "only headless_vendor_args (rescoped by seat) and the interactive session config \
          (rescoped by agent new) may take the cwd-resolved, role-less set"
@@ -360,7 +366,8 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
         .split_whitespace()
         .collect();
     assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));
-    assert!(queue.contains("role:Some(\"reviewer\"),},)?;"));
+    // TASK-2032: the reviewer resume carries the pinned host main.
+    assert!(queue.contains("role:Some(\"reviewer\"),host_main,"));
 }
 
 /// Advisor F2: a composed native Codex argv rescoped by seat. Outside git
@@ -374,6 +381,7 @@ fn rescope_by_seat_touches_only_native_codex() {
     let mut codex = s(&CODEX_NATIVE_POSTURE);
     codex.extend(s(&["--add-dir", "/x", "exec", "p"]));
     crate::session::rescope_native_codex_for_seat(
+        None,
         crate::session::HeadlessVendor::Codex,
         &mut codex,
         tmp.path(),
@@ -386,6 +394,7 @@ fn rescope_by_seat_touches_only_native_codex() {
     let mut claude = s(&["--add-dir", "/x", "-p"]);
     let before = claude.clone();
     crate::session::rescope_native_codex_for_seat(
+        None,
         crate::session::HeadlessVendor::Claude,
         &mut claude,
         tmp.path(),

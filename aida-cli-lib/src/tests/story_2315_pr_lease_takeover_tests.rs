@@ -266,7 +266,7 @@ fn seat_lease(seat: &Path) -> crate::SessionLease {
 /// The full read for a lease already known dead: seat, PR head, ancestry.
 fn check_dead(fx: &Fixture) -> PrLeaseCheck {
     let lease = seat_lease(&fx.seat);
-    let seat = read_seat(&lease, "feat");
+    let seat = read_seat(&fx.main, &lease, "feat");
     let pr_head = pr_head_on_origin(&fx.main, "feat");
     classify(OwnerLiveness::Dead, &seat, pr_head.as_deref(), |a, b| {
         is_ancestor(&fx.main, a, b)
@@ -324,7 +324,7 @@ fn dirty_seat_refuses() {
 fn branch_never_pushed_is_not_judged() {
     let fx = shipped_lane();
     let lease = seat_lease(&fx.seat);
-    let seat = read_seat(&lease, "unpushed");
+    let seat = read_seat(&fx.main, &lease, "unpushed");
     assert!(pr_head_on_origin(&fx.main, "unpushed").is_none());
     assert!(matches!(
         classify(OwnerLiveness::Dead, &seat, None, never),

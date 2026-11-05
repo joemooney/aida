@@ -133,6 +133,10 @@ fn story1673_shell_looking_arguments_are_invalid_before_any_host_read() {
         "/fixture/`id`",
         "/fixture/a|b",
         "/fixture/a\nb",
+        // A UNC-shaped path could reach a network share on Windows.
+        // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+        "//host/share/x",
+        "///x",
     ] {
         for probe in ["path-exists", "disk-rotational"] {
             assert_eq!(

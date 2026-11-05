@@ -4484,7 +4484,10 @@ impl StaleLeaseRecoveryReport {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
 pub(crate) fn lease_tree_dirty_entries(lease: &SessionLease) -> Vec<String> {
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
-        if let Some(clone) = crate::seat_clone::host_recorded_clone(&lease.worktree_path) {
+        if let Some(clone) = crate::seat_clone::recorded_clone_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            &lease.worktree_path,
+        ) {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
             return match crate::seat_clone::probe_counting_origin(
                 &clone.main,

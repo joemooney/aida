@@ -999,6 +999,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
                 branch: "claude/story-9",
                 contained: false,
                 child_grant: &child_grant,
+                host_main: None,
             })
         });
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);

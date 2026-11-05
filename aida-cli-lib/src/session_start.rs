@@ -1941,6 +1941,7 @@ pub(crate) fn session_start_with_receipt(
             .is_some_and(queue_cmd::role_is_stakeholder_only)
     {
         return session::new_session_for_vendor(
+            crate::seat_clone::launcher_main().as_deref(),
             launch_vendor.as_deref().expect("launch vendor preflight"),
             None,
             launch_title,
@@ -3609,6 +3610,12 @@ pub(crate) fn session_start_with_receipt(
             )
             .cyan()
         );
+        // TASK-2032: resolve the host main once, here, before the chdir into
+        // the seat: from inside a seat clone the cwd names the clone, whose
+        // main comes only from its seat-writable marker. It is threaded
+        // explicitly through every boundary builder below.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
         // BUG-1918: the exec'd worker carries its lease id.
@@ -3638,6 +3645,7 @@ pub(crate) fn session_start_with_receipt(
                 .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
         };
         return session::new_session_for_vendor(
+            host_main.as_deref(),
             launch_vendor,
             Some(owns.to_string()),
             launch_title,

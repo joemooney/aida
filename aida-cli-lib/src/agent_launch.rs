@@ -86,6 +86,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 maybe_show_faithful_launcher_notice();
             }
             session::new_session_for_vendor(
+                crate::seat_clone::launcher_main().as_deref(),
                 &vendor,
                 None,
                 title.clone(),
@@ -1602,7 +1603,10 @@ pub(crate) fn agent_resume_launch_config(
         // The child runs in `worktree`, so its write boundary is that
         // worktree — not the launcher's cwd (`tool_contained_flags` would
         // resolve the parent's git root). trace:BUG-2151 | ai:claude
-        config.default_args = session::claude_contained_flags_for(worktree)?;
+        config.default_args = session::claude_contained_flags_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree,
+        )?;
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(
@@ -2030,8 +2034,12 @@ pub(crate) fn rescope_contained_settings(
     // lane's tree the same way; its role decides the gate-ledger grant
     // (reviewer only).
     // trace:TASK-2712 | ai:claude
+    // TASK-2032: an entry point run from the host project; the host main is
+    // resolved here, once, for both vendors. trace:TASK-2032 | ai:claude
+    let host_main = crate::seat_clone::launcher_main();
     if config.agent_type == "codex" {
         return crate::codex_native_sandbox::rescope_codex_native_flags(
+            host_main.as_deref(),
             &mut config.default_args,
             tree,
             role,
@@ -2047,7 +2055,7 @@ pub(crate) fn rescope_contained_settings(
         return Ok(());
     }
     let roots = session::contained_session_write_roots_from(tree);
-    let flags = session::claude_contained_flags_for_roots(&roots)?;
+    let flags = session::claude_contained_flags_for_roots(host_main.as_deref(), &roots)?;
     let settings = flags
         .last()
         .cloned()
@@ -2062,11 +2070,14 @@ pub(crate) fn rescope_contained_settings(
 }
 
 // trace:BUG-1178 | ai:codex
-pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
+pub(crate) fn tool_contained_flags(
+    host_main: Option<&std::path::Path>,
+    agent_type: &str,
+) -> Result<Vec<String>> {
     Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags()?);
+            flags.extend(session::claude_contained_flags(host_main)?);
             flags
         }
         // trace:STORY-1124 | ai:codex
@@ -2074,7 +2085,7 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
         // resolved from this process's tree; `rescope_contained_settings`
         // re-derives it once the lane's tree is known.
         // trace:TASK-2712 | ai:claude
-        "codex" => crate::codex_native_sandbox::codex_native_sandbox_flags()?,
+        "codex" => crate::codex_native_sandbox::codex_native_sandbox_flags(host_main)?,
         _ => Vec::new(),
     })
 }
@@ -2472,7 +2483,10 @@ pub(crate) fn resolve_claude_new_posture(
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags("claude")?,
+            default_args: tool_contained_flags(
+                crate::seat_clone::launcher_main().as_deref(),
+                "claude",
+            )?,
             contained: true,
             explicit: true,
         })
@@ -5931,6 +5945,7 @@ fn wrapped_agent_program_and_args(
 ) -> Result<(std::ffi::OsString, Vec<String>)> {
     if wrap_claude && config.agent_type == "claude" {
         let (prog, args) = crate::session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
             &plan.launch_cwd,
             &binary.to_string_lossy(),
             all_args,
@@ -6407,6 +6422,7 @@ fn reported_harness_version(
 /// The context of an `aida agent new` child, which runs in the lane's cwd.
 // trace:STORY-2326 | ai:claude
 fn agent_launch_context(
+    host_main: Option<&std::path::Path>,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
     kind: aida_core::launch_policy::LaunchKind,
@@ -6429,6 +6445,8 @@ fn agent_launch_context(
             posture,
             cwd: plan.launch_cwd.clone(),
             set_cwd: true,
+            // trace:TASK-2032 | ai:claude
+            host_main: host_main.map(std::path::Path::to_path_buf),
         },
     )?)
 }
@@ -6442,10 +6460,11 @@ pub(crate) fn build_agent_new_bg_command(
     launch_context: Option<&AgentLaunchContext>,
 ) -> Result<std::process::Command> {
     refuse_bg_under_os_wrap(config, &plan.launch_cwd)?;
-    // trace:STORY-2326 | ai:claude
+    // trace:STORY-2326 TASK-2032 | ai:claude
     let mut args = config.default_args.clone();
     args.extend(prompt_args.iter().cloned());
     let ctx = agent_launch_context(
+        crate::seat_clone::launcher_main().as_deref(),
         config,
         plan,
         aida_core::launch_policy::LaunchKind::Background,
@@ -7162,8 +7181,9 @@ pub(crate) fn run_agent_generation(
     // trace:TASK-864 | ai:claude
     let (program, exec_args) =
         resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;
-    // trace:STORY-2326 | ai:claude
+    // trace:STORY-2326 TASK-2032 | ai:claude
     let ctx = agent_launch_context(
+        crate::seat_clone::launcher_main().as_deref(),
         config,
         plan,
         aida_core::launch_policy::LaunchKind::Fresh,

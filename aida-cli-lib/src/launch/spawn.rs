@@ -50,7 +50,8 @@ fn aida_boundary(ctx: &LaunchContext, cmd: &mut Command) -> Result<()> {
     #[cfg(test)]
     AIDA_BOUNDARY_CALLS.with(|calls| calls.set(calls.get() + 1));
     // trace:BUG-2218 TASK-2328 | ai:codex
-    crate::session::prepare_contained_mailbox_for_launch(ctx.cwd())?;
+    crate::session::prepare_contained_mailbox_for_launch(ctx.host_main(), ctx.cwd())?;
+    // trace:TASK-2032 | ai:claude
     cmd.env(CONTAINED_ENV, "1");
     // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
     cmd.env(POSTURE_ENV, "aida");
