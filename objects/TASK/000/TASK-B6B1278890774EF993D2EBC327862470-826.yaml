@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T23:52:07.983053784Z
+modified_at: 2026-11-05T23:52:10.442701653Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -146,6 +146,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 code meets all four ACs and resolves every round-1 finding; one blocker: CI gates job fails ''Executable fixture ratchet'' because two new test fixtures set 0o755 directly.. No triage reason was given.'
   created_at: 2026-11-05T23:52:07.983052365Z
   modified_at: 2026-11-05T23:52:07.983052365Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae20-8957-7ea3-8bfb-fef612fa430a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2879):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 038e06c8862b
+    Recorded: 2026-11-05T23:49:04.734267122+00:00
+    Findings:
+    1. CI (gates) FAILED at 038e06c8862b, step 'Executable fixture ratchet' (python3 -m unittest tests/test_executable_fixture_ratchet.py, test_test_sources_do_not_set_executable_modes_directly). The PR adds two direct executable-mode writes in aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs: line 1588 (pre-receive hook in task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges: std::fs::write + set_permissions(from_mode(0o755))) and line 1743 (fake gh in task_2879_post_exit_commit_looks_up_refs_pr). Replace each write+chmod pair with crate::test_exec::write_executable(&path, body) (ETXTBSY-safe shared helper) and drop the now-unused PermissionsExt imports. Build (ubuntu-latest) fails only as the CI aggregator of this lane; all other shards (cli-0/1, lib-0/1, rest, contracts) pass. merge-hold-gate failure is the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T23:52:10.327106575Z
+  modified_at: 2026-11-05T23:52:10.327106575Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
