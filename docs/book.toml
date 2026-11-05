@@ -1,6 +1,8 @@
-# The AIDA Book — the unified user-facing documentation site (STORY-607 / EPIC-41).
+# The AIDA Book — adopter and operator documentation.
+# trace:STORY-1651 | ai:codex
+# Contributor chapters are excluded from SUMMARY.md; their index is docs/internal/README.md.
 #
-# Build:  mdbook build docs           (output → docs/book/, gitignored)
+# Publish: python3 scripts/build-reader-book.py (output → docs/book/, gitignored)
 # Read:   mdbook serve docs --open
 #
 # The CLI manual (docs/cli/*.md) is nested here as the "CLI Reference" part —
@@ -13,10 +15,15 @@
 # lines below. Until then the book builds fine; diagrams show as fenced code.
 [book]
 title = "The AIDA Book"
-description = "AIDA documentation — from why-it-exists to running it for a team, including the full CLI reference."
+description = "AIDA documentation — from why-it-exists to running it for a team, with the everyday CLI reference."
 authors = ["AIDA"]
 src = "."
 language = "en"
+
+# The publication wrapper removes non-reader assets copied by mdBook.
+# trace:STORY-1651 | ai:codex
+[build]
+create-missing = false
 
 [output.html]
 default-theme = "rust"
@@ -41,6 +48,26 @@ level = 1
 [output.html.redirect]
 "/README.html" = "/index.html"
 "/cli/README.html" = "/cli/index.html"
+
+"/admin-guide.html" = "/advanced/admin-guide.html"
+"/agents/codex-mail-wake.html" = "/advanced/codex-mail-wake.html"
+"/aida-power-features.html" = "/advanced/aida-power-features.html"
+"/air-gapped-development.html" = "/advanced/air-gapped-development.html"
+"/authority-and-seats.html" = "/advanced/authority-and-seats.html"
+"/autonomous-drain.html" = "/advanced/autonomous-drain.html"
+"/deputies.html" = "/advanced/deputies.html"
+"/forge-providers.html" = "/advanced/forge-providers.html"
+"/gitlab-ci-runner.html" = "/advanced/gitlab-ci-runner.html"
+"/mailbox.html" = "/advanced/mailbox.html"
+"/multi-advisor-coordination.html" = "/advanced/multi-advisor-coordination.html"
+"/multi-hub-sync.html" = "/advanced/multi-hub-sync.html"
+"/multi-node.html" = "/advanced/multi-node.html"
+"/multi-user-setup.html" = "/advanced/multi-user-setup.html"
+"/session-lifecycle.html" = "/advanced/session-lifecycle.html"
+"/solo-mode.html" = "/advanced/solo-mode.html"
+"/storage-modes.html" = "/advanced/storage-modes.html"
+"/store-location.html" = "/advanced/store-location.html"
+"/token-usage-ledger.html" = "/advanced/token-usage-ledger.html"
 
 [preprocessor]
 

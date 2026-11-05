@@ -210,7 +210,7 @@ class EnumeratorTest(unittest.TestCase):
             '    s.contains("upstream prose")\n}\n',
             encoding="utf-8",
         )
-        (root / "docs/architecture").mkdir(parents=True, exist_ok=True)
+        (root / "docs/internal/architecture").mkdir(parents=True, exist_ok=True)
 
     def _run_check(self, root: pathlib.Path) -> int:
         argv = sys.argv
@@ -232,7 +232,7 @@ class EnumeratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             self._tree_with_one_marker(root)
-            doc = root / "docs/architecture/external-tool-output-classifiers.md"
+            doc = root / "docs/internal/architecture/external-tool-output-classifiers.md"
 
             doc.write_text("DELIBERATELY WRONG\n", encoding="utf-8")
             self.assertEqual(
@@ -261,7 +261,7 @@ class EnumeratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             self._tree_with_one_marker(root)
-            doc = root / "docs/architecture/external-tool-output-classifiers.md"
+            doc = root / "docs/internal/architecture/external-tool-output-classifiers.md"
 
             # the doc describes a DIFFERENT stable classifier key
             fresh = module.render(module.enumerate_sites(root))

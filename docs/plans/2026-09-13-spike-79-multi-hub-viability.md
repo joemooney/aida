@@ -91,6 +91,6 @@ genuinely committing to gitlab). At that point the gating work is, in order:
 
 ## Related
 
-- `docs/multi-hub-sync.md` (the three legs + reconcile procedure)
-- `docs/git-verb-surface.md` (two-leg mirror verbs)
+- `docs/advanced/multi-hub-sync.md` (the three legs + reconcile procedure)
+- `docs/internal/git-verb-surface.md` (two-leg mirror verbs)
 - `aida-core/src/conflict.rs`, `dispenser.rs`, `node.rs`

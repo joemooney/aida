@@ -640,7 +640,7 @@ orchestrator. Use Codex hooks as convenience checks around that core.
 
 ### Bubblewrap and AIDA containment
 
-`docs/agents/claude-bubblewrap-sandbox.md` documents AIDA's `os_wrap`
+`docs/internal/agents/claude-bubblewrap-sandbox.md` documents AIDA's `os_wrap`
 mechanism. Despite the filename, the architectural point is not "Claude"; it is
 "outer OS boundary around an unattended agent process."
 
@@ -753,7 +753,7 @@ required `SKILL.md`; invoke with `/skills` or `$aida-review`). Verified on Codex
 0.157.0, which also reads a hard link or a symlinked skill *directory*, but
 silently skips a `SKILL.md` that is itself a symlink, so write a regular file.
 Antigravity 1.2.11 reads the same `.agents/skills/` directory. See the skill
-discovery matrix in `docs/agents/seat-parity.md`:
+discovery matrix in `docs/internal/agents/seat-parity.md`:
 
 ```markdown
 ---
@@ -900,7 +900,7 @@ named-team UX — Codex subagents are spawned-on-request fan-out, not a standing
 ## References
 
 - `docs/agents/session-communication.md`
-- `docs/agents/claude-bubblewrap-sandbox.md`
+- `docs/internal/agents/claude-bubblewrap-sandbox.md`
 - `docs/agents/codex-mcp-setup.md`
 - `docs/agents/codex-brief-pickup.md`
 - `docs/agents/per-agent-config.md`

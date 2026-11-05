@@ -46,7 +46,7 @@ runs unattended (CLI in scripts) and supervised (skill in a session).
 ### Spikes
 
 Split spikes by deliverable, not merely by type. A spike with a concrete evidence
-path under `docs/spikes/` and explicit acceptance is agent-able: propose `drain`
+path under `docs/internal/spikes/` and explicit acceptance is agent-able: propose `drain`
 when nothing depends on it, or `drive` when a `BlockedBy` dependent will build on
 its conclusions (name that dependent in the reason so an advisor reviews before
 merge). A decision, taste call, or work needing credentials stays `operator`.

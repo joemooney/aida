@@ -26,7 +26,7 @@
 //! filesystem-canonical coordination substrate. The orchestrator still
 //! reads/writes those files directly — these tools are the surface any
 //! MCP-speaking agent (Codex, Cursor, …) can use to participate in the
-//! same drains. See `docs/architecture/mcp-coordination-surface.md`.
+//! same drains. See `docs/internal/architecture/mcp-coordination-surface.md`.
 //!
 //! # Output schemas (TASK-440 Path A + STORY-399 Path B)
 //!

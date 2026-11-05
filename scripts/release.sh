@@ -377,7 +377,7 @@ fi
 if [ "$is_major_or_minor" = "1" ]; then
     echo
     echo "─── Ecosystem Watch Verification ───"
-    eco_file="docs/competitive-analysis/ecosystem-watch.md"
+    eco_file="docs/internal/competitive-analysis/ecosystem-watch.md"
     echo "  File: $eco_file"
 
     last_updated=""
@@ -400,8 +400,8 @@ if [ "$is_major_or_minor" = "1" ]; then
     fi
     last_commit=$(git log -1 --format='%ad' --date=short -- "$eco_file" 2>/dev/null || true)
     [ -n "$last_commit" ] && echo "  Last commit:  $last_commit"
-    echo "  Refresh: review $eco_file + docs/competitive-analysis/ snapshots, then bump its 'Last updated:' line."
-    echo "  If marketplace/package metadata changed, also walk docs/security/marketplace-publication-checklist.md."
+    echo "  Refresh: review $eco_file + docs/internal/competitive-analysis/ snapshots, then bump its 'Last updated:' line."
+    echo "  If marketplace/package metadata changed, also walk docs/internal/security/marketplace-publication-checklist.md."
 
     # Thresholds: <14d auto-pass · 14–30d warn+prompt · 30+d (or unknown) require.
     fresh_days=14

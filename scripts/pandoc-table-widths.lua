@@ -2,7 +2,7 @@
 -- trace:TASK-1128 | ai:claude
 --
 -- pandoc's LaTeX writer gives every column of a *wide* pipe table an equal
--- share of the text width. For the comparison tables in docs/positioning/ that
+-- share of the text width. For the comparison tables in docs/internal/positioning/ that
 -- wastes a full third on the short row-label column ("Layer" / "State" / ...),
 -- squeezing the content columns into needless wrapping. This filter rebalances
 -- an already-wide table so each column's width is proportional to the longest

@@ -200,7 +200,7 @@ else:
         self.assertEqual(report["trusted_policy_sha"], "policy-tip")
 
     def test_historical_reassessment_withdraws_positive_credit_preserves_sources(self):
-        source = Path(__file__).resolve().parents[1] / "docs/testing/containment-conformance-2026-11-04.json"
+        source = Path(__file__).resolve().parents[1] / "docs/internal/testing/containment-conformance-2026-11-04.json"
         output = self.root / "reassessed.json"
         original = json.loads(source.read_text())
         c.reassess_evidence(source, output)

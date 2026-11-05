@@ -103,7 +103,7 @@ operative mode and design-forks always pause.
 - The four core skills carry kind annotations + an "Autonomy mode" section:
   `/aida-pickup`, `/aida-implement`, `/aida-pr`, `/aida-review`. Other
   skills are a follow-up.
-- `docs/autonomous-drain.md` — the three-mode table + when to use each.
+- `docs/advanced/autonomous-drain.md` — the three-mode table + when to use each.
 
 ## Operator-explicit invocation — `disable-model-invocation` (TASK-575)
 

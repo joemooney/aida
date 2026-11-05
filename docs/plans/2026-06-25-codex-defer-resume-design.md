@@ -15,7 +15,7 @@ Complexity: Medium (one trait method + one launch builder; the substrate already
 ## 1. The problem, stated against the real surface
 
 AIDA's `--no-human=both` autonomous drain has a three-tier escalation cascade
-(STORY-306, `docs/autonomous-drain.md`): a headless implementer that hits a
+(STORY-306, `docs/advanced/autonomous-drain.md`): a headless implementer that hits a
 design-fork it cannot safely resolve **punts** (parks the spec
 `NeedsAttention`, drops a durable record), the orchestrator spawns a headless
 **advisor** that either resolves the fork or escalates it to a human, and on a
@@ -225,7 +225,7 @@ a gate is ever wanted, it is a Claude-only optimization with a Codex fallback of
 
 ## 9. Related
 
-- `docs/autonomous-drain.md` -- the escalation cascade this design slots into.
+- `docs/advanced/autonomous-drain.md` -- the escalation cascade this design slots into.
 - `docs/agents/session-communication.md` -- Claude `ask`/`continue:false`/`defer`
   reference; update its "Codex And Antigravity" section to point here once this
   lands.

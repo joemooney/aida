@@ -3,7 +3,7 @@ import pathlib
 import unittest
 
 
-SCRIPT = pathlib.Path(__file__).parents[1] / "docs/monitor-contract-fixtures/verify.py"
+SCRIPT = pathlib.Path(__file__).parents[1] / "docs/internal/monitor-contract-fixtures/verify.py"
 SPEC = importlib.util.spec_from_file_location("monitor_contract_verify", SCRIPT)
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)

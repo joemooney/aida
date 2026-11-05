@@ -865,7 +865,7 @@ fn a_github_repo_with_no_configured_required_checks_skips_as_ci_unknown() {
 // trace:STORY-1689.ac873b7a | ai:claude
 #[test]
 fn the_repository_guide_documents_the_scheduled_promote() {
-    let guide = include_str!("../../../docs/agents/aida-repository-guide.md");
+    let guide = include_str!("../../../docs/internal/agents/aida-repository-guide.md");
     let para = guide
         .lines()
         .find(|l| l.contains("**The live binary everyone runs is promoted by `aida dev build`**"))

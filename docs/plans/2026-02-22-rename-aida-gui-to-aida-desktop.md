@@ -101,7 +101,7 @@ mv aida-gui/ aida-desktop/
 - `CLAUDE.md` — if any direct references
 - `docs/user-guide.md` — Desktop App section, binary references
 - `docs/getting-started.md` — installation, launch instructions
-- `docs/admin-guide.md` — if references exist
+- `docs/advanced/admin-guide.md` — if references exist
 - `docs/DEVELOPER_GUIDE.md` — build instructions, architecture
 - `README.md` — project structure, build commands
 - `PLAN.md` — if referenced

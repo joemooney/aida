@@ -29,7 +29,7 @@
 # through a script"). Three entries are worth recording because a shallower
 # check would misplace them:
 #   - "Monitor contract drift guard" looks pure: its step body only runs
-#     `docs/monitor-contract-fixtures/verify.py`. That script execs
+#     `docs/internal/monitor-contract-fixtures/verify.py`. That script execs
 #     `target/debug/aida contract --json` -> full. It was classified `fast`
 #     first and failed on exactly that, which is why the check is transitive.
 #   - "Removed mode-flag spelling guard" matches `$AIDA_BIN` only inside a REGEX
@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:STORY-1651 | ai:codex
+"Documentation audience coverage" = "fast"
 # trace:BUG-2014 | ai:codex
 "Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"

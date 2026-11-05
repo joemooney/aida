@@ -4480,7 +4480,7 @@ pub(crate) fn assert_headless_posture(args: &[String], contained: bool, label: &
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
-/// `docs/spikes/2026-05-16-claude-headless.md`:
+/// `docs/internal/spikes/2026-05-16-claude-headless.md`:
 ///   - `-p` — print mode: single turn, exits on its own, no Ctrl+D.
 ///   - `--permission-mode bypassPermissions` — mandatory; `acceptEdits`
 ///     leaves `Bash` gated and `default` auto-denies silently (spike Q2).

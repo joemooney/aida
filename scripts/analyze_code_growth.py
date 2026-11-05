@@ -11,7 +11,7 @@ path-based bucket, and writes CSV + JSON + presentation charts.  It never
 touches the repository work tree, index, refs, or any user/AIDA state.
 
 Run ``scripts/analyze_code_growth.py --help`` for options and see
-``docs/analytics/code-growth/README.md`` for bucket rules, assumptions, and
+``docs/internal/analytics/code-growth/README.md`` for bucket rules, assumptions, and
 rerun commands.
 """
 
@@ -68,7 +68,7 @@ ARTIFACT_SUFFIXES = (".min.js", ".min.css", ".map", ".db", ".sqlite", ".wasm", "
                      ".png", ".jpg", ".jpeg", ".gif", ".ico", ".lock")
 # This tool's own generated exports (exact paths); the authored README beside
 # them stays documentation.
-GENERATED_EXPORTS = {f"docs/analytics/code-growth/{n}" for n in (
+GENERATED_EXPORTS = {f"docs/internal/analytics/code-growth/{n}" for n in (
     "code-growth.json", "code-growth.csv", "code-growth-embedded.csv", "delivery-cadence.csv", "rust-test-markers.csv")}
 ARTIFACT_NAME_RE = re.compile(r"^(requirements.*|default_requirements|sample_project)\.ya?ml(\.backup)?$|^requirements\.yaml\.backup$")
 TEST_DIR_RE = re.compile(r"(^|/)(tests?|__tests__|benches|([^/]*-)?fixtures?)/")
@@ -97,7 +97,7 @@ COMPONENT_PREFIXES = [
 RULE_DOCS = [
     ("artifacts", "lockfiles; any path segment generated/vendor/vendored/node_modules/dist/target; "
                   "aida-store/, .aida-store/, data/; requirements*.yaml, default_requirements.yaml, sample_project.yaml; "
-                  "minified/map/db/wasm/log/font/image files; this tool's own generated exports under docs/analytics/code-growth/"),
+                  "minified/map/db/wasm/log/font/image files; this tool's own generated exports under docs/internal/analytics/code-growth/"),
     ("tests_automation", "any tests/test/__tests__/benches/*fixtures/ directory; root bench/, scripts/, ci/, .github/; "
                          ".gitlab-ci.yml, Makefile"),
     ("docs", ".aida/discipline/ (before the generic .aida/ packaging rule)"),
@@ -685,7 +685,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ref", default="main", help="ref whose first-parent history is sampled; its tip is always included")
     ap.add_argument("--cadence", choices=CADENCES, default="month", help="calendar period for sampling")
     ap.add_argument("--every", type=int, default=1, help="keep every Nth period, counting back from the tip")
-    ap.add_argument("--out", default="docs/analytics/code-growth", help="output directory")
+    ap.add_argument("--out", default="docs/internal/analytics/code-growth", help="output directory")
     ap.add_argument("--tokei", default=shutil.which("tokei") or "tokei", help="tokei executable")
     ap.add_argument("--work-dir", default=None, help="private scratch parent (default: system temp)")
     ap.add_argument("--no-charts", action="store_true", help="skip PNG rendering")

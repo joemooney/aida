@@ -302,7 +302,7 @@ pub(crate) fn init_scaffold_candidate_paths() -> &'static [&'static str] {
         ".aida/discipline",
         "docs/agents",
         "docs/extending-skills.md",
-        "docs/competitive-analysis",
+        "docs/internal/competitive-analysis",
     ]
 }
 
@@ -2044,7 +2044,7 @@ fn complete_init_scaffolding(
         if ecosystem_watch_written {
             println!(
                 "  starter ecosystem-watch log scaffolded to {}",
-                "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
+                "docs/internal/competitive-analysis/ecosystem-watch.md".dimmed(),
             );
         }
     }

@@ -26,7 +26,7 @@
 //!   message. Making it unrepresentable is how the guarantee stays true, rather
 //!   than depending on every caller remembering to catch.
 //! - **Readable without reverse engineering.** Flat `[project]` table, plain
-//!   TOML, every field optional, documented in `docs/project-manifest.md`.
+//!   TOML, every field optional, documented in `docs/internal/project-manifest.md`.
 //! - **Never a blank form.** The scaffolder pre-fills from what is already
 //!   knowable. An empty form is exactly how a metadata standard goes stale in a
 //!   week, which is the failure this exists to prevent.
@@ -355,7 +355,7 @@ pub fn render(facts: &DerivedFacts) -> String {
          # Your edits are never overwritten — `aida init` leaves an existing\n\
          # manifest alone.\n\
          #\n\
-         # Every field is optional. Schema: docs/project-manifest.md\n\n",
+         # Every field is optional. Schema: docs/internal/project-manifest.md\n\n",
     );
     s.push_str(&format!("schema = {SCHEMA_VERSION}\n\n[project]\n"));
 

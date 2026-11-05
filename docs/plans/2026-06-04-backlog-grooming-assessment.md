@@ -128,7 +128,7 @@ The biggest volume lever. These are real-but-low-priority — archiving them to 
 - **STORY-96** (Low) — Decision policy: 'what next?' autonomy for auto-spawn trigger
 - **STORY-99** (Low) — Workflow dashboard TUI: human-in-the-loop UI for orchestration transitions
 - **TASK-101** (Low) — aida statusline + queue list: surface 'base behind by N' for active leases on stale branches
-- **TASK-109** (Low) — docs/git-verb-surface.md: design reference naming the convention
+- **TASK-109** (Low) — docs/internal/git-verb-surface.md: design reference naming the convention
 - **TASK-230** (Low) — Pipelined ping-pong v2: while blocked on PR-N review, optionally pick up next queue item in secondary worktree
 - **TASK-235** (Low) — Backlog: verify 'covers no specs' on auto-queued reviewer story after BUG-85 fix + cluster-mode-drain stabilizes
 - **TASK-239** (Low) — Skill next-steps blocks: ASCII fallback for unicode glyphs (avoid terminal interleave corruption)
@@ -154,7 +154,7 @@ The biggest volume lever. These are real-but-low-priority — archiving them to 
 - **TASK-334** (Low) — Audit whether `AIDA_ZEN` has the same can't-verify-provenance weakness
 - **TASK-335** (Low) — When STORY-301's drain-state file lands, fold the run-UUID into it and retire
 - **TASK-341** (Low) — Audit `AIDA_EXIT_SENTINEL` / `AIDA_REVIEW_VERDICT_FILE` for explicit
-- **TASK-342** (Low) — Update `docs/autonomous-drain.md` zen-mode section to mention `aida zen
+- **TASK-342** (Low) — Update `docs/advanced/autonomous-drain.md` zen-mode section to mention `aida zen
 - **TASK-343** (Low) — `aida drain status` could show PR merge-state (`gh pr view`) per member
 - **TASK-344** (Low) — A `drain:NAME N/M` statusline segment sourced from `drain-state.json` (TASK-306)
 - **TASK-345** (Low) — `aida session leases --json` could include the drain cross-reference

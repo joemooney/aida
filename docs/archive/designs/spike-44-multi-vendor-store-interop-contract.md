@@ -26,15 +26,15 @@ The answer is:
 This spike reuses and cross-checks the existing SPIKE-46 work because it is
 exactly the non-AIDA prototype SPIKE-44 asks for:
 
-- `docs/architecture/spike-46-store-interop/store_interop_prototype.py`
-- `docs/architecture/spike-46-store-interop/store_reader.py`
-- `docs/architecture/spike-46-store-interop/FINDINGS.md`
-- `docs/architecture/on-disk-serialization-surface.md`
+- `docs/internal/architecture/spike-46-store-interop/store_interop_prototype.py`
+- `docs/internal/architecture/spike-46-store-interop/store_reader.py`
+- `docs/internal/architecture/spike-46-store-interop/FINDINGS.md`
+- `docs/internal/architecture/on-disk-serialization-surface.md`
 
 Observed on 2026-06-04:
 
 ```text
-python3 docs/architecture/spike-46-store-interop/store_interop_prototype.py read-report
+python3 docs/internal/architecture/spike-46-store-interop/store_interop_prototype.py read-report
 
 Store: /home/joe/ai/aida/.aida-store
 Objects parsed: 1714/1714
@@ -248,7 +248,7 @@ access trivial.
 
 ## Follow-up specs to file or verify
 
-1. Promote the SPIKE-46 prototype into a maintained `docs/architecture/store-interop/`
+1. Promote the SPIKE-46 prototype into a maintained `docs/internal/architecture/store-interop/`
    reference package or test fixture.
 2. Add a direct-read conformance fixture with the observed relationship variants:
    `BlockedBy`, `Child`, `Parent`, `References`, and `Custom:*`.

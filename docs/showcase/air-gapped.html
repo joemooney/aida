@@ -80,7 +80,7 @@ aida node show</code></pre>
 <h3 id="step-6-bring-the-work-back-out">Step 6: bring the work back out</h3>
 <p><strong>Status: the checks work today; the bundle crossing is untested.</strong> Carry the inside store out the same way, fetch it into a local ref, and audit it before you sync:</p>
 <pre><code>aida db audit-ids --against &lt;ref&gt;</code></pre>
-<p>The audit exits cleanly when no claim conflicts. Every store sync runs the same check and refuses any overlap, so a mistake in the earlier steps stops at the boundary instead of spreading. To keep more than one connected hub level in day-to-day use, see <a href="../multi-hub-sync.md">Multi-hub sync</a>.</p>
+<p>The audit exits cleanly when no claim conflicts. Every store sync runs the same check and refuses any overlap, so a mistake in the earlier steps stops at the boundary instead of spreading. To keep more than one connected hub level in day-to-day use, see <a href="../advanced/multi-hub-sync.md">Multi-hub sync</a>.</p>
 <h2 id="know-the-boundary">Know the boundary</h2>
 <ul>
 <li>Node-local IDs, the root, upstream declarations, pool and block records, the spend checks and the sync-time conflict check are built.</li>
@@ -88,6 +88,6 @@ aida node show</code></pre>
 <li>Carrying a pool across an air gap in a Git bundle has not been tested.</li>
 </ul>
 <p>The storage reference, <a href="../cli/10-storage.md">Storage and the requirement store</a>, documents the current commands and checks in full.</p></main>
-<footer class="guide-footer"><p>Generated from <a href="../air-gapped-development.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+<footer class="guide-footer"><p>Generated from <a href="../advanced/air-gapped-development.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
 </body>
 </html>

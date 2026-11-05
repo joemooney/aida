@@ -1256,7 +1256,10 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
     let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, None);
     assert!(prompt.starts_with("/aida-pickup SPIKE-82"), "{prompt}");
     assert!(prompt.contains("Research-lane contract"), "{prompt}");
-    assert!(prompt.contains("docs/spikes/<date>-<slug>.md"), "{prompt}");
+    assert!(
+        prompt.contains("docs/internal/spikes/<date>-<slug>.md"),
+        "{prompt}"
+    );
     assert!(prompt.contains("open a PR"), "{prompt}");
     assert!(prompt.contains("Do not make or apply"), "{prompt}");
 }

@@ -2795,7 +2795,8 @@ pub(crate) struct ResearchArgs {
     pub dry_run: bool,
 
     /// Directory for the dated analysis + decision-sidecar artifacts.
-    #[clap(long, default_value = "docs/research")]
+    // trace:STORY-1651 | ai:codex
+    #[clap(long, default_value = "docs/internal/research")]
     pub artifact_dir: String,
 }
 

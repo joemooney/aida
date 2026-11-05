@@ -63,7 +63,7 @@ aida burndown run  (launcher — long-lived, holds the drain lock)
    `file_integration_wait_finding`); wired into `handle_burndown_run`'s loop.
 3. `aida-cli-lib/src/session.rs` — the ceiling on the central headless
    spawn/exec/resume paths.
-4. `aida-core/templates/skills/aida-burndown.md`, `docs/autonomous-drain.md`,
+4. `aida-core/templates/skills/aida-burndown.md`, `docs/advanced/autonomous-drain.md`,
    `docs/environment-variables.md`.
 
 ## Critical files

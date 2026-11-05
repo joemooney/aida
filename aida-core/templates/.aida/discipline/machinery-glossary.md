@@ -130,8 +130,8 @@ only reversible actions auto-execute; approvals/rejections are held; uncertain
 calls escalate. It reuses the **same keystone classifier**
 (`presence::is_keystone_class`) as the groom fence, the solo posture, and the
 drain — so all stages agree on "keystone" and no stage can disagree. See
-`docs/architecture/autonomy-and-escalation.md` §8 (the grooming-stage analog of
-the cascade) and `docs/solo-mode.md`.
+`docs/internal/architecture/autonomy-and-escalation.md` §8 (the grooming-stage analog of
+the cascade) and `docs/advanced/solo-mode.md`.
 
 ### session
 
@@ -189,7 +189,7 @@ A fileless, non-routable least-privilege gate activated with
 `AIDA_SESSION_ROLE=guest|requester`: `guest` is read-only and `requester` adds
 Draft-only intake. A persona is discoverable in `aida role list` but has no
 seat, history, or lease. See
-`docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
+`docs/internal/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
 ### standalone implementer
 

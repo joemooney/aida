@@ -86,7 +86,7 @@ The implementation should be divided into the following sequential slices:
 *   **Action:** Generate an `aida-install-state.json` recording checksums of written files, allowing `aida init --refresh` and `aida init --uninstall`.
 
 ### Slice 3: Honesty-Graded Harness Adapter Matrix
-*   **Goal:** Document and grade AIDA's support across harnesses (Native vs. Adapter vs. Instruction-backed) under `docs/positioning/` to manage user expectations.
+*   **Goal:** Document and grade AIDA's support across harnesses (Native vs. Adapter vs. Instruction-backed) under `docs/internal/positioning/` to manage user expectations.
 
 ### Slice 4: Telemetry Features in the AIDA TUI
 *   **Goal:** Absorb `ecc2`'s TUI telemetry advantages.
@@ -100,4 +100,4 @@ The implementation should be divided into the following sequential slices:
 *   **ECC Manifests:** [install-profiles.json](file:///home/joe/ai/aida/ecc-clone/manifests/install-profiles.json), [install-modules.json](file:///home/joe/ai/aida/ecc-clone/manifests/install-modules.json), [install-components.json](file:///home/joe/ai/aida/ecc-clone/manifests/install-components.json)
 *   **ECC CI Validator:** [validate-install-manifests.js](file:///home/joe/ai/aida/ecc-clone/scripts/ci/validate-install-manifests.js)
 *   **ECC Control Plane:** [ecc2/src/main.rs](file:///home/joe/ai/aida/ecc-clone/ecc2/src/main.rs), [store.rs](file:///home/joe/ai/aida/ecc-clone/ecc2/src/session/store.rs), [Cargo.toml](file:///home/joe/ai/aida/ecc-clone/ecc2/Cargo.toml)
-*   **ECC Harness Adapter Matrix:** [cross-harness.md](file:///home/joe/ai/aida/ecc-clone/docs/architecture/cross-harness.md), [harness-adapter-compliance.md](file:///home/joe/ai/aida/ecc-clone/docs/architecture/harness-adapter-compliance.md)
+*   **ECC Harness Adapter Matrix:** [cross-harness.md](file:///home/joe/ai/aida/ecc-clone/docs/internal/architecture/cross-harness.md), [harness-adapter-compliance.md](file:///home/joe/ai/aida/ecc-clone/docs/internal/architecture/harness-adapter-compliance.md)

@@ -189,11 +189,11 @@ Guards (all must pass to launch): `enabled`, `wave-in-flight`, `lock-free`,
 
 ### Docs
 
-- `docs/autonomous-drain.md`: "Night shift" runbook section (preflight =
+- `docs/advanced/autonomous-drain.md`: "Night shift" runbook section (preflight =
   `aida shift tick --dry-run`).
 - `docs/cli/03-work-autonomy.md`: `aida shift` entry.
 - `docs/environment-variables.md`: `AIDA_HOME` relocates `shift-local.toml`.
-- `docs/cli-format-json-audit.md`: regenerated.
+- `docs/internal/cli-format-json-audit.md`: regenerated.
 
 ## Critical Files
 
@@ -209,7 +209,7 @@ Guards (all must pass to launch): `enabled`, `wave-in-flight`, `lock-free`,
 - `aida-cli-lib/src/lib.rs`
 - `aida-cli-lib/src/status_cmd.rs`
 - `aida-cli-lib/src/usage.rs`
-- `docs/autonomous-drain.md`
+- `docs/advanced/autonomous-drain.md`
 - `docs/cli/03-work-autonomy.md`
 - `docs/environment-variables.md`
 
@@ -300,7 +300,7 @@ cargo test -p aida-cli-lib --lib shift
 ## Related
 
 - Builds on: SPIKE-82, STORY-1226, BUG-538, STORY-638, STORY-1462, TASK-1298
-- See also: docs/spikes/2026-09-18-spike-82-night-shift-post-mortem.md
+- See also: docs/internal/spikes/2026-09-18-spike-82-night-shift-post-mortem.md
 
 ## Slice 3 (TASK-1492): re-drive, mail latency (cold-boot deferred)
 

@@ -22,8 +22,8 @@ Do not be diplomatic. The report you are reviewing went out of its way to critic
 
 | Artifact | Location | Note |
 |---|---|---|
-| **The report under review** | `docs/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md` | This is your primary target. Its §9.3 is yours to fill. |
-| **Draft 3** (committed doc) | `docs/competitive-analysis/2026-06-05-ecc-deep-dive.md` | One of the three analyses; note its known defects (fabricated SPIKE header, `file://` leaks, future date). |
+| **The report under review** | `docs/internal/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md` | This is your primary target. Its §9.3 is yours to fill. |
+| **Draft 3** (committed doc) | `docs/internal/competitive-analysis/2026-06-05-ecc-deep-dive.md` | One of the three analyses; note its known defects (fabricated SPIKE header, `file://` leaks, future date). |
 | **Draft 1** (verbatim) | Appendix A below | README-only analysis; chat-only otherwise. |
 | **Draft 2** (verbatim, Claude's) | Appendix B below | The deep dive; chat-only otherwise. The report's §5 self-critiques this — check that self-critique is fair, not performative. |
 | **ECC clone (full, ecc2 built)** | `/tmp/ecc-analysis/` | ~1.9G (includes a built `ecc2/target`). Use for verification. |
@@ -72,7 +72,7 @@ cd ~/ai/aida && ./target/debug/aida list --type bug --status approved | head
 
 ## 5. Deliverable
 
-Produce `docs/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md` containing:
+Produce `docs/internal/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md` containing:
 
 1. **Verdict table** — C1–C8, each AGREE/DISPUTE/REFINE + one-line evidence.
 2. **The three attacks** (§9.2 targets): your evidence on the asymmetry claim, the `ecc2` reality, and the 207k plausibility.
@@ -119,7 +119,7 @@ Then update SPIKE-50: `aida comment add SPIKE-50 "Codex meta-review complete: <o
 >
 > **Competitive map:** They compete on exactly one axis — the orchestration runtime (ecc2's daemon vs AIDA's drain). ECC arguably has the richer operator dashboard today (OTEL, risk scoring, conflict incidents, cron). They diverge completely on durable, ID-stable, traceable, vendor-neutral truth — AIDA's entire moat, which ECC structurally lacks.
 >
-> **What AIDA should learn (prioritized):** (1) The CI path-existence + single-ownership validator — highest-leverage steal; defends AIDA's dual-copy template drift footgun via a `cargo test`. (2) Install-state record + clean uninstall. (3) Honesty-graded harness matrix in docs/positioning/. (4) Manifest profiles (`aida init --profile`) — only if the surface warrants tiers.
+> **What AIDA should learn (prioritized):** (1) The CI path-existence + single-ownership validator — highest-leverage steal; defends AIDA's dual-copy template drift footgun via a `cargo test`. (2) Install-state record + clean uninstall. (3) Honesty-graded harness matrix in docs/internal/positioning/. (4) Manifest profiles (`aida init --profile`) — only if the surface warrants tiers.
 >
 > **Comparison with Draft 1:** Strong agreement on the spine. Sharpenings: Draft 1 over-credits the breadth (tiered marketing — only Claude native; codex/gemini/qwen 10-line shims; trae/kiro forked bash); undersells the catalog substance problem (~90% prompt-text, count-rot); "build a thin control-plane UI" ignores that AIDA already has a TUI. Draft 1 missed: install-state/uninstall lesson, and the asymmetry-of-gaps (AIDA closes distribution in weeks; ECC closing the truth gap means re-architecting — AIDA's leverage). Two-sided risk: ECC's huge-star lineage + `npx` install gives it distribution reach AIDA lacks; a weak-truth tool with great distribution can win mindshare, so AIDA's distribution gap is the channel through which the truth-moat becomes visible.
 >

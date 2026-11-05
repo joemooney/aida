@@ -295,7 +295,7 @@ are the advisor tier and need STORY-276 merged first.
 
 #### Docs
 
-- `docs/autonomous-drain.md` — the three-tier cascade, the `--escalate-*` flags,
+- `docs/advanced/autonomous-drain.md` — the three-tier cascade, the `--escalate-*` flags,
   the advisor's escalate-by-default bias.
 - `aida-core/templates/docs/aida-discipline/advisor-role.md` — the
   headless-advisor seat as an extension of the advisor role; the A/B/C
@@ -315,7 +315,7 @@ are the advisor tier and need STORY-276 merged first.
 - `aida-core/templates/commands/aida-advise.md` (new — verify flags it absent)
 - `aida-core/templates/skills/aida-pickup.md`
 - `aida-core/templates/skills/aida-review.md`
-- `docs/autonomous-drain.md`
+- `docs/advanced/autonomous-drain.md`
 - `aida-core/templates/docs/aida-discipline/advisor-role.md`
 
 ## Reusable helpers (do not reimplement)
@@ -520,5 +520,5 @@ that escalates a merge leaves a verdict file and the orchestrator exits 0.
 - Composes with: STORY-287 (three-mode autonomy taxonomy), STORY-278 (headless
   reviewer findings → advisor — this STORY is its deferred "auto-triage" piece),
   STORY-301 (drain status — the morning-after audit), STORY-325 (punt ledger).
-- See also: `docs/autonomous-drain.md`, `docs/spikes/2026-05-16-claude-headless.md`,
+- See also: `docs/advanced/autonomous-drain.md`, `docs/internal/spikes/2026-05-16-claude-headless.md`,
   `feedback_three_mode_autonomy_taxonomy.md`.

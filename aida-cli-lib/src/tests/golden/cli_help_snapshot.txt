@@ -2403,7 +2403,7 @@ Options:
       --artifact-dir <ARTIFACT_DIR>
           Directory for the dated analysis + decision-sidecar artifacts
           
-          [default: docs/research]
+          [default: docs/internal/research]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10420,7 +10420,7 @@ Arguments:
 Options:
       --plain
           Print the cached plain-English rationale layer for this spec, regenerating
-          `docs/plain/<SPEC>.md` only when the spec changed
+          `docs/internal/plain/<SPEC>.md` only when the spec changed
 
       --json
           Machine-readable JSON
@@ -18125,7 +18125,7 @@ Options:
           unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY
           (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no
           data waiting), this degrades to the AIDA-only segment rather than blocking. See
-          docs/agents/statusline-contract.md
+          docs/internal/agents/statusline-contract.md
           
           [possible values: claude, antigravity, agy]
 
@@ -41119,7 +41119,7 @@ Working on aida itself
       {
         "name": "plain",
         "takes_value": false,
-        "help": "Print the cached plain-English rationale layer for this spec, regenerating `docs/plain/<SPEC>.md` only when the spec changed"
+        "help": "Print the cached plain-English rationale layer for this spec, regenerating `docs/internal/plain/<SPEC>.md` only when the spec changed"
       }
     ],
     "hidden": false
@@ -48798,7 +48798,7 @@ Working on aida itself
       {
         "name": "client",
         "takes_value": true,
-        "help": "Merge live fields from a client's stdin JSON payload into the AIDA segment: model, context-window usage, activity, and VCS branch where the client sends them. `claude` parses Claude Code's statusLine JSON; `antigravity` (alias `agy`) parses Antigravity's live agent-state JSON. Omit for the default, AIDA-only segment — this never reads stdin unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no data waiting), this degrades to the AIDA-only segment rather than blocking. See docs/agents/statusline-contract.md"
+        "help": "Merge live fields from a client's stdin JSON payload into the AIDA segment: model, context-window usage, activity, and VCS branch where the client sends them. `claude` parses Claude Code's statusLine JSON; `antigravity` (alias `agy`) parses Antigravity's live agent-state JSON. Omit for the default, AIDA-only segment — this never reads stdin unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no data waiting), this degrades to the AIDA-only segment rather than blocking. See docs/internal/agents/statusline-contract.md"
       },
       {
         "name": "color",

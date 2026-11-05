@@ -57,13 +57,13 @@
       "category": "operator"
     },
     {
-      "source": "air-gapped-development.md",
+      "source": "advanced/air-gapped-development.md",
       "output": "air-gapped.html",
       "label": "Air-gapped",
       "category": "operator"
     },
     {
-      "source": "authority-and-seats.md",
+      "source": "advanced/authority-and-seats.md",
       "output": "authority.html",
       "label": "Authority",
       "category": "human"

@@ -816,7 +816,7 @@ fence — so Claude Code's terminal draws the box-rule grid instead of raw
 pipes. The **Why** column is load-bearing: it explains the role / lease /
 worktree implication of each path, never just restates the action. A
 single linear next-step stays a compact one-liner — the table is for 2+
-options only. Full convention: `docs/skills-convention.md`.
+options only. Full convention: `docs/internal/skills-convention.md`.
 
 **Apply the finish-state communication rubric (TASK-359).** Every template
 below is finish-state communication, so it must carry all six rubric

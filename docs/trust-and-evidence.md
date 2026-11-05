@@ -26,7 +26,7 @@ Role grants provide scoped, validated authority. An environment variable naming 
 
 Protected paths and other mandatory human gates remain outside what a mandate can authorize. For example, the runtime gate directory and project authority configuration have protected-path treatment. Sensitive work has additional scope rules; inspect the current mandate and command help instead of assuming that all held work is covered.
 
-[Who may do what](authority-and-seats.md) explains how roles, seats, grants, delegation, mandates and the deputy fit together, with diagrams.
+[Who may do what](advanced/authority-and-seats.md) explains how roles, seats, grants, delegation, mandates and the deputy fit together, with diagrams.
 <!-- trace:TASK-2606 | ai:claude -->
 
 ## Know the boundary

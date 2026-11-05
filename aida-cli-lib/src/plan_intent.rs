@@ -1513,7 +1513,7 @@ pub(crate) fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         .unwrap_or_else(|| req.id.to_string());
 
     // STORY-1158: `aida why <spec> --plain` is a Tier-2 surplus layer: it
-    // materializes a separate markdown artifact under docs/plain keyed to the
+    // materializes a separate markdown artifact under docs/internal/plain keyed to the
     // spec's modified_at, and never writes back to the spec object itself.
     if plain {
         return handle_why_plain(&project_root, &store, req, &disp, json);
@@ -2252,7 +2252,7 @@ pub(crate) struct WhyArgs {
     /// nearest code→spec trace comment to the spec's intent (code↔decision).
     pub id: String,
     /// Print the cached plain-English rationale layer for this spec,
-    /// regenerating `docs/plain/<SPEC>.md` only when the spec changed.
+    /// regenerating `docs/internal/plain/<SPEC>.md` only when the spec changed.
     // trace:STORY-1158 | ai:codex
     #[clap(long)]
     pub plain: bool,

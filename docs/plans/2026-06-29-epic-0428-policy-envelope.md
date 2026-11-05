@@ -30,7 +30,7 @@ must only **propose** it, or may **never** do it. An action auto-executes only
 when four gates all pass: (1) the spec clears the existing fence, (2) the action
 class is `auto` in the envelope, (3) the decision is groundable in recorded
 substrate (Type-A or recorded-B — the Type A/B/C calibration from
-`docs/architecture/autonomy-and-escalation.md` §3), and (4) it is under the risk
+`docs/internal/architecture/autonomy-and-escalation.md` §3), and (4) it is under the risk
 ceiling. Any gate failing routes the action to *propose* or *park/escalate*. The
 default bias when uncertain is **park/escalate, never approve** — the same
 conservative-escalation bias the advisor tier already runs on.
@@ -156,7 +156,7 @@ itself past) is preserved and extended.
 
 - Add an "Autopilot envelope" section: when launched with the autopilot env vars, the cold-boot advisor must (a) classify each decision's `Grounding` (A / recorded-B / unrecorded-B / C) and cite the substrate, (b) emit a `risk` per decision, (c) honor that `propose`/`never` actions are *output only*, never executed. The HARD bounds stay in the fence; the skill text is the *soft* guidance layer.
 
-### `docs/architecture/autonomy-and-escalation.md` — new §8 "Advisor autopilot"
+### `docs/internal/architecture/autonomy-and-escalation.md` — new §8 "Advisor autopilot"
 
 - Document the envelope as the grooming-time application of the §2 cascade + §3 calibration. (TASK-0432 owns the precise edit; flagged here for build-order.)
 
@@ -171,7 +171,7 @@ itself past) is preserved and extended.
 - `aida-cli/src/cli.rs`
 - `aida-cli/src/main.rs`
 - `aida-core/templates/skills/aida-assess.md`
-- `docs/architecture/autonomy-and-escalation.md`
+- `docs/internal/architecture/autonomy-and-escalation.md`
 
 ## Reusable helpers (do not reimplement)
 
@@ -181,7 +181,7 @@ itself past) is preserved and extended.
 - `presence::is_keystone_class` (`aida-cli/src/presence.rs`) — the canonical keystone/supervised detector (epic type or `keystone`/`architecture`/`security`/`supervised`/`needs-supervised-build`/`blast-radius:high`/`risk:high` tag). The gate-1 keystone bound MUST route through this so autopilot, the drain, `queue integrate`, and `groom` never disagree on "keystone".
 - `presence::resolve_solo_posture` / `SoloPosture` (`aida-cli/src/presence.rs:390-428`) — the existing safe-vs-keystone posture; autopilot's "default-bias-when-uncertain" composes with this (TASK-0432).
 - `backlog::RiskLevel` + `RiskLevel::from_str`/`token` (`aida-cli/src/backlog.rs:55-80`) — the risk ceiling type for gate 4. Reuse, don't add a parallel enum.
-- The Type A/B/C calibration model (`docs/architecture/autonomy-and-escalation.md` §3, `.claude/skills/aida-advise.md`) — the grounding classifier for gate 3.
+- The Type A/B/C calibration model (`docs/internal/architecture/autonomy-and-escalation.md` §3, `.claude/skills/aida-advise.md`) — the grounding classifier for gate 3.
 
 ## Risks + gotchas
 
@@ -270,7 +270,7 @@ printf '\n[autopilot]\ntag = "auto"\n' >> .aida/config.toml
 ## Related
 
 - EPIC-0428 (parent), STORY-560 / STORY-708 (`groom`), BUG-594 (keystone fence), TASK-827 (solo posture), STORY-306 / STORY-347 (advisor tier + calibration).
-- `docs/architecture/autonomy-and-escalation.md` §2–§4, `docs/solo-mode.md`, `.claude/skills/aida-assess.md`.
+- `docs/internal/architecture/autonomy-and-escalation.md` §2–§4, `docs/advanced/solo-mode.md`, `.claude/skills/aida-assess.md`.
 
 ## Recommendation + smallest first slice
 

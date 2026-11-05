@@ -563,7 +563,7 @@ fn story_2256_doctor_flags_live_codex_without_the_service() {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac0ad877 | ai:claude
 #[test]
 fn story_2256_doc_covers_hand_launched_codex_seats() {
-    let doc = include_str!("../../docs/agents/codex-mail-wake.md");
+    let doc = include_str!("../../docs/advanced/codex-mail-wake.md");
     assert!(doc.contains("Hand-launched Codex seats are covered"));
     assert!(doc.contains("aida session start --owns <ID>"));
 }

@@ -5442,7 +5442,7 @@ fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
             id: format!("store-scrub/{i}"),
             summary: format!("raw machine identity already in the store — {leak}"),
             action:
-                "landed before redaction was enabled; scrub it from the store history before it propagates (see docs/security/)"
+                "landed before redaction was enabled; scrub it from the store history before it propagates (see docs/internal/security/)"
                     .to_string(),
             safe_heal: false,
         })
@@ -6039,7 +6039,7 @@ pub(crate) fn scan_project_manifest(
                 id: "project-manifest-malformed".to_string(),
                 summary: format!("{} could not be read: {msg}", pm::MANIFEST_REL_PATH),
                 action: format!(
-                    "fix the TOML in {} (schema: docs/project-manifest.md).                      Nothing else is affected — every command keeps working without it",
+                    "fix the TOML in {} (schema: docs/internal/project-manifest.md).                      Nothing else is affected — every command keeps working without it",
                     pm::MANIFEST_REL_PATH
                 ),
                 safe_heal: false,
@@ -8302,7 +8302,7 @@ pub(crate) fn doctor_fix_sandbox() -> Result<()> {
     println!();
     println!(
         "   {}",
-        "Full reference: docs/agents/claude-bubblewrap-sandbox.md".dimmed()
+        "Full reference: docs/internal/agents/claude-bubblewrap-sandbox.md".dimmed()
     );
 
     Ok(())

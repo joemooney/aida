@@ -709,7 +709,7 @@ fn print_claude_statusline_setup(settings_path: &std::path::Path) {
     println!("  Richer footer (opt-in): add `--client claude` to the command above to");
     println!("  merge Claude Code's own live model/context-window fields alongside the");
     println!("  AIDA segment (reads the statusLine JSON Claude Code already pipes on");
-    println!("  stdin). See docs/agents/statusline-contract.md.");
+    println!("  stdin). See docs/internal/agents/statusline-contract.md.");
 }
 
 /// Print the Antigravity statusline setup guidance (and the JSON fragment).
@@ -751,7 +751,7 @@ fn antigravity_statusline_setup_text(
         "  statusLine command above to merge Agy's own live model/context/activity/VCS".to_string(),
         "  fields alongside the AIDA segment, when Agy pipes that payload on stdin. See"
             .to_string(),
-        "  docs/agents/statusline-contract.md.".to_string(),
+        "  docs/internal/agents/statusline-contract.md.".to_string(),
     ]
     .join("\n")
 }
@@ -821,7 +821,7 @@ pub(crate) fn codex_statusline_setup_text() -> String {
         "  Why no `--client codex` live-field adapter: Codex's footer never runs a",
         "  command and so never pipes a stdin JSON payload — there's nothing for an",
         "  adapter to parse. `--client claude`/`--client antigravity` (see",
-        "  docs/agents/statusline-contract.md) merge model/context/activity/VCS from",
+        "  docs/internal/agents/statusline-contract.md) merge model/context/activity/VCS from",
         "  a client's own live payload; Codex's built-in items above are the closest",
         "  in-footer equivalent for this client.",
         "",
@@ -1194,7 +1194,7 @@ pub(crate) struct StatuslineArgs {
     /// a TTY (no payload piped), or a piped read doesn't finish within
     /// ~200ms (an open pipe with no data waiting), this degrades to
     /// the AIDA-only segment rather than blocking. See
-    /// docs/agents/statusline-contract.md.
+    /// docs/internal/agents/statusline-contract.md.
     // trace:TASK-1479 | ai:claude
     #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
     pub client: Option<String>,

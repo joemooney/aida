@@ -19,7 +19,7 @@ Maintain AIDA's strategic and technical edge by systematically reviewing shifts 
 
 Execute this scan when:
 1. **Quarterly Interval**: A scheduled deep-dive landscape review is due.
-2. **Signal Trigger**: Any critical market event specified in [signals-to-watch.md](../../docs/competitive-analysis/signals-to-watch.md) fires (e.g. a terminal-agent tool hits 10k stars, Anthropic launches Agent Teams).
+2. **Signal Trigger**: Any critical market event specified in [signals-to-watch.md](../../docs/internal/competitive-analysis/signals-to-watch.md) fires (e.g. a terminal-agent tool hits 10k stars, Anthropic launches Agent Teams).
 3. **Release Hook Warning**: Promoted by `scripts/release.sh` during minor/major version bumps.
 
 ---
@@ -41,7 +41,7 @@ Evaluate each capability using the AIDA strategic matrix:
 - **Ignore**: Out-of-scope or low momentum. Monitor only.
 
 ### Step 3: Log in Ecosystem Watch
-Append a dated, structured entry to `docs/competitive-analysis/ecosystem-watch.md`.
+Append a dated, structured entry to `docs/internal/competitive-analysis/ecosystem-watch.md`.
 Use the following format for each finding:
 
 ```markdown
@@ -55,7 +55,7 @@ Use the following format for each finding:
 ```
 
 ### Step 4: Update Positioning
-If the analyzed competitor has a corresponding positioning paper under `docs/positioning/` (e.g., `vs-claude-code-subagents.md`), update it to reflect the latest changes. If it is a new competitor of high strategic interest, file a task to create a new positioning paper.
+If the analyzed competitor has a corresponding positioning paper under `docs/internal/positioning/` (e.g., `vs-claude-code-subagents.md`), update it to reflect the latest changes. If it is a new competitor of high strategic interest, file a task to create a new positioning paper.
 
 ### Step 5: Close the Loop (Backlog Integration)
 Market intelligence is useless without engineering action. For every action-required finding:
@@ -64,4 +64,4 @@ Market intelligence is useless without engineering action. For every action-requ
    aida add --type task --title "Assess integration gap with X" --description "Description of features..."
    aida queue add <NEW-ID> --for advisor --note "ecosystem scan finding"
    ```
-2. Link the generated Spec or Task ID directly inside the [ecosystem-watch.md](../../docs/competitive-analysis/ecosystem-watch.md) backlog loop section to ensure a perfect audit trail.
+2. Link the generated Spec or Task ID directly inside the [ecosystem-watch.md](../../docs/internal/competitive-analysis/ecosystem-watch.md) backlog loop section to ensure a perfect audit trail.

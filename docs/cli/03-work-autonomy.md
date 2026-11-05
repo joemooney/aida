@@ -591,7 +591,7 @@ Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave
 
 **The switch is per clone, and only a person can turn it on.** `aida shift enable`, `aida shift install` and `aida shift resume` refuse unless run at an interactive terminal outside agent output mode, and ask for an explicit yes; `aida shift disable` never asks. `aida shift enable` writes `enabled = true` to `~/.aida/shift-local.toml` under this repo's path — never to the committed `.aida/config.toml`, where an `enabled` key is ignored — and registers the `night-shift` job (harmless in any clone that has not enabled it). Tunables live under `[shift]` in `.aida/config.toml` or the local layer: `wave_size` (6), `max_failures` (2), `budget_stop_pct` (80), `daily_token_budget` (the watchdog's), `wave_token_budget`, `max_runtime` (`3h`), `max_waves_per_day` (8), `load_per_cpu` (1.5), `batch` (drain a pre-tagged batch instead of auto-tagging), `max_redrives_per_tick` (3), `mail_latency` (`30m`), and the per-wave resource limits `wave_memory_high` (`40%` of total memory), `wave_memory_max` (`50%`), `wave_cpu_weight` (50), `wave_io_weight` (50) and `wave_tasks_max` (2048) — a wave runs in its own transient unit with those limits, so a runaway wave is throttled and then killed inside its own cgroup instead of taking the whole login session down with it; a limit that cannot be parsed refuses the launch rather than lifting the limit, and a user manager without the memory controller delegated is reported by `aida doctor` while waves keep running. `allow_uncovered_vendors` and `redrive` are read from the local layer only.
 
-**Reach for it when** the queue holds drain-mode work and you want it to keep moving overnight. **Don't** enable it on a clone whose queue you have not groomed: the shift launches whatever explicit-drain work is at the head. The runbook is in `docs/autonomous-drain.md` ("Night shift").
+**Reach for it when** the queue holds drain-mode work and you want it to keep moving overnight. **Don't** enable it on a clone whose queue you have not groomed: the shift launches whatever explicit-drain work is at the head. The runbook is in `docs/advanced/autonomous-drain.md` ("Night shift").
 
 <!-- doc-intent: shaped by STORY-1218 -->
 
@@ -633,7 +633,7 @@ It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not o
 
 > **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
 
-The full mechanism, the bind list, and the host setup are documented in [`../agents/claude-bubblewrap-sandbox.md`](../agents/claude-bubblewrap-sandbox.md).
+The full mechanism, the bind list, and the host setup are documented in [`../agents/claude-bubblewrap-sandbox.md`](../internal/agents/claude-bubblewrap-sandbox.md).
 
 ### Contained-mode network egress — `[contained] allowed_hosts`
 
@@ -686,4 +686,4 @@ When `read_allowlist` is **non-empty**, the wrapper replaces the broad `--ro-bin
 - **[Chapter 6 — Roles & sessions](06-roles-sessions.md)**: the seats (advisor/implementer) and the leases that keep parallel drains from colliding.
 - **[Chapter 8 — Reporting](08-reporting.md)**: `aida status` and the lenses that show you the autonomy you just ran.
 - [`docs/review-process.md`](../review-process.md) — **who reviews in each mode** (manual brief → advisor by hand; `--auto-complete` → reviewer phase; `--no-human` → headless reviewer + cold-boot advisor tier), the fasttrack-vs-review tag split, and the completion handoff loop. The authoritative source for this chapter's review/escalation lore.
-- `docs/autonomous-drain.md` is the full practical guide to the drain modes this chapter summarizes.
+- `docs/advanced/autonomous-drain.md` is the full practical guide to the drain modes this chapter summarizes.

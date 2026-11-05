@@ -604,7 +604,7 @@ blocked). `aida config show` renders the resolved `[contained]` posture, and
 lives in [`cli/03-work-autonomy.md`](cli/03-work-autonomy.md) (the per-knob
 sections), and the bwrap mechanism itself — what gets bound, fail-closed
 behavior, host requirements, current scope — is documented in
-[`agents/claude-bubblewrap-sandbox.md`](agents/claude-bubblewrap-sandbox.md).
+[`agents/claude-bubblewrap-sandbox.md`](internal/agents/claude-bubblewrap-sandbox.md).
 
 ## Team RBAC config knobs (`[team]`, not env vars)
 

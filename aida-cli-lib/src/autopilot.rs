@@ -168,7 +168,7 @@ impl Authority {
 }
 
 /// The grounding classification for one decision — the Type A/B/C calibration
-/// from `docs/architecture/autonomy-and-escalation.md` §3. The *classification*
+/// from `docs/internal/architecture/autonomy-and-escalation.md` §3. The *classification*
 /// is the agent's recorded judgment (stored on the [`Decision`]); the *gate*
 /// over it ([`is_resolvable`]) is pure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -438,7 +438,7 @@ fn strip_inline_comment(s: &str) -> &str {
 // context or an active solo posture can only make the envelope stricter,
 // never wider. The worst-case composition bug is therefore over-conservatism
 // (a held action), never an un-gated execute.
-// (`docs/architecture/autonomy-and-escalation.md` §8, the composition matrix.)
+// (`docs/internal/architecture/autonomy-and-escalation.md` §8, the composition matrix.)
 // trace:TASK-1020 trace:TASK-0432 | ai:claude
 // ---------------------------------------------------------------------------
 

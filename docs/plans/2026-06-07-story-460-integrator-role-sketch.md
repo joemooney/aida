@@ -109,7 +109,7 @@ aida agent new claude --role integrator
 
 - **Decision: escalation is the existing file-based handshake, not a new
   channel.** **Rationale**: the autonomy/escalation architecture
-  (`docs/architecture/autonomy-and-escalation.md`) already defines the
+  (`docs/internal/architecture/autonomy-and-escalation.md`) already defines the
   implementer→advisor→human cascade over the brief/finding substrate. The
   integrator reuses it: a finding for the advisor's attention, a brief to route
   work to reviewer/implementer queues. No new transport.
@@ -276,7 +276,7 @@ Deliberately OUT of the smallest slice (STORY-460 already defers): the
 
 - STORY-460 (this spec), EPIC-31 (launcher/registry cluster this rides)
 - STORY-459, TASK-542, TASK-541 (compose-with: dispatch / names / ordered briefs)
-- `docs/architecture/autonomy-and-escalation.md` (escalation cascade substrate)
+- `docs/internal/architecture/autonomy-and-escalation.md` (escalation cascade substrate)
 - `aida-core/templates/docs/aida/discipline/advisor-role.md`,
   `implementer-discipline.md` (sibling discipline pages / format)
 - `feedback_one_master_advisor_until_subsystems`,

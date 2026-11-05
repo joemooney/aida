@@ -578,7 +578,7 @@ pub(crate) fn handle_findings_command(
             let total = findings_total + punts.len() + shelved.len();
 
             // trace:BUG-1289 | ai:claude
-            // Matches `docs/monitor-contract-fixtures/findings-list.json`
+            // Matches `docs/internal/monitor-contract-fixtures/findings-list.json`
             // (`{findings: array}`) plus the punt/shelve axes the human view
             // triages alongside findings.
             if json {

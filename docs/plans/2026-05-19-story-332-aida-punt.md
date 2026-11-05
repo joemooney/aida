@@ -256,4 +256,4 @@ aida punt "$DID" --category other --reason "x" && echo "BUG: punt should have fa
 
 - Blocks: STORY-276, STORY-306
 - Composes with: STORY-287, STORY-325, EPIC-28, TASK-338
-- See also: `docs/lifecycle.md`, `docs/autonomous-drain.md`
+- See also: `docs/lifecycle.md`, `docs/advanced/autonomous-drain.md`

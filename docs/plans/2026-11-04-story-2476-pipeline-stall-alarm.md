@@ -39,7 +39,7 @@ contract or mark the full story complete after implementing only its first part.
 - `mailbox_wake_run.rs`: `watch_row` rejects non-Codex vendors explicitly.
   Reuse its existing batching, acceptance ledger and uncertain-submission
   recovery. Do not add a second Codex delivery channel.
-- `docs/agents/codex-mail-wake.md` documents exact-thread wake, opt-out,
+- `docs/advanced/codex-mail-wake.md` documents exact-thread wake, opt-out,
   authority checks and unsupported Antigravity live wake.
 - Inspected host prototype:
   `~/.local/share/aida/ops/advisor-scripts/stall-check.sh`. Its default-branch

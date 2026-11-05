@@ -66,7 +66,7 @@ The classifier's default is **silent**; only the WAKE rows above emit a line. Th
 - **The append-only writer pattern to reuse**: `aida-cli/src/punt.rs::append_to_ledger` (and `append_failure_to_ledger`) — JSONL, single `write(2)` per record, creates parent dir, best-effort. `events::emit` is a near-clone targeting `.aida/events.jsonl`.
 - **Phase sequencing + reconcile**: `aida-cli/src/auto_complete.rs` — `enum Phase`, `PhaseDriver` trait, `PhaseReconcile` (BUG-241 reconcile-against-reality). The driver is the orchestrator that owns the per-phase outcomes; emit hooks attach to its phase boundaries.
 - **The consumer**: harness `Monitor` tool (`command: "aida watch --emit-wakes"`, `persistent: true`) — each stdout line becomes a session event; silence costs nothing.
-- **Substrate doctrine**: `docs/architecture/autonomy-and-escalation.md` §5 (file-based async handshake, filesystem-canonical, always-available fallback) and `docs/autonomous-drain.md` ("Limits of this cut": *"There is no liveness watchdog yet… the stream-json log is written so the watchdog can be added (TASK-298)"*). STORY-712's events.jsonl is the structured sibling of that stream-json log.
+- **Substrate doctrine**: `docs/internal/architecture/autonomy-and-escalation.md` §5 (file-based async handshake, filesystem-canonical, always-available fallback) and `docs/advanced/autonomous-drain.md` ("Limits of this cut": *"There is no liveness watchdog yet… the stream-json log is written so the watchdog can be added (TASK-298)"*). STORY-712's events.jsonl is the structured sibling of that stream-json log.
 
 ## Emit + consume mechanism
 
@@ -96,7 +96,7 @@ The session does nothing — burns zero tokens — until `aida watch` prints a w
 
 Concrete baseline from the brief: an overnight 8-spec drive where an advisor woke on `ScheduleWakeup` ~hourly just to check "is the agent done." Say an 8-hour drive.
 
-- **Today**: `advisor_watch` forks a `claude -p` garden pass per cadence. Cold-boot pass ≈ $0.50–$1.00 (per `docs/autonomous-drain.md`); fork-from-live ≈ $4 first then ~$0.03 cached. At a 1h cadence over 8h that is ~8 forks. Even at the cheap cold-boot end: **~8 × $0.75 ≈ $6 of pure idle-check spend**, and most of those 8 wakes found *nothing actionable* (the drain was mid-phase). With fork-from-live's first-fork tax the idle cost is dominated by repeated cache-creation: easily **$10–$30** of non-event spend.
+- **Today**: `advisor_watch` forks a `claude -p` garden pass per cadence. Cold-boot pass ≈ $0.50–$1.00 (per `docs/advanced/autonomous-drain.md`); fork-from-live ≈ $4 first then ~$0.03 cached. At a 1h cadence over 8h that is ~8 forks. Even at the cheap cold-boot end: **~8 × $0.75 ≈ $6 of pure idle-check spend**, and most of those 8 wakes found *nothing actionable* (the drain was mid-phase). With fork-from-live's first-fork tax the idle cost is dominated by repeated cache-creation: easily **$10–$30** of non-event spend.
 - **With STORY-712**: the supervisor wakes only on the ~8 spec-completions + however many punts/shelves actually occurred — say ~10–12 real events across the night. The benign phase-churn (dozens of `phase-entered`/`ci-pending`/`retry-blip` transitions) is absorbed in `aida watch` (bash/Rust, **$0**). Idle-check spend → **$0**; the only LLM spend is one pass *per actionable event*, which you were going to pay anyway. Net idle savings on an 8h drive: **roughly $6 (floor) to $20+ (fork-mode)**, i.e. the supervision overhead drops from O(hours) to O(real events). The classifier's marginal cost is a `tail -f` and a JSON parse per line.
 
 The drain's own per-spec implement→review cost (~$3/spec, SPIKE-7) is unchanged — STORY-712 only removes the *supervisory* tax layered on top.
@@ -211,5 +211,5 @@ Build **TASK-A → TASK-B → TASK-C → TASK-D** in order; TASK-E is a skills-t
 ## Related
 
 - Parent: EPIC-56 (AXI incorporation). The firstmate "biggest lever."
-- Substrate: `docs/architecture/autonomy-and-escalation.md` §5, `docs/autonomous-drain.md`.
+- Substrate: `docs/internal/architecture/autonomy-and-escalation.md` §5, `docs/advanced/autonomous-drain.md`.
 - Builds on: TASK-776 (the one existing event trigger — unread-mail), TASK-298 (the stream-json log / liveness-watchdog gap this closes).

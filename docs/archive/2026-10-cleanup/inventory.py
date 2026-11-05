@@ -12,13 +12,15 @@ come from git: renames between the merged main commit and HEAD.
   python3 docs/archive/2026-10-cleanup/inventory.py            # rewrite inventory.tsv
   python3 docs/archive/2026-10-cleanup/inventory.py --check    # coverage check, no writes
 
---check fails if a file moved by this cleanup is missing from the inventory
-or listed with the wrong destination, or if an inventory row's path is not
-tracked. Docs added on main after the cleanup are not required to appear.
+--check requires one valid audience for every tracked document, rejects duplicate
+or stale rows, and checks audience placement. Historical cleanup origin/date
+columns are preserved when regenerating existing rows. --working-tree includes
+pending additions and excludes pending deletions for native lanes.
 Read-only apart from writing inventory.tsv; run it from any directory in the
 repository.
 """
 import os
+import csv
 import subprocess
 import sys
 
@@ -26,12 +28,12 @@ AUDIT_BASE = "738653fb3e6de71d0975047adb143c5f31a25d85"  # main when the audit b
 MERGED_MAIN = "b46aec1e674baae5a329416d4119e67b59200a88"  # main merged into the cleanup branch
 HERE = os.path.dirname(os.path.abspath(__file__))
 TSV = os.path.join(HERE, "inventory.tsv")
-HEADER = ["path", "class", "disposition", "path_before_cleanup", "last_commit_before_audit", "note"]
+HEADER = ["path", "class", "disposition", "path_before_cleanup", "last_commit_before_audit", "note", "audience"]
 # Moved to the archive by the first pass, then returned because something
 # still consumes them at their original path.
 RESTORED = {
     "REVIEW.md": "generated review instructions read at the repository root (aida review assemble)",
-    "docs/cli-format-json-audit.md": "include_str! in aida-cli/tests/bug_1502_format_json_audit.rs",
+    "docs/internal/cli-format-json-audit.md": "include_str! in aida-cli/tests/bug_1502_format_json_audit.rs",
     "docs/agents/codex-mcp-roundtrip-verdict.md": "scaffolded by aida init from its template master",
     "docs/agents/claude-surfaces-codex-parity.md": "in-repo copy of a template master",
     "docs/user-guide.html": "opened by aida user-guide; written by helper/generate-docs.sh",
@@ -56,10 +58,10 @@ def classify(p):
         (".aida/discipline/", "generated-mirror"),
         ("docs/aida/05-decisions/", "normative-adr"),
         ("docs/plans/", "historical-plan"),
-        ("docs/release-notes/", "historical-release-notes"),
-        ("docs/research/", "historical-artifact"),
-        ("docs/spikes/", "historical-artifact"),
-        ("docs/testing/", "historical-artifact"),
+        ("docs/internal/release-notes/", "historical-release-notes"),
+        ("docs/internal/research/", "historical-artifact"),
+        ("docs/internal/spikes/", "historical-artifact"),
+        ("docs/internal/testing/", "historical-artifact"),
         ("docs/cli/", "maintained-manual"),
         ("docs/agents/", "maintained-agent-doc"),
         ("docs/", "maintained-doc"),
@@ -70,12 +72,51 @@ def classify(p):
         return "generated-live-instruction"
     if "/" not in p:
         return "live-entry-point"
-    if p.startswith("docs/presentation/20"):
+    if p.startswith("docs/internal/presentation/20"):
         return "historical-artifact"  # dated decks; the audience decks stay maintained
     for prefix, cls in rules:
         if p.startswith(prefix):
             return cls
     return "component-doc"
+
+
+# trace:STORY-1651 | ai:codex
+AUDIENCES = {"adopter", "advanced", "internal", "archive", "generated"}
+ADOPTER_PAGES = set("""README.md SUMMARY.md UNDERSTANDING_SKILLS.md WHY-AIDA.md
+configuration-guide.md commit-trailer-convention.md environment-variables.md
+extending-skills.md first-project.md getting-started.md git-workflow.md lifecycle.md
+metrics-guide.md operator-setup.md product-capabilities.md product-integrations.md
+product-workflow.md requirement-types.md review-process.md selectable-autonomy.md
+trust-and-evidence.md troubleshooting.md user-guide.md using-aida-with-claude-code.md
+what-is-aida.md what-is-aida.html""".split())
+
+
+def audience(p):
+    if p.startswith("docs/archive/"):
+        return "archive"
+    if p.startswith(("aida-core/templates/", ".claude/", ".agents/", ".codex/", ".aida/discipline/")) or p in {
+        "REVIEW.md", "docs/user-guide.html", "docs/user-guide-dark.html", "docs/cli/12-glossary.md",
+        "docs/agents/claude-surfaces-codex-parity.md", "docs/agents/codex-mcp-roundtrip-verdict.md",
+    }:
+        return "generated"
+    if p.startswith("docs/advanced/"):
+        return "advanced"
+    if p.startswith(("docs/internal/", "docs/plans/", "docs/aida/")) or p == "docs/cli/11-dev.md":
+        return "internal"
+    if p.startswith(("docs/cli/", "docs/agents/", "docs/showcase/", "docs/images/", "docs/tui/")) or p.removeprefix("docs/") in ADOPTER_PAGES:
+        return "adopter"
+    if p.startswith("docs/"):
+        return None  # A new top-level topic needs an explicit audience decision.
+    return "internal"
+
+
+def tracked_paths():
+    top = git("rev-parse", "--show-toplevel").strip()
+    args = ["-C", top, "ls-files", "-z"]
+    if "--working-tree" in sys.argv:
+        args += ["--cached", "--others", "--exclude-standard"]
+    return sorted({p for p in git(*args).split("\0") if p and
+                   ("--working-tree" not in sys.argv or os.path.lexists(os.path.join(top, p)))})
 
 
 def renames():
@@ -102,7 +143,7 @@ def last_dates():
 def build():
     top = git("rev-parse", "--show-toplevel").strip()
     moved = renames()
-    tracked = sorted(p for p in git("-C", top, "ls-files").splitlines() if is_doc(p) or p in moved)
+    tracked = sorted(p for p in tracked_paths() if is_doc(p) or p in moved)
     dates = last_dates()
     rows = []
     for p in tracked:
@@ -116,39 +157,58 @@ def build():
         else:
             disposition = "kept"
         # "-" rather than an empty field, so rows never end in whitespace.
-        rows.append([p, classify(p), disposition, before, dates.get(before) or "-", RESTORED.get(p, "-")])
+        rows.append([p, classify(p), disposition, before, dates.get(before) or "-", RESTORED.get(p, "-"), audience(p) or "UNCLASSIFIED"])
     return rows, moved, set(tracked)
 
 
 def main():
+    if "--check" in sys.argv:
+        return check()
     rows, moved, tracked = build()
     if "--check" not in sys.argv:
+        if os.path.exists(TSV):
+            with open(TSV, encoding="utf-8") as existing:
+                history = {r["path"]: r for r in csv.DictReader(existing, delimiter="\t")}
+            for row in rows:
+                old = history.get(row[0])
+                if old:
+                    row[2:6] = [old[k] for k in HEADER[2:6]]
         with open(TSV, "w", encoding="utf-8") as f:
             f.write("\t".join(HEADER) + "\n")
             for r in rows:
                 f.write("\t".join(r) + "\n")
         print(f"wrote {len(rows)} rows ({len(moved)} moved)")
         return 0
+
+
+# trace:STORY-1651 | ai:codex
+def check():
+    tracked = {p for p in tracked_paths() if is_doc(p)}
     listed = {}
-    with open(TSV, encoding="utf-8") as f:
-        next(f)
-        for line in f:
-            r = line.rstrip("\n").split("\t")
-            listed[r[0]] = r
     errors = []
-    for new, old in sorted(moved.items()):
-        r = listed.get(new)
-        if r is None:
-            errors.append(f"moved file missing from inventory: {old} -> {new}")
-        elif r[3] != old:
-            errors.append(f"wrong origin for {new}: inventory says {r[3]}, git says {old}")
-    for p in listed:
-        if p not in tracked:
-            errors.append(f"inventory row is not a tracked file: {p}")
-    for e in errors:
-        print("FAIL", e)
-    print(f"checked {len(moved)} moves against {len(listed)} inventory rows: {'FAIL' if errors else 'OK'}")
-    return 1 if errors else 0
+    with open(TSV, encoding="utf-8") as source:
+        reader = csv.DictReader(source, delimiter="\t")
+        if reader.fieldnames != HEADER:
+            print("FAIL inventory header differs; regenerate inventory.tsv")
+            return 1
+        for row in reader:
+            p = row["path"]
+            if p in listed:
+                errors.append(f"duplicate inventory row: {p}")
+            listed[p] = row
+            if row["audience"] not in AUDIENCES:
+                errors.append(f"invalid or missing audience: {p}")
+            elif row["audience"] != audience(p):
+                errors.append(f"wrong audience for {p}: {row['audience']} (expected {audience(p)})")
+    for p in sorted(tracked - listed.keys()):
+        errors.append(f"tracked doc missing audience: {p}")
+    all_tracked = set(tracked_paths())
+    for p in sorted(listed.keys() - all_tracked):
+        errors.append(f"inventory row is not a tracked file: {p}")
+    for error in errors:
+        print("FAIL", error)
+    print(f"checked {len(tracked)} tracked docs, {len(listed)} inventory rows: {'FAIL' if errors else 'OK'}")
+    return int(bool(errors))
 
 
 if __name__ == "__main__":

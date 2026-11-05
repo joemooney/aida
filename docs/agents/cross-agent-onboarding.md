@@ -280,7 +280,7 @@ In priority order for an agent boarding the project:
 3. **`docs/agents/aida-mcp-install-matrix.md`** — per-client MCP setup, marketplace/package surface, and safe write-tool posture for Claude, Codex, Cursor, Windsurf, Continue, Cline, Copilot, Devin, and others.
 4. **`docs/archive/spikes/2026-05-20-spike-9-mcp-as-bus.md`** — the architectural verdict on filesystem-canonical + MCP-as-transport. Explains *why* the surface looks the way it does.
 5. **`docs/archive/spikes/2026-05-20-spike-11-session-forking.md`** — fork-from-live advisor (STORY-360, shipped). Lets a live advisor session be consulted during a drain.
-6. **`docs/multi-advisor-coordination.md`** — SPIKE-10 verdict on subsystem-scoping + sibling-advisor initiation. The shape this brief is the first concrete instance of.
+6. **`docs/advanced/multi-advisor-coordination.md`** — SPIKE-10 verdict on subsystem-scoping + sibling-advisor initiation. The shape this brief is the first concrete instance of.
 7. **`docs/writeups/2026-05-20-autonomy-keystone-day.md`** — narrative of the autonomy keystone shipping. Useful context for how the project ships work end-to-end.
 8. **`OVERVIEW.md`** — strategic vision, public face, surface inventory.
 9. **`aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`** — the precise verbs (Draft / Approved / Planned / In Progress / Done / Completed / Released) and the auto-bump mechanics that turn Done → Completed.

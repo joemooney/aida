@@ -29,7 +29,7 @@ Today aida queue work --batch X --auto-complete collapses on first phase failure
 - aida-cli/src/auto_complete.rs (BatchDrainOutcome::DrainedWithShelved + drain_batch loop rewrite)
 - aida-cli/src/main.rs (PhaseDriver::shelve_on_failure trait method + resolve_batch_members filter + summary + findings render)
 - aida-cli/src/cli.rs (--max-failures flag)
-- docs/autonomous-drain.md (new section)
+- docs/advanced/autonomous-drain.md (new section)
 - CLAUDE.md (--auto-complete paragraph extended)
 - OVERVIEW.md (autonomy section)
 

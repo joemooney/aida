@@ -7,7 +7,7 @@
 //! met / missing / unknown, with the layer it came from.
 //!
 //! Machine-checkable items (the prose protocol body stays advisory):
-//!   - spike    — a `docs/spikes/<date>-<slug>.md` deliverable is in the diff
+//!   - spike    — a `docs/internal/spikes/<date>-<slug>.md` deliverable is in the diff
 //!   - decision — the ADR is accepted and carries a `references` edge
 //!   - bug      — the PR touches at least one test file
 //!
@@ -49,7 +49,9 @@ impl ItemKind {
     /// report, the PR body, and the reviewer prompt.
     pub(crate) fn checklist_text(self) -> &'static str {
         match self {
-            ItemKind::SpikeDeliverable => "deliverable docs/spikes/<date>-<slug>.md is in the diff",
+            ItemKind::SpikeDeliverable => {
+                "deliverable docs/internal/spikes/<date>-<slug>.md is in the diff"
+            }
             ItemKind::AdrAcceptedWithReferences => {
                 "ADR status is accepted and it has a references edge"
             }
@@ -59,7 +61,7 @@ impl ItemKind {
 
     fn missing_text(self) -> &'static str {
         match self {
-            ItemKind::SpikeDeliverable => "deliverable docs/spikes/<date>-<slug>.md",
+            ItemKind::SpikeDeliverable => "deliverable docs/internal/spikes/<date>-<slug>.md",
             ItemKind::AdrAcceptedWithReferences => "accepted ADR with a references edge",
             ItemKind::BugTestChange => "test-file change",
         }
@@ -128,7 +130,7 @@ impl ProtocolReport {
     }
 
     /// One line per missing item, e.g.
-    /// `protocol: spike — missing deliverable docs/spikes/<date>-<slug>.md (layer: type; …)`.
+    /// `protocol: spike — missing deliverable docs/internal/spikes/<date>-<slug>.md (layer: type; …)`.
     pub(crate) fn missing_lines(&self) -> Vec<String> {
         self.items
             .iter()
@@ -164,9 +166,14 @@ impl ProtocolReport {
     }
 }
 
-/// `docs/spikes/<YYYY-MM-DD>-<slug>.md`, directly under `docs/spikes/`.
+/// `docs/internal/spikes/<YYYY-MM-DD>-<slug>.md`, directly under `docs/internal/spikes/`.
+// trace:STORY-1651 | ai:codex
 fn is_spike_deliverable(path: &str) -> bool {
-    let Some(name) = path.strip_prefix("docs/spikes/") else {
+    // Other AIDA projects can still have specs naming the pre-reorganization directory.
+    let Some(name) = path
+        .strip_prefix("docs/internal/spikes/")
+        .or_else(|| path.strip_prefix("docs/spikes/"))
+    else {
         return false;
     };
     if name.contains('/') || !name.ends_with(".md") {
@@ -454,7 +461,7 @@ pub(crate) fn evaluate_items(req: &Requirement, changed: &ChangedFiles) -> Proto
                 ItemKind::SpikeDeliverable => diff_item(
                     changed,
                     is_spike_deliverable,
-                    "no docs/spikes/<date>-*.md file in the diff",
+                    "no docs/internal/spikes/<date>-*.md file in the diff",
                 ),
                 ItemKind::BugTestChange => bug_test_item(changed),
                 ItemKind::AdrAcceptedWithReferences => {
@@ -722,17 +729,21 @@ mod tests {
     #[test]
     fn spike_deliverable_missing_prints_the_named_line() {
         let r = req(RequirementType::Spike, RequirementStatus::InProgress);
-        let report = evaluate_items(&r, &known(&["src/lib.rs", "docs/spikes/notes.md"]));
+        let report = evaluate_items(&r, &known(&["src/lib.rs", "docs/internal/spikes/notes.md"]));
         let missing = report.missing_lines();
         assert_eq!(missing.len(), 1);
-        assert!(missing[0]
-            .starts_with("protocol: spike — missing deliverable docs/spikes/<date>-<slug>.md"));
+        assert!(missing[0].starts_with(
+            "protocol: spike — missing deliverable docs/internal/spikes/<date>-<slug>.md"
+        ));
     }
 
     #[test]
     fn spike_deliverable_met_by_dated_report() {
         let r = req(RequirementType::Spike, RequirementStatus::InProgress);
-        let report = evaluate_items(&r, &known(&["docs/spikes/2026-09-23-cache-probe.md"]));
+        let report = evaluate_items(
+            &r,
+            &known(&["docs/internal/spikes/2026-09-23-cache-probe.md"]),
+        );
         assert!(matches!(report.items[0].state, ItemState::Met(_)));
         assert!(report.missing_lines().is_empty());
         assert_eq!(report.items[0].layer, "type");
@@ -1031,10 +1042,17 @@ mod tests {
 
     #[test]
     fn spike_deliverable_path_shape() {
-        assert!(is_spike_deliverable("docs/spikes/2026-01-02-x.md"));
-        assert!(!is_spike_deliverable("docs/spikes/x.md"));
-        assert!(!is_spike_deliverable("docs/spikes/2026-01-02-x.txt"));
-        assert!(!is_spike_deliverable("docs/spikes/sub/2026-01-02-x.md"));
-        assert!(!is_spike_deliverable("other/docs/spikes/2026-01-02-x.md"));
+        assert!(is_spike_deliverable("docs/spikes/2026-01-02-legacy.md"));
+        assert!(is_spike_deliverable("docs/internal/spikes/2026-01-02-x.md"));
+        assert!(!is_spike_deliverable("docs/internal/spikes/x.md"));
+        assert!(!is_spike_deliverable(
+            "docs/internal/spikes/2026-01-02-x.txt"
+        ));
+        assert!(!is_spike_deliverable(
+            "docs/internal/spikes/sub/2026-01-02-x.md"
+        ));
+        assert!(!is_spike_deliverable(
+            "other/docs/internal/spikes/2026-01-02-x.md"
+        ));
     }
 }

@@ -27,7 +27,7 @@
 //! here is not auto-detected. The contract is therefore: **a new per-spec
 //! driver MUST be classified in [`routing_table`]** — routing it through the
 //! engine, or consciously joining the named-exception list. The architecture
-//! doc (`docs/architecture/one-orchestration-engine.md`) states this rule for
+//! doc (`docs/internal/architecture/one-orchestration-engine.md`) states this rule for
 //! humans; this registry states it for CI.
 //!
 //! trace:ADR-7 trace:ADR-9 | ai:claude
@@ -136,7 +136,7 @@ mod tests {
             names, known,
             "a per-spec driver was added/removed without updating the routing registry — \
              classify it (route it through the engine, or consciously add it to the named \
-             exception list). See docs/architecture/one-orchestration-engine.md."
+             exception list). See docs/internal/architecture/one-orchestration-engine.md."
         );
     }
 

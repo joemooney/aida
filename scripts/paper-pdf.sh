@@ -4,7 +4,7 @@
 #
 # Usage:
 #   scripts/paper-pdf.sh                          # builds the coordination paper
-#   scripts/paper-pdf.sh docs/research/foo.md     # builds any markdown doc
+#   scripts/paper-pdf.sh docs/internal/research/foo.md     # builds any markdown doc
 #   PAPER_SUBTITLE="..." scripts/paper-pdf.sh     # override the subtitle line
 #
 # Requires: pandoc, xelatex (texlive-xetex), DejaVu fonts — all stock Ubuntu
@@ -13,7 +13,7 @@
 # them silently.
 set -euo pipefail
 
-MD="${1:-docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md}"
+MD="${1:-docs/internal/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md}"
 OUT="${MD%.md}.pdf"
 SUBTITLE="${PAPER_SUBTITLE:-Design-science findings from a home-grown probe into multi-vendor agent coordination — working draft}"
 

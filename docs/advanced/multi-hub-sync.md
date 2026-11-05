@@ -1,0 +1,271 @@
+# Multi-hub sync: keeping github and gitlab from drifting
+
+AIDA stores two things in git: the **code** (on `main`) and the **requirement store**
+(the orphan `aida-store` branch). When a project has more than one hub — e.g. a public
+github `origin` plus a personal gitlab mirror — both branches must stay identical on every
+hub, or the shared substrate forks.
+
+## How drift happens
+
+AIDA's store sync (`aida db sync`, and the auto-push paths) historically pushed the store
+to a **single** remote named `origin`. A clone whose canonical hub is a *different* remote
+(e.g. a work machine that pushes the store to gitlab, not github) drifts silently: each hub
+accumulates commits the other never sees, with no fan-out and no warning. Reconciling after
+the fact is `aida remote reconcile` (leg 4 below) — a CRDT union-merge of the diverged tips.
+
+The same happens to **code** whenever a push targets one hub only (`git push origin main`
+without also pushing gitlab). Releases have a third failure mode: the version tag and
+binary assets can exist on GitHub while the GitLab hub has neither a tag-triggered
+pipeline nor a release page.
+
+## The four legs: detect, fan out, reconcile
+
+### 1. Detect — `aida remote status`
+
+Read-only. Shows, per configured remote, how far the shared branches (`main` + `aida-store`)
+are ahead/behind local, and flags any remote-vs-remote divergence. Exits non-zero on
+divergence, so it can gate CI or a pre-push hook.
+
+```
+aida remote status            # best-effort fetch, then compare
+aida remote status --no-fetch # offline: compare existing tracking refs
+aida remote status --json     # machine-readable
+```
+
+The same check is a health finding: `aida doctor --category remote-drift`.
+
+Both `aida remote status` and `aida doctor` also report when the local
+`.aida-store` worktree is detached or has a rebase in progress. AIDA refuses
+store writes in that state because a later `rebase --abort` would discard
+commits made on the temporary HEAD. Finish or abandon the interrupted rebase,
+then retry the original command:
+
+```bash
+git -C .aida-store rebase --continue # after resolving the conflict
+# or
+git -C .aida-store rebase --abort
+```
+
+Store pulls that start a rebase now abort it automatically before returning a
+failure. The manual recipe remains relevant for rebases started outside AIDA
+or interrupted by process termination. trace:BUG-1229
+
+`remote status` also checks the latest local `vN` tag. The tag must exist on every hub,
+and GitLab remotes are probed for a matching release record so binary-release drift is
+caught with branch drift.
+
+### 2. Store fan-out — `[store.sync] mirror_remotes`
+
+Make every store push go to **all** hubs, not just `origin`:
+
+```toml
+[store.sync]
+mirror_remotes = ["gitlab"]
+```
+
+After a successful `origin` push, `aida db sync --push` pushes `aida-store` to each mirror.
+**Best-effort**: a non-fast-forward / unreachable / unconfigured mirror leg WARNS (with a
+reconcile hint) and is skipped — it never fails the sync, because a mirror may be
+intentionally behind (e.g. mid-reconcile). `aida init` scaffolds this as a commented stub.
+
+Only `aida db sync --push` and `aida push` fan out this way. The targeted writes behind
+`aida edit`, `aida comment add`, queue moves and the coordination ledgers push the store to
+`origin` only, so between full syncs a mirror's `aida-store` falls behind. `aida pull`
+closes that gap: after both of its legs succeed it runs the origin-following sync below,
+which pushes origin's `aida-store` tip to every mirror.
+
+### 2b. Origin-following sync — `aida remote mirror-sync`
+
+The two fan-outs above mirror what **this machine pushes**. Two things advance a hub
+without a local push: a merge performed on the forge (a squash-merge moves `origin/main`,
+and the only local action is a pull), and a store push from another clone. Neither fires
+a pre-push hook, so the mirror drifts until someone pushes the branch by hand.
+
+`aida remote mirror-sync` pushes origin's tips of the default branch and of `aida-store`
+to every mirror in `[store.sync] mirror_remotes`, by sha, and reports one line per hub and
+branch (pushed / already up to date / failed). It never force-pushes: a diverged hub is
+reported and the command exits non-zero, leaving `aida remote reconcile` (store) or a
+manual reconcile (code) to the operator. `aida pull` runs the same sync best-effort after a
+successful pull (silent unless a hub fails, and never failing the pull), so every drain phase 5, `aida pr ship` and operator catch-up levels the
+hubs; the hub-drift guard's finding points at it.
+
+#### With a pre-push main guard
+
+A repo without server-side branch protection may guard its default branch with a pre-push
+hook that refuses every push to it. That guard would also refuse mirror-sync's push, so
+mirror-sync labels each push it makes (`AIDA_MIRROR_SYNC_ATTEST`). A guard can ask
+`aida remote mirror-guard-check <remote>` before refusing. The check allows the push only
+when all of these hold:
+
+- the remote is a registered mirror, and not `origin`;
+- no ref is a deletion;
+- every default-branch sha equals origin's live tip;
+- mirror-sync labelled exactly that push.
+
+The label alone allows nothing. A local-only `main` commit, a direct push to origin, or a
+stale tip is still refused.
+
+- **AIDA's opt-in guard:** run `aida remote mirror-guard-check --install-guard` once per
+  clone. It writes the guard to `hooks/aida-main-guard` and chains it in front of
+  `pre-push`, handing the ref lines back on stdin, so the mirror fan-out hook that
+  `aida remote mirror` installs still runs (and a later `aida remote mirror` refresh
+  keeps the chain). A custom pre-push hook is left alone unless you add `--force`, and
+  even then only a shell hook (`sh`, `bash`, `dash`, `zsh`, `ksh`) is chained; a hook in
+  another language (Python, Node, ...) is refused, so add the guard call to it yourself.
+  The guard protects **origin's** default branch (`refs/remotes/origin/HEAD`), whatever
+  remote you push to; when that is unset it refuses every push until you run
+  `git remote set-head origin --auto`.
+- **Your own guard:** save the ref lines (`refs=$(cat)`) before reading them. Then, just
+  before refusing, add:
+  `printf '%s\n' "$refs" | aida remote mirror-guard-check "$1" && exit 0`
+
+On the default branch, `aida remote mirror` does not commit its `.aida/config.toml` change.
+It leaves the change in the working tree and prints how to land it on a branch through a
+PR.
+
+### 3. Code fan-out
+
+The code leg is pushed by plain `git`, which AIDA doesn't wrap, so pick one:
+
+- **Native git multi-pushurl** (the clean end-state):
+  `git remote set-url --add --push origin <mirror-url>` makes `git push origin` push `main`
+  to both hubs natively.
+  **Caveat:** this also fans out the *store* push, so while `aida-store` is intentionally
+  diverged (mid-reconcile) the store leg to the mirror will be rejected and confuse
+  `aida db sync`. Enable native multi-pushurl only once both hubs' `aida-store` are
+  reconciled. Until then, use `mirror_remotes` (leg 2, best-effort) for the store and
+  re-sync code manually or via a code-only pre-push hook (tracked follow-up).
+- **Pre-push hook** (`aida remote mirror <name>`): mirrors every code ref this machine
+  pushes to `origin`; `aida remote mirror-push` is its plumbing and says what it mirrored or
+  why it skipped. It cannot see a forge-side merge — that is what `aida remote mirror-sync`
+  (2b) and the sync inside `aida pull` are for.
+- **Manual, until reconciled:** `aida remote mirror-sync` after a merge, or
+  `git push <mirror> origin/main:main`; `aida remote status` in a pre-push hook at least
+  *catches* drift before it lands.
+
+## Recommended setup
+
+```bash
+# 1. add the mirror remote (once)
+git remote add gitlab <mirror-url>
+
+# 2. fan out the store leg
+#    edit .aida/config.toml:
+#    [store.sync]
+#    mirror_remotes = ["gitlab"]
+
+# 3. sanity-check anytime
+aida remote status
+```
+
+Once every hub's `aida-store` is reconciled (no BUG-700-style held divergence), add the
+native multi-pushurl (leg 3) so the *code* leg fans out automatically too.
+
+### Release fan-out
+
+`scripts/release.sh` lands the version bump on `origin` through a `release/vN` PR
+(squash-merged once its checks pass; main is never pushed directly), tags the merged
+commit and pushes the tag to `origin`, then mirrors the `vN` tag to each remote in `[store.sync] mirror_remotes`. Mirror failures warn and do
+not fail the GitHub release. GitLab receives the mirrored tag and runs its release stage:
+Linux x86_64 and arm64 tarballs are built by the GitLab release job, and the
+GitLab Release links those two package-registry assets. Windows and macOS are
+unsupported; no Darwin tarballs are copied or published by the current release
+workflows. See the [operator setup guide](../operator-setup.md) for installation.
+
+GitLab-track installers can opt in without changing the default GitHub path:
+
+```bash
+AIDA_RELEASE_HOST=gitlab ./scripts/install.sh
+./scripts/install.sh --host gitlab --version v0.15.0
+```
+
+### 4. Reconcile — `aida remote reconcile`
+
+The pull-and-union counterpart of the fan-out (BUG-714). The fan-out can only PUSH, so a
+commit that lands on one hub only (e.g. a work box registering a node on the gitlab mirror)
+leaves that hub permanently ahead and every subsequent mirror push rejected. `reconcile`
+heals it:
+
+```
+aida remote reconcile            # dry-run: per-hub standing + the plan; exits 2 when hubs disagree
+aida remote reconcile --execute  # union-merge the diverged tips, verify, push to every hub
+aida remote reconcile --json     # machine-readable
+```
+
+What `--execute` does, in order:
+
+1. **Fetch** the store branch tip from every configured remote.
+2. **Union-merge** the diverged frontier in the `.aida-store/` worktree — a *merge commit*
+   with both tips as parents, so every hub fast-forwards to it (a rebase would rewrite one
+   hub's published history; a force-push would destroy it). Conflicts resolve structurally:
+   spec objects via the `conflict.rs` three-way CRDT union, `oplog.yaml` via operation-id
+   union, `registry/blocks.yaml` via disjoint-range union (same block dispensed on both
+   hubs → furthest `next`), `registry/nodes.toml` via three-way roster union. Anything the
+   structural union cannot resolve (a genuine block-range or node-id collision, a
+   non-mergeable path) aborts the merge and parks — never guess-merged.
+3. **Verify** the union: no spec file present on any tip may be lost, and the unioned block
+   registry must stay collision-free.
+4. **Scrub-guard** it: the same identity-redaction contract as the canonical store write
+   path. This machine's raw hostname/email (when a public alias is configured) must not
+   appear in anything newly published; email-bearing registry lines currently on one hub
+   only require explicit `--yes` consent before they reach every hub.
+5. **Push** the union to every hub — each is a fast-forward by construction.
+
+### 5. Clones that reach some hubs only — `push-hubs` and the hub bridge
+
+Some clones must not push to every hub: a work clone may push the store to gitlab and
+never to GitHub, while the home clone reaches both. The tracked `.aida/config.toml` is
+shared by every clone, so this is set in an untracked, machine-local layer,
+`~/.aida/store-local.toml`, keyed by the clone's primary checkout (seat worktrees of the
+clone resolve to the same entry):
+
+```
+aida remote push-hubs gitlab     # on the work clone: the store goes to gitlab only
+aida remote push-hubs --all      # remove the restriction
+aida remote bridge --enable      # on the clone that reaches every hub
+aida remote bridge               # show this clone's setting
+```
+
+- **Push hubs.** When `origin` is not listed, `aida db sync --push`, the `aida push`
+  store leg and per-write auto-push send the store to the listed hubs instead, and never
+  attempt `origin`. `remote mirror-sync` skips the store branch there, `remote reconcile`
+  reads every hub but pushes only to the listed ones. Every other store writer that
+  addresses `origin` (an `aida add` id allocation, node, alias and team registry writes)
+  publishes to the listed hubs instead, and rebases onto the first of them when it
+  rejects the push. The other listed hubs get the push only after the first accepts it,
+  so a commit about to be rebased never lands on a secondary hub. Every store pull that
+  addresses `origin` (`aida db sync --pull`, `aida pull`, a writer's retry) reads the
+  first listed hub too: that is where this clone publishes, so it is the tip the next
+  push must build on, while `origin` only sees this clone's writes after the bridge runs.
+  The store leg of a `remote create` / bootstrap skips a hub that is not listed.
+  `remote mirror-push` is exempt from the check: it carries code refs only, never the
+  store branch, so it pushes to every mirror it would otherwise. A store push to any
+  other excluded hub is refused before git runs. An unreadable layer refuses every store push; an `aida add`
+  then keeps the new spec committed locally and publishes it once the layer is fixed.
+- **Hub bridge.** The bridge clone's schedule registry gains `store-bridge-reconcile`
+  (runs `aida remote reconcile --execute` hourly; set `bridge_every` in the layer to change
+  it) and `store-bridge-reconcile-route`. The job never passes `--yes`: identity-bearing
+  content, or a conflict the union cannot resolve, fails the run and the route delivers it
+  to the advisor seat. A tracked or machine-global `[schedule]` job cannot run the
+  reconcile. It loads with a problem and never runs.
+- **Escalation.** `hub-drift-guard` is unchanged. It still routes drift the bridge could
+  not union.
+- `aida schedule install-cron` / `install-systemd` on the bridge clone removes a
+  hand-installed `# aida-store-reconcile` crontab entry. `aida remote bridge --enable`
+  removes it only when the schedule tick is already installed; until then the stopgap
+  is the only thing reconciling, so it stays.
+
+## When drift has already happened
+
+Don't force-push a shared branch to "fix" it — that destroys the other hub's commits.
+For the **store**, run `aida remote reconcile` (leg 4 above). For **code** branches, do the
+same shape by hand: merge the divergent tips into a superset (a merge commit lets **both**
+hubs fast-forward to it) and push that to every hub. See `docs/internal/git-verb-surface.md` for the
+verb-surface rules.
+
+## Related
+
+- `docs/internal/git-verb-surface.md` — the two-leg git-mirror verb conventions.
+- `aida remote status`, `aida doctor --category remote-drift` — detection.
+- STORY-760 — the drift-prevention epic; BUG-700 — the employer-content history scrub that
+  currently blocks this repo's `aida-store` from reconciling across hubs.

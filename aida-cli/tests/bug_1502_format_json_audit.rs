@@ -484,7 +484,7 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
                 .join(" ")
         })
         .collect();
-    let audit = include_str!("../../docs/cli-format-json-audit.md");
+    let audit = include_str!("../../docs/internal/cli-format-json-audit.md");
     let audit_paths: BTreeSet<String> = audit
         .lines()
         .filter_map(|line| line.strip_prefix("| `"))

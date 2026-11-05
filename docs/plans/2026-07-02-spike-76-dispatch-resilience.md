@@ -134,7 +134,7 @@ Fallback order should be explicit per task:
 - `docs/agents/cross-agent-onboarding.md`
 - `docs/agents/codex-brief-pickup.md`
 - `docs/agents/antigravity-brief-pickup.md`
-- `docs/git-verb-surface.md`
+- `docs/internal/git-verb-surface.md`
 - `aida-cli/src/main.rs`
 - `aida-cli/src/agent_registry.rs`
 - `aida-cli/src/mailbox_store.rs`
@@ -156,7 +156,7 @@ Fallback order should be explicit per task:
 - `ci_idle_timeout::ci_wait_verdict` and `event_wait::wait_for_actionable` — existing idle/absolute timeout patterns.
 - `exit_signal::spawn_and_wait_watched` and the phase watchdog pattern in `main.rs` — no-progress and process reaping behavior for long child runs.
 - `compete::vendor_adapter` / `headless_argv` — prior art for Claude/Codex headless adapters and AGY human-briefed routing.
-- Git two-leg verbs from `docs/git-verb-surface.md` — preserve code/store leg discipline; do not create a new sync convention.
+- Git two-leg verbs from `docs/internal/git-verb-surface.md` — preserve code/store leg discipline; do not create a new sync convention.
 
 ## Risks + gotchas
 
@@ -210,7 +210,7 @@ For liveness/report tests, use temp repos and fake registry entries rather than 
 - Builds on: `docs/agents/session-communication.md`
 - Builds on: `docs/agents/claude-surfaces-codex-parity.md`
 - Builds on: `docs/agents/cross-agent-onboarding.md`
-- Builds on: `docs/git-verb-surface.md`
-- See also: `docs/research/ablations/2026-06-19-cross-vendor-portability.md`
-- See also: `docs/research/ablations/README.md`
-- See also: `docs/research/2026-06-16-layered-evaluation-framework.md`
+- Builds on: `docs/internal/git-verb-surface.md`
+- See also: `docs/internal/research/ablations/2026-06-19-cross-vendor-portability.md`
+- See also: `docs/internal/research/ablations/README.md`
+- See also: `docs/internal/research/2026-06-16-layered-evaluation-framework.md`

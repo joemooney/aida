@@ -531,5 +531,5 @@ cargo clippy -p aida-cli -- -D warnings
 - builds-on: TASK-94 (`build_reusable_helpers_section` and `scan_trace_graph` — the trace-graph engine the analyzer reuses).
 - composes-with: STORY-248 (stacked-branch awareness for parallel pipelining — the conflict pairs are the input).
 - composes-with: STORY-441 (archive concept — archived specs excluded from grooming by default).
-- see-also: `docs/autonomous-drain.md` (the consumer of the `batch:NAME` tag this command produces).
+- see-also: `docs/advanced/autonomous-drain.md` (the consumer of the `batch:NAME` tag this command produces).
 - see-also: `aida-decompose` skill — same split (skill drives the AskUserQuestion conversation, CLI does the filing).

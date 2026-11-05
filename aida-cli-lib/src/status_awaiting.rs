@@ -2532,7 +2532,7 @@ pub(crate) fn print_fast_status(snap: &FastStatusSnapshot) {
 // extra cost. Plain `//` keeps the marker out of any doc/help.
 // trace:BUG-1503 | ai:claude
 //
-// The monitor contract (`monitor_contract.rs` / `docs/monitor-contract-
+// The monitor contract (`monitor_contract.rs` / `docs/internal/monitor-contract-
 // fixtures/status.json`) promises `requirements.total` (an integer) AND
 // `requirements.by_status` (an object) from `aida status --json`. `counts`
 // (the internal/duplicate scalar key) stays as-is; `requirements` gets the

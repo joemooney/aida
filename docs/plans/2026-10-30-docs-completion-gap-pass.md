@@ -6,7 +6,7 @@ Completion delta for EPIC-HOME-002, based on merged main `79ed6f56bf8f6dc34aaeb4
 
 | promise | where it is met | gap |
 |---|---|---|
-| Inventory separates current guidance from historical evidence | [Original report](../reports/2026-10-29-documentation-review.md), [refreshed snapshot](../reports/2026-10-30-completion-snapshot.json), [inventory](../reports/2026-10-30-completion-inventory.csv) | Closed for the current scope; contextual candidates remain classified, not silently rewritten. |
+| Inventory separates current guidance from historical evidence | [Original report](../internal/reports/2026-10-29-documentation-review.md), [refreshed snapshot](../internal/reports/2026-10-30-completion-snapshot.json), [inventory](../internal/reports/2026-10-30-completion-inventory.csv) | Closed for the current scope; contextual candidates remain classified, not silently rewritten. |
 | Current claims match source and installed help | Guide inspection sections; init/do/mcp-serve/github/gitlab/jira help; CLI chapters 7 and 9 | Corrected residual unconditional MCP wording, chapter count (12), unmeasured on-ramp duration and README framing. External installs remain untested. |
 | Product guidance is reachable from book and entry indexes | [Book contents](../SUMMARY.md), [docs index](../README.md), [README](../../README.md), [OVERVIEW](../../OVERVIEW.md), [landing](../showcase/index.html), [library](../showcase/library.html) | Closed: all five entry points reach all nine source/rendered guide pairs, library and executive brief. |
 | Current local links resolve; published guides are not orphaned | Refreshed link audit and explicit entry-point traversal | Zero focused current link candidates; nine of nine published guides reachable. Contextual candidates retain their classifications. |
@@ -35,11 +35,11 @@ Refresh the evidence from the repository root after staging added sources. This 
 ```python
 import importlib.util,json,sys
 from pathlib import Path
-spec=importlib.util.spec_from_file_location('audit','docs/audit-documentation.py')
+spec=importlib.util.spec_from_file_location('audit','docs/internal/audit-documentation.py')
 a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
 a.PREFIX='2026-10-30-completion'
 a.CURRENT.update({'docs/product-capabilities.md','docs/product-integrations.md','docs/SUMMARY.md'})
-a.EXCLUDED.update({f'docs/reports/{a.PREFIX}{s}' for s in ('-inventory.csv','-links.csv','-snapshot.json')})
+a.EXCLUDED.update({f'docs/internal/reports/{a.PREFIX}{s}' for s in ('-inventory.csv','-links.csv','-snapshot.json')})
 a.EXCLUDED.add('docs/plans/2026-10-30-docs-completion-gap-pass.md')
 sys.argv=['audit','--base','79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa'];a.main()
 p=a.OUT/(a.PREFIX+'-snapshot.json');s=json.loads(p.read_text());s['date']='2026-10-30';s['scope']='Completion-branch working-tree hashes; Git context is merged main 79ed6f56. Supersedes the 2026-10-29 snapshot for current hashes/counts. Self-derived completion outputs and gap table excluded; historical artifacts retained. Link scan is not semantic, external-URL or accessibility certification.';p.write_text(json.dumps(s,indent=2)+'\n')

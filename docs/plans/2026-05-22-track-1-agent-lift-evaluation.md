@@ -391,4 +391,4 @@ rg -n "follow-up|codex|AIDA-assisted|control" docs/experiments/agent-lift/summar
 
 - `docs/plans/2026-05-22-codex-driven-aida-improvement.md`
 - `docs/plans/2026-03-17-codex-cli-support.md`
-- `docs/architecture/mcp-coordination-surface.md`
+- `docs/internal/architecture/mcp-coordination-surface.md`

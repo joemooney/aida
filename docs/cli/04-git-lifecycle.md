@@ -606,7 +606,7 @@ shows the current mandate; the statusline shows `MANDATE <time left>` while one
 is active.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
-PR comment as "released under mandate <id> by advisor"; start and stop are
+PR comment as `released under mandate <id> by advisor`; start and stop are
 recorded in `.aida/events.jsonl`. The authority record lives only in the
 user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
 Each record is re-validated on every read (24h cap, no future issue time,

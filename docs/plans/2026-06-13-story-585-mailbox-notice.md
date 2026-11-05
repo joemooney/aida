@@ -71,7 +71,7 @@ consumes. This is acceptance #4 — a glance must not silently consume.
    UserPromptSubmit.
 7. `aida-core/templates/skills/aida-read-mail.md` + `commands/aida-read-mail.md`
    — on-demand read/ack skill; `make sync-templates` symlinks.
-8. `docs/mailbox.md` — add the read/notice section.
+8. `docs/advanced/mailbox.md` — add the read/notice section.
 
 ## Critical files
 

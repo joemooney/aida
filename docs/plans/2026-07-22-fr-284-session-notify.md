@@ -51,7 +51,7 @@ finished+merged+clean case on one bit, so a session is never both reaped and not
    so NOTIFY rides it with no change there.
 2. `aida-cli-lib/src/tests/fr_284_session_notify_tests.rs` — the NOTIFY predicate matrix +
    sentinel-path confinement.
-3. Docs: `docs/session-lifecycle.md`, `docs/cli/06-roles-sessions.md`, `CLAUDE.md`.
+3. Docs: `docs/advanced/session-lifecycle.md`, `docs/cli/06-roles-sessions.md`, `CLAUDE.md`.
 
 ## Critical files
 
@@ -102,4 +102,4 @@ aida session reap --dry-run --json                                       # notif
 ## Related
 
 - TASK-1177 (REAP slice, shipped), FR-284 (parent), ADR-23, ADR-24, TASK-1179.
-- `docs/session-lifecycle.md`, `docs/architecture/autonomy-and-escalation.md`.
+- `docs/advanced/session-lifecycle.md`, `docs/internal/architecture/autonomy-and-escalation.md`.

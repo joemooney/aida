@@ -60,7 +60,7 @@ lifecycle states in the [lifecycle vocabulary](lifecycle-vocabulary.md).
 
 ### Hub
 
-A Git server. See [the guide](../../../../docs/air-gapped-development.md#the-parts).
+A Git server. See [the guide](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Role
 
@@ -107,7 +107,7 @@ if ! gen --check; then
 fi
 grep -Fx "## Machinery glossary" "$PAGE" >/dev/null
 grep -Fx "## Product glossary" "$PAGE" >/dev/null
-grep -Fx "A Git server. See [the guide](../air-gapped-development.md#the-parts)." "$PAGE" >/dev/null
+grep -Fx "A Git server. See [the guide](../advanced/air-gapped-development.md#the-parts)." "$PAGE" >/dev/null
 grep -Fx "Works the ready set." "$PAGE" >/dev/null
 grep -F 'Say "PR opened for `<spec-id>`".' "$PAGE" >/dev/null
 if grep -F "trace:" "$PAGE" >/dev/null; then

@@ -1319,11 +1319,11 @@ fn the_advisor_standing_orders_deputy_line_submits_and_links_the_page() {
     );
     assert!(
         line.contains(
-            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/deputies.md)"
+            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/advanced/deputies.md)"
         ),
         "the link must resolve from the template master, the generated mirror and an installed project alike: {line}"
     );
-    let page = include_str!("../../../docs/deputies.md");
+    let page = include_str!("../../../docs/advanced/deputies.md");
     assert!(page.starts_with("# Deputies: command vs script"));
 }
 

@@ -68,5 +68,5 @@ sell the record, ride everything else.
   choose them; what exactly is their record's portability story).
 - Extend `aida why` coverage from trace-comments to **git-blame trailer fallback** —
   widen the differentiator from annotated lines to every conventionally-trailered line.
-- Refresh `docs/positioning/` lead pair once the teardown lands (do not touch before —
+- Refresh `docs/internal/positioning/` lead pair once the teardown lands (do not touch before —
   precise claims only).

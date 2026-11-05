@@ -16,14 +16,14 @@ pushed, merged, completed, released) in the
 
 The short ID a spec keeps for good: its type and a number, such as
 `TASK-<number>`. It is unique across every clone of the project, because each
-number is handed out once from a shared range. See [Support for air-gapped development](../../../../docs/air-gapped-development.md).
+number is handed out once from a shared range. See [Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md).
 
 ### Block
 
 A small range of spec numbers set aside for one clone. The clone gives new
 specs short agreed IDs from its own blocks, so it never has to ask anyone
 else first. Blocks are carved from a [pool](#pool). See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Brief
 
@@ -59,7 +59,7 @@ it, under your seat grant. There are two kinds. The command deputy
 (`aida deputy`) runs single commands you allowed. The script deputy
 (`aida deputy shell`) runs whole scripts from the advisor, one at a time, at
 your terminal and as you. Both record each job and tell the submitting
-session the result. See [Deputies: command vs script](../../../../docs/deputies.md).
+session the result. See [Deputies: command vs script](../../../../docs/advanced/deputies.md).
 
 ### Grant
 
@@ -80,7 +80,7 @@ what to do next. AIDA keeps handoff notes in the project's `.aida/` folder.
 A Git server that the requirement store syncs through, such as GitHub, GitLab
 or a repository on an internal host. A mirror that only copies another hub
 counts as the same hub. See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Local ID
 
@@ -89,14 +89,14 @@ has no [block](#block) to draw short numbers from. Local IDs never collide, so
 they need no coordination, and a spec can later be given an
 [agreed ID](#agreed-id). You can give the clone a friendly label with
 `aida node alias`. See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Mailbox
 
 AIDA's message channel between agents and people, for things that are not a
 change of state: a heads-up, a question, a warning about a shared file.
 Messages are kept, so a different agent can read them the next day. See
-[the inter-agent mailbox](../../../../docs/mailbox.md).
+[the inter-agent mailbox](../../../../docs/advanced/mailbox.md).
 
 ### Mandate
 
@@ -127,14 +127,14 @@ if the tag is later removed. See
 A range of one spec type's numbers given to one hub. Clones that sync through
 that hub take their [blocks](#block) from it, so two hubs never hand out the
 same number. See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Ref
 
 Git's name for a pointer to a commit, such as a branch. AIDA keeps its records
 on the `aida-store` branch, called the store ref; a push to it succeeds only
 if nobody else moved it first. See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Review story
 
@@ -162,7 +162,7 @@ wearing it is expected and allowed to do. See
 The one clone of a project that owns every spec number not yet handed out.
 You choose it once with `aida node enroll-root`; it splits the numbers into
 [pools](#pool). See
-[Support for air-gapped development](../../../../docs/air-gapped-development.md#the-parts).
+[Support for air-gapped development](../../../../docs/advanced/air-gapped-development.md#the-parts).
 
 ### Roster
 

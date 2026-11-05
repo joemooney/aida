@@ -209,4 +209,4 @@ Three properties AIDA has that none of these tools have:
 - [`2026-03-17-landscape-scan.md`](2026-03-17-landscape-scan.md) — broader landscape with these tools at lighter detail (March 2026 data).
 - [`2026-05-26-agent-memory-libraries.md`](2026-05-26-agent-memory-libraries.md) — memory-library category (companion analysis, same date).
 - [`../positioning/vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) — AIDA vs Claude Code's `/agents` catalog.
-- [`signals-to-watch.md`](../../competitive-analysis/signals-to-watch.md) — already names Goose/Codex skill-registry as a signal worth watching.
+- [`signals-to-watch.md`](../../internal/competitive-analysis/signals-to-watch.md) — already names Goose/Codex skill-registry as a signal worth watching.

@@ -136,4 +136,4 @@ TASK-title-sized line.
 
 - Builds on: STORY-X
 - Blocks: BUG-Y
-- See also: docs/positioning/<comparison>.md
+- See also: docs/internal/positioning/<comparison>.md

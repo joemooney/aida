@@ -612,7 +612,7 @@ Specs merged since v0.15.0 (961):
 - **BUG-1581** — Two reviewers recorded opposite verdicts on the same commit into two different artefacts and nothing reconciles them, so whether a PR is approved depends on which file the reader opens
 - **BUG-1582** — The doc-intent gate resolves specs by filename (spec_id) while every human-facing surface uses agreed_id, so 96 specs are unresolvable to a required check and their doc-impact tags are silently unenfo
 - **BUG-1584** — The spec card collapses BlockedBy, Blocks, Duplicate and Verifies into one Related heading, so it cannot say a spec is blocked by something — the edge names it already carries are discarded
-- **BUG-1585** — docs/autonomous-drain.md says pipeline_depth defaults to 2 and the code says 1, and the PR that checked it reported clean from a grep for a different phrasing
+- **BUG-1585** — docs/advanced/autonomous-drain.md says pipeline_depth defaults to 2 and the code says 1, and the PR that checked it reported clean from a grep for a different phrasing
 - **BUG-1586** — The --sequential drain notice prints the DEFAULT pipeline_depth instead of the resolved one, so in this repo it announces strictly-one-at-a-time and then pipelines at depth 2
 - **BUG-1587** — Re-running init repairs missing Codex hook runtime files
 - **BUG-1588** — A review test created fixture requirements in the live canonical store
@@ -772,8 +772,8 @@ Specs merged since v0.15.0 (961):
 - **SPIKE-83** — Cost-observability spike: audit today's token capture, inventory the per-message sources already on disk, survey reusable prior art, and compute what the rework tail actually costs (#2004)
 - **TASK-1295** — Discipline pack: write review independence as a property of method, with the marker disagreement as the worked example (#1979)
 - **SPIKE-82** — Night-shift post-mortem: what made the 2026-09-17/18 overnight window succeed, and which parts depend on an agent being awake (#1945)
-- **TASK-1269** — GitLab drain smoke: record the live validation in docs/forge-providers.md (#1936)
-- **TASK-1260** — Document the identity model: role (seat) vs stakeholder persona (gate) vs session/user — docs/architecture/roles-seats-and-personas.md + glossary entries + TERM specs (#1909)
+- **TASK-1269** — GitLab drain smoke: record the live validation in docs/advanced/forge-providers.md (#1936)
+- **TASK-1260** — Document the identity model: role (seat) vs stakeholder persona (gate) vs session/user — docs/internal/architecture/roles-seats-and-personas.md + glossary entries + TERM specs (#1909)
 - **TASK-1252** — TUI seam rule: reads in-process via aida-core, mutations via the aida CLI subprocess, no aida-cli-lib dependency — document + CI-guard + migrate polled subprocess reads (#1898)
 - **TASK-160** — Advisor heartbeat degenerated into token-repetition during idle mail ticks (#1876)
 - **TASK-1228** — Surface AIDA's autonomy modes as ONE coherent concept (cron/groom --apply · /aida-solo · [intake]/solo-posture · zen) — they're scattered and undiscoverable (#1826)
@@ -1369,7 +1369,7 @@ Specs merged since v0.14.0 (959):
 - **STORY-1054** — Vendor activity/liveness adapter: one seam giving the watchdog, idle detector, and supervisor a per-vendor 'is this session alive and producing output' signal (Claude+Codex tier-1, Antigravity tier-2)
 - **STORY-753** — Agent-surface TOON coverage gap: ps / backlog list / history emit human tables under AIDA_AGENT_OUTPUT
 - **STORY-789** — Project-identity checklist at init — offer the thesis, never demand it
-- **TASK-1127** — scripts/publish-positioning-pdfs.sh — batch-render docs/positioning/*.md to PDF into the artifacts repo
+- **TASK-1127** — scripts/publish-positioning-pdfs.sh — batch-render docs/internal/positioning/*.md to PDF into the artifacts repo
 - **TASK-1128** — positioning-PDF renderer: size table columns by content, not equal-split (narrow label columns)
 - **TASK-773** — aida list open: exclude perpetual standing-artifact types (vision/principle/term/constraint/folder/meta) from the open-work view by default
 - **TASK-783** — statusline: show 'away' + TTL-remaining when the operator is away (hide when home)
@@ -1827,7 +1827,7 @@ Specs merged since v0.14.0 (959):
 - **TASK-819** — Doc drift: CLAUDE.md says aida history --spec <id>, actual flag is --id (#914)
 - **TASK-820** — Land the EPIC-35 gh-to-glab forge wiring-gap inventory (2026-06-14 GitLab Tier-2 audit) (#913)
 - **TASK-816** — Capture cross-vendor mailbox demo (Claude/Codex/Antigravity) as dated positioning evidence (#909)
-- **TASK-815** — Solo-mode MVP: docs/solo-mode.md runbook composing intake --apply --then-drain → queue integrate --watch (lock + keystone-park + mailbox escalation) (#905)
+- **TASK-815** — Solo-mode MVP: docs/advanced/solo-mode.md runbook composing intake --apply --then-drain → queue integrate --watch (lock + keystone-park + mailbox escalation) (#905)
 - **TASK-796** — Doc-intent part 4: drift-guard asserts surface-changing specs' interface_changes are REFLECTED in the docs (#897)
 - **TASK-795** — Doc-intent part 3: each manual entry backlinks to its shaping spec(s) via a machine-readable convention (#896)
 - **TASK-794** — Doc-intent part 2: documenter consumes the spec graph (--help + interface_changes + description/acceptance) into intent-bearing entries (#894)
@@ -2339,7 +2339,7 @@ Specs merged since v0.11.0 (198):
 - **TASK-682** — Retire/redirect docs/slideshow.html — the OBE 2025-12 deck is still discoverable and actively misleading (#560)
 - **TASK-632** — Document the `[agents] bypass` knob in the discipline pack / CLAUDE.md agents.toml section (#534)
 - **TASK-530** — TASK: scaffolding-pack: link `backlog-grooming.md` from the auto-appended Discipline section in CLAUDE.md (#533)
-- **TASK-109** — docs/git-verb-surface.md: design reference naming the convention (#531)
+- **TASK-109** — docs/internal/git-verb-surface.md: design reference naming the convention (#531)
 - **TASK-456** — Discipline pack: add 'recursive-failure-risk fixes use keyboard, not drain' section to workflow-patterns.md (#526)
 - **TASK-258** — aida-review skill step 10 documents nonexistent 'aida queue remove --yes' flag (#521)
 - **ADR-2** — Role onboarding: implementer is the default role; surface roles at init; never leave the user role-undefined (#512)
@@ -2613,7 +2613,7 @@ Specs merged since v0.9.1 (103):
 - **TASK-564** — Document cross-agent hook pause/abort/defer semantics (#334)
 - **TASK-512** — Document aida:<subcommand> tag-namespace convention in docs/aida/ + CLAUDE.md + scaffolding-pack (#271)
 - **STORY-443** — Reshape aida init docs/ namespace: discipline pack to docs/aida/, keep docs/plans/ for project-authored plans (#268)
-- **TASK-476** — docs/multi-node.md: replace line-ref to current_user_id with symbol-ref (#262)
+- **TASK-476** — docs/advanced/multi-node.md: replace line-ref to current_user_id with symbol-ref (#262)
 - **TASK-540** — Sync docs/agents/codex-mcp-setup.md live copy → master template
 
 ### Infrastructure
@@ -2776,7 +2776,7 @@ Specs merged since v0.8.0 (114):
 - **TASK-484** — Restore or remove AGENTS.md (CLAUDE.md references it as scaffolded but it doesn't exist) (#214)
 - **TASK-485** — aida init: propagate docs/agents/ directory to new projects via templates (#214)
 - **STORY-318** — Periodic ecosystem review — recurring scan of Claude Code + neighbor-tool capabilities, fed into AIDA's backlog (#212)
-- **TASK-339** — docs/architecture/autonomy-and-escalation.md — the autonomy modes, escalation cascade, and inter-agent communication architecture (#208)
+- **TASK-339** — docs/internal/architecture/autonomy-and-escalation.md — the autonomy modes, escalation cascade, and inter-agent communication architecture (#208)
 - **SPIKE-6** — Spike: skillfold compatibility — can AIDA's skill templates compile to skillfold YAML for cross-platform (Cursor, Codex)? (#200)
 - **TASK-288** — TUI prior-art study: git-clone + analyze Claude Squad / crystal / vibe-kanban / vibe-tree / cmux / Conductor (prereq for STORY-244) (#197)
 - **TASK-447** — aida queue done --skip-pr-check flag has blank --help description (#196)
@@ -2789,7 +2789,7 @@ Specs merged since v0.8.0 (114):
 - **TASK-412** — simple-mode-empty template ▶ row contradicts Step 5c — recommend Stop here when PR already open (#154)
 - **TASK-b6b1278890774ef993d2ebc327862470-257** — queue-done gate creates chicken-and-egg with /aida-pr status check (#153)
 - **TASK-338** — Glossary: pin down AIDA's orchestration / session / autonomy machinery vocabulary (#150)
-- **TASK-337** — docs/positioning/vs-claude-code-subagents.md — where AIDA sits vs Claude Code's /agents subagents (#149)
+- **TASK-337** — docs/internal/positioning/vs-claude-code-subagents.md — where AIDA sits vs Claude Code's /agents subagents (#149)
 - **TASK-319** — Codify the 'don't retroactively edit dated historical artifacts' convention (SPIKE / PROMPT_HISTORY / dated docs) (#148)
 - **SPIKE-10** — SPIKE: Multi-advisor coordination — subsystem-scoped advisors + parent→sibling initiation + bidirectional substrate propagation (#141)
 - **SPIKE-9** — SPIKE: MCP server as the inter-agent communication bus — evaluate vs file-handshakes (#139)
@@ -2907,7 +2907,7 @@ Specs merged since v0.7.0 (81):
 - **TASK-289** — README: AIDA's defensible niche statement (8 dimensions from 2026-05-16 competitive analysis) (#93)
 - **TASK-279** — Rename role:dialog's user-facing identity to 'advisor' (keep internal role name) (#92)
 - **TASK-277** — Sample 'first project' walkthrough in docs/ — concrete AIDA-from-zero example (#91)
-- **TASK-276** — README: surface docs/positioning/ links (vs-ultraplan / vs-ultrareview / vs-karpathy-md / vs-saas-pm) (#90)
+- **TASK-276** — README: surface docs/internal/positioning/ links (vs-ultraplan / vs-ultrareview / vs-karpathy-md / vs-saas-pm) (#90)
 - **TASK-274** — README: 'Getting started in 5 minutes' section — aida init → add → pickup → PR walkthrough (#89)
 - **TASK-273** — Add spec-lifecycle flow diagram + State/Verb table to README (alpha onboarding) (#88)
 - **TASK-275** — README: install instructions for prebuilt binary tarball + build-from-source paths (#87)

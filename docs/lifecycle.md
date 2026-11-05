@@ -420,7 +420,7 @@ recorded principle or preference, and only what genuinely needs a person
 escalates. `--escalate-blocks` (the default) parks for triage;
 `--escalate-defaults` ships the advisor's best-guess default. Full mechanism:
 the [`/aida-punt`](#the-off-mainline-state-needs-attention) skill and
-[`docs/autonomous-drain.md`](autonomous-drain.md).
+[`docs/advanced/autonomous-drain.md`](advanced/autonomous-drain.md).
 
 ### 4 · The three autonomy modes
 
@@ -465,7 +465,7 @@ The trade-off is real and the same across modes: **interactive sessions make
 better design decisions; headless drains deliver better throughput.** Drive
 design-fork specs at the keyboard (`default` / `--zen`); drain mechanical
 batches headless (`--no-human`). The flags and the evidence behind each:
-[`docs/autonomous-drain.md`](autonomous-drain.md).
+[`docs/advanced/autonomous-drain.md`](advanced/autonomous-drain.md).
 
 ### 5 · Merge auto-bump + the two-leg git
 
@@ -513,7 +513,7 @@ working tree); the store leg uses `--rebase` (store conflicts are rare and the
 worktree is AIDA-managed). Missed bump → `aida db reconcile-status` replays the
 same scan over a wider window. The full two-leg verb surface (`fetch` / `pull`
 / `push` / `rebase`, and the `--code-only` / `--store-only` rules) is
-[`docs/git-verb-surface.md`](git-verb-surface.md).
+[`docs/internal/git-verb-surface.md`](internal/git-verb-surface.md).
 
 ## Diagram styling standard
 
@@ -740,7 +740,7 @@ status.
   local delete is refused ("used by worktree at ...") and an `&&` chain then
   silently drops the pull leg, stranding the spec at Done. Branch deletion
   belongs to worktree cleanup (`aida session end` / the drain's prune step) —
-  see the worktree-aware recovery recipes in `docs/autonomous-drain.md`.
+  see the worktree-aware recovery recipes in `docs/advanced/autonomous-drain.md`.
   trace:TASK-406 trace:BUG-758
 
 ### Released
@@ -812,16 +812,16 @@ finished rather than just when the current step returned.
 The trade-off is real: **interactive sessions make better design decisions;
 autonomous drains deliver better throughput.** Drive design-fork specs at the
 keyboard; drain mechanical batches with `--auto-complete`. The full guidance
-lives in [`autonomous-drain.md`](autonomous-drain.md).
+lives in [`autonomous-drain.md`](advanced/autonomous-drain.md).
 
 ## See also
 
 - [Product workflow](product-workflow.md) — the collaboration loop and record layers
 - [`docs/git-workflow.md`](git-workflow.md) — branch, PR, and divergent-branch
   recovery mechanics
-- [`docs/session-lifecycle.md`](session-lifecycle.md) — worktrees, leases,
+- [`docs/advanced/session-lifecycle.md`](advanced/session-lifecycle.md) — worktrees, leases,
   and session crash recovery
-- [`docs/autonomous-drain.md`](autonomous-drain.md) — the headless `--no-human`
+- [`docs/advanced/autonomous-drain.md`](advanced/autonomous-drain.md) — the headless `--no-human`
   drain and the evidence behind each flag
 - The `lifecycle-vocabulary.md` discipline guide scaffolded by `aida init`
   into `docs/aida/discipline/` — the same verb vocabulary, as a habit for any

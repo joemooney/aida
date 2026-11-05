@@ -4,7 +4,7 @@
 #
 # Same-host multi-clone test harness for the AIDA multi-user catalog.
 #
-# Makes docs/testing/multi-user-test-cases.md RUNNABLE: it spins up a throwaway
+# Makes docs/internal/testing/multi-user-test-cases.md RUNNABLE: it spins up a throwaway
 # bare origin + two clones on this host (with an isolated $HOME so the real
 # ~/.aida is never touched), runs the MU-### cases, and asserts each one against
 # the catalog's documented Expected behavior.

@@ -44,4 +44,4 @@ mailbox. <!-- trace:BUG-1589 | ai:codex -->
   flag/answer. NEVER start work, take a lease, merge, or send keys into a pane —
   no new-work dispatch path exists (single-drain-lock lesson: no second decider).
   Any nudge/auto-action tier is a separate explicit opt-in per
-  `docs/architecture/autonomy-and-escalation.md`.
+  `docs/internal/architecture/autonomy-and-escalation.md`.

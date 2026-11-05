@@ -3,7 +3,7 @@
 **Date:** 2026-07-07 · **Spec:** SPIKE-77 · **Status:** findings complete, child specs filed
 **Question:** which of cmux's validated agent-hosting UX signals are worth adopting onto surfaces AIDA already ships — and what does the driving use case (a continuous fleet-watch advisor giving the operator one narrative view of every agent session) actually require?
 
-**Method:** code reconnaissance of `aida-tui` / `aida-core::liveness` / `aida-cli::events` (subagent sweep, file:line-verified); live probes of `wezterm cli` and `tmux` on the operator's machine; cmux capability facts per the 2026-07-07 roster entry (`docs/competitive-analysis/marketplace-roster.md`).
+**Method:** code reconnaissance of `aida-tui` / `aida-core::liveness` / `aida-cli::events` (subagent sweep, file:line-verified); live probes of `wezterm cli` and `tmux` on the operator's machine; cmux capability facts per the 2026-07-07 roster entry (`docs/internal/competitive-analysis/marketplace-roster.md`).
 
 ---
 
@@ -75,7 +75,7 @@ A skill (working name `/aida-fleet-watch`), runnable once ("what's going on?") o
 2. **Terminal census** (fallback): `wezterm cli list` (+ tmux when a server exists) → enumerate panes; subtract panes matching known leases/pane-ids; for the remainder, `get-text` the tail and classify cheaply (agent-shaped? waiting at a prompt? quiescent N min?). This is the *only* legitimate scrape surface, and it also provides wedge detection for managed sessions (pid alive + output quiescent).
 3. **Diff + classify** each session against the previous tick: `completed / progressing / stalled / needs-you / unmanaged / new`.
 4. **Digest + recommendation**: plain-language state of the fleet, one recommended next action per non-nominal item.
-5. **Decision envelope — route, never dispatch**: it may nudge (send-text a newline/status ask is *opt-in*), file findings, ack briefs, escalate into `aida awaiting`. It must **not** start new work, take leases, or merge — a second decider fighting the drain is the failure the single-drain-lock (BUG-538) exists to prevent. Anything beyond read+route is an explicit opt-in tier aligned with the autonomy ladder (`docs/architecture/autonomy-and-escalation.md`).
+5. **Decision envelope — route, never dispatch**: it may nudge (send-text a newline/status ask is *opt-in*), file findings, ack briefs, escalate into `aida awaiting`. It must **not** start new work, take leases, or merge — a second decider fighting the drain is the failure the single-drain-lock (BUG-538) exists to prevent. Anything beyond read+route is an explicit opt-in tier aligned with the autonomy ladder (`docs/internal/architecture/autonomy-and-escalation.md`).
 
 Skill-only slice: no new Rust needed for v1 — every input is an existing CLI surface. If the census loop proves valuable, a later `aida fleet` subcommand can absorb the mechanical parts (revisit trigger recorded).
 

@@ -3,7 +3,7 @@
 **Date**: 2026-05-30
 **Status**: addendum + extension to the 2026-05-29 Round 1 synthesis
 **Audience**: Joe + future AIDA-maintaining advisor sessions
-**Round 1**: `docs/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` (frozen — per `feedback_dated_artifacts_immutable`)
+**Round 1**: `docs/internal/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` (frozen — per `feedback_dated_artifacts_immutable`)
 
 This is the Round 2 sweep. Three new Claude Code surfaces — managed Code Review, the GitHub Actions integration, and the GitLab CI/CD integration — plus one substantive correction to the Round 1 workflows positioning. Round 1 covered runtime orchestration; Round 2 covers the **review/CI seam** plus a sharper architectural framing for SPIKE-32.
 
@@ -113,7 +113,7 @@ Second-opinion brief written: `docs/briefs/second-opinion/2026-05-29-spike-32-wo
 
 ## What this means for AIDA's positioning docs
 
-`docs/positioning/vs-ultrareview.md` and `vs-claude-code-subagents.md` predate Code Review's GA. Both need refresh. The new line:
+`docs/internal/positioning/vs-ultrareview.md` and `vs-claude-code-subagents.md` predate Code Review's GA. Both need refresh. The new line:
 
 > AIDA scaffolds REVIEW.md per spec; Claude Code's managed Code Review consumes it; AIDA's orchestrator parses the severity tally and decides lifecycle. AIDA isn't trying to BE the reviewer — AIDA is the substrate that makes Code Review spec-grounded.
 

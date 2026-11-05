@@ -89,7 +89,7 @@ annotations above each prompt. Edit masters only; `make sync-templates`.
 Skill-author convention doc: the two kinds, classification guidance,
 option-1 convention, annotation form.
 
-### `docs/autonomous-drain.md` — three-mode table
+### `docs/advanced/autonomous-drain.md` — three-mode table
 Add the default / `--zen` / `--no-human` table + "when to use each".
 
 ### Memory `feedback_three_mode_autonomy_taxonomy.md`
@@ -160,4 +160,4 @@ aida plan verify docs/plans/2026-05-17-story-287-zen-mode.md
 - STORY-287 (this spec) · TASK-306 (mode-flag clarity) · STORY-276 · STORY-285
 - TASK-307 · STORY-278 (reviewer findings — sibling pattern)
 - `feedback_pause_for_design_input.md` · `feedback_pushback_on_overengineering.md`
-- `docs/autonomous-drain.md` · `docs/skills-convention.md`
+- `docs/advanced/autonomous-drain.md` · `docs/internal/skills-convention.md`

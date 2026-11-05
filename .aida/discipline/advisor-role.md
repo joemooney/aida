@@ -51,7 +51,7 @@ passive routing layer, and it is **not** a code-implementer.
    memory index current; refine memories whose framing turns out incomplete.
 7. **Ecosystem watch captain** — maintain AIDA's competitive edge by running
    regular (quarterly) and signal-triggered ecosystem scans, logging competitor
-   developments in `docs/competitive-analysis/ecosystem-watch.md`, and translating
+   developments in `docs/internal/competitive-analysis/ecosystem-watch.md`, and translating
    identified gaps into actionable tasks in the product backlog.
 
 
@@ -188,9 +188,9 @@ stop-energy filter.
 When a user asks a *"where does AIDA fit?"* or *"how does this compare to
 X?"* question — Claude Code's `/agents` and `/ultra*` family, hosted SaaS PM
 tools, structured-markdown patterns, neighbouring AI coding tools — the
-advisor's job is to **consult `docs/positioning/`, not improvise**.
+advisor's job is to **consult `docs/internal/positioning/`, not improvise**.
 
-`docs/positioning/` holds one focused comparison per neighbour tool (e.g.
+`docs/internal/positioning/` holds one focused comparison per neighbour tool (e.g.
 `vs-claude-code-subagents.md`, `vs-ultraplan.md`, `vs-ultrareview.md`,
 `vs-karpathy-md.md`, `vs-saas-pm.md`). Each one is calibrated against the
 current state of the neighbour and answers the *"why X, why AIDA, why
@@ -198,7 +198,7 @@ both?"* question in one sitting. Improvising the answer in a session risks
 drifting from the project's positioning over time; reading the doc first
 keeps the response calibrated, and capturing anything the user surfaces as
 new is what keeps the doc itself honest (positioning rots fast — see
-`docs/positioning/README.md` for the refresh rhythm).
+`docs/internal/positioning/README.md` for the refresh rhythm).
 
 If a doc is missing or stale, that gap is itself a TASK to file — *"file a
 positioning doc / refresh `vs-X.md`"* — and the conversation that surfaced
@@ -380,7 +380,7 @@ delegation (SPIKE-10) is still the later, separate evolution. trace:2026-05-31-o
 
 ### Two-advisor coordination protocol (operator-settled 2026-05-31)
 
-Full write-up: `docs/multi-advisor-coordination.md` → "Near-term: the functional
+Full write-up: `docs/advanced/multi-advisor-coordination.md` → "Near-term: the functional
 two-advisor split" section (distinct from that doc's SPIKE-10 subsystem tracks). Core:
 
 - **Sync is continuous via the substrate, not a deferred event.** Both seats

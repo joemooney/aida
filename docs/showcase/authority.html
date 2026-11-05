@@ -86,7 +86,7 @@
 <li><strong>Checked before it runs.</strong> Each job must come from a live session with a valid, allow-listed grant on this machine; anything else is refused with a named reason and never runs. The script is shown on your terminal before it runs.</li>
 <li><strong>Recorded.</strong> Each job keeps its script, sha256, submitter, times, exit code and full transcript for 30 days, and <code>audit.jsonl</code> records every step.</li>
 </ul>
-<p><a href="../deputies.md">Deputies: command vs script</a> explains when to use which, what each records, and what the script deputy&#x27;s checks do and do not protect against.</p>
+<p><a href="../advanced/deputies.md">Deputies: command vs script</a> explains when to use which, what each records, and what the script deputy&#x27;s checks do and do not protect against.</p>
 <h2 id="what-always-needs-a-person-at-a-terminal">What always needs a person at a terminal</h2>
 <p><strong>Status: built.</strong> These steps happen only at an interactive terminal. Holding a grant or a mandate does not stand in for that.</p>
 <ul>
@@ -104,6 +104,6 @@
 <p>AIDA separates sessions, not operating-system users. Everything runs under one Unix account, and the terminal check confirms an interactive terminal, not that a person is typing. A process running as the same user that forges or copies the files AIDA trusts is outside the threat model. So is a process that wraps itself in a pseudo-terminal to pass the terminal check. The grants and mandates stop agents from acting beyond what they were given by mistake or by drift. They are not a defence against malicious code running as you. Several people sharing one account are not separated from each other either.</p>
 <h2 id="where-to-read-more">Where to read more</h2>
 <p>For exact flags and defaults, <code>aida &lt;command&gt; --help</code> is the source of truth. The <a href="../cli/06-roles-sessions.md">roles and sessions reference</a> covers roles, grants, launchers and the deputy. The mandate section of the <a href="../cli/04-git-lifecycle.md">Git lifecycle reference</a> covers mandates, drive mandates and human gates. <a href="trust.html">Trust and evidence</a> explains review, CI and holds.</p></main>
-<footer class="guide-footer"><p>Generated from <a href="../authority-and-seats.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+<footer class="guide-footer"><p>Generated from <a href="../advanced/authority-and-seats.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
 </body>
 </html>

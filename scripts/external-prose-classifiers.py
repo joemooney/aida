@@ -21,7 +21,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DOC = ROOT / "docs/architecture/external-tool-output-classifiers.md"
+DOC = ROOT / "docs/internal/architecture/external-tool-output-classifiers.md"
 MARKER = re.compile(r"^\s*// external-prose-classifier: ([A-Za-z0-9_:{}-]+)\s*$")
 
 

@@ -3,7 +3,7 @@
 **Type**: Reusable mission brief (hand this to any agent)
 **Cadence**: Weekly deep dive (supersedes the quarterly default in `README.md` for the active race period)
 **Mode**: Multi-agent, parallel lanes + adversarial red-team + synthesis
-**Output**: A dated snapshot under `docs/competitive-analysis/YYYY-MM-DD-weekly-scan.md` + targeted updates to `ecosystem-watch.md` / positioning papers
+**Output**: A dated snapshot under `docs/internal/competitive-analysis/YYYY-MM-DD-weekly-scan.md` + targeted updates to `ecosystem-watch.md` / positioning papers
 **Evolves toward**: An `aida ultraplan`-assembled adversarial deep-research run (see §9). This brief is the manual scaffold of that capability.
 
 > This brief is **self-contained**: an agent with no prior context can execute a lane from a cold start by following §3 (ground yourself) → your assigned lane in §4 → the output contract in §7 → the rigor rules in §8.
@@ -27,11 +27,11 @@ Keep AIDA's strategic picture from rotting in a landscape that moves weekly. Eac
 Do not start from a blank page — you will re-derive what we already know and miss the deltas. Read, in order:
 
 - `OVERVIEW.md` — what AIDA is and the Trojan-horse framing.
-- `docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — **the current keystone synthesis**. Your job is to find what changed *since* this.
-- `docs/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md` — the wedge, pressure-tested (and where it's dangerous).
-- `docs/competitive-analysis/positioning.md` + the relevant `docs/positioning/vs-*.md` for your lane's competitors.
-- `docs/competitive-analysis/signals-to-watch.md` — the standing tripwires; check each.
-- `docs/competitive-analysis/README.md` §"Ecosystem Review Discipline" — the sources & tools list.
+- `docs/internal/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — **the current keystone synthesis**. Your job is to find what changed *since* this.
+- `docs/internal/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md` — the wedge, pressure-tested (and where it's dangerous).
+- `docs/internal/competitive-analysis/positioning.md` + the relevant `docs/internal/positioning/vs-*.md` for your lane's competitors.
+- `docs/internal/competitive-analysis/signals-to-watch.md` — the standing tripwires; check each.
+- `docs/internal/competitive-analysis/README.md` §"Ecosystem Review Discipline" — the sources & tools list.
 
 Then state, in 3 bullets, **what you expect to find** before you look. Surprises against that expectation are the highest-value findings.
 
@@ -72,7 +72,7 @@ Release feeds (Anthropic Claude Code changelog, OpenAI/Goose releases, terminal-
 
 ## 7. Output contract
 
-Produce a **new dated file** `docs/competitive-analysis/YYYY-MM-DD-weekly-scan.md` (never overwrite an existing dated snapshot — they are immutable point-in-time records). Mirror the keystone structure:
+Produce a **new dated file** `docs/internal/competitive-analysis/YYYY-MM-DD-weekly-scan.md` (never overwrite an existing dated snapshot — they are immutable point-in-time records). Mirror the keystone structure:
 
 1. **Integrated picture** (3–5 sentences: what changed this week).
 2. **Per-lane findings** (A/B/C, each with source links).
@@ -101,4 +101,4 @@ Today: manual lanes, hand-assigned, synthesized by the advisor. Next: `aida ultr
 
 To dispatch an agent on a lane, paste the block in §10's child file `research-brief-dispatch.md` — or inline:
 
-> **You are running Lane <X> of AIDA's weekly competitive deep-dive.** Read `docs/competitive-analysis/research-brief.md`, ground yourself per §3, execute Lane <X> in §4 under the §8 rigor rules, and produce your lane's section per §7. Source-link every load-bearing claim and tag provenance. File draft specs for adopt/adapt items; do not approve or queue them. Return your lane section as your final output.
+> **You are running Lane <X> of AIDA's weekly competitive deep-dive.** Read `docs/internal/competitive-analysis/research-brief.md`, ground yourself per §3, execute Lane <X> in §4 under the §8 rigor rules, and produce your lane's section per §7. Source-link every load-bearing claim and tag provenance. File draft specs for adopt/adapt items; do not approve or queue them. Return your lane section as your final output.

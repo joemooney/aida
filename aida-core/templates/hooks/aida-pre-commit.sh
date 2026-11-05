@@ -698,7 +698,7 @@ if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
     echo -e "clap pulls \`///\` doc blocks into \`--help\`, so a \`trace:\` marker or a" >&2
     echo -e "bare SPEC-ID leaks into user-facing output. Demote it to a plain \`//\`" >&2
     echo -e "comment above the item (a descriptive SPEC-ID mention in prose is fine)." >&2
-    echo -e "See docs/user-facing-text-conventions.md${NC}" >&2
+    echo -e "See docs/internal/user-facing-text-conventions.md${NC}" >&2
     echo -e "${YELLOW}Offending lines:${NC}" >&2
     for off in "${DOC_TRACE_OFFENDERS[@]}"; do
         echo -e "  - ${YELLOW}${off}${NC}" >&2

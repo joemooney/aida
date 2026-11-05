@@ -256,7 +256,7 @@ jobs:
       # trace:BUG-1526 | ai:claude
       #
       # BUG-1578: this guard cross-checks Rust `// external-prose-classifier:`
-      # markers against docs/architecture/external-tool-output-classifiers.md
+      # markers against docs/internal/architecture/external-tool-output-classifiers.md
       # (a doc-only file). Gating it on full_ci meant a docs-only PR that
       # corrupted that doc got a green required Build with no verifier run.
       # It needs no build artifacts (pure-Python static analysis over checked
@@ -664,6 +664,14 @@ jobs:
           # trace:TASK-2604 | ai:claude
           python3 -m unittest tests/test_showcase_publish.py
 
+      # trace:STORY-1651 | ai:codex
+      - name: Documentation audience coverage
+        if: matrix.shard == 'gates'
+        run: |
+          python3 -m unittest tests/test_doc_audiences.py
+          python3 docs/archive/2026-10-cleanup/inventory.py --check
+          python3 scripts/check-doc-links.py
+
       # trace:STORY-1352 | ai:codex
       #
       # TASK-1447: NOT gated on full_ci — same "Minimal aida-cli build" step
@@ -673,7 +681,7 @@ jobs:
         if: matrix.shard == 'contracts'
         run: |
           BASE="origin/${{ github.base_ref }}"
-          python3 docs/monitor-contract-fixtures/verify.py "$BASE"
+          python3 docs/internal/monitor-contract-fixtures/verify.py "$BASE"
 
       # BUG-1922: every fenced `aida ...` line in a skill/command template must
       # name a real command and only flags its `--help` lists, so an invented

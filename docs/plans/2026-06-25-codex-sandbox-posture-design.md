@@ -226,7 +226,7 @@ uniform boundary; otherwise Codex-native is stronger and the default."
 - `aida-cli/src/session.rs` -- `os_wrapped_program_and_args`, `bwrap_preflight`,
   `bwrap_availability`, `os_wrap_enabled` (the Claude wrap path + the model for
   the Codex doctor probe).
-- `docs/agents/claude-bubblewrap-sandbox.md` -- the `os_wrap` mechanism +
+- `docs/internal/agents/claude-bubblewrap-sandbox.md` -- the `os_wrap` mechanism +
   userns/AppArmor operational tax this design avoids re-incurring for Codex.
 - `docs/agents/per-agent-config.md` -- `[agents] bypass` / `[contained]` posture
   knobs and the nesting caveat.

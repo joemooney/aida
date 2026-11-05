@@ -52,7 +52,7 @@ precedence.
 
 The key clarifying insight: autopilot operates on a **different axis** than the
 three-mode ladder. The ladder (`default → --zen → --no-human`,
-`docs/architecture/autonomy-and-escalation.md` §1) parameterises a *drain* —
+`docs/internal/architecture/autonomy-and-escalation.md` §1) parameterises a *drain* —
 how the implement→CI→review→merge pipeline handles `kind:confirmation` vs
 `kind:design-fork` prompts. Autopilot parameterises the *advisor disposition
 pass* — how `groom` decides a spec's fate. They are **orthogonal stages of the
@@ -128,8 +128,8 @@ presence-marker is the closest analog and the right composition partner.
   reuse (acceptance criterion). Nothing here is greenfield except the envelope
   itself (TASK-0429) and the audit record shape (TASK-0430).
 
-- **Decision: update `docs/architecture/autonomy-and-escalation.md` (new §8) AND
-  `docs/solo-mode.md` (compose-with note).** **Rationale**: autopilot is an
+- **Decision: update `docs/internal/architecture/autonomy-and-escalation.md` (new §8) AND
+  `docs/advanced/solo-mode.md` (compose-with note).** **Rationale**: autopilot is an
   autonomy-architecture concept (belongs in the autonomy doc as the grooming-
   stage analog of the cascade) and a solo-loop participant (belongs in the solo
   runbook as the grooming step's new posture). Both, per acceptance.
@@ -159,11 +159,11 @@ presence-marker is the closest analog and the right composition partner.
 
 - `--autopilot` on the `Groom` variant (next to `--apply`), documented as "execute dispositions under the `[autopilot]` envelope instead of all-or-nothing".
 
-### `docs/architecture/autonomy-and-escalation.md` — new §8
+### `docs/internal/architecture/autonomy-and-escalation.md` — new §8
 
 - "Advisor autopilot — the grooming-stage analog of the cascade." The orthogonal-axes diagram, the composition matrix, and the statement that autopilot reuses the §3 Type A/B/C calibration as its grounding gate.
 
-### `docs/solo-mode.md` — compose-with note
+### `docs/advanced/solo-mode.md` — compose-with note
 
 - The solo loop's groom step gains an `--autopilot` option; document that it is *more* conservative than the binary `--apply` and inherits the solo keystone partition.
 
@@ -175,8 +175,8 @@ presence-marker is the closest analog and the right composition partner.
 
 - `aida-cli/src/autopilot.rs` (new) — created by TASK-0429
 - `aida-cli/src/main.rs`, `aida-cli/src/cli.rs`
-- `docs/architecture/autonomy-and-escalation.md`
-- `docs/solo-mode.md`
+- `docs/internal/architecture/autonomy-and-escalation.md`
+- `docs/advanced/solo-mode.md`
 - `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
 
 ## Reusable helpers (do not reimplement)
@@ -253,7 +253,7 @@ AIDA_HEADLESS=1 "$AIDA_BIN" groom --autopilot --dry-run | grep -i 'headless'
 
 ## Related
 
-- TASK-0429 (envelope), TASK-0430 (audit), TASK-0431 (product), `docs/architecture/autonomy-and-escalation.md` §1–§4, `docs/solo-mode.md`, `feedback_three_mode_autonomy_taxonomy`, TASK-827 (solo posture), BUG-594 (keystone fence).
+- TASK-0429 (envelope), TASK-0430 (audit), TASK-0431 (product), `docs/internal/architecture/autonomy-and-escalation.md` §1–§4, `docs/advanced/solo-mode.md`, `feedback_three_mode_autonomy_taxonomy`, TASK-827 (solo posture), BUG-594 (keystone fence).
 
 ## Recommendation + smallest first slice
 
@@ -266,8 +266,8 @@ binary `groom --apply` path untouched (opt-in), and flip solo-loop defaults to
 autopilot only later, after supervised proof.
 
 **Smallest first slice**: write the **doc deliverable first** — the new §8 in
-`docs/architecture/autonomy-and-escalation.md` (orthogonal-axes framing +
-composition matrix) and the `docs/solo-mode.md` compose-with note — *before any
+`docs/internal/architecture/autonomy-and-escalation.md` (orthogonal-axes framing +
+composition matrix) and the `docs/advanced/solo-mode.md` compose-with note — *before any
 code*. This is a design task whose highest-value output is the shared mental
 model that prevents the precedence bugs; ratifying "autopilot is a grooming-stage
 posture, the ladder is a draining-stage axis, they compose via one keystone

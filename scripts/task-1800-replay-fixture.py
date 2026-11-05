@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the TASK-1800 CI replay fixture (TASK-2068).
 
-The 18 audited cases of docs/testing/task-1800-semantic-audit.json pin
+The 18 audited cases of docs/internal/testing/task-1800-semantic-audit.json pin
 squash-merged PR heads that CI's clone does not have. This script writes a
 git bundle holding, per case, a synthetic BASE and HEAD root commit whose
 trees carry only the paths the real base..head diff changes (with the real
@@ -28,7 +28,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-AUDIT = os.path.join(ROOT, "docs/testing/task-1800-semantic-audit.json")
+AUDIT = os.path.join(ROOT, "docs/internal/testing/task-1800-semantic-audit.json")
 BUNDLE = os.path.join(ROOT, "tests/fixtures/task-1800-replay/audited-cases.bundle")
 STAMP = "1700000000 +0000"
 

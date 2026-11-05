@@ -3100,7 +3100,7 @@ fn merge_and_validate(
     );
     if !leaks.is_empty() {
         anyhow::bail!(
-        "reconcile would publish this machine's raw identity to another hub — {} — scrub it first (`aida store scrub-preview`, docs/security/); nothing was pushed",
+        "reconcile would publish this machine's raw identity to another hub — {} — scrub it first (`aida store scrub-preview`, docs/internal/security/); nothing was pushed",
         leaks.join("; ")
     );
     }
@@ -3111,7 +3111,7 @@ fn merge_and_validate(
         .collect();
     if !suspicious.is_empty() && !yes {
         anyhow::bail!(
-        "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/security/); nothing was pushed",
+        "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/internal/security/); nothing was pushed",
         suspicious.join(", ")
     );
     }

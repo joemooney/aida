@@ -53,7 +53,7 @@ text into a pane. There is **no new-work dispatch path at all** — by design.
 This is the single-drain-lock lesson (BUG-538): a monitor that could start work
 would be a second decider racing the orchestrator. Any nudge (send-keys /
 send-text) or auto-action beyond read+route is a separate, explicit opt-in tier,
-aligned with `docs/architecture/autonomy-and-escalation.md` — out of scope for
+aligned with `docs/internal/architecture/autonomy-and-escalation.md` — out of scope for
 default fleet-watch.
 
 ## Instructions
@@ -161,5 +161,5 @@ may **NOT** start work, take a lease, merge, or send keys into a pane.
 
 Related: **SPIKE-77** (parent — cmux UX signals), the driving research doc
 `docs/archive/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md`, and the
-autonomy/escalation contract `docs/architecture/autonomy-and-escalation.md`
+autonomy/escalation contract `docs/internal/architecture/autonomy-and-escalation.md`
 (where any future nudge/auto-action tier is specified).

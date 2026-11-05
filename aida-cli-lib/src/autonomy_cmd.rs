@@ -242,9 +242,9 @@ fn print_autonomy_overview() {
     );
     println!();
     println!("{}", "More".bold());
-    println!("  docs/aida-power-features.md");
-    println!("  docs/autonomous-drain.md");
-    println!("  docs/solo-mode.md");
+    println!("  docs/advanced/aida-power-features.md");
+    println!("  docs/advanced/autonomous-drain.md");
+    println!("  docs/advanced/solo-mode.md");
     println!("  aida autonomy report");
     println!("  aida autonomy calibration mismatches");
 }

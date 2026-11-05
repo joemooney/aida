@@ -1,6 +1,6 @@
 # Using AIDA with Claude Code
 
-*Last updated: 2026-06-01. Claude Code's surfaces move fast — if a primitive named here has changed, re-verify against the current Claude Code docs and update this page. Per-neighbour deep dives live in [`docs/positioning/`](positioning/).*
+*Last updated: 2026-06-01. Claude Code's surfaces move fast — if a primitive named here has changed, re-verify against the current Claude Code docs and update this page. Per-neighbour deep dives live in [`docs/internal/positioning/`](internal/positioning).*
 
 **If you already know Claude Code, here is AIDA in one breath:**
 
@@ -129,6 +129,6 @@ AIDA owns the layer those tools structurally don't: the **persistent, vendor-neu
 - [vs-claude-code-subagents.md](archive/positioning/vs-claude-code-subagents.md) — roles vs subagents (the *position* vs the *callable*).
 - [vs-claude-code-workflows.md](archive/positioning/vs-claude-code-workflows.md) — the spec-lifecycle vs within-task distinction + the commoditization read.
 - [docs/agents/aida-mcp-install-matrix.md](agents/aida-mcp-install-matrix.md) — connecting AIDA's MCP server to Claude Code, Codex, Cursor, Windsurf, and the rest.
-- [docs/agents/claude-plugin-package.md](agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
+- [docs/internal/agents/claude-plugin-package.md](internal/agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
 - [OVERVIEW.md](../OVERVIEW.md) — the Trojan-horse framing and the full vision.
 - [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the 2026-05-31 moat / commoditization synthesis (archived dated snapshot).

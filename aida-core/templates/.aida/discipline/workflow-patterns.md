@@ -540,7 +540,7 @@ When working in this project, capture documentation seeds as comments on relevan
 
 ---
 
-*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/positioning/` chapters.*
+*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/internal/positioning/` chapters.*
 ```
 
 **Add as a comment via:**
@@ -693,11 +693,11 @@ with [[feedback_declare_the_seat_when_dispatching]].
 
 The agent-collaboration tooling landscape moves fast — heavyweights (claude-flow, gastown) ship monthly; smaller projects emerge constantly; Anthropic's own primitives (Agent Teams, etc.) evolve. A one-shot competitive analysis goes stale within months. Treat the analysis as a **living document** with refresh cadence, not a single output.
 
-**Why** (2026-05-16): Dialog session produced a comprehensive comparative analysis of AIDA vs ~15 marketplace tools (claude-flow, gastown, ralph-orchestrator, loki-mode, Claude Squad, crystal, vibe-kanban, vibe-tree, cmux, Conductor, agent-orchestrator, swarm-protocol, wit, skillfold, wshobson/agents, barkain plugin). User correctly pushed back: this analysis needs to be MAINTAINED, not just produced once. Filed STORY-260 (\`docs/competitive-analysis/\` with cadence) + TASK-288 (TUI prior-art study) + SPIKE-6 (skillfold compatibility) + TASK-289 (README niche statement).
+**Why** (2026-05-16): Dialog session produced a comprehensive comparative analysis of AIDA vs ~15 marketplace tools (claude-flow, gastown, ralph-orchestrator, loki-mode, Claude Squad, crystal, vibe-kanban, vibe-tree, cmux, Conductor, agent-orchestrator, swarm-protocol, wit, skillfold, wshobson/agents, barkain plugin). User correctly pushed back: this analysis needs to be MAINTAINED, not just produced once. Filed STORY-260 (\`docs/internal/competitive-analysis/\` with cadence) + TASK-288 (TUI prior-art study) + SPIKE-6 (skillfold compatibility) + TASK-289 (README niche statement).
 
 **The discipline:**
 
-1. **Each analysis session writes a dated snapshot** (\`docs/competitive-analysis/YYYY-MM-DD-market-snapshot.md\`). Don't overwrite previous; retain as historical record.
+1. **Each analysis session writes a dated snapshot** (\`docs/internal/competitive-analysis/YYYY-MM-DD-market-snapshot.md\`). Don't overwrite previous; retain as historical record.
 2. **Maintain category summaries** (\`category-summaries/swarm-orchestrators.md\`, etc.) that update incrementally as observations accumulate.
 3. **Refresh quarterly** OR on signals: new heavyweight reaches 10k stars, Anthropic ships a foundational primitive (Agent Teams, Skills, etc.), a cross-platform standardization emerges (skillfold-like).
 4. **Signals-to-watch list** (\`signals-to-watch.md\`) names specific projects + triggers; updated as the landscape evolves.
@@ -713,7 +713,7 @@ Dialog produces analysis → writes dated snapshot + updates category summaries 
 
 **Generic for AIDA-using projects:**
 
-Every project that wants to know \"how do we position vs the alternatives?\" benefits from this discipline. Not just AIDA. The propagation channel: \`docs/competitive-analysis/\` template scaffolded by \`aida init\` (or \`aida init --with-positioning-docs\`), with a README that explains the cadence + contribution pattern.
+Every project that wants to know \"how do we position vs the alternatives?\" benefits from this discipline. Not just AIDA. The propagation channel: \`docs/internal/competitive-analysis/\` template scaffolded by \`aida init\` (or \`aida init --with-positioning-docs\`), with a README that explains the cadence + contribution pattern.
 
 **Composes with:**
 
@@ -741,7 +741,7 @@ We missed **Beads (~24.5k★) and Gas Town (~15.9k★)** — AIDA's *nearest* su
 - **Star-velocity / trending / HN front page**; the "X vs Y vs Z 2026" blog genre.
 - **YouTube/podcast** (titles, descriptions' "tools mentioned", comments — readable without watching) + **snowball** from each found tool's README and comparison posts.
 
-Fold this into `docs/archive/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
+Fold this into `docs/archive/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/internal/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
 
 ### feedback_confirming_a_mechanism_is_not_explaining_an_event
 
@@ -2672,7 +2672,7 @@ questions separately — presence and consultation-appetite. Tag prompts by
 kind so the runtime can route by mode. Make the first option of every
 prompt the smallest-valuable-slice / safe default, since auto-resolve
 picks option 1. See `docs/aida-discipline/skill-prompt-kinds.md`,
-`docs/autonomous-drain.md`, STORY-287. Related:
+`docs/advanced/autonomous-drain.md`, STORY-287. Related:
 [[feedback_pause_for_design_input]], [[feedback_pushback_on_overengineering]].
 
 ### feedback_tier_a_gate_transitively_not_by_its_body
@@ -2680,7 +2680,7 @@ picks option 1. See `docs/aida-discipline/skill-prompt-kinds.md`,
 When deciding whether a CI gate can run without a build (TASK-1555's tiering),
 grepping the gate's own `run:` body for `cargo build|target/(debug|release)|
 AIDA_BIN` is **not enough**. `Monitor contract drift guard` reads as a pure
-script gate — its body runs only `docs/monitor-contract-fixtures/verify.py` —
+script gate — its body runs only `docs/internal/monitor-contract-fixtures/verify.py` —
 and that script execs `target/debug/aida contract --json`. It was classified
 `fast` and failed on the first real run with `FileNotFoundError`.
 

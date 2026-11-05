@@ -375,10 +375,13 @@ mod tests {
         let tags = vec![];
         let mut i = base_input("spike", &tags);
         i.human_only = true; // type default must not defeat grooming
-        i.description = "Deliver docs/spikes/2026-09-18-night.md. Acceptance: cite evidence.";
+        i.description =
+            "Deliver docs/internal/spikes/2026-09-18-night.md. Acceptance: cite evidence.";
         let p = propose_execution_mode(&i);
         assert_eq!(p.mode, ExecutionMode::Drain);
-        assert!(p.reason.contains("docs/spikes/2026-09-18-night.md"));
+        assert!(p
+            .reason
+            .contains("docs/internal/spikes/2026-09-18-night.md"));
 
         i.blocked_by_dependent = Some("TASK-99");
         let p = propose_execution_mode(&i);

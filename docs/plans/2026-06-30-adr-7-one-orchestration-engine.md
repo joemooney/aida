@@ -48,7 +48,7 @@ side-channel (`AIDA_ZEN`) re-read in scattered in-process spots.
 4. `aida-cli/src/auto_complete.rs` + `main.rs` — carry `AutonomyMode` on `RealPhaseDriver`;
    resolve once; replace scattered in-process `AIDA_ZEN` reads with the typed field; keep the
    env-set as child transport.
-5. NEW `docs/architecture/one-orchestration-engine.md` — the invariant, the burndown exception
+5. NEW `docs/internal/architecture/one-orchestration-engine.md` — the invariant, the burndown exception
    rationale, the autonomy-parameter model.
 
 ## Critical files

@@ -1,6 +1,6 @@
 # Multi-vendor coordination refresh — what changed since the June baseline (2026-07-19)
 
-**Specs:** TASK-1058 (parent EPIC-48) · **Status:** dated snapshot (immutable once landed; supersede with a new dated file) · **Baseline:** `docs/research/2026-06-26-agent-coordination-market-landscape.md` (market) + `2026-05-31-round2-moat-gaps-moves.md` (moat/moves) · **Evidence:** this repo's own commits, specs, benchmarks, and code — **not** a fresh web scan. External-market claims that would need re-verification online are marked **[needs-web-verify]** rather than asserted.
+**Specs:** TASK-1058 (parent EPIC-48) · **Status:** dated snapshot (immutable once landed; supersede with a new dated file) · **Baseline:** `docs/internal/research/2026-06-26-agent-coordination-market-landscape.md` (market) + `2026-05-31-round2-moat-gaps-moves.md` (moat/moves) · **Evidence:** this repo's own commits, specs, benchmarks, and code — **not** a fresh web scan. External-market claims that would need re-verification online are marked **[needs-web-verify]** rather than asserted.
 
 > Frozen at time T per the immutability discipline. Scope note: everything below is evidenced *inside* this repository (git log, spec graph, benchmark artifacts, source). Where the June baseline's market claims are repeated, they carry the baseline's date, not today's.
 
@@ -44,7 +44,7 @@ The 2026-07-09 sweep (`177e1f365`) already refreshed the vs-* set for the CLI-pr
 - `composition.md` Recipe 3 ("Any MCP editor reads the same graph") — accurate for MCP editors specifically, but never mentions the CLI-primary path; a reader could infer MCP-first. One-line caveat candidate.
 - `vs-agent-teams.md` incentive-section sentence ("lets a Codex or Antigravity session pick up the same spec") — an AGY session *does* pick up briefs, just at the draft tier; the two dated notes elsewhere in the doc carry the qualification, and editing inside the incentive argument would muddy it.
 - `agent-decision-matrix.md` step 5 ("Standardize coordination on MCP, the one layer both agents read identically") — about the neutral coordination *seam*, not agent output economics; the file already carries the SPIKE-73 caveat. Borderline, left as is.
-- `docs/positioning/README.md` "Maintenance rhythm" says each doc keeps its date "in frontmatter" while the docs actually use an italic `*Last updated:*` line — internal inconsistency, cosmetic, not a positioning claim.
+- `docs/internal/positioning/README.md` "Maintenance rhythm" says each doc keeps its date "in frontmatter" while the docs actually use an italic `*Last updated:*` line — internal inconsistency, cosmetic, not a positioning claim.
 
 **Checked clean on all five refresh topics:** `agent-decision-matrix.md` (already CLI-primary-aware), `vs-a2a.md`, `vs-spec-kit.md`, `vs-kiro.md`, `vs-karpathy-md.md`, `vs-langgraph.md`, `vs-ultraplan.md`, `vs-ultrareview.md`, `vs-claude-code-subagents.md`, `vs-continue.md`, `vs-aider.md`, `when-not-to-use-aida.md`, `composition.md` (beyond the Recipe 3 flag above). Notably, **no doc under-claims cross-vendor** — the residual staleness ran in the *over*-claiming direction (Antigravity symmetry), which is the direction the precision discipline exists to catch.
 

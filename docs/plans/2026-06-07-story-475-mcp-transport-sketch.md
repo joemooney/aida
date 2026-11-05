@@ -223,7 +223,7 @@ until these are answered in writing.
 8. **DoS posture.** Approve connection/request-size/rate caps and the failure
    behavior when exceeded.
 9. **Marketplace checklist re-run.** Commit to re-running
-   `docs/security/marketplace-publication-checklist.md` (§4 MCP tool exposure,
+   `docs/internal/security/marketplace-publication-checklist.md` (§4 MCP tool exposure,
    §5 auth/secrets, §7 auditability) and producing the publish/no-publish
    verdict block before any package advertises HTTP transport.
 10. **Test gates required before merge.** Confirm the minimum test set:
@@ -240,7 +240,7 @@ until these are answered in writing.
 ## 7. Related
 
 - STORY-474 (shipped) — MCP tool profiles; the permission model this transport reuses.
-- `docs/security/marketplace-publication-checklist.md` — §4/§5/§7 gate any HTTP-transport publication.
+- `docs/internal/security/marketplace-publication-checklist.md` — §4/§5/§7 gate any HTTP-transport publication.
 - `docs/agents/aida-mcp-install-matrix.md` — Copilot/Devin/cloud rows depend on this transport existing before write tools are safe.
 - Codex architecture sketch (STORY-475 comment, 2026-05-26) — the v1 shape this document expands into a full threat model.
 - CLAUDE.md "deny-by-default `.aida/` gitignore" (BUG-73) — the token file and audit log must respect it.

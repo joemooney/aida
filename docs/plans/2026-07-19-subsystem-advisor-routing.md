@@ -23,9 +23,9 @@ an implementation patch. The proposed contract is:
 
 AIDA already has the ingredients, but not one first-class model:
 
-- `docs/multi-advisor-coordination.md` defines SPIKE-10 Track A as focused
+- `docs/advanced/multi-advisor-coordination.md` defines SPIKE-10 Track A as focused
   memories and later subsystem-scoped advisors.
-- `docs/architecture/autonomy-and-escalation.md` defines cold-boot advisor,
+- `docs/internal/architecture/autonomy-and-escalation.md` defines cold-boot advisor,
   fork-from-live advisor, conservative Type A/B/C calibration, and master
   human escalation.
 - `docs/aida/discipline/docs-lane.md` proves a single-writer scope lane by
@@ -58,7 +58,7 @@ subsystems:
     path_globs:
       - "aida-cli/src/auto_complete.rs"
       - "aida-cli/src/punt.rs"
-      - "docs/architecture/autonomy-and-escalation.md"
+      - "docs/internal/architecture/autonomy-and-escalation.md"
     memories: ["autonomy", "orchestrator"]
     queue: implementer
     risk_policy: keystone
@@ -114,7 +114,7 @@ Seed these examples in docs/tests first, not as hardcoded production defaults:
 
 | Name | Primary signals |
 |---|---|
-| `autonomy` | `auto_complete`, punt/advisor, zen/no-human, `docs/architecture/autonomy-and-escalation.md` |
+| `autonomy` | `auto_complete`, punt/advisor, zen/no-human, `docs/internal/architecture/autonomy-and-escalation.md` |
 | `orchestrator` | queue drain, sessions, worktree, leases, CI/PR phases |
 | `mcp-server` | `mcp.rs`, MCP docs, tool schema contracts |
 | `cli` | command parsing, CLI manual, user-facing terminal output |

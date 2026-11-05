@@ -122,7 +122,7 @@ and (b) TASK-298's watchdog has a concrete file to tail. The watchdog *logic*
 - Orchestrator entry: when `no_human == Some(Both)`, print the STORY-276
   deferral note.
 
-### `docs/autonomous-drain.md` — new doc
+### `docs/advanced/autonomous-drain.md` — new doc
 
 - When `--no-human` is appropriate (small specs, clear acceptance) vs not.
 - Reviewer-only cut today; implementer phase tracked as STORY-276.
@@ -138,7 +138,7 @@ and (b) TASK-298's watchdog has a concrete file to tail. The watchdog *logic*
 - `aida-cli/src/session.rs`
 - `aida-cli/src/cli.rs`
 - `aida-cli/src/main.rs`
-- `docs/autonomous-drain.md`
+- `docs/advanced/autonomous-drain.md`
 - `CLAUDE.md`
 
 ## Reusable helpers (do not reimplement)
@@ -199,6 +199,6 @@ cargo test -p aida-cli claude_headless 2>&1 | tail -8
 ## Related
 
 - STORY-263 — this spec.
-- SPIKE-7 / `docs/spikes/2026-05-16-claude-headless.md` — empirical basis.
+- SPIKE-7 / `docs/internal/spikes/2026-05-16-claude-headless.md` — empirical basis.
 - STORY-246 — the `--auto-complete` orchestrator this extends.
 - TASK-285 — `--batch --auto-complete`; `--no-human` composes with it.

@@ -7,7 +7,7 @@
 
 ## Why this brief
 
-Your SPIKE-32 POC (`docs/architecture/spike-32-workflow-poc/`, merged PR-352) settled the happy path and surfaced exactly one architecture-blocking question. Your own verdict:
+Your SPIKE-32 POC (`docs/internal/architecture/spike-32-workflow-poc/`, merged PR-352) settled the happy path and surfaced exactly one architecture-blocking question. Your own verdict:
 
 > punt reroute is expressible only with structured agent output; shelve branching is easy but marking NeedsAttention needs AIDA CLI/MCP/supervisor callback; **resume is the hard part because Claude workflow resume is run-local while AIDA punt resolution is substrate-local.**
 
@@ -36,7 +36,7 @@ That's already a working bridge between a run-local session (the implementer's `
 1. **Read the AIDA side of the existing handshake** (don't reimplement — understand):
    - `aida-cli/src/punt.rs` — how `/aida-punt` writes the signal
    - `aida-cli/src/auto_complete.rs` — how the orchestrator detects the punt + drives the advisor + resumes the implementer (search for `AIDA_PUNT_SIGNAL_FILE`, `--resume`, advisor spawn)
-   - `docs/architecture/autonomy-and-escalation.md` — the cascade design
+   - `docs/internal/architecture/autonomy-and-escalation.md` — the cascade design
    - `aida-cli/src/advisor.rs` — the advisor tier
 
 2. **Read the Claude Code workflow runtime's resume model** at `https://code.claude.com/docs/en/workflows` (use the `.md` suffix for clean content). Find: does a workflow `agent()` call support resuming with injected context after an external signal? Is there a "wait for external resolution" primitive? Or is the workflow's only pause-point the permission prompt?
@@ -54,7 +54,7 @@ That's already a working bridge between a run-local session (the implementer's `
 
 ## Place the verdict
 
-`docs/architecture/spike-32-workflow-poc/resume-bridge-verdict.md`. Commit to a branch + report.
+`docs/internal/architecture/spike-32-workflow-poc/resume-bridge-verdict.md`. Commit to a branch + report.
 
 ## Desired return shape
 

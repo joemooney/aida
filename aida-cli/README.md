@@ -52,7 +52,7 @@ AIDA tracks what you build and why, with structured context for AI coding agents
 ## Documentation
 
 - [Getting Started](https://github.com/joemooney/aida/blob/main/docs/getting-started.md)
-- [Storage Modes](https://github.com/joemooney/aida/blob/main/docs/storage-modes.md)
+- [Storage Modes](https://github.com/joemooney/aida/blob/main/docs/advanced/storage-modes.md)
 - [Why AIDA?](https://github.com/joemooney/aida/blob/main/docs/WHY-AIDA.md)
 
 ## License

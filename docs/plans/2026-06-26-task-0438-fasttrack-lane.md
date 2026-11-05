@@ -317,7 +317,7 @@ aida show TASK-0438 | grep -i status   # expect: Approved (design slice; spec co
   (lifecycle short-circuit tags).
 - Parent: EPIC-0428 (advisor autopilot bounded disposition) — this is the
   operator-requested-quick-fix instance of that envelope.
-- See also: `docs/autonomous-drain.md`, `.claude/skills/aida-fasttrack.md`,
+- See also: `docs/advanced/autonomous-drain.md`, `.claude/skills/aida-fasttrack.md`,
   `.claude/skills/aida-assess.md`, `aida-cli/src/auto_complete.rs`
   (`LifecycleSkip`, phase orchestrator), `aida-cli/src/intake.rs` (fence +
   policy).

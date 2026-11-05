@@ -47,7 +47,7 @@ Augment the `--no-human=both` orchestrator's `run_advisor` path with a fork-from
 - **`aida-cli/src/advisor.rs`** (new) — `AdvisorConfig`, `AdvisorRegistration`, `discover_live_advisor_session`, `plan_fork`, `execute_fork`, `estimated_fork_cost_usd`, freshness window, discovery cascade. Self-contained module with its own test suite.
 - **`aida-cli/src/main.rs`** — module declaration, `Command::Advisor` early dispatch (before storage init), `handle_advisor_command` / `handle_advisor_register` / `handle_advisor_status` / `locate_for_status`, and the `run_advisor` augmentation that calls `plan_fork` + `execute_fork` and chooses between `claude_headless_args` / `claude_headless_resume_args`.
 - **`aida-cli/src/cli.rs`** — `AdvisorCommand` enum (Register / Unregister / Status), `Command::Advisor(AdvisorCommand)` variant.
-- **`docs/autonomous-drain.md`** — new "Fork-from-live" subsection under the existing advisor-tier section: registration flow, cost trade-off, config keys, discovery cascade, JSONL destination.
+- **`docs/advanced/autonomous-drain.md`** — new "Fork-from-live" subsection under the existing advisor-tier section: registration flow, cost trade-off, config keys, discovery cascade, JSONL destination.
 - **`README.md`** — one-sentence pointer in the "Needs Attention" paragraph to fork-from-live + the docs link.
 
 ## Critical Files
@@ -112,7 +112,7 @@ CLAUDE_CODE_SESSION_ID=test-xxx ./target/debug/aida advisor register
 
 ## Related
 
-- **SPIKE-11** — the research that motivates this story (`docs/spikes/2026-05-20-spike-11-session-forking.md`).
+- **SPIKE-11** — the research that motivates this story (`docs/internal/spikes/2026-05-20-spike-11-session-forking.md`).
 - **STORY-306** — the headless advisor escalation tier this story augments (cold-boot version stays intact).
 - **STORY-347** — calibration ledger that now becomes implementable.
 - Memory `feedback_headless_advisor_is_cold_boot` — updated to mark fork-from-live as implemented.

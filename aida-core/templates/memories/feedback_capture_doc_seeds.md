@@ -27,7 +27,7 @@ When working in this project, capture documentation seeds as comments on relevan
 
 ---
 
-*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/positioning/` chapters.*
+*This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` or `docs/internal/positioning/` chapters.*
 ```
 
 **Add as a comment via:**

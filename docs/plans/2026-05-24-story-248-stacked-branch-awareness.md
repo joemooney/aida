@@ -311,4 +311,4 @@ aida pull --auto 2>&1 | grep -qE "(rebased onto main|no stacked branches behind)
 - Builds on: `aida_core::rebase::detect/classify` (TASK-103), `/aida-rebase` skill (TASK-104), `aida pr rebase` (TASK-308).
 - Composes with: STORY-246 (`--auto-complete`), TASK-249 (`/aida-drain-queue` skill).
 - Successor to: BUG-114 (already completed — was the lease-tracking precondition).
-- See also: `docs/autonomous-drain.md` (the workflow story that this acceleration enables).
+- See also: `docs/advanced/autonomous-drain.md` (the workflow story that this acceleration enables).

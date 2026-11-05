@@ -230,7 +230,7 @@ pub(crate) fn statusline_away_remaining(now: DateTime<Utc>) -> Option<String> {
 // Solo mode (STORY-624) — a visible work-state flag, sibling to presence.
 //
 // `aida solo` marks this session as advisor+integrator working the SAFE backlog
-// end-to-end with maximum discretion (EPIC-43 / docs/solo-mode.md). Like
+// end-to-end with maximum discretion (EPIC-43 / docs/advanced/solo-mode.md). Like
 // presence it is a timestamped `~/.aida/solo.toml` file (no daemon) and is
 // COMPUTED through a TTL so a forgotten solo flag self-clears — a solo session
 // should not run forever. The statusline surfaces it; honoring it as a drain
@@ -350,7 +350,7 @@ pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
 //
 // STORY-624 shipped solo as a visible FLAG; this folds that flag into the
 // escalate-vs-proceed decision the `--no-human=both` drain makes on a punted
-// design-fork. The contract (docs/solo-mode.md):
+// design-fork. The contract (docs/advanced/solo-mode.md):
 //
 //   solo active + SAFE work     → PROCEED on the defensible default
 //                                 (max-discretion safe-backlog mode)
