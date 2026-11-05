@@ -135,30 +135,7 @@ fn nudge_pass(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
     // trace:STORY-2476 | ai:codex — alarms share the existing request delivery.
     if let Some(body) = alarm_body {
-        let root = crate::main_worktree_root_from(project_root);
-        if let Some(advisor) = live_advisor_recipient(&root) {
-            send_advisor_body(&root, &advisor, body.to_owned())?;
-            return Ok(Some(format!("pipeline alarm delivered to {advisor}")));
-        }
-        // Separate alarm sets do not consume the parked-work notification cooldown.
-        let rule = format!(
-            "supervise_pipeline_{}",
-            body.lines().next().unwrap_or("alarm")
-        );
-        let outcome = notify::send_direct_bounded(
-            &root,
-            &rule,
-            "aida: pipeline needs advisor",
-            body,
-            Some(std::time::Duration::from_secs(10)),
-        )?;
-        return Ok(match outcome.delivery() {
-            notify::DirectDelivery::Sent => Some("pipeline alarm delivered to operator".into()),
-            notify::DirectDelivery::Deferred => {
-                Some("pipeline alarm queued for operator after quiet hours".into())
-            }
-            _ => None,
-        });
+        return deliver_pipeline_alarm(project_root, body);
     }
     let store = backend.load()?;
     let titles = store
@@ -224,6 +201,35 @@ fn display_id(req: &aida_core::Requirement) -> Option<String> {
         .clone()
         .or_else(|| req.spec_id.clone())
         .filter(|s| !s.trim().is_empty())
+}
+
+// All alarm kinds use the same advisor/operator delivery policy.
+// trace:TASK-3075 | ai:codex
+fn deliver_pipeline_alarm(project_root: &Path, body: &str) -> Result<Option<String>> {
+    let root = crate::main_worktree_root_from(project_root);
+    if let Some(advisor) = live_advisor_recipient(&root) {
+        send_advisor_body(&root, &advisor, body.to_owned())?;
+        return Ok(Some(format!("pipeline alarm delivered to {advisor}")));
+    }
+    // Separate alarm sets do not consume the parked-work notification cooldown.
+    let rule = format!(
+        "supervise_pipeline_{}",
+        body.lines().next().unwrap_or("alarm")
+    );
+    let outcome = notify::send_direct_bounded(
+        &root,
+        &rule,
+        "aida: pipeline needs advisor",
+        body,
+        Some(std::time::Duration::from_secs(10)),
+    )?;
+    Ok(match outcome.delivery() {
+        notify::DirectDelivery::Sent => Some("pipeline alarm delivered to operator".into()),
+        notify::DirectDelivery::Deferred => {
+            Some("pipeline alarm queued for operator after quiet hours".into())
+        }
+        _ => None,
+    })
 }
 
 fn nudge_state_path(project_root: &Path) -> PathBuf {
@@ -364,14 +370,23 @@ fn send_advisor_body(project_root: &Path, advisor: &str, body: String) -> Result
     use aida_core::mailbox::{Intent, Message, Recipient};
     let id = uuid::Uuid::new_v4().to_string();
     // trace:BUG-1533 | ai:claude
-    let (from, from_source) = crate::resolve_mail_sender_identity(None);
+    let alarm = body.starts_with("Pipeline needs attention:");
+    // A stable detector sender makes passive self-mail exclusion independent
+    // of the shell or agent that runs a later observation tick.
+    // trace:TASK-3075 | ai:codex
+    let (from, from_source) = if alarm {
+        (
+            pipeline_stall::ALARM_SENDER.to_owned(),
+            aida_core::mailbox::SenderSource::Explicit,
+        )
+    } else {
+        crate::resolve_mail_sender_identity(None)
+    };
     // trace:BUG-1592 | ai:claude
     let from_role = crate::resolve_mail_sender_role();
     let msg = Message {
         // trace:TASK-3075 | ai:codex
-        subject: body
-            .starts_with("Pipeline needs attention:")
-            .then(|| "Pipeline stall alarm".into()),
+        subject: alarm.then(|| "Pipeline stall alarm".into()),
         id: id.clone(),
         thread_id: id,
         from,

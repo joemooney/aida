@@ -9,6 +9,8 @@ use std::path::Path;
 #[path = "pipeline_stall_signals.rs"]
 mod signals;
 
+pub(super) const ALARM_SENDER: &str = "aida-pipeline-detector";
+
 // An absent observer cannot prove that a predicate held throughout a long gap.
 const MAX_GAP_MS: i64 = 15 * 60 * 1000;
 
@@ -221,8 +223,16 @@ fn tick_with_writer(
         ..Default::default()
     };
     for (kind, active) in snapshot.predicates() {
+        let alarm = snapshot.extra.iter().find(|a| a.kind == kind);
+        // Age/event delivery belongs to the evidence identity, not a continuous
+        // run of true observations. Preserve accepted and unresolved deliveries
+        // across unknown/false ticks (including CI reruns on an unchanged head).
+        // trace:TASK-3075 | ai:codex
+        let identity_keyed = alarm.is_some_and(|a| a.immediate);
         if active != Some(true) {
-            state.episodes.remove(kind);
+            if !identity_keyed {
+                state.episodes.remove(kind);
+            }
             if active.is_none() {
                 report.unknown.push(kind.into());
             }
@@ -232,7 +242,6 @@ fn tick_with_writer(
         // Age/event predicates already include their own threshold. Identity changes
         // re-arm a new merge/mail/head episode without waiting for a clear tick.
         // trace:TASK-3075 | ai:codex
-        let alarm = snapshot.extra.iter().find(|a| a.kind == kind);
         let identity = alarm.map_or("", |a| a.identity.as_str());
         let delay = if alarm.is_some_and(|a| a.immediate) {
             0
@@ -246,8 +255,8 @@ fn tick_with_writer(
             delivery_pending: false,
             identity: identity.into(),
         });
-        if now < episode.observed_ms
-            || (now - episode.observed_ms > MAX_GAP_MS && !alarm.is_some_and(|a| a.immediate))
+        if (!identity_keyed
+            && (now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS))
             || episode.identity != identity
         {
             *episode = Episode {

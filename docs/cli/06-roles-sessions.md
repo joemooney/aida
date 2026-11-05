@@ -839,7 +839,11 @@ The continuous alarms require `--threshold-mins N` minutes of observations
   least N minutes old. It fires immediately at that age, without another N-minute
   delay. Read mail clears the signal; reading does not establish action.
   Passive inspection neither binds role deliveries nor ACKs mail. Detector
-  requests are labeled `Pipeline stall alarm` and excluded from this predicate.
+  requests from `aida-pipeline-detector` labeled `Pipeline stall alarm` are
+  excluded from this predicate; the same subject from another sender counts.
+  With no verified live advisor subject, this kind is explicitly unknown:
+  passive inspection cannot attribute unread role mail to an absent reader.
+  Other due kinds still use the configured operator notification fallback.
 - `empty-rework-exit`: an existing empty-rework retry receipt matches an open
   PR’s unchanged head and current red CI, conflict or request-changes. It fires
   immediately and clears when the PR closes, changes head or loses those blockers.
@@ -859,7 +863,8 @@ Process identity comes from leases, the registry and train ownership, including 
 namespace checks. Unsupported forges, failed/partial forge reads and invisible
 processes remain unknown. Unknown predicates, cleared predicates, backwards
 clocks and gaps over 15 minutes reset their continuous timer. Age/event kinds
-retain accepted delivery across observation gaps for the same evidence identity;
+retain accepted delivery across unknown and false ticks, clock changes and
+observation gaps for the same evidence identity (including pending CI reruns);
 a new merge timestamp, oldest-mail ID or empty-rework head re-arms that kind.
 Schedule ticks more frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
 A preview never advances an observation timer.
@@ -878,8 +883,10 @@ nudge path: urgent mailbox
 fallback. A delivery reservation is persisted before sending. Known delivery
 failure retains the episode for retry; a crash or failed post-send write leaves
 an unresolved reservation, reported as unknown and suppressed until the
-predicate resets or the operator inspects the inbox and resets the state. An
-accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+continuous predicate resets, an age/event identity changes, or the operator
+inspects the inbox and resets the state. An accepted continuous kind stays quiet
+until its predicate resets; an accepted age/event kind stays quiet until its
+evidence identity changes. One kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
 sent/queued after quiet hours; it does not prove read or action. This slice
 does not implement repeated unresolved escalation.
 

@@ -248,7 +248,7 @@ fn oldest_unread(
     let mut oldest = None;
     for m in mail.records {
         // Alarm requests must not create their own stale-mail episode.
-        if m.subject == "Pipeline stall alarm"
+        if (m.subject == "Pipeline stall alarm" && m.from == ALARM_SENDER)
             || !matches!(m.state, InspectionState::Unread | InspectionState::Pending)
         {
             continue;
@@ -383,8 +383,10 @@ mod tests {
             to: aida_core::mailbox::Recipient::Agent("advisor".into()),
             intent: aida_core::mailbox::Intent::Request,
         };
+        let mut own = record("self", MIN, "Pipeline stall alarm", InspectionState::Unread);
+        own.from = ALARM_SENDER.into();
         let records = vec![
-            record("self", MIN, "Pipeline stall alarm", InspectionState::Unread),
+            own,
             record("old-read", MIN, "read", InspectionState::Acknowledged),
             record("new-unread", 3 * MIN, "review", InspectionState::Unread),
             record("old-pending", 2 * MIN, "rework", InspectionState::Pending),
@@ -396,6 +398,16 @@ mod tests {
         };
         let evidence = oldest_unread(mail(true, records)).unwrap();
         assert_eq!(evidence, Some(("old-pending".into(), 2 * MIN)));
+        let unrelated = record(
+            "other-sender",
+            MIN,
+            "Pipeline stall alarm",
+            InspectionState::Unread,
+        );
+        assert_eq!(
+            oldest_unread(mail(true, vec![unrelated])).unwrap(),
+            Some(("other-sender".into(), MIN))
+        );
         assert!(oldest_unread(mail(false, Vec::new())).is_err());
         assert_eq!(oldest_unread(mail(true, Vec::new())).unwrap(), None);
         let mut details = Vec::new();
@@ -421,6 +433,21 @@ mod tests {
             .active,
             Some(true)
         );
+    }
+
+    #[test]
+    fn delivered_alarm_has_stable_detector_sender_and_subject() {
+        let t = tempfile::tempdir().unwrap();
+        crate::supervise_cmd::send_advisor_body(
+            t.path(),
+            "advisor",
+            "Pipeline needs attention: stale-advisor-mail".into(),
+        )
+        .unwrap();
+        let messages = crate::mailbox_store::read_local_messages(t.path()).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].from, ALARM_SENDER);
+        assert_eq!(messages[0].subject.as_deref(), Some("Pipeline stall alarm"));
     }
 
     #[test]
@@ -517,6 +544,29 @@ mod tests {
             1
         );
         assert!(details[0].contains(&format!("aida queue rework {spec}")));
+        // Red -> pending rerun -> red on the same head must not mail twice.
+        let mut s = Snapshot::default();
+        let mut sends = 0;
+        let mut send = |_: &str| {
+            sends += 1;
+            Ok(true)
+        };
+        for (minute, ci, expected) in [(1, "fail", true), (2, "pending", false), (3, "fail", true)]
+        {
+            let p = prs.by_branch.get_mut("topic").unwrap();
+            p.mergeable = Some("MERGEABLE".into());
+            p.ci_rollup = Some(ci.into());
+            let ids = empty_rework(t.path(), Some(&prs), &mut details).unwrap();
+            assert_eq!(!ids.is_empty(), expected);
+            s.extra = vec![Alarm::new(
+                "empty-rework-exit",
+                Some(!ids.is_empty()),
+                ids.join(","),
+            )];
+            let report = tick(t.path(), &s, minute * MIN, true, 30, &mut send).unwrap();
+            assert_eq!(report.accepted.len(), usize::from(minute == 1));
+        }
+        assert_eq!(sends, 1);
         prs.by_branch.get_mut("topic").unwrap().head_sha = Some("newhead".into());
         assert!(empty_rework(t.path(), Some(&prs), &mut details)
             .unwrap()
@@ -528,6 +578,141 @@ mod tests {
             .is_empty());
         std::fs::write(&path, "broken").unwrap();
         assert!(empty_rework(t.path(), Some(&prs), &mut details).is_err());
+    }
+
+    // trace:TASK-3075 | ai:codex
+    #[test]
+    fn identity_delivery_survives_unknown_false_gaps_and_backwards_clock() {
+        for kind in ["no-merge-90m", "stale-advisor-mail", "empty-rework-exit"] {
+            let t = tempfile::tempdir().unwrap();
+            std::fs::create_dir(t.path().join(".aida")).unwrap();
+            let mut s = Snapshot {
+                extra: vec![Alarm::new(kind, Some(true), "evidence1".into())],
+                ..Default::default()
+            };
+            let mut send = |_: &str| Ok(true);
+            assert_eq!(
+                tick(t.path(), &s, MIN, true, 30, &mut send)
+                    .unwrap()
+                    .accepted,
+                [kind]
+            );
+            for (active, minute) in [
+                (None, 2),
+                (Some(false), 3),
+                (Some(true), 100),
+                (Some(true), 50),
+            ] {
+                s.extra[0].active = active;
+                // Missing evidence must not replace the retained identity.
+                s.extra[0].identity = if active == Some(true) {
+                    "evidence1"
+                } else {
+                    ""
+                }
+                .into();
+                assert!(tick(t.path(), &s, minute * MIN, true, 30, &mut send)
+                    .unwrap()
+                    .due
+                    .is_empty());
+            }
+            s.extra[0].identity = "evidence2".into();
+            assert_eq!(
+                tick(t.path(), &s, 101 * MIN, true, 30, &mut send)
+                    .unwrap()
+                    .accepted,
+                [kind]
+            );
+        }
+    }
+
+    #[test]
+    fn no_advisor_mail_is_unknown_and_new_kinds_use_operator_fallback() {
+        let t = tempfile::tempdir().unwrap();
+        let root = t.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida-store/objects")).unwrap();
+        let git = |args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "test@example.com"]);
+        git(&["config", "user.name", "Test"]);
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n[notify]\ncommand = \"cat >> operator-mail\"\nmin_interval = \"0s\"\n",
+        )
+        .unwrap();
+        git(&["add", ".aida/config.toml"]);
+        git(&["commit", "-q", "-m", "trusted notifications"]);
+        let head = git(&["rev-parse", "HEAD"]);
+        git(&[
+            "update-ref",
+            "refs/remotes/origin/main",
+            String::from_utf8_lossy(&head.stdout).trim(),
+        ]);
+        assert!(oldest_mail(root)
+            .unwrap_err()
+            .to_string()
+            .contains("no verified advisor subject"));
+        assert!(crate::supervise_cmd::live_advisor_recipient(root).is_none());
+        let mut details = Vec::new();
+        let alarms = observe(root, None, Some(0), Some(false), 30, MIN, &mut details);
+        assert!(alarms
+            .iter()
+            .find(|a| a.kind == "stale-advisor-mail")
+            .unwrap()
+            .active
+            .is_none());
+        for kind in [
+            "under-cap",
+            "no-merge-90m",
+            "stale-advisor-mail",
+            "empty-rework-exit",
+        ] {
+            let s = Snapshot {
+                extra: vec![Alarm::new(kind, Some(true), "evidence".into())],
+                ..Default::default()
+            };
+            // Supply stale-mail evidence explicitly: a real no-advisor snapshot
+            // leaves that kind unknown, while other due kinds still fall back.
+            let mut send = |body: &str| {
+                let outcome = crate::supervise_cmd::deliver_pipeline_alarm(root, body)?;
+                assert_eq!(
+                    outcome.as_deref(),
+                    Some("pipeline alarm delivered to operator")
+                );
+                Ok(outcome.is_some())
+            };
+            let first = tick(root, &s, MIN, true, 30, &mut send).unwrap();
+            if kind == "under-cap" {
+                assert!(first.accepted.is_empty());
+                for minute in [11, 21] {
+                    tick(root, &s, minute * MIN, true, 30, &mut send).unwrap();
+                }
+                assert_eq!(
+                    tick(root, &s, 31 * MIN, true, 30, &mut send)
+                        .unwrap()
+                        .accepted,
+                    [kind]
+                );
+            } else {
+                assert_eq!(first.accepted, [kind]);
+            }
+            assert!(std::fs::read_to_string(root.join("operator-mail"))
+                .unwrap()
+                .contains(kind));
+        }
     }
 
     #[test]
@@ -587,18 +772,16 @@ mod tests {
         let unknown = tick(t.path(), &s, 33 * MIN, true, 30, &mut send).unwrap();
         assert_eq!(unknown.unknown, ["no-merge-90m"]);
         s.extra[1].active = Some(true);
-        assert_eq!(
-            tick(t.path(), &s, 34 * MIN, true, 30, &mut send)
-                .unwrap()
-                .accepted,
-            ["no-merge-90m"]
-        );
+        assert!(tick(t.path(), &s, 34 * MIN, true, 30, &mut send)
+            .unwrap()
+            .due
+            .is_empty());
         // An observation gap does not duplicate accepted age/event alarms.
         s.extra[0].active = Some(false);
         assert!(tick(t.path(), &s, 100 * MIN, true, 30, &mut send)
             .unwrap()
             .due
             .is_empty());
-        assert_eq!(sent, 4);
+        assert_eq!(sent, 3);
     }
 }
