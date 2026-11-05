@@ -148,7 +148,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
     if liveness != OwnerLiveness::Dead {
         return classify(liveness, &SeatReading::Missing, None, |_, _| false);
     }
-    let seat = read_seat(lease, pr_branch);
+    let seat = read_seat(main, lease, pr_branch);
     let pr_head = match &seat {
         SeatReading::Read {
             dirty,
@@ -289,13 +289,14 @@ fn owner_liveness(lease: &SessionLease) -> OwnerLiveness {
 /// Read the seat. Host git never runs in a seat clone: a clone is read through
 /// the sandboxed probe, as `session end` reads it.
 // trace:STORY-2315 | ai:claude
-pub(crate) fn read_seat(lease: &SessionLease, pr_branch: &str) -> SeatReading {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn read_seat(main: &Path, lease: &SessionLease, pr_branch: &str) -> SeatReading {
     let path = &lease.worktree_path;
     if path.as_os_str().is_empty() || !path.exists() {
         return SeatReading::Missing;
     }
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
-        let Some(clone) = crate::seat_clone::host_recorded_clone(path) else {
+        let Some(clone) = crate::seat_clone::host_recorded_clone(main, path) else {
             return SeatReading::Unreadable(
                 "it is a seat clone the host does not recognise".to_string(),
             );

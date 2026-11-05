@@ -177,7 +177,7 @@ fn containment_agent_new_codex_uses_native_flags() {
         std::fs::write(root.path().join(".aida/agents.toml"), defaults).unwrap();
         let mut launch = config("codex");
         crate::apply_agent_default_flags(&mut launch, root.path(), crate::AgentDefaultFlagOptions::new(true, Vec::new(), None), false).unwrap();
-        let expected = crate::tool_contained_flags("codex").unwrap();
+        let expected = crate::tool_contained_flags(None, "codex").unwrap();
         assert_eq!(&launch.default_args[..expected.len()], expected);
         assert!(!launch.default_args.iter().any(|a| a == "--dangerously-bypass-approvals-and-sandbox"));
         assert!(!launch.contained);
@@ -223,6 +223,7 @@ fn containment_native_headless_child_launches_without_aida_marker() {
     );
     for seat in ["implementer", "reviewer"] {
         let mut cmd = session::build_exec_vendor_headless_command(
+            None,
             HeadlessVendor::Codex,
             "prompt",
             "sid",
@@ -249,6 +250,7 @@ fn containment_native_headless_child_launches_without_aida_marker() {
         assert!(!text.contains("dangerously-bypass"), "{text}");
     }
     let args = session::headless_vendor_args_contained_in(
+        None,
         HeadlessVendor::Codex,
         "p",
         "sid",
@@ -259,6 +261,7 @@ fn containment_native_headless_child_launches_without_aida_marker() {
     .unwrap();
     assert!(!args.iter().any(|a| a.contains("dangerously-bypass")));
     let review = session::interactive_reviewer_launch_plan(
+        None,
         HeadlessVendor::Codex,
         None,
         None,
@@ -284,16 +287,35 @@ fn containment_codex_opt_in_preserves_claude_bytes() {
     ]);
     let _cwd = session::contained_cwd_seam::pin(root.path());
     policy(root.path(), "");
-    let interactive = crate::tool_contained_flags("claude").unwrap();
-    let headless =
-        session::headless_vendor_args(HeadlessVendor::Claude, "p", "sid", true, None, None)
-            .unwrap();
+    let host_main = crate::seat_clone::launcher_main();
+    let interactive = crate::tool_contained_flags(host_main.as_deref(), "claude").unwrap();
+    let headless = session::headless_vendor_args(
+        host_main.as_deref(),
+        HeadlessVendor::Claude,
+        "p",
+        "sid",
+        true,
+        None,
+        None,
+    )
+    .unwrap();
     policy(root.path(), "codex = \"native\"");
-    assert_eq!(interactive, crate::tool_contained_flags("claude").unwrap());
+    assert_eq!(
+        interactive,
+        crate::tool_contained_flags(host_main.as_deref(), "claude").unwrap()
+    );
     assert_eq!(
         headless,
-        session::headless_vendor_args(HeadlessVendor::Claude, "p", "sid", true, None, None)
-            .unwrap()
+        session::headless_vendor_args(
+            host_main.as_deref(),
+            HeadlessVendor::Claude,
+            "p",
+            "sid",
+            true,
+            None,
+            None
+        )
+        .unwrap()
     );
     assert!(session::containment_applied(HeadlessVendor::Claude, true));
     let mut launch = config("claude");
@@ -342,7 +364,7 @@ fn containment_doctor_and_permission_reports_distinguish_native() {
     // trace:TASK-2712 | ai:claude
     assert_eq!(
         codex.headless_flags,
-        crate::tool_contained_flags("codex").unwrap()[..4]
+        crate::tool_contained_flags(None, "codex").unwrap()[..4]
     );
     assert!(
         !crate::config_cmd::scan_permission_posture_findings(root.path())

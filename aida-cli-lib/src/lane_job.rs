@@ -658,7 +658,7 @@ impl LaneJobs {
     /// clone record, else from the lease's cargo target directory.
     pub(crate) fn for_lease(main_root: &Path, seat: &Path, lease_id: &str) -> Self {
         let build_env: Vec<(String, String)> =
-            if let Some(clone) = crate::seat_clone::host_recorded_clone(seat) {
+            if let Some(clone) = crate::seat_clone::host_recorded_clone(main_root, seat) {
                 crate::seat_clone::seat_build_env(&clone)
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v))

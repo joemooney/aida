@@ -52,9 +52,24 @@ fn fixture() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
 #[test]
 fn intact_linked_worktree_verifies_against_its_main() {
     let (_tmp, main, wt, other) = fixture();
-    crate::session::verify_linked_worktree_main(&wt, &main).expect("intact pointer verifies");
-    crate::session::verify_linked_worktree_main(&main, &main).expect("the main checkout itself");
-    assert!(crate::session::verify_linked_worktree_main(&wt, &other).is_err());
+    crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &main,
+    )
+    .expect("intact pointer verifies");
+    crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &main,
+        &main,
+    )
+    .expect("the main checkout itself");
+    assert!(crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &other
+    )
+    .is_err());
 }
 
 // BUG-2016: a worktree whose `.git` pointer was rewritten at another
@@ -75,7 +90,10 @@ fn rewritten_git_pointer_refuses_and_grants_nothing_of_the_other_repo() {
         std::fs::write(wt.join(".git"), format!("gitdir: {}\n", target.display())).unwrap();
         let roots = crate::contained_boundary::contained_write_roots(&wt);
         let err = aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
-            crate::session::claude_contained_settings_json(&roots)
+            crate::session::claude_contained_settings_json(
+                crate::seat_clone::launcher_main().as_deref(),
+                &roots,
+            )
         })
         .expect_err("a rewritten pointer must refuse the launch");
         let msg = format!("{err:#}");
@@ -170,12 +188,15 @@ fn contained_resume_is_bounded_to_the_lease_tree() {
         worktree: Some(main.clone()),
     };
     assert_eq!(
-        crate::session::resume_lease_tree(&target("claude-a")),
+        crate::session::resume_lease_tree(Some(&main), &target("claude-a")),
         Some(wt.clone())
     );
-    assert_eq!(crate::session::resume_lease_tree(&target("claude-b")), None);
     assert_eq!(
-        crate::session::resume_lease_tree(&target("claude-none")),
+        crate::session::resume_lease_tree(Some(&main), &target("claude-b")),
+        None
+    );
+    assert_eq!(
+        crate::session::resume_lease_tree(Some(&main), &target("claude-none")),
         None
     );
 
@@ -205,6 +226,52 @@ fn contained_resume_is_bounded_to_the_lease_tree() {
     assert_eq!(cmd.get_current_dir(), Some(main.as_path()));
 }
 
+// TASK-2032 round 2: a resume anchors only on the host main the launcher
+// passes, never on the checkout the transcript was listed in, and refuses a
+// host main a seat could have forged: a repository `git init`-ed under the
+// seat's own cargo target directory (`<main>/target/worktrees/<seat>`), whose
+// lease names the forgery itself. The same arrangement outside
+// `target/worktrees` resolves, so the refusal is the forgery check.
+// trace:TASK-2032 | ai:claude
+#[cfg(unix)]
+#[test]
+fn resume_lease_tree_refuses_a_forged_seat_writable_main() {
+    let (_tmp, main, wt, _other) = fixture();
+    mint_lease(&main, "lease-a", "claude-a", &wt);
+    let listed = |id: &str, at: &Path| crate::session::ResumeTarget {
+        agent: "claude".to_string(),
+        id: id.to_string(),
+        worktree: Some(at.to_path_buf()),
+    };
+    // The listed checkout anchors nothing: with no host main, no lease tree.
+    assert_eq!(
+        crate::session::resume_lease_tree(None, &listed("claude-a", &main)),
+        None
+    );
+    assert_eq!(
+        crate::session::resume_lease_tree(Some(&main), &listed("claude-a", &wt)),
+        Some(wt.clone())
+    );
+
+    let seat_target = main.join("target/worktrees/aida-seat-forger");
+    let fake = repo(&seat_target, "fake-main");
+    mint_lease(&fake, "lease-f", "claude-f", &fake);
+    assert!(!crate::seat_clone::plausible_host_main(&fake));
+    assert_eq!(
+        crate::session::resume_lease_tree(Some(&fake), &listed("claude-f", &fake)),
+        None,
+        "a forged, seat-writable main never anchors a resume"
+    );
+
+    let control = repo(main.parent().unwrap(), "control-main");
+    mint_lease(&control, "lease-c", "claude-c", &control);
+    assert_eq!(
+        crate::session::resume_lease_tree(Some(&control), &listed("claude-c", &control)),
+        Some(control.clone()),
+        "the same lease under a real main resolves"
+    );
+}
+
 // BUG-2016 (r1 minor): a relative gitdir back-pointer (`git worktree add
 // --relative-paths`, git 2.48+) resolves against the gitdir, so an intact
 // worktree still verifies.
@@ -215,7 +282,12 @@ fn relative_gitdir_back_pointer_verifies() {
     let (_tmp, main, wt, _other) = fixture();
     let gitdir = main.join(".git/worktrees/wt");
     std::fs::write(gitdir.join("gitdir"), "../../../../wt/.git\n").unwrap();
-    crate::session::verify_linked_worktree_main(&wt, &main).expect("relative back-pointer");
+    crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &main,
+    )
+    .expect("relative back-pointer");
 }
 
 // TASK-2111: a tree whose `.git` is a directory holding a `commondir` that
@@ -243,23 +315,48 @@ fn task_2111_git_dir_or_symlink_redirect_refuses() {
         std::fs::canonicalize(&wt).ok(),
         "precondition: the redirect moves the resolved main off the tree"
     );
-    assert!(crate::session::verify_linked_worktree_main(&wt, &resolved).is_err());
+    assert!(crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &resolved
+    )
+    .is_err());
 
     // A `.git` symlink to the other repository's `.git` directory.
     let (_tmp, _main, wt, other) = fixture();
     std::fs::remove_file(wt.join(".git")).unwrap();
     std::os::unix::fs::symlink(other.join(".git"), wt.join(".git")).unwrap();
     let resolved = crate::main_worktree_root_from(&wt);
-    assert!(crate::session::verify_linked_worktree_main(&wt, &resolved).is_err());
-    assert!(crate::session::verify_linked_worktree_main(&wt, &other).is_err());
+    assert!(crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &resolved
+    )
+    .is_err());
+    assert!(crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &wt,
+        &other
+    )
+    .is_err());
 
     // A plain repository is its own main and still verifies; a tree with no
     // `.git` at all (a --cwd subdirectory) is not refused either.
     let (_tmp, main, _wt, _other) = fixture();
-    crate::session::verify_linked_worktree_main(&main, &main).expect("own main");
+    crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &main,
+        &main,
+    )
+    .expect("own main");
     let sub = main.join("sub");
     std::fs::create_dir_all(&sub).unwrap();
-    crate::session::verify_linked_worktree_main(&sub, &main).expect("subdirectory");
+    crate::session::verify_linked_worktree_main(
+        crate::seat_clone::launcher_main().as_deref(),
+        &sub,
+        &main,
+    )
+    .expect("subdirectory");
 }
 
 // TASK-2112: Claude keys transcripts by cwd, so a contained resume moved to

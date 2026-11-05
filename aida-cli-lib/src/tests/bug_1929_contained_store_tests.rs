@@ -300,7 +300,11 @@ fn unexpressible_main_emits_no_entries() {
 /// The settings JSON a contained launch gets for `write_roots`, parsed.
 // trace:BUG-1929 | ai:claude
 fn launch_settings(write_roots: &[PathBuf]) -> (String, serde_json::Value) {
-    let flags = crate::session::claude_contained_flags_for_roots(write_roots).unwrap();
+    let flags = crate::session::claude_contained_flags_for_roots(
+        crate::seat_clone::launcher_main().as_deref(),
+        write_roots,
+    )
+    .unwrap();
     let json = flags[3].clone();
     let settings = serde_json::from_str(&json).unwrap();
     (json, settings)
@@ -1597,7 +1601,11 @@ fn task_1775_contained_marker_written_before_git_version_check() {
     for fake in ["git version 2.39.5", "not a version"] {
         let _ = std::fs::remove_file(&marker);
         aida_core::git_ops::with_host_git_version(fake, || {
-            let json = crate::session::claude_contained_settings_json(&[main.clone()]).unwrap();
+            let json = crate::session::claude_contained_settings_json(
+                crate::seat_clone::launcher_main().as_deref(),
+                &[main.clone()],
+            )
+            .unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert!(
                 !allow_write(&settings)
@@ -2002,7 +2010,10 @@ fn deputy_sandbox_never_grants_a_symlink_target() {
     let sensitive = tempfile::tempdir().unwrap();
     std::os::unix::fs::symlink(sensitive.path(), main.join(".aida/deputy")).unwrap();
     assert!(crate::contained_boundary::contained_deputy_write_paths(&main).is_err());
-    assert!(crate::session::os_wrap_rw_paths(&main).is_err());
+    assert!(
+        crate::session::os_wrap_rw_paths(crate::seat_clone::launcher_main().as_deref(), &main)
+            .is_err()
+    );
 }
 
 // trace:BUG-2218 | ai:codex
@@ -2022,10 +2033,18 @@ fn bug_2218_path_and_settings_builders_do_not_create_mailbox() {
     bug_1929_git(&main, &["init", "-q", "-b", "main"]);
     assert!(!main.join(".aida/mailbox").exists());
     contained_mailbox_write_paths(&main).unwrap();
-    crate::session::os_wrap_rw_paths(&main).unwrap();
-    crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap();
+    crate::session::os_wrap_rw_paths(crate::seat_clone::launcher_main().as_deref(), &main).unwrap();
+    crate::session::claude_contained_settings_json(
+        crate::seat_clone::launcher_main().as_deref(),
+        &contained_write_roots(&main),
+    )
+    .unwrap();
     assert!(!main.join(".aida/mailbox").exists());
-    crate::session::prepare_contained_mailbox_for_launch(&main).unwrap();
+    crate::session::prepare_contained_mailbox_for_launch(
+        crate::seat_clone::launcher_main().as_deref(),
+        &main,
+    )
+    .unwrap();
     assert!(main.join(".aida/mailbox").is_dir());
 }
 
@@ -2046,9 +2065,21 @@ fn bug_2218_symlink_refusals_match_across_launch_paths() {
         }
         std::os::unix::fs::symlink(outside.path(), &path).unwrap();
         let roots = contained_write_roots(&main);
-        assert!(crate::session::claude_contained_settings_json(&roots).is_err());
-        assert!(crate::session::os_wrap_rw_paths(&main).is_err());
-        assert!(crate::session::prepare_contained_mailbox_for_launch(&main).is_err());
+        assert!(crate::session::claude_contained_settings_json(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots
+        )
+        .is_err());
+        assert!(crate::session::os_wrap_rw_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &main
+        )
+        .is_err());
+        assert!(crate::session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &main
+        )
+        .is_err());
         assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
     }
 }
@@ -2063,9 +2094,22 @@ fn bug_2218_launch_command_primes_mailbox_after_settings_preview() {
     bug_1929_git(&main, &["init", "-q", "-b", "main"]);
     let original = std::env::current_dir().unwrap();
     std::env::set_current_dir(&main).unwrap();
-    crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap();
+    crate::session::claude_contained_settings_json(
+        crate::seat_clone::launcher_main().as_deref(),
+        &contained_write_roots(&main),
+    )
+    .unwrap();
     assert!(!main.join(".aida/mailbox").exists());
-    crate::session::build_run_claude_session_command(None, None, None, None, true, None).unwrap();
+    crate::session::build_run_claude_session_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        None,
+        None,
+        None,
+        None,
+        true,
+        None,
+    )
+    .unwrap();
     assert!(main.join(".aida/mailbox").is_dir());
     std::env::set_current_dir(original).unwrap();
 }

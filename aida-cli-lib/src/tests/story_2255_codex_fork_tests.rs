@@ -43,6 +43,7 @@ fn exec_fork_rewrite_inserts_subcommand_and_thread() {
 #[test]
 fn compose_forking_refuses_non_codex_vendor() {
     let err = session::compose_headless_command_forking(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Claude,
         "p",
         "sid",
@@ -103,10 +104,18 @@ fn contained_fork_uses_the_native_posture_without_bypass() {
     let _cwd = session::contained_cwd_seam::pin(root.path());
     native_codex_policy(root.path());
 
-    let (_, fresh) =
-        session::compose_headless_command(HeadlessVendor::Codex, "P", "sid", true, None, None)
-            .unwrap();
+    let (_, fresh) = session::compose_headless_command(
+        None,
+        HeadlessVendor::Codex,
+        "P",
+        "sid",
+        true,
+        None,
+        None,
+    )
+    .unwrap();
     let (_, forked) = session::compose_headless_command_forking(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         "P",
         "sid",
@@ -120,13 +129,14 @@ fn contained_fork_uses_the_native_posture_without_bypass() {
         !forked.iter().any(|a| a.contains("dangerously-bypass")),
         "{forked:?}"
     );
-    let flags = crate::tool_contained_flags("codex").unwrap();
+    let flags = crate::tool_contained_flags(None, "codex").unwrap();
     assert_eq!(&forked[..flags.len()], &flags[..]);
     assert_eq!(forked, session::codex_exec_fork_args(fresh, "T").unwrap());
 
     // The punt-tier advisor fork keeps the contained posture the same way.
     let tier = |is_fork| {
         session::advisor_tier_program_and_args_with_posture(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             is_fork,
             "P",
@@ -151,6 +161,7 @@ fn contained_fork_uses_the_native_posture_without_bypass() {
 
     // Uncontained keeps the historical bypass posture, forked or not.
     let (_, open) = session::compose_headless_command_forking(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         "P",
         "sid",

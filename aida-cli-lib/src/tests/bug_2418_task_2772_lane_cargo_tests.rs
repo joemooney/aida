@@ -65,7 +65,8 @@ fn bug_2418_contained_render_has_no_cargo_home_in_rw_roots() {
         "no home directory to check against"
     );
 
-    let rw = crate::session::os_wrap_rw_paths(&main).unwrap();
+    let rw = crate::session::os_wrap_rw_paths(crate::seat_clone::launcher_main().as_deref(), &main)
+        .unwrap();
     for cargo_home in &cargo_homes {
         assert!(
             rw.iter()
@@ -79,8 +80,11 @@ fn bug_2418_contained_render_has_no_cargo_home_in_rw_roots() {
         .iter()
         .all(|p| !p.starts_with(home.join(".cargo"))));
 
-    let settings =
-        crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap();
+    let settings = crate::session::claude_contained_settings_json(
+        crate::seat_clone::launcher_main().as_deref(),
+        &contained_write_roots(&main),
+    )
+    .unwrap();
     let allowed = allow_write(&settings);
     for cargo_home in &cargo_homes {
         assert!(
@@ -261,7 +265,11 @@ fn bug_2418_task_2772_contained_settings_allow_lane_build_paths() {
     let (settings, expected) = {
         let _lock = crate::test_env::env_lock();
         (
-            crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap(),
+            crate::session::claude_contained_settings_json(
+                crate::seat_clone::launcher_main().as_deref(),
+                &contained_write_roots(&main),
+            )
+            .unwrap(),
             sandbox_allow_write_entries(&lane_build_write_paths()),
         )
     };
@@ -412,7 +420,11 @@ fn bug_2418_contained_settings_never_grant_aliased_cargo_home() {
             ("XDG_RUNTIME_DIR", run_s.as_str()),
             ("CARGO_HOME", link_s.as_str()),
         ]);
-        crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap()
+        crate::session::claude_contained_settings_json(
+            crate::seat_clone::launcher_main().as_deref(),
+            &contained_write_roots(&main),
+        )
+        .unwrap()
     };
     let allowed = allow_write(&settings);
     for dir in [&slot, &link] {
@@ -453,8 +465,13 @@ fn task_2772_os_wrapped_launch_binds_slots_rw_and_cargo_home_ro() {
             ("XDG_RUNTIME_DIR", run_s.as_str()),
             ("CARGO_HOME", cargo_s.as_str()),
         ]);
-        crate::session::os_wrapped_program_and_args(&main, "sh", vec!["-c".to_string(), script])
-            .unwrap()
+        crate::session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            &main,
+            "sh",
+            vec!["-c".to_string(), script],
+        )
+        .unwrap()
     };
     assert_eq!(program, "bwrap");
     let slot_s = slot.to_string_lossy().into_owned();
