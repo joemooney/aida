@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T19:34:25.077502467Z
+modified_at: 2026-11-05T19:34:43.914152032Z
 req_type: Bug
 tags:
 - area:compete
@@ -267,6 +267,12 @@ comments:
   content: 'Round 7 validation: committed and pushed 16c1f4186d87ec04871b8529d68051355dbf4dc7 to existing PR #3401. GitHub CI (lib-0) is SUCCESS at that exact head in run 42091684910; gates, contracts and cli-1 are also green. Local make check-ci-fast passed all 37 gates; cargo fmt --all -- --check and git diff --check passed. The separate local agent-profile deputy-shell test build is still compiling. Merge hold is retained: independent approval and the authorized clear/eligible auto-release path remain for reviewer/merge seat; no ship or review-record action performed.'
   created_at: 2026-11-05T19:34:25.077502467Z
   modified_at: 2026-11-05T19:34:25.077502467Z
+  session_id: 01a1ad1e7dba
+- id: 01a1ad34-d7ca-7000-a966-c815b10f66ce
+  author: joe
+  content: 'Local targeted cargo build was cancelled after GitHub lib-0 passed the exact pushed head; it did not reach test execution. Final local evidence is the 37/37 fast gates plus formatting/diff checks. Full deputy-shell coverage is supplied by the successful lib-0 lane. Turn ending with PR #3401 open and merge hold retained for independent review.'
+  created_at: 2026-11-05T19:34:43.914152032Z
+  modified_at: 2026-11-05T19:34:43.914152032Z
   session_id: 01a1ad1e7dba
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
