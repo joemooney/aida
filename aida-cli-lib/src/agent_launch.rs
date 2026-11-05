@@ -2024,7 +2024,19 @@ pub(crate) fn rescope_codex_mcp_flags(
 pub(crate) fn rescope_contained_settings(
     config: &mut AgentLaunchConfig,
     tree: &std::path::Path,
+    role: Option<&str>,
 ) -> Result<()> {
+    // TASK-2712: a native Codex launch's `--add-dir` write set follows the
+    // lane's tree the same way; its role decides the gate-ledger grant
+    // (reviewer only).
+    // trace:TASK-2712 | ai:claude
+    if config.agent_type == "codex" {
+        return crate::codex_native_sandbox::rescope_codex_native_flags(
+            &mut config.default_args,
+            tree,
+            role,
+        );
+    }
     if config.agent_type != "claude" || !is_contained_launch(config) {
         return Ok(());
     }
@@ -2058,12 +2070,11 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
             flags
         }
         // trace:STORY-1124 | ai:codex
-        "codex" => vec![
-            "--sandbox".to_string(),
-            "workspace-write".to_string(),
-            "--ask-for-approval".to_string(),
-            "never".to_string(),
-        ],
+        // TASK-2712: the posture plus the shared write set (`--add-dir`),
+        // resolved from this process's tree; `rescope_contained_settings`
+        // re-derives it once the lane's tree is known.
+        // trace:TASK-2712 | ai:claude
+        "codex" => crate::codex_native_sandbox::codex_native_sandbox_flags()?,
         _ => Vec::new(),
     })
 }
@@ -3137,10 +3148,10 @@ pub(crate) fn agent_new_with_config_wake(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     // trace:BUG-2394 | ai:claude
     rescope_codex_mcp_flags(
         &mut config,
@@ -3457,10 +3468,10 @@ pub(crate) fn agent_new_bg_dispatch(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -6528,6 +6539,16 @@ pub(crate) fn refuse_bg_under_os_wrap(
     Ok(())
 }
 
+/// TASK-2712: whether this launch's lane is a private seat clone: a contained
+/// launch (BUG-2169), or a native Codex launch, which can commit only in a
+/// clone the host recorded (Codex keeps every other `.git` read-only).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn launch_wants_seat_clone(config: &AgentLaunchConfig) -> bool {
+    is_contained_launch(config)
+        || (config.agent_type == "codex"
+            && crate::codex_native_sandbox::carries_native_posture(&config.default_args))
+}
+
 // trace:BUG-2006 | ai:antigravity
 // trace:BUG-2124 | ai:antigravity
 pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
@@ -6859,10 +6880,44 @@ fn run_tracked_agent_after_spawn(
         )?
         .status
     };
+    // TASK-2712 (advisor ruling F1): the launcher's own post-exit step
+    // commits what a native Codex implementer left pending in its seat
+    // clone, whatever the child's exit status (its work is kept either way);
+    // only a clean exit gets a completing trailer, the rest is `(Refs SPEC)`.
+    // trace:TASK-2712 | ai:claude
+    if let Some(spec) = native_post_exit_spec(config, plan) {
+        crate::ship_from_seat::post_exit_commit_reported(
+            &plan.project_root,
+            &plan.launch_cwd,
+            spec,
+            &plan.name,
+            status.success(),
+        );
+    }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
+}
+
+/// TASK-2712: the spec whose seat a foreground launch's post-exit step
+/// commits for: a native Codex implementer with a spec. `None` otherwise.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn native_post_exit_spec<'a>(
+    config: &AgentLaunchConfig,
+    plan: &'a AgentLaunchPlan,
+) -> Option<&'a str> {
+    let native = config.agent_type == "codex"
+        && crate::codex_native_sandbox::carries_native_posture(&config.default_args);
+    let implementer = plan
+        .role
+        .as_deref()
+        .is_some_and(|role| aida_core::team::canonical_role(role) == "implementer");
+    if native && implementer {
+        plan.current_spec.as_deref()
+    } else {
+        None
+    }
 }
 
 /// The rotation generation a supervised child runs as, and the fresh

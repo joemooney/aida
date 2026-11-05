@@ -73,6 +73,8 @@ pub(crate) fn handle_home_command() -> Result<()> {
 ///   away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 ///   escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain)
 ///   home_offer = "surface" | "dont-block" (home-side; default surface)
+///   questions  = "quiet-when-away" | "always-surface" (decision-inbox nudge in
+///                `aida status` while away; default quiet-when-away)
 ///
 /// Hidden alias for `aida presence away` (kept for muscle memory).
 // trace:TASK-756 trace:STORY-561 | ai:claude
