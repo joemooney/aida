@@ -16,12 +16,12 @@ description: |-
   4. COSMETIC aida-cli-lib/src/intent_intake.rs:794-855: the --json flags on enroll/publish/pull/process do nothing. These commands always print JSON, even in human mode. Human 'list' prints the title JSON-quoted. Receipts and the list view show the internal requirement UUID as destination instead of the spec ID the operator passed with --target. Give these commands a human rendering, or drop the dead flags and say so in docs/cli-format-json-audit.md.
   5. UNVERIFIED: PR CI at 395eea71d48a (run 41995861126: cli-0, cli-1, lib-0, lib-1, gates, contracts, rest) was still pending at review time. The rework head needs every shard green, including bug_1502_format_json_audit, which the implementer could not run locally.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T11:39:34.090431548Z
-modified_at: 2026-11-05T15:58:59.238365767Z
+modified_at: 2026-11-05T15:59:00.476652795Z
 req_type: Task
 tags:
 - from-advisor:TASK-3096
@@ -42,6 +42,14 @@ history:
   author: joe
   timestamp: 2026-11-05T11:54:34.581628303Z
   changes: []
+- id: 01a1ac6f-577c-7893-aa31-7070688b510a
+  author: joe
+  timestamp: 2026-11-05T15:59:00.476651011Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
