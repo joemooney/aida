@@ -8,12 +8,43 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-05T17:36:39.863418078Z
+modified_at: 2026-11-05T17:37:54.850479821Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1acc9-e4a2-7981-9100-322148912639
+  author: joe
+  content: |
+    SKETCH v1 / triage, 2026-11-05, Codex (awaiting advisor sign-off)
+
+    Verified the original local AGY 1.4.12 artifacts, without rerunning a model or changing permissions:
+    - /tmp/story2460-pdqj_i8_/stdout.jsonl ends with event=result, result.status=SUCCESS, response="", denied_actions=[{action:command,display_name:RunCommand}]. Its tool step is DONE, so DONE alone is not evidence of execution.
+    - retry-stdout.jsonl contains step_update.state=ERROR and tool_info.error.type=TOOL_ERROR for run_command initialization (agentapi write refused), followed by result.status=SUCCESS and a nonempty response describing the error. Nonempty response alone is also not evidence of completion.
+    - Both saved exit files contain 0. These are failures to execute the requested probe, not empirical sandbox passes. This was an outer Codex lane; it does not establish how AGY behaves on an unconstrained host.
+
+    Source inventory:
+    - session.rs::agy_headless_args_with_effort selects plain -p output (no --output-format stream-json); a classifier cannot consume the observed structured evidence from current production argv without changing it.
+    - session.rs::spawn_vendor_headless_with_seat_forking_inner retains reviewer_status_with_handle_guard's process status. run_exec_vendor_headless_once uses headless_linger's returned process status.
+    - headless_linger::parse_final_result only accepts type=result / is_error; AGY uses event=result / nested result.status. Its natural-exit path returns the actual process status before reading final evidence.
+    - headless_tee also recognizes type=result / permission_denials, not AGY's nested denied_actions. It would otherwise display no AGY structured diagnostics.
+    - Existing phase-specific PR/verdict judgements are separate from process success. Do not claim that process exit 0 by itself currently grants merge/completion authority.
+
+    Decision needed: should an unresolved AGY tool failure override zero process exit, and what phase-specific positive evidence proves recovery? A blanket TOOL_ERROR => failure rejects recovered sessions; SUCCESS or a nonempty response accepts both observed false positives. Merely parsing the final event misses the second failure.
+
+    Recommended bounded implementation after sign-off:
+    1. Request AGY stream-json with every flag before value-taking -p. Preserve permission posture, containment refusal and model/effort flags. Explicitly account for quiet coordinators instead of silently changing their user-visible output.
+    2. Track structured denial/tool-error diagnostics through a bounded incremental AGY reader; preserve the last terminal result. Expose diagnostics even with tee disabled. Never infer errors from model prose or arbitrary strings in tool output.
+    3. Keep process status and task evidence distinct. Nonzero exit or an explicit terminal failure is failed. Zero exit plus denied actions/unresolved tool initialization failure is incomplete unless the existing phase-specific trusted completion check establishes the requested outcome. Missing/malformed terminal evidence is unknown/incomplete, never positive execution evidence. A subsequent successful tool step alone cannot establish the requested task's completion.
+    4. Preserve existing PR/reviewer handshake authority. Successful completion evidence can coexist with historical recoverable tool errors; report those diagnostics without failing every such session. Define behavior for direct/coordinator launches lacking a completion check before wiring enforcement there.
+    5. Test sanitized fixtures for both observed runs, an error followed by genuine phase completion, clean success, missing/malformed/truncated result, explicit terminal failure, and nonzero exit after SUCCESS. Add a fake-process integration test for actual launch/status wiring and argv order; no live vendor or expanded filesystem grants required.
+
+    This changes headless/orchestrator outcome semantics. AGENTS.md Sketch-First Protocol requires a sketch on the owning spec and master sign-off for orchestrator semantics; the standalone launch explicitly says to use aida punt at a design fork. No production code changed, no new sandbox experiment run, and no completion claim made. Please approve/refine the recovery and missing-evidence policies before implementation; coordinate with STORY-2460 / TASK-3048 so containment adapter work uses the same outcome contract.
+  created_at: 2026-11-05T17:37:54.850479821Z
+  modified_at: 2026-11-05T17:37:54.850479821Z
+  session_id: 01a1acc7aefd
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
   author: joe
