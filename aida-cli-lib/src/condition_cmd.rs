@@ -91,31 +91,6 @@ fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsSt
     }
 }
 
-// A successful process exit alone is not an observation of a PR state.
-// Keep the forge-only parameter spelling explicit for the launch-site ratchet.
-// trace:STORY-2402 | ai:codex
-fn read_pr_state(
-    root: &Path,
-    gh_bin: &Path,
-    number: u64,
-    timeout: std::time::Duration,
-) -> Option<bool> {
-    let mut command = std::process::Command::new(gh_bin);
-    command
-        .current_dir(root)
-        .args(["pr", "view", &number.to_string(), "--json", "state"]);
-    let output = crate::command_output_with_timeout(command, timeout)?;
-    if !output.status.success() {
-        return None;
-    }
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    match value.get("state")?.as_str()? {
-        "MERGED" => Some(true),
-        "OPEN" | "CLOSED" => Some(false),
-        _ => None,
-    }
-}
-
 impl ConditionFacts for CliConditionFacts {
     fn spec_status(&self, id: &str) -> Result<Option<RequirementStatus>, String> {
         // Resolve literal IDs before aliases, and refuse ambiguous agreed IDs.
@@ -127,13 +102,7 @@ impl ConditionFacts for CliConditionFacts {
     }
 
     fn pr_merged(&self, number: u64) -> Option<bool> {
-        let binary = crate::resolve_gh_binary()?;
-        read_pr_state(
-            &self.project_root,
-            &binary,
-            number,
-            std::time::Duration::from_secs(15),
-        )
+        crate::forge::observe_github_pr_merged(&self.project_root, number).known()
     }
 
     fn latest_release(&self) -> Result<Option<Version>, String> {

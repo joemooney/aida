@@ -73,11 +73,19 @@ fn story2402_pr_probe_requires_a_known_state_and_bounds_the_process() {
         } else {
             std::time::Duration::from_secs(5)
         };
-        assert_eq!(
-            read_pr_state(fixture.path(), &binary, 12, timeout),
-            want,
-            "{body}"
+        let observation = crate::forge::observe_github_pr_merged_with_binary(
+            fixture.path(),
+            &binary,
+            12,
+            timeout,
         );
+        assert_eq!(observation.as_known().copied(), want, "{body}");
+        if want.is_none() {
+            assert!(
+                matches!(observation, crate::forge_observed::Observed::Transient(_)),
+                "{body}: {observation:?}"
+            );
+        }
     }
 }
 
