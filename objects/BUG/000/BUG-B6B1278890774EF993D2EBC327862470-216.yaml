@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-216
 agreed_id: BUG-2450
 title: An exited implementer's lease blocks the reviewer launch for its PR until someone runs session end --force
 description: 'Observed 2026-11-04 21:35: review watcher attempts for PR-3392 and PR-3367 failed: ''lease 01a1a9927f73 (implementer, seat ...-784) holds branch ... and its session has exited, but it was not ended automatically'' → queue work exit 1 → ''review of this head exited without completing''. The watcher then marked the head attempted and stopped retrying. The seats were clean and fully pushed. Acceptance: (1) when the holder''s session has exited and its seat is clean and pushed, the reviewer launch ends the lease itself (or the lane does on exit) and proceeds; (2) a dirty or unpushed seat still refuses and mails the advisor naming the lease; (3) a launch failure from a reclaimable lease doesn''t consume the head''s review attempt; (4) regression test.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T09:12:02.160336650Z
+modified_at: 2026-11-05T09:55:45.604867727Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -174,6 +174,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ab22-c73d-7362-ae3e-25e98c241c17
+  author: aida-auto-bump
+  timestamp: 2026-11-05T09:55:45.597393059Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ab22-c744-70f1-9785-5da6a35ff340
+  timestamp: 2026-11-05T09:55:45.604861797Z
+  agent: aida
+  commit_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
+  summary: AC1-4 and the --discard-unpushed addition verified by bug2450_* regressions; round-1 findings 1-3 addressed (worktree guard scoped to HEAD+lease branch, bounded setup retry, session_start Bail->advisor wiring test). CI green at head (merge-hold-gate is the supervised-spec hold, not a code failure).
+  review_verdict: approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -186,6 +200,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T05:32:50.572848670Z
   implemented_by: joe
+  completed_at: 2026-11-05T09:55:45.597385933Z
+  completion_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
 interface_changes:
   cli:
   - aida session end --discard-unpushed explicitly permits discarding commits absent from remotes
