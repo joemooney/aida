@@ -9,10 +9,11 @@
 //! is written to `jobs/`, over injected probes so the table is testable. Any
 //! failure is a named refusal and the script never runs.
 //!
-//! What this does NOT stop: a same-uid, uncontained process forging a record
-//! that names a live session's grant (grant records are readable by the
-//! user). Such a process can already edit the operator's shell profile; a
-//! file queue cannot do better. Kernel-attested submit is a later slice.
+//! Submit is kernel-attested ([`super::socket`]): the runner accepts a job
+//! only from a socket peer whose process ancestry reaches one of the named
+//! grant's process bindings, and records that peer on the job. The claim side
+//! refuses a job that carries no attested peer, so a record dropped into the
+//! queue by any other route never runs.
 // trace:STORY-2338 | ai:claude
 
 use anyhow::{bail, Result};
@@ -91,6 +92,7 @@ pub(crate) fn submitter_from(
         cwd: cwd.to_path_buf(),
         host,
         mail_to,
+        peer: None,
     }
 }
 
@@ -220,6 +222,13 @@ pub(crate) fn verdict(
         ));
     };
     checks.push("attributed".to_string());
+    // trace:STORY-2343 | ai:claude
+    let Some(peer) = s.peer.as_ref().filter(|p| p.attested) else {
+        return Err(Refusal::new(
+            "unattested",
+            "the job did not come through the runner's socket, so no kernel-attested submitter vouches for it",
+        ));
+    };
     if s.host.boot_id.is_empty()
         || s.host.boot_id != probes.host.boot_id
         || s.host.hostname != probes.host.hostname
@@ -251,7 +260,18 @@ pub(crate) fn verdict(
             "the job's seat, subject or principal does not match the grant it names",
         ));
     }
+    if !grant
+        .binding
+        .iter()
+        .any(|b| crate::gate::review_authority::binding_tokens_match(b, &peer.matched))
+    {
+        return Err(Refusal::new(
+            "unattested",
+            "the binding the submitting process was attested under is not one of the grant's bindings",
+        ));
+    }
     checks.push("grant-valid".to_string());
+    checks.push("peer-attested".to_string());
     if !submit_seats
         .iter()
         .any(|allowed| crate::gate::dispatch_deps::canonical_role_name(allowed) == seat)

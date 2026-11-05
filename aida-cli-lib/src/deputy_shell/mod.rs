@@ -9,8 +9,9 @@
 //!
 //! ```text
 //! $AIDA_HOME/.aida/deputy-shell/<name>/
-//!   incoming/<id>.job        what submit writes (the only place it writes)
-//!   incoming/<id>.cancel     a cancel request
+//!   submit.sock              the live runner's socket (submit and cancel)
+//!   accepted/<id>.job        a submitted job the runner accepted (runner-only)
+//!   accepted/<id>.cancel     a cancel request the runner accepted
 //!   jobs/<id>/job.json       the submitted record, moved here at claim
 //!   jobs/<id>/script.sh      the exact script bytes (written after the verdict)
 //!   jobs/<id>/state.json     state, timestamps, rc, reason, attribution
@@ -20,6 +21,14 @@
 //!   runner.json, runner.lock the live runner
 //!   paused                   claim nothing while present
 //! ```
+//!
+//! A submitter writes nothing here. It connects to `submit.sock`; the runner
+//! reads the peer's credentials from the kernel (`SO_PEERCRED`), accepts the
+//! job only when that peer runs under the grant it names, and writes the
+//! record into `accepted/` itself ([`socket`]). No seat sandbox is given a
+//! socket rule: only unsandboxed processes (the operator's shell, host-run
+//! agents, or a submit the operator lists in the sandbox's
+//! `excludedCommands`) can reach the runner.
 //!
 //! Every directory is 0700 and checked at every scan (a symlink, a foreign
 //! owner or a group/other bit stops claiming). It reuses the command deputy's
@@ -31,6 +40,7 @@
 pub(crate) mod attribution;
 #[cfg(unix)]
 pub(crate) mod runner;
+pub(crate) mod socket;
 
 #[cfg(test)]
 mod tests;
@@ -161,6 +171,26 @@ pub(crate) struct Submitter {
     pub cwd: PathBuf,
     pub host: Host,
     pub mail_to: Option<String>,
+    /// The kernel-reported peer that handed this job to the runner over its
+    /// socket. Only the runner sets it (a client's value is overwritten), and
+    /// the claim side refuses a job without it.
+    #[serde(default)]
+    pub peer: Option<Peer>,
+}
+
+/// What the kernel reported about the process that submitted a job over the
+/// runner's socket, and the grant binding its ancestry reached.
+// trace:STORY-2343 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Peer {
+    pub pid: u32,
+    pub uid: u32,
+    pub start: Option<String>,
+    /// The grant binding token (`proc:`/`sid:`) an ancestor of the peer
+    /// (or the peer itself) matched.
+    pub matched: String,
+    pub attested: bool,
 }
 
 impl Submitter {
@@ -304,8 +334,13 @@ pub(crate) struct JobView {
 }
 
 impl Queue {
-    pub(crate) fn incoming(&self) -> PathBuf {
-        self.root.join("incoming")
+    /// The runner-only spool of accepted jobs and cancel requests.
+    pub(crate) fn accepted(&self) -> PathBuf {
+        self.root.join("accepted")
+    }
+    /// The runner's submit socket.
+    pub(crate) fn socket_path(&self) -> PathBuf {
+        self.root.join("submit.sock")
     }
     pub(crate) fn jobs(&self) -> PathBuf {
         self.root.join("jobs")
@@ -313,11 +348,11 @@ impl Queue {
     pub(crate) fn acks(&self) -> PathBuf {
         self.root.join("acks")
     }
-    pub(crate) fn incoming_job(&self, id: &str) -> PathBuf {
-        self.incoming().join(format!("{id}.job"))
+    pub(crate) fn accepted_job(&self, id: &str) -> PathBuf {
+        self.accepted().join(format!("{id}.job"))
     }
     pub(crate) fn cancel_path(&self, id: &str) -> PathBuf {
-        self.incoming().join(format!("{id}.cancel"))
+        self.accepted().join(format!("{id}.cancel"))
     }
     pub(crate) fn job_dir(&self, id: &str) -> PathBuf {
         self.jobs().join(id)
@@ -354,7 +389,7 @@ impl Queue {
         vec![
             self.base.clone(),
             self.root.clone(),
-            self.incoming(),
+            self.accepted(),
             self.jobs(),
             self.acks(),
         ]
@@ -380,20 +415,6 @@ impl Queue {
             check_private_dir(&d)?;
         }
         Ok(())
-    }
-
-    /// The submit side: `incoming/` must exist and be private.
-    pub(crate) fn check_incoming(&self) -> Result<()> {
-        if !self.incoming().is_dir() {
-            bail!(
-                "no script deputy is set up at {} — the operator starts one with `aida deputy shell run --name {}` in their terminal",
-                self.root.display(),
-                self.name
-            );
-        }
-        check_private_dir(&self.base)?;
-        check_private_dir(&self.root)?;
-        check_private_dir(&self.incoming())
     }
 
     /// Append one audit line: `O_APPEND`, one write, then fsync.
@@ -450,15 +471,16 @@ impl Queue {
             .collect()
     }
 
-    /// Queue `job` as `incoming/<id>.job`: 0600, create-new on a dot-tmp,
-    /// then a link that never replaces, so a half-written or clobbered job is
-    /// never visible. Writes nothing outside `incoming/`, the one directory a
-    /// submitter's sandbox names; the runner audits `queued` when it claims.
-    pub(crate) fn submit(&self, job: &ShellJob) -> Result<PathBuf> {
+    /// RUNNER SIDE: file an accepted `job` as `accepted/<id>.job`: 0600,
+    /// create-new on a dot-tmp, then a link that never replaces, so a
+    /// half-written or clobbered job is never visible. Only the runner's
+    /// socket server calls it, after the kernel-attested peer check.
+    // trace:STORY-2343 | ai:claude
+    pub(crate) fn accept(&self, job: &ShellJob) -> Result<PathBuf> {
         validate_id(&job.id)?;
-        self.check_incoming()?;
-        let tmp = self.incoming().join(format!(".{}.tmp", job.id));
-        let dest = self.incoming_job(&job.id);
+        self.check()?;
+        let tmp = self.accepted().join(format!(".{}.tmp", job.id));
+        let dest = self.accepted_job(&job.id);
         write_private_new(&tmp, &serde_json::to_vec_pretty(job)?)?;
         if std::fs::symlink_metadata(&dest).is_ok() || self.job_dir(&job.id).exists() {
             let _ = std::fs::remove_file(&tmp);
@@ -472,12 +494,12 @@ impl Queue {
 
     /// Ids of queued jobs, oldest first (UUIDv7 sorts by time).
     pub(crate) fn queued_ids(&self) -> Vec<String> {
-        ids_with_suffix(&self.incoming(), ".job")
+        ids_with_suffix(&self.accepted(), ".job")
     }
 
     /// Ids with a cancel request on file.
     pub(crate) fn cancel_ids(&self) -> Vec<String> {
-        ids_with_suffix(&self.incoming(), ".cancel")
+        ids_with_suffix(&self.accepted(), ".cancel")
     }
 
     /// Ids of claimed jobs (a directory under `jobs/`), oldest first.
@@ -530,7 +552,7 @@ impl Queue {
                 cancel_requested,
             }));
         }
-        let queued = self.incoming_job(id);
+        let queued = self.accepted_job(id);
         if std::fs::symlink_metadata(&queued).is_ok() {
             let job: Option<ShellJob> = std::fs::read(&queued)
                 .ok()
@@ -546,11 +568,11 @@ impl Queue {
         Ok(None)
     }
 
-    /// Ask for job `id` to be cancelled. Like a submit, it writes only under
-    /// `incoming/`; the runner acts on it at its next check.
+    /// RUNNER SIDE: file a cancel request for job `id` (the socket server
+    /// accepted it); the runner acts on it at its next check.
     pub(crate) fn request_cancel(&self, id: &str) -> Result<()> {
         validate_id(id)?;
-        self.check_incoming()?;
+        self.check()?;
         match write_private_new(&self.cancel_path(id), b"cancel\n") {
             Ok(()) => Ok(()),
             Err(_) if self.cancel_requested(id) => Ok(()),
