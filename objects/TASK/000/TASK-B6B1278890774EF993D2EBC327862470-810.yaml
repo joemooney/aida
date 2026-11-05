@@ -12,12 +12,12 @@ description: |-
   Investigate test-context isolation or explicitly classify these as host-only fixtures; do not weaken native authority or filesystem boundaries. A baseline outside this seat has not been established. The three new cross-node publication tests pass, including the revocation conflict test; these residual fixtures concern existing launch/root paths outside that slice.
 
   State metadata from `aida state-snapshot --spec STORY-2492 --json`: branch=null, pr.state=none, drain.phase=null, drain.mode=interactive, drain.orchestrator=false, tests='not run', fmt='not run', plan.state=none. Snapshot branch/commit are unknown inside the native seat. Direct test results are separate best-effort observations; the standalone lease has no lane job runner (formal untested=true).
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:40:20.321747849Z
-modified_at: 2026-11-05T16:33:16.553090705Z
+modified_at: 2026-11-05T16:53:12.587280301Z
 req_type: Task
 tags:
 - from-implementer:STORY-2492
@@ -28,6 +28,32 @@ relationships:
   target_id: 01a1aa06-fe3e-7d10-b529-3fb10c82d60e
   created_at: 2026-11-05T16:01:07.365248695Z
   created_by: joe
+comments:
+- id: 01a1aca0-9fb5-7ae3-bd9e-4b8e5cad7b7e
+  author: joe
+  content: |
+    Implementation prepared in /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-810 (four modified files; uncommitted because native seat git metadata is read-only).
+
+    Changes:
+    - drain_gate unresolved-root fixture removes a separate isolated child cwd before probing; this host has /tmp/.git, so a fresh cwd under /tmp was not enough to make discovery fail. Storage remains in a separate live tempdir; the no-mutation assertions still run for both headless modes.
+    - Solo self-approval fixture pins AIDA_PROJECT_ROOT/AIDA_DRIVE_ROOT and clears AIDA_REVIEW_VERDICT_FILE under its existing ambient guard, and asserts the PR handshake lands on its own gate ledger.
+    - Dispatch compatibility-recorder regression runs in an exact-test child and uses review_authority::with_pid_namespace with the actual local namespace so fixture grants match the real CLI child's presenter tokens.
+    - run_path_isolated_test gives its child a private TMPDIR as well as HOME. The pre-main test-home constructor uses PID-only names and sweeps stale bare PIDs: shared /tmp across native namespaces caused intermittent missing grant files. Top-level runner home cleanup remains a separately filed draft finding SPEC-b6b1278890774ef993d2ebc327862470-016; final top-level test invocations used a unique TMPDIR too.
+
+    Validation (local standalone evidence, not a lane-job attestation): matching cargo build -p aida-cli --bin aida passed. Final rebuilt lib test binary passed all 3 bug_2139_headless_phase_seat_tests, 16 story_1655_solo_review_tests, 19 story_1917_dispatch_flow_schedule_tests, 13 test_env::tests, and 10 test_home::tests (61 total), with --test-threads=4 and a unique top-level TMPDIR. cargo test -p aida-cli --test bug_1502_format_json_audit passed 9/9; its namespace-binding fix was already present from BUG-2450. cargo fmt --all -- --check and git diff --check passed. Earlier pre-private-TMPDIR dispatch module runs were 14/19 and 9/19, with missing grant files; after the isolation fix the whole module passed 19/19. Logs: /tmp/task2861-final-tests.log, /tmp/task2861-audit.log, /tmp/task2861-fmt.log. Patch copy: /tmp/task2861.patch. No production authority or filesystem checks changed.
+
+    Publication blocked by TASK-2879: git add refused index.lock with Read-only file system. No commit/push/PR, no review record and no merge. Preserve the seat checkout. After this owner exits, run from the host main checkout:
+    aida ship TASK-2861 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-810 --commit-pending '[AI:codex] test(gate): isolate native seat fixtures (TASK-2861)'
+    This --from-seat path only publishes a PR; the separate reviewer and merge seat must take over. Run queue done after the publication gate allows it.
+  created_at: 2026-11-05T16:52:50.229994948Z
+  modified_at: 2026-11-05T16:52:50.229994948Z
+  session_id: 01a1ac8ddd3b
+- id: 01a1aca0-f70b-7500-989c-17965fd564b3
+  author: joe
+  content: 'Queue completion outcome: aida queue done TASK-2861 --yes succeeded and removed the item. It explicitly skipped the PR check because current_branch_at returned None, and the session-manifest update was refused by the native seat write boundary. Canonical status is Done (not merged/Completed). Store edits are queued for host commit. Commit/push/PR still require the post-exit host publication command in the preceding handoff comment; the queue result does not establish publication. These finish-path limitations are already tracked by TASK-2879.'
+  created_at: 2026-11-05T16:53:12.587280301Z
+  modified_at: 2026-11-05T16:53:12.587280301Z
+  session_id: 01a1ac8ddd3b
 history:
 - id: 01a1aa76-531f-7571-925b-879aa618ebf9
   author: joe
@@ -58,6 +84,18 @@ history:
   timestamp: 2026-11-05T16:33:51.149496398Z
   session_id: 01a1ac8ddd3b
   changes: []
+- id: 01a1aca0-b4b8-7fc1-84a2-c205f21a29c2
+  author: joe
+  timestamp: 2026-11-05T16:52:55.608572575Z
+  session_id: 01a1ac8ddd3b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T16:52:55.485215437Z
+  implemented_by: joe
