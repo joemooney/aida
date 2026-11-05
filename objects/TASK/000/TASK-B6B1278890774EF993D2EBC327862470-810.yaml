@@ -1,0 +1,27 @@
+id: 01a1aa6f-dd61-71e1-b2e4-f9af70102007
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-810
+title: Make isolated gate fixtures hermetic in native standalone Codex seats
+description: |-
+  Observed while implementing STORY-2492 in a native standalone Codex seat. After building the matching CLI and clearing AIDA_PROJECT_ROOT/AIDA_DRIVE_ROOT/AIDA_REVIEW_VERDICT_FILE for the test process, the gate-area run had 1278 passing tests and three remaining fixture failures:
+
+  - drain_gate::bug_2139_headless_phase_seat_tests::unresolved_root_refuses_before_queue_or_phase_mutation: find_main_worktree_root still resolves a project from an isolated temporary cwd.
+  - gate::solo_review::story_1655_solo_review_tests::solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_gate: handshake resolves the real /home/joe/ai/aida gate ledger and receives read-only filesystem refusal.
+  - gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review: delegated reviewer child exits 1 in this native context.
+
+  Investigate test-context isolation or explicitly classify these as host-only fixtures; do not weaken native authority or filesystem boundaries. A baseline outside this seat has not been established. The three new cross-node publication tests pass, including the revocation conflict test; these residual fixtures concern existing launch/root paths outside that slice.
+
+  State metadata from `aida state-snapshot --spec STORY-2492 --json`: branch=null, pr.state=none, drain.phase=null, drain.mode=interactive, drain.orchestrator=false, tests='not run', fmt='not run', plan.state=none. Snapshot branch/commit are unknown inside the native seat. Direct test results are separate best-effort observations; the standalone lease has no lane job runner (formal untested=true).
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T06:40:20.321747849Z
+modified_at: 2026-11-05T06:40:20.321747849Z
+req_type: Task
+tags:
+- from-implementer:STORY-2492
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
