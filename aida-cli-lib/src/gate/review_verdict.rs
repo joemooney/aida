@@ -274,6 +274,23 @@ impl RecorderAttestation {
         fn nonempty(v: Option<&str>) -> Option<&str> {
             v.map(str::trim).filter(|s| !s.is_empty())
         }
+        // trace:STORY-2492 | ai:codex — a publication is neither a human TTY
+        // receipt nor a seat grant. Its exact signed projection revalidates in
+        // verified_authority_keys before this key can grant positive credit.
+        if self.seat.as_deref() == Some("review-publication")
+            && self.grant_id.is_none()
+            && !self.human_at_tty
+        {
+            if let Some(publication) =
+                nonempty(self.receipt_id.as_deref()).filter(|id| id.starts_with("publication:"))
+            {
+                return Some(format!(
+                    "{publication}:{}@{}",
+                    self.sha,
+                    nonempty(recorded_at)?
+                ));
+            }
+        }
         if let (Some(grant), Some(seat)) = (
             nonempty(self.grant_id.as_deref()),
             nonempty(self.seat.as_deref()),
@@ -938,6 +955,10 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
+    // trace:STORY-2492 | ai:codex
+    if let Some(remote) = super::review_publication::current(project_root, &[spec]) {
+        return parse_recorded_verdict(&remote.body);
+    }
     let path = verdict_path(project_root, spec);
     let legacy = read_verdict_body(&path)
         .ok()
@@ -1164,6 +1185,18 @@ fn choose_current(
     path: PathBuf,
     file_body: Option<String>,
 ) -> Option<CurrentVerdict> {
+    // trace:STORY-2492 | ai:codex — canonical publications override the local derived view.
+    if let Some(remote) = super::review_publication::current(start, &[key]) {
+        if file_body
+            .as_deref()
+            .is_some_and(|local| local != remote.body)
+        {
+            eprintln!(
+                "review publication/local verdict disagreement for {key}; using synced evidence"
+            );
+        }
+        return Some(remote);
+    }
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
     // answer in its place: every gate fails closed on it (TASK-1801).

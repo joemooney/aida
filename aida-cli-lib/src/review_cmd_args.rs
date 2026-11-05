@@ -15,6 +15,35 @@ use std::path::PathBuf;
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum ReviewCommand {
+    /// Publish validated local review evidence, optionally naming filed findings.
+    // trace:STORY-2492 | ai:codex
+    Publish {
+        /// Pull request whose existing local verdict should be published.
+        #[arg(long)]
+        pr: u64,
+        /// Covered spec IDs, separated by commas.
+        #[arg(long, value_delimiter = ',', required = true)]
+        specs: Vec<String>,
+        /// Native origin IDs of filed blocking findings, separated by commas.
+        #[arg(long, value_delimiter = ',')]
+        blocking_findings: Vec<String>,
+    },
+    /// Publish author sessions for the change at the current checked-out head.
+    // trace:STORY-2492 | ai:codex
+    Authorship {
+        /// Pull request to bind to the current checked-out head.
+        #[arg(long)]
+        pr: u64,
+        /// Specs whose recorded author sessions belong to this head (CSV).
+        #[arg(long, value_delimiter = ',', required = true)]
+        specs: Vec<String>,
+    },
+    /// Manage explicitly trusted review publishers (operator only).
+    // trace:STORY-2492 | ai:codex
+    Nodes {
+        #[command(subcommand)]
+        command: crate::gate::review_publication::NodeCommand,
+    },
     /// Discover new heads and dispatch attested reviews without waiting for CI.
     // trace:TASK-1993 | ai:codex
     Watch(crate::review_watch::ReviewWatchArgs),

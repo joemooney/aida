@@ -572,10 +572,14 @@ pub(crate) fn load_view(
             unbound.insert(m.key, events);
         }
     }
-    Ok(LedgerView {
+    let mut view = LedgerView {
         change_events,
         unbound,
-    })
+    };
+    // trace:STORY-2492 | ai:codex
+    super::review_publication::overlay_view(root, change, set, &mut view)
+        .map_err(|e| Unsafe(format!("review publication refused: {e:#}")))?;
+    Ok(view)
 }
 
 /// What [`load`] read.

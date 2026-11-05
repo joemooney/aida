@@ -526,6 +526,16 @@ atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
 snapshot-save writer. Corrupt queues fail closed on mutation; position
 placement is still computed by callers outside the lock. See OVERVIEW.md.
 
+## Trusted cross-node review publications
+
+Configured host recorders publish immutable OpenSSH-signed review receipts to
+`reviews/v1/` in the shared store after local authority validation. Consumers use
+the current operator-enrolled node roster, exact PR head, canonical spec keys and
+portable author/reviewer sessions. Grants and human receipts stay local. Synced
+refusals override local approvals; watcher reservation sync remains deferred.
+See [second-node setup](docs/agents/second-review-node.md).
+<!-- trace:STORY-2492 | ai:codex -->
+
 ## Requirements Management
 
 Before implementing, read the owning requirement:

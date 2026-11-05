@@ -610,6 +610,18 @@ impl<'a> Selector<'a> {
 
     /// [`select_verdict`] for one requirement's labels.
     pub(crate) fn select(&mut self, ids: &[&str]) -> AliasSelection {
+        // trace:STORY-2492 | ai:codex — remote refusals cannot lose to alias cache order.
+        if let Some(remote) = super::review_publication::current(self.project_root, ids) {
+            let verdict = rv::parse_recorded_verdict(&remote.body)
+                .expect("publication projection is a verdict");
+            return AliasSelection::Selected(Box::new(Selected {
+                verdict,
+                body: remote.body,
+                label: ids.first().unwrap_or(&"").to_string(),
+                source: remote.source,
+                order_time: None,
+            }));
+        }
         let labels = spec_labels(ids);
         match labels.as_slice() {
             [] => AliasSelection::Absent,

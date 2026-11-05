@@ -391,3 +391,17 @@ pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
     ids.dedup();
     ids
 }
+
+/// Bounded OpenSSH/Git execution for trusted review publication. This leaf
+/// supplies only process output; signature and authority decisions stay on floor.
+// trace:STORY-2492 | ai:codex
+pub(crate) fn bounded_review_output(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+    cap: u64,
+) -> Option<std::process::Output> {
+    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
+        crate::BoundedCommandOutput::Completed(out) => Some(out),
+        _ => None,
+    }
+}

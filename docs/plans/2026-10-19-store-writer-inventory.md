@@ -213,3 +213,14 @@ retain their own storage behavior.
 ## 7. Category E — Read-Only Store Consumers (No Store Lock Required)
 
 Read-only store consumers (`load` (`aida-core/src/db/git_backend.rs:2285`), `CachedGitBackend` snapshot readers, `TeamRoster` `load` (`aida-core/src/team.rs:92`), `NodeRegistry` `load` (`aida-core/src/registry.rs:26`), `BlockRegistry` `load` (`aida-core/src/node.rs:834`), `read_canonical_messages` (`aida-cli-lib/src/mailbox_store.rs:113`), `load_published` (`aida-cli-lib/src/timing_record.rs:292`), `read_committed_trials` (`aida-cli-lib/src/regen/score.rs:972`), `doctor_scrub_collisions` (`aida-cli-lib/src/doctor_cmd.rs:13362`), `doctor_fsck` (`aida-cli-lib/src/doctor_cmd.rs:13527`), and `doctor_contradictions` (`aida-cli-lib/src/doctor_cmd.rs:14206`)) only read committed git objects or atomic-write files (`crate::write_atomic`) and never mutate the store worktree or git index.
+
+## Trusted review publications
+
+`gate/review_publication.rs` writes `reviews/v1/nodes.json`, immutable review
+publications and immutable author-session publications. The operator roster's
+read/modify/write uses a pinned-head compare under the existing store writer
+lock. Evidence creation, staging and commit also use that lock; exact-ref pushes
+run after it is released. Rejected immutable pushes use the existing private-ref
+pull/rebase helper and validate the preserved receipt before retrying. No reset,
+rollback, authority-grant export or second object writer is introduced.
+<!-- trace:STORY-2492 | ai:codex -->

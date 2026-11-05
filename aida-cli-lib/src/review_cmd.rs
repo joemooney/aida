@@ -169,6 +169,19 @@ pub(crate) fn handle_review_command(
 ) -> anyhow::Result<()> {
     use crate::*;
     match cmd {
+        ReviewCommand::Authorship { pr, specs } => {
+            crate::gate::review_publication::publish_authorship(
+                &std::env::current_dir()?,
+                crate::gate::ledger::ChangeKey::pr(*pr),
+                specs,
+            )
+        }
+        ReviewCommand::Publish {
+            pr,
+            specs,
+            blocking_findings,
+        } => crate::gate::review_publication::publish_local(*pr, specs, blocking_findings),
+        ReviewCommand::Nodes { command } => crate::gate::review_publication::nodes(command),
         // trace:TASK-1993 | ai:codex
         ReviewCommand::Watch(args) => crate::review_watch::run(args),
         ReviewCommand::Prompt {

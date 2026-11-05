@@ -1,6 +1,14 @@
 # Cross-machine review on trusted nodes
 
-Status: proposed; master sign-off required before implementation.
+Status: approved for slice 1 by the advisor ruling and master sign-off on
+2026-11-05. The signing amendment explicitly selects OpenSSH
+`ssh-keygen -Y sign/verify`, namespace `aida-review-receipt`; the earlier
+assumption about existing keyring signing primitives is withdrawn.
+Watcher reservation synchronization remains slice 2.
+
+Slice 1 implementation and operator setup: [second review node](../agents/second-review-node.md).
+The proposed decision and inspection below are retained as the signed-off sketch;
+the recorded rulings take precedence.
 Owning requirement: STORY-2492.
 <!-- trace:STORY-2492 | ai:codex -->
 
@@ -109,8 +117,23 @@ fake only the forge transport as needed for a deterministic test.
 - Unsupported schema, read-budget exhaustion and unsafe paths cannot yield
   positive credit. Existing local verdict and hold tests remain valid.
 
-## Current outcome
+## Implementation session outcome (2026-11-05)
 
-Source inspection only; no production behavior changed and no acceptance
-criterion is claimed complete. Punt the story for the authority decision and
-sketch approval; resume implementation after sign-off is recorded on the spec.
+Slice 1 implements the approved OpenSSH amendment: operator-enrolled public-key
+roster, immutable signed review and author-session publications, exact-head and
+canonical-spec consumption, current-roster revocation, and host recorder/collector
+integration. Watcher reservation synchronization remains slice 2.
+
+Direct native validation: all three new two-clone/OpenSSH tests passed; all 36
+fast CI checks passed; the wider gate run passed 1,278 tests with three remaining
+native-context fixture failures. Those failures are tracked as
+TASK-b6b1278890774ef993d2ebc327862470-810. The CLI help snapshot and manual were
+updated. The standalone lease has no lane runner, so its formal result remains
+`untested=true`; direct checks are separate best-effort evidence.
+
+The native publication preflight explicitly requires leaving edits uncommitted
+for the host-side exit step. No PR, review record or merge was performed in this
+session. Host publication from the main checkout uses `aida ship STORY-2492
+--from-seat <seat-path> --commit-pending '<message> (STORY-2492)'`; that path never
+merges. The source and pending store documentation-impact metadata need the host
+commit before publication.

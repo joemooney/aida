@@ -1037,6 +1037,20 @@ pub(crate) fn merge_gate_verdict_candidates(
     spec_ids: &[String],
     head: Option<&str>,
 ) -> Vec<crate::gate::review_verdict::RecordedVerdict> {
+    // trace:STORY-2492 | ai:codex — a synced refusal excludes local/archive approval fallback.
+    let change_key = format!("PR-{pr}");
+    let remote_keys: Vec<&str> = std::iter::once(change_key.as_str())
+        .chain(spec_ids.iter().map(String::as_str))
+        .collect();
+    for root in roots {
+        if let Some(remote) =
+            super::review_publication::current_at_head(root, &remote_keys, head.unwrap_or(""))
+        {
+            return crate::gate::review_verdict::parse_recorded_verdict(&remote.body)
+                .into_iter()
+                .collect();
+        }
+    }
     let head = head.map(str::trim).filter(|h| !h.is_empty());
     let mut keys: Vec<String> = vec![format!("PR-{pr}")];
     for id in spec_ids {

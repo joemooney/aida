@@ -180,6 +180,25 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::presence::is_keystone_class",
         ],
     ),
+    // trace:STORY-2492 | ai:codex
+    (
+        "review_publication.rs",
+        "trusted review publication: orchestrates the canonical store writer and pinned-ref synchronization; OpenSSH transport runs through the floor",
+        &[
+            "aida_core::db::with_store_write_lock",
+            "aida_core::git_ops",
+            "aida_core::git_ops::add",
+            "aida_core::git_ops::commit",
+            "aida_core::git_ops::current_branch",
+            "aida_core::git_ops::ensure_store_write_safe",
+            "aida_core::git_ops::has_remote",
+            "aida_core::git_ops::head_sha",
+            "aida_core::git_ops::pull_rebase",
+            "aida_core::git_ops::push_exact",
+            "aida_core::store_locate::detect_distributed_store_from",
+            "aida_core::transport_policy::refuse_unsupported",
+        ],
+    ),
     (
         "ship.rs",
         "ship status: the awaiting-you classifier, drain lock and state, and vendor activity",

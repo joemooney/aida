@@ -206,14 +206,25 @@ pub(crate) fn record_verdict_at(
         if let Some(spec) = spec {
             store::bind_unbound(&store, spec, change)?;
         }
-        return store::append_one(&store, event::verdict_event(&store, change, record, spec));
+        let delivered =
+            store::append_one(&store, event::verdict_event(&store, change, record, spec))?;
+        // trace:STORY-2492 | ai:codex
+        let labels = spec.map(|s| vec![s.label.clone()]).unwrap_or_default();
+        super::review_publication::publish(&store, change, record, &labels)
+            .map_err(std::io::Error::other)?;
+        return Ok(delivered);
     }
     let spec = GateSpec::resolve(&root, &key);
     match project::changes_for_spec(&store, &spec.label).last() {
-        Some(change) => store::append_one(
-            &store,
-            event::verdict_event(&store, *change, record, Some(&spec)),
-        ),
+        Some(change) => {
+            let result = store::append_one(
+                &store,
+                event::verdict_event(&store, *change, record, Some(&spec)),
+            )?;
+            super::review_publication::publish(&store, *change, record, &[spec.label.clone()])
+                .map_err(std::io::Error::other)?;
+            Ok(result)
+        }
         None => store::append_unbound(&store, &spec, record),
     }
 }
@@ -261,6 +272,18 @@ pub(crate) fn record_collected_verdict(
         events.push(event::verdict_event(&root, change, body, Some(spec)));
     }
     let appended = store::append(&root, change, events)?;
+    // trace:STORY-2492 | ai:codex — collector publishes only after its local checks.
+    super::review_publication::publish(
+        &root,
+        change,
+        record,
+        &spec_records
+            .iter()
+            .map(|(spec, _)| spec.label.clone())
+            .collect::<Vec<_>>(),
+    )
+    .map_err(std::io::Error::other)?;
+
     Ok(appended
         .iter()
         .filter(|e| e.verdict_record().is_some())
@@ -312,6 +335,11 @@ pub(crate) fn open_change_bound(
             ChangeKey::pr(change.id),
             &GateSpec::resolve_all(start, specs),
         );
+    }
+    // trace:STORY-2492 | ai:codex — publish stable author sessions with the opened head.
+    if change.id != 0 {
+        super::review_publication::publish_authorship(start, ChangeKey::pr(change.id), specs)
+            .map_err(|e| anyhow::anyhow!("{} opened at {}, but author publication failed: {e:#}; retry `aida review authorship --pr {} --specs {}` from its head checkout", change.id, change.url, change.id, specs.join(",")))?;
     }
     Ok(change)
 }

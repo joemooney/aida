@@ -57,3 +57,6 @@ pub(crate) mod trailer_coverage;
 #[cfg(test)]
 #[path = "tests/task_2707_cache_authority_tests.rs"]
 mod task_2707_cache_authority_tests;
+
+// trace:STORY-2492 | ai:codex
+pub(crate) mod review_publication;
