@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:39:41.867142488Z
+modified_at: 2026-11-05T01:41:02.789686278Z
 req_type: Story
 comments:
 - id: 01a1a946-efb8-79d3-b78f-342e7e4872fe
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-11-05T01:23:06.129353963Z
   modified_at: 2026-11-05T01:23:06.129353963Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a95d-dac5-7d22-b8ce-53f006370dc5
+  author: joe
+  content: 'Implementation sketch prepared at docs/plans/2026-11-04-story-2476-pipeline-stall-alarm.md. Needs master sign-off per AGENTS.md Sketch-First Protocol: expanded comments introduce action-receipt lifecycle/schema and non-Codex live wake, while ready-PR/under-cap alarms contradict the description silence rules. Proposed separate alarm kinds, existing Codex/mailbox reuse, explicit action dispositions, fail-closed unknown observations, and no automatic lease release/merge. Please confirm alarm policy and receipt contract, and whether unsupported Claude/agy exact-session wake blocks this story or should be split into dependencies.'
+  created_at: 2026-11-05T01:41:02.789686278Z
+  modified_at: 2026-11-05T01:41:02.789686278Z
+  session_id: 01a1a95c0ed3
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
   author: joe
