@@ -13,16 +13,25 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T19:06:50.818108328Z
+modified_at: 2026-11-05T19:25:58.313401260Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
 - regroup
+comments:
+- id: 01a1ad2c-d24f-7430-9333-b241823a103e
+  author: joe
+  content: |
+    protocol check at `aida queue done` ([protocol] enforce = "warn"): BUG-2458 proceeded with missing protocol items:
+    - protocol: bug — missing test-file change (layer: type; no test file in the diff)
+  created_at: 2026-11-05T19:25:58.223994714Z
+  modified_at: 2026-11-05T19:25:58.223994714Z
+  session_id: 01a1ad1ae5d5
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
@@ -36,6 +45,14 @@ history:
   timestamp: 2026-11-05T19:06:50.903892640Z
   session_id: 01a1ad1ae5d5
   changes: []
+- id: 01a1ad2c-d35e-7b10-a98c-6fa9ca060293
+  author: joe
+  timestamp: 2026-11-05T19:25:58.494689785Z
+  session_id: 01a1ad1ae5d5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -44,3 +61,7 @@ filed_at:
   aida_build_sha: b66ec083185
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T19:25:58.313401260Z
+  implemented_by: joe
