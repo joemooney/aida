@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1715",
+  "publishes": [
+    {
+      "at": "2026-11-05T07:06:47.620471964Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T05:09:06.194564817Z",
+      "spec": "TASK-1715",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T06:33:56.330668497Z",
+      "spec": "TASK-1715",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T09:24:53.707249181Z",
+      "spec": "TASK-1715",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1715",
+        "branch": "task-1715",
+        "first_seen": "2026-10-08T09:24:53.707055659+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:47:27.619950772Z",
+      "spec": "TASK-1715",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-1715"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:42:35.600107704Z",
+      "spec": "TASK-1715",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T02:46:40.176917821Z",
+      "spec": "TASK-1715",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T04:07:38.066187574Z",
+      "spec": "TASK-1715",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1715",
+        "branch": "pr-3404",
+        "first_seen": "2026-11-05T04:07:38.066107663+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-05T07:06:03.334287078Z",
+      "spec": "TASK-1715",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3404
+      }
+    },
+    {
+      "ts": "2026-11-05T07:06:47.367867285Z",
+      "spec": "TASK-1715",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5602eae5bf12f06d8f3e2f3e1753667a9db41246",
+        "pr": 3404,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
