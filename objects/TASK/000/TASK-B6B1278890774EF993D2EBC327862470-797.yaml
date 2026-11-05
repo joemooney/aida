@@ -1,0 +1,29 @@
+id: 01a1a96d-f16c-7a42-a28b-850ede330ad7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-797
+title: '[cosmetic][non-blocking][TASK-1760] aida-core/src/scaffolding/mod.rs:2952 sends…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1954, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic][non-blocking][TASK-1760] aida-core/src/scaffolding/mod.rs:2952 sends only .git/hooks/ through write_hook_file, while requirements_cli::write_scaffold_artifact also covers .claude/hooks/ and *.sh. That leaves two 'executable artifact' predicates that can drift apart.
+
+  PR: #3372
+  Reviewed sha: 46d1064a19079a7a9503a76289ce3436d5640ba6
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T01:58:37.164985551Z
+modified_at: 2026-11-05T01:58:37.164985551Z
+req_type: Task
+tags:
+- carried-from:TASK-1954
+- finding-hash:36dc5745
+- from-review:PR-3372
+- kind:carried-forward
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
