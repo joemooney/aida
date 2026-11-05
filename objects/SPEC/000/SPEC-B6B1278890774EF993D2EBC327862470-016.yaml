@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:49:13.714847256Z
-modified_at: 2026-11-05T19:44:07.574921959Z
+modified_at: 2026-11-05T19:49:11.602446086Z
 req_type: Task
 tags:
 - from-implementer:TASK-2861
@@ -63,6 +63,12 @@ comments:
   created_at: 2026-11-05T19:41:11.750530762Z
   modified_at: 2026-11-05T19:41:11.750530762Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad42-1532-78b1-a7aa-ab212d273d92
+  author: joe
+  content: 'Round 2: addressed findings 1-6 in pending code and PR #3444 metadata. Added a justified test_home.rs liveness allow-list entry (ancestor procfs cannot establish local PID death); replaced current_exe with /proc/self/exe read_link without changing its ratchet; set explicit Builder mode 0700; added geteuid SAFETY; CI now requires AIDA_REQUIRE_USERNS=1. Retitled PR to [AI:codex] fix(tests): isolate lib homes across PID namespaces (TASK-2886), and documented legacy PID-only directories require manual cleanup. Prior lib-0 log https://github.com/joemooney/aida/actions/runs/42083002843/job/127440664876 suppresses successful output and does not establish whether live namespaces actually ran; no claim of prior CI live coverage. Six focused rustc-harness checks passed under umask 022, including actual concurrent PID-1 namespaces and both source guards; required-userns refusal branch also verified. Formatting, portability and diff checks passed. Full cargo validation unavailable: lease has no lane job runner (untested=true per launcher contract). Native sandbox refuses git add: .git/index.lock read-only. Per documented TASK-2712 flow, launcher must create the new round-2 commit and push pending edits after exit. Requested subject: [AI:codex] fix(tests): isolate lib homes across PID namespaces (TASK-2886). PR body at /tmp/task-2886-pr.md is already applied. No findings disputed; merge hold left for separate review/merge seat.'
+  created_at: 2026-11-05T19:49:11.602446086Z
+  modified_at: 2026-11-05T19:49:11.602446086Z
+  session_id: 01a1ad3d633b
 history:
 - id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
   author: joe
