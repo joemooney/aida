@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T02:32:33.918317979Z
+modified_at: 2026-11-05T03:57:36.734536445Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-11-05T02:18:17.556369997Z
   modified_at: 2026-11-05T02:18:17.556369997Z
   session_id: 01a1a971a49b
+- id: 01a1a9da-e25e-77e3-8929-2dcf07e7e1e2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Tests are correct and cover all three claim-window paths, but CI (lib-0) fails the ''Test time budget'' gate: the new interrupted-claim test runs >=10s by design against default_limit=10 with no budget entry.. No triage reason was given.'
+  created_at: 2026-11-05T03:57:36.734535168Z
+  modified_at: 2026-11-05T03:57:36.734535168Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
   author: joe
@@ -96,6 +102,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a9da-e25e-77e3-8929-2db0835eebdc
+  author: joe
+  timestamp: 2026-11-05T03:57:36.734523563Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
@@ -111,12 +125,4 @@ implementation_info:
     cargo fmt --all -- --check; git diff --cached --check — passed
   implemented_at: 2026-11-05T02:18:32.791749244Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Tests are correct and cover all three claim-window paths, but CI (lib-0) fails the ''Test time budget'' gate: the new interrupted-claim test runs >=10s by design against default_limit=10 with no budget entry.'
-  recovery_hint: address the review findings, move TASK-2832 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T02:32:33.918317979Z
 interface_changes: {}
