@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T02:55:47.844000604Z
-modified_at: 2026-11-05T02:55:47.844000604Z
+modified_at: 2026-11-05T02:56:07.577955574Z
 req_type: Bug
+comments:
+- id: 01a1a9a2-9799-79c3-8dc0-7fc0458a497a
+  author: joe
+  content: 'Update 19:56: a minute later the same command listed 5 again. So it''s intermittent: one read returned the historical set, possibly during a cache refresh or a partial receipt-anchor read. Treat it as a flaky inbox scope or receipt read, not lost state. Acceptance: a partial or failed receipt read must report the view as incomplete, never show everything as unread.'
+  created_at: 2026-11-05T02:56:07.577955574Z
+  modified_at: 2026-11-05T02:56:07.577955574Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
