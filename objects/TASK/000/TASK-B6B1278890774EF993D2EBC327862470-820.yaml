@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T08:43:29.060020396Z
+modified_at: 2026-11-05T09:48:53.471184990Z
 req_type: Task
 tags:
 - docs:impacted
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-11-05T08:35:00.285805800Z
   modified_at: 2026-11-05T08:35:00.285805800Z
   session_id: 01a1aaa4cf95
+- id: 01a1ab1c-7d5f-73b3-8f35-c00e10e4d517
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Intake isolation, publication, hostile-history validation and journaled create/comment are solid and tested, but the normal two-site flow wedges on divergence and a failed child write wedges an observation permanently; CI was still pending at review time.. Triage reason: CI red at 395eea7: task1169_launcher_sets_ceiling_guardrail (every_headless_spawn_site_disables_background_tasks / sets_the_background_wait_ceiling), bug_2181 task_2001_every_host_remote_call_routes_its_credentials, resolve_aida_exe no_cli_source_outside_the_resolver. New spawn site must go through the shared launcher/resolver.'
+  created_at: 2026-11-05T09:48:53.471182767Z
+  modified_at: 2026-11-05T09:48:53.471182767Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
@@ -77,6 +83,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ab1c-7d5f-73b3-8f35-bff16c213ac3
+  author: joe
+  timestamp: 2026-11-05T09:48:53.471164316Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -85,11 +99,3 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Intake isolation, publication, hostile-history validation and journaled create/comment are solid and tested, but the normal two-site flow wedges on divergence and a failed child write wedges an observation permanently; CI was still pending at review time.
-  recovery_hint: address the review findings, move TASK-3096 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T08:43:29.060020396Z
