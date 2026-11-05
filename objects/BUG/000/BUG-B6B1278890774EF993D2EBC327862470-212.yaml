@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-05T02:54:44.951774086Z
+modified_at: 2026-11-05T02:56:01.308601964Z
 req_type: Bug
 tags:
 - area:containment
@@ -26,6 +26,40 @@ relationships:
 - rel_type: Child
   target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
   created_at: 2026-11-05T01:34:02.236179426Z
+comments:
+- id: 01a1a9a2-7f1c-7d81-bfb7-ba5362b106c6
+  author: mcp
+  content: |-
+    SKETCH v1 — awaiting independent advisor signoff
+    trace:BUG-2446 | ai:codex
+    2026-11-04; inspected checkout efca74e51a683b314e45f7ccbc9afaccab2b1ec8. No production changes, PR, new vendor execution, or conformance pass claimed.
+
+    Confirmed source cause: contained_boundary::contained_store_write_paths grants the entire main .aida-store and .aida/cache-db; session::contained_write_set combines those with coordination grants; codex_native_sandbox::codex_native_write_paths renders this shared set as --add-dir. The native terminal therefore has the same filesystem object-write authority as its in-sandbox aida process. Protecting .git or checking store hooks does not distinguish raw object writes from legitimate CLI writes. Removing the store grant alone breaks existing claim/comment/edit/queue workflows.
+
+    Authority/context: STORY-2460 Q2 approves raw Git/store denial and mediated AIDA positive controls, but does not select or independently approve a concrete mutation service. TASK-2712 N1 explicitly grants the shared store for current native compatibility; its post-exit Git publication path is not an in-session mutation service. STORY-1681 discussed spool versus RPC but is superseded by BUG-2169; do not silently revive its unapproved design or assume seat clones discharge raw canonical-store denial. Current S1 reassessment withdraws Codex C0/C1 positive credit; C2 failure remains parent-observed. S1 harness source is absent from this checkout, so integrated same-profile C2 acceptance is not presently runnable here.
+
+    Proposal for independent judgment:
+    1. Use one host-launcher-owned, synchronous, typed AIDA mutation service for the native lane, reusing signed shared-boundary identity primitives where implemented. Run the service outside the vendor sandbox; CLI and allowed MCP consumers become clients, not privileged arbitrary CLI runners. Do not add a generic host shell/argv execution deputy, arbitrary YAML replacement, or authority from caller-controlled environment fields.
+    2. Host fixes the canonical project/store, process-bound child identity, owned spec/role and permitted verbs at launch. Each request identifies an explicit supported operation and bounded data; the service resolves identity/paths itself and revalidates live authority and existing per-operation gates at the write boundary. Missing/expired/revoked/foreign/sibling authority and unsupported operations refuse. Baseline non-authoritative compatibility remains explicitly inventoried; do not broaden role policy incidentally.
+    3. All object mutation uses existing canonical atomic persistence and store writer lock, including hypothesis/relationship/status rules and provenance. Return success only after persistence; bind retries to request identity with explicit conflict semantics so interrupted clients cannot duplicate comments or overwrite concurrent edits. Never trust client-provided paths, executables, Git settings, or complete replacement objects.
+    4. Make canonical store objects and authority-bearing store metadata read-only/unwritable to every vendor terminal/file tool and descendant. Store paths nested under workspace, ancestor grants, symlinks, primary-checkout launches and resume must be accounted for: simply dropping --add-dir is insufficient when another grant covers them. If the native profile cannot express the protected subtree, refuse this new mediated profile pending an approved enforcement alternative. Do not silently revoke or relabel current operator-approved native compatibility.
+    5. Treat shared derived cache as host-owned for this profile; use read-only snapshots or lane-private derived caches where readers need local writes. Inventory CLI/MCP mutation and coordination writers (claim/edit/comment/queue done/findings/handoff) before cutover. Existing mailbox/deputy channels must not become generic service bypasses. Restrict the service endpoint to the named typed authority; BUG-2448's generic host-IPC defect is a separate owner and cannot be treated as solved by the presence of a socket.
+    6. Host lifecycle starts service before child tools, tears it down with the child/lease, and refuses a mediated launch if required service/endpoint/identity protections are unavailable. No new timers, automatic watcher, operator settings change, or global opt-in changes.
+
+    Decisive verification before completion:
+    - Disposable real-vendor production launch with exact resulting grants and profile/version evidence: immutable closed payload and parent-made same-directory sentinels; raw terminal AND enabled file-tool create/append/rename to canonical-equivalent objects must execute and fail, with parent-observed unchanged content/entries. Cover symlink/ancestor/resume layouts; EXDEV, unexecuted payload, model refusal or missing C0 are not passing denial evidence.
+    - Same-profile positive controls: workspace write plus actual mediated own claim/comment/edit/queue completion, visible from an independent host reader after durable success. Use fixture store/cache/credentials/forge only.
+    - Refusal/concurrency tests: malformed/oversized/path-bearing requests, endpoint replacement/replay, wrong/expired/revoked/sibling identity, stale base, concurrent mutations, host failure after persist before reply, and service absence. Host must never run lane-owned hooks/config/commands.
+    - Preserve existing Claude behavior and native compatibility labeling. Independent strict review is still required; no completion claim from synthetic tests alone.
+
+    Approval questions:
+    Q1. Approve synchronous typed host mediation rather than asynchronous spool ingestion? Existing CLI contracts require immediate durable failure/success and read-after-write; asynchronous fallback would change them.
+    Q2. Approve a separately gated mediated native profile and explicit protected-subtree capability check while retaining today's compatibility policy? If current native enforcement cannot exclude nested store objects, choose the shared AIDA boundary or another independently reviewed enforcement mechanism rather than promising a grant-only fix.
+    Q3. Confirm shared ownership/slicing with TASK-2712 and STORY-2238/TASK-2707: transport/identity and writer inventory first, then CLI/MCP routing plus profile cutover, then authorized real-vendor evidence. These owners are references, not newly declared satisfied dependencies.
+
+    Disposition: implementation is blocked on independent design selection/signoff. Punt BUG-2446 as design-fork; do not queue-done or claim the vulnerability fixed.
+  created_at: 2026-11-05T02:56:01.308584955Z
+  modified_at: 2026-11-05T02:56:01.308584955Z
 history:
 - id: 01a1a957-74fc-7913-99bf-268eaf265ca8
   author: joe
