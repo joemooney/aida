@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-767
 agreed_id: TASK-2995
 title: 'Showcase: add interactive CLI command, skill, and hook explorer page (features.html)'
 description: 'Add docs/showcase/features.html exposing AIDA''s CLI command surface, workspace crate topology, skill templates, and hook templates. Acceptance: (1) docs/showcase/features.html is linked from docs/showcase/index.html and docs/showcase/engineering-audit.html; python3 docs/showcase/build.py --check and tests/test_showcase_build.py + tests/test_showcase_publish.py pass with zero broken relative links or external runtime dependencies. (2) Accurately reflects the repository without fabricating nonexistent crates on command badges or making unsourced third-party competitor claims: documents the 7 actual Cargo.toml workspace crates (aida-core, aida-cli, aida-cli-lib, aida-crate, aida-server, aida-generate-types, aida-tui), groups all 163 CLI command families (752 routes from aida commands --json --flags --hidden) by their official aida help-all topic categories and actual owning crate, and describes the proposed aida-cli-lib domain split in an explicitly labelled Planned Decomposition section. (3) Includes the interactive aida commands explorer, the 59 skill templates under aida-core/templates/skills/, and all 22 hook templates under aida-core/templates/hooks/, with no internal spec IDs in public prose.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T11:33:55.190207292Z
+modified_at: 2026-11-05T13:20:09.504552459Z
 req_type: Task
 tags:
 - docs
@@ -50,6 +50,12 @@ comments:
   content: 'Round 2 finding addressed in 82842edb179 on agy2/task-2995-features-page (PR #3342): terminal now belongs to aida-cli-lib in COMMAND_FAMILIES; all crate counts read aida-cli-lib 163 / aida-tui 1; removed the inaccurate TUI multiplexer claim and documented the user-local Terminator plugin installer on the CLI library card. Verified embedded ownership and displayed counts, python3 docs/showcase/build.py --check, 14 showcase build tests, 7 showcase publish tests, cargo fmt --all -- --check, and git diff --check. make check-ci-fast was attempted but interrupted while queued behind occupied Cargo build slots; no full fast-check success claimed. Existing merge hold remains for human/advisor or eligible recorded Rework clearance; no ship or review-record action taken.'
   created_at: 2026-11-05T11:24:45.340081674Z
   modified_at: 2026-11-05T11:24:45.340081674Z
+- id: 01a1abdd-e920-7153-8246-cb1a2300c339
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 and AC3 met (features.html linked from index.html and both engineering-audit copies; 59 skills and 22 hooks match the template directories exactly; no spec IDs in public prose; showcase build and tests green in CI). AC2 is partial: the ''server'' command family is credited to the aida-server crate, but it is a remote client implemented in aida-cli-lib. The embedded command inventory is also 5 routes behind the PR head.. Triage reason: Address the latest review on #3342 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch agy2/task-2995-features-page (no new branch). LIGHT gate.'
+  created_at: 2026-11-05T13:20:09.504551159Z
+  modified_at: 2026-11-05T13:20:09.504551159Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a4ee-75d9-73f1-810d-e41d3e072f38
   author: joe
@@ -99,6 +105,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1abdd-e920-7153-8246-cb014ad6c270
+  author: joe
+  timestamp: 2026-11-05T13:20:09.504533359Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
   branch: agy2/audit-polish
@@ -110,11 +124,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T11:25:06.400832460Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1 and AC3 met (features.html linked from index.html and both engineering-audit copies; 59 skills and 22 hooks match the template directories exactly; no spec IDs in public prose; showcase build and tests green in CI). AC2 is partial: the ''server'' command family is credited to the aida-server crate, but it is a remote client implemented in aida-cli-lib. The embedded command inventory is also 5 routes behind the PR head.'
-  recovery_hint: address the review findings, move TASK-2995 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T11:33:55.190207292Z
