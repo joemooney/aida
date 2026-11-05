@@ -925,6 +925,10 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         "standalone implementer: concurrency cap",
     ),
     (
+        crate::standalone_implementer::EMPTY_REWORK_EXIT_CODE,
+        "standalone implementer: empty rework",
+    ),
+    (
         crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
         "scheduled job timed out",
     ),
