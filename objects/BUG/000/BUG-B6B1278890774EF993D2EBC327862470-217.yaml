@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-217
 agreed_id: BUG-2451
 title: Rework lanes start on a fresh -N branch off main instead of the open PR's branch, producing duplicate incomplete PRs
 description: 'Observed 2026-11-04, five times on both vendors: TASK-2708 (-658-2), TASK-3046 (-784-2, dup PR #3397), BUG-2439 (-208-2 → #3401 and a lost -208-3), TASK-1715 (task-1715-2 → #3404), STORY-2475 (-403-2 → dup PR #3407). When `aida queue work` is launched for a spec whose open PR''s branch is still held by an old seat or lease, or the branch exists without a matching local seat, pickup allocates <branch>-2 from main. The lane then implements only the rework delta on top of main and publishes a second PR missing the original commits. Folding that back needs a cherry-pick, which often conflicts, plus another lane. Acceptance: (1) a rework or queue-work for a spec with an open PR always seats that PR''s head branch; if the branch is held, it reclaims a clean, pushed holder (see BUG-2450) or refuses, naming the holder, and never allocates -N; (2) -N allocation is only for a spec with no open PR, and only when explicitly requested; (3) publication refuses to open a second open PR for the same spec, and pushes to the existing one or errors; (4) regression tests for the held-branch and the stale-seat cases.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T06:37:32.939542045Z
+modified_at: 2026-11-05T06:55:41.067273847Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1aa7d-ea0b-7060-b3ae-ce000fab373c
+  author: aida-session-start
+  timestamp: 2026-11-05T06:55:41.067269186Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
