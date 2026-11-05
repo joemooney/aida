@@ -1,0 +1,34 @@
+id: 01a1a9fa-a071-7532-965c-0066b6cb1554
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-417
+agreed_id: STORY-2491
+title: 'Review PR-3407: [AI:codex] fix(queue): address rework admission and publication review (STORY-2475)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-403-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3407>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-403-2` → `main`
+
+  ## Covers
+
+  - STORY-2475
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3407` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T04:32:17.009546707Z
+modified_at: 2026-11-05T04:32:17.009546707Z
+req_type: Story
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e1fc3f06903
+  vendor: codex
+  session: 01a1a9f00add
