@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T12:46:08.703912274Z
+modified_at: 2026-11-05T12:49:31.306134343Z
 req_type: Task
 tags:
 - architecture
@@ -535,6 +535,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1abc1-dcaa-73e2-bf68-d046abf4632c
+  author: joe
+  timestamp: 2026-11-05T12:49:31.306151924Z
+  session_id: 01a1abbeba7f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -542,3 +550,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+attention_reason:
+  category: blocked-dependency
+  detail: 'AC(1) pickup audit at 9f572b1f0d1: the PR-3307 rework is already landed via 96c521861aa; the controlling scope is the 05:25 next-slice brief plus 05:47 credential ruling. Credential policy is settled: host pre-launch refresh, exact read-only auth leaf, named expiry refusal, no writable credential root. Remaining prerequisite: signed STORY-2238 C12/M1 requires live Claude nested-sandbox chained-proxy proof before ordinary Claude AIDA-posture launches, and the signed pre-code probes must run on the real host outside every agent sandbox. No such Claude allowed/denied chain proof was found in the parent evidence. This native confined seat cannot supply an outside-sandbox host probe, and the later brief defers AC(2) installed evidence and forbids new unattended runs; I did not waive C12, run an authenticated lane, or enable a partial backend. Independently, the requested targeted test through aida lane job run --wait 1 -- cargo test --profile agent -p aida-cli-lib --lib task_2708_ refused because the current launcher lease names no lane job runner. No source changes; untested=true. Audit: launch/contained.rs remains Codex foreground-headless/API-key only; launch/spawn.rs stamps Claude Aida but preserves the legacy program; session.rs retains ClaudeNative applied credit and legacy os_wrap; agent_launch.rs still refuses contained --bg with os_wrap. Git metadata is read-only as expected; host auto-publication remains the approved publishing path.'
+  lean: Have the host/advisor supply the signed model-free Claude nested-proxy prerequisite and a launcher-provided test runner, then resume the AC(1)-only migration. If implementation should precede the live proof, explicitly authorize shipping a disabled adapter with named refusal until that host proof is attached; do not waive read-only credentials or containment floors.
+  raised_by: implementer
+  raised_at: 2026-11-05T12:49:31.306134343Z
