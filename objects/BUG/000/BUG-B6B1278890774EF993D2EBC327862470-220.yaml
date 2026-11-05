@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-220
 agreed_id: BUG-2454
 title: session end cannot end a lease whose seat clone state read times out (sandboxed sh over 120s), even with --force --discard-unpushed
 description: 'Lease 01a1aa6e87e1 (TASK-2832) in clean, fully pushed seat clone aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-779-2: ''aida session end --force --discard-unpushed'' refuses because ''the sandboxed sh did not finish within 120s''. The lease keeps holding the PR branch, so queue work --force-claim --branch refuses and the PR-3394 review fails. Acceptance: timed-out sandboxed read falls back to an unsandboxed read-only git check or names the hanging step; explicit discard ends the lease when state is unreadable; regression test with a stubbed hanging sandbox.'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T10:43:27.328808534Z
-modified_at: 2026-11-05T12:13:15.419192385Z
+modified_at: 2026-11-05T13:16:59.118593819Z
 req_type: Bug
 comments:
 - id: 01a1ab9f-7b7b-7c63-bffd-193b70025879
@@ -61,6 +61,20 @@ history:
   timestamp: 2026-11-05T12:13:16.169319894Z
   session_id: 01a1ab929a76
   changes: []
+- id: 01a1abdb-016b-7060-8557-623690b8f333
+  author: aida-auto-bump
+  timestamp: 2026-11-05T13:16:59.115600136Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1abdb-016e-7f52-8f00-bc6ed6b35082
+  timestamp: 2026-11-05T13:16:59.118589786Z
+  agent: aida
+  commit_sha: 5bd07349956be69601e07baabb1684538112b8a8
+  summary: 'All 3 BUG-2454 acceptance criteria met: probe failures name their step (submodule evidence/working tree status/local ref tips/unpushed commit count); --force --discard-unpushed releases the lease while keeping the clone, cargo target and base pin, with no host git and no probe retry; hanging-bwrap regression bug2454_hanging_sandbox_allows_explicit_lease_release. Bug protocol (touches a test file): met. All PR CI green at ec6cc80.'
+  review_verdict: approved
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
@@ -76,6 +90,8 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-11-05T12:13:10.671702759Z
   implemented_by: joe
+  completed_at: 2026-11-05T13:16:59.115594063Z
+  completion_sha: 5bd07349956be69601e07baabb1684538112b8a8
 interface_changes:
   cli:
   - session end --force --discard-unpushed releases unreadable clone leases while retaining clone data and base pins; probe failures name their failing step
