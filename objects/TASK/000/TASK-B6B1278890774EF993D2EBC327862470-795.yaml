@@ -1,0 +1,29 @@
+id: 01a1a96d-df0f-79e1-83a5-316fb89affc7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-795
+title: '[minor][non-blocking][TASK-1982] story_1728_command_registry_tests.rs catch_all…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1954, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor][non-blocking][TASK-1982] story_1728_command_registry_tests.rs catch_all regex counts a guarded wildcard ('_ if cond') as a catch-all, so an exhaustive per-verb match plus '_ if x => ..' still passes the hot-file guard. This predates the PR and is not a regression.
+
+  PR: #3372
+  Reviewed sha: 46d1064a19079a7a9503a76289ce3436d5640ba6
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T01:58:32.463549478Z
+modified_at: 2026-11-05T01:58:32.463549478Z
+req_type: Task
+tags:
+- carried-from:TASK-1954
+- finding-hash:bec69ce7
+- from-review:PR-3372
+- kind:carried-forward
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
