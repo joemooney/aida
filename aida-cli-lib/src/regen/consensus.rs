@@ -1227,35 +1227,68 @@ mod tests {
         assert_eq!(head(store.path()).unwrap(), before);
     }
 
+    // trace:SPEC-447 | ai:codex
     #[test]
-    fn consensus_accepts_committed_json_fraction_43_of_44() {
-        let store = store();
-        let mut rows = store.rows();
-        for row in &mut rows {
-            row.checks = (0..44)
-                .map(|i| score::CheckOutcome {
-                    name: format!("check-{i}"),
-                    passed: i != 0,
-                })
-                .collect();
-            row.excluded_checks.clear();
-            row.discriminating = Some(score::Aggregate {
-                passed: 43,
-                total: 44,
-                pass_rate: 43.0 / 44.0,
-            });
-        }
-        commit_rows(store.path(), &rows);
-        let committed = score::read_committed_trials(store.path()).unwrap();
-        let report = analyze(&committed, &ids()).unwrap();
-        assert_eq!(report.gaps(), ["check-0"]);
-        handle(store.path(), &ids(), false).unwrap();
+    fn consensus_accepts_committed_json_fractions_and_preserves_validation() {
+        for (passed, total) in [(1, 11), (43, 44), (1, 3), (2, 3), (1, 2), (0, 11), (11, 11)] {
+            let store = store();
+            let mut rows = store.rows();
+            for row in &mut rows {
+                row.checks = (0..total)
+                    .map(|i| score::CheckOutcome {
+                        name: format!("check-{i}"),
+                        passed: i < passed,
+                    })
+                    .collect();
+                row.excluded_checks.clear();
+                row.discriminating = Some(score::Aggregate {
+                    passed,
+                    total,
+                    pass_rate: passed as f64 / total as f64,
+                });
+            }
+            commit_rows(store.path(), &rows);
+            let committed = score::read_committed_trials(store.path()).unwrap();
+            let report = analyze(&committed, &ids()).unwrap();
+            assert_eq!(report.gaps().len(), total - passed);
+            handle(store.path(), &ids(), false).unwrap();
 
-        // A materially wrong redundant rate still refuses committed evidence.
-        rows[1].discriminating.as_mut().unwrap().pass_rate = 0.99;
-        commit_rows(store.path(), &rows);
-        assert!(handle(store.path(), &ids(), true).is_err());
-        assert!(!store.path().join("objects").exists());
+            // Value conversion preserves f64 bits without another text parse.
+            let copy_rows = || {
+                serde_json::from_value::<Vec<score::TrialRecord>>(
+                    serde_json::to_value(&rows).unwrap(),
+                )
+                .unwrap()
+            };
+            for mutation in 0..6 {
+                let mut invalid = copy_rows();
+                let row = &mut invalid[1];
+                let aggregate = row.discriminating.as_mut().unwrap();
+                match mutation {
+                    0 => aggregate.pass_rate = if passed == 0 { 0.5 } else { 0.0 },
+                    1 => aggregate.passed += 1,
+                    2 => aggregate.total += 1,
+                    3 => row.oracle_sha = "other".into(),
+                    4 => row.oracle_bundle_sha256 = "other".into(),
+                    _ => row.content_sha256 = "other".into(),
+                }
+                commit_rows(store.path(), &invalid);
+                let before = head(store.path()).unwrap();
+                assert!(handle(store.path(), &ids(), true).is_err());
+                assert_eq!(head(store.path()).unwrap(), before);
+                assert!(!store.path().join("objects").exists());
+            }
+            // JSON cannot represent non-finite numbers; exercise the validator
+            // directly as well as checking that their persisted null refuses.
+            for rate in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                let mut invalid = copy_rows();
+                invalid[1].discriminating.as_mut().unwrap().pass_rate = rate;
+                assert!(analyze(&invalid, &ids()).is_err());
+            }
+            rows[1].discriminating.as_mut().unwrap().pass_rate = f64::NAN;
+            commit_rows(store.path(), &rows);
+            assert!(score::read_committed_trials(store.path()).is_err());
+        }
     }
 
     #[test]
