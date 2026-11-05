@@ -1125,8 +1125,10 @@ pub(crate) fn build_compete_arm_command(
     let args = compete_arm_argv(host_main, argv, vendor, contained, tree, || {
         session::claude_contained_flags_for(host_main, worktree_dir)
     })?;
+    // Compete launches have no containment receipt; native Codex stays uncredited.
+    // trace:BUG-2439 | ai:codex
     let actually_contained =
-        headless_vendor.is_some_and(|v| session::containment_applied(v, contained));
+        headless_vendor.is_some_and(|v| session::containment_applied(v, contained, None));
     let (program, args) = if actually_contained {
         session::os_wrapped_program_and_args(host_main, worktree_dir, command, args)?
     } else {
@@ -1143,7 +1145,7 @@ pub(crate) fn build_compete_arm_command(
     if vendor == "claude" {
         cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
     }
-    if headless_vendor.is_some_and(|v| session::containment_applied(v, contained, None)) {
+    if actually_contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
