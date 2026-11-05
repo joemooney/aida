@@ -2644,6 +2644,13 @@ pub(crate) fn session_start_with_receipt(
                         ) {
                             crate::pr_lease_takeover::LeaseEndAction::ForceEnd => true,
                             crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                                // trace:BUG-2450 | ai:codex
+                                crate::pr_lease_takeover::notify_advisor(
+                                    &project_root,
+                                    l,
+                                    &message,
+                                )
+                                .with_context(|| message.clone())?;
                                 anyhow::bail!("{}", message)
                             }
                             crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,

@@ -244,7 +244,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             return_to_pool,
             remove,
             include_in_use,
-        } => session_end(
+            discard_unpushed,
+        } => crate::session_end::session_end_with_discard_unpushed(
             id.as_deref(),
             spec.as_deref(),
             branch.as_deref(),
@@ -257,6 +258,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *return_to_pool,
             *remove,
             *include_in_use,
+            *discard_unpushed,
         ),
         SessionCommand::Leases {
             verbose,
