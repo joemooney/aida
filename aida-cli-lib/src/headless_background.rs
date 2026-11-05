@@ -472,6 +472,23 @@ pub(crate) enum Unshipped {
 impl SeatState {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     pub(crate) fn read(worktree: &Path, branch: &str) -> Self {
+        // Host Git refuses a seat clone. Read it through the sandbox and
+        // query origin through its trusted host, including after publication.
+        // trace:STORY-2475 | ai:codex
+        if let Some(seat) = crate::seat_clone::host_recorded_clone(
+            &crate::main_worktree_root_from(worktree),
+            worktree,
+        ) {
+            let facts = match crate::seat_clone::probe(&seat.main, &seat.root) {
+                crate::seat_clone::Probe::Known(facts) => Some(facts),
+                _ => None,
+            };
+            return Self {
+                head: facts.as_ref().and_then(|f| f.head.clone()),
+                origin: origin_head(&seat.main, branch),
+                uncommitted: facts.as_ref().map(|f| f.dirty.len()),
+            };
+        }
         Self {
             head: seat_head(worktree),
             origin: origin_head(worktree, branch),

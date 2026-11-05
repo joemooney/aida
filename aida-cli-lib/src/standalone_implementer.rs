@@ -792,6 +792,24 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     } = finished?;
     store_commit.commit();
 
+    // Publish before reading the final seat state or ending its lease. A punt
+    // or manual hold is an explicit instruction to leave publication alone.
+    // trace:STORY-2475 | ai:codex
+    let mut outcome = outcome;
+    if launch.vendor == crate::session::HeadlessVendor::Codex
+        && launch.contained
+        && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. })
+    {
+        crate::ship_from_seat::publish_queue_exit(
+            &main_root,
+            &worktree,
+            launch.spec,
+            launch.lease_id,
+            status.success(),
+        )?;
+        outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
+    }
+
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let seat = bg::SeatState::read(&worktree, launch.branch);

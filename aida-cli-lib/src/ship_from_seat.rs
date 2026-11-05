@@ -361,6 +361,274 @@ pub(crate) fn post_exit_commit_reported(
     outcome
 }
 
+/// Queue-work publication runs in the host after the child and test runner
+/// have stopped, while the clone lease still vouches for the seat. Explicit
+/// punts and holds retain their publication veto, including in drain/resume.
+// trace:STORY-2475 | ai:codex
+pub(crate) fn publish_queue_exit(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+) -> Result<()> {
+    let main = crate::main_worktree_root_from(main);
+    let publish = || {
+        run_at(
+            &main,
+            FromSeatOptions {
+                clone: tree.to_path_buf(),
+                spec: Some(spec.to_string()),
+                no_pr: false,
+                dry_run: false,
+                commit_pending: None,
+            },
+        )
+    };
+    publish_queue_exit_with(
+        &main,
+        spec,
+        || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+        || crate::seat_clone::probe(&main, tree),
+        publish,
+        || {
+            advisor_request(
+                &main,
+                "Queue-work lane exited without changes",
+                &format!(
+                    "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
+                 (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
+                 PR needs a new rework assignment.",
+                    tree.display()
+                ),
+            )
+        },
+    )
+}
+
+// These effects are injected at the publication boundary so tests exercise
+// the same veto, probe and dispatch as all three lane exit paths.
+// trace:STORY-2475 | ai:codex
+fn publish_queue_exit_with(
+    main: &Path,
+    spec: &str,
+    commit: impl FnOnce() -> PostExitCommit,
+    probe: impl FnOnce() -> crate::seat_clone::Probe,
+    publish: impl Fn() -> Result<()>,
+    notify: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
+        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
+    {
+        return Ok(());
+    }
+    finish_queue_exit(commit(), &publish, || {
+        match probe() {
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
+            crate::seat_clone::Probe::Unknown(why)
+            | crate::seat_clone::Probe::HasSubmodules(why) => {
+                anyhow::bail!("could not inspect clean lane for pending publication: {why}")
+            }
+            _ => {}
+        }
+        notify()
+    })
+}
+
+// trace:STORY-2475 | ai:codex
+fn finish_queue_exit(
+    outcome: PostExitCommit,
+    publish: impl FnOnce() -> Result<()>,
+    notify: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    match outcome {
+        // Failed exits retain the existing salvage-only Refs trailer, but
+        // the work is still published for review rather than stranded.
+        PostExitCommit::Committed(_) => publish(),
+        PostExitCommit::Clean => notify(),
+        PostExitCommit::NotASeat => Ok(()),
+        PostExitCommit::Failed(why) => anyhow::bail!("host post-exit commit failed: {why}"),
+    }
+}
+
+/// Send through the ordinary mailbox resolver, with bounded CLI execution.
+/// Queue the request when the advisor has no current reader.
+// trace:STORY-2475 | ai:codex
+pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Result<()> {
+    let mut cmd = std::process::Command::new(std::env::current_exe()?);
+    cmd.current_dir(main).args([
+        "mailbox",
+        "send",
+        "--to",
+        "advisor",
+        "--queue-for-role",
+        "--intent",
+        "request",
+        "--subject",
+        subject,
+        "--",
+        message,
+    ]);
+    match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(20)) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not notify advisor: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ),
+        _ => anyhow::bail!("advisor request did not finish: {message}"),
+    }
+}
+
+#[cfg(test)]
+mod queue_exit_tests {
+    use super::*;
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_punt_and_hold_veto_every_publication_effect() {
+        for hold in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let main = tmp.path();
+            let spec = "STORY-2475";
+            if hold {
+                crate::punt::write_hold_signal(
+                    &crate::punt::hold_signal_path(main, spec),
+                    &crate::punt::HoldSignal {
+                        spec: spec.into(),
+                        branch: "rework".into(),
+                        reason: None,
+                        spec_key: None,
+                    },
+                )
+                .unwrap();
+            } else {
+                crate::punt::write_signal(
+                    &crate::punt::signal_path(main, spec),
+                    &crate::punt::PuntSignal {
+                        spec: spec.into(),
+                        category: aida_core::PuntCategory::DesignFork,
+                        detail: "advisor decision needed".into(),
+                        lean: None,
+                    },
+                )
+                .unwrap();
+            }
+            publish_queue_exit_with(
+                main,
+                spec,
+                || panic!("veto must precede commit"),
+                || panic!("veto must precede probe"),
+                || panic!("veto must precede publication"),
+                || panic!("veto must precede no-change mail"),
+            )
+            .unwrap();
+            // Also cover the public boundary with actual on-disk signals.
+            publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
+        }
+    }
+
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_clean_unpushed_publishes_without_no_change_mail() {
+        use crate::seat_clone::{Probe, ProbeFacts};
+        use std::cell::Cell;
+        let tmp = tempfile::tempdir().unwrap();
+        for unpushed in [0, 1] {
+            let published = Cell::new(0);
+            let notified = Cell::new(0);
+            publish_queue_exit_with(
+                tmp.path(),
+                "STORY-2475",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        unpushed,
+                        ..Default::default()
+                    })
+                },
+                || {
+                    published.set(published.get() + 1);
+                    Ok(())
+                },
+                || {
+                    notified.set(notified.get() + 1);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(published.get(), unpushed);
+            assert_eq!(notified.get(), usize::from(unpushed == 0));
+        }
+        for probe in [
+            Probe::Unknown("probe failed".into()),
+            Probe::HasSubmodules("submodules".into()),
+        ] {
+            let why = publish_queue_exit_with(
+                tmp.path(),
+                "STORY-2475",
+                || PostExitCommit::Clean,
+                || probe,
+                || panic!("unknown must not publish"),
+                || panic!("unknown must not claim no changes"),
+            )
+            .unwrap_err();
+            assert!(why.to_string().contains("could not inspect clean lane"));
+        }
+        assert!(publish_queue_exit_with(
+            tmp.path(),
+            "STORY-2475",
+            || PostExitCommit::Clean,
+            || Probe::Known(ProbeFacts {
+                unpushed: 1,
+                ..Default::default()
+            }),
+            || anyhow::bail!("push refused"),
+            || panic!("failed publication is not no changes")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn story_2475_publication_and_notification_are_exclusive_and_fail_closed() {
+        use std::cell::Cell;
+        for (outcome, expected) in [
+            (PostExitCommit::Committed("tip".into()), (true, false, true)),
+            (PostExitCommit::Clean, (false, true, true)),
+            (PostExitCommit::NotASeat, (false, false, true)),
+            (
+                PostExitCommit::Failed("refused".into()),
+                (false, false, false),
+            ),
+        ] {
+            let published = Cell::new(false);
+            let notified = Cell::new(false);
+            let result = finish_queue_exit(
+                outcome,
+                || {
+                    published.set(true);
+                    Ok(())
+                },
+                || {
+                    notified.set(true);
+                    Ok(())
+                },
+            );
+            assert_eq!((published.get(), notified.get(), result.is_ok()), expected);
+        }
+        assert!(finish_queue_exit(
+            PostExitCommit::Committed("tip".into()),
+            || anyhow::bail!("push refused"),
+            || panic!("must not notify clean exit")
+        )
+        .is_err());
+        assert!(finish_queue_exit(
+            PostExitCommit::Clean,
+            || panic!("must not publish"),
+            || anyhow::bail!("mail refused")
+        )
+        .is_err());
+    }
+}
+
 /// The one head `git bundle list-heads` printed, when it is exactly
 /// `refs/heads/<branch>` at a full object id; the refusal otherwise.
 // trace:BUG-HOME-038 | ai:claude
@@ -765,8 +1033,13 @@ pub(crate) struct Deps<'a> {
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
     let cwd = std::env::current_dir().context("could not read the current directory")?;
+    run_at(&cwd, opts)
+}
+
+// trace:STORY-2475 | ai:codex
+pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
     run_from(
-        &cwd,
+        cwd,
         opts,
         &Deps {
             bundle: &crate::seat_clone::bundle_branch,
