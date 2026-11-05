@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T16:00:53.147986638Z
-modified_at: 2026-11-05T18:41:00.484061191Z
+modified_at: 2026-11-05T18:41:05.778716675Z
 req_type: Task
 tags:
 - from-implementer:BUG-2440
@@ -38,6 +38,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Doc content is accurate against codex_native_write_paths/contained_write_set, but the PR turns CI red: CI (contracts) ''CLI-manual drift-guard'' fails because a bare `--add-dir` citation lands under the ''### aida add'' manual entry.. No triage reason was given.'
   created_at: 2026-11-05T18:41:00.484059850Z
   modified_at: 2026-11-05T18:41:00.484059850Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad03-bc79-7350-af62-7ade2484c318
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2836):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 475a2680eae1
+    Recorded: 2026-11-05T17:48:53.445844068+00:00
+    Findings:
+    1. BLOCKING (CI red, caused by this PR): docs/cli/07-project-setup.md:660 cites bare `--add-dir` (a Codex flag). This block sits under the manual entry '### `aida add --sanitized`' (line 571). docs/cli/verify-manual.py parse_chapters therefore records it as an aida add flag citation (FLAG_RE, path=None), and flag_accuracy_misses hard-fails because aida add has no --add-dir. Failing check: CI (contracts) step 'CLI-manual drift-guard (every command documented)', run 42076394840 job 127417600996; Build (ubuntu-latest) 'Require every CI lane' then fails too. Fix: write it as `codex --add-dir` (verify-manual skips flags inside backticks that start with an external tool name only for git/cargo/python/bash/gh/glab/claude, so codex will not be exempt) or reword without a backticked bare flag, e.g. 'Codex add-dir grants'. Then confirm with: PATH=target/debug:$PATH python3 docs/cli/verify-manual.py 07-project-setup.md.
+    2. MINOR (user-facing manual): line 669 points users at `aida dev status` and says 'relaunch from a current build'. Those are developer-only instructions for working on AIDA itself, placed in a user-facing setup chapter. Phrase it for end users, e.g. check `aida --version` / upgrade and relaunch, or move the dev-binary note to developer docs.
+    3. COSMETIC (commit metadata): the commit subject '[AI:codex] fix: address CI failures and review findings (TASK-2836)' mislabels a docs-only change and becomes the squash title. The spec comment names the intended subject '[AI:codex] docs(codex): clarify linked-cache coordination contract (TASK-2836)'. Retitle the PR/commit on rework.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T18:41:05.657145169Z
+  modified_at: 2026-11-05T18:41:05.657145169Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a769-c350-7b21-8fbc-14a580bffafe
