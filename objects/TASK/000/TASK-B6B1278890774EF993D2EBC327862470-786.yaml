@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:26:49.386885231Z
+modified_at: 2026-11-05T12:26:50.733666515Z
 req_type: Task
 tags:
 - area:containment
@@ -60,6 +60,14 @@ history:
   timestamp: 2026-11-05T12:25:13.507335047Z
   session_id: 01a1abaae052
   changes: []
+- id: 01a1abad-19ed-71f3-8a79-9c5cbc3bd06c
+  author: joe
+  timestamp: 2026-11-05T12:26:50.733686573Z
+  session_id: 01a1abaae052
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -68,3 +76,9 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: 'AGY S2 cannot satisfy its conformance acceptance from current evidence: S1 left an unresolved advisor ruling on fresh shipped-harness runs; the harness cannot pass C3 or whole-lane coverage; exact auth/refresh hosts remain unknown. Authorized script deputies 2 and 3 report NOT running, preventing the required scoped host measurements. Existing Codex launcher also grants raw store writes contrary to signed AGY Q2. See investigation comment for concrete recovery; no containment opt-in or completion claimed.'
+  lean: Retain posture A and fail-closed AGY refusal. Resume after S1 evidence ruling and an available authorized host deputy; build the adapter and integrated proof against signed Q2/Q3 without reusing Codex raw-store grants.
+  raised_by: implementer
+  raised_at: 2026-11-05T12:26:50.733666515Z
