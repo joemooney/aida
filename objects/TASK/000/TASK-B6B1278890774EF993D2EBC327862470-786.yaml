@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T13:47:45.490941255Z
+modified_at: 2026-11-05T15:56:28.080591154Z
 req_type: Task
 tags:
 - area:containment
@@ -116,6 +116,12 @@ comments:
   content: 'Final handoff: GitHub confirms PR #3426 head f7569c357b633c4cc2a02b5b12e3b1aad8a20e6b; working tree clean. Remote pushes succeeded, with only local remote-tracking-ref updates refused by the read-only Git sandbox. Stopped make check-ci-fast (exit 130) while it was compiling the no-default-features guard, to stop at PR-open as instructed; fast suite INCOMPLETE, not a pass. PR body records this and targeted Rust tests untested=true. Offline conformance tests (20), formatting and diff checks passed. No completion claim; fresh host acceptance and merge-hold clearance remain with advisor/reviewer/merge seat.'
   created_at: 2026-11-05T13:30:50.207039219Z
   modified_at: 2026-11-05T13:30:50.207039219Z
+- id: 01a1ac6d-0430-7301-b0b9-a72d919401cd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 code addresses all four prior findings (named per-check unsupported_reason, mocked stream/log tests, no --mode auto in adapter, Refs title), but the merge would still COMPLETE TASK-3048 via ship''s branch-name fallback, contradicting the PR''s deliberate non-completion; CI build jobs still queued at this head.. No triage reason was given.'
+  created_at: 2026-11-05T15:56:28.080587673Z
+  modified_at: 2026-11-05T15:56:28.080587673Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
@@ -210,6 +216,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ac6d-0430-7301-b0b9-a71900aaa4ae
+  author: joe
+  timestamp: 2026-11-05T15:56:28.080575939Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -218,11 +232,3 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-2 code addresses all four prior findings (named per-check unsupported_reason, mocked stream/log tests, no --mode auto in adapter, Refs title), but the merge would still COMPLETE TASK-3048 via ship's branch-name fallback, contradicting the PR's deliberate non-completion; CI build jobs still queued at this head.
-  recovery_hint: address the review findings, move TASK-3048 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T13:47:45.490941255Z
