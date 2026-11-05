@@ -505,12 +505,13 @@ Start it in your terminal, through the `aida()` shell function, holding an advis
 
 Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
 
-- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes only `incoming/`.
-- **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
+- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../deputies.md#letting-a-sandboxed-advisor-submit).
+- **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
+<!-- trace:STORY-2343 | ai:claude -->
 
 ### `aida driver`
 
