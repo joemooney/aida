@@ -18,6 +18,7 @@ pub(crate) use crate::burndown_run::burndown_run_args::BurndownCommand;
 pub(crate) use crate::cache_cmd::cache_cmd_args::CacheCommand;
 pub(crate) use crate::changelog_cmd::changelog_cmd_args::ChangelogCommand;
 pub(crate) use crate::comment_cmd::comment_cmd_args::CommentCommand;
+pub(crate) use crate::condition_cmd::condition_cmd_args::ConditionCommand;
 pub(crate) use crate::config_cmd::config_cmd_args::{
     ConfigCommand, ConfigPermissionTier, ConfigPermissionsCommand, GlyphCommand,
 };

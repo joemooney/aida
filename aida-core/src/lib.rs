@@ -97,6 +97,9 @@ pub mod allocation_lineage;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
 #[cfg(feature = "native")]
 pub mod store_hubs;
+// Typed conditions for deferral, handoffs and recurrence escalation.
+// trace:STORY-2402 | ai:claude
+pub mod condition;
 // trace:BUG-2017 | ai:codex
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]

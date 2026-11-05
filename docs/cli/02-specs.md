@@ -420,3 +420,34 @@ round-trips. `validate --json` reports the label, full checksum and
 Intake-branch publication, policy enrollment, processing receipts and backup
 comment recovery are planned separately; these local commands do not publish.
 <!-- doc-intent: shaped by STORY-2479 -->
+
+### `aida condition check`
+
+Check a typed condition without changing requirements:
+
+```bash
+aida condition check 'spec:STORY-12=completed'
+aida condition check 'pr:2577=merged' --json
+aida condition check 'release:>=0.17'
+aida condition check 'date:2026-12-01'
+aida condition check 'query:tag=operator-held,status=approved count>=5'
+aida condition check 'manual:joe'
+```
+
+The result is `met`, `not-met`, `unknown`, or `manual`. All four exit zero;
+malformed conditions and unreadable or missing spec data exit nonzero.
+`unknown` means the PR or release could not be observed and must not trigger
+a handoff or resurface a spec. `manual` always waits for the named person.
+`--format json` and `--json` emit the same condition, verdict and observation.
+
+Dates use UTC. Releases compare the highest local dotted numeric Git tag,
+ignoring prerelease and non-version tags; this does not fetch remote tags.
+Queries combine tag, status, type and feature filters with AND and count only
+non-archived specs. Comparisons accept `>=`, `>`, `<=`, `<`, and `=`.
+Spec and query checks read canonical objects strictly (or an explicit YAML
+`--file`); archived SQLite stores must be migrated first.
+
+This first slice supplies the language and read-only checker. Deferral write
+gates, migration, scheduled resurfacing and relay/recurrence integration follow
+in separate slices.
+<!-- trace:STORY-2402 | ai:codex -->
