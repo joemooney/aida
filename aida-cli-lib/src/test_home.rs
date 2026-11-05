@@ -56,7 +56,7 @@ static REDIRECT: OnceLock<Redirect> = OnceLock::new();
 
 /// Exported to child processes: the real homes the top-level test process
 /// fenced, so a re-exec of the test binary keeps the same fence.
-const REAL_HOMES_ENV: &str = "AIDA_LIB_TEST_REAL_HOMES";
+pub(crate) const REAL_HOMES_ENV: &str = "AIDA_LIB_TEST_REAL_HOMES";
 
 /// Env vars cleared before `main` so their fallbacks derive from the temp
 /// `HOME` instead of an operator-set location.

@@ -7,8 +7,7 @@ use crate::*;
 /// Code hook, or a shell script.
 // trace:BUG-21 trace:BUG-2009 | ai:claude
 pub(crate) fn is_executable_artifact(rel_path: &std::path::Path) -> bool {
-    let s = rel_path.to_string_lossy();
-    s.starts_with(".git/hooks/") || s.starts_with(".claude/hooks/") || s.ends_with(".sh")
+    aida_core::scaffolding::is_executable_artifact(rel_path)
 }
 
 /// Write a scaffold artifact. A git or Claude Code hook, or a shell script,

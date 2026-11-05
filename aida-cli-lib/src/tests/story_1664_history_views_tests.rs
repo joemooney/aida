@@ -491,3 +491,18 @@ fn human_table_golden() {
     ];
     assert_eq!(lines, golden, "actual:\n{}", lines.join("\n"));
 }
+
+// trace:TASK-3112 | ai:codex
+#[test]
+fn task3112_opened_without_since_uses_original_creation_time() {
+    let events = vec![event("TASK-9", "2026-10-14T03:00:00Z", added())];
+    let mut s = summary(9, "TASK-9", "Task", "Draft", &[]);
+    s.created_at = "2026-01-01T00:00:00Z".into();
+    let q = ViewQuery {
+        created_floor: Some(chrono::DateTime::<chrono::Utc>::MIN_UTC),
+        ..Default::default()
+    };
+    let rows = select_rows(&events, &[s.clone()], &q);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].when, history::human_timestamp(&s.created_at));
+}
