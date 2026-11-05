@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T10:43:27.328808534Z
-modified_at: 2026-11-05T11:58:38.839269077Z
+modified_at: 2026-11-05T12:11:58.203406851Z
 req_type: Bug
+comments:
+- id: 01a1ab9f-7b7b-7c63-bffd-193b70025879
+  author: joe
+  content: 'Implemented explicit unreadable-clone lease release for session end --force --discard-unpushed. The clone, cargo target, mail and base pin are retained, and cleanup neither retries the failed probe nor uses host git in the seat. Sandbox failures name their probe step. Validation passed: hanging-bwrap regression, four existing seat-clone session-end lifecycle tests, remote-coverage side-branch protection, expired-budget diagnostics; formatting and whitespace checks. PR handoff follows; no ship or review verdict in this standalone implementer session.'
+  created_at: 2026-11-05T12:11:58.203406851Z
+  modified_at: 2026-11-05T12:11:58.203406851Z
+  session_id: 01a1ab929a76
 history:
 - id: 01a1ab51-522a-7151-9994-9eb3232fc0f1
   author: joe
