@@ -130,10 +130,15 @@ spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
 
 **Key options (rationale only).**
 - `start --owns <scope>` (alias `--spec`) — the scope is the lease's identity: an EPIC, any SPEC-ID, a `path/**` glob, or a free-form `feature:auth` tag. Path globs are *stored, not validated* — they're advisory coordination hints.
-- `start --reuse-branch` — check out an existing branch instead of forking fresh: the fixup-on-an-existing-PR-branch flow. Without it, an explicitly-named existing `--branch` is reused automatically and an auto-derived name always forks.
+- `start --reuse-branch` — check out an existing branch instead of forking fresh: the fixup-on-an-existing-PR-branch flow. An explicitly named existing `--branch` is reused automatically. For a spec with an open PR, pickup always uses that PR’s head branch, regardless of status or `--force-claim`; a different `--branch` refuses. A held head refuses with its holder’s path. Without an open PR, auto naming refuses collisions unless the forge confirms the old branch merged and has no open PR; that normal retained-branch case automatically uses a dated name, including queue-work and lane pickups. Other collisions require `--branch <name>`; direct session starts also accept `--branch-style date`. Auto-complete resumes a recorded lease. Broad EPIC, feature and path scopes do not scan for a spec PR. Unknown forge state refuses single-spec pickup and publication. Rework hold records remain positive association evidence for currently open PRs. Pickup and publication refuse ambiguous specs with multiple open PRs and name each PR and branch. AIDA publication reuses the matching open PR and refuses a second PR from a different branch. A merge train may publish while its listed rider PRs remain open; unrelated open changes still refuse. `queue work --list-sessions` skips forge lookup and works offline. <!-- trace:BUG-2451 | ai:codex -->
 - `start --launch` (+ `--title` / `--name` / `--role` / `--permission-mode` / `--sandbox`) — create the worktree *and* exec Claude inside it. The role is **derived from the scope** by default (`PR-N`/`MR-N` → reviewer, everything else → implementer); `--role` overrides, but when it disagrees with the scope the scope wins with a warning — because the scope is the more reliable signal of what the work *is*.
 - `start --force-claim` — claim a spec in an *ambiguous* state (In-Progress with no local lease, or NeedsAttention awaiting triage). It deliberately does **not** override Done/Completed/Rejected/Draft — those always refuse. The escape hatch for "yes, I'm taking over this stuck claim."
 - `end --force` — discard uncommitted changes and skip the confirmation. The refusal-without-it is the guard against silently nuking dirty work. It does not override the live-process check, so a script that passes `--force` for a dirty tree or a missing terminal still keeps a worktree in use.
+- `end --discard-unpushed` — explicitly permit discarding commits reachable from the seat’s HEAD or recorded lease branch that no remote has (private clones check every local branch). Without it, even `--force` refuses before teardown and keeps the lease and seat. The check uses commit reachability, including branches with no upstream and detached HEAD, and runs again before removal or pool reset. Clone checks run inside the existing read-only sandbox; host-only copies and base pins do not count as remote coverage. Use `--force` as well when discarding uncommitted files. <!-- trace:BUG-2450 | ai:codex -->
+- If a seat clone probe fails or times out, the refusal names its failing step. `end --force --discard-unpushed` can release that lease while retaining the unreadable clone, cargo target and base pin for recovery; it skips salvage and further clone probes. Inspect the retained clone and run `aida worktree dismiss <path>` once it is readable. Neither flag alone bypasses the unreadable-state refusal. Git in the clone stays sandboxed. <!-- trace:BUG-2454 | ai:codex -->
+
+A reviewer launch automatically ends an exited holder's lease when its seat is clean and its HEAD and recorded lease-branch commits are on remotes (private clones check all their local branches). Already-pushed staged index changes use the same exception as session end. A dirty or unpushed seat stays intact and sends the advisor a notice naming the lease and reason. The review watcher retries a setup failure once when no reviewer was started and the queue child is confirmed gone. A second setup refusal stays terminal with its diagnostic and can be retried using `aida review watch --release PR-N`; a started or ambiguously spawned reviewer still prevents another attempt on that head. <!-- trace:BUG-2450 | ai:codex -->
+
 - `end --include-in-use` — the one override for the live-process check: remove (or return) the worktree even while processes use it, and terminate live `claude` processes inside it. Without it, `session end` refuses, which guards against killing a running build or agent and against an orphaned claude with a deleted working directory.
 - `end --wait-ci` vs `--watch-ci` — both block until the PR's CI is terminal before releasing the lease; `--wait-ci` is the *silent* poll (overnight builds), `--watch-ci` is the *live* stream (interactive). Same decision tree once CI resolves; pick by how much screen noise you want.
 - `new --permission-mode` — the faithful-launcher knob: omit it and Claude uses its native posture (prompts); pass `bypassPermissions`/`acceptEdits`/`auto`/etc. to opt in. Fleet-wide bypass is `[agents] bypass = true` in `agents.toml`, not a baked-in default.
@@ -802,3 +807,59 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+### Pipeline stall alarms
+
+<!-- trace:STORY-2476 | ai:codex -->
+`aida supervise stalls --json` previews two independent alarms without writing
+runtime state, queue data, eligibility caches, mail or notification receipts.
+Run `aida supervise stalls --execute --json` every few minutes from a host job,
+or use the same detector integrated into `aida supervise watch --execute`.
+A watch preview also previews these alarms; watch JSON keeps its objective
+report on stdout and emits the alarm report on stderr.
+
+Each alarm requires `--threshold-mins N` minutes of continuous observations
+(default 30, minimum 15), on both `stalls` and `watch`:
+
+- `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
+  has red CI/current-head request-changes or the project has queued work.
+  Any implementer/reviewer lane, running train or ready PR suppresses this kind.
+  Role-less, integrator, advisor and product seats do not count as worker lanes.
+- `ready-without-train`: a PR is ship-ready and no train is running. Worker
+  activity does not suppress this kind.
+
+Readiness uses current-head local review, required CI, mergeability, holds and
+reviewer activity, without the eligible-idle display's age filter. The detector
+uses the latest timestamped attempt of each check and reports `merge-hold-gate`
+through the hold blocker, excluding it from CI failures and failed-job log reads.
+StatusContext failures without job logs are labeled as unavailable test evidence.
+Process identity comes from leases, the registry and train ownership, including PID
+namespace checks. Unsupported forges, failed/partial forge reads and invisible
+processes remain unknown. Unknown predicates, cleared predicates, backwards
+clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
+frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
+A preview never advances an observation timer.
+
+Execute ticks serialize through the permanent main-worktree
+`.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
+versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
+reported as unknown by watch; its objective/redrive reporting continues.
+The digest names draft/hold/review/CI/conflict blockers and only applicable
+unblocking commands; ship-ready PRs get a ship command. At delivery time, up to
+four failed job logs are read with five-second timeouts and 1 MiB caps for failing tests
+and panic lines. Missing logs or exhausted budgets are labeled unavailable.
+One bounded actionable digest covers due kinds through the existing supervisor
+nudge path: urgent mailbox
+`kind=request` to the live advisor, or the configured operator notification
+fallback. A delivery reservation is persisted before sending. Known delivery
+failure retains the episode for retry; a crash or failed post-send write leaves
+an unresolved reservation, reported as unknown and suppressed until the
+predicate resets or the operator inspects the inbox and resets the state. An
+accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+sent/queued after quiet hours; it does not prove read or action. This slice
+does not implement repeated unresolved escalation.
+
+This detector never starts work, ends a session, releases a lease or merges.
+Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
+acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
+rework exits are follow-up work; reading or accepting a wake is not action.

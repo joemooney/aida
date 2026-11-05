@@ -59,6 +59,16 @@ pub(crate) fn aida_home_dir() -> Option<std::path::PathBuf> {
     crate::home_dir()
 }
 
+// ── Contained launch evidence ───────────────────────────────────────────────
+
+/// TASK-2708: the containment receipt the seat-authority kernel reads before
+/// binding a launch child's grant to a contained worker
+/// (`seat_authority::bind_contained_launch_worker`). It feeds that authority
+/// decision (only an accepted receipt's worker pid may be bound), so the gate
+/// names it here on the floor rather than reaching into `containment` itself.
+// trace:TASK-2708 | ai:claude
+pub(crate) use crate::containment::launch::ContainmentReceipt;
+
 // ── Human at a terminal ─────────────────────────────────────────────────────
 
 /// BUG-1618: whether stdin is an interactive terminal, as the advisor-authority

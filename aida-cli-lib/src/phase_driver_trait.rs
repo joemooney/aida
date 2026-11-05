@@ -57,7 +57,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
                 resolve_pickup_workspace(&self.project_root, &self.spec, "auto")
                     .map(|(path, branch)| Some((path.display().to_string(), branch)))
-                    .map_err(|err| format!("{err:#}"))
+                    .map_err(|err| format!("{err:#}. Start `aida session start --owns {} --branch-style date` (or --branch <name>), then retry this drain; it will use the recorded lease.", self.spec))
             }
         }
     }
@@ -4078,7 +4078,7 @@ pub(crate) fn build_phase_driver_ci_fix_command(
         .env("AIDA_HEADLESS", "1")
         .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
-    if session::containment_applied(vendor, contained) {
+    if session::containment_applied(vendor, contained, None) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

@@ -1422,6 +1422,137 @@ fn probe_run(
         .map_err(|failure| failure.to_string())
 }
 
+/// Count commits held by the seat but by no remote: HEAD and the lease branch
+/// for worktrees, all local branches for private clones. Unlike salvage
+/// accounting, a local host ref or base pin never excuses a commit.
+/// Clone Git stays inside the existing read-only probe sandbox.
+// trace:BUG-2450 | ai:codex
+pub(crate) fn remote_missing_commits(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+) -> Result<u64> {
+    let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
+    // A remote tip absent from the clone cannot excuse anything there. Git
+    // failures (including a broken HEAD) refuse rather than guessing zero.
+    let script = r#"set -eu
+head=''
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  head=HEAD
+else
+  branch=$(git symbolic-ref -q HEAD) || exit 1
+  if git show-ref --verify --quiet "$branch"; then exit 1; else
+    code=$?
+    [ "$code" -eq 1 ] || exit 1
+  fi
+fi
+negative=''
+if [ "$#" -gt 0 ]; then
+  objects=$(printf '%s\n' "$@" | git cat-file --batch-check='%(objectname) %(objecttype)')
+  negative=$(printf '%s\n' "$objects" | awk '$2 == "commit" {print "^" $1}')
+fi
+printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
+"#;
+    let output = if is_clone {
+        let out = run_sandboxed_until(
+            seat,
+            main,
+            "sh",
+            &["-c".as_ref(), REF_TIPS_SCRIPT.as_ref()],
+            PROBE_OUTPUT_CAP,
+            deadline,
+        )
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let out = String::from_utf8_lossy(&out);
+        let (tips, candidates) = split_tips(&out);
+        let remote_tips = main_reachable_commits_via(
+            main,
+            tips.into_iter().chain(candidates),
+            deadline,
+            "--remotes",
+        );
+        let count_with = |tips: &[String]| -> Result<String> {
+            let mut args: Vec<&std::ffi::OsStr> = vec![
+                "-c".as_ref(),
+                script.as_ref(),
+                "aida-remote-missing".as_ref(),
+            ];
+            args.extend(tips.iter().map(|s| std::ffi::OsStr::new(s)));
+            let out = run_sandboxed_until(seat, main, "sh", &args, PROBE_OUTPUT_CAP, deadline)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            Ok(String::from_utf8(out)?)
+        };
+        let first = count_with(&remote_tips)?;
+        if first.trim() == "0" {
+            first
+        } else {
+            // Explicit-refspec pushes need not leave tracking refs in either
+            // checkout. Use the same bounded origin-tip evidence as the
+            // existing clone probe; host-only refs still excuse nothing.
+            // trace:BUG-2450 | ai:codex
+            let remaining = deadline
+                .unwrap()
+                .saturating_duration_since(std::time::Instant::now());
+            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            if heads.is_empty() {
+                first
+            } else {
+                let tips: Vec<String> = remote_tips.into_iter().chain(heads).collect();
+                count_with(&tips)?
+            }
+        }
+    } else {
+        let mut cmd = aida_core::git_ops::host_git_command(seat);
+        // Use Git directly for ordinary worktrees; the negative tips are
+        // already in their shared object database and remote namespace.
+        let mut head = aida_core::git_ops::host_git_command(seat);
+        head.args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+        let has_head = run_bounded(head, "", deadline).is_some();
+        if !has_head {
+            let mut symbolic = aida_core::git_ops::host_git_command(seat);
+            symbolic.args(["symbolic-ref", "--quiet", "HEAD"]);
+            let branch = run_bounded(symbolic, "", deadline).context("cannot read HEAD")?;
+            let mut exists = aida_core::git_ops::host_git_command(seat);
+            exists.args(["show-ref", "--verify", "--quiet", branch.trim()]);
+            let out = crate::command_output_with_timeout(exists, std::time::Duration::from_secs(5))
+                .context("cannot validate unborn HEAD")?;
+            anyhow::ensure!(out.status.code() == Some(1), "HEAD is unreadable");
+        }
+        // Worktrees share refs/heads with every other seat. Only this
+        // seat's current HEAD and its recorded branch belong to this lease.
+        // HEAD also covers a different branch currently checked out here.
+        // trace:BUG-2450 | ai:codex
+        let lease_ref = format!("refs/heads/{lease_branch}");
+        let mut exists = aida_core::git_ops::host_git_command(seat);
+        exists.args(["show-ref", "--verify", "--quiet", &lease_ref]);
+        let status = crate::command_output_with_timeout(exists, std::time::Duration::from_secs(5))
+            .context("cannot validate lease branch")?
+            .status;
+        anyhow::ensure!(
+            matches!(status.code(), Some(0 | 1)),
+            "cannot read lease branch"
+        );
+        let has_branch = status.success();
+        if !has_head && !has_branch {
+            return Ok(0);
+        }
+        cmd.args(["rev-list", "--count"]);
+        if has_branch {
+            cmd.arg(&lease_ref);
+        }
+        if has_head {
+            cmd.arg("HEAD");
+        }
+        cmd.args(["--not", "--remotes"]);
+        run_bounded(cmd, "", deadline).context("cannot count commits absent from remotes")?
+    };
+    output
+        .trim()
+        .parse::<u64>()
+        .context("invalid remote-missing commit count")
+}
+
 /// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
 /// from main (host-owned), never from the clone.
 // trace:TASK-2053 | ai:claude
@@ -1533,6 +1664,7 @@ fn ship_cleanup_deadline(
 // clone's ref tips against main, rather than a fresh budget per call.
 // trace:TASK-2053 | ai:codex
 // trace:BUG-2224 | ai:claude
+// trace:BUG-2454 | ai:codex
 pub(crate) fn probe_until(
     main: &Path,
     clone: &Path,
@@ -1567,7 +1699,7 @@ pub(crate) fn probe_until(
                 clone.display()
             ))
         }
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("submodule evidence: {why}")),
     }
     // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
     // must not hide anything, should a submodule appear after the check.
@@ -1585,7 +1717,7 @@ pub(crate) fn probe_until(
         "git",
     ) {
         Ok(out) => out,
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("working tree status: {why}")),
     };
     let mut facts = parse_status_v2(&status);
     // The sandbox's empty `.gitmodules` placeholder holds no work, so it
@@ -1612,7 +1744,7 @@ pub(crate) fn probe_until(
         "sh",
     ) {
         Ok(out) => out,
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("local ref tips: {why}")),
     };
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
     let (ref_tips, candidates) = split_tips(&tips);
@@ -1650,7 +1782,7 @@ pub(crate) fn probe_until(
             }
             None => return Probe::Unknown(format!("unreadable commit count `{}`", out.trim())),
         },
-        Err(why) => return Probe::Unknown(why),
+        Err(why) => return Probe::Unknown(format!("unpushed commit count: {why}")),
     }
     Probe::Known(facts)
 }
@@ -1971,6 +2103,18 @@ pub(crate) fn main_reachable_commits<'a>(
     tips: impl Iterator<Item = &'a str>,
     deadline: Option<std::time::Instant>,
 ) -> Vec<String> {
+    main_reachable_commits_via(main, tips, deadline, "--all")
+}
+
+// Only remote refs grant teardown coverage; ordinary salvage accounting
+// continues to use all host refs through the wrapper above.
+// trace:BUG-2450 | ai:codex
+fn main_reachable_commits_via<'a>(
+    main: &Path,
+    tips: impl Iterator<Item = &'a str>,
+    deadline: Option<std::time::Instant>,
+    refs: &str,
+) -> Vec<String> {
     let mut tips: Vec<&str> = tips.filter(|oid| is_full_oid(oid)).collect();
     tips.sort_unstable();
     tips.dedup();
@@ -1994,7 +2138,7 @@ pub(crate) fn main_reachable_commits<'a>(
     // `rev-list <tips> --not --all` lists what main's refs do not reach; a
     // tip missing from it is reachable.
     let mut unreached = git(main);
-    unreached.args(["rev-list", "--stdin", "--not", "--all"]);
+    unreached.args(["rev-list", "--stdin", "--not", refs]);
     let input: String = commits.iter().map(|oid| format!("{oid}\n")).collect();
     let Some(out) = run_bounded(unreached, &input, deadline) else {
         return Vec::new();
@@ -3091,3 +3235,8 @@ mod seat_publish_tests;
 #[cfg(test)]
 #[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
 mod seat_clone_handshake_tests;
+
+// trace:BUG-2451 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2451_pickup_entry_tests.rs"]
+mod pickup_entry_tests;

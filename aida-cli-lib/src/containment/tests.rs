@@ -413,7 +413,19 @@ fn task_2705_policy_errors_are_redacted_and_aida_selector_stays_closed() {
     assert!(!report.cause.contains("SYNTHETIC_MUST_NOT_PRINT"));
     let partial = tempfile::tempdir().unwrap();
     trusted_fixture(partial.path(), "[contained.vendors]\ncodex = \"aida\"\n");
-    assert!(crate::session::containment_posture_in(partial.path(), "codex", true).is_err());
+    // trace:TASK-2708 | ai:claude — the selector resolves (TASK-2707 wires the
+    // receipt-owning headless boundary), and every other Codex surface stays
+    // closed at the shared finalizer with the named refusal.
+    assert_eq!(
+        crate::session::containment_posture_in(partial.path(), "codex", true).unwrap(),
+        crate::session::ContainmentPosture::Aida
+    );
+    let mut unwired = std::process::Command::new("codex");
+    unwired.env("AIDA_PROJECT_ROOT", partial.path());
+    assert!(crate::codex_tool_env::prepare_launch(&mut unwired)
+        .unwrap_err()
+        .to_string()
+        .contains(crate::codex_tool_env::UNWIRED_AIDA_POSTURE));
     assert_eq!(
         crate::session::containment_posture_in(partial.path(), "claude", true).unwrap(),
         crate::session::ContainmentPosture::Aida
