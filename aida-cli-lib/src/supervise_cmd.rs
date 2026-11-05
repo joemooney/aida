@@ -452,6 +452,24 @@ struct WatchReport {
     redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
 }
 
+#[cfg(test)]
+#[test]
+fn executing_watch_refuses_intervals_that_reset_alarm_episodes() {
+    assert!(validate_watch_interval(true, Some(900)).is_ok());
+    assert!(validate_watch_interval(true, Some(901)).is_err());
+    assert!(validate_watch_interval(true, None).is_ok());
+    assert!(validate_watch_interval(false, Some(901)).is_ok());
+}
+
+// trace:STORY-2476 | ai:codex
+fn validate_watch_interval(execute: bool, interval: Option<u64>) -> Result<()> {
+    anyhow::ensure!(
+        !execute || interval.is_none_or(|secs| secs <= 900),
+        "--execute requires --interval <= 900 seconds so pipeline alarm observations do not reset"
+    );
+    Ok(())
+}
+
 fn handle_supervise_watch(
     backend: &aida_core::CachedGitBackend,
     store_path: &Path,
@@ -461,6 +479,7 @@ fn handle_supervise_watch(
     threshold_mins: u32,
     json: bool,
 ) -> Result<()> {
+    validate_watch_interval(execute, interval)?;
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;

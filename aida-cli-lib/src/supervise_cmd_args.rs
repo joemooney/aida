@@ -18,8 +18,10 @@ pub enum SuperviseCommand {
         /// Continuous observation window in minutes (minimum 15).
         #[clap(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(15..))]
         threshold_mins: u32,
+        /// Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications.
         #[clap(long)]
         execute: bool,
+        /// Print the alarm report as JSON.
         #[clap(long)]
         json: bool,
     },
@@ -67,7 +69,7 @@ pub enum SuperviseCommand {
         // trace:BUG-1623 | ai:claude
         #[clap(long)]
         execute: bool,
-        /// Repeat the pass every N seconds (default: a single pass then exit).
+        /// Repeat every N seconds (maximum 900 with --execute; default: one pass).
         #[clap(long)]
         interval: Option<u64>,
         /// Pipeline alarm observation window in minutes (minimum 15).

@@ -9958,10 +9958,10 @@ Options:
           [default: 30]
 
       --execute
-          
+          Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications
 
       --json
-          
+          Print the alarm report as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10041,7 +10041,7 @@ Options:
           report of what it WOULD do
 
       --interval <INTERVAL>
-          Repeat the pass every N seconds (default: a single pass then exit)
+          Repeat every N seconds (maximum 900 with --execute; default: one pass)
 
       --threshold-mins <THRESHOLD_MINS>
           Pipeline alarm observation window in minutes (minimum 15)
@@ -40469,7 +40469,7 @@ Working on aida itself
       {
         "name": "execute",
         "takes_value": false,
-        "help": ""
+        "help": "Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications"
       },
       {
         "name": "format",
@@ -40484,7 +40484,7 @@ Working on aida itself
       {
         "name": "json",
         "takes_value": false,
-        "help": ""
+        "help": "Print the alarm report as JSON"
       },
       {
         "name": "threshold-mins",
@@ -40571,7 +40571,7 @@ Working on aida itself
       {
         "name": "interval",
         "takes_value": true,
-        "help": "Repeat the pass every N seconds (default: a single pass then exit)"
+        "help": "Repeat every N seconds (maximum 900 with --execute; default: one pass)"
       },
       {
         "name": "json",

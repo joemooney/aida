@@ -829,17 +829,25 @@ identity comes from leases, the registry and train ownership, including PID
 namespace checks. Unsupported forges, failed/partial forge reads and invisible
 processes remain unknown. Unknown predicates, cleared predicates, backwards
 clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
-frequently than that gap; a preview never advances an observation timer.
+frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
+A preview never advances an observation timer.
 
 Execute ticks serialize through the permanent main-worktree
 `.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
 versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
 reported as unknown by watch; its objective/redrive reporting continues.
-One bounded actionable digest
-covers due kinds through the existing supervisor nudge path: urgent mailbox
+The digest names draft/hold/review/CI/conflict blockers and only applicable
+unblocking commands; ship-ready PRs get a ship command. At delivery time, up to
+four failed job logs are read with five-second timeouts and 1 MiB caps for failing tests
+and panic lines. Missing logs or exhausted budgets are labeled unavailable.
+One bounded actionable digest covers due kinds through the existing supervisor
+nudge path: urgent mailbox
 `kind=request` to the live advisor, or the configured operator notification
-fallback. Delivery failure retains the pending episode for retry. An accepted
-kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+fallback. A delivery reservation is persisted before sending. Known delivery
+failure retains the episode for retry; a crash or failed post-send write leaves
+an unresolved reservation, reported as unknown and suppressed until the
+predicate resets or the operator inspects the inbox and resets the state. An
+accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
 sent/queued after quiet hours; it does not prove read or action. This slice
 does not implement repeated unresolved escalation.
 

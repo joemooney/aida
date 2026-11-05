@@ -19,6 +19,8 @@ struct Episode {
     first_ms: i64,
     observed_ms: i64,
     accepted: bool,
+    #[serde(default)]
+    delivery_pending: bool,
 }
 #[derive(Default, Debug, Serialize)]
 pub(super) struct Report {
@@ -54,6 +56,7 @@ struct Snapshot {
     ready: Option<bool>,
     work_waiting: Option<bool>,
     details: Vec<String>,
+    failed_jobs: Vec<(u64, serde_json::Value)>,
 }
 impl Snapshot {
     fn predicates(&self) -> [(&'static str, Option<bool>); 2] {
@@ -172,6 +175,25 @@ fn tick(
     threshold_mins: u32,
     send: &mut dyn FnMut(&str) -> Result<bool>,
 ) -> Result<Report> {
+    tick_with_writer(
+        root,
+        snapshot,
+        now,
+        execute,
+        threshold_mins,
+        send,
+        &mut |path, bytes| Ok(aida_core::write_atomic(path, bytes)?),
+    )
+}
+fn tick_with_writer(
+    root: &Path,
+    snapshot: &Snapshot,
+    now: i64,
+    execute: bool,
+    threshold_mins: u32,
+    send: &mut dyn FnMut(&str) -> Result<bool>,
+    persist: &mut dyn FnMut(&Path, &[u8]) -> Result<()>,
+) -> Result<Report> {
     let path = root.join(".aida/pipeline-stalls.json");
     let mut state = std::fs::read(&path)
         .ok()
@@ -202,24 +224,65 @@ fn tick(
             first_ms: now,
             observed_ms: now,
             accepted: false,
+            delivery_pending: false,
         });
         if now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS {
             *episode = Episode {
                 first_ms: now,
                 observed_ms: now,
                 accepted: false,
+                delivery_pending: false,
             };
         }
         episode.observed_ms = now;
-        if now - episode.first_ms >= i64::from(threshold_mins) * 60_000 && !episode.accepted {
+        if episode.delivery_pending {
+            report.unknown.push(format!("{kind}: prior delivery outcome unresolved; inspect advisor inbox before resetting state"));
+        }
+        if now - episode.first_ms >= i64::from(threshold_mins) * 60_000
+            && !episode.accepted
+            && !episode.delivery_pending
+        {
             report.due.push(kind.into());
         }
     }
     if execute && !report.due.is_empty() {
+        let mut details = snapshot.details.clone();
+        details.extend(failure_details(&snapshot.failed_jobs, &mut |job| {
+            if cfg!(test) {
+                return None;
+            }
+            let gh = crate::resolve_gh_binary()?;
+            let mut cmd = std::process::Command::new(gh);
+            cmd.current_dir(root).args([
+                "api",
+                &format!("repos/{{owner}}/{{repo}}/actions/jobs/{job}/logs"),
+            ]);
+            let crate::BoundedCommandOutput::Completed(out) =
+                crate::command_output_with_timeout_capped(
+                    cmd,
+                    std::time::Duration::from_secs(5),
+                    1024 * 1024,
+                )
+            else {
+                return None;
+            };
+            (out.status.success() && out.stdout.len() <= 1024 * 1024)
+                .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+        }));
         let body = format!("Pipeline needs attention: {} (continuously observed >= {threshold_mins} minutes).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
-            report.due.join(", "), bounded_digest(&snapshot.details));
-        // Retain the episode on refused/failed delivery so the next tick retries.
-        match send(&body) {
+            report.due.join(", "), bounded_digest(&details));
+        // Reserve durably before external delivery. A failed post-send write leaves
+        // an unresolved reservation, preventing duplicate urgent mail on later ticks.
+        for kind in &report.due {
+            state.episodes.get_mut(kind).unwrap().delivery_pending = true;
+        }
+        persist(&path, &serde_json::to_vec_pretty(&state)?)?;
+        let delivered = send(&body);
+        for kind in &report.due {
+            state.episodes.get_mut(kind).unwrap().delivery_pending = false;
+        }
+        // Known refused/failed deliveries remain retryable after persistence.
+        match delivered {
             Ok(true) => {
                 for kind in &report.due {
                     state.episodes.get_mut(kind).unwrap().accepted = true;
@@ -235,7 +298,7 @@ fn tick(
         }
     }
     if execute {
-        aida_core::write_atomic(&path, &serde_json::to_vec_pretty(&state)?)?;
+        persist(&path, &serde_json::to_vec_pretty(&state)?)?;
     }
     Ok(report)
 }
@@ -328,51 +391,23 @@ fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
                 .unwrap();
             if pr.head_branch.starts_with("train/") {
                 // An open train with unknown owner is never evidence of no train.
-                train.push(
-                    if crate::pr_train::train_abandoned(
-                        row["body"].as_str().unwrap_or(""),
-                        &crate::coordination::hostname(),
-                        crate::process_probe::process_identity_is_alive,
-                    )
-                    .is_some()
-                    {
-                        Some(false)
-                    } else {
-                        Some(true)
-                    },
-                );
+                train.push(train_pr_running(
+                    root,
+                    pr.number,
+                    row["body"].as_str().unwrap_or(""),
+                    &mut s.details,
+                ));
                 continue;
             }
-            readiness.push(pr_ready(root, pr));
-            let failed = pr.ci_rollup.as_deref() == Some("fail");
+            let ready = pr_ready(root, pr);
+            readiness.push(ready);
             let rejected = pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
                 || current_rejection(root, pr);
-            blocked |= failed || rejected;
-            let checks: Vec<_> = row["statusCheckRollup"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|c| {
-                    matches!(
-                        c["conclusion"].as_str().or(c["state"].as_str()),
-                        Some("FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
-                    )
-                })
-                .filter_map(|c| c["name"].as_str().or(c["context"].as_str()))
-                .collect();
-            let ids = crate::pr_ship::extract_spec_ids_from_text(&pr.title);
-            let rework = if ids.is_empty() {
-                "aida queue rework (select the owning spec)".to_owned()
-            } else {
-                ids.iter()
-                    .map(|id| format!("aida queue rework {id}"))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            };
-            s.details.push(format!("PR-{} head {}: CI {}, failed checks [{}], review {}, mergeability {}; inspect/rework: {}; review: aida queue work PR-{} --role reviewer; ship when gates permit: aida pr ship {}",
-                pr.number, pr.head_sha.as_deref().unwrap_or("unknown"), pr.ci_rollup.as_deref().unwrap_or("unknown"), checks.join(", "),
-                if rejected { "request-changes" } else { pr.review_decision.as_deref().unwrap_or("local review / unknown") },
-                pr.mergeable.as_deref().unwrap_or("unknown"), rework, pr.number, pr.number));
+            blocked |= pr.ci_rollup.as_deref() == Some("fail") || rejected;
+            if pr.ci_rollup.as_deref() == Some("fail") {
+                s.failed_jobs.push((pr.number, row.clone()));
+            }
+            s.details.extend(pr_digest(root, pr, row, ready, rejected));
         }
         s.ready = any(&readiness);
         s.train_running = any(&train);
@@ -449,15 +484,176 @@ fn forge_snapshot(
         return None;
     }
     let required = crate::status_prs::github_required_status_checks_uncached(root);
-    let prs = crate::status_prs::parse_open_pr_snapshot(
-        std::str::from_utf8(&out.stdout).ok()?,
-        required.as_deref(),
-    );
+    let prs = parse_stall_prs(&raw, required.as_deref());
     if prs.by_branch.len() != raw.len() {
         return None;
     }
     Some((prs, raw))
 }
+// GitHub treats completed skipped/neutral checks as non-blocking. Keep the
+// shared status display unchanged; preserve required-check absence/unknown guards.
+fn parse_stall_prs(
+    raw: &[serde_json::Value],
+    required: Option<&[String]>,
+) -> crate::status_prs::OpenPrSnapshot {
+    let mut normalized = raw.to_vec();
+    for row in &mut normalized {
+        if let Some(checks) = row["statusCheckRollup"].as_array_mut() {
+            for check in checks {
+                if check["status"] == "COMPLETED"
+                    && matches!(check["conclusion"].as_str(), Some("SKIPPED" | "NEUTRAL"))
+                {
+                    check["conclusion"] = "SUCCESS".into();
+                }
+            }
+        }
+    }
+    crate::status_prs::parse_open_pr_snapshot(
+        &serde_json::to_string(&normalized).unwrap(),
+        required,
+    )
+}
+
+fn train_pr_running(
+    root: &Path,
+    number: u64,
+    body: &str,
+    details: &mut Vec<String>,
+) -> Option<bool> {
+    if crate::pr_train::train_abandoned(
+        body,
+        &crate::coordination::hostname(),
+        crate::process_probe::process_identity_is_alive,
+    )
+    .is_some()
+    {
+        Some(false)
+    } else {
+        details.push(format!("Train PR-{number}: owner liveness unknown; inspect: gh pr view {number}; after confirming abandonment: gh pr close {number} (inspect train lease with aida integrate from {})", root.display()));
+        None
+    }
+}
+
+// Fetch at most four job logs per alarm, only when delivery is due. Job IDs
+// come from GitHub's snapshot, never from executing stored URLs or shell text.
+fn failure_details(
+    prs: &[(u64, serde_json::Value)],
+    fetch: &mut dyn FnMut(u64) -> Option<String>,
+) -> Vec<String> {
+    let mut details = Vec::new();
+    let mut remaining = 4;
+    for (pr, row) in prs {
+        for check in row["statusCheckRollup"].as_array().into_iter().flatten() {
+            if !matches!(
+                check["conclusion"].as_str(),
+                Some("FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
+            ) {
+                continue;
+            }
+            let name = check["name"].as_str().unwrap_or("unknown check");
+            let job = check["detailsUrl"]
+                .as_str()
+                .and_then(|url| url.split_once("/job/"))
+                .and_then(|(_, tail)| tail.split(['/', '?', '#']).next())
+                .and_then(|id| id.parse::<u64>().ok());
+            let lines = if remaining > 0 {
+                job.and_then(|id| {
+                    remaining -= 1;
+                    fetch(id)
+                })
+                .map(|log| crate::ci_failures::extract_failure_lines(&log))
+            } else {
+                None
+            };
+            match lines.filter(|lines| !lines.is_empty()) {
+                Some(lines) => details.extend(lines.into_iter().map(|line| format!("PR-{pr} {name}: {line}"))),
+                None => details.push(format!("PR-{pr} {name}: failing tests unavailable (log missing, no test failures, or alarm log budget exhausted); inspect: gh pr checks {pr}")),
+            }
+        }
+    }
+    details
+}
+
+fn pr_digest(
+    root: &Path,
+    pr: &crate::status_cleanup::OpenPrItem,
+    row: &serde_json::Value,
+    ready: Option<bool>,
+    rejected: bool,
+) -> Vec<String> {
+    let n = pr.number;
+    if ready == Some(true) {
+        return vec![format!("PR-{n}: ship-ready; aida pr ship {n}")];
+    }
+    let mut blockers = Vec::new();
+    if pr.is_draft {
+        blockers.push(format!("draft; gh pr ready {n}"));
+    }
+    if crate::pr_has_merge_hold(root, pr) {
+        blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
+    }
+    let checks: Vec<_> = row["statusCheckRollup"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|c| {
+            matches!(
+                c["conclusion"].as_str().or(c["state"].as_str()),
+                Some("FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
+            )
+        })
+        .filter_map(|c| c["name"].as_str().or(c["context"].as_str()))
+        .collect();
+    if rejected
+        || pr.ci_rollup.as_deref() == Some("fail")
+        || pr.mergeable.as_deref() == Some("CONFLICTING")
+    {
+        let ids = crate::pr_ship::extract_spec_ids_from_text(&pr.title);
+        let rework = if ids.is_empty() {
+            format!("gh pr view {n} (identify owning spec for aida queue rework)")
+        } else {
+            ids.iter()
+                .map(|id| format!("aida queue rework {id}"))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        if rejected {
+            blockers.push(format!("current-head request-changes; {rework}"));
+        }
+        if pr.ci_rollup.as_deref() == Some("fail") {
+            blockers.push(format!(
+                "red CI [{}]; {rework}; gh pr checks {n}",
+                checks.join(", ")
+            ));
+        }
+        if pr.mergeable.as_deref() == Some("CONFLICTING") {
+            blockers.push(format!("merge conflict; {rework}"));
+        }
+    }
+    match pr.ci_rollup.as_deref() {
+        Some("pending") => blockers.push(format!("CI pending; gh pr checks {n}")),
+        Some("missing" | "unknown" | "?") | None => {
+            blockers.push(format!("CI evidence missing/unknown; gh pr checks {n}"))
+        }
+        _ => {}
+    }
+    if pr.mergeable.as_deref() != Some("MERGEABLE")
+        && pr.mergeable.as_deref() != Some("CONFLICTING")
+    {
+        blockers.push(format!(
+            "mergeability unknown; gh pr view {n} --json mergeable"
+        ));
+    }
+    if blockers.is_empty() {
+        blockers.push(format!("current-head review missing, active or unreadable; aida queue work PR-{n} --role reviewer"));
+    }
+    vec![format!(
+        "PR-{n} head {}: {}",
+        pr.head_sha.as_deref().unwrap_or("unknown"),
+        blockers.join("; ")
+    )]
+}
+
 fn current_rejection(root: &Path, pr: &crate::status_cleanup::OpenPrItem) -> bool {
     verdict_ids(pr)
         .iter()
@@ -483,6 +679,7 @@ fn pr_ready(root: &Path, pr: &crate::status_cleanup::OpenPrItem) -> Option<bool>
         || pr.mergeable.as_deref() == Some("CONFLICTING")
         || matches!(pr.ci_rollup.as_deref(), Some("fail" | "pending"))
         || pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
+        || current_rejection(root, pr)
     {
         return Some(false);
     }
@@ -705,6 +902,167 @@ mod tests {
             ["ready-without-train"]
         );
     }
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn delivery_reservation_prevents_send_on_write_failure_and_duplicates_after_send() {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir(t.path().join(".aida")).unwrap();
+        for minute in [0, 10, 20] {
+            at(t.path(), &idle(), minute, &mut |_| panic!());
+        }
+        assert!(tick_with_writer(
+            t.path(),
+            &idle(),
+            30 * MIN,
+            true,
+            30,
+            &mut |_| panic!("must persist before send"),
+            &mut |_, _| anyhow::bail!("injected reservation write failure")
+        )
+        .is_err());
+        let mut writes = 0;
+        let mut sent = 0;
+        assert!(tick_with_writer(
+            t.path(),
+            &idle(),
+            30 * MIN,
+            true,
+            30,
+            &mut |_| {
+                sent += 1;
+                Ok(true)
+            },
+            &mut |path, bytes| {
+                writes += 1;
+                if writes == 2 {
+                    anyhow::bail!("injected post-send write failure");
+                }
+                Ok(aida_core::write_atomic(path, bytes)?)
+            }
+        )
+        .is_err());
+        assert_eq!(sent, 1);
+        let report = at(t.path(), &idle(), 31, &mut |_| panic!("duplicate mail"));
+        assert!(report.due.is_empty());
+        assert!(report
+            .unknown
+            .iter()
+            .any(|s| s.contains("outcome unresolved")));
+    }
+
+    #[test]
+    fn skipped_neutral_checks_allow_ready_but_unknown_ci_never_hides_rejection() {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(t.path().join(".aida/review-verdicts")).unwrap();
+        let path = t.path().join(".aida/review-verdicts/PR-42.json");
+        let raw = serde_json::json!([{
+            "number":42,"title":"work","headRefName":"topic","headRefOid":"abcdef1234",
+            "mergeable":"MERGEABLE","isDraft":false,
+            "statusCheckRollup":[
+                {"name":"build","status":"COMPLETED","conclusion":"SUCCESS"},
+                {"name":"Release","status":"COMPLETED","conclusion":"SKIPPED"},
+                {"name":"optional","status":"COMPLETED","conclusion":"NEUTRAL"}]
+        }]);
+        let mut p = parse_stall_prs(raw.as_array().unwrap(), Some(&["build".into()]))
+            .by_branch
+            .remove("topic")
+            .unwrap();
+        std::fs::write(
+            &path,
+            r#"{"verdict":"approved","reviewed_sha":"abcdef1234"}"#,
+        )
+        .unwrap();
+        assert_eq!(pr_ready(t.path(), &p), Some(true));
+        let missing = parse_stall_prs(raw.as_array().unwrap(), Some(&["missing".into()]));
+        assert_eq!(
+            missing.by_branch["topic"].ci_rollup.as_deref(),
+            Some("missing")
+        );
+        assert_eq!(
+            parse_stall_prs(raw.as_array().unwrap(), None).by_branch["topic"]
+                .ci_rollup
+                .as_deref(),
+            Some("unknown")
+        );
+        p.ci_rollup = Some("?".into());
+        std::fs::write(
+            &path,
+            r#"{"verdict":"request-changes","reviewed_sha":"abcdef1234"}"#,
+        )
+        .unwrap();
+        assert_eq!(pr_ready(t.path(), &p), Some(false));
+        let mut s = idle();
+        s.ready = pr_ready(t.path(), &p);
+        assert_eq!(s.predicates()[0].1, Some(true));
+    }
+
+    #[test]
+    fn failure_logs_have_a_shared_four_job_budget() {
+        let row = serde_json::json!({"statusCheckRollup":[{"name":"build","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/1/job/123"}]});
+        let prs = (1..=6).map(|pr| (pr, row.clone())).collect::<Vec<_>>();
+        let mut calls = 0;
+        let lines = failure_details(&prs, &mut |_| {
+            calls += 1;
+            Some("test broken ... FAILED".into())
+        });
+        assert_eq!(calls, 4);
+        assert_eq!(lines.len(), 6);
+        assert!(lines[4].contains("unavailable"));
+    }
+
+    #[test]
+    fn unproven_train_owner_is_unknown_with_inspection_evidence() {
+        let t = tempfile::tempdir().unwrap();
+        for body in [
+            "",
+            "legacy owner",
+            "<!-- aida-train-owner: host=foreign pid=123 -->",
+        ] {
+            let mut details = Vec::new();
+            assert_eq!(train_pr_running(t.path(), 88, body, &mut details), None);
+            assert!(details[0].contains("Train PR-88"));
+            assert!(details[0].contains("gh pr view 88"));
+        }
+    }
+
+    #[test]
+    fn digest_commands_match_blockers_and_include_actual_failure_lines() {
+        let t = tempfile::tempdir().unwrap();
+        let mut p = pr();
+        let row = serde_json::json!({"statusCheckRollup":[{"name":"build","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/1/job/123"}]});
+        let ready = pr_digest(t.path(), &p, &row, Some(true), false).join("\n");
+        assert!(ready.contains("aida pr ship 42"));
+        assert!(!ready.contains("rework"));
+        p.is_draft = true;
+        let draft = pr_digest(t.path(), &p, &row, Some(false), false).join("\n");
+        assert!(draft.contains("draft; gh pr ready 42"));
+        assert!(!draft.contains("rework"));
+        p.is_draft = false;
+        p.labels.push("aida:merge-hold".into());
+        let held = pr_digest(t.path(), &p, &row, Some(false), false).join("\n");
+        assert!(held.contains("merge hold"));
+        assert!(held.contains("aida merge-hold clear 42"));
+        assert!(!held.contains("queue rework"));
+        p.labels.clear();
+        p.title = "work (STORY-2476)".into();
+        p.ci_rollup = Some("fail".into());
+        let red = pr_digest(t.path(), &p, &row, Some(false), false).join("\n");
+        assert!(red.contains("red CI [build]"));
+        assert!(red.contains("aida queue rework STORY-2476"));
+        assert!(!red.contains("aida pr ship"));
+        let rejected = pr_digest(t.path(), &p, &row, Some(false), true).join("\n");
+        assert!(rejected.contains("current-head request-changes"));
+        let logs = failure_details(&[(42, row.clone())], &mut |id| {
+            assert_eq!(id, 123);
+            Some("test suite::broken ... FAILED\nthread 'x' panicked at src/x.rs:9:\nassertion failed".into())
+        });
+        assert!(logs.iter().any(|s| s.contains("suite::broken")));
+        assert!(logs.iter().any(|s| s.contains("assertion failed")));
+        assert!(
+            failure_details(&[(42, row)], &mut |_| None)[0].contains("failing tests unavailable")
+        );
+    }
+
     fn pr() -> crate::status_cleanup::OpenPrItem {
         crate::status_prs::parse_open_pr_snapshot(
             &serde_json::json!([{
