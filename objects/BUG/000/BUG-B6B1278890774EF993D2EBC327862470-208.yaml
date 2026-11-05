@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T07:55:32.741806452Z
+modified_at: 2026-11-05T07:55:35.187069610Z
 req_type: Bug
 tags:
 - area:compete
@@ -137,6 +137,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Codex native argv, judge read-only posture and parent-death binding meet BUG-2439 (1) and (3); CI green at 46a08d25; but (2) dry-run argv != real argv for a contained native Codex arm: the preview resolves the --add-dir write set from a candidate worktree that does not exist yet. No triage reason was given.'
   created_at: 2026-11-05T07:55:32.741804781Z
   modified_at: 2026-11-05T07:55:32.741804781Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aab4-c100-7a42-a042-8c0b330677f2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 46a08d2577d5
+    Recorded: 2026-11-05T06:46:31.874859758+00:00
+    Findings:
+    1. MAJOR (acceptance 2, dry-run argv equals real): compete_cmd.rs:221-226 passes compete_worktree_dir(&project_root,&branch) to compete_preview_argv, which feeds compete_arm_argv -> codex_native_sandbox_flags_in(host_main, worktree, None) (compete_cmd.rs:1255). During --dry-run that sibling directory does not exist, so contained_session_write_roots_from -> find_project_root_from walks /home/joe/ai/aida-compete-* up to / without finding .git, write roots are empty, and codex_native_write_paths returns no grants. The preview therefore prints '--sandbox workspace-write --ask-for-approval never exec ...' with no --add-dir, while the real launch (the worktree now exists as a linked worktree of project_root) adds --add-dir for the main store/cache/mailbox/deputy/slots. If a stale aida-compete-* worktree from an earlier run exists, the preview instead resolves grants (and runs contained_write_set's cache priming, an artifact write the dry-run comment at :218-219 promises to avoid) from that stale tree. Fix: resolve the preview's write set from what the arm will actually be (a linked worktree of project_root, so the same main grants), e.g. derive grants via project_root's main, without writing; or, if that is not possible, have the preview say that grants resolve at launch, and get advisor sign-off that this meets (2).
+    2. MINOR (test gap for the above): codex_compete_native_argv_matches_preview_and_runs (compete_cmd.rs:~1548) creates the candidate worktree as a standalone repo with its own .aida/mailbox before calling compete_preview_argv, so it never exercises the production dry-run state, a not-yet-created linked worktree of project_root. Add a case that previews against a nonexistent compete_worktree_dir and then builds the real command after creating it as a linked worktree (git worktree add), and assert the two argvs are equal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T07:55:35.040879775Z
+  modified_at: 2026-11-05T07:55:35.040879775Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
