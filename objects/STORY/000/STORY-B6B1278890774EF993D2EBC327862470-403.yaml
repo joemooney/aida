@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T04:36:20.609331187Z
+modified_at: 2026-11-05T04:56:23.895423863Z
 req_type: Story
 relationships:
 - rel_type:
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-11-05T04:36:20.609331187Z
   modified_at: 2026-11-05T04:36:20.609331187Z
   session_id: 01a1a9f00add
+- id: 01a1aa10-b457-7e11-8721-00e0def1f68c
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (22:00): Codex''s review fixes are commit 84ff97dcf03 on branch -403-2 (closed PR #3407). That branch started from main, not the PR branch. On #3398''s branch story-b6b1278890774ef993d2ebc327862470-403, cherry-pick 84ff97dcf03, resolve the conflicts keeping both the original publish path and the review fixes, run the targeted queue/ship_from_seat tests plus make check-ci-fast, and push to #3398.'
+  created_at: 2026-11-05T04:56:23.895423863Z
+  modified_at: 2026-11-05T04:56:23.895423863Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
