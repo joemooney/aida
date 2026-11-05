@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T02:43:20.047924579Z
+modified_at: 2026-11-05T02:51:42.670902437Z
 req_type: Bug
 tags:
 - area:compete
@@ -102,6 +102,11 @@ comments:
   content: 'Round 2 rework in native Codex seat: addressed all three findings from 6e57ac521464. Parent-death pre_exec is now in launch/parent.rs; preview computes Codex tool metadata from explicit env pairs without a vendor Command; native arm flags resolve from the candidate tree; read-only judges derive posture by named sandbox mode and omit all --add-dir grants. Regression fixture pins a candidate repo different from launcher cwd and the full contained judge argv. Launch ratchet (2 tests), compete_cmd (8 tests), resolve_aida_exe (7 tests), fmt and diff whitespace pass. Broader Codex env tests initially 17 passed / 4 missing matching CLI fixture; building fixture before rerun. Native seat .git is read-only, so fast-forward/commit/push cannot run here. Worktree starts at efca74e51a6 and carries the original PR source changes forward with current launcher-main API integration. Advisor/host must commit the pending edits and publish using the sanctioned from-seat path; no finding is disputed.'
   created_at: 2026-11-05T02:43:20.047792473Z
   modified_at: 2026-11-05T02:43:20.047792473Z
+- id: 01a1a99e-8cce-7342-9cc3-231f08ad96d5
+  author: mcp
+  content: 'Round 2 final validation: make check-ci-fast PASSED (36 gates); cargo test -p aida-cli-lib --lib compete_cmd PASSED (8); resolve_aida_exe PASSED (7); launch_sites_outside_the_launcher_match_the_ledger PASSED (Cargo, unchanged LEDGER/CEILING); standalone ratchet module PASSED (2); cargo fmt --all -- --check and git diff --check PASSED. Matching CLI built successfully. Extra codex_tool_env suite: 20 passed, 1 native Codex fixture failed because its app-server socket directory ownership/mode preflight refuses this environment. All findings 1-3 addressed, none disputed. Pending files remain in the seat for host commit/publication, including new launch/parent.rs. No new commit could be made because the seat .git is read-only. Attempt to record a publication-blocker punt via MCP was refused: tool requires approval, approval policy never. This comment is the durable handoff; advisor must create this round''s NEW commit and publish via sanctioned from-seat workflow. Suggested subject: [AI:codex] fix(compete): honor launcher ratchet and candidate sandbox roots (BUG-2439). No ship, review record, or merge-hold clearance performed.'
+  created_at: 2026-11-05T02:51:42.670892804Z
+  modified_at: 2026-11-05T02:51:42.670892804Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe

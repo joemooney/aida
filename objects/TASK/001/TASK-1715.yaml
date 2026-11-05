@@ -21,7 +21,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-11-05T02:46:39.447803877Z
+modified_at: 2026-11-05T02:48:57.761675463Z
 req_type: Task
 comments:
 - id: 01a11cf7-a146-7782-b29f-a9c76e58bee3
@@ -125,6 +125,31 @@ comments:
   created_at: 2026-11-04T01:42:32.299476793Z
   modified_at: 2026-11-04T01:42:32.299476793Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a99c-08a1-7c01-8a12-1cdc0e15a2f7
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (parser):** `aida pr review 42|PR-42|MR-7` parses to `PrCommand::Review`.
+    - **Unit (normalization):** pure `review_change_id(id, ForgeKind)` maps bare N (and `#N`) to PR-N under GitHub and MR-N under GitLab; explicit PR-N/MR-N pass through canonicalized regardless of forge; pure-git bare N and garbage refuse with a message naming PR-N/MR-N.
+    - **Unit (dispatch equivalence):** the QueueArgs built by the alias Debug-equals the QueueArgs clap parses from `aida queue work PR-42 --auto-complete` / `MR-7 --auto-complete`; the alias calls the same `queue_cmd::dispatch_queue_args` that `run_queue` calls (refusals/gates are inside that shared path, not duplicated).
+    - **Unit (policy):** `pr review` policy equals the `queue work` policy (team-identity/stakeholder gates shared; no extra authority).
+    - **Help golden:** regenerated snapshot shows help that distinguishes `pr ship` and `ship --no-merge`.
+    - **No automated test:** lifecycle docs/templates text — verified by `make check-templates`.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_cmd_args.rs`, `aida-cli-lib/src/pr_cmd.rs` (Review variant; registration becomes a Store handler that defers only Review)
+    - `aida-cli-lib/src/queue_cmd.rs` (extract run_queue body to shared `dispatch_queue_args`; expose policy)
+    - new test module under `aida-cli-lib/src/tests/`
+    - help golden; `docs/cli/` lifecycle guidance; aida-pr / review skill template under `aida-core/templates/` + generated mirrors
+
+    ### Ambiguities / conflicts as questions
+    - None blocking. Pure-git bare numbers refuse (no forge to resolve); explicit PR-N/MR-N always forwarded unchanged so `queue work` semantics stay authoritative.
+  created_at: 2026-11-05T02:48:57.761675463Z
+  modified_at: 2026-11-05T02:48:57.761675463Z
+  session_id: 01a1a999e1a6
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a119ea-3e16-7a33-8411-ac7968b10987
   author: aida-session-start
