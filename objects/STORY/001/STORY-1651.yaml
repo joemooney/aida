@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T12:41:33.128720856Z
+modified_at: 2026-11-05T12:43:54.904284159Z
 req_type: Story
 tags:
 - docs
@@ -68,6 +68,17 @@ comments:
     After the PR exists, finish queue done on the host. Do not bypass the live-owner check or mark this story Completed before publication/review.
   created_at: 2026-11-05T12:41:33.128720856Z
   modified_at: 2026-11-05T12:41:33.128720856Z
+  session_id: 01a1aba9a850
+- id: 01a1abbc-ba98-7c20-93fc-d29310f0b1c4
+  author: joe
+  content: |
+    Final validation update (supersedes the earlier counts): 191 tracked files moved, including the authored core API contract under docs/internal/api/. The inventory covers all 943 tracked Markdown/HTML documents with 947 rows; all 1,416 local documentation file links resolve. The reader publication build excludes contributor/archive assets and its contributor-only CLI chapter. Focused fixtures, the glossary fixture, static manual checks, CI-tier audit, formatting and diff whitespace checks pass. The fresh-project landing-page command sequence succeeded.
+
+    make check-ci-fast was run in bounded attempts. Its no-default-features CLI check, standalone TUI check, external-prose inventory, test-touched planner, mail-wake, containment and additional hook gates passed. The last aggregate attempt reached the cargo-timeout hook gate before the 240-second local budget expired (exit 124); the full aggregate did not finish. The new audience coverage/link gate was verified directly using --working-tree, since this lane cannot stage new/moved paths. The post-stage host/CI must run the ordinary inventory --check and full fast aggregate.
+
+    The publication workflow mismatch was successfully filed through the host deputy as draft observation TASK-b6b1278890774ef993d2ebc327862470-826. AIDA comment writes were queued for host store commit. STORY-1651 remains In Progress: no commit or PR could be created while the seat clone's .git is read-only and the host commit gate refuses a live lane owner. Finish the documented host commit/PR command after this lane exits, then queue done. No merge or review verdict was attempted.
+  created_at: 2026-11-05T12:43:54.904284159Z
+  modified_at: 2026-11-05T12:43:54.904284159Z
   session_id: 01a1aba9a850
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
