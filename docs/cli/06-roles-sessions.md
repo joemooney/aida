@@ -585,7 +585,16 @@ head branch even when the spec is Approved and has no Rework hold. Each such
 pickup performs a forge PR lookup unless an explicit branch was selected. Before
 launching an implementer, the host fetches `origin/main` and attempts its
 merge into the seated PR branch. A clean merge is committed with the host's
-identity. Clone Git runs inside AIDA's sandbox with hooks disabled.
+identity and pushed to the trusted host's `origin` before the vendor starts.
+Clone commits are imported through the sandboxed bundle boundary; clone Git
+runs inside AIDA's sandbox with hooks disabled. Pre-launch publication requires
+that the seat started at the fetched PR head and produced a new merge whose
+parents are that head and the fetched main tip, in that order. Existing local
+lane commits and unchanged heads skip this push and retain the gated post-exit
+publication path. Temporary import refs are removed on success or refusal.
+Publication failures (including a non-fast-forward rejection) stop
+the launch.
+<!-- trace:BUG-2456 | ai:codex -->
 
 The host never resolves conflicts. It lists the conflicting files, aborts
 the merge, sends the advisor a request, and routes a fresh launch to Claude.
