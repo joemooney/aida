@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ab80-1ae4-71c1-862a-a0e0c3115581
+  position: 113000
+  added_by: role:implementer
+  note: 'Address the latest review on #3421 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-221 (no new branch). LIGHT gate.'
+  added_at: 2026-11-05T13:19:16.233722199Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
   position: 114000
   added_by: role:implementer
