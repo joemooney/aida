@@ -1,0 +1,29 @@
+id: 01a1aa76-f1d6-7112-a921-0ede31a3d143
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-813
+title: 'Cosmetic/docs: C1/C2 can never reach overall ''pass'' in this runner (evaluate() …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic/docs: C1/C2 can never reach overall 'pass' in this runner (evaluate() at :315 forces unknown; file-tool observations at :528-536 can only fail). The docs say so for file tools (md 'terminal_status' paragraph), but the 'This runner cannot earn native posture' paragraph cites only C3. Name C1/C2 there too.
+
+  PR: #3392
+  Reviewed sha: bff8078de70755e2e8d740d0b25bf1599f9627d7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T06:48:04.310423059Z
+modified_at: 2026-11-05T06:48:04.310423059Z
+req_type: Task
+tags:
+- carried-from:TASK-3046
+- finding-hash:db1d51cd
+- from-review:PR-3392
+- kind:carried-forward
+filed_at:
+  code_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
