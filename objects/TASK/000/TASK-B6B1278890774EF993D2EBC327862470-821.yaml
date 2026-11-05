@@ -9,12 +9,12 @@ description: |-
 
   PR: #3396
   Reviewed sha: 9b3f40b8304a34db5c48b12bea3ce70aef42de91
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T08:14:34.343277750Z
-modified_at: 2026-11-05T16:09:55.807672029Z
+modified_at: 2026-11-05T16:09:57.928568068Z
 req_type: Task
 tags:
 - carried-from:STORY-2476
@@ -33,6 +33,14 @@ history:
   author: joe
   timestamp: 2026-11-05T09:33:26.842192478Z
   changes: []
+- id: 01a1ac79-5fa8-7c82-bdec-a2ad5c2a231f
+  author: joe
+  timestamp: 2026-11-05T16:09:57.928565381Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c735c7e8c30ad8c104e5656f7fbc40506084aaf4
   branch: main
