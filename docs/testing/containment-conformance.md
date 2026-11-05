@@ -112,6 +112,24 @@ IPC and egress boundary and demonstrate mediated-write positive controls and
 fresh all-tool conformance before that gate can change. This slice does not
 claim an integrated launch or complete the parent story's real-lane acceptance.
 
+### Non-completing adapter handoff
+
+<!-- trace:TASK-3048 | ai:codex -->
+PR #3426 is a preparation slice. TASK-3048 remains open: the advisor's fresh
+host evidence still has C0–C4 unknown, no vendor receipts, and an incomplete
+authentication-host inventory. The production AGY gate must remain refused.
+
+Land this PR only through `aida pr ship 3426 --merge-method squash --no-complete`
+from the authorized merge seat after review and merge-hold clearance. Keep its
+title ending in `(Refs STORY-2460, TASK-3048)` and a standalone
+`aida: no-complete` line in its body. The title suppresses branch-ID completion
+fallback; the body marker also makes ship append the declaration to the
+explicit squash body, overriding GitHub's `COMMIT_MESSAGES` default. This is
+necessary because an earlier branch commit has a completing task trailer.
+Rebase, merge-commit, and direct GitHub merges are outside this handoff: their
+unmodified commit messages could complete the unfinished task. These are
+PR-specific merge instructions, not a repository-wide merge-method restriction.
+
 ## Result rules
 
 | Check | Measurement | Meaning of pass/fail/unknown |
