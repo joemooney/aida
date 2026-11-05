@@ -1651,7 +1651,14 @@ mod containment_tests {
             .collect();
         assert!(!worktree.exists(), "a dry run must not create the worktree");
         // Launch: the arm's worktree is now a linked worktree of the root.
-        git(&["worktree", "add", "-q", "-b", &branch, worktree.to_str().unwrap()]);
+        git(&[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            &branch,
+            worktree.to_str().unwrap(),
+        ]);
         // The Claude settings builder must never run for native Codex.
         let posture = compete_arm_argv(
             host_main,
@@ -1693,14 +1700,9 @@ mod containment_tests {
         assert_eq!(posture, expected_native);
         for (contained, preview) in [false, true].into_iter().zip(&previews) {
             ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
-            let mut cmd = build_compete_arm_command(
-                &root,
-                &worktree,
-                fake.to_str().unwrap(),
-                &argv,
-                "codex",
-            )
-            .unwrap();
+            let mut cmd =
+                build_compete_arm_command(&root, &worktree, fake.to_str().unwrap(), &argv, "codex")
+                    .unwrap();
             assert_eq!(
                 cmd.get_program(),
                 fake.as_os_str(),
