@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T02:32:13.391804241Z
+modified_at: 2026-11-05T02:36:11.702090909Z
 req_type: Task
 tags:
 - area:containment
@@ -75,6 +75,12 @@ comments:
   created_at: 2026-11-05T02:30:53.558408720Z
   modified_at: 2026-11-05T02:30:53.558408720Z
   session_id: 01a1a984c04a
+- id: 01a1a990-5836-7212-bad4-2c1a4ed7ddcc
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (19:40): Codex''s round-1 fixes are commit 38fd65f76c3 on branch task-...-784-2 (closed PR #3397). That branch started from main, not the PR branch. On the PR #3392 branch task-b6b1278890774ef993d2ebc327862470-784, cherry-pick 38fd65f76c3, resolve the conflicts in scripts/containment/conformance.py and tests/test_containment_conformance.py (keep both the original suite and the review fixes), run the conformance tests plus make check-ci-fast, and push to #3392.'
+  created_at: 2026-11-05T02:36:11.702090909Z
+  modified_at: 2026-11-05T02:36:11.702090909Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
   author: joe
