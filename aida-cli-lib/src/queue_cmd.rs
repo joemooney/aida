@@ -11326,6 +11326,18 @@ pub(crate) fn preflight_queue_work_branch_adopting(
     branch: Option<&str>,
     adopting: Option<&std::path::Path>,
 ) -> Result<()> {
+    preflight_queue_work_branch_reclaiming(root, branch, adopting, false)
+}
+
+/// Explicit force-claim can retire an exited lane before the branch occupancy
+/// refusal. Resume adoption and ordinary preflights remain read-only.
+// trace:BUG-2455 | ai:codex
+pub(crate) fn preflight_queue_work_branch_reclaiming(
+    root: &std::path::Path,
+    branch: Option<&str>,
+    adopting: Option<&std::path::Path>,
+    force_claim: bool,
+) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
     };
@@ -11350,10 +11362,23 @@ pub(crate) fn preflight_queue_work_branch_adopting(
     // it too. It is never offered for `git worktree remove` (not a linked
     // worktree); ending its session salvages and removes it.
     // trace:TASK-2053 | ai:claude
-    if let Some(clone) = clone_seat_trees(root)
+    let clones: Vec<_> = clone_seat_trees(root)
         .into_iter()
-        .find(|wt| wt.branch.as_deref() == Some(branch) && !adopted(&wt.path))
-    {
+        .filter(|wt| wt.branch.as_deref() == Some(branch) && !adopted(&wt.path))
+        .collect();
+    // Validate the entire set before retiring any clone. Teardown still
+    // rechecks each owner and working tree to protect against later races.
+    // trace:BUG-2455 | ai:codex
+    if force_claim {
+        for clone in &clones {
+            check_exited_branch_clone(root, branch, &clone.path)?;
+        }
+    }
+    for clone in &clones {
+        if force_claim {
+            reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            continue;
+        }
         anyhow::bail!(
             "branch `{branch}` is held by a contained seat's private clone at {} before pickup \
              setup. Continue it in that seat, end that seat's session first (`aida session end`), \
@@ -11390,6 +11415,158 @@ pub(crate) fn preflight_queue_work_branch_adopting(
         );
     }
     Ok(())
+}
+
+/// Read-only admission check shared by the all-clone preflight and teardown.
+// trace:BUG-2455 | ai:codex
+fn check_exited_branch_clone(
+    root: &std::path::Path,
+    branch: &str,
+    path: &std::path::Path,
+) -> Result<SessionLease> {
+    let leases: Vec<_> = list_leases(root)
+        .into_iter()
+        .filter(|l| {
+            crate::worktree::canonical_or_self(&l.worktree_path)
+                == crate::worktree::canonical_or_self(path)
+        })
+        .collect();
+    anyhow::ensure!(
+        !leases.is_empty(),
+        "cannot force-claim branch `{branch}`: private clone {} has no matching lease; inspect its sessions before retrying",
+        path.display()
+    );
+    anyhow::ensure!(
+        leases.len() == 1,
+        "cannot force-claim branch `{branch}`: private clone {} has several matching leases (ambiguous lease ownership); inspect its sessions before retrying",
+        path.display()
+    );
+    let lease = &leases[0];
+    anyhow::ensure!(
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone && lease.branch == branch,
+        "cannot force-claim branch `{branch}`: private clone {} no longer has the expected lease",
+        path.display()
+    );
+    match crate::pr_lease_takeover::check_pr_lease(root, lease, branch) {
+        crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => {}
+        other => {
+            let reason = match other {
+                crate::pr_lease_takeover::PrLeaseCheck::Live => {
+                    "its owning session is still live".to_string()
+                }
+                crate::pr_lease_takeover::PrLeaseCheck::NotProvable(why)
+                | crate::pr_lease_takeover::PrLeaseCheck::Refuse(why) => why,
+                crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => unreachable!(),
+            };
+            let stat = crate::seat_clone::pending_diff_stat(root, path)
+                .unwrap_or_else(|e| format!("unavailable ({e:#})"));
+            anyhow::bail!(
+                "cannot force-claim branch `{branch}`: retained lease {} and private clone {}: {reason}. Diff stat: {stat}. Commit and push pending work there, or resume that session, then retry",
+                lease.id, path.display()
+            );
+        }
+    }
+    Ok(leases.into_iter().next().unwrap())
+}
+
+/// Reuse the PR relaunch evidence and conservative clone teardown. Unlike
+/// --steal, force-claim never removes a clone holding unpublished work.
+// trace:BUG-2455 | ai:codex
+fn reclaim_exited_branch_clone(
+    root: &std::path::Path,
+    branch: &str,
+    path: &std::path::Path,
+) -> Result<()> {
+    let lease = check_exited_branch_clone(root, branch, path)?;
+    // KeepUnshipped re-probes immediately before teardown and checks live
+    // holders. Any new dirty or unpushed work retains the clone and lease.
+    match crate::seat_clone::destroy(
+        root,
+        path,
+        crate::seat_clone::DestroyMode::KeepUnshipped,
+        None,
+    )? {
+        crate::seat_clone::Destroyed::Removed { .. } => {
+            crate::session_reap::release_lease_files(root, &lease.id);
+            anyhow::ensure!(
+                !crate::lease_path(root, &lease.id).exists(),
+                "retired private clone {} but could not release lease {}",
+                path.display(),
+                lease.id
+            );
+            eprintln!(
+                "  retired exited lease {} and clean, pushed private clone {} (--force-claim)",
+                lease.id,
+                path.display()
+            );
+            Ok(())
+        }
+        crate::seat_clone::Destroyed::Kept { reason, .. } => {
+            anyhow::bail!("cannot force-claim branch `{branch}`: retained lease {} and private clone {}: {reason}", lease.id, path.display())
+        }
+    }
+}
+
+#[cfg(test)]
+mod force_claim_ownership_tests {
+    use super::*;
+
+    // Admission must refuse before touching an orphan or an ambiguous clone.
+    // trace:BUG-2455 | ai:codex
+    #[test]
+    fn bug_2455_missing_or_multiple_leases_keep_clone() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("main");
+        let clone = temp.path().join("clone");
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(&root)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(crate::test_git::git_command()
+            .args(["clone", "-q"])
+            .arg(&root)
+            .arg(&clone)
+            .status()
+            .unwrap()
+            .success());
+        std::fs::write(clone.join("pending.txt"), "keep me").unwrap();
+        let err = reclaim_exited_branch_clone(&root, "rework", &clone)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no matching lease"), "{err}");
+        assert!(err.contains(&clone.display().to_string()), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(clone.join("pending.txt")).unwrap(),
+            "keep me"
+        );
+
+        for id in ["first", "second"] {
+            let path = crate::lease_path(&root, id);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, format!(
+                "id = \"{id}\"\nscope = \"BUG-2455\"\nslug = \"bug-2455\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"rework\"\nstarted_at = \"2026-11-05T00:00:00Z\"\nhostname = \"h\"\ntree_kind = \"clone\"\n",
+                aida_core::toml_quote::toml_string(&clone.display().to_string())
+            )).unwrap();
+        }
+        let before: Vec<_> = ["first", "second"]
+            .map(|id| std::fs::read(crate::lease_path(&root, id)).unwrap())
+            .into();
+        let err = reclaim_exited_branch_clone(&root, "rework", &clone)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("several matching leases"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(clone.join("pending.txt")).unwrap(),
+            "keep me"
+        );
+        for (id, bytes) in ["first", "second"].into_iter().zip(before) {
+            assert_eq!(std::fs::read(crate::lease_path(&root, id)).unwrap(), bytes);
+        }
+    }
 }
 
 /// BUG-2145: `aida queue work --auto-complete --sandbox` contains the whole
@@ -11986,11 +12163,6 @@ pub(crate) fn handle_queue_work(
             let review_branch = plan
                 .review_target
                 .map(|(forge, n)| forge.local_branch_for(n));
-            preflight_queue_work_branch_adopting(
-                &project_root,
-                session_branch_override.or(review_branch.as_deref()),
-                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
-            )?;
             // trace:BUG-1808 | ai:claude
             // Preflight every launch path that later mints a child grant —
             // including the `--no-human` resume and standalone-reviewer
@@ -12060,6 +12232,15 @@ pub(crate) fn handle_queue_work(
                     crate::standalone_implementer::configured_cap(&project_root),
                 )?);
             }
+            // Force-claim may retire a dead clone, so delegation and launch
+            // capacity must succeed before this preflight mutates anything.
+            // trace:BUG-2455 | ai:codex
+            preflight_queue_work_branch_reclaiming(
+                &project_root,
+                session_branch_override.or(review_branch.as_deref()),
+                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
+                force_claim,
+            )?;
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
             for entry in &plan.entries {
