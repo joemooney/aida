@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T19:59:55.330949747Z
+modified_at: 2026-11-05T20:02:56.169729033Z
 req_type: Story
 relationships:
 - rel_type:
@@ -180,6 +180,11 @@ comments:
   created_at: 2026-11-05T18:02:56.547946439Z
   modified_at: 2026-11-05T18:02:56.547946439Z
   session_id: 01a1acd5e4cb
+- id: 01a1ad4e-aa29-7073-853d-fa6c3d579794
+  author: mcp
+  content: 'Current pickup: prior round-3 fixes are already in PR #3428 at merged-main head 0835c12ead95. CI run 42083886747 gates and contracts pass. Retrieved lib-1 job 127443734903 log: 7609/7610 tests passed; the sole failure is story_2401_no_new_raw_gh_reads_outside_forge, flagging condition_cmd.rs''s raw gh resolution newly prohibited by merged STORY-2401. Addressing this by moving the bounded PR-state probe into forge.rs, returning Observed<bool> and mapping unsettled reads to the condition''s Unknown verdict. No findings disputed. Native git add still refuses index.lock (read-only .git), so pending source will require documented host-exit commit publication. Python maintenance/executable fixture guards pass 15/15; Rust validation compiling in the seat-specific writable target.'
+  created_at: 2026-11-05T20:02:56.169712465Z
+  modified_at: 2026-11-05T20:02:56.169712465Z
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
