@@ -17,16 +17,26 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T06:40:20.321747849Z
-modified_at: 2026-11-05T06:40:20.321747849Z
+modified_at: 2026-11-05T16:01:07.365253559Z
 req_type: Task
 tags:
 - from-implementer:STORY-2492
 - kind:bug-spotted
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1aa06-fe3e-7d10-b529-3fb10c82d60e
+  created_at: 2026-11-05T16:01:07.365248695Z
+  created_by: joe
 history:
 - id: 01a1aa76-531f-7571-925b-879aa618ebf9
   author: joe
   timestamp: 2026-11-05T06:47:23.679281144Z
+  changes: []
+- id: 01a1ac71-4b7a-7442-8e34-73379249d92f
+  author: joe
+  timestamp: 2026-11-05T16:01:08.474478104Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
 filed_at:
   aida_version: 0.16.0
