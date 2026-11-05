@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-806
 agreed_id: TASK-2859
 title: Native queue-done cannot inspect branch/test changes and emits false diagnostics
 description: Observed while finishing BUG-2450 in a native Codex seat with read-only .git. aida queue done BUG-2450 --yes successfully marked Done and removed the queue item, but printed current_branch_at returned None and skipped the PR check, then warned missing test-file change despite edits in five test/golden files and verified tests. Raw git status/diff can read those edits. The native Git inspection path appears unable to report evidence here; distinguish unavailable native-seat evidence from a genuinely missing test change and preserve the documented host publication handoff. This is a diagnostic follow-up to TASK-2712, not a failure of the completed BUG-2450 implementation.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T05:33:47.612207322Z
-modified_at: 2026-11-05T16:00:22.532540624Z
+modified_at: 2026-11-05T16:00:25.150758428Z
 req_type: Task
 tags:
 - from-advisor:BUG-2450
@@ -34,6 +34,14 @@ history:
   author: joe
   timestamp: 2026-11-05T06:47:23.568440712Z
   changes: []
+- id: 01a1ac70-a23e-70d0-9ef0-e66472fed795
+  author: joe
+  timestamp: 2026-11-05T16:00:25.150754522Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
