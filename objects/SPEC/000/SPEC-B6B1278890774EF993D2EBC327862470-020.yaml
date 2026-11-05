@@ -1,0 +1,18 @@
+id: 01a1ad2e-200a-7863-b306-5df544243c39
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-020
+title: Subagent-adoption regression fixture lacks PID namespace and fails in a native sandbox
+description: 'During BUG-2458 validation, the existing test bug_2130_liveness_identity_tests::bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_preserves_live failed at aida-cli-lib/src/tests/bug_2130_liveness_identity_tests.rs:119: adoption returned None instead of lease-2130. The fixture writes no pid_namespace. The pre-existing BUG-2425 guard in leases.rs checks PidObserver::current().can_observe(recorded_ns) and returns before adoption for an unstamped lease in this sandbox namespace. BUG-2458''s added dual-write is after successful write_atomic and is never reached in this failure. Adapt the current-namespace fixture to the namespace-aware contract while preserving dedicated tests that foreign/unstamped legacy leases refuse in isolated observers. Ownership tests (44) and PID stamping tests (2) passed.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T19:27:23.658547560Z
+modified_at: 2026-11-05T19:27:23.658547560Z
+req_type: Task
+tags:
+- from-implementer:BUG-2458
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
