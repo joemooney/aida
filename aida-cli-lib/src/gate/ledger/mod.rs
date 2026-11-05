@@ -332,8 +332,55 @@ pub(crate) fn open_change_bound(
     req: crate::forge::OpenChange,
     specs: &[String],
 ) -> anyhow::Result<crate::forge::ChangeRef> {
+    open_change_bound_with_riders(forge, start, req, specs, &[])
+}
+
+// trace:BUG-2451 | ai:codex — train riders remain open until the train lands.
+pub(crate) fn open_change_bound_with_riders(
+    forge: &dyn crate::forge::Forge,
+    start: &Path,
+    req: crate::forge::OpenChange,
+    specs: &[String],
+    riders: &[u64],
+) -> anyhow::Result<crate::forge::ChangeRef> {
+    // trace:BUG-2451 | ai:codex — all AIDA publication paths use this boundary.
     let branch = req.branch.clone();
-    let change = forge.open_change(req)?;
+    let mut existing = None;
+    for spec in specs {
+        let changes: Vec<_> = forge
+            .open_changes_for_spec(spec)?
+            .into_iter()
+            .filter(|change| change.branch == req.branch || !riders.contains(&change.id))
+            .collect();
+        if changes.len() > 1 {
+            anyhow::bail!(
+                "{spec} has multiple open changes: {}; resolve duplicates before publication",
+                changes
+                    .iter()
+                    .map(|c| format!("#{} on `{}`", c.id, c.branch))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        for change in changes {
+            if change.branch != req.branch {
+                anyhow::bail!("{spec} already has open change #{} on `{}`; refusing a second change from `{}`. Continue the existing branch.", change.id, change.branch, req.branch);
+            }
+            if existing
+                .as_ref()
+                .is_some_and(|prior: &crate::forge::ChangeRef| prior.id != change.id)
+            {
+                anyhow::bail!(
+                    "credited specs belong to different open changes; refusing publication"
+                );
+            }
+            existing = Some(change);
+        }
+    }
+    let change = match existing {
+        Some(change) => change,
+        None => forge.open_change(req)?,
+    };
     if change.id != 0 {
         bind_specs(
             start,

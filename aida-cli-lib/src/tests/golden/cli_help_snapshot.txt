@@ -14060,10 +14060,10 @@ Options:
           (self-hosted GHE/GitLab, multi-remote setups, etc.). Accepts `github` or `gitlab`
 
       --branch-style <STYLE>
-          Branch naming style when --branch isn't given. `auto` (default): try slug, then
-          slug-2..-10, then slug-YYYY-MM-DD, then slug-YYYY-MM-DD-2..-10. `date`:           always
-          slug-YYYY-MM-DD (with -N suffix on collision). Useful when every session should be
-          traceable to its date
+          Branch naming style when --branch isn't given. `auto` (default): use the scope slug;
+          refuse on collision. `date`:           always slug-YYYY-MM-DD (with -N suffix on
+          collision). Useful when every session should be traceable to its date. An open PR always
+          fixes the branch to its existing head
           
           [default: auto]
 
@@ -44885,7 +44885,7 @@ Working on aida itself
       {
         "name": "branch-style",
         "takes_value": true,
-        "help": "Branch naming style when --branch isn't given. `auto` (default): try slug, then slug-2..-10, then slug-YYYY-MM-DD, then slug-YYYY-MM-DD-2..-10. `date`:           always slug-YYYY-MM-DD (with -N suffix on collision). Useful when every session should be traceable to its date"
+        "help": "Branch naming style when --branch isn't given. `auto` (default): use the scope slug; refuse on collision. `date`:           always slug-YYYY-MM-DD (with -N suffix on collision). Useful when every session should be traceable to its date. An open PR always fixes the branch to its existing head"
       },
       {
         "name": "canonical-ids",
