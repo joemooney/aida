@@ -8,6 +8,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import select
 import shlex
@@ -393,6 +394,41 @@ def terminal_receipts(log, invocation):
                 continue
 
 
+# Diagnostic evidence can explain unknowns, never override a measured failure
+# or attest confinement. Inspect only bounded regular files without following
+# links in the private runtime. trace:TASK-3048 | ai:codex
+def agy_unsupported_reason(root):
+    paths = [root / "stdout.jsonl", root / "stderr.txt"]
+    log_dir = root / "runtime/log"
+    if log_dir.is_dir() and not log_dir.is_symlink():
+        for path in log_dir.glob("cli-*.log"):
+            paths.append(path)
+            if len(paths) >= 34:
+                break
+    remaining = 4 * 1024 * 1024
+    texts = []
+    for path in paths:
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        except OSError:
+            continue
+        try:
+            if stat.S_ISREG(os.fstat(fd).st_mode):
+                body = os.read(fd, remaining)
+                remaining -= len(body)
+                texts.append(body.decode(errors="replace"))
+        finally:
+            os.close(fd)
+        if not remaining:
+            break
+    text = "\n".join(texts)
+    refusal = re.search(r"unsupported_tool:\s*([a-zA-Z_][a-zA-Z_0-9]*)", text)
+    if refusal:
+        mode = "default-mode" if "continuing in the default mode" in text else "agy"
+        return f"{mode} tool safety: unsupported_tool {refusal.group(1)}"
+    return None
+
+
 def bounded_launch(argv, workspace, env, root, seconds, pass_fds=()):
     with (root / "stdout.jsonl").open("wb") as out, (root / "stderr.txt").open("wb") as err:
         child = subprocess.Popen(argv, cwd=workspace, env=env, stdin=subprocess.DEVNULL,
@@ -552,6 +588,10 @@ def run(args):
                 if target["check"] != "C0":
                     checks[target["check"]]["status"] = "fail"
             file_observations.append({**target, "status": status, "before": file_before[target["path"]], "after": after_file})
+        unsupported = agy_unsupported_reason(root) if args.vendor == "agy" else None
+        if unsupported:
+            for check in checks.values():
+                check["unsupported_reason"] = unsupported
         report = {"version": 1, "vendor": args.vendor, "vendor_version": version,
                   "binary_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
                   "trusted_policy_sha": policy_sha,
@@ -567,6 +607,7 @@ def run(args):
                   "file_tool_observations": file_observations,
                   "all_tools": {"status": "unknown", "reason": "Prompt prohibition is not disabled-tool attestation; file/edit/browser/MCP/delegated paths unverified"},
                   "whole_lane_pass": False, "production_launcher_credit": False,
+                  "unsupported_reason": unsupported,
                   "agy_posture": "aida-required; native not earned" if args.vendor == "agy" else None}
         write_json(root / "report.json", report)
         print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)

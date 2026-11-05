@@ -1596,7 +1596,12 @@ fn apply_agent_default_flags_contained_injects_when_native() {
         )
         .expect_err("a contained codex/agy agent launch must be refused");
         assert!(
-            format!("{err:#}").contains("refusing to launch it"),
+            // AGY has its own closed conformance gate. trace:TASK-3048 | ai:codex
+            format!("{err:#}").contains(if matches!(agent_type, "antigravity" | "agy") {
+                "agy shared AIDA boundary is pending fresh all-tool conformance"
+            } else {
+                "refusing to launch it"
+            }),
             "{agent_type}: {err:#}"
         );
         assert!(

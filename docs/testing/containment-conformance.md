@@ -91,6 +91,14 @@ launcher's `launch/agy.rs` records posture A, the private runtime/credential
 layout, safe option order before final `-p <prompt>`, allowed write classes,
 raw Git/store denial with mediated-only operations, and browser/URL/MCP/delegated
 tool disablement requirements. It introduces no separate enforcement engine.
+The candidate argv omits `--mode auto`: the advisor's host run observed auto
+unavailable and a fallback to default mode. The table records that observation;
+it grants no default-mode tool support. The harness retains the auto request
+as a measurement and reports tool-safety refusals found in its bounded stream,
+stderr or private `runtime/log/cli-*.log` diagnostics as `unsupported_reason`
+on the report and every C0–C4 check (for example, `default-mode tool safety:
+unsupported_tool write_file`). Measured failures remain failures. These
+vendor diagnostics explain missing evidence and grant no positive credit.
 Candidate data must not be passed through the existing Codex preparation arm,
 which has a different auth model and grants raw store writes.
 

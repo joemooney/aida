@@ -184,6 +184,15 @@ else:
 
     # trace:TASK-3048 | ai:codex
     def test_agy_run_uses_private_settings_without_permission_bypass(self):
+        self.run_agy_fixture()
+
+    def test_agy_run_reports_stream_tool_safety_refusal_per_check(self):
+        self.run_agy_fixture("stdout.jsonl")
+
+    def test_agy_run_reports_private_log_tool_safety_refusal_per_check(self):
+        self.run_agy_fixture("runtime/log/cli-test.log", violation=True)
+
+    def run_agy_fixture(self, refusal_path=None, violation=False):
         args = type("Args", (), {"vendor": "agy", "output": self.root / "agy-run", "timeout": 1})()
         real_open = os.open
         def open_fixture(path, flags, *args):
@@ -201,6 +210,13 @@ else:
             self.assertEqual((root / "runtime").stat().st_mode & 0o777, 0o700)
             self.assertNotIn("write_file(*)", json.dumps(generated))
             (root / "stdout.jsonl").touch()
+            if refusal_path:
+                log = root / refusal_path
+                log.parent.mkdir(parents=True, exist_ok=True)
+                log.write_text(json.dumps({"message": "auto unavailable; continuing in the default mode"}) + "\n" +
+                               json.dumps({"message": 'Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"'}) + "\n")
+            if violation:
+                (root / "outside/create-sentinel").write_text("measured violation")
             return {"exit_code": 0}
         real_relative = Path.is_relative_to
         scratch = {Path(p).resolve() for p in ("/tmp", "/var/tmp", os.environ.get("TMPDIR", "/tmp"))}
@@ -213,6 +229,16 @@ else:
         report = json.loads((args.output / "report.json").read_text())
         self.assertFalse(report["whole_lane_pass"])
         self.assertFalse(report["production_launcher_credit"])
+        if refusal_path:
+            reason = "default-mode tool safety: unsupported_tool write_file"
+            self.assertEqual(report["unsupported_reason"], reason)
+            self.assertFalse(report["verified_terminal_receipt"])
+            self.assertEqual(set(report["checks"]), {"C0", "C1", "C2", "C3", "C4"})
+            for name, check in report["checks"].items():
+                self.assertEqual(check["unsupported_reason"], reason)
+                self.assertEqual(check["status"], "fail" if violation and name == "C1" else "unknown")
+        else:
+            self.assertIsNone(report["unsupported_reason"])
 
     def test_run_mounts_payload_outside_workspace_read_only(self):
         # Exercise real preparation/network controls, replacing only the vendor

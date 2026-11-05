@@ -242,7 +242,12 @@ fn contained_agent_new_refuses_codex_agy_and_unknown_tools_even_with_per_tool_fl
     for tool in ["codex", "antigravity", "agy", "something-else"] {
         let err = crate::refuse_uncontainable_agent_tool(tool).expect_err(tool);
         assert!(
-            format!("{err:#}").contains("refusing to launch it"),
+            // AGY has its own closed conformance gate. trace:TASK-3048 | ai:codex
+            format!("{err:#}").contains(if matches!(tool, "antigravity" | "agy") {
+                "agy shared AIDA boundary is pending fresh all-tool conformance"
+            } else {
+                "refusing to launch it"
+            }),
             "{err:#}"
         );
     }

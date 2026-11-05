@@ -21,6 +21,7 @@ pub(crate) struct Adapter {
     pub raw_store_writes: bool,
     pub mediated_writes: &'static [&'static str],
     pub disabled_unless_confined: &'static [&'static str],
+    pub observed_mode: &'static str,
     pub argv_prefix: &'static [&'static str],
 }
 
@@ -36,10 +37,11 @@ pub(crate) const AGY: Adapter = Adapter {
     raw_store_writes: false,
     mediated_writes: &["aida-cli-host-boundary", "deputy", "host-commit"],
     disabled_unless_confined: &["browser", "url", "mcp", "delegated-tools"],
+    // Host evidence: auto unavailable; the CLI continues in default mode.
+    // This mode has no all-tool conformance credit. trace:TASK-3048 | ai:codex
+    observed_mode: "default (auto unavailable)",
     argv_prefix: &[
         "--sandbox",
-        "--mode",
-        "auto",
         "--output-format",
         "stream-json",
         "--disable-slash-commands",
@@ -122,6 +124,8 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|a| a == ["--settings", "/private/agy-runtime/settings.json"]));
+        assert!(!args.iter().any(|s| s == "--mode" || s == "auto"));
+        assert_eq!(AGY.observed_mode, "default (auto unavailable)");
         assert_eq!(AGY.runtime_relative, ".gemini/antigravity-cli");
         assert_eq!(AGY.credential_relative, "antigravity-oauth-token");
         assert!(AGY.candidate_argv(Path::new("/"), prompt).is_err());
