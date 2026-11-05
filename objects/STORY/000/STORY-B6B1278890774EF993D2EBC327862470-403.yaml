@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T12:46:06.350373482Z
+modified_at: 2026-11-05T12:46:07.527211045Z
 req_type: Story
 relationships:
 - rel_type:
@@ -157,6 +157,12 @@ comments:
   modified_at: 2026-11-05T12:12:59.305441726Z
   session_id: 01a1ab80fd8e
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1abbe-bfde-7230-85b8-9455a224ff4e
+  author: joe
+  content: '#3398 at d6fe567 conflicts with main again, in .github/workflows/ci.yml only (2 hunks in the live-bwrap step). Merge origin/main into the PR branch (merge, no rebase/force) and COMBINE both sides: keep this PR''s --logfile result-file counting (lib_results/cli_results, ''^ok <name>$'' matching) AND main''s TASK-2708 additions: the task_2707_ filter on the lib cargo test line and the required task_2707 count, with ran_2707 counted from $lib_results (''^ok .*task_2707_...$'') instead of the console $log, keeping not_required_2707 excluded on both sides and the task_2706_egress_ipc_live check against $lib_results. Run make check-ci-fast, push to the same branch.'
+  created_at: 2026-11-05T12:46:07.326307301Z
+  modified_at: 2026-11-05T12:46:07.326307301Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
