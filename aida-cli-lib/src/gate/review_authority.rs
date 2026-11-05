@@ -1442,6 +1442,20 @@ pub(crate) fn verified_authority_keys(
         let Some(att) = v.attestation.as_ref() else {
             continue;
         };
+        // trace:STORY-2492 | ai:codex — never treat a remote publication as a local grant.
+        if att
+            .receipt_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("publication:"))
+        {
+            if let (Some(key), Ok(identity)) = (
+                att.authority_key(v.recorded_at.as_deref()),
+                super::review_publication::verified_identity(project_root, v),
+            ) {
+                out.insert(key, identity);
+            }
+            continue;
+        }
         let Some(key) = att.authority_key(v.recorded_at.as_deref()) else {
             continue;
         };

@@ -1399,3 +1399,21 @@ remove legacy notice files once, without migrating them. A marker in the
 grant-notices base then skips the session-grants scan on every later per-tool-call
 hook. One duplicate notice after upgrade is accepted.
 <!-- trace:TASK-2707 | ai:codex -->
+
+## Trusted review publication between hosts
+
+An operator-enrolled public-key roster in `aida-store` authorizes configured host
+recorders to publish version-1 review receipts after ordinary local authority
+validation. OpenSSH signs canonical JSON in the `aida-review-receipt` namespace;
+private keys, role grants and human-review receipts stay on their original host.
+Signed author-session evidence binds the PR head to its author sessions, allowing
+consumers to check reviewer independence after a conversation resumes elsewhere.
+The shared publication overrides a contradictory local verdict view, while exact
+head checks and current-roster signature validation remain mandatory. Revocation
+removes a roster entry and affects future credit without undoing merges.
+Publications use node-qualified UUID identity and signed per-node supersession;
+an independent concurrent refusal cannot be overwritten by another node's approval.
+The bounded committed-blob readers refuse malformed or unverifiable evidence.
+Watcher reservation synchronization and untrusted-node envelopes remain separate
+work. See [second-node operation](docs/agents/second-review-node.md).
+<!-- trace:STORY-2492 | ai:codex -->
