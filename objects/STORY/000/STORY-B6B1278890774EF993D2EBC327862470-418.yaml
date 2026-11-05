@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T07:55:44.578565144Z
+modified_at: 2026-11-05T07:55:47.249472220Z
 req_type: Story
 tags:
 - docs:impacted
@@ -226,6 +226,30 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 receipt design is sound, but CI is red, authorship binds to the wrong head on seat/primary ships, a global 256-publication cap and head-unfiltered/spec-scoped selection can block every PR, and AC4/AC5 are unmet. No triage reason was given.'
   created_at: 2026-11-05T07:55:44.578562248Z
   modified_at: 2026-11-05T07:55:44.578562248Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aab4-f015-7b63-a369-e10999efaabe
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 28dfd6c654e3
+    Recorded: 2026-11-05T06:55:07.023928188+00:00
+    Findings:
+    1. CI red at 28dfd6c: 'Run tests' failed in CI (cli-0) job 127094984253 and CI (lib-0) job 127094984338 (lib-1/gates still pending at review time). Implementer self-reported 3 failing tests (TASK-b6b1278890774ef993d2ebc327862470-810). Fix to green.
+    2. Authorship is bound to the wrong head: gate/ledger/mod.rs open_change_bound -> review_publication::publish_authorship uses head(start), but ship_from_seat.rs:1035 passes the primary checkout ('main'), whose HEAD is main, not the seat tip (pr_train/orchestrator_leases/drain_batch also pass roots). B's later publish then fails 'missing portable author spec coverage'. Bind authorship to the opened change's branch tip (req.branch / pushed tip), and add a test that ships from a non-head checkout.
+    3. Rework breaks cross-node review: author_evidence (review_publication.rs:1031) requires authorship at the exact review head, and nothing republishes it when a rework or update-branch pushes a new head. So request-changes -> rework -> re-review on B always fails until someone runs 'aida review authorship' by hand. Publish authorship on every AIDA push of a new head (ship rework, update-branch) and test the full iterate cycle.
+    4. Global outage ceiling: publications()/author_evidence refuse once the store holds more than MAX_PUBLICATIONS=256 entries across ALL PRs, with no retention. Also, any one malformed publication anywhere (it is deserialized before the repository filter) poisons every read. resolve_current then turns the Err into a synthetic request-changes for EVERY change and spec, including ones reviewed only locally, and author_evidence blocks every new publication. Scope reads to the change (e.g. a per-change directory) and keep one bad blob from failing unrelated changes.
+    5. Head-unfiltered selection: current() (used by read_recorded_verdict, choose_current, review_alias::select) and overlay_view (effective::load_view) call current_for with expected_head=None. With one current answer per node, node B's request-changes at old head H1 keeps blocking after node C approves H2, and approvals at different heads from two nodes trip 'concurrent review publications disagree on change/head', which becomes a synthetic refusal or load_view Unsafe. Filter to the change's current head (or treat other-head publications as stale) on every reader, and test it.
+    6. Spec-scoped cross-PR contamination: current_for pulls in every change whose publication covers a requested spec. A spec reviewed in two PRs (e.g. this slice and slice 2) either inherits an old PR's refusal or errors 'disagree on change/head', so read_recorded_verdict(spec) returns a permanent synthetic request-changes. Select per change and pick the spec's current change.
+    7. On a configured publisher, 'aida review record --verdict request-changes --finding ...' fails: the record carries no blocking_finding_origin_ids and review record has no flag for them, so publish() bails AFTER store::append_one/append durably wrote the local verdict. record_verdict_at/record_collected_verdict then return Err for a verdict that was written (the launcher sees failure; retries duplicate events). Either accept origin IDs on review record, or make publication failure a reported, non-fatal pending state.
+    8. open_change_bound returns Err after forge.open_change already created the PR when authorship publication fails, and the callers bail 'could not open a forge change request' although the PR exists (risk of duplicate-PR retries). Report the publication failure as a warning or pending state instead of failing the open.
+    9. AC5 unmet: the two-clone test (story_2492_publication_tests.rs) calls internal functions (record_collected_verdict, merge_gate_verdict_candidates) and never runs ship or train. There is no 'A's train lands it' leg. Add a train/ready-path assertion over the shared bare hub.
+    10. AC3 partially verified: the disagreement report is only an eprintln in resolve_current/choose_current (it compares just kind/sha/findings), and no test asserts the disagreement is reported. Add a test that captures or asserts the report.
+    11. AC4 (watcher discovery and synced reservation) is not implemented (deferred to slice 2) and no slice-2 follow-up spec exists. The (STORY-2492) commit trailer will drive merge-time completion of the story with AC4 unmet. File the slice-2 spec and use a trailer or slicing that does not complete STORY-2492.
+    12. Minor: persist_checked's doc comment says the rebase runs 'under the store writer lock', but git_ops::pull_rebase runs outside with_store_write_lock (only the sync lock), so another store writer can interleave. On a roster push race the local roster commit stays, and 'reapply' then fails with 'node already enrolled'/'not enrolled'. Fix the lock scope or the comment, and give the operator a recovery path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T07:55:47.093174988Z
+  modified_at: 2026-11-05T07:55:47.093174988Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
