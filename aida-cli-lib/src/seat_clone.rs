@@ -1326,7 +1326,7 @@ pub(crate) fn pending_diff_stat(main: &Path, clone: &Path) -> Result<String> {
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     let text = String::from_utf8_lossy(&out).trim().replace('\n', "; ");
     Ok(if text.is_empty() {
-        "no tracked changes (see untracked paths above)".into()
+        "no tracked changes".into()
     } else {
         text
     })

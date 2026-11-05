@@ -2,8 +2,24 @@
 //! occupancy blocks pickup, without losing unpublished work.
 // trace:BUG-2455 | ai:codex
 use super::s4_host_git_tests::leased_clone_on;
-use super::tests::{fixture, git_ok};
+use super::tests::fixture;
 use super::*;
+
+// Keep maintenance disabled in every fixture write, including imported-helper calls.
+// trace:BUG-2455 | ai:codex
+fn git_ok(dir: &Path, args: &[&str]) {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
 
 fn set_owner(main: &Path, pid: Option<u32>) {
     let mut lease = crate::list_leases(main).into_iter().next().unwrap();
@@ -51,7 +67,7 @@ fn bwrap_live() -> bool {
 }
 
 #[test]
-fn bug2455_force_claim_retires_clean_pushed_dead_clone_and_lease() {
+fn bug_2455_bwrap_force_claim_retires_clean_pushed_dead_clone_and_lease() {
     if !bwrap_live() {
         return;
     }
@@ -96,7 +112,7 @@ fn bug2455_force_claim_retires_clean_pushed_dead_clone_and_lease() {
 }
 
 #[test]
-fn bug2455_dirty_clone_refuses_with_path_and_diff_stat_and_keeps_work() {
+fn bug_2455_bwrap_dirty_clone_refuses_with_path_and_diff_stat_and_keeps_work() {
     if !bwrap_live() {
         return;
     }
@@ -133,7 +149,7 @@ fn bug2455_dirty_clone_refuses_with_path_and_diff_stat_and_keeps_work() {
 }
 
 #[test]
-fn bug2455_clean_unpushed_clone_is_retained() {
+fn bug_2455_bwrap_clean_unpushed_clone_is_retained() {
     if !bwrap_live() {
         return;
     }
@@ -161,12 +177,14 @@ fn bug2455_clean_unpushed_clone_is_retained() {
     );
     let err = reclaim(&fx.main).unwrap_err().to_string();
     assert!(err.contains("no remote has"), "{err}");
+    assert!(err.contains("no tracked changes"), "{err}");
+    assert!(!err.contains("untracked paths above"), "{err}");
     assert!(clone.join("only-copy.txt").exists());
     assert_eq!(crate::list_leases(&fx.main).len(), 1);
 }
 
 #[test]
-fn bug2455_live_or_unprovable_owners_and_adopted_clones_are_retained() {
+fn bug_2455_bwrap_live_or_unprovable_owners_and_adopted_clones_are_retained() {
     if !bwrap_live() {
         return;
     }
@@ -192,4 +210,55 @@ fn bug2455_live_or_unprovable_owners_and_adopted_clones_are_retained() {
     .unwrap();
     assert!(clone.exists());
     assert_eq!(crate::list_leases(&fx.main).len(), 1);
+}
+
+// trace:BUG-2455 | ai:codex
+#[test]
+fn bug_2455_bwrap_all_clones_checked_before_any_retirement() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let a = leased_clone_on(&fx, "2455multi-a", "2455multi-a", "rework");
+    let b = leased_clone_on(&fx, "2455multi-b", "2455multi-b", "rework");
+    // Make inventory ordering explicit: the safe clone precedes the refusal.
+    let mut leases = crate::list_leases(&fx.main);
+    for (index, lease) in leases.iter_mut().enumerate() {
+        lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+        lease.active_pid = Some(dead_pid());
+        lease.active_pid_start_time = None;
+        lease.started_at += chrono::Duration::seconds(index as i64);
+        std::fs::write(
+            crate::lease_path(&fx.main, &lease.id),
+            toml::to_string_pretty(lease).unwrap(),
+        )
+        .unwrap();
+    }
+    let safe = &leases[0].worktree_path;
+    let dirty = &leases[1].worktree_path;
+    // Both heads are published; only the later clone has pending work.
+    git_ok(&fx.main, &["push", "origin", "HEAD:refs/heads/rework"]);
+    std::fs::write(dirty.join("README.md"), "pending\n").unwrap();
+    let snapshots: Vec<_> = leases
+        .iter()
+        .map(|l| std::fs::read(crate::lease_path(&fx.main, &l.id)).unwrap())
+        .collect();
+    let err = reclaim(&fx.main).unwrap_err().to_string();
+    assert!(err.contains(&dirty.display().to_string()), "{err}");
+    assert!(safe.exists() && a.exists() && b.exists(), "{err}");
+    for (lease, bytes) in leases.iter().zip(snapshots) {
+        assert_eq!(
+            std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap(),
+            bytes
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(dirty.join("README.md")).unwrap(),
+        "pending\n"
+    );
 }
