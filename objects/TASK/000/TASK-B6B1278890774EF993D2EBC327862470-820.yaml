@@ -8,8 +8,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T07:38:57.844441435Z
+modified_at: 2026-11-05T07:53:12.675807431Z
 req_type: Task
+tags:
+- docs:impacted
+comments:
+- id: 01a1aab1-c61d-7b92-90af-79b5eb7adff3
+  author: joe
+  content: Implementation follows the advisor-approved STORY-2479 sketch. Independent intake is isolated under the clone-common aida-intake directory with its own Git repository/worktree/index/objects/refs and permanent lock. Publication uses reviewed exact bytes and a pinned validated SHA, pull quarantines and validates all reachable history before fast-forward acceptance, and processing records immutable receipts plus a durable random operation identity. Normal CLI writers retain requirement/comment authorization. Local bare-remote integration coverage and processing crash-recovery coverage are in progress; no ship or review-record action will run.
+  created_at: 2026-11-05T07:52:19.741517667Z
+  modified_at: 2026-11-05T07:52:19.741517667Z
+  session_id: 01a1aaa4cf95
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
@@ -29,6 +38,11 @@ history:
 - id: 01a1aaa5-89fa-7812-83ee-40adb92c7b10
   author: joe
   timestamp: 2026-11-05T07:38:57.914331054Z
+  session_id: 01a1aaa4cf95
+  changes: []
+- id: 01a1aab2-9563-7740-a71e-c8ff452ef3d9
+  author: joe
+  timestamp: 2026-11-05T07:53:12.803473847Z
   session_id: 01a1aaa4cf95
   changes: []
 filed_at:
