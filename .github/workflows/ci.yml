@@ -356,12 +356,20 @@ jobs:
             bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ containment::tests::task_2706_egress_ipc_live 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture --logfile "$cli_results" \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
-          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
-          ran=$(grep -hE '^ok .*' "$lib_results" "$cli_results" | grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+$' | sort -u | wc -l)
+          grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sed 's/^fn //' | sort -u > "$RUNNER_TEMP/live-bwrap.expected"
+          grep -hE '^ok .*' "$lib_results" "$cli_results" | grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+$' | sort -u > "$RUNNER_TEMP/live-bwrap.ran"
+          expected=$(wc -l < "$RUNNER_TEMP/live-bwrap.expected")
+          ran=$(wc -l < "$RUNNER_TEMP/live-bwrap.ran")
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
-          if [ "$ran" -ne "$expected" ]; then echo "::error::only $ran of $expected live bwrap tests ran ok"; exit 1; fi
+          # Name each missing test so a repeat is identifiable, not just a count.
+          # trace:STORY-2475 | ai:claude
+          if [ "$ran" -ne "$expected" ]; then
+            comm -23 "$RUNNER_TEMP/live-bwrap.expected" "$RUNNER_TEMP/live-bwrap.ran" | sed 's/^/missing or not ok: /'
+            grep -vhE '^ok ' "$lib_results" "$cli_results" || true
+            echo "::error::only $ran of $expected live bwrap tests ran ok"; exit 1
+          fi
           # trace:TASK-2706 | ai:codex — a typo/zero-match filter cannot count
           # as egress/IPC acceptance. This regression has no skip arm.
           grep -q '^ok containment::tests::task_2706_egress_ipc_live$' "$lib_results"
