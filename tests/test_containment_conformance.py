@@ -19,6 +19,37 @@ c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
 
 
+# trace:TASK-3114 | ai:codex
+class PolicyRevisionTests(unittest.TestCase):
+    def test_policy_resolves_in_script_repository_from_outside_cwd(self):
+        repo = Path(c.__file__).resolve().parents[2]
+        original = c.command
+        with tempfile.TemporaryDirectory() as outside:
+            # Give Git an unrelated cwd, as when launched outside the repo.
+            with mock.patch.object(c, "command", side_effect=lambda argv: original(argv, cwd=outside)):
+                sha = c.trusted_policy_sha()
+        self.assertEqual(sha, original(["git", "-C", str(repo), "rev-parse", "origin/main^{commit}"]))
+
+    def test_missing_policy_ref_is_a_conformance_refusal_without_traceback(self):
+        with tempfile.TemporaryDirectory() as empty:
+            c.command(["git", "init", "-q", empty])
+            script = Path(empty) / "scripts/containment/conformance.py"
+            with mock.patch.object(c, "__file__", str(script)), mock.patch.object(
+                    c.sys, "argv", [str(script), "--vendor", "codex", "--output", empty]), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as exit:
+                    c.main()
+        self.assertEqual(exit.exception.code, 2)
+        self.assertTrue(stderr.getvalue().startswith("conformance: cannot resolve"))
+        self.assertIn("fetch origin main", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_git_timeout_is_reported_as_policy_refusal(self):
+        with mock.patch.object(c, "command", side_effect=c.subprocess.TimeoutExpired("git", 15)):
+            with self.assertRaisesRegex(ValueError, "cannot resolve.*origin/main"):
+                c.trusted_policy_sha()
+
+
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

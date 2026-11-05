@@ -532,12 +532,11 @@ placement is still computed by callers outside the lock. See OVERVIEW.md.
 
 ## Local observation envelopes
 
-`aida intent note|validate|export` operate on explicitly supplied data before
-identity, telemetry or store setup. The six-field v1 JSON format and hash are
-specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
-Keep these operations independent of store-only transport and spec comprehension.
-Use direct spellings; local observation commands reaching late alias dispatch
-refuse with direct-spelling guidance before performing observation I/O.
+`aida intent note|validate|export` operate on explicitly supplied data through a
+local entry path before identity, telemetry or store setup. The six-field v1
+JSON format and hash are specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+Store-only transport retains its separate authority.
+<!-- trace:TASK-3114 | ai:codex -->
 <!-- trace:STORY-2479 | ai:codex -->
 
 ## Requirements Management

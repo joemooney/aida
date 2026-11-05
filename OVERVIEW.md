@@ -370,16 +370,12 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 ## Architecture
 
 **Store-independent observations.** `aida intent note`, `validate`, and `export`
-produce or inspect an explicit six-field JSON envelope without requirements,
-identity discovery, telemetry, store setup or network calls. A dedicated entry
-path precedes shared CLI startup; late alias dispatch refuses and directs the
-caller to the direct spelling. SHA-256 covers ordered compact JSON of the five
-payload fields; the full digest is the identity, with a 12-hex display label.
-Reads and serialized size are bounded, imported prose is data, and optional
-explicit regex rules refuse sensitive content without certifying sanitization.
-Manual-email export is a self-contained JSON attachment. Store-only transport
-retains its separate authority; enrolled intake transport and processing are
-future slices. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+produce or inspect an explicit six-field JSON envelope through a dedicated local
+entry path before shared CLI startup, without identity discovery, telemetry or
+store setup. Store-only transport retains its separate authority. See
+[the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export)
+for envelope fields, hashing and validation rules.
+<!-- trace:TASK-3114 | ai:codex -->
 <!-- trace:STORY-2479 | ai:codex -->
 
 ### The four layers

@@ -65,6 +65,13 @@ preset and disposable equivalents of the TASK-2712 store/cache/mail/deputy
 write grants. Credentials are opened with `O_PATH` and mounted read-only,
 never read by the harness, copied, or printed. No operator settings change.
 
+The policy SHA is pinned from the harness repository's locally available
+`origin/main` commit, regardless of the caller's working directory. Fetch
+`origin main` in that repository before a host run to refresh this snapshot;
+the runner does not fetch or claim remote freshness. A missing or unreadable
+ref produces a `conformance:` refusal.
+<!-- trace:TASK-3114 | ai:codex -->
+
 The pinned `origin/main` SHA, vendor version/entrypoint hash, payload hash,
 argv, desired policy, actual surrogate grants, before/after hashes/modes, tool
 diagnostics and receiver receipts are retained in `report.json` and its private
@@ -102,8 +109,9 @@ In particular,
 its fixed loopback CONNECT proxy bypasses environment proxies and its names
 resolve only through that fixture. A vendor's own proxy/DNS allow list may be
 correct yet unable to use this route. **This runner cannot earn native posture:**
-C3 has no pass rule. A C3-capable harness with an allowed route expressible by
-the vendor policy, allowed positive receipts, verified execution and denied-route
+C1/C2 cannot attest native file-tool denials, and C3 has no pass rule.
+A C3-capable harness with an allowed route expressible by the vendor policy,
+allowed positive receipts, verified execution and denied-route
 coverage is S2 work, alongside production lifecycle and all-tool acceptance tests.
 
 ## Tests
@@ -171,8 +179,8 @@ measurements neither revoke it nor call it conformant.
 
 The reassessment does **not** claim new vendor execution or validation of the
 new read-only layout against either vendor. Both script deputies were unavailable
-during rework; a fresh authorized host run is still required. Regenerate the
-conservative assessment reproducibly with the command below. The reassessment
+during rework; the later authorized host runs are summarized below. Regenerate
+the conservative assessment reproducibly with the command below. The reassessment
 never credits C0's terminal sub-check: a changed C0 target is the positive
 sentinel, not a violation, so it is `unknown` without a fresh receipt.
 
@@ -181,3 +189,19 @@ python3 scripts/containment/conformance.py \
   --reassess docs/testing/containment-conformance-2026-11-04.json \
   --output docs/testing/containment-conformance-2026-11-04.json
 ```
+
+## Fresh host-run follow-up: 2026-11-05
+
+<!-- trace:TASK-3114 | ai:codex -->
+
+The historical fresh-run follow-up (TASK-2863) is resolved by the advisor's
+2026-11-05 ruling and fresh-run record on STORY-2460 (12:29 and 12:41 UTC).
+The advisor selected fresh shipped-harness runs rather than offline reassessment.
+The recorded private outputs are `~/aida-conformance-codex-FRESH-20261105/`
+and `~/aida-conformance-agy-FRESH-20261105/`.
+Codex 0.166.0 produced C0 pass, C1 unknown and C2–C4 fail;
+AGY produced C0–C4 unknown with zero vendor receipts because headless mode
+refused the required file-write permission. Neither earned a whole-lane pass.
+The advisor assigned fixture-scoped AGY permissions and further conformance
+work to TASK-3048; posture A and the production AGY refusal remain in effect.
+These are the advisor's recorded results, not new measurements by this sweep.

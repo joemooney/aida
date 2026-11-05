@@ -685,7 +685,6 @@ changing the queue entry.
   and merge only where merge is already authorized.
   <!-- trace:TASK-1715 | ai:claude -->
 
-
 **A verdict is state, not prose — and it gates `queue done`.** A "changes
 requested" written only as a comment cannot be enforced: the incident behind
 this rule was a reviewer rejecting a specific commit, and a later session
