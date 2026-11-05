@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-403
 agreed_id: STORY-2475
 title: Headless Codex queue-work lanes publish their own work on exit (host-side commit + ship)
 description: 'Codex''s native sandbox makes .git read-only, so a Codex `aida queue work` lane leaves validated edits uncommitted in its seat clone and exits with ''pr-opened ... untested'' or nothing. Someone has to run `aida ship SPEC --from-seat <clone> --commit-pending ...` by hand. On 2026-11-04 the BUG-2439 fix sat uncommitted for 3 hours. TASK-2712 added the host commit for agent-new lanes only. Acceptance: (1) when a contained Codex queue-work lane exits with pending seat changes, the host commits them with a generated [AI:codex] message naming the spec, and ships them to the existing PR or opens one; (2) this also covers reworks of an existing PR branch; (3) an exit with no changes is reported to the advisor by mail, not silently; (4) it replaces the advisor''s auto-publish.sh workaround.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T10:55:45.594746483Z
+modified_at: 2026-11-05T11:19:24.365544456Z
 req_type: Story
 relationships:
 - rel_type:
@@ -261,6 +261,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ab6f-6883-7740-a047-6e4a8c20301f
+  author: joe
+  timestamp: 2026-11-05T11:19:27.619852457Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
