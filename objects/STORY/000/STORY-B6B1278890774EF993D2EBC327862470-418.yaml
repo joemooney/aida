@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T04:48:26.867949908Z
+modified_at: 2026-11-05T04:49:14.663327027Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -145,6 +145,18 @@ comments:
     sketch approval; resume implementation after sign-off is recorded on the spec.
   created_at: 2026-11-05T04:48:22.740329034Z
   modified_at: 2026-11-05T04:48:22.740329034Z
+  session_id: 01a1aa06b62b
+- id: 01a1aa0a-08c3-79a0-8b60-42b15d76d533
+  author: joe
+  content: Sketch committed as 914dcbec5406094df0550c8e59471cb5f31eed24 on branch story-b6b1278890774ef993d2ebc327862470-418. aida pr hold refused claiming the local branch was missing although git show-ref resolved it; a separate draft finding captures that issue. Direct git push uploaded the branch (local upstream/remote-tracking bookkeeping was read-only). No PR opened, no hold marker claimed, no queue-done or review/ship action taken. Story remains Needs Attention awaiting master sketch and authority-decision sign-off.
+  created_at: 2026-11-05T04:49:06.755705647Z
+  modified_at: 2026-11-05T04:49:06.755705647Z
+  session_id: 01a1aa06b62b
+- id: 01a1aa0a-27a7-78f0-9f59-f8e49efab55a
+  author: joe
+  content: 'Correction to the preceding note: filing the separate PR-hold finding failed because requirement ID allocation hit a read-only filesystem; no finding metadata/object was written for that issue. The original architecture-concern finding TASK-b6b1278890774ef993d2ebc327862470-805 did succeed. PR-hold reproduction remains recorded here: hold reports local branch missing while show-ref resolves it; origin ls-remote confirms the full sketch commit 914dcbec5406094df0550c8e59471cb5f31eed24. No hold marker exists.'
+  created_at: 2026-11-05T04:49:14.663327027Z
+  modified_at: 2026-11-05T04:49:14.663327027Z
   session_id: 01a1aa06b62b
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
