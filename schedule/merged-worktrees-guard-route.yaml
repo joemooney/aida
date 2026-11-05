@@ -1,0 +1,7 @@
+job: merged-worktrees-guard-route
+due_since: 2026-11-05T04:02:09.988859664Z
+due_reason: on CronJobFailed:merged-worktrees-guard
+due_failure:
+  trip_id: merged-worktrees-guard@2026-11-05T03:53:40.188422847Z
+  job: merged-worktrees-guard
+  error: 'exit 124: timed out: doctor check merged-agent-worktrees --fail-on-findings did not complete within 120s (killed)'
