@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:55:47.844000604Z
-modified_at: 2026-11-05T16:40:25.216345883Z
+modified_at: 2026-11-05T16:48:39.750931855Z
 req_type: Bug
 comments:
 - id: 01a1a9a2-9799-79c3-8dc0-7fc0458a497a
@@ -17,6 +17,17 @@ comments:
   created_at: 2026-11-05T02:56:07.577955574Z
   modified_at: 2026-11-05T02:56:07.577955574Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1ac9c-cd46-7f70-afed-6bd47a34bb95
+  author: joe
+  content: |
+    Isolated the resurfacing path: mailbox_logical::read_evidence marks failed/over-budget receipt reads unknown and reports source/anchor errors, but its compatibility fallback is ReadEvidence::Unread. mailbox_view::snapshot_view previously cloned every raw record into own-inbox views, so inbox/notice/latency treated unknown read state as new mail. Operator backlog inspection already excluded these unknown IDs.
+
+    Compared the parent/head blobs of mailbox_logical.rs and mailbox_view.rs for #3384 (fb2086e9008), #3372 (7d64f7f5736), #3336 (efca74e51a6), and #3373 (785f19331c2): unchanged in every candidate. This isolates a pre-existing receipt-failure projection defect rather than a changed inbox/receipt implementation in those merges. The exact transient I/O/deadline trigger on Nov 4 cannot be recovered from the report alone; do not claim a particular merge deleted receipts. The 19:56 recovery confirms no blanket receipt repair or re-acknowledgement is warranted.
+
+    Implementation now excludes unknown IDs from own-inbox projections and core unread_ids, retains the incomplete-view warning and ACK refusal, and keeps explicit ID reads addressable. Existing receipts remain untouched. Regression fixtures cover a corrupt/refused ledger hiding 100 historical messages while independent new mail remains visible, corrupt per-ID source receipts, oversized ledger reads, retry recovery from the same bytes, and an ACK read back from primary/linked-worktree/second-seat-clone after removing the first clone's compatibility receipt. Validation is running.
+  created_at: 2026-11-05T16:48:39.750931855Z
+  modified_at: 2026-11-05T16:48:39.750931855Z
+  session_id: 01a1ac949eba
 history:
 - id: 01a1a9a2-d64d-77f3-8930-351f4a298400
   author: joe
