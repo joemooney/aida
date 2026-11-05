@@ -22,13 +22,24 @@ SPEC.loader.exec_module(c)
 # trace:TASK-3114 | ai:codex
 class PolicyRevisionTests(unittest.TestCase):
     def test_policy_resolves_in_script_repository_from_outside_cwd(self):
-        repo = Path(c.__file__).resolve().parents[2]
         original = c.command
-        with tempfile.TemporaryDirectory() as outside:
+        with tempfile.TemporaryDirectory() as fixture, tempfile.TemporaryDirectory() as outside:
+            repo = Path(fixture)
+            script = repo / "scripts/containment/conformance.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("# policy lookup fixture\n")
+            original(["git", "init", "-q", str(repo)])
+            original(["git", "-C", str(repo), "add", "."])
+            original(["git", "-C", str(repo), "-c", "user.name=Test",
+                      "-c", "user.email=test@example.invalid", "-c", "core.hooksPath=/dev/null",
+                      "commit", "-qm", "fixture"])
+            expected = original(["git", "-C", str(repo), "rev-parse", "HEAD"])
+            original(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", expected])
             # Give Git an unrelated cwd, as when launched outside the repo.
-            with mock.patch.object(c, "command", side_effect=lambda argv: original(argv, cwd=outside)):
+            with mock.patch.object(c, "__file__", str(script)), mock.patch.object(
+                    c, "command", side_effect=lambda argv: original(argv, cwd=outside)):
                 sha = c.trusted_policy_sha()
-        self.assertEqual(sha, original(["git", "-C", str(repo), "rev-parse", "origin/main^{commit}"]))
+        self.assertEqual(sha, expected)
 
     def test_missing_policy_ref_is_a_conformance_refusal_without_traceback(self):
         with tempfile.TemporaryDirectory() as empty:
