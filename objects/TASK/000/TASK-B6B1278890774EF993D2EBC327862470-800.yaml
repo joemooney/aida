@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T20:44:59.177750103Z
+modified_at: 2026-11-05T21:27:18.997315125Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -48,6 +48,19 @@ comments:
   content: 'Implementing approved PR-A only (advisor signoff 2026-11-05 18:42 UTC). Added separate versioned request-action ledger, recipient-authorized acted/declined/deferred CLI, message inspection/JSON projection and core/adapter regressions. Reuses read-ACK source-generation/replica validation without ACK writes; rechecks selected session identity and people-catalog evidence under Lifecycle -> action-ledger locks. Default-feature cargo check passed; focused tests and no-default-feature/fast guards are still building. Native publication dry-run explicitly refuses Git metadata writes and directs the host-side lane exit commit. Required commit/PR subject: [AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074). Do not mark TASK-3074 Done on PR-A; approved PR-B must add typed delivery correlation and unresolved/persistent escalation.'
   created_at: 2026-11-05T20:44:59.177750103Z
   modified_at: 2026-11-05T20:44:59.177750103Z
+  session_id: 01a1ad68128d
+- id: 01a1ad9b-ead5-7fb1-90e2-6dff43d1bcac
+  author: joe
+  content: |-
+    Approved PR-A implemented and validated; TASK-3074 intentionally remains In Progress for the signed two-PR split. Added recipient-authorized version-1 action revisions, exact-ID acted/declined/deferred CLI, separate message action/JSON projection, reason/evidence/deadline bounds, source/identity revalidation and read-ACK independence. Shared-only inbox keys require a verified session binding: unbound role hints refuse; a real registered reader records its concrete recipient UUID. No alarm correlation/escalation or protected-operation/status mutation is implemented in PR-A.
+
+    Final validation: 15 action tests, 15 supported ACK regressions, 3 disposition CLI/adapter tests, 3 read regressions and the sibling-message follow-up regression passed. Final cargo check -p aida-cli --no-default-features --offline, cargo fmt --all -- --check and git diff --check passed. Help snapshot regenerated and verified; JSON audit matches repeat generation. CLI build, global/local JSON smoke and all 37 make check-ci-fast gates passed before the final shared-binding guard; the targeted authority/ACK/read suites, formatting and feature-disabled check were rerun after it. One unchanged local-only ACK fixture refuses at its context setup due to /tmp/.git; recorded as draft SPEC-b6b1278890774ef993d2ebc327862470-023. Native completing-trailer/hold limitations are recorded in draft SPEC-b6b1278890774ef993d2ebc327862470-021.
+
+    Publication: no commit, push, PR, pr ship or review record was performed. Native aida ship --no-merge --dry-run explicitly refuses read-only Git metadata and requires host-side exit publication. aida pr hold also refused, claiming checked-out task-3074-r1329 does not exist. No force or marker fabrication attempted. Required commit/PR subject: [AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074). PR body prepared at /tmp/task3074-pr-a-body.md.
+
+    From the main checkout, while edits are pending: aida ship TASK-3074 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-800 --commit-pending '[AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074)' --no-merge . If the automatic clean-exit step already captures a completing subject, correct that unpublished subject/PR title to the required Refs title before publication/handoff. The default completing title must not close TASK-3074 on PR-A. Do not queue-done this task until PR-B delivers typed request correlation and unresolved/persistent escalation. Leave merge and independent review to separate seats.
+  created_at: 2026-11-05T21:27:18.997315125Z
+  modified_at: 2026-11-05T21:27:18.997315125Z
   session_id: 01a1ad68128d
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
