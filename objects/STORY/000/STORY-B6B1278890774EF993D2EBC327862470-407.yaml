@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T03:34:46.804577064Z
+modified_at: 2026-11-05T03:35:14.249363590Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -153,6 +153,12 @@ comments:
   content: 'Implementing the advisor-authorized first slice only: note/validate/export plus bounded strict envelope validation and email round trips. Filed child TASK-3077 to distinguish this delivery from remaining intake enrollment/publication/pull, receipts/processing and comment recovery. Parent remains in progress. Existing store-only transport profile is untouched.'
   created_at: 2026-11-05T03:10:08.890792389Z
   modified_at: 2026-11-05T03:10:08.890792389Z
+  session_id: 01a1a9a8fe02
+- id: 01a1a9c6-6649-7b52-adb4-c3f3afd9b660
+  author: joe
+  content: 'Advisor-authorized first slice delivered in PR https://github.com/joemooney/aida/pull/3403, commit dede3933efa, tracked as TASK-3077. Adds local intent note/validate/export, exact v1 envelope hashing/schema/limits, bounded regular-file reads, explicit deny-pattern rules and manual-email attachments before shared startup. Final-source envelope integration tests: 10/10 passed; command-registry suite: 21/21; final help snapshot: 1/1; no-default-features check, cargo fmt and static manual/doc-intent checks passed. Root hygiene reports the sandbox read-only .aws entry, left untouched. Native staging refused .git/index.lock; sanctioned aida ship --from-seat --commit-pending from the host checkout committed, pushed and opened PR without merging. Parent remains in progress: intake enrollment/publication/pull, receipts/processing and comment recovery remain for later slices. Stopping at the open PR as instructed.'
+  created_at: 2026-11-05T03:35:14.249363590Z
+  modified_at: 2026-11-05T03:35:14.249363590Z
   session_id: 01a1a9a8fe02
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
