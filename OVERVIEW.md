@@ -1123,6 +1123,14 @@ Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
 
+`aida pr hold` retains Git safety refusals and repository lookup errors and
+explicitly reports that no hold was recorded. Only Git's quiet missing-ref
+result reports a missing branch. This preserves diagnostics; it does not
+enable native-seat publication. Regression fixtures isolate Git discovery
+from `TMPDIR` and retain the existing seat-refusal coverage. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
+
 GitHub `aida pr ship` waits on classified CI rows for up to 20 minutes. The
 `[ci]` informational allow-list applies to pending as well as failed jobs;
 branch-protection-required checks always take precedence. Unlisted failures
