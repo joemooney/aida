@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-05T02:57:10.087944898Z
+modified_at: 2026-11-05T03:15:58.163013059Z
 req_type: Bug
 tags:
 - area:containment
@@ -46,6 +46,12 @@ comments:
   created_at: 2026-11-05T02:57:07.999290303Z
   modified_at: 2026-11-05T02:57:07.999290303Z
   session_id: 01a1a9a2272a
+- id: 01a1a9b4-c253-7bc2-a6f2-392c6f23e8a7
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 20:20), applying the operator''s STORY-2460 principle: a vendor''s native sandbox earns a posture by passing the conformance suite, and AIDA''s shared boundary is the fallback. Do NOT build a Codex-specific production boundary, proxy or broker. Codex native fails C3, so it keeps its separately labelled native-compatibility exception (unchanged, not ''contained''). The fix is to run Codex inside the shared AIDA boundary (network namespace plus host-owned proxy with a pinned allowed_hosts snapshot) once that boundary supports ordinary launches. BLOCKED on TASK-2708 / STORY-2238 (shared boundary production launch). Close this as fixed when the same-profile C3 probe passes for Codex under the shared boundary. Not drainable until then.'
+  created_at: 2026-11-05T03:15:58.163013059Z
+  modified_at: 2026-11-05T03:15:58.163013059Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a957-aeb7-7150-887a-dd6b7a33021d
   author: joe
