@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T04:06:27.716155442Z
+modified_at: 2026-11-05T04:07:02.093993112Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -60,6 +60,11 @@ comments:
   created_at: 2026-11-05T03:57:38.898703245Z
   modified_at: 2026-11-05T03:57:38.898703245Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9e3-82cd-7710-a637-15a5f82156e7
+  author: mcp
+  content: 'Round 2 findings 1 and 2 accepted and prepared in the current worktree: wait delegates to wait_with_grace with production CLAIM_GRACE=10s; interrupted-claim regression injects 300ms, asserts grace <= elapsed < grace+1s, and uses a 5s hang watchdog. cargo fmt --all -- --check and git diff --check passed. Focused test compilation underway. Publication punt recorded: this launch is on newer main (e1fc3f06903), not the PR head fa97b48bcb09, and .git is mounted read-only, blocking merge/commit/push. Prepared incremental patch against reviewed PR head: /tmp/task-2832-round-2.patch. No findings disputed; relaunch on PR #3394 branch with git-write capability to commit and push.'
+  created_at: 2026-11-05T04:07:02.093901691Z
+  modified_at: 2026-11-05T04:07:02.093901691Z
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
   author: joe
