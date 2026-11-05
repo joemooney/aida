@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-211
 agreed_id: BUG-2442
 title: Review watcher treats a stale lease as a live author and skips the PR indefinitely
 description: 'Observed 2026-11-04: PRs #3372, #3367, #3336 and #3386 got no fresh review for hours. The watcher logged ''stale overlapping head already notified; the author''s session on <branch> is live and owns the merge'', while `aida session leases` showed those leases as ⚠ stale (the Codex lane had exited and the seats were clean and pushed). review_watch_update::author_live -> status_prs::live_owned_branches_strict counts a lease live when its active OR creator process is alive. The creator for advisor-launched lanes is a long-lived process (the deputy or advisor), so an exited lane stays ''live'' forever. Acceptance: (1) liveness for review gating uses the same verdict as the leases view''s stale marker (the lane''s own process, not the launcher); (2) a lease whose lane has exited with a clean, pushed seat is not live; (3) a regression test pins an alive creator plus a dead active process to ''not live''; (4) the watcher log names the lease id when it skips for a live author.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:36.411397250Z
-modified_at: 2026-11-05T02:44:59.249948434Z
+modified_at: 2026-11-05T03:22:12.419324241Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -129,6 +129,20 @@ history:
   timestamp: 2026-11-05T02:45:00.377288995Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a9ba-783d-7dd1-98c9-e8342b13cb63
+  author: aida-auto-bump
+  timestamp: 2026-11-05T03:22:12.413904611Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1a9ba-7843-7523-b739-be7a565ecbb1
+  timestamp: 2026-11-05T03:22:12.419319111Z
+  agent: aida
+  commit_sha: e1fc3f06903785151ac46e5dc911e75cd6965b94
+  summary: 'All 4 BUG-2442 ACs met and all 3 round-1 findings addressed: ownership filters on classify_session_leases non-Stale (Dormant/Unknown kept), alive-creator+dead-active regression reads Stale and is updated, Dormant and foreign-namespace refusal tests, per-pass OnceCell snapshot, skip log names lease id; PR CI green at 21a56f8.'
+  review_verdict: approved
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -137,6 +151,10 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T03:22:12.413898115Z
+  completion_sha: e1fc3f06903785151ac46e5dc911e75cd6965b94
 attention_reason:
   category: other
   detail: 'Round 2 findings 1, 2 and 3 are all addressed locally; none is disputed. Non-Stale ownership includes Dormant and Unknown, real classifier refusal tests protect both, and one lazy snapshot per watcher pass avoids repeated process scans. Validation: 15/15 review_watch::update_tests tests passed; cargo fmt --all -- --check and git diff --check passed. Publication is blocked in this native Codex sandbox: git cherry-pick failed creating .git/index.lock with Read-only file system; direct commit and push are unavailable. Four intended files remain edited in the seat. /tmp/bug-2442-round2.patch contains only round-two changes against reviewed commit 4fd5c3cb598c. Host must commit/publish the pending seat work or apply that patch to PR #3390 and create the required new commit. Documented TASK-2712 post-exit host commit has not yet been observed; no new commit or PR update is claimed.'
