@@ -8,12 +8,22 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T17:38:27.205211745Z
+modified_at: 2026-11-05T18:06:23.783611700Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a91e-a1e8-7e81-981e-cba544d1ee9c
   created_at: 2026-11-05T02:08:07.988378842Z
+comments:
+- id: 01a1ace3-f827-7851-bb7a-77a319580aae
+  author: joe
+  content: |-
+    Implemented the four remaining independent detector kinds in pipeline_stall_signals.rs: under-cap uses configured implementer capacity plus queued implementer work and the continuous observation threshold; no-merge-90m uses actual GitHub mergedAt with bounded-history completeness checks; stale-advisor-mail passively inspects verified advisor subjects and excludes detector requests; empty-rework-exit consumes existing unchanged-head retry receipts and rechecks PR blockers. Added evidence identities to per-kind delivery episodes; age/event kinds retain accepted delivery across observation gaps. Existing nudge/request/operator fallback and side-effect-free previews remain in use. Updated the CLI guide and added six regression tests.
+    Validation so far: all six new tests passed; the detector run had 23 passing tests and one existing digest wording assertion failure, now corrected. Broader supervise_cmd rerun and make check-ci-fast are still running; no-default-features CLI check, cargo fmt --all -- --check and git diff --check passed. No passing final test result claimed yet.
+    Publication is blocked by this native Codex seat's read-only Git metadata. aida ship TASK-3075 --no-merge --dry-run explicitly directs host-side exit commit/publication; edits remain uncommitted for that handoff. No review verdict or pr ship action performed.
+  created_at: 2026-11-05T18:06:23.783611700Z
+  modified_at: 2026-11-05T18:06:23.783611700Z
+  session_id: 01a1acca079a
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
   author: joe
