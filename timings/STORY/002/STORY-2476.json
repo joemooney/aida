@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2476",
+  "publishes": [
+    {
+      "at": "2026-11-05T08:14:29.534056653Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T03:57:43.666507786Z",
+      "spec": "STORY-2476",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T05:36:28.555029828Z",
+      "spec": "STORY-2476",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T06:37:16.875886059Z",
+      "spec": "STORY-2476",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T08:14:02.457893945Z",
+      "spec": "STORY-2476",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3396
+      }
+    },
+    {
+      "ts": "2026-11-05T08:14:29.359328528Z",
+      "spec": "STORY-2476",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c735c7e8c30ad8c104e5656f7fbc40506084aaf4",
+        "pr": 3396,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
