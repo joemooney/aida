@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-218
 agreed_id: BUG-2452
 title: queue work accepts a rework lane's no-commit 'already done' exit on a PR that is still red or conflicting
 description: 'Observed 2026-11-04 at least five times: TASK-2708 (Codex, then Claude), TASK-2823 (Claude), TASK-1471 (Codex), STORY-2479. Each exited code 0 with no new commits, reporting ''nothing changed / already done'' or ''blocked'', while its PR had red CI, a request-changes verdict at the current head, or a merge conflict. AIDA recorded the exit as pr-opened with an unchanged head, or as no-pr, and moved on, so the advisor had to notice and re-brief by hand. Acceptance: (1) on a rework lane''s exit, queue work compares the PR head before and after; if it''s unchanged and the PR still has a request-changes verdict at that head, failing required checks, or mergeable=CONFLICTING, the exit is classified as an empty rework, not success; (2) an empty rework re-queues once with an auto-brief naming the failing check names, the conflicting state or the open findings; a second empty exit punts to the advisor by mail (kind=request); (3) an explicit punt that names a disputed finding is still honoured; (4) tests for each trigger. Related: STORY-2476 empty-rework-exit alarm, BUG-2451.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T07:15:46.566358032Z
+modified_at: 2026-11-05T07:18:25.402415215Z
 req_type: Bug
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
@@ -19,6 +19,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1aa92-bb7a-74a3-b4af-1983b8ed9aec
+  author: aida-session-start
+  timestamp: 2026-11-05T07:18:25.402409982Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
