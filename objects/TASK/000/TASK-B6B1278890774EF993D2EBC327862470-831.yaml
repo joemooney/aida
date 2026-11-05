@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-05T17:29:41.471738245Z
+modified_at: 2026-11-05T17:40:14.344458562Z
 req_type: Task
 tags:
 - from-advisor
@@ -63,6 +63,12 @@ comments:
     This from-seat path opens a PR without merging. The detailed draft PR body is /tmp/task-3111-pr-body.txt. No PR has been opened from this lane.
   created_at: 2026-11-05T17:29:41.471738245Z
   modified_at: 2026-11-05T17:29:41.471738245Z
+  session_id: 01a1aca9561d
+- id: 01a1accc-0588-7fd0-ab63-917c83219f49
+  author: joe
+  content: 'Correction to the earlier handoff note: the documented native Git restriction did not apply empirically to this launch. The normal aida commit --all path succeeded as 42f8998007e, and git log plus git status confirmed the commit and clean tree. Continuing toward normal push/PR publication after final validation. Core activation suite: 16/16 passed. Initial parallel train tests hit the already tracked TASK-2841 receipt flake / SPEC-HOME-016 PID-only test-home issue; a private-TMPDIR exact-child run of the new coverage refusal regression passed. No authority checks were weakened.'
+  created_at: 2026-11-05T17:40:14.344458562Z
+  modified_at: 2026-11-05T17:40:14.344458562Z
   session_id: 01a1aca9561d
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
