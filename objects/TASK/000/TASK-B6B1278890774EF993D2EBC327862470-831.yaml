@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-05T18:47:21.764486068Z
+modified_at: 2026-11-05T19:06:30.870505797Z
 req_type: Task
 tags:
 - from-advisor
@@ -108,6 +108,11 @@ comments:
   content: 'Round 2: downloaded lib-0 job 127426812765''s full log. Its summary is 4690 run / 4689 passed / 1 failed: seat_target_overlay::tests::bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw. It fails identically to gates job 127426812582: retain_admin=true, unshare(CLONE_NEWNS) returns EPERM despite CAP_SYS_ADMIN. No TASK-2841 waiver is needed for this lib-0 failure. The patch leaves all original negative assertions required-live, makes only positive-control namespace/tmpfs setup policy refusals explicit exit-77 skips, handles missing Python explicitly, and asserts requested/effective capability state. Remount errors still fail. Direct bwrap controls passed for cap-drop and retained-admin; injected seccomp EPERM for unshare and initial mount reports exit 77, injected remount denial still fails with exit 1; missing Python reports exit 77. Replaced redundant private-title assertion with independent CanaryTitle. PR body will clarify TASK-2869 covers missing-review-story routing only. Rust targeted validation pending while seeding the empty replacement seat''s cache.'
   created_at: 2026-11-05T18:47:21.764424184Z
   modified_at: 2026-11-05T18:47:21.764424184Z
+- id: 01a1ad1b-0256-76c2-a36a-520ea044f181
+  author: mcp
+  content: 'Round 2 completed in new commit 2f306eaa9e9 ([AI:codex] test(hygiene): handle host-restricted capability controls and independent title canary). Both changed Rust tests passed: the actual forced-live bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw test under AIDA_REQUIRE_BWRAP_LIVE=1 passed with no skip; the checked-out sensitive_patterns_cover_decoded_text_and_do_not_echo_it test compiled directly against built dependencies passed against the locally installed CLI. Direct live controls also passed, including the non-root shell launch. Seccomp-injected EPERM for positive unshare and initial mount reported exit 77; remount denial remained a failing exit 1; missing Python reported exit 77. Formatting and whitespace checks pass. Lib-0''s downloaded summary was 4689 passed / 1 failed, and the sole failure was this same positive-control unshare EPERM (not the train flake). Pushed to existing PR #3442; PR body records all four review findings, TASK-2869 scope, and validation limits. Remote push succeeded; sandbox denied only updating the local remote-tracking ref afterward. No ship, review record, merge-hold release or CI callback wait.'
+  created_at: 2026-11-05T19:06:30.870497184Z
+  modified_at: 2026-11-05T19:06:30.870497184Z
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
   author: joe
