@@ -1,0 +1,36 @@
+id: 01a1ad5d-cbb1-7cd2-93fc-9a345aaa493f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-451
+agreed_id: STORY-2528
+title: 'Review PR-3449: [AI:claude] feat(containment): Claude headless on the shared contained wrapper, F-a amendments for M1 (Refs TASK-2708)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ad03`) for branch `task-2708-ac1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3449>
+  - Branch: `task-2708-ac1` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-2708
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3449` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T20:19:27.793519805Z
+modified_at: 2026-11-05T20:19:27.793519805Z
+req_type: Story
+filed_at:
+  code_sha: 70e10d2b449f980b725a733bf35159164941039b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70e10d2b449
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
