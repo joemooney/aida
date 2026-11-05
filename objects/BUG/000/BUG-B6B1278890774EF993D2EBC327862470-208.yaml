@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T09:48:10.110658371Z
+modified_at: 2026-11-05T09:48:13.309737891Z
 req_type: Bug
 tags:
 - area:compete
@@ -164,6 +164,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2439 acceptance (1)-(3) met in code and pinned by tests that pass in CI lib-0/lib-1 at a9ea09fa, incl. the round-3 dry-run==launch linked-worktree case; but CI (gates) is red on this PR''s own rustfmt drift in compete_cmd.rs, so Build is red.. Triage reason: CI red at a9ea09f: CI (gates) failing. Read the gates log, fix on the PR branch. After it lands close #3382.'
   created_at: 2026-11-05T09:48:10.110653880Z
   modified_at: 2026-11-05T09:48:10.110653880Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1b-e018-7bd2-80bd-2e5d824865a1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a9ea09fa83a8
+    Recorded: 2026-11-05T09:04:15.697980808+00:00
+    Findings:
+    1. BLOCKER (CI gates step 'Check formatting' red at a9ea09fa; Build (ubuntu-latest) is the aggregate and fails with it): commit a9ea09fa left rustfmt drift in aida-cli-lib/src/compete_cmd.rs inside codex_compete_native_argv_matches_preview_and_runs. (a) ~line 1654: git(&["worktree", "add", "-q", "-b", &branch, worktree.to_str().unwrap()]) exceeds the width and must be split one element per line; (b) ~line 1696: let mut cmd = build_compete_arm_command(&root, &worktree, fake.to_str().unwrap(), &argv, "codex").unwrap(); must be laid out as rustfmt wants (let mut cmd =\n build_compete_arm_command(...)\n .unwrap();). Fix: run cargo fmt --all, commit, and push; make check-ci-fast includes the fmt gate. The 'lane_fixture_fails ... FAILED' lines in the launcher's CI summary are expected output from a passing BUG-2383 fixture test, not a failure. No logic change is needed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:48:13.208311220Z
+  modified_at: 2026-11-05T09:48:13.208311220Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
