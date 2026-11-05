@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. No public DNS or Internet outage is used as an oracle.
 
   Acceptance: an independently approved Codex boundary translates the trusted allow list into enforceable policy for every enabled egress surface; allowed HTTPS must remain usable while denied host, redirect, direct IP/TCP/UDP and proxy-bypass receivers see no nonce. No unsupported/unexecuted/deny-all run earns a pass. Preserve compatibility labeling until policy is explicitly changed.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-05T02:57:07.999290303Z
+modified_at: 2026-11-05T02:57:10.087944898Z
 req_type: Bug
 tags:
 - area:containment
@@ -71,7 +71,21 @@ history:
   timestamp: 2026-11-05T02:56:11.726720911Z
   session_id: 01a1a9a2272a
   changes: []
+- id: 01a1a9a3-8bc7-74c3-87bf-2eae8d57f437
+  author: joe
+  timestamp: 2026-11-05T02:57:10.087961005Z
+  session_id: 01a1a9a2272a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Production Codex egress boundary needs independent design approval. Signed STORY-2460 Q5 retains the native compatibility exception; shared TASK-2706 backend explicitly forbids ordinary vendor launch. Posted SKETCH v1 with boundary/tool/auth/IPC decisions and real-launch C3 validation requirements.
+  lean: Reuse shared netns and host-owned proxy primitives through a separately reviewed production Codex adapter; preserve current compatibility policy until approved.
+  raised_by: implementer
+  raised_at: 2026-11-05T02:57:10.087944898Z
