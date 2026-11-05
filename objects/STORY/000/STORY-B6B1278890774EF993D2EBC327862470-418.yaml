@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T09:02:44.781796393Z
+modified_at: 2026-11-05T09:21:27.753435032Z
 req_type: Story
 tags:
 - docs:impacted
@@ -264,6 +264,13 @@ comments:
   created_at: 2026-11-05T09:01:19.422692423Z
   modified_at: 2026-11-05T09:01:19.422692423Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1ab03-60c9-7ef0-bf1d-5694a1b0fb87
+  author: joe
+  content: 'Advisor brief 01:58 done: merged origin/main into the branch (abd0b869eeb). The only conflict was AGENTS.md, where both sections were kept (STORY-2492 trusted publications + STORY-2479 observation envelopes). PR-3411 is now MERGEABLE. Validation: cargo check aida-cli-lib --tests passes; review_publication suite 8/8 (incl. rework→re-review→train, non-head checkout, malformed-blob isolation, pending publication, disagreement report); command-registry/help golden 21/21. make check-ci-fast could not finish in this lane (60s tool cap and it needs a build), so it is untested here and CI must cover it. Round-1 findings 1-10 and 12 were addressed in 850bde3f11f. Finding 11 is still OPEN: the slice-2 child spec (watcher discovery + synced (change, head) reservation, AC4) cannot be filed from this seat. ''aida add'' fails with ''requirement ID allocation failed: Read-only file system'' and the MCP add is denied. An operator or advisor must file it and choose a merge trailer/slicing that does not auto-complete STORY-2492.'
+  created_at: 2026-11-05T09:21:27.753435032Z
+  modified_at: 2026-11-05T09:21:27.753435032Z
+  session_id: 01a1aaf32ad3
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
