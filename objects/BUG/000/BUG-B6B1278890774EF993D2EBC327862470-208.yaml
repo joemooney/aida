@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T04:33:19.072789626Z
+modified_at: 2026-11-05T04:43:26.075093579Z
 req_type: Bug
 tags:
 - area:compete
@@ -119,6 +119,12 @@ comments:
   modified_at: 2026-11-05T04:33:19.072789626Z
   session_id: 01a1a9ddaecf
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1aa04-d5fb-7e43-a093-4698759d3775
+  author: joe
+  content: 'ADVISOR NOTE (21:45): the advisor''s cleanup destroyed the previous Claude rework commit 331d3a5de5f (it was on an unpushed local -208-3 branch). Redo it: fix the CI ratchet failures on PR #3401''s branch bug-b6b1278890774ef993d2ebc327862470-208-2 (compete_cmd test, launcher_main ratchet, story_2326 launch ratchet, resolve_aida_exe ratchet). If #3401 doesn''t already contain #3382''s commits, merge origin/bug-b6b1278890774ef993d2ebc327862470-208 in first. Push to -208-2 (PR #3401). Do not create another branch.'
+  created_at: 2026-11-05T04:43:26.075093579Z
+  modified_at: 2026-11-05T04:43:26.075093579Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
