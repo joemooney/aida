@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:16:13.229171634Z
+modified_at: 2026-11-05T01:22:33.324739612Z
 req_type: Story
 comments:
 - id: 01a1a946-efb8-79d3-b78f-342e7e4872fe
@@ -16,6 +16,12 @@ comments:
   content: 'Operator direction 2026-11-04 18:15: don''t rely on agent memory. Detection must be mechanical and live in AIDA, and the response must be delivered INTO the stalled session through each vendor''s channel. Design: (a) a vendor-neutral stall detector, a due job or oversight-loop tick, using the checks the advisor prototyped in ~/.local/share/aida/ops/advisor-scripts/stall-check.sh: implementer lanes below cap, ship-ready PRs with no train running, no merge for >90m, stale leases, and rework lanes that exited with no commits on a still-red PR (send them back with the failing test names instead of accepting the exit). (b) delivery adapters: Claude, through a session-scheduled prompt (Claude Code cron/loop) or a hook-surfaced mailbox item; Codex and agy, through their session-message/resume channels (to be confirmed per CLI); fallback, aida mailbox plus the advisor handshake hook line. Escalate to the operator if the stall persists after N nudges.'
   created_at: 2026-11-05T01:16:00.824445668Z
   modified_at: 2026-11-05T01:16:00.824445668Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a94c-ecec-73c2-a507-d2535f359597
+  author: joe
+  content: 'Operator 2026-11-04 18:21: the mailbox is the durable fallback and must be reliable regardless. Evidence it isn''t today: the review watcher mailed the advisor at 12:37 that PR-3373 conflicts, and nothing happened until 17:47. A claude-implementer handshake sat unacked for ~6h. Durability isn''t the gap: mail is stored but only read when the recipient polls. Acceptance addition: (1) unread advisor mail older than N minutes is itself a stall signal, with the age shown on the hook line; (2) actionable mail (kind=request) is pushed through the same per-vendor delivery adapter, not left to polling; (3) mail tracks read vs acted, so ''read and ignored'' is visible.'
+  created_at: 2026-11-05T01:22:33.324739612Z
+  modified_at: 2026-11-05T01:22:33.324739612Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
