@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T15:56:47.351240576Z
+modified_at: 2026-11-05T16:07:18.560402482Z
 req_type: Task
 tags:
 - docs:impacted
@@ -201,6 +201,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ac76-f120-7d31-9ac0-eeda0ab27c28
+  author: aida-session-start
+  timestamp: 2026-11-05T16:07:18.560396737Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
