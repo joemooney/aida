@@ -22,12 +22,12 @@ description: |
 
   ## Non-goals
   Automatic sanitization, automatic spec creation, transferring source history, auto-publishing intake to a public forge.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T03:35:14.249363590Z
+modified_at: 2026-11-05T05:36:48.546392633Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -214,6 +214,14 @@ history:
   timestamp: 2026-11-05T03:34:48.013574349Z
   session_id: 01a1a9a8fe02
   changes: []
+- id: 01a1aa35-b427-7d12-859e-956024fe437f
+  author: joe
+  timestamp: 2026-11-05T05:36:48.679523581Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
