@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T06:55:08.113860962Z
+modified_at: 2026-11-05T07:55:44.578565144Z
 req_type: Story
 tags:
 - docs:impacted
@@ -221,6 +221,12 @@ comments:
     `git add` refuses .git/index.lock (read-only). `aida ship STORY-2492 --no-merge --dry-run` explicitly refuses native seat publication and requires uncommitted edits to be left for host-side exit. No commit/push/PR/review-record/merge was performed; the temporary unused publication clone was removed after the native refusal. Host handoff (from main checkout): aida ship STORY-2492 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-418 --commit-pending '[AI:codex] feat(review): sync trusted review publications (STORY-2492)'. This from-seat path never merges. Also commit queued store metadata, including the docs:impacted tag. All implementation edits are retained for that host action.
   created_at: 2026-11-05T06:41:32.941247952Z
   modified_at: 2026-11-05T06:41:32.941247952Z
+- id: 01a1aab4-e642-7320-af07-ec8cc2d04499
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 receipt design is sound, but CI is red, authorship binds to the wrong head on seat/primary ships, a global 256-publication cap and head-unfiltered/spec-scoped selection can block every PR, and AC4/AC5 are unmet. No triage reason was given.'
+  created_at: 2026-11-05T07:55:44.578562248Z
+  modified_at: 2026-11-05T07:55:44.578562248Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
@@ -322,6 +328,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aab4-e642-7320-af07-ec735a0a2763
+  author: joe
+  timestamp: 2026-11-05T07:55:44.578551989Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -330,11 +344,3 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Slice-1 receipt design is sound, but CI is red, authorship binds to the wrong head on seat/primary ships, a global 256-publication cap and head-unfiltered/spec-scoped selection can block every PR, and AC4/AC5 are unmet
-  recovery_hint: address the review findings, move STORY-2492 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T06:55:08.113860962Z
