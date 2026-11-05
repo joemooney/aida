@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-018
 agreed_id: TASK-2889
 title: Dispatch fresh-review fixture still lacks sandbox session key in native PID namespace
 description: 'While validating TASK-2886, all 11 test_home tests passed, including live concurrent PID-1 namespaces. The adjacent dispatch module passed 18/19 after building the matching CLI. The remaining bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review also fails alone with a private TMPDIR, so this reproduction is not explained by shared test HOME cleanup. Captured dispatch log: review record rejects the reviewer grant because the sandboxed process namespace does not hold its session key (grant bound to test process PID 4). The fixture mints a reviewer grant and invokes the matching CLI from review-fresh-authority, but the CLI refuses before recording. Evidence: /tmp/task-2886-dispatch-diagnostic-oltpn0be/logs/.tmpi1mEjV/repo/.aida/dispatch/logs/bdd61820-7d0e-47c2-b0b2-81d9a13f2075.log. Test: env -u AIDA_PROJECT_ROOT -u AIDA_DRIVE_ROOT -u AIDA_REVIEW_VERDICT_FILE <matching lib test binary> --exact gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review --nocapture --test-threads=1, with private TMPDIR. Investigate fixture authority/session-key setup without weakening production grant checks. Related historical TASK-2861/TASK-2862. No outside-seat baseline was run.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:16:43.532811481Z
-modified_at: 2026-11-05T21:05:40.016775481Z
+modified_at: 2026-11-05T22:28:02.335648407Z
 req_type: Task
 tags:
 - from-implementer:TASK-2886
@@ -102,6 +102,20 @@ history:
   timestamp: 2026-11-05T21:05:41.157618332Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1add3-827c-7eb3-8ecb-e26ccc3ae5e4
+  author: aida-auto-bump
+  timestamp: 2026-11-05T22:28:02.300427141Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1add3-829f-7140-a674-4720323ba748
+  timestamp: 2026-11-05T22:28:02.335644388Z
+  agent: aida
+  commit_sha: 07735b93d61790520c2583aa15c827599c0f89f7
+  summary: 'Test-only fix: adoption fixture stamps pid_namespace and adds foreign/unstamped refusal coverage; dispatch fixture pins live-namespace grant binding (consistent with author_process_token) and surfaces dispatch log on failure; no production code touched. CI run 42109347921 still queued/in-progress at record time (runner backlog) — merge remains gated on required checks.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b66ec083185
@@ -113,4 +127,6 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check passed; broader identity module 5/7, two pre-existing failures filed as SPEC-b6b1278890774ef993d2ebc327862470-022
   implemented_at: 2026-11-05T21:03:40.888131266Z
   implemented_by: joe
+  completed_at: 2026-11-05T22:28:02.300420806Z
+  completion_sha: 07735b93d61790520c2583aa15c827599c0f89f7
 interface_changes: {}
