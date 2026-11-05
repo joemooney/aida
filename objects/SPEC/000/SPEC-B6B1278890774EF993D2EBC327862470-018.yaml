@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:16:43.532811481Z
-modified_at: 2026-11-05T20:49:33.116180134Z
+modified_at: 2026-11-05T20:57:40.827352578Z
 req_type: Task
 tags:
 - from-implementer:TASK-2886
@@ -31,6 +31,12 @@ comments:
   content: 'Implementation inspection: TASK-2861 commit 5409dbcbe393 already wraps the dispatch fixture in the live PID namespace. An older lib test artifact reproduced the refusal and diagnostic instrumentation confirmed its reviewer grant was unqualified (proc:<pid>@linux-starttime:<ticks>) while the CLI used a non-host namespace. Updating the subagent-adoption fixture to stamp pid_namespace; adding an explicit live-namespace grant invariant and dispatch log failure diagnostics. Fresh matching CLI/lib validation in progress.'
   created_at: 2026-11-05T20:49:33.116180134Z
   modified_at: 2026-11-05T20:49:33.116180134Z
+  session_id: 01a1ad7455f6
+- id: 01a1ad80-c8db-70c3-96ae-a190115efe82
+  author: joe
+  content: 'Both fixture changes are ready; cargo fmt --all -- --check and git diff --check pass. Matching CLI build from this checkout succeeded (agent profile). Full lib-test compilation is still running before targeted dispatch/adoption execution. Native-seat git staging is refused because .git is read-only; per docs/cli/04-git-lifecycle.md TASK-2712, pending edits must be committed and published by the launcher after Codex exits. Proposed subject: [AI:codex] test(fixtures): qualify native PID namespace authority (TASK-2889). Production grant and lease checks are unchanged.'
+  created_at: 2026-11-05T20:57:40.827352578Z
+  modified_at: 2026-11-05T20:57:40.827352578Z
   session_id: 01a1ad7455f6
 history:
 - id: 01a1acf2-ccf4-7d90-9bab-c9bceff9c004
