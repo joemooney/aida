@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T13:50:11.610831365Z
+modified_at: 2026-11-05T13:51:00.020969713Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,12 @@ comments:
   content: 'Round 2: addressed findings 1-5: required-live bwrap CI filter/count wiring, distinct zero/multiple lease refusals with retention coverage, plain empty-diff diagnostic, corrected teardown documentation, and all-clone admission before retirement. Fixed original held-branch fixture delegation and Git-maintenance ratchet recognition. Validation: all 6 BUG-2455 tests pass with AIDA_REQUIRE_BWRAP_LIVE=1; original held-branch test passes; cargo fmt and 8 maintenance ratchet tests pass. Broader queue_work_dry_run suite is 14/15: rollback lease-removal test fails, also isolated and with ambient AIDA variables removed; baseline not checked. Git staging refuses .git/index.lock: Read-only file system, so no new commit or push could be made. Patch /tmp/bug2455-round2.patch retained; host publication needed for PR #3421.'
   created_at: 2026-11-05T13:50:02.589971240Z
   modified_at: 2026-11-05T13:50:02.589971240Z
+  session_id: 01a1abdf1077
+- id: 01a1abfa-25b4-7543-987f-f0a13f99e5ee
+  author: joe
+  content: The additional rollback regression found during broader validation is filed separately as TASK-3110 (draft, from-implementer:BUG-2455). No review finding from this round is disputed. Host publication remains blocked from this lane; merge hold was not changed.
+  created_at: 2026-11-05T13:51:00.020969713Z
+  modified_at: 2026-11-05T13:51:00.020969713Z
   session_id: 01a1abdf1077
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
