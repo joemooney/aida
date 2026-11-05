@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-784
 agreed_id: TASK-3046
 title: 'STORY-2460 S1: containment conformance harness (C0-C4) plus host-run probes of agy --sandbox and codex native'
 description: 'Implement the vendor-neutral conformance contract from SKETCH v1 sections 1-2 as a host-runnable harness, as ruled at signoff 2026-11-04 11:05 (Q1, Q2, Q4). Run it host-side through the script deputy against agy --sandbox (private runtime dir, no credential copying) and against codex native. Record per-check results on STORY-2460, and the posture S1 selects for agy. File a defect for each Codex failure (Q5). Acceptance: the harness exists with tests; both vendors have recorded results; the posture decision is recorded.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T05:39:43.133875384Z
+modified_at: 2026-11-05T06:47:35.228416162Z
 req_type: Task
 tags:
 - area:containment
@@ -225,6 +225,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aa76-7fe6-76c2-9d96-cb3e4df5551c
+  author: aida-auto-bump
+  timestamp: 2026-11-05T06:47:35.142659943Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1aa76-803c-77c1-a3aa-52bbc495659f
+  timestamp: 2026-11-05T06:47:35.228410883Z
+  agent: aida
+  commit_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
+  summary: 'Round-2 findings 1,2,4,5 fixed at bff8078 (CI green: gates step incl. containment tests; merge-hold is the only red). All 3 acceptance bullets met: harness+16 tests in CI, both vendors recorded (historical reports + reassessment hashed to the shipped harness f692a8eb), posture A recorded on STORY-2460. Finding 3 (fresh host run) cannot change the S1 posture: C3 has no pass rule and C1/C2 need file-tool attestation, so native is unreachable and Codex C2/C3/C4 fails are parent-observed. Advisor should confirm the STORY-2460 comment[8] ruling (option b) when clearing the merge hold.'
+  review_verdict: approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -233,3 +247,7 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T06:47:35.142651828Z
+  completion_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
