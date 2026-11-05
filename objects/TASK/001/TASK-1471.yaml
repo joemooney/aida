@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T05:45:09.702157340Z
+modified_at: 2026-11-05T06:16:15.792387416Z
 req_type: Task
 relationships:
 - rel_type:
@@ -138,6 +138,13 @@ comments:
   created_at: 2026-11-05T05:36:45.622908702Z
   modified_at: 2026-11-05T05:36:45.622908702Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa59-d2b0-7870-b964-8baa1c6e1250
+  author: joe
+  content: 'Round 4: ef28ebf fixes lib-1 failure in task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output. JSON key check now mirrors TOON: before-keys ⊆ after-keys, added keys must be EDGE_DELTA (relationships is skip_serializing_if empty, so a first edge adds it). Local lane test timed out twice at 900s compiling aida-cli-lib (untested=true locally); relying on CI lib-1.'
+  created_at: 2026-11-05T06:16:15.792387416Z
+  modified_at: 2026-11-05T06:16:15.792387416Z
+  session_id: 01a1aa3d4c9d
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe

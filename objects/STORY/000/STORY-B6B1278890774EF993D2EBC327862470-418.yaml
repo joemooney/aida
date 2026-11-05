@@ -21,8 +21,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T06:11:29.219889946Z
+modified_at: 2026-11-05T06:14:14.134309892Z
 req_type: Story
+tags:
+- docs:impacted
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
   author: joe
@@ -285,6 +287,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aa57-f7ec-7853-b379-961bcc87861a
+  author: joe
+  timestamp: 2026-11-05T06:14:14.252427366Z
+  session_id: 01a1aa370a6b
+  changes: []
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
