@@ -1,0 +1,18 @@
+id: 01a1ad96-ffdb-7cc3-9716-74e6c3898c7f
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-023
+title: Local-only mailbox fixture assumes its temporary root has no Git ancestor
+description: 'During TASK-3074 validation, mailbox_lifecycle::ack::tests passed 15 cases but the unchanged story1843_b2c_local_only_project_commits_without_an_anchor fixture refused before the modified ACK code. Its snapshot helper at aida-core/src/mailbox_lifecycle/ack_tests.rs:26 unwraps MailboxContext::resolve_or_local; this environment has /tmp/.git (containing an allocation file), so tempfile::tempdir() creates a directory beneath a .git ancestor and the context correctly refuses NotAGitCheckout. An explicit TMPDIR=/tmp rerun reproduced it. All 15 remaining ACK tests passed when this case was excluded. Follow-up: make the non-Git fixture independent of ambient Git ancestry, or explicitly report the unsupported fixture environment; preserve the production wrong-root refusal. No unrelated fixture or root-validation change was included in PR-A.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T21:21:56.699346580Z
+modified_at: 2026-11-05T21:21:56.699346580Z
+req_type: Task
+tags:
+- from-implementer:TASK-3074
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 70e10d2b449
