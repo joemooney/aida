@@ -24,12 +24,12 @@ description: |-
   - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
 
   Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T16:27:56.159266765Z
+modified_at: 2026-11-05T16:28:06.095148874Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -196,6 +196,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ac89-fa4f-72f3-a946-3b3cc3193ab0
+  author: joe
+  timestamp: 2026-11-05T16:28:06.095167125Z
+  session_id: 01a1ac730663
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -204,3 +212,9 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+attention_reason:
+  category: other
+  detail: 'PR #3428 round 2 publication and finding 3 full-shard confirmation remain blocked. No review finding is disputed: source fixes for findings 1-4 are complete, targeted tests and the full current-binary manual guard pass. The native sandbox makes .git read-only, so git add failed creating index.lock and no new commit or push can be produced here. Host launcher must commit/push the three pending files, then verify lib-1 at the new head. The local nextest shard encountered untouched launch/coordination failures, including PID-namespace cleanup refusals; details and test evidence are recorded in the latest spec comment.'
+  lean: 'Use the documented TASK-2712 host exit commit path with subject [AI:codex] fix(condition): resolve review CI failures and cover release probes (STORY-2402), push PR #3428, and let host CI confirm the full shard. Keep the merge hold for the independent reviewer/merge seat.'
+  raised_by: implementer
+  raised_at: 2026-11-05T16:28:06.095148874Z
