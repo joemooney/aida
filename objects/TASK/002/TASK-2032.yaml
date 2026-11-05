@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-05T00:35:22.034532102Z
+modified_at: 2026-11-05T01:00:44.165168294Z
 req_type: Task
 tags:
 - contained
@@ -116,6 +116,12 @@ comments:
   created_at: 2026-11-04T20:50:10.139607895Z
   modified_at: 2026-11-04T20:50:10.139607895Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a938-f305-7893-8b4d-d7af28812e6f
+  author: joe
+  content: 'Advisor rework completed in-tree on base 8212a38b8f8; no merge, commit, push, ship, or review verdict performed, per latest brief. Verified existing host_main threading in LaunchRequest/LaunchContext and spawn_agent::aida_boundary. Fixed stale test expectations: cwd is implicitly writable in Claude sandbox, while allowWrite contains extra roots; retired forged self-lease before subsequent independent attacks; extended headless argv source window for LaunchContext/grant setup; split quoted chdir needles to avoid the cwd-isolation source guard false positive. Strengthened clone-start regression to build_claude_exec_command (LaunchContext/spawn_agent), with no LauncherMainPin. Fixture roots now fall back to TMPDIR inside a named seat, with an explicit main-root assertion preventing live-store access. Applied CI formatting repairs. Validation (umask 022): TMPDIR=/home/joe/ai/aida/.aida/cache-db/task-2032-fixtures-M1ScVX cargo test --profile agent -p aida-cli-lib --lib -- bug_2169 headless_hint task_2032 a_clone_launched_from_inside_itself_keeps_its_boundary: 18 passed, 0 failed, including live bwrap. Log /tmp/task-2032-gate-final.log. make check-ci-fast: all 36 fast gates passed; log /tmp/task-2032-check-ci-fast-final.log. Lane runner request refused because this session has no runner; these are direct native-sandbox results. An additional older broad 52-test run under /tmp passed 41 and failed 11 due live /tmp masking and PID-namespace cleanup refusals; log /tmp/task-2032-targeted-tmp.log. Final requested gate used an isolated writable scratch area outside /tmp, Cargo home and real ~/.aida and passed. Advisor publishes the six-file dirty diff.'
+  created_at: 2026-11-05T01:00:44.165168294Z
+  modified_at: 2026-11-05T01:00:44.165168294Z
+  session_id: 01a1a917521b
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
