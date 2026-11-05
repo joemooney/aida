@@ -1235,7 +1235,8 @@ fn compete_arm_argv(
     let split = argv.len().saturating_sub(1);
     let (template, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
     // Codex uses its native sandbox, never Claude's permission/settings flags.
-    // Global approval flags must precede `exec`. Keep judges read-only.
+    // Global approval flags and the native write-set grants precede `exec`.
+    // Keep judges read-only.
     // trace:BUG-2439 | ai:codex
     let mut args = if parsed == session::HeadlessVendor::Codex {
         let mut flags = crate::tool_contained_flags("codex")?;
@@ -1531,7 +1532,9 @@ mod containment_tests {
             &[("AIDA_CONTAINED", Some("1")), ("AIDA_OS_WRAP", Some("1"))],
         );
         let _cwd = session::contained_cwd_seam::pin(root.path());
-        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        // Ensure this fixture exercises a real --add-dir grant.
+        let mailbox = root.path().join(".aida/mailbox");
+        std::fs::create_dir_all(&mailbox).unwrap();
         std::fs::write(
             root.path().join(".aida/config.toml"),
             "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
@@ -1567,16 +1570,31 @@ mod containment_tests {
         // The Claude settings builder must never run for native Codex.
         let posture =
             compete_arm_argv(&argv, "codex", true, || panic!("Claude settings for Codex")).unwrap();
-        assert_eq!(
-            &posture[..5],
-            [
-                "--sandbox",
-                "workspace-write",
-                "--ask-for-approval",
-                "never",
-                "exec"
-            ]
-        );
+        // Pin the whole native argv, including grants between the global
+        // approval option and `exec`, rather than assuming `exec` is fifth.
+        // trace:BUG-2439 | ai:codex
+        let mut expected_native: Vec<String> = [
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        for path in crate::codex_native_sandbox::codex_native_write_paths(
+            &[root.path().to_path_buf()],
+            None,
+        )
+        .unwrap()
+        {
+            expected_native.extend(["--add-dir".into(), path.to_str().unwrap().to_owned()]);
+        }
+        expected_native.extend(["exec".into(), prompt.into()]);
+        assert!(expected_native
+            .windows(2)
+            .any(|pair| pair == ["--add-dir", mailbox.to_str().unwrap()]));
+        assert_eq!(posture, expected_native);
         for contained in [false, true] {
             ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
             let preview = compete_preview_argv(&argv, "codex", contained, root.path()).unwrap();
@@ -1597,12 +1615,23 @@ mod containment_tests {
                 .get_args()
                 .map(|a| a.to_str().unwrap().to_owned())
                 .collect();
-            assert_eq!(actual, preview);
+            let mut expected = crate::codex_tool_env::codex_tool_env_overrides(&cmd).unwrap();
+            expected.extend(if contained {
+                expected_native.clone()
+            } else {
+                vec![
+                    "exec".into(),
+                    "--dangerously-bypass-approvals-and-sandbox".into(),
+                    prompt.into(),
+                ]
+            });
+            assert_eq!(actual, expected);
+            assert_eq!(preview, expected);
             let out = cmd.output().unwrap();
             assert!(out.status.success());
             assert_eq!(
                 String::from_utf8(out.stdout).unwrap(),
-                format!("{}\n", actual.join("\n"))
+                format!("{}\n", expected.join("\n"))
             );
             assert_eq!(actual.last().unwrap(), prompt);
             assert!(!actual.iter().any(|a| matches!(
@@ -1676,14 +1705,19 @@ mod containment_tests {
         for vendor in ["claude", "codex"] {
             for signal in [libc::SIGTERM, libc::SIGKILL] {
                 let root = tempfile::tempdir().unwrap();
-                let mut parent = std::process::Command::new(std::env::current_exe().unwrap())
-                    .args(["--exact", &name, "--nocapture"])
-                    .env("AIDA_TEST_COMPETE_PARENT", root.path())
-                    .env("AIDA_TEST_COMPETE_VENDOR", vendor)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn()
-                    .unwrap();
+                // Re-exec this test runner, never an ambient AIDA_BIN override.
+                // trace:BUG-2439 | ai:codex
+                let mut parent = std::process::Command::new(
+                    crate::aida_bin::current_executable_path()
+                        .expect("resolve current test executable"),
+                )
+                .args(["--exact", &name, "--nocapture"])
+                .env("AIDA_TEST_COMPETE_PARENT", root.path())
+                .env("AIDA_TEST_COMPETE_VENDOR", vendor)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
                 let deadline = Instant::now() + Duration::from_secs(5);
                 while !root.path().join("pid").exists() && Instant::now() < deadline {
                     std::thread::sleep(Duration::from_millis(10));
