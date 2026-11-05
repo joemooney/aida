@@ -9006,101 +9006,38 @@ pub(crate) fn preclaim_collision_check(
     }
     if let Some((number, title, url)) = open_pr {
         return PreclaimDecision::Refuse(format!(
-            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display} --from-pr`, or take it over deliberately with `--force-claim`.",
+            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display}`; pickup must retain its head branch.",
         ));
     }
     if branch_state == PreclaimBranchState::Unmerged {
         return PreclaimDecision::Refuse(format!(
-            "Branch `{branch}` exists, no open PR was found for it, and the forge reports no merged PR with it as head — it looks like unfinished work. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
+            "Branch `{branch}` exists, no open PR was found for it, and the forge reports no merged PR with it as head — it looks like unfinished work. `queue work` will not silently allocate `{branch}-2`. Pass `--branch <name>` to choose deliberately, or delete the stale branch."
         ));
     }
     PreclaimDecision::Proceed
 }
 
-/// BUG-022: whether this pickup resolves the spec's open PR head as its
-/// branch. `aida queue rework` sends a refused spec back to Approved, which the
-/// status test alone reads as a fresh pickup — so a Rework hold standing on
-/// the spec's PR also qualifies. An explicit `--branch` always wins: it is the
-/// deliberate way to start a new branch instead.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-pub(crate) fn queue_work_wants_rework_pr_branch(
+// trace:BUG-2451 | ai:codex
+pub(crate) fn rework_pr_head_branch_override(
+    forge: &dyn crate::forge::Forge,
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-    spec_rework_held: bool,
-) -> bool {
-    explicit_branch.is_none()
-        && (queue_work_plan_wants_pr_head_branch(plan)
-            || (spec_rework_held && plan.review_target.is_none() && plan.entries.len() == 1))
-}
-
-/// BUG-022: an open PR carrying a Rework hold for the spec is the spec's PR —
-/// the hold record names the spec, so no title/branch match is needed.
-/// Any other open PR still has to name the spec (BUG-1074).
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-pub(crate) fn rework_pr_head_accepted(
-    held_prs: &[u64],
-    pr_number: u64,
-    matches_spec: impl FnOnce() -> bool,
-) -> bool {
-    held_prs.contains(&pr_number) || matches_spec()
-}
-
-/// BUG-022: the PRs whose Rework hold names `spec`, read from the primary's
-/// merge-hold markers. Ids are compared canonically, so a node-label id and
-/// its node-local twin match.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u64> {
-    use crate::gate::merge_hold_core as mh;
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
-    let canonical =
-        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
-    let wanted = canonical(spec);
-    let root = mh::hold_store_root(project_root);
-    mh::list_holds(&root)
-        .into_iter()
-        .filter_map(|(pr, _)| mh::read_hold_record(&root, pr).map(|r| (pr, r)))
-        .filter(|(_, r)| r.reason_kind == mh::HoldReasonKind::Rework)
-        .filter(|(_, r)| r.spec.as_deref().is_some_and(|s| canonical(s) == wanted))
-        .map(|(pr, _)| pr)
-        .collect()
-}
-
-fn rework_pr_head_branch_override(
-    project_root: &std::path::Path,
-    plan: &QueueWorkPlan,
-    explicit_branch: Option<&str>,
-) -> Option<(u64, String)> {
-    if explicit_branch.is_some() || plan.review_target.is_some() || plan.entries.len() != 1 {
-        return None;
+) -> Result<Option<(u64, String)>> {
+    if plan.review_target.is_some() {
+        return Ok(None);
     }
-    let spec = plan.entries.first()?.spec_id.as_str();
-    let held_prs = rework_held_prs_for_spec(project_root, spec);
-    if !queue_work_wants_rework_pr_branch(plan, explicit_branch, !held_prs.is_empty()) {
-        return None;
+    let mut existing = None;
+    for entry in &plan.entries {
+        if let Some(change) =
+            crate::session_start::pickup_pr_branch(forge, &entry.spec_id, explicit_branch)?
+        {
+            if plan.entries.len() != 1 {
+                anyhow::bail!("{} already has open change #{} on `{}`; pick it up individually to continue that branch", entry.spec_id, change.0, change.1);
+            }
+            existing = Some(change);
+        }
     }
-    // BUG-1023: a findings-led rework belongs on the already-open PR branch.
-    // Seed session_start with that head so the implementer lease and phase 2
-    // drive the same branch instead of deriving the plain spec branch.
-    // trace:BUG-1023 | ai:codex
-    // BUG-1074: the spec-search fallback can see unrelated recent PRs when a
-    // fresh pickup has only been pre-bumped to In Progress. Reuse only a PR
-    // whose head branch or PR metadata names the driven spec; otherwise derive
-    // the normal fresh branch.
-    // trace:BUG-1074 | ai:codex
-    let lookup = crate::detect_open_pr_for_spec_via_forge(project_root, spec);
-    let PrLookup::Found(pr) = lookup else {
-        return None;
-    };
-    let Some(head_branch) = pr.head_branch.filter(|branch| !branch.trim().is_empty()) else {
-        return None;
-    };
-    rework_pr_head_accepted(&held_prs, pr.number, || {
-        let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
-            .map(|meta| meta.body)
-            .unwrap_or_default();
-        rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body)
-    })
-    .then_some((pr.number, head_branch))
+    Ok(existing)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11946,13 +11883,17 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
-    let rework_pr = rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    let rework_pr = rework_pr_head_branch_override(
+        &*crate::forge::forge_for_open_change(&project_root),
+        &plan,
+        branch_override,
+    )?;
     // BUG-022: say where the rework goes, and how to fork instead.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
     if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
         eprintln!(
             "  rework: continuing open PR #{pr} on its branch `{branch}`; \
-             pass --branch <name> to start a new branch instead"
+             this pickup must keep the existing PR branch"
         );
     }
     // BUG-057: a rework PR that conflicts with main makes the merge the

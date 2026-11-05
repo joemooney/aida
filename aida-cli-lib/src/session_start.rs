@@ -387,6 +387,30 @@ pub(crate) fn branch_exists_anywhere(project_root: &std::path::Path, branch: &st
 #[path = "tests/bug_442_distributed_detection_tests.rs"]
 mod bug_442_distributed_detection_tests;
 
+/// Resolve the existing change before branch allocation, regardless of spec status.
+/// Unknown forge evidence must never authorize a fresh rework branch.
+// trace:BUG-2451 | ai:codex
+pub(crate) fn pickup_pr_branch(
+    forge: &dyn crate::forge::Forge,
+    spec: &str,
+    explicit: Option<&str>,
+) -> Result<Option<(u64, String)>> {
+    use crate::forge::ChangeLookup;
+    match forge.change_for_spec(spec)? {
+        ChangeLookup::NoChange => Ok(None),
+        ChangeLookup::Found(change) => {
+            if change.branch.trim().is_empty() {
+                anyhow::bail!("open change #{} for {spec} has no head branch; refusing pickup", change.id);
+            }
+            if explicit.is_some_and(|branch| branch != change.branch) {
+                anyhow::bail!("{spec} has open change #{} on `{}`; --branch cannot fork its rework onto `{}`", change.id, change.branch, explicit.unwrap());
+            }
+            Ok(Some((change.id, change.branch)))
+        }
+        unknown => anyhow::bail!("cannot establish the open change for {spec}: {unknown:?}; retry before allocating a branch"),
+    }
+}
+
 /// TASK-245: decide whether `aida session start` should check out an
 /// existing branch instead of forking a new one. True when
 /// `--reuse-branch` was passed, or when an explicitly-named `--branch`
@@ -685,9 +709,8 @@ pub(crate) fn effective_force_claim_for_session_start(
 mod preflight_spec_status_tests;
 
 /// Walk a candidate list of branch names and return the first that's free
-/// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
-/// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
-/// (with -N suffix on collision). Bails if 21 candidates all collide —
+/// locally and on origin. Auto uses only the scope slug; explicit date style
+/// permits dated collision suffixes. Bails when the candidates collide —
 /// that's a strong signal the user wants an explicit --branch.
 /// trace:STORY-65 | ai:claude
 pub(crate) fn resolve_session_branch(
@@ -698,17 +721,8 @@ pub(crate) fn resolve_session_branch(
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let dated = format!("{}-{}", slug, today);
     let candidates: Vec<String> = match branch_style {
-        "auto" => {
-            let mut v = vec![slug.to_string()];
-            for n in 2..=10 {
-                v.push(format!("{}-{}", slug, n));
-            }
-            v.push(dated.clone());
-            for n in 2..=10 {
-                v.push(format!("{}-{}", dated, n));
-            }
-            v
-        }
+        // trace:BUG-2451 | ai:codex — suffix allocation requires explicit intent.
+        "auto" => vec![slug.to_string()],
         "date" => {
             let mut v = vec![dated.clone()];
             for n in 2..=10 {
@@ -824,7 +838,14 @@ pub(crate) fn resolve_pickup_workspace(
             scope
         );
     }
-    let branch = resolve_session_branch(project_root, &slug, branch_style)?;
+    let branch = match pickup_pr_branch(
+        &*crate::forge::forge_for_open_change(project_root),
+        scope,
+        None,
+    )? {
+        Some((_, branch)) => branch,
+        None => resolve_session_branch(project_root, &slug, branch_style)?,
+    };
     let path = pickup_worktree_path(project_root, &slug)?;
     Ok((path, branch))
 }
@@ -1999,13 +2020,21 @@ pub(crate) fn session_start_with_receipt(
     });
     let is_review_session = session_start_is_review_session(review_target, launch_role.as_deref());
 
-    // STORY-65: auto-branch with collision-aware naming. If --branch isn't
-    // given (and we're not in review mode, which has its own deterministic
-    // naming), walk a candidate list — slug, slug-2..-10, slug-YYYY-MM-DD,
-    // slug-YYYY-MM-DD-2..-10 — and pick the first that doesn't exist
-    // locally OR on origin. `--branch-style date` skips straight to the
-    // dated form for callers that want every session traceable to a date.
+    // An open change fixes the branch; otherwise use the explicit name or
+    // the scope slug. Only explicit date style permits generated suffixes.
     // trace:STORY-65 | ai:claude
+    // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
+    let existing_pr = if review_target.is_none() && !is_review_session {
+        pickup_pr_branch(
+            &*crate::forge::forge_for_open_change(&project_root),
+            owns,
+            branch,
+        )?
+    } else {
+        None
+    };
+    let pr_branch = existing_pr.as_ref().map(|(_, branch)| branch.as_str());
+    let branch = pr_branch.or(branch);
     let branch_name = match (&review_target, branch) {
         (Some((forge, n)), None) => forge.local_branch_for(*n),
         (_, Some(b)) => b.to_string(),
@@ -2421,6 +2450,19 @@ pub(crate) fn session_start_with_receipt(
     // can display head/base SHAs without a round-trip to the forge.
     // trace:STORY-71 | ai:claude
     let mut pr_metadata: PrMetadata = PrMetadata::default();
+
+    // trace:BUG-2451 | ai:codex — a clone must not bypass a held PR branch either.
+    if existing_pr.is_some() {
+        crate::queue_cmd::preflight_queue_work_branch_adopting(
+            &project_root,
+            Some(&branch_name),
+            (clone_reentry || reuse_existing_worktree_path).then_some(worktree_path.as_path()),
+        )?;
+        if !branch_exists_anywhere(&project_root, &branch_name) {
+            anyhow::bail!("open change head `{branch_name}` is unavailable locally and on origin; refusing to fork from the default branch");
+        }
+        align_reused_pr_branch(&project_root, &branch_name)?;
+    }
 
     // TASK-245: decide whether to fork a new branch or check out an
     // existing one. `--reuse-branch` is the explicit opt-in (the

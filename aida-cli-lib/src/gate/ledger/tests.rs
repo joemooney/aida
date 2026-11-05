@@ -2191,3 +2191,42 @@ fn verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order() {
 // trace:STORY-2324 | ai:claude — every writer stamps the canonical key.
 #[path = "story_2324_writer_tests.rs"]
 mod story_2324_writers;
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_publication_reuses_existing_head_and_refuses_duplicate_or_unknown() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.opens_as = Some(99);
+    let existing = crate::forge::ChangeRef {
+        id: 42,
+        url: "https://example.invalid/42".into(),
+        branch: "original".into(),
+        base: "main".into(),
+        title: None,
+    };
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(existing.clone());
+    let mut req = crate::forge::OpenChange {
+        branch: "duplicate-2".into(),
+        base: "main".into(),
+        title: "fix".into(),
+        body: String::new(),
+        draft: false,
+    };
+    let specs = vec!["BUG-2451".into()];
+    assert!(super::open_change_bound(&forge, &root, req.clone(), &specs)
+        .unwrap_err()
+        .to_string()
+        .contains("refusing a second"));
+    req.branch = "original".into();
+    assert_eq!(
+        super::open_change_bound(&forge, &root, req.clone(), &specs)
+            .unwrap()
+            .id,
+        existing.id
+    );
+    forge.open_for_spec = crate::forge::ChangeLookup::Unreachable("offline".into());
+    assert!(super::open_change_bound(&forge, &root, req, &specs).is_err());
+    assert!(forge.opened.lock().unwrap().is_empty());
+}

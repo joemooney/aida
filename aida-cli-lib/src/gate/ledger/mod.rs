@@ -305,7 +305,34 @@ pub(crate) fn open_change_bound(
     req: crate::forge::OpenChange,
     specs: &[String],
 ) -> anyhow::Result<crate::forge::ChangeRef> {
-    let change = forge.open_change(req)?;
+    // trace:BUG-2451 | ai:codex — all AIDA publication paths use this boundary.
+    let mut existing = None;
+    for spec in specs {
+        match forge.change_for_spec(spec)? {
+            crate::forge::ChangeLookup::NoChange => {}
+            crate::forge::ChangeLookup::Found(change) => {
+                if change.branch != req.branch {
+                    anyhow::bail!("{spec} already has open change #{} on `{}`; refusing a second change from `{}`. Continue the existing branch.", change.id, change.branch, req.branch);
+                }
+                if existing
+                    .as_ref()
+                    .is_some_and(|prior: &crate::forge::ChangeRef| prior.id != change.id)
+                {
+                    anyhow::bail!(
+                        "credited specs belong to different open changes; refusing publication"
+                    );
+                }
+                existing = Some(change);
+            }
+            unknown => anyhow::bail!(
+                "cannot check existing changes for {spec}: {unknown:?}; refusing publication"
+            ),
+        }
+    }
+    let change = match existing {
+        Some(change) => change,
+        None => forge.open_change(req)?,
+    };
     if change.id != 0 {
         bind_specs(
             start,
