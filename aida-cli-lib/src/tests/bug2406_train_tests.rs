@@ -73,7 +73,12 @@ if a[:2]==['pr','view']:
         if '@tsv' in q:
             if '.state' in q: print('OPEN\tMERGEABLE\tAPPROVED\t'+v['headRefOid']); sys.exit(0)
     emit(v)
-if a[:2]==['pr','list']: emit([])
+if a[:2]==['pr','list']:
+    if '--state' in a and a[a.index('--state')+1]=='open':
+        for n in ['11','12']:
+            v=meta(n)
+            print(str(v['number'])+'\t'+v['title']+'\t'+v['url']+'\t'+v['headRefName'])
+    sys.exit(0)
 if a[:2]==['pr','checks']:
     if '--watch' in a: sys.exit(0)
     emit([dict(name=n,bucket='pass',state='SUCCESS',workflow='CI',link='') for n in ['Build (ubuntu-latest)','merge-hold-gate']])
@@ -84,6 +89,15 @@ if a[:2]==['pr','merge']:
         (r/'transport.json').write_text(json.dumps(s)); print('error connecting to api.github.com',file=sys.stderr); sys.exit(1)
     sys.exit(0)
 if a[0]=='api':
+    # All-open association examines unrelated riders too. Supply their real
+    # commit evidence instead of treating a new GraphQL read as a transport fault.
+    # trace:BUG-2451 | ai:codex
+    if a[1]=='graphql':
+        repo={}
+        for n,v in s['prs'].items():
+            message=subprocess.check_output(['git','show','-s','--format=%B',v['headRefOid']],text=True)
+            repo['p'+n]=dict(headRefOid=v['headRefOid'],commits=dict(totalCount=1,nodes=[dict(commit=dict(oid=v['headRefOid'],message=message))]))
+        emit(dict(data=dict(repository=repo)))
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
         sha=endpoint.split('/commits/')[1].split('/')[0]
@@ -752,25 +766,29 @@ fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static 
 }
 
 /// BUG-2438: open the train on the fixture's current-head approvals, then
-/// `record` the case's ledger: the sealed final gate refuses and never
-/// reaches the transport.
+/// `record` the case's ledger. Assert its expected refusal without transport:
+/// old-head approval fails carry-over before the train's supersession loop;
+/// malformed refusal SHAs reach the train's refusing-review check.
 // trace:BUG-2438 | ai:claude
-fn bug2438_refuses(f: &Fixture, why: &str, record: impl FnOnce()) {
+// trace:TASK-2831 | ai:codex
+fn bug2438_refuses(f: &Fixture, why: &str, expected_message: &str, record: impl FnOnce()) {
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
     let (train, change) = f.opened(&mut live);
     let lease = live.lease(change.id).unwrap();
     record();
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .expect_err(why);
     assert!(
-        live.merge_verified(&change, &train, lease.as_ref())
-            .is_err(),
-        "{why}"
+        format!("{error:#}").contains(expected_message),
+        "{why}: expected {expected_message:?}, got {error:#}"
     );
     assert!(calls(f.root()).is_empty(), "{why}");
 }
 
-/// BUG-2438: with NO current-head verdict nothing is superseded, so an
-/// older-head refusal still refuses even beside an older-head approval.
+/// BUG-2438: with NO current-head verdict, the older-head approval fails
+/// carry-over before the train can evaluate the older-head refusal.
 // trace:BUG-2438 | ai:claude
 #[test]
 fn bug2438_old_head_refusal_without_current_head_verdict_refuses() {
@@ -781,9 +799,14 @@ fn bug2438_old_head_refusal_without_current_head_verdict_refuses() {
     let old_head = g(f.root(), &["rev-parse", "main"]);
     let mut approval = f.records[0].clone();
     approval["reviewed_sha"] = json!(old_head);
-    bug2438_refuses(&f, "old-head refusal with no current-head verdict", || {
-        bug2438_ledger(&f, &old_head, &approval);
-    });
+    bug2438_refuses(
+        &f,
+        "old-head refusal with no current-head verdict",
+        "The approval did not carry over",
+        || {
+            bug2438_ledger(&f, &old_head, &approval);
+        },
+    );
 }
 
 /// BUG-2438: only a well-formed SHA naming another commit is an older head. A
@@ -803,7 +826,7 @@ fn bug2438_malformed_reviewed_sha_refusal_is_not_superseded() {
         } else {
             bad.to_string()
         };
-        bug2438_refuses(&f, bad, || {
+        bug2438_refuses(&f, bad, "train source has a refusing review", || {
             bug2438_ledger(&f, &sha, &f.records[0]);
         });
     }

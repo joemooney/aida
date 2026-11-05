@@ -120,3 +120,12 @@ contention skips this tool call and can retry on the next. A failed ledger
 read/write emits no notice; SessionStart/statusline remain the fallback. A
 jump straight to expiry emits the current expired notice rather than obsolete
 near-expiry warnings. Notices confer no authority.
+
+Claims explicitly unlock the permanent sidecar on every exit. Closing the
+descriptor alone can leave its flock held by a concurrently forked child until
+exec, briefly suppressing a later crossing. The BUG-2451 regression retains a
+duplicated descriptor (the same open file description as an inherited one),
+checks that a competing claim refuses while locked, then verifies that dropping
+the notice lock permits a claim before that duplicate closes. The existing
+epoch/crossing test checks deduplication and renewal.
+<!-- trace:BUG-2451 | ai:codex -->
