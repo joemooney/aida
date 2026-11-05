@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-767
 agreed_id: TASK-2995
 title: 'Showcase: add interactive CLI command, skill, and hook explorer page (features.html)'
 description: 'Add docs/showcase/features.html exposing AIDA''s CLI command surface, workspace crate topology, skill templates, and hook templates. Acceptance: (1) docs/showcase/features.html is linked from docs/showcase/index.html and docs/showcase/engineering-audit.html; python3 docs/showcase/build.py --check and tests/test_showcase_build.py + tests/test_showcase_publish.py pass with zero broken relative links or external runtime dependencies. (2) Accurately reflects the repository without fabricating nonexistent crates on command badges or making unsourced third-party competitor claims: documents the 7 actual Cargo.toml workspace crates (aida-core, aida-cli, aida-cli-lib, aida-crate, aida-server, aida-generate-types, aida-tui), groups all 163 CLI command families (752 routes from aida commands --json --flags --hidden) by their official aida help-all topic categories and actual owning crate, and describes the proposed aida-cli-lib domain split in an explicitly labelled Planned Decomposition section. (3) Includes the interactive aida commands explorer, the 59 skill templates under aida-core/templates/skills/, and all 22 hook templates under aida-core/templates/hooks/, with no internal spec IDs in public prose.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T11:31:43.725175180Z
+modified_at: 2026-11-05T11:33:55.190207292Z
 req_type: Task
 tags:
 - docs
@@ -90,6 +90,15 @@ history:
   author: joe
   timestamp: 2026-11-05T11:31:45.173767712Z
   changes: []
+- id: 01a1ab7c-a576-7ba0-95ec-4fa55a2c91c3
+  author: aida-orchestrator
+  timestamp: 2026-11-05T11:33:55.190230668Z
+  session_id: 01a1ab7ac456
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
   branch: agy2/audit-polish
@@ -105,7 +114,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round-2 rework fixed the prior findings (audit link added; counts 165/776 and 542/234 match live ''aida commands --json --flags --hidden''; topics match ''aida help-all'' exactly, with honest ''Not in aida help-all'' buckets; 7 crates, 59 skills, 22 hooks verified; showcase gates green in CI ''gates'' shard). One AC2 defect remains: the ''terminal'' family is misattributed to aida-tui.'
+  detail: 'AC1 and AC3 met (features.html linked from index.html and both engineering-audit copies; 59 skills and 22 hooks match the template directories exactly; no spec IDs in public prose; showcase build and tests green in CI). AC2 is partial: the ''server'' command family is credited to the aida-server crate, but it is a remote client implemented in aida-cli-lib. The embedded command inventory is also 5 routes behind the PR head.'
   recovery_hint: address the review findings, move TASK-2995 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-04T13:04:09.521253725Z
+  shelved_at: 2026-11-05T11:33:55.190207292Z

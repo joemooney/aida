@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T11:29:43.322371546Z
+modified_at: 2026-11-05T11:33:14.660666477Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -154,6 +154,12 @@ comments:
   content: 'Round 5: CI log confirms only task_2707_notice_leaf_epoch_and_crossed_dedup failed; the failing lane fixture is intentional and its parent test passed. Investigating inherited flock descriptors during parallel process spawning, adding deterministic release coverage, and replacing the train/ literal with pr_train::BRANCH_PREFIX. Will run grant-notice and BUG-2451 regressions plus the live gate where supported. The supervised merge hold remains untouched.'
   created_at: 2026-11-05T11:29:43.322371546Z
   modified_at: 2026-11-05T11:29:43.322371546Z
+  session_id: 01a1ab76474c
+- id: 01a1ab7c-0724-7280-bb52-97510dcd5b75
+  author: joe
+  content: 'Round-5 validation so far: fetched CI gates log for run 42013363181/job 127197654410. Sole outer failure is grant_expiry_notice::tests::task_2707_notice_leaf_epoch_and_crossed_dedup (68 passed, 1 failed); lane_fixture_fails is intentional and bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli passed. Added explicit RAII flock unlock and deterministic dup-descriptor regression; isolated Rust harness compiled from the edited claim/lock and tests passes 2 tests, while removing unlock makes the new regression fail. Hook tests: 13 passed; fixture ratchets: 15 passed; formatting and diff whitespace clean. Full library Cargo tests are building in /tmp/bug2451-round5-tests.log. git add failed with .git/index.lock: Read-only file system; commit/push remain blocked. Patch saved as /tmp/BUG-2451-round5.patch.'
+  created_at: 2026-11-05T11:33:14.660666477Z
+  modified_at: 2026-11-05T11:33:14.660666477Z
   session_id: 01a1ab76474c
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723

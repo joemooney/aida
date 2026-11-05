@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T11:03:34.821972588Z
+modified_at: 2026-11-05T11:33:24.437017486Z
 req_type: Task
 tags:
 - docs:impacted
@@ -61,6 +61,25 @@ comments:
   created_at: 2026-11-05T09:48:56.171073478Z
   modified_at: 2026-11-05T09:48:56.171073478Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab7c-2d55-79a2-a8b0-9657e53c8cc0
+  author: joe
+  content: |
+    Round 2 rework is prepared in the existing PR #3415 seat clone. TASK-3096 remains Needs Attention: finding 1 was explicitly punted as a design fork, not silently waived. The approved STORY-2479 sketch says fast-forward-only pull and refusal of divergent histories. Review requests additive replay of immutable local-only files atop validated incoming history. Advisor authorization is needed before changing that contract. The normal process/remote-publication divergence remains unresolved; do not merge this partial rework.
+
+    Addressed independent findings:
+    - Finding 2: the ordinary writer uses the shared executable resolver and headless env helper. Bounded capture now preserves stderr and kills/reaps its process group before returning. A fresh canonical operation-marker scan recovers confirmed writes or removes an unconfirmed journal after definite failure, including spawn failure and timeout. Existing ambiguous crash journals still refuse automatic replay; explicit process --reconcile asserts the previous writer has stopped and checks fresh evidence before clearing an unconfirmed journal. Tests cover refused transport-policy writer followed by successful retry without duplicate specs, escaped-NUL spawn failure followed by pending/dismiss, confirmed recovery and explicit reconciliation.
+    - Finding 3: owner-only validated-tip proof is bound to the compiled intake and envelope validator sources, including dirty source revisions. Only new intermediate commits are checked when that exact validated ancestor and validator fingerprint match; live checkpoint files are revalidated and blobs reused within a command. Unrelated history or stale proof falls back to full validation. Tests prove an old intermediate tree is skipped, stale proof forces full validation, and a hostile new intermediate commit is refused without moving accepted refs. The manual explicitly documents lifetime caps, monitoring and a coordinated archive/new-remote rotation procedure; no automatic compaction is claimed.
+    - Finding 4: enroll/publish/pull/process now have human renderings and honor both JSON spellings. Human titles are unquoted. Receipt views resolve destination UUIDs to spec IDs with an available home store; wire receipts retain UUID identity. The JSON audit now executes all five enrolled-intake commands against a local bare remote.
+    - Reported CI failures: raw executable lookup replaced by the resolver; shared background-wait/background-disable envs applied; independently enrolled remote credential exclusions justified at the actual transport sites; manual TASK-123 example replaced by a spec-id placeholder. The existing supervised merge hold is retained.
+
+    Local validation passed: final intake 12/12 (29.39s), existing envelope 11/11, full bug_1502 JSON audit 9/9, bounded writer runner 3/3, launcher guardrails 3/3, executable-resolver guard 1/1, remote-credential guard 1/1, registry/help snapshot regeneration 21/21. Full manual verifier, 36 Python fixture tests, static manual flags, portability, glyph and trace-header checks, final no-default-features cargo check, final clippy with denied correctness lints, cargo fmt check and git diff whitespace check passed. Audit regeneration compares identically. Slow processing tests were split and timing budgets updated from measured runs. Logs are /tmp/task3096-r2-*.log; complete tracked and new-file backup patch: /tmp/task3096-r2.patch.
+
+    Finding 5 remains unverified for a new PR head: there is no new pushed head from inside this live lane. The native seat .git is read-only. The authorized host publisher dry-run with --commit-pending refused because this lane owns the live process 2099871; it explicitly requires this lane to finish before committing. The launcher has the supported post-exit pending-work commit step. No guard was bypassed, no pr ship or review record ran. After host commit, publish the new branch head to the existing PR and retain the manual gate until finding 1 is resolved and fresh CI is green.
+
+    Suggested commit subject: [AI:codex] fix(intent): recover processing and checkpoint validation (TASK-3096)
+  created_at: 2026-11-05T11:33:24.437017486Z
+  modified_at: 2026-11-05T11:33:24.437017486Z
+  session_id: 01a1ab59f36b
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
