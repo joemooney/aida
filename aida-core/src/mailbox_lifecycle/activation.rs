@@ -448,7 +448,41 @@ fn inspect_writer(exe_link: &Path, expected: (u64, u64), hash: bool) -> Option<I
     if (meta.dev(), meta.ino()) != expected {
         return None;
     }
-    inspect_reader(&mut file, hash)
+    if hash {
+        return inspect_reader(&mut file, true);
+    }
+    // Deleted executables cannot be rewritten while running. Keep a bounded
+    // cache with pinned inodes so repeated retirement scans do not reread old,
+    // unmarked debug builds to EOF, nor confuse a recycled inode with one.
+    // Metadata also invalidates entries for ordinary mutable test files.
+    // trace:TASK-3112 | ai:codex
+    type Stamp = (u64, u64, u64, i64, i64, i64, i64);
+    static MARKERS: std::sync::Mutex<Vec<(Stamp, std::fs::File, Inspection)>> =
+        std::sync::Mutex::new(Vec::new());
+    let stamp = (
+        meta.dev(),
+        meta.ino(),
+        meta.len(),
+        meta.mtime(),
+        meta.mtime_nsec(),
+        meta.ctime(),
+        meta.ctime_nsec(),
+    );
+    if let Some(found) = MARKERS
+        .lock()
+        .ok()?
+        .iter()
+        .find(|(key, _, _)| *key == stamp)
+    {
+        return Some(found.2.clone());
+    }
+    let inspection = inspect_reader(&mut file, false)?;
+    let mut cache = MARKERS.lock().ok()?;
+    if cache.len() == 16 {
+        cache.remove(0);
+    }
+    cache.push((stamp, file, inspection.clone()));
+    Some(inspection)
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
@@ -901,6 +935,30 @@ mod tests {
     /// and records its marker, without hashing it: a replaced binary's digest
     /// could not admit it.
     // trace:BUG-2437 | ai:claude
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_marker_cache_invalidates_changed_content_and_checks_identity() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), b"old unmarked build").unwrap();
+        let meta = file.as_file().metadata().unwrap();
+        let id = (meta.dev(), meta.ino());
+        for _ in 0..2 {
+            assert_eq!(
+                inspect_writer(file.path(), id, false)
+                    .unwrap()
+                    .permit_marker,
+                false
+            );
+        }
+        std::fs::write(file.path(), WRITE_PERMIT_MARKER).unwrap();
+        assert!(
+            inspect_writer(file.path(), id, false)
+                .unwrap()
+                .permit_marker
+        );
+        assert!(inspect_writer(file.path(), (id.0, id.1 + 1), false).is_none());
+    }
+
     #[test]
     fn fill_digests_reads_the_marker_of_a_replaced_writer() {
         let (proc, exe, id) = proc_with_writer(5);

@@ -209,7 +209,8 @@ pub(crate) struct ViewQuery {
     pub(crate) filters: ViewFilters,
     /// For `opened`: a creation event for a spec whose `created_at` is
     /// before this is a re-filing (a renumber or duplicate repair writes the
-    /// object at a new path, which reads as an add), not a new spec.
+    /// object at a new path, which reads as an add), not a new spec. Opened
+    /// without a window uses MIN_UTC and still displays original creation time.
     // trace:TASK-1954 trace:TASK-1762 | ai:claude
     pub(crate) created_floor: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -394,9 +395,18 @@ pub(crate) fn select_rows(
             continue;
         }
         rows.push(ViewRow {
-            when: e.timestamp.clone(),
+            // Opened views use the object's original creation time even when
+            // the newest add is a renumber. trace:TASK-3112 | ai:codex
+            when: if q.created_floor.is_some() && matches!(e.kind, EventKind::Added { .. }) {
+                history::human_timestamp(&summary.created_at)
+            } else {
+                e.timestamp.clone()
+            },
             summary: (*summary).clone(),
         });
+    }
+    if q.created_floor.is_some() {
+        rows.sort_by(|a, b| b.when.cmp(&a.when));
     }
     if q.oldest_first {
         rows.reverse();
@@ -568,9 +578,11 @@ pub(crate) fn run(
         ..Default::default()
     })?;
     let q = &ViewQuery {
-        created_floor: (view == HistoryView::Opened)
-            .then_some(collected.since_at)
-            .flatten(),
+        created_floor: (view == HistoryView::Opened).then_some(
+            collected
+                .since_at
+                .unwrap_or(chrono::DateTime::<chrono::Utc>::MIN_UTC),
+        ),
         ..q.clone()
     };
     let rows = select_rows(&collected.events, &summaries, q);

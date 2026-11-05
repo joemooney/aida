@@ -908,7 +908,7 @@ impl Rails for LocalRails<'_> {
 /// failure (auth, 4xx, conflict) returned at once, and the exhausted or
 /// final error naming the step through the caller's `ensure!`.
 // trace:BUG-2219 | ai:claude
-fn net_output(
+pub(crate) fn net_output(
     repo: &Path,
     label: &str,
     build: impl FnMut() -> std::process::Command,
@@ -923,39 +923,18 @@ fn net_output(
     .with_context(|| format!("could not run `{label}`"))
 }
 
-/// One required-check policy read (`gh api <endpoint>`) through the retry
-/// runner, like every other train network step.
-// trace:BUG-2401 trace:BUG-2219 | ai:claude
+/// One required-check policy read (`gh api <endpoint>`). The spawn lives
+/// behind forge.rs (STORY-2401).
+// trace:BUG-2401 trace:BUG-2219 trace:STORY-2401 | ai:claude
 fn train_policy_read(repo: &Path, endpoint: &str) -> Result<std::process::Output> {
-    let gh =
-        crate::kernel::resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
-    net_output(repo, &format!("gh api {endpoint}"), || {
-        let mut cmd = std::process::Command::new(&gh);
-        cmd.current_dir(repo)
-            .args(["api", endpoint])
-            .stdin(std::process::Stdio::null());
-        cmd
-    })
+    crate::forge::train_gh_api_read(repo, endpoint)
 }
 
-/// `gh` in the project root, returning its stdout.
-// trace:BUG-2214 | ai:claude
+/// `gh` in the project root, returning its stdout. The spawn lives behind
+/// forge.rs (STORY-2401).
+// trace:BUG-2214 trace:STORY-2401 | ai:claude
 fn gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
-    // trace:BUG-2219 | ai:claude
-    let out = net_output(repo, &format!("gh {}", args.join(" ")), || {
-        let mut cmd = std::process::Command::new("gh");
-        cmd.current_dir(repo)
-            .args(args)
-            .stdin(std::process::Stdio::null());
-        cmd
-    })?;
-    anyhow::ensure!(
-        out.status.success(),
-        "`gh {}` failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&out.stderr).trim()
-    );
-    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+    crate::forge::train_gh_stdout(repo, args)
 }
 
 /// `git` in the main clone with origin's stored credentials kept out of argv

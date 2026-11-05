@@ -540,16 +540,36 @@ fn resolved_member_spec_ids(
     }
     let mut out = Vec::new();
     for id in ids {
-        if explicit_resolves
-            && !explicit.contains(&id)
+        if !explicit.contains(&id)
             && store
                 .get_requirement_unambiguous(&id)
                 .map_err(anyhow::Error::msg)?
                 .is_none()
         {
-            continue;
+            // Queue-work appends a numeric rework suffix. Preserve the owning
+            // spec's policy gates when that exact stripped hint resolves.
+            // trace:TASK-3112 | ai:codex
+            if let Some((base, suffix)) = id.rsplit_once('-') {
+                if !suffix.is_empty()
+                    && suffix.bytes().all(|b| b.is_ascii_digit())
+                    && store
+                        .get_requirement_unambiguous(base)
+                        .map_err(anyhow::Error::msg)?
+                        .is_some()
+                {
+                    if !out.iter().any(|s: &String| s.eq_ignore_ascii_case(base)) {
+                        out.push(base.to_string());
+                    }
+                    continue;
+                }
+            }
+            if explicit_resolves {
+                continue;
+            }
         }
-        out.push(id);
+        if !out.contains(&id) {
+            out.push(id);
+        }
     }
     Ok(out)
 }

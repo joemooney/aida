@@ -157,7 +157,7 @@ fn brace_delta(line: &str, state: &mut BraceState) -> i64 {
 /// The 0-based lines of `#[cfg(test)] mod name { ... }` blocks, at any
 /// indentation and with the attribute on its own line or the module's,
 /// matched by brace balance.
-fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
+pub(crate) fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
     static MODULE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap()
     });
@@ -241,7 +241,7 @@ fn raw_git_builders(src: &str, require_field: bool) -> Option<usize> {
 
 /// The non-test `.rs` sources of every workspace crate (skipping `tests`
 /// directories, `*_tests.rs` and `tests.rs`), keyed by workspace-relative path.
-fn workspace_sources(workspace: &Path) -> BTreeMap<String, String> {
+pub(crate) fn workspace_sources(workspace: &Path) -> BTreeMap<String, String> {
     let mut sources = BTreeMap::new();
     let crates: Vec<PathBuf> = std::fs::read_dir(workspace)
         .unwrap()

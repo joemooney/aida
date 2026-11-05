@@ -464,7 +464,11 @@ fn observe_prs(
             ));
             continue;
         }
-        let ready = pr_ready(root, pr);
+        let ready = if hold_gate_failed(row) {
+            Some(false)
+        } else {
+            pr_ready(root, pr)
+        };
         readiness.push(ready);
         let rejected = pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
             || current_rejection(root, pr);
@@ -560,7 +564,8 @@ fn forge_snapshot(
 fn check_name(check: &serde_json::Value) -> Option<&str> {
     check["name"].as_str().or(check["context"].as_str())
 }
-fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
+// trace:TASK-3112 | ai:codex
+fn latest_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
     let mut latest = BTreeMap::new();
     let mut unnamed = Vec::new();
     for check in row["statusCheckRollup"].as_array().into_iter().flatten() {
@@ -568,9 +573,6 @@ fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
             unnamed.push(check);
             continue;
         };
-        if name == "merge-hold-gate" {
-            continue;
-        }
         // Compare parsed instants, including offsets. Missing timestamps retain
         // input order as a tie-breaker; a newer queued attempt supersedes old red.
         let time = |c: &serde_json::Value| {
@@ -580,13 +582,26 @@ fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
                 .filter_map(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .max()
         };
-        let previous = latest.entry(name).or_insert(check);
+        let previous = latest
+            .entry((check["workflowName"].as_str(), name))
+            .or_insert(check);
         if time(check) >= time(previous) {
             *previous = check;
         }
     }
     unnamed.extend(latest.into_values());
     unnamed
+}
+fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
+    latest_checks(row)
+        .into_iter()
+        .filter(|c| check_name(c) != Some("merge-hold-gate"))
+        .collect()
+}
+fn hold_gate_failed(row: &serde_json::Value) -> bool {
+    latest_checks(row)
+        .into_iter()
+        .any(|c| check_name(c) == Some("merge-hold-gate") && check_failed(c))
 }
 fn check_failed(check: &serde_json::Value) -> bool {
     matches!(
@@ -708,7 +723,7 @@ fn pr_digest(
     if pr.is_draft {
         blockers.push(format!("draft; gh pr ready {n}"));
     }
-    if crate::pr_has_merge_hold(root, pr) {
+    if crate::pr_has_merge_hold(root, pr) || hold_gate_failed(row) {
         blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
     }
     let checks: Vec<_> = ci_checks(row)
@@ -1115,7 +1130,7 @@ mod tests {
         let row = serde_json::json!({
             "number":42,"title":"work (STORY-2476)","headRefName":"topic",
             "headRefOid":"abcdef1234","mergeable":"MERGEABLE","isDraft":false,
-            "labels":[{"name":"aida:merge-hold"}],
+            "labels":[{"name":"aida:merge-hold-recorded"}],
             "statusCheckRollup":[
                 {"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE",
                  "detailsUrl":"https://github.com/o/r/actions/runs/1/job/123"},
@@ -1135,6 +1150,22 @@ mod tests {
         assert!(!digest.contains("queue rework"));
         assert!(!digest.contains("red CI"));
         assert!(failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty());
+    }
+
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_same_named_jobs_in_different_workflows_remain_distinct() {
+        let row = serde_json::json!({"number":42,"headRefName":"topic","statusCheckRollup":[
+            {"workflowName":"A","name":"test","status":"COMPLETED","conclusion":"FAILURE","completedAt":"2026-11-05T00:00:00Z"},
+            {"workflowName":"B","name":"test","status":"COMPLETED","conclusion":"SUCCESS","completedAt":"2026-11-05T01:00:00Z"}
+        ]});
+        assert_eq!(ci_checks(&row).len(), 2);
+        assert!(ci_checks(&row).iter().any(|c| check_failed(c)));
+        let prs = parse_stall_prs(&[row], None);
+        assert!(prs
+            .by_branch
+            .values()
+            .any(|p| p.ci_rollup.as_deref() == Some("fail")));
     }
 
     #[test]
