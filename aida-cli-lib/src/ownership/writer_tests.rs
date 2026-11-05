@@ -318,10 +318,18 @@ fn a_rider_names_its_train() {
 
 // ---- dual-write adapters ----------------------------------------------
 
+// trace:BUG-2458 | ai:codex
 #[test]
 fn lease_start_identity_converts_only_from_the_exact_scheme() {
     let id = dual::identity_from_record(42, "linux-starttime:1234", BOOT).unwrap();
     assert_eq!(id.start, format!("linux:{BOOT}:1234"));
+    assert_eq!(
+        dual::identity_from_record(42, &id.start, BOOT),
+        Some(id.clone())
+    );
+    assert!(dual::identity_from_record(42, &id.start, "another-boot").is_none());
+    assert!(dual::identity_from_record(42, &id.start, "").is_none());
+    assert!(dual::identity_from_record(1, &id.start, BOOT).is_none());
     assert!(dual::identity_from_record(42, "2026-11-01T00:00:00+00:00", BOOT).is_none());
     assert!(dual::identity_from_record(42, "sysinfo-start:2026", BOOT).is_none());
     assert!(dual::identity_from_record(0, "linux-starttime:1", BOOT).is_none());
@@ -1331,7 +1339,7 @@ fn unstamped_session_stays_unknown_after_setup_exits_while_lease_is_live() {
         Some(INITIAL_PID_NAMESPACE_INODE),
         &probe,
     );
-    dual::lease_started(dir.path(), &l);
+    dual::lease_written(dir.path(), &l);
     let started = repo_store(dir.path()).load(&key).unwrap().unwrap();
     let h = started.holder.as_ref().unwrap();
     assert!(h.witnesses.is_empty());

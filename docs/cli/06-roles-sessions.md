@@ -884,8 +884,9 @@ Ownership never uses the creator shell or the session-start CLI invocation as a
 witness. Session setup records no process witness until a worker is stamped by
 launch or adoption. Creator-only leases remain unknown, including after setup
 exits. Later lease writes and migration derive the same holder from that lease.
-Linux exposes the subreaper flag only to the process itself; remote holder validation rejects PID 1 and known init executables, not
-arbitrary processes that may have enabled that flag.
+Linux exposes the subreaper flag only to the process itself; remote holder
+validation rejects PID 1 and known init executables, not arbitrary processes that
+may have enabled that flag.
 
 Repairing an invalid orphan witness does not release its record. Such rows still
 report “never released” pending an operator-reviewed lifecycle repair for the

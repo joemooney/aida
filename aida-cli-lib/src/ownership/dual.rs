@@ -123,12 +123,14 @@ impl WriterFacts {
 }
 
 /// Today's `linux-starttime:<ticks>` (read on this boot) as the probe's
-/// `linux:<boot>:<ticks>` identity. Any other scheme (the legacy rfc3339
+/// `linux:<boot>:<ticks>` identity. Already-qualified identities must match
+/// this boot. Any other scheme (the legacy rfc3339
 /// time, the non-Linux sysinfo time) cannot be converted and is `None`.
 // trace:STORY-2325 | ai:claude
+// trace:BUG-2458 | ai:codex
 pub(crate) fn identity_from_record(pid: u32, start: &str, boot: &str) -> Option<ProcessIdentity> {
     if let Some((recorded_boot, _)) = aida_core::process_probe::parse_start_identity(start) {
-        return (pid > 1 && !recorded_boot.is_empty()).then(|| ProcessIdentity {
+        return (pid > 1 && !boot.is_empty() && recorded_boot == boot).then(|| ProcessIdentity {
             pid,
             start: start.to_string(),
         });
@@ -317,13 +319,6 @@ fn store_for(project_root: &Path) -> Option<OwnershipStore> {
             None
         }
     }
-}
-
-/// Session setup has no owner witness until a worker is stamped. The CLI
-/// invocation and creator shell do not own the session's long-lived work.
-// trace:BUG-2458 | ai:codex
-pub(crate) fn lease_started(project_root: &Path, lease: &crate::SessionLease) {
-    lease_written(project_root, lease);
 }
 
 /// A lease was written: its holder acquires the work it names.
