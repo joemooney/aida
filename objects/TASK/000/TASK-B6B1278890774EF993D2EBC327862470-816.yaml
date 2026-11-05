@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T07:07:06.906677728Z
-modified_at: 2026-11-05T07:07:06.906677728Z
+modified_at: 2026-11-05T16:11:55.300386215Z
 req_type: Task
 tags:
 - carried-from:TASK-1715
 - finding-hash:f903b06e
 - from-review:PR-3404
 - kind:carried-forward
+comments:
+- id: 01a1ac7b-2a24-7721-822b-ff2f71c09036
+  author: joe
+  content: 'Advisor triage 2026-11-05: folded into nit sweep TASK-3114.'
+  created_at: 2026-11-05T16:11:55.300386215Z
+  modified_at: 2026-11-05T16:11:55.300386215Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aac5-cb1d-7fc1-9de0-ca02c9eabe1d
   author: joe
