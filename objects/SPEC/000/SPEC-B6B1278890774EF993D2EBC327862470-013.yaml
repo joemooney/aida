@@ -1,5 +1,6 @@
 id: 01a1a95e-69ad-77a2-b84f-771c9e860a0e
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-013
+agreed_id: TASK-2849
 title: pr hold reports current existing worktree branch missing
 description: 'While implementing STORY-2476 in worktree /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-404, git branch --show-current returned story-b6b1278890774ef993d2ebc327862470-404 and git commit succeeded (f44af0c8273). After aida punt, aida pr hold --reason <design sign-off pending> refused: local branch `story-b6b1278890774ef993d2ebc327862470-404` does not exist — nothing to push for the hold. Direct git push -u origin HEAD then succeeded for that exact branch. Investigate worktree/project-root branch existence resolution and whether punt changes hold eligibility; distinguish a state refusal from missing-branch evidence. No hold outcome was recorded; story is Needs Attention and no PR exists.'
 status: Draft
@@ -13,6 +14,11 @@ tags:
 - from-implementer:STORY-2476
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1a96d-793e-7370-9e82-c087c50aba54
+  author: joe
+  timestamp: 2026-11-05T01:58:06.398657081Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
