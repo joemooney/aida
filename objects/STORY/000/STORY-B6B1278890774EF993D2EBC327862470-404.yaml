@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T06:48:59.605005414Z
+modified_at: 2026-11-05T06:53:38.437832843Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -181,6 +181,12 @@ comments:
   content: 'Round 4 implementation: addressed all four findings in pipeline_stall.rs. Detector CI evidence now selects the latest timestamped check attempt and excludes merge-hold-gate from both the CI rollup/required set and failure-log selection; holds remain readiness blockers via pr_has_merge_hold. Digest and failure details share the same CheckRun/StatusContext failure predicate and context names. Non-abandoned train evidence now says live-or-unknown and never suggests closing it. Added regression coverage for held green PR observation/digest/no-log-fetch, superseded red runs followed by green (both input orders), newer pending attempts, StatusContext FAILURE/ERROR unavailable evidence, live train text, and preserving all four real failure-log slots despite held PRs. Updated the alarm documentation. Formatting and whitespace checks pass; focused Rust tests are building. Publication constraint: git add fails with read-only .git/index.lock; aida ship --no-merge --dry-run explicitly requires the native lane host-side exit commit. No finding is disputed. New commit/publication must use that documented host path, rather than counting the prior round commit.'
   created_at: 2026-11-05T06:48:59.605005414Z
   modified_at: 2026-11-05T06:48:59.605005414Z
+  session_id: 01a1aa70e71b
+- id: 01a1aa7c-0b05-7db0-97ae-16b378619134
+  author: joe
+  content: 'Round 4 verification complete: cargo test -p aida-cli-lib pipeline_stall::tests --lib passed all 18 tests (0 failures), including held-green observation/digest/no-log-fetch, latest rerun selection/readiness, StatusContext failure evidence, train-owner wording and shared log-budget preservation. cargo fmt --all -- --check and git diff --check passed. All four findings are addressed; none is disputed. This native seat cannot create the required new commit because its .git is read-only (git add refused index.lock). The documented host-side lane exit step must create a NEW commit for this round. Host publication from /home/joe/ai/aida: aida ship STORY-2476 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-404 --commit-pending "[AI:codex] fix(supervise): classify latest CI separately from holds (STORY-2476)" --no-merge . Existing PR #3396 remains open for independent review; no merge-hold clear, review record, or pr ship was run.'
+  created_at: 2026-11-05T06:53:38.437832843Z
+  modified_at: 2026-11-05T06:53:38.437832843Z
   session_id: 01a1aa70e71b
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
