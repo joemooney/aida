@@ -3290,7 +3290,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             None,
         )
         .and_then(|resume_id| {
+            // TASK-2032: the orchestrator runs at the host project root.
+            // trace:TASK-2032 | ai:claude
             session::spawn_vendor_headless_resume(
+                crate::seat_clone::launcher_main().as_deref(),
                 &session::HeadlessResume {
                     vendor,
                     session_id: &session_id,
@@ -3775,7 +3778,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
+        // TASK-2032: the orchestrator runs at the host project root; its host
+        // main is resolved once for every builder below.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         let fix_args = match session::headless_vendor_args_contained_in(
+            host_main.as_deref(),
             vendor,
             &prompt,
             &fix_uuid,
@@ -3795,6 +3803,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         };
         let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
+            host_main.as_deref(),
             vendor,
             self.contained,
             contained_in,
@@ -3817,7 +3826,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         // trace:BUG-2218 TASK-2328 | ai:codex
         if self.contained {
-            if let Err(error) = session::prepare_contained_mailbox_for_launch(&worktree) {
+            if let Err(error) =
+                session::prepare_contained_mailbox_for_launch(host_main.as_deref(), &worktree)
+            {
                 tee.stop();
                 eprintln!("CI-fix mailbox: {error:#}; leaving the CI failure standing");
                 return false;

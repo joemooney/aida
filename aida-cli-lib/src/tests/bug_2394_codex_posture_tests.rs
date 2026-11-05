@@ -243,6 +243,7 @@ fn bug_2394_headless_codex_plan_lane_keeps_write_posture() {
     let _env = headless_env();
     let compose = |prompt| {
         compose_headless_command_for(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             prompt,
             "sid",
@@ -266,6 +267,7 @@ fn bug_2394_headless_codex_plan_lane_keeps_write_posture() {
 
     // The drain's `--plan-phase` child is built the same way: no read-only.
     let cmd = build_exec_vendor_headless_command_for(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         "/aida-plan BUG-1",
         "sid",

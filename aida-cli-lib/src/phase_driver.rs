@@ -2197,7 +2197,12 @@ impl RealPhaseDriver {
         // advisor reads untrusted PR content and runs commands. Scoped to the
         // advisor's cwd (the project root, where it writes its punt response).
         let contained_in = self.contained.then_some(self.project_root.as_path());
+        // TASK-2032: the orchestrator runs at the host project root (it never
+        // chdirs into a seat); its host main is resolved once, here.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         let advisor_tier = session::advisor_tier_program_and_args_with_posture(
+            host_main.as_deref(),
             vendor,
             is_fork,
             &seeded,
@@ -2219,6 +2224,7 @@ impl RealPhaseDriver {
             }
         };
         let (program, advisor_args) = match contained_child_program_and_args(
+            host_main.as_deref(),
             vendor,
             self.contained,
             contained_in,
@@ -2240,7 +2246,10 @@ impl RealPhaseDriver {
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         // trace:BUG-2218 TASK-2328 | ai:codex
         if self.contained {
-            if let Err(error) = session::prepare_contained_mailbox_for_launch(&self.project_root) {
+            if let Err(error) = session::prepare_contained_mailbox_for_launch(
+                host_main.as_deref(),
+                &self.project_root,
+            ) {
                 tee_handle.stop();
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,
@@ -2409,7 +2418,9 @@ pub(crate) fn missing_implementer_worktree_push_gate(
 /// a no-op with os_wrap off, fail-closed when it is on but bwrap cannot run.
 // trace:BUG-2133 | ai:claude
 // trace:TASK-1952 | trace:TASK-1770 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn contained_child_program_and_args(
+    host_main: Option<&std::path::Path>,
     vendor: session::HeadlessVendor,
     contained: bool,
     contained_in: Option<&std::path::Path>,
@@ -2419,13 +2430,13 @@ pub(crate) fn contained_child_program_and_args(
     args: Vec<String>,
 ) -> anyhow::Result<(String, Vec<String>)> {
     if !contained {
-        return session::os_wrapped_program_and_args(child_cwd, program, args);
+        return session::os_wrapped_program_and_args(host_main, child_cwd, program, args);
     }
     session::require_child_containment(vendor, contained, child)?;
     let root = contained_in.ok_or_else(|| {
         anyhow::anyhow!("[contained] no working directory to scope the {child} to — refusing to launch it uncontained")
     })?;
-    session::os_wrapped_program_and_args(root, program, args)
+    session::os_wrapped_program_and_args(host_main, root, program, args)
 }
 
 // trace:BUG-2124 | ai:antigravity

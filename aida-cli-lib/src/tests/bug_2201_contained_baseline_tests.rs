@@ -50,6 +50,7 @@ fn outside_project_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
 /// as `claude_contained_settings_json`, without its store side effects.
 fn launch_settings(worktree: &Path, main: &Path) -> serde_json::Value {
     let json = crate::session::contained_settings_json_with_boundary(
+        crate::seat_clone::launcher_main().as_deref(),
         &[],
         false,
         &contained_write_roots(worktree),

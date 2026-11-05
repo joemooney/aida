@@ -29,6 +29,11 @@ pub(crate) struct LaunchRequest {
     /// Whether the site sets the child's working directory itself
     /// (`Command::current_dir`). Sites that inherit this process's cwd say no.
     pub(crate) set_cwd: bool,
+    /// The host main checkout the launcher pinned at its entry point, before
+    /// any chdir into a seat clone. The boundary verifies the mailbox root
+    /// against it; never derived from the process cwd below that point.
+    // trace:TASK-2032 | ai:claude
+    pub(crate) host_main: Option<PathBuf>,
 }
 
 /// Why a launch was refused, before any effect.
@@ -90,6 +95,7 @@ pub(crate) struct LaunchContext {
     posture: ContainmentPosture,
     cwd: PathBuf,
     set_cwd: bool,
+    host_main: Option<PathBuf>,
     parent_contained: bool,
 }
 
@@ -156,6 +162,7 @@ impl LaunchContext {
             posture: req.posture,
             cwd: req.cwd,
             set_cwd: req.set_cwd,
+            host_main: req.host_main,
             parent_contained,
         })
     }
@@ -186,6 +193,12 @@ impl LaunchContext {
 
     pub(crate) fn sets_cwd(&self) -> bool {
         self.set_cwd
+    }
+
+    /// The launcher's pinned host main (see [`LaunchRequest::host_main`]).
+    // trace:TASK-2032 | ai:claude
+    pub(crate) fn host_main(&self) -> Option<&Path> {
+        self.host_main.as_deref()
     }
 
     pub(crate) fn parent_contained(&self) -> bool {

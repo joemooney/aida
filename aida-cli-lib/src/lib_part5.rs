@@ -962,7 +962,10 @@ pub(crate) fn review_spec_launch_reviewer(
     prompt: &str,
     session_id: &str,
 ) -> Result<std::process::ExitStatus> {
+    // TASK-2032: `aida review` launches from the host project root.
+    // trace:TASK-2032 | ai:claude
     let plan = session::interactive_reviewer_launch_plan(
+        crate::seat_clone::launcher_main().as_deref(),
         vendor,
         None,
         Some(session_name),
