@@ -2222,6 +2222,12 @@ fn spawn_vendor_headless_forking(
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
+    // trace:TASK-2838 | ai:codex
+    let status = if vendor == HeadlessVendor::Agy {
+        crate::agy_outcome::log_status(log_path, status)
+    } else {
+        status
+    };
     // The child has exited: end its registry row now. Its prompts are its only
     // heartbeats and a `-p` lane gets one, so gc would end it at its start.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
@@ -4191,7 +4197,12 @@ pub fn agy_headless_args(prompt: &str) -> Vec<String> {
 // The permission posture is unchanged — the same single flag, moved, not weakened.
 // trace:BUG-1686 | ai:claude
 pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
-    let mut args = vec!["--dangerously-skip-permissions".to_string()];
+    // trace:TASK-2838 | ai:codex
+    let mut args = vec![
+        "--dangerously-skip-permissions".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+    ];
     if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
         args.extend(["--effort".to_string(), effort.to_string()]);
     }
@@ -6364,17 +6375,37 @@ pub(crate) fn coordinator_status_with_handle_guard(
     vendor: HeadlessVendor,
     cmd: &mut std::process::Command,
     project_root: &Path,
-    stdout: Option<std::process::Stdio>,
+    stdout: Option<std::fs::File>,
     mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
 ) -> Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
     finalize_coordinator_launch(vendor, cmd, project_root)?;
-    if let Some(stdout) = stdout {
+    // AGY needs structured output even for quiet coordinators. Forward JSON
+    // to streaming consumers; quiet callers receive only the final response.
+    // Interactive AGY launches without stream-json retain their ordinary IO.
+    // trace:TASK-2838 | ai:codex
+    let agy_stream =
+        vendor == HeadlessVendor::Agy && cmd.get_args().any(|arg| arg == "stream-json");
+    let mut forward = stdout;
+    if agy_stream {
+        cmd.stdout(std::process::Stdio::piped());
+    } else if let Some(stdout) = forward.take() {
         cmd.stdout(stdout);
     }
     let mut child = cmd.spawn_retrying_etxtbsy()?;
     if let Some(guard) = guard.as_mut() {
         guard.disarm();
+    }
+    if agy_stream {
+        let output = child.stdout.take().expect("AGY stdout was piped");
+        let quiet = forward.is_none();
+        let evidence = crate::agy_outcome::Evidence::read(
+            output,
+            forward.as_mut().map(|file| file as &mut dyn std::io::Write),
+            quiet,
+        );
+        let status = child.wait()?;
+        return Ok(evidence?.status(status));
     }
     Ok(child.wait()?)
 }
@@ -7150,7 +7181,12 @@ fn run_vendor_headless_child(
     }
     let status = status?;
     tee.stop();
-    Ok(status)
+    // trace:TASK-2838 | ai:codex
+    Ok(if vendor == HeadlessVendor::Agy {
+        crate::agy_outcome::log_status(log_path, status)
+    } else {
+        status
+    })
 }
 
 /// BUG-741: `codex exec` is not discoverable by the Claude-specific worktree

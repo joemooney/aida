@@ -15006,7 +15006,14 @@ pub(crate) fn run_standalone_reviewer(
         .map_err(|err| format!("{err:#}\n{}", recovery.as_deref().unwrap_or_default()));
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
-    if let Some(code) = status.code().filter(|c| *c != 0) {
+    // A fresh trusted verdict can settle incomplete AGY execution evidence;
+    // actual process/terminal failure still propagates. trace:TASK-2838 | ai:codex
+    if let Some(code) = status.code().filter(|c| {
+        *c != 0
+            && !(launch_vendor == session::HeadlessVendor::Agy
+                && *c == crate::agy_outcome::INCOMPLETE
+                && outcome.is_ok())
+    }) {
         // No verdict: return the vendor's code with the recovery text, so
         // the draft reaches the caller like any other error.
         // trace:BUG-2187 | ai:claude
