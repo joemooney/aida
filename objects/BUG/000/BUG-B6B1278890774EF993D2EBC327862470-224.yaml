@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:29:23.016534515Z
+modified_at: 2026-11-05T21:31:31.437788824Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -138,6 +138,12 @@ comments:
   created_at: 2026-11-05T21:27:41.487879034Z
   modified_at: 2026-11-05T21:27:41.487879034Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad9f-c4ed-73c2-b492-25d76984097a
+  author: joe
+  content: 'Round 4: commit 8cb06e6020a pushed to PR #3450. Findings 3-5 addressed: removed lease_started pass-through and used lease_written at startup/test, wrapped the subreaper paragraph, and rejected qualified Linux identities whose recorded boot differs from WriterFacts boot (regression covers same boot, mismatched boot, absent boot and PID 1). git diff --check and static manual flags pass; targeted ownership tests and formatting/portability verification are running. Finding 1 / AC5 is still unverified: own migrate --execute refuses with "--execute needs an operator at a terminal"; lane PID namespace 4026533099 differs from host 4026531836. No host output or advisor narrowing has been supplied; no acceptance claim is made. Finding 2 remains pending: run 42111575194 at 842e6e618e96 still had all seven CI lanes in progress when checked. The supervised merge hold is expected and retained.'
+  created_at: 2026-11-05T21:31:31.437788824Z
+  modified_at: 2026-11-05T21:31:31.437788824Z
+  session_id: 01a1ad9dc6e4
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
