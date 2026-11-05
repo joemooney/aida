@@ -149,8 +149,13 @@ impl Verify {
 // Schema validity must not depend on the reading host: stores are shared, so
 // "absolute" means a leading `/` everywhere, not `Path::is_absolute`.
 // trace:STORY-1673 | ai:claude
+//
+// A leading `//` is refused: on Windows `//host/share/...` is a UNC path, and
+// probing it against a hostile shared store could open an outbound SMB
+// connection. trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
 fn valid_path(text: &str) -> bool {
     text.starts_with('/')
+        && !text.starts_with("//")
         && !Path::new(text)
             .components()
             .any(|c| matches!(c, Component::ParentDir))

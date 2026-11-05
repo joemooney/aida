@@ -284,7 +284,10 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 1
+# TASK-1472 adds a probe site: project_is_aida_initialized only tests whether
+# .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# trace:TASK-1472 | ai:claude
+sites = 2
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
@@ -954,3 +957,14 @@ inspection = "policy"
 # trace:TASK-2631 | ai:codex
 [keys.trusted."contained.vendors"]
 "*" = "policy"
+
+# Private vendor-state config is generated, not a branch-local authority read.
+# Egress comes from the already-pinned trusted project snapshot.
+# trace:TASK-2707 | ai:codex
+[readers."aida-cli-lib/src/launch/contained.rs"]
+channels = ["other-file", "write", "trusted"]
+sites = 1
+
+[keys.trusted.contained]
+allowed_hosts = "policy"
+read_allowlist = "policy"

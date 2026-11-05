@@ -86,6 +86,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 maybe_show_faithful_launcher_notice();
             }
             session::new_session_for_vendor(
+                crate::seat_clone::launcher_main().as_deref(),
                 &vendor,
                 None,
                 title.clone(),
@@ -243,7 +244,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             return_to_pool,
             remove,
             include_in_use,
-        } => session_end(
+            discard_unpushed,
+        } => crate::session_end::session_end_with_discard_unpushed(
             id.as_deref(),
             spec.as_deref(),
             branch.as_deref(),
@@ -256,6 +258,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *return_to_pool,
             *remove,
             *include_in_use,
+            *discard_unpushed,
         ),
         SessionCommand::Leases {
             verbose,
@@ -1602,7 +1605,10 @@ pub(crate) fn agent_resume_launch_config(
         // The child runs in `worktree`, so its write boundary is that
         // worktree — not the launcher's cwd (`tool_contained_flags` would
         // resolve the parent's git root). trace:BUG-2151 | ai:claude
-        config.default_args = session::claude_contained_flags_for(worktree)?;
+        config.default_args = session::claude_contained_flags_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree,
+        )?;
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(
@@ -2024,7 +2030,23 @@ pub(crate) fn rescope_codex_mcp_flags(
 pub(crate) fn rescope_contained_settings(
     config: &mut AgentLaunchConfig,
     tree: &std::path::Path,
+    role: Option<&str>,
 ) -> Result<()> {
+    // TASK-2712: a native Codex launch's `--add-dir` write set follows the
+    // lane's tree the same way; its role decides the gate-ledger grant
+    // (reviewer only).
+    // trace:TASK-2712 | ai:claude
+    // TASK-2032: an entry point run from the host project; the host main is
+    // resolved here, once, for both vendors. trace:TASK-2032 | ai:claude
+    let host_main = crate::seat_clone::launcher_main();
+    if config.agent_type == "codex" {
+        return crate::codex_native_sandbox::rescope_codex_native_flags(
+            host_main.as_deref(),
+            &mut config.default_args,
+            tree,
+            role,
+        );
+    }
     if config.agent_type != "claude" || !is_contained_launch(config) {
         return Ok(());
     }
@@ -2035,7 +2057,7 @@ pub(crate) fn rescope_contained_settings(
         return Ok(());
     }
     let roots = session::contained_session_write_roots_from(tree);
-    let flags = session::claude_contained_flags_for_roots(&roots)?;
+    let flags = session::claude_contained_flags_for_roots(host_main.as_deref(), &roots)?;
     let settings = flags
         .last()
         .cloned()
@@ -2050,20 +2072,22 @@ pub(crate) fn rescope_contained_settings(
 }
 
 // trace:BUG-1178 | ai:codex
-pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
+pub(crate) fn tool_contained_flags(
+    host_main: Option<&std::path::Path>,
+    agent_type: &str,
+) -> Result<Vec<String>> {
     Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags()?);
+            flags.extend(session::claude_contained_flags(host_main)?);
             flags
         }
         // trace:STORY-1124 | ai:codex
-        "codex" => vec![
-            "--sandbox".to_string(),
-            "workspace-write".to_string(),
-            "--ask-for-approval".to_string(),
-            "never".to_string(),
-        ],
+        // TASK-2712: the posture plus the shared write set (`--add-dir`),
+        // resolved from this process's tree; `rescope_contained_settings`
+        // re-derives it once the lane's tree is known.
+        // trace:TASK-2712 | ai:claude
+        "codex" => crate::codex_native_sandbox::codex_native_sandbox_flags(host_main)?,
         _ => Vec::new(),
     })
 }
@@ -2461,7 +2485,10 @@ pub(crate) fn resolve_claude_new_posture(
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags("claude")?,
+            default_args: tool_contained_flags(
+                crate::seat_clone::launcher_main().as_deref(),
+                "claude",
+            )?,
             contained: true,
             explicit: true,
         })
@@ -2524,7 +2551,7 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
         return Ok(());
     }
     let containable = session::HeadlessVendor::parse(config.agent_type)
-        .is_some_and(|v| session::containment_applied(v, true));
+        .is_some_and(|v| session::containment_applied(v, true, None));
     if !containable {
         anyhow::bail!(
             "[contained] this session is contained (AIDA_CONTAINED), but `{}` cannot run an \
@@ -3137,10 +3164,10 @@ pub(crate) fn agent_new_with_config_wake(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     // trace:BUG-2394 | ai:claude
     rescope_codex_mcp_flags(
         &mut config,
@@ -3457,10 +3484,10 @@ pub(crate) fn agent_new_bg_dispatch(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -4723,7 +4750,16 @@ fn prepare_agent_launch_attempt_inner(
                     // trace:BUG-2169 | ai:claude
                     contained_seat,
                     true,
-                    /* adopt_orphan */ false,
+                    // A lane naming both its branch and an existing tree
+                    // (dispatch `take` on a branch checked out elsewhere)
+                    // re-enters that tree; session setup checks it is a
+                    // registered worktree on the branch that no lease holds.
+                    // trace:TASK-2823 | ai:claude
+                    if lane_branch.branch.is_some() && requested_path.is_some() {
+                        crate::session_start::PathReentry::LaneWorktree
+                    } else {
+                        crate::session_start::PathReentry::None
+                    },
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);
@@ -5911,6 +5947,7 @@ fn wrapped_agent_program_and_args(
 ) -> Result<(std::ffi::OsString, Vec<String>)> {
     if wrap_claude && config.agent_type == "claude" {
         let (prog, args) = crate::session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
             &plan.launch_cwd,
             &binary.to_string_lossy(),
             all_args,
@@ -6384,6 +6421,38 @@ fn reported_harness_version(
     None
 }
 
+/// The context of an `aida agent new` child, which runs in the lane's cwd.
+// trace:STORY-2326 | ai:claude
+fn agent_launch_context(
+    host_main: Option<&std::path::Path>,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    kind: aida_core::launch_policy::LaunchKind,
+    program: std::ffi::OsString,
+    args: Vec<String>,
+) -> Result<crate::launch::LaunchContext> {
+    let vendor = aida_core::launch_policy::LaunchVendor::parse(config.agent_type)?;
+    let posture = match agent_containment_posture(config) {
+        "aida" => session::ContainmentPosture::Aida,
+        "native" => session::ContainmentPosture::Native,
+        _ => session::ContainmentPosture::None,
+    };
+    Ok(crate::launch::LaunchContext::resolve(
+        crate::launch::LaunchRequest {
+            vendor,
+            kind,
+            program,
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: plan.launch_cwd.clone(),
+            set_cwd: true,
+            // trace:TASK-2032 | ai:claude
+            host_main: host_main.map(std::path::Path::to_path_buf),
+        },
+    )?)
+}
+
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_agent_new_bg_command(
     binary: &std::path::Path,
@@ -6393,20 +6462,19 @@ pub(crate) fn build_agent_new_bg_command(
     launch_context: Option<&AgentLaunchContext>,
 ) -> Result<std::process::Command> {
     refuse_bg_under_os_wrap(config, &plan.launch_cwd)?;
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if is_contained_launch(config) {
-        crate::session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
-    }
-    let mut command = std::process::Command::new(binary);
+    // trace:STORY-2326 TASK-2032 | ai:claude
+    let mut args = config.default_args.clone();
+    args.extend(prompt_args.iter().cloned());
+    let ctx = agent_launch_context(
+        crate::seat_clone::launcher_main().as_deref(),
+        config,
+        plan,
+        aida_core::launch_policy::LaunchKind::Background,
+        binary.as_os_str().to_owned(),
+        args,
+    )?;
+    let mut command = crate::launch::spawn_agent(&ctx)?;
     command
-        .current_dir(&plan.launch_cwd)
-        .args(&config.default_args)
-        .args(prompt_args)
-        // trace:TASK-2631 | ai:codex
-        .env(
-            "AIDA_CONTAINMENT_POSTURE",
-            agent_containment_posture(config),
-        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
@@ -6416,8 +6484,7 @@ pub(crate) fn build_agent_new_bg_command(
         // AIDA_USER = the stable name so mailbox + queue agree with the
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
-        .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(crate::gate::seat_authority::GRANT_ENV); // trace:TASK-1752 | ai:claude
+        .env("AIDA_PROJECT_ROOT", &plan.project_root);
     if config.agent_type != "codex" {
         command
             .stdin(std::process::Stdio::null())
@@ -6449,12 +6516,6 @@ pub(crate) fn build_agent_new_bg_command(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
-    // trace:BUG-2006 | ai:antigravity
-    if is_contained_launch(config) {
-        command.env("AIDA_CONTAINED", "1");
-    } else {
-        command.env_remove("AIDA_CONTAINED");
-    }
     // BUG-1918: the backgrounded worker carries its lease id too.
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
@@ -6462,12 +6523,18 @@ pub(crate) fn build_agent_new_bg_command(
     }
     if let Some(role) = &plan.role {
         crate::gate::seat_authority::bg_seat_refusal(role)?;
-        // BUG-1934: a baseline seat needs no grant, and a child grant here
-        // could never be presented (see `seat_authority::bg_seat_refusal`).
-        command.env("AIDA_SESSION_ROLE", role);
-    } else {
-        command.env_remove("AIDA_SESSION_ROLE");
     }
+    // The hand-off carries no seat, grant or purpose: the daemon-run session
+    // takes its seat from its lane lease (a baseline seat needs no grant,
+    // BUG-1934). trace:TASK-1752 STORY-2326 | ai:claude
+    crate::launch::assign_seat(
+        &mut command,
+        ctx.kind(),
+        crate::launch::SeatDecision::Lane {
+            role: None,
+            grant: None,
+        },
+    )?;
     Ok(command)
 }
 
@@ -6493,6 +6560,16 @@ pub(crate) fn refuse_bg_under_os_wrap(
     Ok(())
 }
 
+/// TASK-2712: whether this launch's lane is a private seat clone: a contained
+/// launch (BUG-2169), or a native Codex launch, which can commit only in a
+/// clone the host recorded (Codex keeps every other `.git` read-only).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn launch_wants_seat_clone(config: &AgentLaunchConfig) -> bool {
+    is_contained_launch(config)
+        || (config.agent_type == "codex"
+            && crate::codex_native_sandbox::carries_native_posture(&config.default_args))
+}
+
 // trace:BUG-2006 | ai:antigravity
 // trace:BUG-2124 | ai:antigravity
 pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
@@ -6500,7 +6577,7 @@ pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
         Some(v) => v,
         None => return false,
     };
-    session::containment_applied(vendor, config.contained)
+    session::containment_applied(vendor, config.contained, None)
 }
 
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
@@ -6824,17 +6901,51 @@ fn run_tracked_agent_after_spawn(
         )?
         .status
     };
+    // TASK-2712 (advisor ruling F1): the launcher's own post-exit step
+    // commits what a native Codex implementer left pending in its seat
+    // clone, whatever the child's exit status (its work is kept either way);
+    // only a clean exit gets a completing trailer, the rest is `(Refs SPEC)`.
+    // trace:TASK-2712 | ai:claude
+    if let Some(spec) = native_post_exit_spec(config, plan) {
+        crate::ship_from_seat::post_exit_commit_reported(
+            &plan.project_root,
+            &plan.launch_cwd,
+            spec,
+            &plan.name,
+            status.success(),
+        );
+    }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
 }
 
+/// TASK-2712: the spec whose seat a foreground launch's post-exit step
+/// commits for: a native Codex implementer with a spec. `None` otherwise.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn native_post_exit_spec<'a>(
+    config: &AgentLaunchConfig,
+    plan: &'a AgentLaunchPlan,
+) -> Option<&'a str> {
+    let native = config.agent_type == "codex"
+        && crate::codex_native_sandbox::carries_native_posture(&config.default_args);
+    let implementer = plan
+        .role
+        .as_deref()
+        .is_some_and(|role| aida_core::team::canonical_role(role) == "implementer");
+    if native && implementer {
+        plan.current_spec.as_deref()
+    } else {
+        None
+    }
+}
+
 /// The rotation generation a supervised child runs as, and the fresh
 /// handoff it loads at SessionStart (generation 2 on).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 #[derive(Debug, Clone, Copy)]
-struct RotationEnv<'a> {
+pub(crate) struct RotationEnv<'a> {
     generation: u64,
     seat: &'a str,
     /// The handoff file the supervisor matched, and its log stamp.
@@ -7040,15 +7151,15 @@ fn run_rotating_agent(
 /// One generation's exit: its status, and the native session id its row
 /// recorded by then (a Codex thread the SessionStart hook bound).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
-struct GenerationExit {
-    status: std::process::ExitStatus,
+pub(crate) struct GenerationExit {
+    pub(crate) status: std::process::ExitStatus,
     native_session_id: Option<String>,
 }
 
 /// Spawn one child, wait for it, and clean up its registry row.
 // trace:BUG-2188 | ai:codex
 #[allow(clippy::too_many_arguments)]
-fn run_agent_generation(
+pub(crate) fn run_agent_generation(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
@@ -7070,30 +7181,27 @@ fn run_agent_generation(
     // returns the bare program + args, so a normal `aida agent new` is
     // byte-identical to today's behavior. Non-claude agents keep the bare path.
     // trace:TASK-864 | ai:claude
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if is_contained_launch(config) {
-        session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
-    }
     let (program, exec_args) =
         resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;
-    let mut command = std::process::Command::new(&program);
+    // trace:STORY-2326 TASK-2032 | ai:claude
+    let ctx = agent_launch_context(
+        crate::seat_clone::launcher_main().as_deref(),
+        config,
+        plan,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        program.clone(),
+        exec_args,
+    )?;
+    let mut command = crate::launch::spawn_agent(&ctx)?;
     command
-        .current_dir(&plan.launch_cwd)
-        .args(&exec_args)
-        // trace:TASK-2631 | ai:codex
-        .env(
-            "AIDA_CONTAINMENT_POSTURE",
-            agent_containment_posture(config),
-        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: export AIDA_USER = the stable name so the spawned agent's
         // mailbox/queue identity is its own, not the launching human's shell
         // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
-        .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(crate::gate::seat_authority::GRANT_ENV); // trace:TASK-1752 | ai:claude
-                                                             // trace:STORY-1843 | ai:claude
+        .env("AIDA_PROJECT_ROOT", &plan.project_root);
+    // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     // The child's SessionStart hook may write its row before this launcher
     // stamps it: it reads the launch's decision from here, and a value
@@ -7152,12 +7260,6 @@ fn run_agent_generation(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
-    // trace:BUG-2006 | ai:antigravity
-    if is_contained_launch(config) {
-        command.env("AIDA_CONTAINED", "1");
-    } else {
-        command.env_remove("AIDA_CONTAINED");
-    }
     // BUG-1918: the worker carries its lease id, so it stays its lease's
     // author after it leaves the worktree or the lease is released.
     // trace:BUG-1918 | ai:claude
@@ -7165,6 +7267,7 @@ fn run_agent_generation(
         crate::gate::review_authority::bind_worker_env(&mut command, lease_id);
     }
 
+    // trace:TASK-1752 STORY-2326 | ai:claude
     if let Some(role) = &plan.role {
         // A contained role launch is sandboxed the same way a contained
         // reviewer is. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
@@ -7174,11 +7277,23 @@ fn run_agent_generation(
             &plan.name,
             is_contained_launch(config),
         )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(crate::gate::seat_authority::GRANT_ENV, grant.id);
+        crate::launch::assign_seat(
+            &mut command,
+            ctx.kind(),
+            crate::launch::SeatDecision::Lane {
+                role: Some(role),
+                grant: Some(&grant.id),
+            },
+        )?;
     } else {
-        command.env_remove("AIDA_SESSION_ROLE");
+        crate::launch::assign_seat(
+            &mut command,
+            ctx.kind(),
+            crate::launch::SeatDecision::Lane {
+                role: None,
+                grant: None,
+            },
+        )?;
     }
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     if config.agent_type == "codex" {

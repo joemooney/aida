@@ -134,6 +134,10 @@ spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
 - `start --launch` (+ `--title` / `--name` / `--role` / `--permission-mode` / `--sandbox`) — create the worktree *and* exec Claude inside it. The role is **derived from the scope** by default (`PR-N`/`MR-N` → reviewer, everything else → implementer); `--role` overrides, but when it disagrees with the scope the scope wins with a warning — because the scope is the more reliable signal of what the work *is*.
 - `start --force-claim` — claim a spec in an *ambiguous* state (In-Progress with no local lease, or NeedsAttention awaiting triage). It deliberately does **not** override Done/Completed/Rejected/Draft — those always refuse. The escape hatch for "yes, I'm taking over this stuck claim."
 - `end --force` — discard uncommitted changes and skip the confirmation. The refusal-without-it is the guard against silently nuking dirty work. It does not override the live-process check, so a script that passes `--force` for a dirty tree or a missing terminal still keeps a worktree in use.
+- `end --discard-unpushed` — explicitly permit discarding commits reachable from the seat’s HEAD or recorded lease branch that no remote has (private clones check every local branch). Without it, even `--force` refuses before teardown and keeps the lease and seat. The check uses commit reachability, including branches with no upstream and detached HEAD, and runs again before removal or pool reset. Clone checks run inside the existing read-only sandbox; host-only copies and base pins do not count as remote coverage. Use `--force` as well when discarding uncommitted files. <!-- trace:BUG-2450 | ai:codex -->
+
+A reviewer launch automatically ends an exited holder's lease when its seat is clean and its HEAD and recorded lease-branch commits are on remotes (private clones check all their local branches). Already-pushed staged index changes use the same exception as session end. A dirty or unpushed seat stays intact and sends the advisor a notice naming the lease and reason. The review watcher retries a setup failure once when no reviewer was started and the queue child is confirmed gone. A second setup refusal stays terminal with its diagnostic and can be retried using `aida review watch --release PR-N`; a started or ambiguously spawned reviewer still prevents another attempt on that head. <!-- trace:BUG-2450 | ai:codex -->
+
 - `end --include-in-use` — the one override for the live-process check: remove (or return) the worktree even while processes use it, and terminate live `claude` processes inside it. Without it, `session end` refuses, which guards against killing a running build or agent and against an orphaned claude with a deleted working directory.
 - `end --wait-ci` vs `--watch-ci` — both block until the PR's CI is terminal before releasing the lease; `--wait-ci` is the *silent* poll (overnight builds), `--watch-ci` is the *live* stream (interactive). Same decision tree once CI resolves; pick by how much screen noise you want.
 - `new --permission-mode` — the faithful-launcher knob: omit it and Claude uses its native posture (prompts); pass `bypassPermissions`/`acceptEdits`/`auto`/etc. to opt in. Fleet-wide bypass is `[agents] bypass = true` in `agents.toml`, not a baked-in default.
@@ -168,6 +172,8 @@ does not authorize coexistence.
 **Mental model.** `aida agent new <tool>` spawns a *one-shot* agent with project-correct cwd/env, a role, registry tracking, and a startup **context snapshot** — the supervised way to put an agent on work instead of opening a terminal and pasting a prompt. The critical framing in its own help: this lane *does its work, ships a PR, and exits* — it is **not** the orchestrated pipeline. It does not run CI, the reviewer phase, or the merge. For a supervised end-to-end drain (implementer → CI → reviewer → merge → pull), that's `aida queue work <SPEC> --auto-complete` ([Chapter 3](03-work-autonomy.md)), not this.
 
 **Reach for it when** — you want to *dispatch* a bounded agent run: `aida agent new claude --role implementer --spec <spec-id>` spins the worktree+lease and launches Claude already pointed at the work. `aida agent list` (aliases `ls` and `status`) to see what's running; `pause` / `resume` to mark an agent budget-exhausted/rate-limited so brief-time dispatch and `aida status` flag it (without stopping the process).
+
+**Bare `aida` is a shortcut.** Typing `aida` with no arguments at an interactive terminal inside an initialized AIDA project (one with `.aida/config.toml`, a legacy `requirements.db`, or a `.aida-store` worktree) opens the same agent picker as `aida agent new`. When output goes to an agent or a pipe, bare `aida` prints the `aida status` snapshot instead; outside a project, or when stdin is not a terminal, it shows the getting-started menu. `aida status`, `aida help`, and `aida agent new` themselves are unchanged. <!-- trace:TASK-1472 | ai:claude -->
 
 **Don't reach for it when** — you want the full lifecycle driven for you (CI, review, merge) — that's `aida queue work --auto-complete`, not `agent new`. And `pause` does **not** stop a process — it's a *status marker* for dispatch logic; use `aida agent stop` to actually terminate one.
 
@@ -503,12 +509,13 @@ Start it in your terminal, through the `aida()` shell function, holding an advis
 
 Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
 
-- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes only `incoming/`.
-- **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
+- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../deputies.md#letting-a-sandboxed-advisor-submit).
+- **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
+<!-- trace:STORY-2343 | ai:claude -->
 
 ### `aida driver`
 
@@ -799,3 +806,59 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+### Pipeline stall alarms
+
+<!-- trace:STORY-2476 | ai:codex -->
+`aida supervise stalls --json` previews two independent alarms without writing
+runtime state, queue data, eligibility caches, mail or notification receipts.
+Run `aida supervise stalls --execute --json` every few minutes from a host job,
+or use the same detector integrated into `aida supervise watch --execute`.
+A watch preview also previews these alarms; watch JSON keeps its objective
+report on stdout and emits the alarm report on stderr.
+
+Each alarm requires `--threshold-mins N` minutes of continuous observations
+(default 30, minimum 15), on both `stalls` and `watch`:
+
+- `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
+  has red CI/current-head request-changes or the project has queued work.
+  Any implementer/reviewer lane, running train or ready PR suppresses this kind.
+  Role-less, integrator, advisor and product seats do not count as worker lanes.
+- `ready-without-train`: a PR is ship-ready and no train is running. Worker
+  activity does not suppress this kind.
+
+Readiness uses current-head local review, required CI, mergeability, holds and
+reviewer activity, without the eligible-idle display's age filter. The detector
+uses the latest timestamped attempt of each check and reports `merge-hold-gate`
+through the hold blocker, excluding it from CI failures and failed-job log reads.
+StatusContext failures without job logs are labeled as unavailable test evidence.
+Process identity comes from leases, the registry and train ownership, including PID
+namespace checks. Unsupported forges, failed/partial forge reads and invisible
+processes remain unknown. Unknown predicates, cleared predicates, backwards
+clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
+frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
+A preview never advances an observation timer.
+
+Execute ticks serialize through the permanent main-worktree
+`.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
+versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
+reported as unknown by watch; its objective/redrive reporting continues.
+The digest names draft/hold/review/CI/conflict blockers and only applicable
+unblocking commands; ship-ready PRs get a ship command. At delivery time, up to
+four failed job logs are read with five-second timeouts and 1 MiB caps for failing tests
+and panic lines. Missing logs or exhausted budgets are labeled unavailable.
+One bounded actionable digest covers due kinds through the existing supervisor
+nudge path: urgent mailbox
+`kind=request` to the live advisor, or the configured operator notification
+fallback. A delivery reservation is persisted before sending. Known delivery
+failure retains the episode for retry; a crash or failed post-send write leaves
+an unresolved reservation, reported as unknown and suppressed until the
+predicate resets or the operator inspects the inbox and resets the state. An
+accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+sent/queued after quiet hours; it does not prove read or action. This slice
+does not implement repeated unresolved escalation.
+
+This detector never starts work, ends a session, releases a lease or merges.
+Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
+acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
+rework exits are follow-up work; reading or accepting a wake is not action.

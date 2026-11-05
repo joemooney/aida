@@ -147,7 +147,8 @@ fn locally_disqualified(root: &Path, pr: u64, head: &str, title: &str, branch: &
     crate::gate::merge_hold_core::read_hold_record(root, pr).is_some()
         || reviewing(root, pr, head, branch, title)
 }
-fn local_kind(
+// trace:STORY-2476 | ai:codex — shared current-head eligibility, without idle-age filtering.
+pub(crate) fn local_kind(
     root: &Path,
     pr: u64,
     head: &str,

@@ -16,6 +16,12 @@ pub enum VerifyCommand {
         /// Return a nonzero exit only when a row reports drift.
         #[clap(long)]
         fail_on_drift: bool,
+        /// With --fail-on-drift, also fail when a row is unknown (host data
+        /// unavailable) or invalid (bad block), so a CI gate cannot pass on a
+        /// host that could not check anything.
+        // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
+        #[clap(long, requires = "fail_on_drift")]
+        fail_on_unknown: bool,
         /// Also list rejected, superseded and archived constraints, which are
         /// never probed. JSON output always includes them.
         // trace:STORY-1673 | ai:claude

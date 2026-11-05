@@ -369,6 +369,19 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 
 ## Architecture
 
+**Store-independent observations.** `aida intent note`, `validate`, and `export`
+produce or inspect an explicit six-field JSON envelope without requirements,
+identity discovery, telemetry, store setup or network calls. A dedicated entry
+path precedes shared CLI startup; late alias dispatch refuses and directs the
+caller to the direct spelling. SHA-256 covers ordered compact JSON of the five
+payload fields; the full digest is the identity, with a 12-hex display label.
+Reads and serialized size are bounded, imported prose is data, and optional
+explicit regex rules refuse sensitive content without certifying sanitization.
+Manual-email export is a self-contained JSON attachment. Store-only transport
+retains its separate authority; enrolled intake transport and processing are
+future slices. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+<!-- trace:STORY-2479 | ai:codex -->
+
 ### The four layers
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
@@ -1260,8 +1273,9 @@ and keeps its existing settings, sandbox and parent protections. Non-Claude
 vendors without a key still refuse. Branch-local opt-ins are ignored; this
 repository’s opt-in becomes trusted when merged into `origin/main`. Only Codex supports `"native"`: it receives
 `--sandbox workspace-write --ask-for-approval never`, including headless children,
-and is reported as **native sandbox, not AIDA-contained**. `"aida"` for Codex and
-`"native"` for Claude, agy or unknown tools refuse. Native policy overrides
+and is reported as **native sandbox, not AIDA-contained**. Trusted `"aida"` for
+Codex selects the foreground headless boundary described below. `"native"` for
+Claude, agy or unknown tools refuses. Native policy overrides
 conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
@@ -1312,6 +1326,54 @@ The closed `config permissions probe --vendor <name>` tracer is implemented in
 policy snapshot, descriptor-pinned synthetic filesystem mounts and an owned
 bounded supervisor. Its successful report credits only the fixed diagnostic;
 it cannot launch arbitrary programs or issue an applied-containment receipt.
-The production vendor selectors remain unchanged until the full boundary is
-ready. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
+This diagnostic remains separate from ordinary launch receipts. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
 <!-- trace:TASK-2705 | ai:codex -->
+
+### Foreground headless Codex boundary
+
+Trusted `[contained.vendors] codex = "aida"` routes fresh headless implementer
+and reviewer phases through `launch/contained.rs`. `/usr/bin/python3 -I -S`
+and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
+session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
+connect broker. Rust clears the helper environment and supplies an exact list;
+bubblewrap inherits it unchanged. Only `OPENAI_API_KEY` carries authentication.
+An existing Codex `auth.json` refuses by name until the ChatGPT-auth design lands.
+The launcher writes no credential files and forwards neither registry nor handle
+launch tokens. Tool shells cannot bind their own registry/handle records.
+
+Each launch has private Codex state. HOME retains the issuer's canonical AIDA
+home, read-only, so core-filtered tools resolve the same grant records without
+expanding the signed metadata whitelist. Explicit public Cargo/Rustup home and
+target paths retain toolchain selection, with compiler wrapping disabled. No
+shared compiler cache is writable. A generated directory-based native permission profile with networking enabled under the outer network namespace.
+Only the launch-owned loopback relay and pinned private Unix endpoints accept
+connects; all other internet connects refuse. The broker replaces the socket
+with an already connected descriptor, so options set before connect are lost.
+CONNECT authorizes hosts and ports, not tunneled content or downstream relays.
+The same-uid host replay residual from ADR-66 remains.
+
+The shim runs the requested-seat probe inside both layers before the host emits
+a receipt with the kernel-attested shim PID, start identity, namespaces, identity
+UID map, and pinned policy commit. Rust validates that receipt while exec is
+blocked, finishes host PID binding, then releases the vendor. Configured posture
+and receipt-shaped JSON confer no applied credit. The temporary `ClaudeNative`
+arm preserves existing Claude behavior until its separate migration. Interactive,
+background, resume/fork, Claude migration and OpenCode integration remain later
+slices. The authenticated operator run is still required for acceptance.
+
+Under `codex = "aida"` every other Codex surface fails closed. This covers
+interactive `aida agent new`, `--bg`, resume, coordinator, phase-driver
+advisor/CI-fix, compete, dispatch and `aida do`. They all finalize through
+`codex_tool_env::prepare_launch`, which re-reads the trusted policy for the
+child's project. It refuses by name ("Codex AIDA posture requires the
+receipt-owning headless launch boundary") whatever posture the surface stamped.
+A test-time inventory pins every Codex spawn path.
+<!-- trace:TASK-2708 | ai:claude -->
+
+Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`
+(or the configured AIDA home). A Codex lane gets only its own notice directory;
+canonical session grants and revocation locks remain host-only. Host notice calls
+remove legacy notice files once, without migrating them. A marker in the
+grant-notices base then skips the session-grants scan on every later per-tool-call
+hook. One duplicate notice after upgrade is accepted.
+<!-- trace:TASK-2707 | ai:codex -->

@@ -272,6 +272,8 @@ fn collect(
     );
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
+    // trace:BUG-2438 | ai:claude
+    let mut superseded = Vec::new();
     let mut all_specs = Vec::new();
     for car in &train.cars {
         if let Some(cover) = &car.member.release {
@@ -297,7 +299,13 @@ fn collect(
         let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
             "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
             "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
-        let ids = member_spec_ids(&source.head_ref, &source.title, &fresh.subject, &fresh.body);
+        let ids = resolved_member_spec_ids(
+            &live.project_root,
+            &source.head_ref,
+            &source.title,
+            &fresh.subject,
+            &fresh.body,
+        )?;
         let covered = crate::gate::trailer_coverage::covered_gate_ids(
             &live.project_root,
             &source.head_ref,
@@ -323,11 +331,51 @@ fn collect(
             Some(&live.base),
             || Some(fresh.head.clone()),
         )?;
-        let mut originals = Vec::new();
+        let mut verdicts = Vec::new();
         for (key, record) in &bodies {
             let body = serde_json::to_string(record)?;
             let verdict = rv::parse_recorded_verdict(&body).context("unparseable source review")?;
+            verdicts.push((key, record, verdict));
+        }
+        // Head-scoped effective verdict, the same reading the corpus gate
+        // above applies: once any of the PR's keys holds a verdict reviewed
+        // at the current head, a verdict reviewed at an older head is
+        // superseded (it is a past round, not the standing decision). With
+        // no current-head verdict every body still counts, so an off-head
+        // approval stands only as the patch-identity carry-over the corpus
+        // gate proved, and a refusal at the current head always refuses.
+        // trace:BUG-2438 | ai:claude
+        let reviewed_at_head = |v: &rv::RecordedVerdict| {
+            v.reviewed_sha
+                .as_deref()
+                .is_some_and(|sha| rv::same_reviewed_sha(sha, &fresh.head))
+        };
+        let at_head = verdicts
+            .iter()
+            .any(|(_, _, v)| !v.is_closed() && reviewed_at_head(v));
+        let mut originals = Vec::new();
+        let mut superseded_here = Vec::new();
+        for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
+                continue;
+            }
+            // Only a well-formed SHA (>= 7 hex) naming a different commit is
+            // an older head; a malformed or too-short one keeps counting, so
+            // the refusal it carries fails closed.
+            let is_superseded = at_head
+                && verdict.reviewed_sha.as_deref().is_some_and(|sha| {
+                    let sha = sha.trim();
+                    sha.len() >= 7
+                        && sha.bytes().all(|c| c.is_ascii_hexdigit())
+                        && !rv::same_reviewed_sha(sha, &fresh.head)
+                });
+            if is_superseded {
+                // Covered by this car's current-head verdict, so the train's
+                // own exact-tip corpus gate must not re-weigh it either.
+                superseded_here.push(json!({"key": key, "record": record}));
+                if !superseded.contains(&(key.clone(), record.clone())) {
+                    superseded.push((key.clone(), record.clone()));
+                }
                 continue;
             }
             anyhow::ensure!(
@@ -358,7 +406,7 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "metadata":metadata, "policy_specs":policy_specs}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "superseded": superseded_here, "metadata":metadata, "policy_specs":policy_specs}));
         all_specs.extend(ids);
     }
     all_specs.sort();
@@ -386,6 +434,14 @@ fn collect(
             train_key,
             Value::Object(event.verdict_record().unwrap().clone()),
         ));
+    }
+    // Superseded bodies join the mapped set only after the train-key binding
+    // above, so an older-head refusal can never be the M1 copy it binds.
+    // trace:BUG-2438 | ai:claude
+    for entry in superseded {
+        if !mapped.contains(&entry) {
+            mapped.push(entry);
+        }
     }
     anyhow::ensure!(
         live.fetch_main()? == train.base,
@@ -459,10 +515,48 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     Ok(proof)
 }
 
-fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
+/// Branch names are hints: queue-work may append a rework suffix which the
+/// broad ID parser includes. Only discard an unresolved branch-only hint when
+/// explicit metadata supplies a resolvable spec. Ambiguous lookups still refuse,
+/// and explicit unknown IDs remain inputs to the strict alias check below.
+// trace:BUG-2441 | ai:codex
+fn resolved_member_spec_ids(
+    root: &Path,
+    head_ref: &str,
+    title: &str,
+    subject: &str,
+    body: &str,
+) -> Result<Vec<String>> {
+    let ids = member_spec_ids(head_ref, title, subject, body);
+    let explicit = member_spec_ids("", title, subject, body);
+    let store =
+        crate::load_store_for_lookup(root).context("cannot resolve train source spec hints")?;
+    let mut explicit_resolves = false;
+    for id in &explicit {
+        explicit_resolves |= store
+            .get_requirement_unambiguous(id)
+            .map_err(anyhow::Error::msg)?
+            .is_some();
     }
+    let mut out = Vec::new();
+    for id in ids {
+        if explicit_resolves
+            && !explicit.contains(&id)
+            && store
+                .get_requirement_unambiguous(&id)
+                .map_err(anyhow::Error::msg)?
+                .is_none()
+        {
+            continue;
+        }
+        out.push(id);
+    }
+    Ok(out)
+}
+
+fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
+    // trace:BUG-2441 | ai:codex
+    anyhow::ensure!(!ids.is_empty(), "train source has no resolvable spec");
     let store =
         crate::load_store_for_lookup(root).context("cannot resolve train source spec aliases")?;
     let mut out = ids.to_vec();

@@ -148,6 +148,44 @@ fn fixture_crate_reports_one_of_two_and_names_the_untraced_fn() {
     assert!(human.contains("fixture/src/lib.rs:7  untraced"), "{human}");
 }
 
+/// Every file under the store's objects directory, with its contents.
+fn store_snapshot(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
+    fn walk(dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else {
+                out.push((path.clone(), std::fs::read(&path).unwrap()));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&f.repo.join(".aida-store/objects"), &mut out);
+    out.sort();
+    out
+}
+
+// Report-only: a whole-tree run, human or JSON, leaves the store untouched.
+// trace:TASK-1954 | ai:claude — TASK-1916 (1)
+#[test]
+fn tree_coverage_leaves_the_store_unchanged() {
+    let f = fixture();
+    let before = store_snapshot(&f);
+    assert!(!before.is_empty(), "fixture store has objects");
+    ok(&f, "implementer", &["trace", "coverage", "--all", "--json"]);
+    ok(
+        &f,
+        "implementer",
+        &["trace", "coverage", "--path", "fixture"],
+    );
+    assert_eq!(
+        store_snapshot(&f),
+        before,
+        "trace coverage must not edit the store"
+    );
+}
+
 // trace:TASK-1783.ac20f5be | ai:claude
 #[test]
 fn nonzero_exit_only_with_fail_on() {

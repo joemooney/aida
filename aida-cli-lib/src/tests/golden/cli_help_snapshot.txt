@@ -217,11 +217,11 @@ Commands:
                 focus`; `aida worktree enter <epic>` creates-if-missing then cd's you in (run it
                 BARE — the `aida()` shell wrapper auto-evals the emitted `cd`, NOT wrapped in
                 `eval`); `aida worktree list` shows AIDA-managed worktrees + each one's focus
-  intent        Show the AI-generated plain-terms comprehension of WHY a spec exists — its intent,
-                distilled from the spec + its graph neighborhood. Distinct from `aida why` (a
-                deterministic state classifier): this is a cached, drift-stamped LLM synthesis.
-                Generated on first call (or `--refresh`), printed from cache thereafter; a STALE
-                marker shows when the neighborhood drifted since generation
+  intent        Capture a portable observation, or show the AI-generated comprehension of WHY a spec
+                exists — its intent, distilled from the spec + its graph neighborhood. Distinct from
+                `aida why` (a deterministic state classifier): this is a cached, drift-stamped LLM
+                synthesis. Generated on first call (or `--refresh`), printed from cache thereafter;
+                a STALE marker shows when the neighborhood drifted since generation
   driver        Register, refresh, deregister and list drivers — long-running relays, drains and
                 agents that work in-progress specs. `aida ps` and `aida list` show the driver beside
                 each in-progress spec's status. Operator/developer surface
@@ -2122,6 +2122,10 @@ Run by: anyone, when: you want to see what's pending (read-only).
 
 List the decision inbox — every spec with a recorded DecisionRequest, pending ones first. The pure
 read; never prompts (scripting/scanning).
+
+Always shows the full inbox, home or away. Presence only shapes the proactive nudge in `aida
+status`: while away, pending decisions accumulate quietly unless `[presence] questions =
+"always-surface"` (default `"quiet-when-away"`) in `.aida/config.toml`.
 
 Usage: aida questions list [OPTIONS]
 
@@ -9888,6 +9892,8 @@ Usage: aida supervise [OPTIONS] <COMMAND>
 Commands:
   nudge    Nudge a live advisor about transiently parked work, or fall back to operator notification
            when no advisor is live
+  stalls   Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes;
+           default is a side-effect-free preview
   redrive  Re-drive transiently-parked specs (typed tooling causes) on a capped, backed-off loop;
            leave genuine needs-human parks for escalation. Lets an unattended drain self-recover.
            Reads parks from the store and its attempt history from the event log, so it recovers a
@@ -9923,6 +9929,40 @@ advisor is live
 Usage: aida supervise nudge [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida supervise stalls
+Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes; default is
+a side-effect-free preview
+
+Usage: aida supervise stalls [OPTIONS]
+
+Options:
+      --threshold-mins <THRESHOLD_MINS>
+          Continuous observation window in minutes (minimum 15)
+          
+          [default: 30]
+
+      --execute
+          Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications
+
+      --json
+          Print the alarm report as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -10001,7 +10041,12 @@ Options:
           report of what it WOULD do
 
       --interval <INTERVAL>
-          Repeat the pass every N seconds (default: a single pass then exit)
+          Repeat every N seconds (maximum 900 with --execute; default: one pass)
+
+      --threshold-mins <THRESHOLD_MINS>
+          Pipeline alarm observation window in minutes (minimum 15)
+          
+          [default: 30]
 
       --json
           
@@ -11304,12 +11349,20 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida intent
-Show the AI-generated plain-terms comprehension of WHY a spec exists — its intent, distilled from
-the spec + its graph neighborhood. Distinct from `aida why` (a deterministic state classifier): this
-is a cached, drift-stamped LLM synthesis. Generated on first call (or `--refresh`), printed from
-cache thereafter; a STALE marker shows when the neighborhood drifted since generation
+Capture a portable observation, or show the AI-generated comprehension of WHY a spec exists — its
+intent, distilled from the spec + its graph neighborhood. Distinct from `aida why` (a deterministic
+state classifier): this is a cached, drift-stamped LLM synthesis. Generated on first call (or
+`--refresh`), printed from cache thereafter; a STALE marker shows when the neighborhood drifted
+since generation
 
 Usage: aida intent [OPTIONS] <ID>
+       aida intent <note|validate|export> ...
+
+Commands:
+  note      Generate an observation envelope on stdout, without a spec or store
+  validate  Validate an envelope without creating a requirement. Does not certify sanitization
+  export    Validate and emit a self-contained JSON attachment on stdout for manual email
+  help      Print this message or the help of the given subcommand(s)
 
 Arguments:
   <ID>
@@ -11328,6 +11381,99 @@ Options:
 
       --json
           Machine-readable JSON (`{spec, audience, comprehension, generated_at, model, stale}`)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent note
+Generate an observation envelope on stdout, without a spec or store
+
+Usage: aida intent note [OPTIONS] --category <CATEGORY> --title <TITLE> --file <FILE>
+
+Options:
+      --category <CATEGORY>
+          [possible values: observation, question, request]
+
+      --title <TITLE>
+          Explicit observation title, 1 to 512 UTF-8 bytes
+
+      --file <FILE>
+          Explicit UTF-8 body file, at most 64 KiB
+
+      --deny-pattern <DENY_PATTERN>
+          Refuse matching title/body text (regex, repeatable; no automatic policy discovery)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent validate
+Validate an envelope without creating a requirement. Does not certify sanitization
+
+Usage: aida intent validate [OPTIONS] --file <FILE>
+
+Options:
+      --file <FILE>
+          JSON envelope file, at most 128 KiB
+
+      --deny-pattern <DENY_PATTERN>
+          Refuse matching title/body text (regex, repeatable)
+
+      --json
+          Report validity, label, full digest and sanitization limitation as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent export
+Validate and emit a self-contained JSON attachment on stdout for manual email
+
+Usage: aida intent export [OPTIONS] --file <FILE>
+
+Options:
+      --file <FILE>
+          JSON envelope file, at most 128 KiB
+
+      --deny-pattern <DENY_PATTERN>
+          Refuse matching title/body text (regex, repeatable)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -14149,6 +14295,10 @@ Options:
           never require `--force` and are always discarded. `--force` does NOT override the
           live-process check; that is `--include-in-use`
 
+      --discard-unpushed
+          Explicitly discard commits on HEAD or any local branch that no remote has. --force alone
+          never permits losing these commits
+
       --include-in-use
           Remove the worktree, or reset it back into the warm pool, even while live processes use
           it. Without this, `session end` refuses and names each pid and command: a live `claude`
@@ -14164,13 +14314,6 @@ Options:
           sessions whose cwd no longer exists. Without this flag, the dir is left in place and a
           hint is printed pointing at `aida session prune --orphans`
 
-      --wait-ci
-          Block until the PR's CI run reaches a terminal state (green or red) before releasing the
-          lease — the SILENT variant: polls every 30s and prints only the poll ticks + final result.
-          Use it to tail a long/overnight build without prompt noise. For live per-check progress
-          instead, use `--watch-ci`. No-op when the session has no associated PR or `gh` isn't on
-          PATH
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -14181,15 +14324,22 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --wait-ci
+          Block until the PR's CI run reaches a terminal state (green or red) before releasing the
+          lease — the SILENT variant: polls every 30s and prints only the poll ticks + final result.
+          Use it to tail a long/overnight build without prompt noise. For live per-check progress
+          instead, use `--watch-ci`. No-op when the session has no associated PR or `gh` isn't on
+          PATH
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --watch-ci
           Block until CI reaches a terminal state — the LIVE variant: streams `gh run watch` so each
           check resolves on screen as it happens. Use it when you want interactive feedback; use the
           quieter `--wait-ci` to tail a build without the live display. Same end-session decision
           tree as `--wait-ci` once CI is terminal (green proceeds, red prompts)
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --skip-ci
           Skip CI awareness entirely (release the lease without probing the PR's CI run). Use when
@@ -15255,6 +15405,11 @@ Options:
           check its commit trailers, push it and open the PR. The seat's hooks never run. Never
           merges. With --dry-run, nothing is imported or pushed
 
+      --commit-pending <MSG>
+          With --from-seat: first commit the seat's uncommitted changes with this message, inside
+          AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex
+          seat, which cannot commit in its own sandbox. The message must carry the spec trailer
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15286,16 +15441,22 @@ Commands:
                      configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via
                      `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
                      and authenticated
+  review             Start the independent review pipeline for an open PR/MR. Runs exactly `aida
+                     queue work <PR-N|MR-N> --auto-complete`: a separate reviewer session reviews
+                     the change, rework goes back to the implementer, and the pipeline continues
+                     through merge only where merge is already authorized. Ownership, leases, merge
+                     holds and supervised/draft restrictions apply as they do for `queue work`; this
+                     command grants no extra authority
   list               List every open PR/MR with its spec ID (when one can be found), CI state and
                      rebase status [aliases: mr]
   rebase             Rebase a PR onto its base in a temporary worktree, then force-push-with-lease
                      the rebased branch. Collapses the standard 6-command "rebase a PR before
                      review" recipe into one call
   ship               Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware
-                     cleanup. The direct-publish counterpart to `aida queue work PR-N
-                     --auto-complete` (which drives the full reviewer pipeline) — use this for
-                     human-pre-approved work where no orchestrator review phase is needed (docs PRs,
-                     master-signed architecture work, recovery merges)
+                     cleanup. The direct-publish counterpart to `aida pr review N` / `aida queue
+                     work PR-N --auto-complete` (which drive the full reviewer pipeline) — use this
+                     for already-approved work where no orchestrator review phase is needed (docs
+                     PRs, master-signed architecture work, recovery merges)
   train              Land a batch of approved PRs together through a merge train, so two PRs that
                      are each green cannot break main together
   ship-batch         Ship several PRs that need a human merge, one at a time, in order
@@ -15381,6 +15542,42 @@ Options:
           Branch to look up the PR for. Defaults to the current branch via `git branch
           --show-current`
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida pr review
+Start the independent review pipeline for an open PR/MR. Runs exactly `aida queue work <PR-N|MR-N>
+--auto-complete`: a separate reviewer session reviews the change, rework goes back to the
+implementer, and the pipeline continues through merge only where merge is already authorized.
+Ownership, leases, merge holds and supervised/draft restrictions apply as they do for `queue work`;
+this command grants no extra authority.
+
+A bare number resolves through the project's configured forge: `PR-N` on GitHub, `MR-N` on GitLab.
+Pass `PR-N` or `MR-N` to name the forge explicitly.
+
+Compare: `aida ship --no-merge` finishes implementation and opens the PR/MR; `aida pr review` gets
+it independently reviewed; `aida pr ship` lands work that is already approved.
+
+Usage: aida pr review [OPTIONS] <N|PR-N|MR-N>
+
+Arguments:
+  <N|PR-N|MR-N>
+          The change to review: `N`, `PR-N` or `MR-N`
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15485,9 +15682,9 @@ Options:
           Print help (see a summary with '-h')
 ===== aida pr ship
 Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The
-direct-publish counterpart to `aida queue work PR-N --auto-complete` (which drives the full reviewer
-pipeline) — use this for human-pre-approved work where no orchestrator review phase is needed (docs
-PRs, master-signed architecture work, recovery merges).
+direct-publish counterpart to `aida pr review N` / `aida queue work PR-N --auto-complete` (which
+drive the full reviewer pipeline) — use this for already-approved work where no orchestrator review
+phase is needed (docs PRs, master-signed architecture work, recovery merges).
 
 With no `<N>`, the command targets the current branch's open PR — creating one via `gh pr create`
 (deriving title/body from the latest commit) if none exists. `aida pull` runs from the main worktree
@@ -18027,7 +18224,8 @@ win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always apply
 `[presence]` in `.aida/config.toml`: consumers  = "on" | "off"            (master switch; default
 on) away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain) home_offer =
-"surface" | "dont-block" (home-side; default surface)
+"surface" | "dont-block" (home-side; default surface) questions  = "quiet-when-away" |
+"always-surface" (decision-inbox nudge in `aida status` while away; default quiet-when-away)
 
 Hidden alias for `aida presence away` (kept for muscle memory).
 
@@ -25514,10 +25712,13 @@ Commands:
   completed  Specs that entered Completed in the window, one row each: when, then its `aida list`
              row with its CURRENT status (a spec reopened since shows its status now)
   rejected   Specs that entered Rejected in the window, one row each, with their CURRENT status
-  approved   Specs that entered Approved in the window, one row each, with their CURRENT status
+  approved   Specs that entered Approved in the window, one row each, with their CURRENT status. Any
+             move into Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed
+             spec reopened
   closed     Specs that entered a terminal status in the window: Completed, Rejected or Superseded.
-             Archiving is housekeeping, not an outcome, so it does not count. One row each, with
-             their CURRENT status
+             Archiving is housekeeping, not an outcome, so it does not count. Done (finished on a
+             branch, not yet merged) does not count either, though `aida list closed` shows Done
+             rows. One row each, with their CURRENT status
   help       Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -26194,7 +26395,7 @@ Usage: aida history opened [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26216,8 +26417,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26373,7 +26574,7 @@ Usage: aida history completed [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26395,8 +26596,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26551,7 +26752,7 @@ Usage: aida history rejected [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26573,8 +26774,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26721,7 +26922,8 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida history approved
-Specs that entered Approved in the window, one row each, with their CURRENT status.
+Specs that entered Approved in the window, one row each, with their CURRENT status. Any move into
+Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed spec reopened.
 
 Example: `aida history approved --since 3d --priority high`
 
@@ -26729,7 +26931,7 @@ Usage: aida history approved [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26751,8 +26953,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -26900,7 +27102,9 @@ Options:
           Print help (see a summary with '-h')
 ===== aida history closed
 Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is
-housekeeping, not an outcome, so it does not count. One row each, with their CURRENT status.
+housekeeping, not an outcome, so it does not count. Done (finished on a branch, not yet merged) does
+not count either, though `aida list closed` shows Done rows. One row each, with their CURRENT
+status.
 
 Example: `aida history closed --since 7d --tags cli`
 
@@ -26908,7 +27112,7 @@ Usage: aida history closed [OPTIONS]
 
 Options:
       --priority <PRIORITY>
-          Only specs whose CURRENT priority is this
+          Only specs whose CURRENT priority is this (high, medium, low)
 
       --template <TEMPLATE>
           Human event layout: a name (user > project > builtin), or inline when it contains `{`.
@@ -26930,8 +27134,8 @@ Options:
           [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing
 
       --status <STATUS>
-          Only specs whose CURRENT status is this. The status column is always the current status,
-          not the status at the event
+          Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed`
+          groups. The status column is always the current status, not the status at the event
 
       --all-events
           One row per matching event instead of one per spec: a spec completed, reopened and
@@ -27203,6 +27407,10 @@ Options:
 
       --fail-on-drift
           Return a nonzero exit only when a row reports drift
+
+      --fail-on-unknown
+          With --fail-on-drift, also fail when a row is unknown (host data unavailable) or invalid
+          (bad block), so a CI gate cannot pass on a host that could not check anything
 
   -v, --verbose
           Also list rejected, superseded and archived constraints, which are never probed. JSON
@@ -40396,6 +40604,47 @@ Working on aida itself
     "path": [
       "aida",
       "supervise",
+      "stalls"
+    ],
+    "about": "Observe independent pipeline-idle and ready-without-train alarms. Run every few minutes; default is a side-effect-free preview",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "execute",
+        "takes_value": false,
+        "help": "Write .aida/pipeline-stalls.{lock,json} and send advisor mail or operator notifications"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the alarm report as JSON"
+      },
+      {
+        "name": "threshold-mins",
+        "takes_value": true,
+        "help": "Continuous observation window in minutes (minimum 15)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "supervise",
       "redrive"
     ],
     "about": "Re-drive transiently-parked specs (typed tooling causes) on a capped, backed-off loop; leave genuine needs-human parks for escalation. Lets an unattended drain self-recover. Reads parks from the store and its attempt history from the event log, so it recovers a park regardless of which drain parked it or whether that drain crashed",
@@ -40469,7 +40718,7 @@ Working on aida itself
       {
         "name": "interval",
         "takes_value": true,
-        "help": "Repeat the pass every N seconds (default: a single pass then exit)"
+        "help": "Repeat every N seconds (maximum 900 with --execute; default: one pass)"
       },
       {
         "name": "json",
@@ -40480,6 +40729,11 @@ Working on aida itself
         "name": "objective",
         "takes_value": true,
         "help": "The objective to keep work aligned to (an epic id). When omitted, falls back to the `[oversight] objective` config value"
+      },
+      {
+        "name": "threshold-mins",
+        "takes_value": true,
+        "help": "Pipeline alarm observation window in minutes (minimum 15)"
       }
     ],
     "hidden": false
@@ -41734,7 +41988,7 @@ Working on aida itself
       "aida",
       "intent"
     ],
-    "about": "Show the AI-generated plain-terms comprehension of WHY a spec exists — its intent, distilled from the spec + its graph neighborhood. Distinct from `aida why` (a deterministic state classifier): this is a cached, drift-stamped LLM synthesis. Generated on first call (or `--refresh`), printed from cache thereafter; a STALE marker shows when the neighborhood drifted since generation",
+    "about": "Capture a portable observation, or show the AI-generated comprehension of WHY a spec exists — its intent, distilled from the spec + its graph neighborhood. Distinct from `aida why` (a deterministic state classifier): this is a cached, drift-stamped LLM synthesis. Generated on first call (or `--refresh`), printed from cache thereafter; a STALE marker shows when the neighborhood drifted since generation",
     "flags": [
       {
         "name": "audience",
@@ -41765,6 +42019,129 @@ Working on aida itself
         "name": "refresh",
         "takes_value": false,
         "help": "Force regeneration even if a cached comprehension exists and is fresh"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "note"
+    ],
+    "about": "Generate an observation envelope on stdout, without a spec or store",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "category",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "deny-pattern",
+        "takes_value": true,
+        "help": "Refuse matching title/body text (regex, repeatable; no automatic policy discovery)"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Explicit UTF-8 body file, at most 64 KiB"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "title",
+        "takes_value": true,
+        "help": "Explicit observation title, 1 to 512 UTF-8 bytes"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "validate"
+    ],
+    "about": "Validate an envelope without creating a requirement. Does not certify sanitization",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "deny-pattern",
+        "takes_value": true,
+        "help": "Refuse matching title/body text (regex, repeatable)"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "JSON envelope file, at most 128 KiB"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Report validity, label, full digest and sanitization limitation as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "export"
+    ],
+    "about": "Validate and emit a self-contained JSON attachment on stdout for manual email",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "deny-pattern",
+        "takes_value": true,
+        "help": "Refuse matching title/body text (regex, repeatable)"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "JSON envelope file, at most 128 KiB"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -44597,6 +44974,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "discard-unpushed",
+        "takes_value": false,
+        "help": "Explicitly discard commits on HEAD or any local branch that no remote has. --force alone never permits losing these commits"
+      },
+      {
         "name": "force",
         "takes_value": false,
         "help": "Discard uncommitted work and skip the confirmation. Discards tracked and untracked-but-not-ignored changes in the worktree; without this, `session end` refuses and prints the dirty file list. Gitignored differences (`target/`, `.aida/cache.db`, etc.) never require `--force` and are always discarded. `--force` does NOT override the live-process check; that is `--include-in-use`"
@@ -45695,6 +46077,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "commit-pending",
+        "takes_value": true,
+        "help": "With --from-seat: first commit the seat's uncommitted changes with this message, inside AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex seat, which cannot commit in its own sandbox. The message must carry the spec trailer"
+      },
+      {
         "name": "dry-run",
         "takes_value": false,
         "help": "Print the resolved finish sequence without executing any of it"
@@ -45848,6 +46235,32 @@ Working on aida itself
     "path": [
       "aida",
       "pr",
+      "review"
+    ],
+    "about": "Start the independent review pipeline for an open PR/MR. Runs exactly `aida queue work <PR-N|MR-N> --auto-complete`: a separate reviewer session reviews the change, rework goes back to the implementer, and the pipeline continues through merge only where merge is already authorized. Ownership, leases, merge holds and supervised/draft restrictions apply as they do for `queue work`; this command grants no extra authority",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
       "list"
     ],
     "about": "List every open PR/MR with its spec ID (when one can be found), CI state and rebase status",
@@ -45937,7 +46350,7 @@ Working on aida itself
       "pr",
       "ship"
     ],
-    "about": "Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The direct-publish counterpart to `aida queue work PR-N --auto-complete` (which drives the full reviewer pipeline) — use this for human-pre-approved work where no orchestrator review phase is needed (docs PRs, master-signed architecture work, recovery merges)",
+    "about": "Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The direct-publish counterpart to `aida pr review N` / `aida queue work PR-N --auto-complete` (which drive the full reviewer pipeline) — use this for already-approved work where no orchestrator review phase is needed (docs PRs, master-signed architecture work, recovery merges)",
     "flags": [
       {
         "name": "allow-stacked-base",
@@ -56914,7 +57327,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -56934,7 +57347,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57095,7 +57508,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57115,7 +57528,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57276,7 +57689,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57296,7 +57709,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57337,7 +57750,7 @@ Working on aida itself
       "history",
       "approved"
     ],
-    "about": "Specs that entered Approved in the window, one row each, with their CURRENT status",
+    "about": "Specs that entered Approved in the window, one row each, with their CURRENT status. Any move into Approved counts: a draft approved, a NeedsAttention spec un-punted, a closed spec reopened",
     "flags": [
       {
         "name": "all",
@@ -57457,7 +57870,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57477,7 +57890,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57518,7 +57931,7 @@ Working on aida itself
       "history",
       "closed"
     ],
-    "about": "Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is housekeeping, not an outcome, so it does not count. One row each, with their CURRENT status",
+    "about": "Specs that entered a terminal status in the window: Completed, Rejected or Superseded. Archiving is housekeeping, not an outcome, so it does not count. Done (finished on a branch, not yet merged) does not count either, though `aida list closed` shows Done rows. One row each, with their CURRENT status",
     "flags": [
       {
         "name": "all",
@@ -57638,7 +58051,7 @@ Working on aida itself
       {
         "name": "priority",
         "takes_value": true,
-        "help": "Only specs whose CURRENT priority is this"
+        "help": "Only specs whose CURRENT priority is this (high, medium, low)"
       },
       {
         "name": "save-as-template",
@@ -57658,7 +58071,7 @@ Working on aida itself
       {
         "name": "status",
         "takes_value": true,
-        "help": "Only specs whose CURRENT status is this. The status column is always the current status, not the status at the event"
+        "help": "Only specs whose CURRENT status is this: a status, a comma list, or the `open` / `closed` groups. The status column is always the current status, not the status at the event"
       },
       {
         "name": "status-changes",
@@ -57811,6 +58224,11 @@ Working on aida itself
         "name": "fail-on-drift",
         "takes_value": false,
         "help": "Return a nonzero exit only when a row reports drift"
+      },
+      {
+        "name": "fail-on-unknown",
+        "takes_value": false,
+        "help": "With --fail-on-drift, also fail when a row is unknown (host data unavailable) or invalid (bad block), so a CI gate cannot pass on a host that could not check anything"
       },
       {
         "name": "format",

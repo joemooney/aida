@@ -2124,3 +2124,115 @@ fn cargo_diagnostics_detect_marker_split_across_reads() {
     assert!(stream_cargo_diagnostics(message.as_bytes(), &mut output).unwrap());
     assert_eq!(output, message.as_bytes());
 }
+
+/// A failing command whose stderr carries `stderr_line`, run with an injected
+/// cargo home and no sccache problem.
+#[cfg(unix)]
+fn failing_run(stderr_line: &str, cargo_home: Option<PathBuf>) -> String {
+    let mut cmd = Command::new("sh");
+    cmd.args(["-c", &format!("echo '{stderr_line}' >&2; exit 101")]);
+    run_checked_in(&mut cmd, "cargo build", cargo_home, || None)
+        .unwrap_err()
+        .to_string()
+}
+
+// trace:TASK-2802 | ai:claude
+#[cfg(unix)]
+#[test]
+fn run_checked_fetch_error_on_read_only_cargo_home_adds_the_note() {
+    // SAFETY: geteuid never fails and has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("SKIP (root ignores directory write bits)");
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let ro = tmp.path().join("cargo-home");
+    fs::create_dir(&ro).unwrap();
+    let original = fs::metadata(&ro).unwrap().permissions();
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+    let fetch = failing_run("error: failed to download `serde`", Some(ro.clone()));
+    let plain = failing_run("error[E0308]: mismatched types", Some(ro.clone()));
+    // Restore write access so the temporary directory can be removed.
+    fs::set_permissions(&ro, original).unwrap();
+
+    assert!(
+        fetch.contains("CARGO_HOME is read-only here; new dependencies are fetched on the host"),
+        "{fetch}"
+    );
+    // An ordinary compile failure is not blamed on the read-only home.
+    assert_eq!(plain, "cargo build exited with exit status: 101");
+}
+
+// trace:TASK-2802 | ai:claude
+#[cfg(unix)]
+#[test]
+fn run_checked_fetch_error_on_writable_or_unknown_cargo_home_stays_plain() {
+    let tmp = tempfile::tempdir().unwrap();
+    let writable = failing_run(
+        "error: failed to download `serde`",
+        Some(tmp.path().to_path_buf()),
+    );
+    assert_eq!(writable, "cargo build exited with exit status: 101");
+    let unknown = failing_run("error: failed to download `serde`", None);
+    assert_eq!(unknown, "cargo build exited with exit status: 101");
+}
+
+// trace:TASK-2802 | ai:claude
+#[test]
+fn cargo_tty_env_is_set_only_for_a_terminal_and_never_overrides() {
+    fn env_of<'a>(cmd: &'a Command, key: &str) -> Option<&'a std::ffi::OsStr> {
+        cmd.get_envs().find(|(k, _)| *k == key).and_then(|(_, v)| v)
+    }
+    // The host environment may already set these; then nothing is injected.
+    let host_sets = |key: &str| std::env::var_os(key).is_some();
+
+    let mut piped = Command::new("cargo");
+    inherit_cargo_tty_env(&mut piped, None);
+    assert_eq!(piped.get_envs().count(), 0);
+
+    let mut explicit = Command::new("cargo");
+    explicit.env("CARGO_TERM_COLOR", "never");
+    explicit.env("CARGO_TERM_PROGRESS_WHEN", "never");
+    inherit_cargo_tty_env(&mut explicit, Some(Some(120)));
+    assert_eq!(
+        env_of(&explicit, "CARGO_TERM_COLOR"),
+        Some(std::ffi::OsStr::new("never"))
+    );
+    assert_eq!(
+        env_of(&explicit, "CARGO_TERM_PROGRESS_WHEN"),
+        Some(std::ffi::OsStr::new("never"))
+    );
+
+    // `auto` would still see the pipe, so the bar needs `always` plus a width.
+    let mut terminal = Command::new("cargo");
+    inherit_cargo_tty_env(&mut terminal, Some(Some(120)));
+    if !host_sets("CARGO_TERM_PROGRESS_WHEN") && !host_sets("CARGO_TERM_PROGRESS_WIDTH") {
+        assert_eq!(
+            env_of(&terminal, "CARGO_TERM_PROGRESS_WHEN"),
+            Some(std::ffi::OsStr::new("always"))
+        );
+        assert_eq!(
+            env_of(&terminal, "CARGO_TERM_PROGRESS_WIDTH"),
+            Some(std::ffi::OsStr::new("120"))
+        );
+    }
+
+    // Cargo rejects `always` without a width: an unknown width keeps colour only.
+    let mut no_width = Command::new("cargo");
+    inherit_cargo_tty_env(&mut no_width, Some(None));
+    assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WHEN"), None);
+    assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WIDTH"), None);
+}
+
+// trace:TASK-1954 | ai:claude  trace:TASK-1771 | ai:claude
+#[test]
+fn rustc_wrapper_for_prefers_the_child_override() {
+    let mut cmd = Command::new("cargo");
+    cmd.env("RUSTC_WRAPPER", "");
+    assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some(""));
+    cmd.env("RUSTC_WRAPPER", "sccache");
+    assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some("sccache"));
+    cmd.env_remove("RUSTC_WRAPPER");
+    assert_eq!(rustc_wrapper_for(&cmd), None);
+}

@@ -22,7 +22,8 @@ use crate::{find_project_root, load_store_for_lookup};
 /// One untraced function.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct FnCoverage {
-    /// `name`, or `Type::name` for methods and trait default methods.
+    /// `name`, `Type::name` for methods and trait default methods, and the
+    /// full owner path for nested fns (`Type::method::inner`).
     pub(crate) name: String,
     /// 1-based line of the `fn` item (its first attribute, if any).
     pub(crate) line: usize,
@@ -70,12 +71,16 @@ where
     let traced_regions = traced_file(text, |id| matches!(resolve(id), SpecResolution::Live))?;
     let mut traced = 0;
     let mut untraced = Vec::new();
-    for item in traced_regions
+    // trace:TASK-1954 | ai:claude — TASK-1916 (2)(3): coverage follows the
+    // item's own markers and its enclosing items (not whatever else starts on
+    // its first line), and test-only fns are exempt like `tests/` files.
+    for (idx, item) in traced_regions
         .items
         .iter()
-        .filter(|i| i.kind == ItemKind::Fn)
+        .enumerate()
+        .filter(|(_, i)| i.kind == ItemKind::Fn && !traced_regions.in_test(i.range.start))
     {
-        if traced_regions.specs_at(item.range.start).is_empty() {
+        if traced_regions.item_specs(idx).is_empty() {
             untraced.push(FnCoverage {
                 name: item.name.clone(),
                 line: item.range.start + 1,
@@ -130,6 +135,8 @@ pub(crate) fn handle_tree_coverage(
         None => project_root.clone(),
     };
     anyhow::ensure!(target.exists(), "{} does not exist", target.display());
+    // trace:TASK-1954 | ai:claude — TASK-1916 (3)
+    crate::lint_constants::ensure_rust_path(&target, "trace coverage")?;
 
     let store = load_store_for_lookup(&project_root);
     if store.is_none() {
@@ -342,5 +349,25 @@ fn dangling() {}
     #[test]
     fn unparsable_source_is_none() {
         assert!(file_coverage("f.rs", "fn broken( {", &mut all_live).is_none());
+    }
+
+    // trace:TASK-1954 | ai:claude — TASK-1916 (2)(3)
+    #[test]
+    fn test_fns_are_exempt_and_same_line_siblings_do_not_share() {
+        let src = "\
+fn a() {} fn b() {
+    // trace:STORY-1 | ai:claude
+}
+#[cfg(test)]
+mod tests {
+    fn helper() {}
+    #[test]
+    fn t() {}
+}
+";
+        let fc = file_coverage("f.rs", src, &mut all_live).unwrap();
+        let names: Vec<&str> = fc.untraced.iter().map(|u| u.name.as_str()).collect();
+        assert_eq!(names, vec!["a"]);
+        assert_eq!((fc.traced, fc.functions), (1, 2));
     }
 }

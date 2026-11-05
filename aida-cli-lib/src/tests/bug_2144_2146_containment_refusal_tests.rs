@@ -40,7 +40,7 @@ fn contained_request_on_codex_or_agy_is_refused_and_claude_passes() {
 #[test]
 fn compose_headless_command_refuses_contained_codex_and_agy() {
     for vendor in [HeadlessVendor::Codex, HeadlessVendor::Agy] {
-        let err = session::compose_headless_command(vendor, "p", "sid", true, None, None)
+        let err = session::compose_headless_command(None, vendor, "p", "sid", true, None, None)
             .expect_err("the headless choke point refuses a contained codex/agy argv");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
     }
@@ -49,6 +49,7 @@ fn compose_headless_command_refuses_contained_codex_and_agy() {
 #[test]
 fn contained_codex_reviewer_plan_is_refused() {
     let err = session::interactive_reviewer_launch_plan(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         None,
         None,

@@ -77,6 +77,8 @@ For an independent review handoff, `/aida-pr` is a compatibility redirect to
 `aida ship <SPEC> --no-merge`. Preview with the same command plus `--dry-run`.
 After successful PR creation or reuse, explicitly run
 `aida pr auto-queue-review`: the ship stop mode does not queue review itself.
+To drive the independent review pipeline from there, run `aida pr review <N>`
+(the same pipeline as `aida queue work PR-N --auto-complete`).
 Read the outcome before reporting a handoff; policy skips can exit zero.
 Creation derives title/body from the latest commit, so inspect and enrich the
 PR with linked specs and actual validation evidence.
@@ -98,6 +100,21 @@ clone's git config and hooks, checks commit trailers, pushes, and opens the
 PR. It never merges; `--dry-run` imports and pushes nothing.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
 
+A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
+inside its sandbox, and `aida ship` there refuses with the way out. The seat
+leaves its edits uncommitted. When an implementer lane's Codex process exits,
+the launcher commits that pending work in the seat clone. An operator can also
+commit and publish it with
+`aida ship <SPEC> --from-seat <clone> --commit-pending '<subject> (<SPEC>)'`.
+Either way the commit runs inside AIDA's own sandbox on the seat's leased
+branch, with the seat's hooks and config off and the host's git identity.
+Before anything is committed, the message's spec trailer and an explicit
+`<SPEC>` are checked (under `--dry-run` too). It is also refused for a clone
+this checkout did not record, an ended lease, a lease another live process
+still holds, or a symlinked or replaced clone path. If the commit fails after
+staging, the index is put back as it was.
+<!-- trace:TASK-2712 | ai:claude -->
+
 ---
 
 ### `aida pr`
@@ -108,12 +125,14 @@ PR. It never merges; `--dry-run` imports and pushes nothing.
 
 **Reach for it when**
 - `aida pr ship` — you have **already-approved** work (an independent approval is recorded on the PR head) that needs *no* orchestrator review phase: docs PRs, master-signed architecture work, recovery merges. It's the direct-publish counterpart to the full reviewed pipeline.
+- `aida pr review <N|PR-N|MR-N>` — a PR/MR is open and still needs **independent review**. It runs exactly `aida queue work PR-N --auto-complete` (or `MR-N`): a separate reviewer session, rework routed back to the implementer, and merge only where merge is already authorized. A bare number takes the configured forge's prefix (PR on GitHub, MR on GitLab). It grants no extra authority — leases, merge holds and supervised/draft restrictions apply as for `queue work`, and the `queue work` spelling still works. The three finish verbs in order: `aida ship --no-merge` opens the PR, `aida pr review` gets it reviewed, `aida pr ship` lands work that is already approved.
+  <!-- trace:TASK-1715 | ai:claude -->
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".
 
-**Don't reach for it when** — the work has not been **reviewed** yet. `aida pr ship` does not run a reviewer phase; it merges only when an approval of the PR head has already been recorded by a session that did not author the work, and refuses otherwise. For work that still needs review, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead.
+**Don't reach for it when** — the work has not been **reviewed** yet. `aida pr ship` does not run a reviewer phase; it merges only when an approval of the PR head has already been recorded by a session that did not author the work, and refuses otherwise. For work that still needs review, use `aida pr review N` (the same full reviewer pipeline as `aida queue work PR-N --auto-complete`) instead.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 

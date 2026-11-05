@@ -2199,6 +2199,21 @@ pub(crate) fn repo_hooks_dir(project_root: &Path) -> std::path::PathBuf {
     }
 }
 
+/// True when `path` has an executable bit (always true off Unix).
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+fn hook_is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        true
+    }
+}
+
 /// Install the mirror pre-push shim into the repo's hooks directory.
 /// Idempotent: refreshes its own hook in place, never
 /// clobbers a custom pre-push hook (prints the one line to add instead).
@@ -2221,15 +2236,31 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
             } else {
                 script
             };
-            if !aida_core::scaffolding::generated_text_matches(&existing, &script) {
-                std::fs::write(&target, &script)
-                    .with_context(|| format!("failed to refresh {}", target.display()))?;
-            }
             // BUG-2009: an AIDA hook is always 0755; git skips it otherwise.
+            // Say so when the refresh changes the mode, so a deliberate
+            // `chmod -x` is not undone silently.
             // trace:BUG-2009 | ai:claude
-            aida_core::git_ops::set_hook_mode(&target)
-                .with_context(|| format!("failed to make {} executable", target.display()))?;
-            println!("{check} pre-push mirror hook already installed");
+            // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+            let was_executable = hook_is_executable(&target);
+            if !aida_core::scaffolding::generated_text_matches(&existing, &script) {
+                aida_core::git_ops::write_hook_file(&target, script.as_bytes())
+                    .with_context(|| format!("failed to refresh {}", target.display()))?;
+                println!(
+                    "{check} refreshed the pre-push mirror hook at {}",
+                    target.display()
+                );
+            } else {
+                aida_core::git_ops::set_hook_mode(&target)
+                    .with_context(|| format!("failed to make {} executable", target.display()))?;
+                println!("{check} pre-push mirror hook already installed");
+            }
+            if !was_executable {
+                println!(
+                    "{check} made the pre-push mirror hook at {} executable (0755): git was \
+                     skipping it",
+                    target.display()
+                );
+            }
             return Ok(());
         }
         eprintln!(
@@ -2241,15 +2272,9 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    std::fs::write(&target, &script)
+    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+    aida_core::git_ops::write_hook_file(&target, script.as_bytes())
         .with_context(|| format!("failed to write {}", target.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&target)?.permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&target, perms)?;
-    }
     println!(
         "{check} installed pre-push mirror hook at {}",
         target.display()
@@ -4646,6 +4671,39 @@ host = \"should.not.count\"
         std::fs::write(&hook, drifted).unwrap();
         install_mirror_pre_push_hook(&project).unwrap();
         assert_eq!(std::fs::read_to_string(&hook).unwrap(), script);
+    }
+
+    // A current mirror hook without the executable bit (git skips it) is
+    // made 0755 in place, content untouched, and no staged file is left.
+    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn mirror_hook_refresh_restores_a_cleared_exec_bit() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        let hooks = project.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("pre-push");
+
+        install_mirror_pre_push_hook(&project).unwrap();
+        let installed = std::fs::read_to_string(&hook).unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!hook_is_executable(&hook));
+
+        install_mirror_pre_push_hook(&project).unwrap();
+        let mode = std::fs::metadata(&hook).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
+        assert_eq!(std::fs::read_to_string(&hook).unwrap(), installed);
+        let leftovers: Vec<_> = std::fs::read_dir(&hooks)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains("aida-write"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
     }
 
     // A custom pre-push hook is never clobbered; setup still succeeds.

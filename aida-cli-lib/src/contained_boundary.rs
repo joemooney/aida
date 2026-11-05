@@ -334,6 +334,26 @@ pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<P
     Ok(vec![mailbox])
 }
 
+/// TASK-2712: the gate ledger alone, `<main>/.aida/gate-ledger`, where a
+/// reviewer's merge-hold placement takes its lock and appends its event. Never
+/// the enclosing `.aida`. Refuse a symlinked state or ledger directory rather
+/// than binding its target.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn contained_gate_ledger_write_paths(main: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let main = std::fs::canonicalize(main)?;
+    let ledger = crate::gate::ledger::ledger_dir(&main);
+    for path in [&main.join(".aida"), &ledger] {
+        if let Ok(meta) = std::fs::symlink_metadata(path) {
+            anyhow::ensure!(
+                !meta.file_type().is_symlink(),
+                "refusing sandbox gate-ledger path {}: symbolic link",
+                path.display()
+            );
+        }
+    }
+    Ok(vec![ledger])
+}
+
 /// The submit side of `aida deputy` alone: `<main>/.aida/deputy/incoming`,
 /// where `aida deputy submit` and `cancel` write. Never the enclosing
 /// `.aida/deputy` (the running jobs, results, ledger, TTY policy and terminal
@@ -461,8 +481,16 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// the seat's own repository, which it must write to commit; no host git ever
 /// runs in it.
 // trace:BUG-2012 | ai:antigravity
+///
+/// `host_main` is the launch's host main, resolved by its entry point before
+/// any chdir into a seat and threaded here explicitly (TASK-2032); `None`
+/// exempts no clone.
 // trace:BUG-2169 | ai:claude
-pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn contained_main_checkout_git_deny_paths(
+    host_main: Option<&Path>,
+    write_roots: &[PathBuf],
+) -> Vec<PathBuf> {
     let mut denied = Vec::new();
     let mut push_unique = |p: PathBuf| {
         if !denied.contains(&p) {
@@ -475,7 +503,8 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
             continue;
         };
         // trace:BUG-2169 | ai:claude
-        if crate::seat_clone::host_recorded_clone(root).is_some() {
+        // trace:TASK-2032 | ai:claude
+        if crate::seat_clone::recorded_clone_for(host_main, root).is_some() {
             continue;
         }
         if meta.is_dir() || git_entry.is_dir() {

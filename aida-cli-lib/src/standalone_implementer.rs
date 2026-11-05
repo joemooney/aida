@@ -10,6 +10,9 @@
 //! standalone reviewer's verdict contract.
 // trace:STORY-1662 | ai:claude
 
+#[path = "standalone_empty_rework.rs"]
+mod empty_rework;
+
 use crate::*;
 use std::path::{Path, PathBuf};
 
@@ -61,6 +64,8 @@ pub(crate) const HELD_EXIT_CODE: i32 = 33;
 /// Exit code: the launch was refused because the standalone-implementer
 /// concurrency cap is reached. Nothing was set up.
 pub(crate) const CAP_EXIT_CODE: i32 = 34;
+/// Unchanged blocked rework, queued for its one automatic retry.
+pub(crate) const EMPTY_REWORK_EXIT_CODE: i32 = empty_rework::EXIT_CODE;
 
 /// Default cap on concurrently running standalone implementers.
 pub(crate) const DEFAULT_CAP: usize = 3;
@@ -571,6 +576,10 @@ pub(crate) struct Launch<'a> {
     pub(crate) branch: &'a str,
     pub(crate) contained: bool,
     pub(crate) child_grant: &'a crate::gate::seat_authority::HeadlessChildGrant,
+    /// TASK-2032: the host main `handle_queue_work` resolved before its chdir
+    /// into the seat; the child's boundary is built from it.
+    // trace:TASK-2032 | ai:claude
+    pub(crate) host_main: Option<&'a Path>,
 }
 
 /// The audit reason for a baseline child whose launcher presented no grant at
@@ -744,6 +753,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         prompt,
         |prompt, log, resume, hold| {
             crate::session::run_standalone_implementer_child(
+                launch.host_main,
                 launch.vendor,
                 prompt,
                 launch.session_id,
@@ -790,6 +800,31 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let seat = bg::SeatState::read(&worktree, launch.branch);
+    // trace:BUG-2452 | ai:codex
+    // Check before settlement turns a stale PR with leftover work into NoPr.
+    if let Some((pr, head, reason)) =
+        empty_rework::inspect(&main_root, launch.spec, &launch_seat, &outcome, &seat)?
+    {
+        let escalated = empty_rework::route(
+            &main_root,
+            launch.spec,
+            launch.vendor.as_str(),
+            pr,
+            &head,
+            &reason,
+        )?;
+        let action = if escalated { "punted" } else { "requeued" };
+        println!("implementer: empty-rework pr={pr} head={head} action={action}");
+        return Err(anyhow::Error::new(StandaloneImplementerExit {
+            code: if escalated {
+                PUNTED_EXIT_CODE
+            } else {
+                EMPTY_REWORK_EXIT_CODE
+            },
+            message: format!("empty rework for {}: {action}; {reason}", launch.spec),
+            vendor_exit: false,
+        }));
+    }
     let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
     let (line, code) = report(&outcome, status.code(), unshipped.as_ref());
     // BUG-2436: end the finished lane's lease before the result line goes

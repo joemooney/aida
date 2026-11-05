@@ -212,6 +212,7 @@ fn outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error() {
         PUNTED_EXIT_CODE,
         HELD_EXIT_CODE,
         CAP_EXIT_CODE,
+        EMPTY_REWORK_EXIT_CODE, // trace:BUG-2452 | ai:codex
     ] {
         assert_eq!(
             table.iter().filter(|(c, _)| *c == code).count(),
@@ -999,6 +1000,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
                 branch: "claude/story-9",
                 contained: false,
                 child_grant: &child_grant,
+                host_main: None,
             })
         });
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);

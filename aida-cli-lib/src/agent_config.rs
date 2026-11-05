@@ -622,11 +622,25 @@ pub(crate) fn load_contained_vendor(
 ) -> Result<Option<String>> {
     // A branch must never grant itself permission to bypass AIDA containment.
     // Only the reviewed default-branch config can opt a vendor into native mode.
-    let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
+    contained_vendor_in_trusted_body(
+        crate::trusted_config::read_trusted_config_toml(root).as_deref(),
+        vendor,
+    )
+}
+
+/// [`load_contained_vendor`]'s parser over an already-read trusted body, so a
+/// caller that must tell "the trusted sha is unresolvable" apart from "no
+/// config at the trusted sha" (`None` body) resolves the sha itself.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn contained_vendor_in_trusted_body(
+    body: Option<&str>,
+    vendor: &str,
+) -> Result<Option<String>> {
+    let Some(body) = body else {
         return Ok(None);
     };
     let cfg: toml::Value =
-        toml::from_str(&body).context("parsing trusted containment vendor config")?;
+        toml::from_str(body).context("parsing trusted containment vendor config")?;
     let Some(vendors) = cfg.get("contained").and_then(|v| v.get("vendors")) else {
         return Ok(None);
     };

@@ -624,6 +624,158 @@ mod tests {
             assert!(crate::command_registry::try_parse_from(argv).is_err());
         }
     }
+    // Survey redundant-rate parsing independently of the committed fixtures.
+    // This bounds the proposed repair against many small-denominator ratios;
+    // it does not establish a universal serde_json error bound. Enabling
+    // serde_json/float_roundtrip is expected to make changed == 0 and flip
+    // the changed > 0 characterization assertion below (repair: TASK-2842).
+    // trace:SPEC-447 | ai:codex
+    #[test]
+    fn json_fraction_roundtrip_error_survey() {
+        let mut changed = 0;
+        let mut max_ulps = 0;
+        for total in 1..=512 {
+            for passed in 0..=total {
+                let original = passed as f64 / total as f64;
+                let json = serde_json::to_string(&original).unwrap();
+                let parsed: f64 = serde_json::from_str(&json).unwrap();
+                let ulps = original.to_bits().abs_diff(parsed.to_bits());
+                changed += usize::from(ulps > 0);
+                max_ulps = max_ulps.max(ulps);
+            }
+        }
+        eprintln!("ratio survey (denominators 1..=512): {changed} changed, max {max_ulps} ULPs");
+        assert!(changed > 0);
+        assert!(max_ulps <= 2);
+    }
+
+    // Characterization of the remaining strict-gate defect, not permission to
+    // weaken eligibility. Replace the refusal assertions when its repair lands.
+    // trace:SPEC-447 | ai:codex
+    #[test]
+    fn committed_json_fraction_characterizes_control_and_trial_refusal() {
+        for (passed, total, drifts) in [
+            (1, 11, true),
+            (43, 44, true),
+            (1, 3, false),
+            (2, 3, false),
+            (1, 2, false),
+            (0, 11, false),
+        ] {
+            let names: Vec<_> = (0..total).map(|i| format!("check-{i}")).collect();
+            let values = |passes| {
+                names
+                    .iter()
+                    .enumerate()
+                    .map(|(i, name)| (name.as_str(), i < passes))
+                    .collect::<Vec<_>>()
+            };
+            let run = Uuid::new_v4();
+            let mut rows: Vec<_> = (1..=3)
+                .map(|i| record("control-reference", run, i, &values(total)))
+                .collect();
+            let stub = record("control-stub", Uuid::new_v4(), 1, &values(passed));
+            let mut trial = record("trial", Uuid::new_v4(), 1, &values(passed));
+            // Keep reader-derived quality flags from masking rate validation.
+            let diagnostics = trial
+                .checks
+                .iter()
+                .filter(|c| !c.passed)
+                .map(|c| {
+                    serde_json::json!({"v": 1, "check": c.name, "kind": "assertion"}).to_string()
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            trial.failure_diagnostics = Some(
+                serde_json::to_value(diagnostics::capture(
+                    Some(diagnostics.as_bytes()),
+                    &trial.checks,
+                    50,
+                ))
+                .unwrap(),
+            );
+            // Both gates accept the original, count-consistent in-memory data.
+            rows.push(stub);
+            gate(serde_json::from_value(serde_json::to_value(&rows).unwrap()).unwrap()).unwrap();
+            require_execution(&trial, "trial", false, "guards").unwrap();
+            let trial_id = trial.trial_id;
+            rows.push(trial);
+
+            let store = tempfile::tempdir().unwrap();
+            let store_git = |args: &[&str]| {
+                let out = crate::test_git::git_command()
+                    .arg("-C")
+                    .arg(store.path())
+                    .args(args)
+                    .output()
+                    .unwrap();
+                assert!(
+                    out.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            };
+            store_git(&["init", "-b", "aida-store"]);
+            store_git(&["config", "user.name", "Test"]);
+            store_git(&["config", "user.email", "test@example.com"]);
+            std::fs::create_dir_all(store.path().join("regen/trials")).unwrap();
+            for row in &rows {
+                std::fs::write(
+                    store
+                        .path()
+                        .join(format!("regen/trials/{}.json", row.trial_id)),
+                    super::super::super::json_bytes(row).unwrap(),
+                )
+                .unwrap();
+            }
+            store_git(&["add", "regen/trials"]);
+            store_git(&["commit", "-m", "fractional execution fixtures"]);
+            // Prove the reader uses committed blobs, not the working files.
+            for row in &rows {
+                std::fs::remove_file(
+                    store
+                        .path()
+                        .join(format!("regen/trials/{}.json", row.trial_id)),
+                )
+                .unwrap();
+            }
+            let mut committed = read_records(store.path()).unwrap();
+            let index = committed
+                .iter()
+                .position(|r| r.trial_id == trial_id)
+                .unwrap();
+            let mut read_trial = committed.remove(index);
+            let original = passed as f64 / total as f64;
+            let parsed = read_trial.aggregate.as_ref().unwrap().pass_rate;
+            assert_eq!(
+                original != parsed,
+                drifts,
+                "{passed}/{total}: {original:?} -> {parsed:?}"
+            );
+            assert!((original - parsed).abs() <= f64::EPSILON);
+            assert_eq!(read_trial.aggregate.as_ref().unwrap().passed, passed);
+            assert_eq!(read_trial.aggregate.as_ref().unwrap().total, total);
+            if drifts {
+                refused(committed, "stub control aggregate does not match checks");
+            } else {
+                gate(committed).unwrap();
+            }
+            // Isolate apply from stub loading with a zero-pass, exact-rate stub.
+            let mut exact_controls = rows.drain(..3).collect::<Vec<_>>();
+            exact_controls.push(record("control-stub", Uuid::new_v4(), 1, &values(0)));
+            let exact_gate = gate(exact_controls).unwrap();
+            let result = exact_gate.apply(&mut read_trial);
+            if drifts {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("trial control aggregate does not match checks"));
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+
     #[test]
     fn controls_reader_uses_committed_objects_and_refuses_corrupt_records() {
         let store = tempfile::tempdir().unwrap();

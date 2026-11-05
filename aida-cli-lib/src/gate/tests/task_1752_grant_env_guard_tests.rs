@@ -24,11 +24,20 @@ const OWNER: &str = "aida-cli-lib/src/gate/seat_authority.rs";
 /// (path suffix, exact line text, why) — the only other production lines
 /// allowed to name the variable. Matched per line, so nothing else in the
 /// same file is exempt.
-const ALLOWED_LITERAL_LINES: &[(&str, &str, &str)] = &[(
-    "aida-cli-lib/src/role_cmd_args.rs",
-    "/// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its",
-    "clap help text for `aida role expiry`: users set the variable by name",
-)];
+// trace:STORY-2326 | ai:claude
+const ALLOWED_LITERAL_LINES: &[(&str, &str, &str)] = &[
+    (
+        "aida-cli-lib/src/role_cmd_args.rs",
+        "/// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its",
+        "clap help text for `aida role expiry`: users set the variable by name",
+    ),
+    (
+        "aida-core/src/launch_policy.rs",
+        "pub const GRANT_ENV: &str = \"AIDA_SESSION_GRANT\";",
+        "the pure launch policy names the key spawn_agent sets or strips on a child; \
+         aida-core cannot reach seat_authority, and it never reads the variable",
+    ),
+];
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

@@ -266,7 +266,10 @@ fn fork_and_run_to(
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
     // trace:BUG-2393 | ai:claude
     let contained = session::drain_contained(project_root)?;
+    // TASK-2032: advisor-watch runs at the host project root.
+    // trace:TASK-2032 | ai:claude
     let status = session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         prompt,
         &plan.fork_uuid,
         &log_path,
@@ -381,6 +384,11 @@ mod tests {
     // trace:BUG-2172 | ai:codex
     #[test]
     fn cold_boot_inherits_containment_even_with_literal_false_call_site() {
+        // A contained parent refuses the `AIDA_AGENT_CMD` seam (STORY-2326),
+        // so the fake is the `claude` on PATH. trace:STORY-2326 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -390,7 +398,9 @@ mod tests {
             "store_path = \".aida-store\"\n",
         )
         .unwrap();
-        let fake = tmp.path().join("fake-claude");
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let fake = bin.join("claude");
         let capture = tmp.path().join("capture");
         crate::test_exec::write_executable(
             &fake,
@@ -399,12 +409,17 @@ mod tests {
                 "printf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > \"$AIDA_TEST_CAPTURE\"\n",
             ),
         );
+        let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap();
         let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
             &project,
             "advisor",
             &["advisor"],
             &[
-                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_AGENT_CMD", None),
+                ("PATH", path.to_str()),
                 ("AIDA_OS_WRAP", Some("0")),
                 ("AIDA_CONTAINED", Some("1")),
                 ("AIDA_TEST_CAPTURE", Some(capture.to_str().unwrap())),
@@ -626,6 +641,7 @@ mod tests {
         };
         assert_eq!(thread, THREAD);
         let (_, argv) = session::advisor_tier_program_and_args_with_posture(
+            None,
             HeadlessVendor::Codex,
             true,
             "seeded advise",
