@@ -70,15 +70,20 @@ pub(crate) const GATE_LEDGER_ROLE: &str = "reviewer";
 /// only for [`GATE_LEDGER_ROLE`]. A path that does not exist is dropped (the
 /// sandbox cannot bind it), as is anything at or under a denied main git
 /// directory spelling, whatever produced it.
+///
+/// `host_main` is the launcher's pinned host main (TASK-2032): the only
+/// anchor that recognises `write_roots[0]` as a host-recorded seat clone.
 // trace:TASK-2712 | ai:claude
+// trace:TASK-2032 | ai:claude
 pub(crate) fn codex_native_write_paths(
+    host_main: Option<&Path>,
     write_roots: &[PathBuf],
     role: Option<&str>,
 ) -> Result<Vec<PathBuf>> {
     let Some(first) = write_roots.first() else {
         return Ok(Vec::new());
     };
-    let set = crate::session::contained_write_set(write_roots)?;
+    let set = crate::session::contained_write_set(host_main, write_roots)?;
     let mut paths = set.grant_paths.clone();
     // Only for a reviewer, and only beside a store grant: a launch that was
     // refused the store (an old git, an unmarkable store) stays without the
@@ -107,12 +112,14 @@ pub(crate) fn codex_native_write_paths(
 /// is `write_roots[0]`. A path that is not valid UTF-8 is left out (fail
 /// closed).
 // trace:TASK-2712 | ai:claude
+// trace:TASK-2032 | ai:claude
 pub(crate) fn codex_native_sandbox_flags_for_roots(
+    host_main: Option<&Path>,
     write_roots: &[PathBuf],
     role: Option<&str>,
 ) -> Result<Vec<String>> {
     let mut flags: Vec<String> = CODEX_NATIVE_POSTURE.iter().map(|s| s.to_string()).collect();
-    for path in codex_native_write_paths(write_roots, role)? {
+    for path in codex_native_write_paths(host_main, write_roots, role)? {
         if let Some(path) = path.to_str() {
             flags.push("--add-dir".to_string());
             flags.push(path.to_string());
@@ -127,10 +134,12 @@ pub(crate) fn codex_native_sandbox_flags_for_roots(
 /// differ) and its role (`None` when it is not known: no gate ledger).
 // trace:TASK-2712 | ai:claude
 pub(crate) fn codex_native_sandbox_flags_in(
+    host_main: Option<&Path>,
     tree: &Path,
     role: Option<&str>,
 ) -> Result<Vec<String>> {
     codex_native_sandbox_flags_for_roots(
+        host_main,
         &crate::session::contained_session_write_roots_from(tree),
         role,
     )
@@ -142,8 +151,12 @@ pub(crate) fn codex_native_sandbox_flags_in(
 /// launcher that learns the lane's tree and role later rescopes with
 /// [`rescope_codex_native_flags`].
 // trace:TASK-2712 | ai:claude
-pub(crate) fn codex_native_sandbox_flags() -> Result<Vec<String>> {
-    codex_native_sandbox_flags_for_roots(&crate::session::contained_session_write_roots(), None)
+pub(crate) fn codex_native_sandbox_flags(host_main: Option<&Path>) -> Result<Vec<String>> {
+    codex_native_sandbox_flags_for_roots(
+        host_main,
+        &crate::session::contained_session_write_roots(),
+        None,
+    )
 }
 
 /// Whether `args` carry the native Codex posture.
@@ -164,6 +177,7 @@ fn native_posture_at(args: &[String]) -> Option<usize> {
 /// without the native posture are left alone.
 // trace:TASK-2712 | ai:claude
 pub(crate) fn rescope_codex_native_flags(
+    host_main: Option<&Path>,
     args: &mut Vec<String>,
     tree: &Path,
     role: Option<&str>,
@@ -175,7 +189,7 @@ pub(crate) fn rescope_codex_native_flags(
     let Some(start) = native_posture_at(args) else {
         return Ok(());
     };
-    let fresh = codex_native_sandbox_flags_in(tree, role)?;
+    let fresh = codex_native_sandbox_flags_in(host_main, tree, role)?;
     args.splice(start..start + CODEX_NATIVE_POSTURE.len(), fresh);
     Ok(())
 }

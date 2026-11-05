@@ -249,7 +249,7 @@ fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
     // Claude: `-p` leads and the prompt is the trailing POSITIONAL — correct
     // for claude's boolean `-p`, and unchanged by BUG-1686.
     let claude =
-        session::headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None)
+        session::headless_vendor_args(None, HeadlessVendor::Claude, prompt, sid, false, None, None)
             .unwrap();
     assert_eq!(claude.first().map(String::as_str), Some("-p"), "{claude:?}");
     assert_eq!(
@@ -266,7 +266,7 @@ fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
     // Codex: no `-p` token exists, so there is no value-flag to swallow the
     // permission flag; the prompt is `codex exec`'s trailing positional.
     let codex =
-        session::headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None)
+        session::headless_vendor_args(None, HeadlessVendor::Codex, prompt, sid, false, None, None)
             .unwrap();
     assert!(
         !codex.iter().any(|a| a == "-p"),
@@ -429,6 +429,7 @@ fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
 
     let prompt = "/aida-pickup BUG-1680";
     let (program, argv) = session::compose_headless_command(
+        None,
         HeadlessVendor::Agy,
         prompt,
         "019e0000-0000-7000-8000-0000000000bb",

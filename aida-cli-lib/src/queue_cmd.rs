@@ -11096,7 +11096,14 @@ pub(crate) fn resolve_rework_findings(
 pub(crate) fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
     // BUG-1982: a refused contained launch shows the refusal, not a command.
     // trace:BUG-1982 | ai:claude
-    match session::claude_headless_args_with_posture(prompt, session_id, contained) {
+    // TASK-2032: a `--no-launch` hint renders before any chdir into a seat.
+    // trace:TASK-2032 | ai:claude
+    match session::claude_headless_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        prompt,
+        session_id,
+        contained,
+    ) {
         Ok(argv) => format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv)),
         Err(err) => format!("{err:#}"),
     }
@@ -11120,8 +11127,10 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            match session::headless_vendor_args(vendor, prompt, session_id, contained, model, None)
-            {
+            // Agy's argv never reads the host main.
+            match session::headless_vendor_args(
+                None, vendor, prompt, session_id, contained, model, None,
+            ) {
                 Ok(argv) => format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv)),
                 Err(err) => format!("{err:#}"),
             }
@@ -11143,6 +11152,7 @@ pub(crate) fn deferred_interactive_launch_hint(
     match vendor {
         session::HeadlessVendor::Claude => {
             let mut args = match session::claude_session_args(
+                crate::seat_clone::launcher_main().as_deref(),
                 permission_mode,
                 None,
                 Some(prompt),
@@ -11556,6 +11566,7 @@ pub(crate) fn build_queue_work_claude_command(
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
     session::build_claude_exec_command(
+        crate::seat_clone::launcher_main().as_deref(),
         posture.permission_mode.as_deref(),
         name,
         Some(prompt),
@@ -13371,8 +13382,11 @@ pub(crate) fn handle_queue_work(
             // BUG-2223: re-enter the orphan's tree in place. Session start
             // re-checks it and bypasses nothing else: a live claim on the
             // scope still refuses. trace:BUG-2223 | ai:claude
-            /* adopt_orphan */
-            adopt_orphan.is_some(),
+            if adopt_orphan.is_some() {
+                crate::session_start::PathReentry::AdoptOrphan
+            } else {
+                crate::session_start::PathReentry::None
+            },
         )
     };
     let setup_receipt = if no_launch {
@@ -13692,6 +13706,10 @@ pub(crate) fn handle_queue_work(
                 applied_vars.join(", ").dimmed()
             );
         }
+        // TASK-2032: the host main, resolved once before the chdir into the
+        // seat and threaded explicitly into the launch below.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         std::env::set_current_dir(&lease.worktree_path)
             .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
         // BUG-1918: the launched worker (exec'd or spawned below) carries its
@@ -13765,6 +13783,7 @@ pub(crate) fn handle_queue_work(
                 &verdict_path,
                 contained,
                 launch_vendor,
+                host_main.as_deref(),
             );
         }
         // trace:TASK-1594 | ai:claude
@@ -13843,6 +13862,7 @@ pub(crate) fn handle_queue_work(
                     branch: &lease.branch,
                     contained,
                     child_grant,
+                    host_main: host_main.as_deref(),
                 });
             }
         }
@@ -13906,6 +13926,8 @@ pub(crate) fn handle_queue_work(
                     session::CodexLane {
                         tree: &lease.worktree_path,
                         role: Some(&crate::canonical_role_name(&role)),
+                        // trace:TASK-2032 | ai:claude
+                        host_main: host_main.as_deref(),
                     },
                 );
             }
@@ -13929,7 +13951,9 @@ pub(crate) fn handle_queue_work(
                 .cyan()
             );
             // trace:TASK-2712 | ai:claude — the lane's role picks its write set.
+            // trace:TASK-2032 | ai:claude — the host main pinned before the chdir.
             return session::exec_codex_session(
+                host_main.as_deref(),
                 &prompt,
                 codex_bypass,
                 codex_read_only,
@@ -14000,6 +14024,7 @@ pub(crate) fn handle_queue_work(
                     // Counted by `AgentLaunchMark` once the child spawned:
                     // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
                     let status = session::spawn_vendor_headless_resume(
+                        host_main.as_deref(),
                         &session::HeadlessResume {
                             vendor,
                             session_id: &id,
@@ -14042,6 +14067,7 @@ pub(crate) fn handle_queue_work(
                     .cyan()
                 );
                 session::exec_claude_resume(
+                    host_main.as_deref(),
                     &id,
                     permission_mode.as_deref(),
                     contained,
@@ -14129,6 +14155,7 @@ pub(crate) fn handle_queue_work(
                     // exec). trace:TASK-2807 | ai:claude
                     agent.starting();
                     return session::exec_vendor_headless(
+                        host_main.as_deref(),
                         headless_vendor,
                         &prompt,
                         &id,
@@ -14157,6 +14184,7 @@ pub(crate) fn handle_queue_work(
                     .cyan()
                 );
                 session::exec_claude_with_session(
+                    host_main.as_deref(),
                     permission_mode.as_deref(),
                     name.as_deref(),
                     &prompt,
@@ -14440,6 +14468,10 @@ pub(crate) fn run_standalone_reviewer(
     // codex-routed standalone reviewer actually launches `codex`.
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
+    // TASK-2032: the host main `handle_queue_work` resolved before its chdir
+    // into the seat; every launch arm below builds its boundary from it.
+    // trace:TASK-2032 | ai:claude
+    host_main: Option<&std::path::Path>,
 ) -> Result<()> {
     // TASK-2807: every arm spawns through `reviewer_status_on_spawn`, which
     // `AgentLaunchMark` counts only once a child exists, so a reviewer spawn
@@ -14522,6 +14554,7 @@ pub(crate) fn run_standalone_reviewer(
                 let (vendor, resume_id) =
                     crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
                 let (status, grant) = session::spawn_vendor_headless_resume_granted(
+                    host_main,
                     &session::HeadlessResume {
                         vendor,
                         session_id: &id,
@@ -14576,6 +14609,7 @@ pub(crate) fn run_standalone_reviewer(
                         session::CodexLane {
                             tree: worktree,
                             role: Some("reviewer"),
+                            host_main, // trace:TASK-2032 | ai:claude
                         },
                     )?;
                     cmd.current_dir(worktree);
@@ -14622,6 +14656,7 @@ pub(crate) fn run_standalone_reviewer(
                     )?;
                     (
                         session::spawn_claude_resume_with_grant(
+                            host_main,
                             &id,
                             permission_mode,
                             contained,
@@ -14669,6 +14704,7 @@ pub(crate) fn run_standalone_reviewer(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
                 let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
+                    host_main,
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
                     prompt,
@@ -14687,6 +14723,7 @@ pub(crate) fn run_standalone_reviewer(
                 // regardless, failing after the lease + worktree already
                 // existed. trace:BUG-1607 | ai:claude
                 let plan = session::interactive_reviewer_launch_plan(
+                    host_main,
                     launch_vendor,
                     permission_mode,
                     name.as_deref(),

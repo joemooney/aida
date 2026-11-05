@@ -824,57 +824,6 @@ pub(crate) fn sccache_missing_tmpdir_in(
     sccache_server_status_in(proc_dir, pids_env).1
 }
 
-/// Ensure sccache server is running with a stable TMPDIR (/tmp).
-/// Respects the opt-out: if RUSTC_WRAPPER is set and empty or doesn't name sccache, does nothing.
-/// If no sccache server is running, pre-starts it with `TMPDIR=/tmp sccache --start-server`.
-/// If an sccache server is running with a missing TMPDIR, stops it and restarts it with `TMPDIR=/tmp`.
-pub(crate) fn ensure_sccache_server() -> Result<()> {
-    if let Ok(wrapper) = std::env::var("RUSTC_WRAPPER") {
-        let trimmed = wrapper.trim();
-        if trimmed.is_empty() || !trimmed.contains("sccache") {
-            return Ok(());
-        }
-    }
-    if std::env::var("AIDA_SCCACHE_DISABLE").as_deref() == Ok("1") {
-        return Ok(());
-    }
-    let sccache_bin = if let Ok(bin) = std::env::var("AIDA_SCCACHE") {
-        PathBuf::from(bin)
-    } else if let Some(path) = std::env::var_os("PATH").and_then(|p| {
-        std::env::split_paths(&p)
-            .map(|dir| dir.join("sccache"))
-            .find(|cand| cand.is_file())
-    }) {
-        path
-    } else {
-        return Ok(());
-    };
-
-    let (is_running, missing) = sccache_server_status();
-    let stable_tmp = std::env::var("AIDA_SCCACHE_TMPDIR").unwrap_or_else(|_| "/tmp".into());
-    if missing.is_some() {
-        let _ = Command::new(&sccache_bin)
-            .arg("--stop-server")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
-        let _ = Command::new(&sccache_bin)
-            .arg("--start-server")
-            .env("TMPDIR", stable_tmp)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
-    } else if !is_running {
-        let _ = Command::new(&sccache_bin)
-            .arg("--start-server")
-            .env("TMPDIR", stable_tmp)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
-    }
-    Ok(())
-}
-
 // Stream diagnostics without retaining an entire build log. Keep an overlap so
 // error markers split between reads still count. Cargo emits these on stderr.
 // trace:TASK-2790 | ai:codex
@@ -932,6 +881,18 @@ fn inherit_cargo_tty_env(cmd: &mut Command, parent_tty_width: Option<Option<u16>
     }
 }
 
+/// The RUSTC_WRAPPER a spawned `cmd` sees: its explicit override when set
+/// (a removed override counts as unset), else the inherited process value.
+/// trace:TASK-1954 | ai:claude  trace:TASK-1771 | ai:claude
+fn rustc_wrapper_for(cmd: &Command) -> Option<String> {
+    for (key, value) in cmd.get_envs() {
+        if key == "RUSTC_WRAPPER" {
+            return value.map(|v| v.to_string_lossy().into_owned());
+        }
+    }
+    std::env::var("RUSTC_WRAPPER").ok()
+}
+
 fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
     use std::io::IsTerminal;
     let tty_width = std::io::stderr()
@@ -966,7 +927,7 @@ fn run_checked_in(
     // once every holder of the pipe's write end has closed it, so a grandchild
     // that inherits stderr and outlives the child (a daemon cargo spawns, say)
     // keeps this join blocked until it exits. Long-lived helpers must be
-    // started with their stdio detached, as ensure_sccache_server does.
+    // started with their stdio detached (an sccache server, say).
     // trace:TASK-2802 | ai:claude
     let status = child.wait();
     let fetch_error = diagnostics
@@ -974,12 +935,17 @@ fn run_checked_in(
         .map_err(|_| anyhow!("diagnostic reader panicked"))??;
     let status = status.with_context(|| format!("could not wait for {what}"))?;
     if !status.success() {
-        let sccache_active = match std::env::var("RUSTC_WRAPPER") {
-            Ok(ref w) => {
+        // The child's own RUSTC_WRAPPER override (the build sets it to "" to
+        // opt out of sccache) wins over this process's environment, so the
+        // sccache hint never prints for a build that did not use sccache.
+        // trace:TASK-1954 | ai:claude  trace:TASK-1771 | ai:claude
+        let wrapper = rustc_wrapper_for(cmd);
+        let sccache_active = match wrapper {
+            Some(ref w) => {
                 let trimmed = w.trim();
                 !trimmed.is_empty() && trimmed.contains("sccache")
             }
-            Err(_) => true,
+            None => true,
         };
         if sccache_active {
             if let Some(missing) = sccache_missing() {

@@ -348,3 +348,146 @@ fn cli_parses_each_view_with_list_style_filters() {
         }
     ));
 }
+
+// ---- TASK-1954 sweep (TASK-1762 follow-ups) ----
+// trace:TASK-1954 trace:TASK-1762 | ai:claude
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[test]
+fn view_status_filter_accepts_open_closed_groups_and_lists() {
+    let closed = resolve_view_status_filter("closed").unwrap();
+    for s in ["Done", "Completed", "Rejected", "Superseded"] {
+        assert!(
+            closed
+                .iter()
+                .any(|c| history::status_key(c) == history::status_key(s)),
+            "closed lacks {s}: {closed:?}"
+        );
+    }
+    let open = resolve_view_status_filter("open").unwrap();
+    assert!(
+        open.iter().any(|c| history::status_key(c) == "draft"),
+        "{open:?}"
+    );
+    assert!(!open.iter().any(|c| history::status_key(c) == "completed"));
+    assert_eq!(
+        resolve_view_status_filter("accepted").unwrap(),
+        ["Approved"]
+    );
+    assert_eq!(
+        resolve_view_status_filter("draft,approved").unwrap().len(),
+        2
+    );
+    let err = resolve_view_status_filter("bogus").unwrap_err().to_string();
+    assert!(err.contains("`open` / `closed`"), "{err}");
+
+    let events = vec![
+        event("TASK-1", "2026-10-14T03:00:00Z", added()),
+        event("TASK-2", "2026-10-14T02:00:00Z", added()),
+    ];
+    let summaries = vec![
+        summary(1, "TASK-1", "Task", "Completed", &[]),
+        summary(2, "TASK-2", "Task", "Draft", &[]),
+    ];
+    let q = ViewQuery {
+        filters: ViewFilters {
+            statuses: closed,
+            ..ViewFilters::default()
+        },
+        ..ViewQuery::default()
+    };
+    assert_eq!(ids(&select_rows(&events, &summaries, &q)), ["TASK-1"]);
+}
+
+#[test]
+fn view_priority_filter_refuses_an_unknown_value() {
+    assert_eq!(resolve_view_priority_filter("HIGH").unwrap(), "High");
+    let err = resolve_view_priority_filter("urgent")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("invalid priority `urgent`"), "{err}");
+}
+
+#[test]
+fn json_when_carries_an_offset() {
+    let when = when_rfc3339("2026-10-14 03:00");
+    let parsed =
+        chrono::DateTime::parse_from_rfc3339(&when).unwrap_or_else(|e| panic!("{when}: {e}"));
+    assert_eq!(
+        parsed.naive_local().format("%Y-%m-%d %H:%M").to_string(),
+        "2026-10-14 03:00"
+    );
+    assert_eq!(when_rfc3339("2026-10-14T03:00:00Z"), "2026-10-14T03:00:00Z");
+    assert_eq!(when_rfc3339("not a time"), "not a time");
+}
+
+/// A renumber writes the object at a new path, which the decoder reads as
+/// an add for the new ID. `opened` must not list it as newly filed.
+#[test]
+fn opened_skips_a_renumbered_spec_filed_before_the_window() {
+    let events = vec![
+        event("TASK-9", "2026-10-14T03:00:00Z", added()),
+        event("TASK-2", "2026-10-14T02:00:00Z", added()),
+    ];
+    let mut renumbered = summary(9, "TASK-9", "Task", "Draft", &[]);
+    renumbered.created_at = "2026-01-01T00:00:00+00:00".to_string();
+    let mut fresh = summary(2, "TASK-2", "Task", "Draft", &[]);
+    fresh.created_at = "2026-10-14T02:00:00+00:00".to_string();
+    let summaries = vec![renumbered, fresh];
+    let floor = chrono::DateTime::parse_from_rfc3339("2026-10-07T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let q = ViewQuery {
+        created_floor: Some(floor),
+        ..ViewQuery::default()
+    };
+    assert_eq!(ids(&select_rows(&events, &summaries, &q)), ["TASK-2"]);
+    // Without a floor (any non-`opened` view) nothing is dropped.
+    assert_eq!(
+        ids(&select_rows(&events, &summaries, &ViewQuery::default())),
+        ["TASK-9", "TASK-2"]
+    );
+}
+
+/// Golden for the human table: a `When` column in front of the `aida
+/// list --fields id,type,status,priority,title` table.
+#[test]
+fn human_table_golden() {
+    let rows = vec![
+        ViewRow {
+            when: "2026-10-14 03:00".to_string(),
+            summary: summary(1, "TASK-1", "Task", "Completed", &[]),
+        },
+        ViewRow {
+            when: "2026-10-13 21:15".to_string(),
+            summary: summary(2, "BUG-22", "Bug", "Draft", &[]),
+        },
+    ];
+    let lines: Vec<String> = render_human_table(&rows)
+        .iter()
+        .map(|l| strip_ansi(l).trim_end().to_string())
+        .collect();
+    let golden = [
+        "When             ID     Type Status    Priority Title",
+        "──────────────── ───────────────────────────────────────────",
+        "2026-10-14 03:00 TASK-1 task completed medium   TASK-1 title",
+        "2026-10-13 21:15 BUG-22 bug  draft     medium   BUG-22 title",
+    ];
+    assert_eq!(lines, golden, "actual:\n{}", lines.join("\n"));
+}

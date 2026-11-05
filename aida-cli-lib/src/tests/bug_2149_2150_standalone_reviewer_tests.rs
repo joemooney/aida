@@ -196,6 +196,7 @@ fn run_mock_reviewer_in(
         &verdict_path,
         false,
         launch_vendor,
+        crate::seat_clone::launcher_main().as_deref(),
     );
     crate::session::set_headless_vendor_override(None);
     (result, project)
@@ -1072,6 +1073,7 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
         ("AIDA_CONTAINED", None),
     ]);
     let status = crate::session::spawn_claude_resume_with_grant(
+        crate::seat_clone::launcher_main().as_deref(),
         "019e0000-0000-7000-8000-0000000000cc",
         None,
         false,

@@ -25,6 +25,7 @@ fn request(posture: ContainmentPosture, kind: LaunchKind, tail: &[&str]) -> Laun
         posture,
         cwd: std::env::temp_dir(),
         set_cwd: false,
+        host_main: None,
     }
 }
 
@@ -591,11 +592,21 @@ fn no_tee() -> crate::headless_tee::TeeOptions {
 #[test]
 fn aida_posture_spawn_routes_through_single_boundary_fn() {
     let exec = |c| {
-        crate::session::build_claude_exec_command(None, None, Some("p"), Some("sid"), c, None, None)
-            .unwrap()
+        crate::session::build_claude_exec_command(
+            None,
+            None,
+            None,
+            Some("p"),
+            Some("sid"),
+            c,
+            None,
+            None,
+        )
+        .unwrap()
     };
     let run = |c| {
         crate::session::build_run_claude_session_command(
+            None,
             None,
             None,
             Some("p"),
@@ -640,6 +651,7 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
         if !c || keyring {
             let (out, n) = boundary_calls(|| {
                 crate::session::spawn_vendor_headless_with_seat_granted(
+                    None,
                     claude,
                     aida_core::agents_config::AgentSeat::Implementer,
                     "go",
@@ -653,7 +665,7 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
             assert_eq!(n, want, "headless forking contained={c}");
 
             let plan = crate::session::interactive_reviewer_launch_plan(
-                claude, None, None, "review", "sid-r", c,
+                None, claude, None, None, "review", "sid-r", c,
             )
             .unwrap();
             let (out, n) = boundary_calls(|| {
@@ -664,13 +676,14 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
         }
 
         let (out, n) = boundary_calls(|| {
-            crate::session::build_advisor_interactive_command(claude, "advise", "g-adv", c)
+            crate::session::build_advisor_interactive_command(None, claude, "advise", "g-adv", c)
         });
         out.unwrap();
         assert_eq!(n, want, "advisor interactive contained={c}");
 
         let (out, n) = boundary_calls(|| {
             crate::session::build_exec_vendor_headless_command(
+                None,
                 claude,
                 "coord",
                 "sid-c",
@@ -735,6 +748,7 @@ fn golden_interactive_claude_paths_are_unchanged() {
     let exec = |c: bool, grant: Option<&str>| {
         crate::session::build_claude_exec_command(
             None,
+            None,
             Some("n"),
             Some("p"),
             Some("sid"),
@@ -746,6 +760,7 @@ fn golden_interactive_claude_paths_are_unchanged() {
     };
     let run = |c: bool| {
         crate::session::build_run_claude_session_command(
+            None,
             None,
             Some("n"),
             Some("p"),
@@ -864,6 +879,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
         if !c || keyring {
             // spawn_vendor_headless_forking: a fresh headless phase.
             crate::session::spawn_vendor_headless_with_seat_granted(
+                None,
                 claude,
                 aida_core::agents_config::AgentSeat::Implementer,
                 "go",
@@ -879,7 +895,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
 
             // spawn_reviewer_launch_plan_granted.
             let plan = crate::session::interactive_reviewer_launch_plan(
-                claude, None, None, "review", "sid-r", c,
+                None, claude, None, None, "review", "sid-r", c,
             )
             .unwrap();
             crate::session::spawn_reviewer_launch_plan_granted(&plan, &fx.project).unwrap();
@@ -889,8 +905,9 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
         }
 
         // build_advisor_interactive_command.
-        let cmd = crate::session::build_advisor_interactive_command(claude, "advise", "g-adv", c)
-            .unwrap();
+        let cmd =
+            crate::session::build_advisor_interactive_command(None, claude, "advise", "g-adv", c)
+                .unwrap();
         assert_eq!(
             decided_ops(&cmd),
             child_ops("advisor", "g-adv", c),
@@ -905,6 +922,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
 
         // build_coordinator_headless_command_inner, via the exec phase.
         let cmd = crate::session::build_exec_vendor_headless_command(
+            None,
             claude,
             "coord",
             "sid-c",

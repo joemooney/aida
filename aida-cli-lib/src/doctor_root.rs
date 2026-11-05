@@ -842,7 +842,16 @@ pub(crate) fn collect_doctor_findings_at(
     // unwritable, store writes defer their commits indefinitely. Report the
     // exact unwritable directory so the operator can fix permissions.
     // trace:BUG-2140 | ai:antigravity
-    if let Some(unwritable) = aida_core::git_ops::store_unwritable_git_path(&store_worktree) {
+    // TASK-1624: a contained seat is denied `<main>/.git` by design and its
+    // store writes are committed by the host, so the finding (and its
+    // `chmod -R u+w` advice) is noise there; `store-queued-specs` below still
+    // reports writes the host has not committed. trace:TASK-1954 trace:TASK-1624 | ai:claude
+    let unwritable = if crate::session::process_contained() {
+        None
+    } else {
+        aida_core::git_ops::store_unwritable_git_path(&store_worktree)
+    };
+    if let Some(unwritable) = unwritable {
         push(DoctorFinding {
             category: "store-worktree".to_string(),
             id: "store-worktree-gitdir-unwritable".to_string(),

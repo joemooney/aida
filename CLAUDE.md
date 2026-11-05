@@ -18,6 +18,10 @@ needed.
   explicitly for developers/operators.
 - Architecture changes require a sketch on the owning spec and advisor signoff
   before implementation.
+- Put per-change notes in the PR body and an `aida comment add` on the spec,
+  not in `AGENTS.md` or `OVERVIEW.md`; edit those only for a real architecture
+  change (each prepended paragraph conflicts with every open PR).
+  <!-- trace:TASK-1954 TASK-2015 | ai:claude -->
 - CLI commands are registered from their own modules
   (`command_registry::REGISTRY`; clap types in `<module>_args.rs`); never add
   to the legacy `Command` enum in `cli.rs` (a ratchet test fails). See the

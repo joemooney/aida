@@ -1160,7 +1160,8 @@ fn tool_bypass_flags_per_agent() {
 
 #[test]
 fn tool_contained_flags_for_claude_keep_interactive_prompts() {
-    let flags = tool_contained_flags("claude").unwrap();
+    let flags =
+        tool_contained_flags(crate::seat_clone::launcher_main().as_deref(), "claude").unwrap();
     assert!(!claude_args_request_dontask(&flags), "{flags:?}");
     assert!(flags.contains(&"--setting-sources".to_string()));
     assert!(flags.contains(&"project".to_string()));
@@ -1187,10 +1188,11 @@ fn interactive_claude_dontask_guard_refuses_unpromptable_mode() {
     let args = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
     let err = guard_interactive_claude_dontask("claude", &args).unwrap_err();
     assert!(format!("{err:?}").contains("interactive Claude"));
-    assert!(
-        guard_interactive_claude_dontask("claude", &tool_contained_flags("claude").unwrap())
-            .is_ok()
-    );
+    assert!(guard_interactive_claude_dontask(
+        "claude",
+        &tool_contained_flags(crate::seat_clone::launcher_main().as_deref(), "claude").unwrap()
+    )
+    .is_ok());
 }
 
 // trace:BUG-1178 | ai:codex
@@ -1298,7 +1300,7 @@ fn bug_2131_contained_launch_refuses_on_old_git() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
-    let flags = tool_contained_flags("codex").unwrap();
+    let flags = tool_contained_flags(None, "codex").unwrap();
     assert_eq!(
         &flags[..4],
         &[
@@ -1608,7 +1610,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn codex_bypass_flag_only_comes_from_bypass_posture() {
-    let contained = tool_contained_flags("codex").unwrap();
+    let contained = tool_contained_flags(None, "codex").unwrap();
     assert!(!contained
         .iter()
         .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
