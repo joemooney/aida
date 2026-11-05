@@ -589,17 +589,31 @@ impl Fixture {
         mode: u8,
     ) -> anyhow::Result<()> {
         let mock = self.path("mock-claude.sh");
+        // Resumes issue a real delegated child grant. The fake Codex vendor
+        // acknowledges its model-free preflight separately from the child
+        // invocation whose exit/publication this fixture observes.
+        // trace:STORY-2475 | ai:codex
+        let preflight = if mode == 2 && vendor == crate::session::HeadlessVendor::Codex {
+            "for arg in \"$@\"; do\n\
+             if [ \"$arg\" = sandbox ]; then\n\
+             test -n \"$AIDA_SESSION_GRANT\" || exit 42\n\
+             test \"$AIDA_SESSION_ROLE\" = implementer || exit 43\n\
+             echo 'seat_grant_valid=true expected_seat=true'\n\
+             exit 0\nfi\ndone\n"
+        } else {
+            ""
+        };
         crate::test_exec::write_executable(
             &mock,
             format!(
-                "#!/bin/sh\nn=$(cat \"{count}\" 2>/dev/null || echo 0); n=$((n+1)); echo $n > \"{count}\"\n\
+                "#!/bin/sh\n{preflight}n=$(cat \"{count}\" 2>/dev/null || echo 0); n=$((n+1)); echo $n > \"{count}\"\n\
                  for a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"{args}.$n\"\n{stub_body}\n",
                 count = self.path("count").display(),
                 args = self.path("args").display(),
             ),
         );
         let home = self.path("home");
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_HOME", Some(home.to_str().unwrap())),
             ("HOME", Some(home.to_str().unwrap())),
             ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
@@ -609,6 +623,18 @@ impl Fixture {
             ("AIDA_TEE_HEADLESS", Some("0")),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ]);
+        if mode == 2 {
+            let subject = "story-2475-fixture";
+            env.set_key("AIDA_USER", subject);
+            env.set_key("AIDA_SESSION_ROLE", "advisor");
+            let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+                &self.worktree,
+                subject,
+                "advisor",
+                &["implementer"],
+            );
+            env.set_key(crate::gate::seat_authority::GRANT_ENV, parent);
+        }
         let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
             cause: "test".into(),
         };
