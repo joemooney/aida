@@ -210,6 +210,17 @@ mod bug_home_041_fail_fast_command_tests {
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // Local observation data must never enter identity/store/telemetry setup.
+    // trace:STORY-2479 | ai:codex
+    if let Some(result) = crate::observation_envelope::local_entry() {
+        match result {
+            Ok(()) => return,
+            Err(error) => {
+                eprintln!("Error: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
     // BUG-2221: anchor the foreground-scheduling window (the show negative
     // probe derives its batch budget from process entry + the unchanged
     // 1000 ms objective). trace:BUG-2221 | ai:claude

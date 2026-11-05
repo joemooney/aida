@@ -13390,8 +13390,11 @@ pub(crate) fn handle_queue_work(
             // BUG-2223: re-enter the orphan's tree in place. Session start
             // re-checks it and bypasses nothing else: a live claim on the
             // scope still refuses. trace:BUG-2223 | ai:claude
-            /* adopt_orphan */
-            adopt_orphan.is_some(),
+            if adopt_orphan.is_some() {
+                crate::session_start::PathReentry::AdoptOrphan
+            } else {
+                crate::session_start::PathReentry::None
+            },
         )
     };
     let setup_receipt = if no_launch {
@@ -17979,8 +17982,19 @@ fn run_queue(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    dispatch_queue_args(&args, ctx)
+}
+
+/// The `aida queue` store-phase execution path, shared by `run_queue` and
+/// `aida pr review` (which builds `queue work <change> --auto-complete` and
+/// runs it here, so every queue-work gate and refusal stays in one place).
+// trace:TASK-1715 | ai:claude
+pub(crate) fn dispatch_queue_args(
+    args: &QueueArgs,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -17992,7 +18006,7 @@ fn run_queue(
         }) => {
             use crate::git_backend_cmd::*;
             let (store_path, backend) = (*store_path, *backend);
-            match &args {
+            match args {
                 QueueArgs { inner: queue_cmd } => {
                     // STORY-78: `aida queue list --sync` pulls before listing.
                     // Done here at dispatch (not inside handle_queue_command) so
@@ -18016,7 +18030,7 @@ fn run_queue(
             requirements_path,
         }) => {
             let (storage, requirements_path) = (*storage, *requirements_path);
-            match &args {
+            match args {
                 QueueArgs { inner: queue_cmd } => {
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
@@ -18221,7 +18235,7 @@ pub(crate) static REWORK: crate::command_registry::CommandReg =
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::QueueCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
