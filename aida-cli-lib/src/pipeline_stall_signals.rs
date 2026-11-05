@@ -582,6 +582,124 @@ mod tests {
 
     // trace:TASK-3075 | ai:codex
     #[test]
+    fn empty_exit_deduplicates_each_receipt_head_across_membership_changes() {
+        for fail_after_send in [false, true] {
+            let t = tempfile::tempdir().unwrap();
+            let dir = t.path().join(".aida/empty-rework");
+            std::fs::create_dir_all(&dir).unwrap();
+            for pr in [41, 42] {
+                let key = uuid::Uuid::new_v4();
+                std::fs::write(dir.join(format!("{key}-{pr}.json")), "\"samehead\"").unwrap();
+            }
+            let raw = serde_json::json!([
+                {"number":41,"title":"A","headRefName":"a","headRefOid":"samehead",
+                 "mergeable":"MERGEABLE","isDraft":false},
+                {"number":42,"title":"B","headRefName":"b","headRefOid":"samehead",
+                 "mergeable":"MERGEABLE","isDraft":false}
+            ]);
+            let mut prs = parse_stall_prs(raw.as_array().unwrap(), Some(&["build".into()]));
+            let mut sends = 0;
+            // A -> A+B -> B -> A+B must deliver only for A, then B, even
+            // when the accepted-result write fails and leaves a reservation.
+            for (i, (a, b)) in [
+                ("fail", "pending"),
+                ("fail", "fail"),
+                ("pending", "fail"),
+                ("fail", "fail"),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                prs.by_branch.get_mut("a").unwrap().ci_rollup = Some(a.into());
+                prs.by_branch.get_mut("b").unwrap().ci_rollup = Some(b.into());
+                let ids = empty_rework(t.path(), Some(&prs), &mut Vec::new()).unwrap();
+                let s = Snapshot {
+                    extra: vec![Alarm::new("empty-rework-exit", Some(true), ids.join(","))],
+                    ..Default::default()
+                };
+                let mut writes = 0;
+                let result = tick_with_writer(
+                    t.path(),
+                    &s,
+                    (i as i64 + 1) * MIN,
+                    true,
+                    30,
+                    &mut |_| {
+                        sends += 1;
+                        Ok(true)
+                    },
+                    &mut |path, bytes| {
+                        writes += 1;
+                        if fail_after_send && i < 2 && writes == 2 {
+                            anyhow::bail!("injected post-send failure");
+                        }
+                        Ok(aida_core::write_atomic(path, bytes)?)
+                    },
+                );
+                assert_eq!(result.is_err(), fail_after_send && i < 2);
+                assert_eq!(sends, (i + 1).min(2));
+            }
+            // A new head with a matching new receipt is fresh evidence.
+            prs.by_branch.get_mut("a").unwrap().head_sha = Some("newhead".into());
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .ends_with("-41.json")
+                {
+                    std::fs::write(path, "\"newhead\"").unwrap();
+                }
+            }
+            let ids = empty_rework(t.path(), Some(&prs), &mut Vec::new()).unwrap();
+            let s = Snapshot {
+                extra: vec![Alarm::new("empty-rework-exit", Some(true), ids.join(","))],
+                ..Default::default()
+            };
+            let report = tick(t.path(), &s, 5 * MIN, true, 30, &mut |_| {
+                sends += 1;
+                Ok(true)
+            })
+            .unwrap();
+            assert_eq!(report.accepted, ["empty-rework-exit"]);
+            assert_eq!(sends, 3);
+        }
+    }
+
+    // trace:TASK-3075 | ai:codex
+    #[test]
+    fn empty_exit_migrates_aggregate_acceptance_and_reservations() {
+        for pending in [false, true] {
+            let t = tempfile::tempdir().unwrap();
+            std::fs::create_dir(t.path().join(".aida")).unwrap();
+            let state = serde_json::json!({"version":1,"episodes":{
+                "empty-rework-exit":{"first_ms":MIN,"observed_ms":MIN,
+                    "accepted":!pending,"delivery_pending":pending,"identity":"A,B"}
+            }});
+            std::fs::write(
+                t.path().join(".aida/pipeline-stalls.json"),
+                serde_json::to_vec(&state).unwrap(),
+            )
+            .unwrap();
+            for identity in ["A", "A,B", "B", "A,B"] {
+                let s = Snapshot {
+                    extra: vec![Alarm::new("empty-rework-exit", Some(true), identity.into())],
+                    ..Default::default()
+                };
+                assert!(tick(t.path(), &s, 2 * MIN, true, 30, &mut |_| panic!(
+                    "legacy delivered heads must remain suppressed"
+                ))
+                .unwrap()
+                .due
+                .is_empty());
+            }
+        }
+    }
+
+    // trace:TASK-3075 | ai:codex
+    #[test]
     fn identity_delivery_survives_unknown_false_gaps_and_backwards_clock() {
         for kind in ["no-merge-90m", "stale-advisor-mail", "empty-rework-exit"] {
             let t = tempfile::tempdir().unwrap();

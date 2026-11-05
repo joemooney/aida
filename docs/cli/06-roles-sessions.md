@@ -866,6 +866,8 @@ clocks and gaps over 15 minutes reset their continuous timer. Age/event kinds
 retain accepted delivery across unknown and false ticks, clock changes and
 observation gaps for the same evidence identity (including pending CI reruns);
 a new merge timestamp, oldest-mail ID or empty-rework head re-arms that kind.
+Empty-rework delivery is tracked separately for each receipt key/head: changes
+to the set of blocked PRs do not resend already accepted heads.
 Schedule ticks more frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
 A preview never advances an observation timer.
 

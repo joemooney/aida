@@ -19,7 +19,7 @@ struct State {
     version: u32,
     episodes: BTreeMap<String, Episode>,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Episode {
     first_ms: i64,
     observed_ms: i64,
@@ -212,6 +212,19 @@ fn tick_with_writer(
         .filter(|s| s.version == 1)
         .unwrap_or_default();
     state.version = 1;
+    // Upgrade the former aggregate receipt episode without losing accepted or
+    // unresolved deliveries. Receipt keys/heads contain no comma separators.
+    // trace:TASK-3075 | ai:codex
+    if let Some(episode) = state.episodes.remove("empty-rework-exit") {
+        for member in episode.identity.split(',').filter(|id| !id.is_empty()) {
+            let mut member_episode = episode.clone();
+            member_episode.identity = member.into();
+            state
+                .episodes
+                .entry(format!("empty-rework-exit:{member}"))
+                .or_insert(member_episode);
+        }
+    }
     let mut report = Report {
         execute,
         evidence: snapshot
@@ -222,7 +235,30 @@ fn tick_with_writer(
             .collect(),
         ..Default::default()
     };
-    for (kind, active) in snapshot.predicates() {
+    let mut due_episodes = Vec::new();
+    // Each empty-rework receipt/head owns its delivery state. Adding or removing
+    // another blocked PR must never re-arm an accepted (or unresolved) head.
+    // trace:TASK-3075 | ai:codex
+    let observations = snapshot
+        .predicates()
+        .into_iter()
+        .flat_map(|(kind, active)| {
+            let identity = snapshot
+                .extra
+                .iter()
+                .find(|a| a.kind == kind)
+                .map_or("", |a| a.identity.as_str());
+            if kind == "empty-rework-exit" && active == Some(true) {
+                identity
+                    .split(',')
+                    .filter(|id| !id.is_empty())
+                    .map(|member| (kind, active, member, format!("{kind}:{member}")))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![(kind, active, identity, kind.to_owned())]
+            }
+        });
+    for (kind, active, identity, episode_key) in observations {
         let alarm = snapshot.extra.iter().find(|a| a.kind == kind);
         // Age/event delivery belongs to the evidence identity, not a continuous
         // run of true observations. Preserve accepted and unresolved deliveries
@@ -238,23 +274,27 @@ fn tick_with_writer(
             }
             continue;
         }
-        report.active.push(kind.into());
+        if !report.active.iter().any(|k| k == kind) {
+            report.active.push(kind.into());
+        }
         // Age/event predicates already include their own threshold. Identity changes
         // re-arm a new merge/mail/head episode without waiting for a clear tick.
         // trace:TASK-3075 | ai:codex
-        let identity = alarm.map_or("", |a| a.identity.as_str());
         let delay = if alarm.is_some_and(|a| a.immediate) {
             0
         } else {
             i64::from(threshold_mins) * 60_000
         };
-        let episode = state.episodes.entry(kind.into()).or_insert(Episode {
-            first_ms: now,
-            observed_ms: now,
-            accepted: false,
-            delivery_pending: false,
-            identity: identity.into(),
-        });
+        let episode = state
+            .episodes
+            .entry(episode_key.clone())
+            .or_insert(Episode {
+                first_ms: now,
+                observed_ms: now,
+                accepted: false,
+                delivery_pending: false,
+                identity: identity.into(),
+            });
         if (!identity_keyed
             && (now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS))
             || episode.identity != identity
@@ -272,7 +312,10 @@ fn tick_with_writer(
             report.unknown.push(format!("{kind}: prior delivery outcome unresolved; inspect advisor inbox before resetting state"));
         }
         if now - episode.first_ms >= delay && !episode.accepted && !episode.delivery_pending {
-            report.due.push(kind.into());
+            due_episodes.push(episode_key);
+            if !report.due.iter().any(|k| k == kind) {
+                report.due.push(kind.into());
+            }
         }
     }
     if execute && !report.due.is_empty() {
@@ -303,19 +346,19 @@ fn tick_with_writer(
             report.due.join(", "), bounded_digest(&details));
         // Reserve durably before external delivery. A failed post-send write leaves
         // an unresolved reservation, preventing duplicate urgent mail on later ticks.
-        for kind in &report.due {
-            state.episodes.get_mut(kind).unwrap().delivery_pending = true;
+        for key in &due_episodes {
+            state.episodes.get_mut(key).unwrap().delivery_pending = true;
         }
         persist(&path, &serde_json::to_vec_pretty(&state)?)?;
         let delivered = send(&body);
-        for kind in &report.due {
-            state.episodes.get_mut(kind).unwrap().delivery_pending = false;
+        for key in &due_episodes {
+            state.episodes.get_mut(key).unwrap().delivery_pending = false;
         }
         // Known refused/failed deliveries remain retryable after persistence.
         match delivered {
             Ok(true) => {
-                for kind in &report.due {
-                    state.episodes.get_mut(kind).unwrap().accepted = true;
+                for key in &due_episodes {
+                    state.episodes.get_mut(key).unwrap().accepted = true;
                 }
                 report.accepted = report.due.clone();
             }
