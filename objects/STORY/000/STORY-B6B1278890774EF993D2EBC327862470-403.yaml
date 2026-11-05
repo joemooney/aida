@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T04:32:31.708144936Z
+modified_at: 2026-11-05T04:36:20.609331187Z
 req_type: Story
 relationships:
 - rel_type:
@@ -77,6 +77,12 @@ comments:
   created_at: 2026-11-05T03:57:52.118269445Z
   modified_at: 2026-11-05T03:57:52.118269445Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9fe-5801-7141-815c-9e6b417dacd9
+  author: joe
+  content: 'Round-two changes committed and published as 84ff97dcf03 in https://github.com/joemooney/aida/pull/3407. Both host_recorded_clone calls are anchored; dirty resumes preserve edits; conflict routing/mail errors fail closed; clean unpushed publication returns without misleading mail; unused hold argument removed. Added real Git preparation refusal tests, vendor routing and failure tests, publication veto/probe tests, recorded-clone state coverage, and mock-child standalone/drain/resume exit tests. fmt --check and git diff --check passed. untested=true: initial direct test compilation reported a private PuntCategory fixture import, fixed in the committed source; final-source retry is queued for a build slot. Host lane-job runner explicitly unavailable for this lease. Launcher seated fresh -403-2 on main instead of requested PR branch -403, so restored prior feature patch and sanctioned host publication opened replacement PR #3407. Existing #3398 is untouched. No force push, pr ship, review record, or merge. Status remains In Progress pending independent verification/review.'
+  created_at: 2026-11-05T04:36:20.609331187Z
+  modified_at: 2026-11-05T04:36:20.609331187Z
+  session_id: 01a1a9f00add
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
