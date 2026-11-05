@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:07:16.412587611Z
+modified_at: 2026-11-05T20:13:42.115962312Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -68,6 +68,12 @@ comments:
   created_at: 2026-11-05T20:05:35.310643447Z
   modified_at: 2026-11-05T20:05:35.310643447Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad58-8563-7c13-a992-c18c1d8fa4c8
+  author: joe
+  content: 'Round 2: findings 1-4 implemented: manual flag citation corrected; intended own-migrate help snapshot updated; creator-shell fallback removed; session-start ownership snapshot captures the AIDA invocation itself without altering legacy lease routing/liveness, then worker stamps replace it; injectable writer probe covers init/systemd/tini refusal. Finding 5 constructor fragility fixed: production HostFacts can only be constructed from ProbeSource, which always applies ownership validation. Generic remote subreaper detection remains a design fork: Linux PR_GET_CHILD_SUBREAPER reads only the calling process; procfs provides no arbitrary-PID flag, so known-init executable rejection is explicitly scoped in code/docs. Finding 6 remains unverified: this lane is PID namespace 4026533091, while host leases name 4026531836. own migrate --execute refused for missing operator terminal; lane own show sees zero ownership records and is not host acceptance evidence. Repairing an invalid orphan witness deliberately retains UNEXPLAINED never-released: no missing-lease release operation is included; an operator-reviewed lifecycle repair is required before PR-C cutover. Tests are running; final results and commit will follow.'
+  created_at: 2026-11-05T20:13:42.115962312Z
+  modified_at: 2026-11-05T20:13:42.115962312Z
+  session_id: 01a1ad52961b
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
