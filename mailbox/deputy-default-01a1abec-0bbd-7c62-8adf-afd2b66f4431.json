@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1abec-0bbd-7c62-8adf-afd2b66f4431",
+  "thread_id": "deputy-01a1abec-0bbd-7c62-8adf-afd2b66f4431",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793885737398,
+  "body": "Deputy \"default\" finished job 01a1abec-0bbd-7c62-8adf-afd2b66f4431: rc 1 (exit).\nCommand: aida ship STORY-1651 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 --commit-pending [AI:codex] fix(docs): close audience review gaps (STORY-1651) --dry-run\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1abec-0bbd-7c62-8adf-afd2b66f4431.out\nRead it with `aida deputy log 01a1abec-0bbd-7c62-8adf-afd2b66f4431`.\n`aida awaiting` lists it until you run `aida deputy ack 01a1abec-0bbd-7c62-8adf-afd2b66f4431`.\n",
+  "subject": "deputy job 01a1abec FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
