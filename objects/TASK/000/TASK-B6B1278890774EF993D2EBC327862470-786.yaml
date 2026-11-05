@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:45:45.853875499Z
+modified_at: 2026-11-05T12:57:18.021518798Z
 req_type: Task
 tags:
 - area:containment
@@ -49,6 +49,22 @@ comments:
   content: 'Implementation approach under binding 2026-11-05 ruling: add a session-only AGY write_file permission for the exact fixture workspace plus only the immutable fixture payload command, with offline integration coverage of generated private settings and argv. Add an explicitly gated AGY adapter data table alongside the shared launcher describing posture A, private runtime/auth evidence, safe argv order, disabled host-capable tool surfaces, and raw-store denial with mediated-only writes. Route AGY posture refusals through its named conformance gate; no production enablement, real credentials, host measurement or deputies. Validate with offline conformance tests, targeted Rust containment tests and LIGHT checks. Open Refs STORY-2460 PR if publication is available; otherwise retain a concrete publication handoff.'
   created_at: 2026-11-05T12:45:45.853875499Z
   modified_at: 2026-11-05T12:45:45.853875499Z
+  session_id: 01a1abbc157d
+- id: 01a1abc8-f850-7603-b6bf-9de1326cd373
+  author: joe
+  content: |-
+    Implementation ready locally under the binding 2026-11-05 ruling. No AGY enablement or host measurement claimed.
+
+    Changes: scripts/containment/conformance.py now creates private runtime conformance-settings.json with only write_file(<canonical fixture workspace>) (covers native writes/edits) and the exact immutable fixture payload command; --settings points at the overlay file; no permission-bypass flag. Offline tests exercise both rule generation/refusal of unsafe paths and the actual generated AGY argv/settings through a mocked vendor spawn. Shared launch/agy.rs supplies typed adapter data for posture A, private runtime/credential layout, observed-vs-approved auth hosts (approved empty, inventory incomplete), safe option order ending -p <prompt>, four writable classes, raw Git/store denial and mediated-only writes, and tool confinement/disablement requirements. Session admission now gives a named pending-fresh-all-tool-conformance refusal; trusted aida/native and missing opt-ins remain refused. Existing Codex/Claude enforcement is unchanged. Updated conformance documentation and Rust refusal/adapter regressions.
+
+    Validation: 18 offline conformance tests PASS; make check-ci-fast PASS (all 37 gates), including aida-cli --no-default-features compilation, TUI seam, formatting and conformance fixtures. git diff --check PASS. Rust unit tests untested=true: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_2631_containment_tests refused because lease 01a1abbc157d has no lane job runner. Host/CI should run the containment tests plus launch::agy::tests. No real vendor calls, credentials copied/logged, deputies contacted, review verdict, merge or completion claim.
+
+    Publication blocked by native seat, not a design fork: aida ship TASK-3048 --no-merge --dry-run refused before mutation because the seat Git directory is read-only. It explicitly requires leaving edits uncommitted for the host-side exit step; publication remains a separate host operation. Seven source/test/doc files are pending, including new aida-cli-lib/src/launch/agy.rs. No PR exists from this work. Per aida-pickup pre-exit publication rule, filing category=other punt rather than claiming a published result.
+
+    Requested PR title (Refs parent, completion trailer only for this task): [AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)
+    Requested commit subject: same as PR title. From the main checkout, the documented recovery is aida ship TASK-3048 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-786 --commit-pending '<subject above>'. That host seat path never merges. If the launcher already committed pending work, omit --commit-pending. Ensure the opened PR title includes Refs STORY-2460, preserve the current AGY refusal, and stop at PR-open for independent review. Fresh host measurements remain the advisor's responsibility.
+  created_at: 2026-11-05T12:57:17.136716828Z
+  modified_at: 2026-11-05T12:57:17.136716828Z
   session_id: 01a1abbc157d
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
@@ -101,6 +117,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1abc8-fbc5-7160-9ddb-a143fd689688
+  author: joe
+  timestamp: 2026-11-05T12:57:18.021536618Z
+  session_id: 01a1abbc157d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -109,3 +133,9 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: other
+  detail: 'Implementation and all 37 fast gates pass locally, but native Codex publication preflight refuses: this seat Git directory is read-only. Edits remain uncommitted for host post-exit commit/publication. Rust unit tests untested=true because this lease has no lane job runner. No PR opened.'
+  lean: Host should publish the pending seven-file implementation with the title recorded on TASK-3048, including Refs STORY-2460; run containment and agy adapter unit tests in host/CI; leave AGY gated and stop at PR-open.
+  raised_by: implementer
+  raised_at: 2026-11-05T12:57:18.021518798Z
