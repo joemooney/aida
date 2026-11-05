@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-831
 agreed_id: TASK-3111
 title: 'Nit sweep A: test hygiene findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2833 TASK-2839 TASK-2843 TASK-2845 TASK-2846 TASK-2847 TASK-2855 TASK-2866 TASK-2869'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-05T17:40:14.344458562Z
+modified_at: 2026-11-05T17:53:37.869990215Z
 req_type: Task
 tags:
 - from-advisor
@@ -70,6 +70,12 @@ comments:
   created_at: 2026-11-05T17:40:14.344458562Z
   modified_at: 2026-11-05T17:40:14.344458562Z
   session_id: 01a1aca9561d
+- id: 01a1acd7-f37e-7da2-9a3a-8b47be40fd79
+  author: joe
+  content: 'Validation complete on commit 42f8998007e (pushed to origin): 16 core activation tests, 46 selected CLI unit tests including the forced-live capability control, all six BUG-2441 train regressions as exact children with fresh private TMPDIR, and both binary-level regressions passed (70 targeted checks total). All three TASK-1059 criterion anchors resolve. Formatting and committed whitespace checks pass. Initial parallel train failures matched the existing TASK-2841 / SPEC-HOME-016 test-home/receipt issue; private temporary roots and exact-child isolation passed without weakening authority. All nine findings still applied on initial main b66ec083185 and are addressed in one commit. Earlier publication concern is superseded by the successful normal commit and push; no host handoff is needed for this launch. Opening the single PR next, then queue-done bookkeeping; no ship or review-record action.'
+  created_at: 2026-11-05T17:53:16.158753551Z
+  modified_at: 2026-11-05T17:53:16.158753551Z
+  session_id: 01a1aca9561d
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
   author: joe
@@ -128,6 +134,14 @@ history:
   timestamp: 2026-11-05T17:03:06.798686099Z
   session_id: 01a1aca9561d
   changes: []
+- id: 01a1acd8-4914-7490-9390-460a4cf02649
+  author: joe
+  timestamp: 2026-11-05T17:53:38.068427242Z
+  session_id: 01a1aca9561d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -136,3 +150,7 @@ filed_at:
   aida_build_sha: c38a77db609
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T17:53:37.869990215Z
+  implemented_by: joe
