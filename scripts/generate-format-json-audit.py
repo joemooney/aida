@@ -22,6 +22,12 @@ VERIFIED = {
     "aida intent note": "intent note --category observation --title title --file note.md (JSON attachment)",
     "aida intent validate": "intent validate --file observation.json",
     "aida intent export": "intent export --file observation.json (JSON attachment)",
+    # trace:TASK-3096 | ai:codex — hermetic bare-remote intake probes.
+    "aida intent enroll": "intent enroll --remote <local-bare-repo> --reviewed",
+    "aida intent publish": "intent publish --file observation.json --reviewed",
+    "aida intent pull": "intent pull (validated local bare remote)",
+    "aida intent list": "intent list",
+    "aida intent process": "intent process <checksum> --action pending",
     # trace:TASK-2705 | ai:codex
     "aida config permissions probe": "config permissions probe --vendor unregistered-audit-fixture (structured refusal; nonzero exit)",
     # trace:TASK-2347 | ai:codex

@@ -315,11 +315,11 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida worktree pool adopt` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree pool destroy` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida intent enroll` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida intent publish` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida intent pull` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida intent list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida intent process` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida intent enroll` | JSON honoured | intent enroll --remote <local-bare-repo> --reviewed |
+| `aida intent publish` | JSON honoured | intent publish --file observation.json --reviewed |
+| `aida intent pull` | JSON honoured | intent pull (validated local bare remote) |
+| `aida intent list` | JSON honoured | intent list |
+| `aida intent process` | JSON honoured | intent process <checksum> --action pending |
 | `aida intent note` | JSON honoured | intent note --category observation --title title --file note.md (JSON attachment) |
 | `aida intent validate` | JSON honoured | intent validate --file observation.json |
 | `aida intent export` | JSON honoured | intent export --file observation.json (JSON attachment) |

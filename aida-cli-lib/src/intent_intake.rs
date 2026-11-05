@@ -5,6 +5,7 @@ use aida_core::transport_policy::{self as transport_process, Private};
 use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
@@ -72,6 +73,9 @@ pub(crate) enum IntakeCommand {
         /// Existing destination spec for --action comment.
         #[clap(long)]
         target: Option<String>,
+        /// Confirm the prior writer has stopped; reconcile its journal with store evidence.
+        #[clap(long)]
+        reconcile: bool,
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
@@ -185,6 +189,7 @@ struct Intake {
     worktree: PathBuf,
     profile: Profile,
     _lock: fs::File,
+    blobs: RefCell<BTreeMap<String, Vec<u8>>>,
 }
 
 impl Intake {
@@ -312,6 +317,7 @@ impl Intake {
             worktree,
             profile,
             _lock: lock,
+            blobs: RefCell::new(BTreeMap::new()),
         })
     }
 
@@ -325,6 +331,12 @@ impl Intake {
     }
 
     fn blob(&self, oid: &str, limit: usize) -> Result<Vec<u8>> {
+        if let Some(bytes) = self.blobs.borrow().get(oid) {
+            if bytes.len() > limit {
+                bail!("Intake object exceeds size limit");
+            }
+            return Ok(bytes.clone());
+        }
         let size: usize = text(git(&self.worktree, &["cat-file", "-s", oid], &[])?)?.parse()?;
         if size > limit {
             bail!("Intake object exceeds size limit");
@@ -333,6 +345,9 @@ impl Intake {
         if !ok {
             bail!("Unreadable intake blob");
         }
+        self.blobs
+            .borrow_mut()
+            .insert(oid.to_string(), bytes.clone());
         Ok(bytes)
     }
 
@@ -344,6 +359,29 @@ impl Intake {
             &["rev-list", "--reverse", "--topo-order", "--parents", tip],
             &[],
         )?)?;
+        // Owner-only checkpoint pins a previously validated immutable Git object.
+        // Rewritten/unrelated history cannot reuse it; it falls back to full validation.
+        // Only new commits need intermediate-tree checks. Re-read the checkpoint
+        // tree and validate every live file against the current policy as well.
+        // Bind proof to the compiled validators, including dirty source changes:
+        // future validation rules must never inherit an older validator's proof.
+        use sha2::{Digest, Sha256};
+        let mut validator = Sha256::new();
+        validator.update(include_bytes!("intent_intake.rs"));
+        validator.update(include_bytes!("observation_envelope.rs"));
+        let validator = format!("v1:{:x}:", validator.finalize());
+        let checkpoint = self
+            .private
+            .read("validated-tip")?
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|value| value.strip_prefix(&validator).map(str::to_owned))
+            .filter(|tip| tip.len() == 40 && tip.bytes().all(|b| b.is_ascii_hexdigit()));
+        let checkpoint = checkpoint.filter(|tip| {
+            commits
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(tip.as_str()))
+        });
+        let mut reached = checkpoint.is_none();
         let deadline = Instant::now() + Duration::from_secs(30);
         let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let mut read_bytes = 0usize;
@@ -362,6 +400,11 @@ impl Intake {
             {
                 bail!("Intake ancestry must be a single orphan linear history");
             }
+            if !reached && checkpoint.as_deref() != Some(fields[0]) {
+                parent = Some(fields[0]);
+                continue;
+            }
+            reached = true;
             let tree = git(
                 &self.worktree,
                 &["ls-tree", "-rtz", "--full-tree", fields[0]],
@@ -472,6 +515,8 @@ impl Intake {
             previous = current;
             parent = Some(fields[0]);
         }
+        self.private
+            .write("validated-tip", format!("{validator}{tip}").as_bytes())?;
         Ok(previous)
     }
 
@@ -545,6 +590,7 @@ impl Intake {
     fn push(&self) -> Result<()> {
         let tip = self.tip()?.context("No intake commits to publish")?;
         self.history(&tip)?;
+        // remote-creds-ok(TASK-2001): separately enrolled URL; ambient product credentials/config are intentionally excluded.
         git(&self.worktree, &["-c", "push.default=nothing", "push", "--no-verify", "--no-follow-tags", "--", &self.profile.remote, &format!("{tip}:{BRANCH}")], &[])
             .context("Intake push refused; local commit retained. Pull first; divergence requires manual review in a separate clone")?;
         Ok(())
@@ -553,6 +599,7 @@ impl Intake {
     fn pull(&self) -> Result<()> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
+        // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
         git(
             &self.worktree,
             &[
@@ -642,7 +689,14 @@ fn evidence(journal: &Journal) -> Result<Option<String>> {
     }
 }
 
-fn process(intake: &Intake, checksum: &str, action: Action, target: &Option<String>) -> Result<()> {
+fn process(
+    intake: &Intake,
+    checksum: &str,
+    action: Action,
+    target: &Option<String>,
+    reconcile: bool,
+    json: bool,
+) -> Result<()> {
     if !digest(checksum) {
         bail!("Supply the full lowercase SHA-256 digest");
     }
@@ -672,17 +726,39 @@ fn process(intake: &Intake, checksum: &str, action: Action, target: &Option<Stri
                 bail!("Observation already processed for another destination");
             }
         }
-        println!("{}", serde_json::to_string(&receipt)?);
+        print_receipt(&receipt, json)?;
         return Ok(());
+    }
+    if reconcile {
+        if let Some(bytes) = intake.private.read(&journal_name)? {
+            let journal: Journal = serde_json::from_slice(&bytes)?;
+            if journal.version != 1
+                || journal.checksum != checksum
+                || uuid::Uuid::parse_str(&journal.operation).is_err()
+            {
+                bail!("Invalid processing journal; inspect manually");
+            }
+            if evidence(&journal)?.is_none() {
+                // Explicit operator assertion that the old writer is stopped,
+                // plus a fresh store scan, permits abandoning an unconfirmed op.
+                intake.private.remove(&journal_name)?;
+            } else if matches!(action, Action::Pending | Action::Dismiss) {
+                bail!("Confirmed prior spec write; repeat its original action and target to recover the receipt");
+            }
+        }
     }
     if action == Action::Pending {
         if intake.private.read(&journal_name)?.is_some() {
             bail!("Unresolved processing operation; reconcile before leaving pending");
         }
-        println!(
-            "{}",
-            serde_json::json!({"checksum": checksum, "state": "pending"})
-        );
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({"checksum": checksum, "state": "pending"})
+            );
+        } else {
+            println!("{checksum} pending");
+        }
         return Ok(());
     }
     let mut destination = None;
@@ -732,8 +808,10 @@ fn process(intake: &Intake, checksum: &str, action: Action, target: &Option<Stri
             let marker = format!("intake-op:{}", journal.operation);
             // Reuse normal CLI authorization and canonical writers, never bypass
             // role, transport, hypothesis or store mutation policy here.
-            let mut cmd = Command::new(std::env::current_exe()?);
-            cmd.env("AIDA_HEADLESS", "1");
+            let mut cmd = Command::new(crate::resolve_aida_exe());
+            let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(None);
+            cmd.env("AIDA_HEADLESS", "1")
+                .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
             let body;
             if action == Action::Create {
                 cmd.arg("add")
@@ -761,15 +839,26 @@ fn process(intake: &Intake, checksum: &str, action: Action, target: &Option<Stri
                 ]);
                 body = format!("{}\n\n{}\n\n[{marker}]", value.title, value.body);
             }
-            let (status, _) = transport_process::bounded(
+            let result = transport_process::bounded_with_stderr(
                 cmd,
                 body.as_bytes(),
                 CAP,
                 Instant::now() + Duration::from_secs(30),
-            )?;
+            );
+            // The bounded runner has stopped/reaped its group even on timeout,
+            // spawn failure or overflow. Fresh canonical evidence decides recovery.
             destination = evidence(&journal)?;
-            if !status.success() || destination.is_none() {
-                bail!("Spec write failed or its success is ambiguous; processing journal retained. Retry only to recover confirmed evidence; never blindly repeat the write");
+            if destination.is_none() {
+                intake.private.remove(&journal_name)?;
+                match result {
+                    Ok((_, _, stderr)) => bail!("Spec writer made no confirmed write; retry is available: {}", String::from_utf8_lossy(&stderr)),
+                    Err(error) => bail!("Spec writer stopped without a confirmed write; retry is available: {error:#}"),
+                }
+            }
+            if let Ok((_, _, stderr)) = result {
+                if !stderr.is_empty() {
+                    eprint!("{}", String::from_utf8_lossy(&stderr));
+                }
             }
         }
     } else if intake.private.read(&journal_name)?.is_some() {
@@ -784,18 +873,68 @@ fn process(intake: &Intake, checksum: &str, action: Action, target: &Option<Stri
     intake.add_file(&receipt_path, &serde_json::to_vec(&receipt)?)?;
     // Receipt is durable before journal cleanup; retry after either crash is safe.
     intake.private.remove(&journal_name)?;
-    println!("{}", serde_json::to_string(&receipt)?);
+    print_receipt(&receipt, json)?;
+    Ok(())
+}
+
+fn receipt_view(
+    receipt: &Receipt,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<serde_json::Value> {
+    let mut view = serde_json::to_value(receipt)?;
+    if let Some(id) = &receipt.destination {
+        // Listing an observation clone needs no store. Keep UUID if unavailable.
+        if let Some(store) = store {
+            if let Some(req) = store.get_requirement_unambiguous(id)? {
+                view["destination"] = serde_json::Value::String(req.display_id());
+            }
+        }
+    }
+    Ok(view)
+}
+
+fn print_receipt(receipt: &Receipt, json: bool) -> Result<()> {
+    let store = receipt
+        .destination
+        .as_ref()
+        .and_then(|_| canonical_store().ok().map(|(_, store)| store));
+    let view = receipt_view(receipt, store.as_ref())?;
+    if json {
+        println!("{}", view);
+    } else {
+        println!(
+            "{} {}{}",
+            receipt.checksum,
+            serde_json::to_value(receipt.action)?.as_str().unwrap(),
+            view["destination"]
+                .as_str()
+                .map(|id| format!(" → {id}"))
+                .unwrap_or_default()
+        );
+    }
     Ok(())
 }
 
 pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
     let intake = Intake::open(command)?;
+    let json = json_format
+        || match command {
+            IntakeCommand::Enroll { json, .. }
+            | IntakeCommand::Publish { json, .. }
+            | IntakeCommand::Pull { json }
+            | IntakeCommand::List { json, .. }
+            | IntakeCommand::Process { json, .. } => *json,
+        };
     match command {
         IntakeCommand::Enroll { .. } => {
-            println!(
-                "{}",
-                serde_json::json!({"enrolled": true, "branch": "aida-intent", "store_required": false})
-            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({"enrolled": true, "branch": "aida-intent", "store_required": false})
+                );
+            } else {
+                println!("Enrolled independent intake destination.");
+            }
         }
         IntakeCommand::Publish { file, reviewed, .. } => {
             if let Some(file) = file {
@@ -807,20 +946,33 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                 intake.add_file(&format!("observations/{}.json", value.checksum), &bytes)?;
             }
             intake.push()?;
-            println!(
-                "{}",
-                serde_json::json!({"published": true, "branch": "aida-intent"})
-            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({"published": true, "branch": "aida-intent"})
+                );
+            } else {
+                println!("Published intake observations and receipts.");
+            }
         }
         IntakeCommand::Pull { .. } => {
             intake.pull()?;
-            println!(
-                "{}",
-                serde_json::json!({"pulled": true, "branch": "aida-intent"})
-            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({"pulled": true, "branch": "aida-intent"})
+                );
+            } else {
+                println!("Pulled validated intake history.");
+            }
         }
-        IntakeCommand::List { all, json } => {
+        IntakeCommand::List { all, .. } => {
             let files = intake.files()?;
+            let store = if *all {
+                canonical_store().ok().map(|(_, store)| store)
+            } else {
+                None
+            };
             let mut rows = Vec::new();
             for (path, bytes) in files.iter().filter(|(p, _)| p.starts_with("observations/")) {
                 let value = envelope::parse(bytes, &intake.profile.deny_patterns)?;
@@ -829,19 +981,23 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                     .map(|b| serde_json::from_slice::<Receipt>(b))
                     .transpose()?;
                 if *all || receipt.is_none() {
-                    rows.push(serde_json::json!({"label": value.label(), "checksum": value.checksum, "title": value.title, "state": if receipt.is_some() {"processed"} else {"pending"}, "receipt": receipt}));
+                    rows.push(serde_json::json!({"label": value.label(), "checksum": value.checksum, "title": value.title, "state": if receipt.is_some() {"processed"} else {"pending"}, "receipt": receipt.as_ref().map(|r| receipt_view(r, store.as_ref())).transpose()?}));
                 }
             }
-            if *json || json_format {
+            if json {
                 println!("{}", serde_json::to_string(&rows)?);
             } else {
                 for row in rows {
                     println!(
-                        "{} {} {} {}",
+                        "{} {} {} {}{}",
                         row["label"].as_str().unwrap(),
                         row["checksum"].as_str().unwrap(),
                         row["state"].as_str().unwrap(),
-                        row["title"]
+                        row["title"].as_str().unwrap(),
+                        row["receipt"]["destination"]
+                            .as_str()
+                            .map(|id| format!(" → {id}"))
+                            .unwrap_or_default()
                     );
                 }
             }
@@ -850,8 +1006,9 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             checksum,
             action,
             target,
+            reconcile,
             ..
-        } => process(&intake, checksum, *action, target)?,
+        } => process(&intake, checksum, *action, target, *reconcile, json)?,
     }
     Ok(())
 }

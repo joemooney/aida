@@ -406,10 +406,14 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
     let checksum = f.note("--an-untrusted-title");
     good(&f.publish());
     assert_eq!(f.snapshot(), store_before_publication);
-    let out = f.run(&["intent", "process", &checksum, "--action", "create"]);
+    let out = f.run(&[
+        "intent", "process", &checksum, "--action", "create", "--json",
+    ]);
     good(&out);
     let receipt: Value = serde_json::from_slice(&out.stdout).unwrap();
-    let destination = receipt["destination"].as_str().unwrap();
+    let receipt_bytes = fs::read(f.intake().join(format!("receipts/{checksum}.json"))).unwrap();
+    let wire_receipt: Value = serde_json::from_slice(&receipt_bytes).unwrap();
+    let destination = wire_receipt["destination"].as_str().unwrap();
     let store_path = aida_core::store_locate::detect_distributed_store_from(&f.root).unwrap();
     let load = || {
         let backend = aida_core::GitBackend::new(&store_path).unwrap();
@@ -420,6 +424,7 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
         .get_requirement_unambiguous(destination)
         .unwrap()
         .unwrap();
+    assert_eq!(receipt["destination"], req.display_id());
     assert_eq!(req.title, "--an-untrusted-title");
     assert_eq!(req.status, aida_core::RequirementStatus::Draft);
     let count = first.requirements.len();
@@ -537,6 +542,19 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
         .read(&format!("operation-{ambiguous}.json"))
         .unwrap()
         .is_some());
+    good(&f.run(&[
+        "intent",
+        "process",
+        &ambiguous,
+        "--action",
+        "pending",
+        "--reconcile",
+    ]));
+    assert!(private
+        .read(&format!("operation-{ambiguous}.json"))
+        .unwrap()
+        .is_none());
+    assert_eq!(load().requirements.len(), count);
 }
 
 #[test]
@@ -651,4 +669,214 @@ fn hostile_file_modes_and_orphan_receipts_are_not_accepted() {
         );
         assert_eq!(accepted, git(&receiver.intake(), &["rev-parse", "HEAD"]));
     }
+}
+
+#[test]
+fn intake_human_and_json_renderings_are_distinct() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    f.enroll(&remote);
+    let enrolled = f.run(&[
+        "intent",
+        "enroll",
+        "--remote",
+        remote.to_str().unwrap(),
+        "--reviewed",
+        "--json",
+    ]);
+    good(&enrolled);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&enrolled.stdout).unwrap()["enrolled"],
+        true
+    );
+    let checksum = f.note("Title with spaces");
+    let published = f.publish();
+    good(&published);
+    assert!(String::from_utf8_lossy(&published.stdout).starts_with("Published "));
+    let published = f.run(&["intent", "publish", "--json"]);
+    good(&published);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&published.stdout).unwrap()["published"],
+        true
+    );
+    let pulled = f.run(&["intent", "pull"]);
+    good(&pulled);
+    assert!(String::from_utf8_lossy(&pulled.stdout).starts_with("Pulled "));
+    let pulled = f.run(&["--format", "json", "intent", "pull"]);
+    good(&pulled);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&pulled.stdout).unwrap()["pulled"],
+        true
+    );
+    let listed = f.run(&["--format", "human", "intent", "list"]);
+    good(&listed);
+    assert!(String::from_utf8_lossy(&listed.stdout).ends_with("pending Title with spaces\n"));
+    let pending = f.run(&[
+        "intent", "process", &checksum, "--action", "pending", "--json",
+    ]);
+    good(&pending);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&pending.stdout).unwrap()["state"],
+        "pending"
+    );
+    let dismissed = f.run(&["intent", "process", &checksum, "--action", "dismiss"]);
+    good(&dismissed);
+    assert_eq!(
+        String::from_utf8_lossy(&dismissed.stdout),
+        format!("{checksum} dismiss\n")
+    );
+}
+
+#[test]
+fn validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let sender = Fixture::new();
+    let receiver = Fixture::new();
+    sender.enroll(&remote);
+    receiver.enroll(&remote);
+    sender.note("first");
+    good(&sender.publish());
+    sender.note("second");
+    good(&sender.publish());
+    good(&receiver.run(&["intent", "pull"]));
+    let old = git(&receiver.intake(), &["rev-parse", "HEAD"]);
+    let checkpoint = receiver.root.join(".git/aida-intake/validated-tip");
+    let cached = fs::read_to_string(&checkpoint).unwrap();
+    assert!(cached.ends_with(&format!(":{old}")));
+    // Removing an old object proves a second command uses the validated prefix.
+    // The tip's live blobs still get validated, so a missing live blob refuses.
+    let root_commit = git(&receiver.intake(), &["rev-list", "--max-parents=0", "HEAD"]);
+    let root_tree = git(
+        &receiver.intake(),
+        &["rev-parse", &format!("{root_commit}^{{tree}}")],
+    );
+    let object = receiver
+        .intake()
+        .join(".git/objects")
+        .join(&root_tree[..2])
+        .join(&root_tree[2..]);
+    let saved = fs::read(&object).unwrap();
+    fs::remove_file(&object).unwrap();
+    good(&receiver.run(&["intent", "list", "--json"]));
+    fs::write(&checkpoint, format!("v0:stale:{old}")).unwrap();
+    bad(
+        &receiver.run(&["intent", "list", "--json"]),
+        "Git operation refused",
+    );
+    fs::write(object, saved).unwrap();
+    good(&receiver.run(&["intent", "list", "--json"]));
+    assert_eq!(fs::read_to_string(&checkpoint).unwrap(), cached);
+    // The checkpoint cannot hide a hostile addition and removal after its tip.
+    fs::write(sender.intake().join("leak.txt"), "private").unwrap();
+    git(&sender.intake(), &["add", "."]);
+    git(
+        &sender.intake(),
+        &["commit", "-qm", "Record reviewed intake data"],
+    );
+    git(&sender.intake(), &["rm", "-q", "leak.txt"]);
+    git(
+        &sender.intake(),
+        &["commit", "-qm", "Record reviewed intake data"],
+    );
+    git(
+        &sender.intake(),
+        &[
+            "push",
+            remote.to_str().unwrap(),
+            "HEAD:refs/heads/aida-intent",
+        ],
+    );
+    bad(&receiver.run(&["intent", "pull"]), "Unexpected intake path");
+    assert_eq!(fs::read_to_string(checkpoint).unwrap(), cached);
+    assert_eq!(git(&receiver.intake(), &["rev-parse", "HEAD"]), old);
+}
+
+#[test]
+fn writer_refusal_is_diagnostic_and_successful_retry_does_not_duplicate() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    f.enroll(&remote);
+    f.git(&["branch", "-D", "aida-store"]);
+    good(&f.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let refused = f.note("Retry after a refused writer");
+    good(&f.publish());
+    // A definite ordinary-writer policy refusal; local intake reads stay available.
+    let common = aida_core::transport_policy::Private::open(&f.root.join(".git")).unwrap();
+    common.write("aida-transport.json", b"{}").unwrap();
+    let failure = f.run(&["intent", "process", &refused, "--action", "create"]);
+    bad(&failure, "retry is available");
+    assert!(
+        String::from_utf8_lossy(&failure.stderr).contains("transport profile"),
+        "writer stderr must survive: {}",
+        String::from_utf8_lossy(&failure.stderr)
+    );
+    assert!(!f
+        .root
+        .join(format!(".git/aida-intake/operation-{refused}.json"))
+        .exists());
+    common.remove("aida-transport.json").unwrap();
+    good(&f.run(&["intent", "process", &refused, "--action", "create"]));
+    good(&f.run(&["intent", "publish"]));
+    let out = f.run(&["intent", "list", "--all", "--json"]);
+    good(&out);
+    let rows: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let destination = rows[0]["receipt"]["destination"].as_str().unwrap();
+    assert!(destination.starts_with("TASK-"));
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&f.root).unwrap();
+    let backend = aida_core::GitBackend::new(&store_path).unwrap();
+    let store = aida_core::DatabaseBackend::load(&backend).unwrap();
+    assert_eq!(
+        store
+            .requirements
+            .iter()
+            .filter(|r| r.title == "Retry after a refused writer")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn escaped_nul_spawn_failure_leaves_pending_and_dismiss_available() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    f.enroll(&remote);
+    f.git(&["branch", "-D", "aida-store"]);
+    good(&f.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    // A valid escaped NUL is data in an envelope, but cannot be an argv value.
+    // A spawn failure must leave pending/dismiss and subsequent work usable.
+    let nul = "34663d4588bf11840f31087f115be131de11a7a27dfdf71e8de08ce456a748ce";
+    let wire = json!({"version":1,"kind":"observation","category":"observation","title":"NUL\0title","body":"body","checksum":nul});
+    fs::write(
+        f.root.join("envelope.json"),
+        serde_json::to_vec(&wire).unwrap(),
+    )
+    .unwrap();
+    good(&f.publish());
+    bad(
+        &f.run(&["intent", "process", nul, "--action", "create"]),
+        "retry is available",
+    );
+    assert!(!f
+        .root
+        .join(format!(".git/aida-intake/operation-{nul}.json"))
+        .exists());
+    good(&f.run(&["intent", "process", nul, "--action", "pending"]));
+    good(&f.run(&["intent", "process", nul, "--action", "dismiss"]));
+    good(&f.run(&["intent", "publish"]));
 }

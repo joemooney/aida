@@ -176,6 +176,16 @@ pub fn test_process_binding() -> String {
     let pid = std::process::id();
     let start = aida_core::liveness::process_start_identity(pid)
         .expect("this test process's start identity is readable");
+    // Match production's subject binding when tests run in a child PID namespace.
+    // trace:TASK-3096 | ai:codex
+    let ns = aida_core::local_pid_ns().expect("this test process's PID namespace is readable");
+    let start = if ns.trim().parse::<u64>().expect("numeric namespace inode")
+        == aida_core::process_probe::INITIAL_PID_NAMESPACE_INODE
+    {
+        start
+    } else {
+        format!("pidns-{}/{start}", ns.trim())
+    };
     format!("proc:{pid}@{start}")
 }
 

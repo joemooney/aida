@@ -536,7 +536,65 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }
 
+    // trace:TASK-3096 | ai:codex — all enrolled command JSON flags are real projections.
+    let intake_remote = repo.parent().unwrap().join("intake.git");
+    git(
+        &repo,
+        &["init", "--bare", "-q", intake_remote.to_str().unwrap()],
+    );
+    let remote_path = intake_remote.to_str().unwrap();
+    json(
+        &aida(
+            &repo,
+            &home,
+            &[
+                "intent",
+                "enroll",
+                "--remote",
+                remote_path,
+                "--reviewed",
+                "--json",
+            ],
+        ),
+        "intake enrollment",
+    );
+    json(
+        &aida(
+            &repo,
+            &home,
+            &[
+                "intent",
+                "publish",
+                "--file",
+                "observation.json",
+                "--reviewed",
+                "--json",
+            ],
+        ),
+        "intake publication",
+    );
+    let checksum = note_value["checksum"].as_str().unwrap();
     let probes: &[(&str, &[&str])] = &[
+        (
+            "aida intent enroll",
+            &["intent", "enroll", "--remote", remote_path, "--reviewed"],
+        ),
+        (
+            "aida intent publish",
+            &[
+                "intent",
+                "publish",
+                "--file",
+                "observation.json",
+                "--reviewed",
+            ],
+        ),
+        ("aida intent pull", &["intent", "pull"]),
+        ("aida intent list", &["intent", "list"]),
+        (
+            "aida intent process",
+            &["intent", "process", checksum, "--action", "pending"],
+        ),
         (
             "aida intent validate",
             &["intent", "validate", "--file", "observation.json"],

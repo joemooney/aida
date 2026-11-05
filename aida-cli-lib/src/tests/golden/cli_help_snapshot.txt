@@ -11540,6 +11540,9 @@ Options:
       --target <TARGET>
           Existing destination spec for --action comment
 
+      --reconcile
+          Confirm the prior writer has stopped; reconcile its journal with store evidence
+
       --json
           Emit machine-readable JSON
 
@@ -42366,6 +42369,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "reconcile",
+        "takes_value": false,
+        "help": "Confirm the prior writer has stopped; reconcile its journal with store evidence"
       },
       {
         "name": "target",

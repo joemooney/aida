@@ -16,7 +16,7 @@ pub use private::{with_lock_wait, Private};
 
 #[path = "transport_process.rs"]
 mod process;
-pub use process::{bounded, drain, Group};
+pub use process::{bounded, bounded_with_stderr, drain, Group};
 
 #[path = "transport_prepared.rs"]
 mod prepared;

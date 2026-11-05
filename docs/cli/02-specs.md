@@ -435,7 +435,7 @@ aida intent list --json
 aida intent process <full-sha256> --action pending
 aida intent process <full-sha256> --action dismiss
 aida intent process <full-sha256> --action create
-aida intent process <full-sha256> --action comment --target TASK-123
+aida intent process <full-sha256> --action comment --target <spec-id>
 aida intent list --all --json
 aida intent publish
 ```
@@ -463,8 +463,31 @@ observation JSON and receipt JSON. Unknown paths, empty trees, foreign commit
 metadata, links, tampering, rewritten/deleted files, invalid receipts and denied
 text refuse, including in intermediate commits. Validation is bounded to 4096
 commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
-between commits and blobs. Each Git call has a 30-second timeout and bounded
+between commits and blobs. An owner-only `validated-tip` checkpoint skips
+previously validated intermediate trees when its exact commit remains an ancestor
+and the compiled validator sources match;
+unrelated history receives full validation. The checkpoint tree and all its live
+files are checked again, and blobs are reused within one command. Removing the
+checkpoint triggers full validation. Each Git call has a 30-second timeout and bounded
 output.
+
+These are **lifetime limits per intake repository**, not a rolling window. Rotate
+before reaching 4096 commits, 8192 files or 32 MiB; maximum-size envelopes can
+exhaust the byte limit in about 256 observations. Monitor the independent
+repository with `git -C <clone-common>/aida-intake/worktree rev-list --count HEAD`
+and `aida intent list --all --json`. There is no automatic compaction.
+
+For planned rotation, stop publishers and processors, publish outstanding receipts,
+and have every enrolled clone pull successfully. Archive the old remote and keep
+the old clones, receipts, store markers and operation journals intact. Resolve all
+journals before rotation. Create a new empty bare intake repository and new product
+clones; enroll each against that new destination with its reviewed policy. Publish
+only still-pending envelopes from the archived validated worktree, with explicit
+review for each. Never republish processed envelopes or recreate their specs. Keep
+the archive available for receipt lookup; do not delete it or force-rewrite its
+history. If a cap or divergence has already prevented synchronization, stop and
+reconcile both histories and store markers with an advisor before moving data;
+starting over without receipts can duplicate spec writes.
 
 A failed push retains its local commit. `aida intent publish` without `--file`
 retries publication and sends any local processing receipts. Pull first when
@@ -480,8 +503,23 @@ ordinary authorized CLI writers. Receipts contain exactly `version: 1`, the full
 `receipts/<sha256>.json`. Receipts are immutable and never enter envelopes.
 Processing writes a private durable operation journal before crossing into the
 store; the task tag or comment marker records its random operation identity.
-Retry recovers a confirmed successful write without repeating it. Missing,
-conflicting, or ambiguous evidence refuses automatic replay and keeps the journal
-for manual reconciliation. Do not delete a journal and repeat a store write
-without independently checking whether it succeeded.
+Retry recovers a confirmed successful write without repeating it. After a writer
+fails to spawn, exits, or is killed on timeout, a fresh canonical scan checks the
+operation marker. If absent, the journal is removed and retry is available; writer
+stderr is bounded and shown on failure. If evidence cannot be read or is ambiguous,
+the journal remains and automatic replay refuses.
+
+For a journal left by a crashed parent, first independently confirm that the old
+writer and its helpers have stopped. Then run
+`aida intent process <checksum> --action pending --reconcile` to check current
+store evidence and clear only an unconfirmed journal. `--reconcile` is the explicit
+assertion that the old writer has stopped. If a marker exists, use the original
+create/comment action and target to recover its receipt instead. Different-store
+or ambiguous markers refuse. Never remove journals manually and blindly repeat a
+store write.
+
+All intake commands honor `--json` and global `--format json`; otherwise they
+print human-readable results. Receipt destination UUIDs remain stable in the wire
+files. CLI receipt views resolve them to spec IDs when the home store is available,
+and keep the UUID when listing from an observation-only clone.
 <!-- doc-intent: shaped by TASK-3096 -->
