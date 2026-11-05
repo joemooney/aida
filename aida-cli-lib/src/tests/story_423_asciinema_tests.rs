@@ -882,3 +882,27 @@ fn shell_command_quotes_spaces_and_single_quotes() {
         "'/tmp/aida dev/aida' comment add TASK-1 'with spaces and '\"'\"'quote'\"'\"''"
     );
 }
+
+// trace:TASK-3114 | ai:codex
+#[test]
+fn pr_review_casts_name_numeric_and_forge_prefixed_targets() {
+    for (target, expected) in [("123", "PR-123"), ("pr-123", "PR-123"), ("MR-42", "MR-42")] {
+        let inner: Vec<String> = ["aida", "pr", "review", target]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            default_cast_title(&inner),
+            format!("AIDA pr review: {expected}")
+        );
+        assert_eq!(
+            asciinema_command_slug(&inner),
+            expected.to_ascii_lowercase()
+        );
+    }
+    let inner: Vec<String> = ["aida", "pr", "review"]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    assert_eq!(default_cast_title(&inner), "aida pr review");
+}
