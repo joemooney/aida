@@ -6,12 +6,12 @@ description: |
   seat_clone_detect::is_host_main (aida-core/src/seat_clone_detect.rs:92) checks against a process-wide HOST_MAINS set: every non-clone main ever resolved via main_worktree_root_from (worktree_gc.rs:758), plus the cwd git root. It does not check the launcher's main. No host path that resolves a seat-chosen dir was found, but a long-lived process widens the set. Pass the launcher's main into host_recorded_clone explicitly.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-05T00:20:41.991702297Z
+modified_at: 2026-11-05T00:21:45.875572603Z
 req_type: Task
 tags:
 - contained
@@ -280,6 +280,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a915-4576-7fd3-b7d5-e1532abe9f53
+  author: joe
+  timestamp: 2026-11-05T00:21:45.974832751Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
