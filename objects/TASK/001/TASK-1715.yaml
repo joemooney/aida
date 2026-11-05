@@ -16,12 +16,12 @@ description: |
 
   ## Handoff
   Advisor decision is approved by the operator in this session. Inspect existing PrCommand, queue-work dispatch and forge identifier helpers before implementation. Keep this a bounded additive alias; any change to orchestration semantics or authority requires a separate design decision. Implement in an isolated claimed session and obtain independent review.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-11-05T06:39:31.593423181Z
+modified_at: 2026-11-05T07:06:36.515874385Z
 req_type: Task
 relationships:
 - rel_type:
@@ -216,6 +216,23 @@ history:
   timestamp: 2026-11-05T06:39:32.691557205Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1aa87-ea28-7420-9b70-4d4f28f1cedc
+  author: aida-auto-bump
+  timestamp: 2026-11-05T07:06:36.456709079Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1aa87-ea63-75b2-9977-b995d78ef4b5
+  timestamp: 2026-11-05T07:06:36.515861087Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/claude/TASK-1715-2026-10-08T192413Z.md.acked
+  commit_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  summary: 'All 6 TASK-1715 ACs met: pr review normalizes N/#N via resolve_forge_kind (PR-N GitHub, MR-N GitLab, pure-git refuses), explicit PR-/MR- pass through parse_review_scope, runs the shared queue_cmd::dispatch_queue_args with queue-work policy (no extra authority), help/docs/skill updated, 9 tracing tests; CI green at head, CLEAN.'
+  punted:
+  - 'punted: session end observed 1 commit ahead on branch `task-1715` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
@@ -227,4 +244,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-08T05:19:06.906787276Z
   implemented_by: joe
+  completed_at: 2026-11-05T07:06:36.456702654Z
+  completion_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   reopened_at_sha: bf65220959c7601427247286abc7eb16278af5a5
