@@ -402,9 +402,15 @@ fn unpublishable_receipt_retries_without_a_second_spec_write() {
         fs::set_permissions(&objects, fs::Permissions::from_mode(0o755)).unwrap();
         return;
     }
+    good(&home.run(&["intent", "pull"]));
+    let checkpoint = home.root.join(".git/aida-intake/validated-tip");
+    let accepted = fs::read(&checkpoint).unwrap();
     let failed = home.run(&["intent", "process", &checksum, "--action", "create"]);
+    assert_eq!(fs::read(&checkpoint).unwrap(), accepted);
     fs::set_permissions(&objects, fs::Permissions::from_mode(0o755)).unwrap();
     bad(&failed, "rerun the same process command");
+    bad(&failed, "Intake push refused:");
+    assert!(!String::from_utf8_lossy(&failed.stderr).contains("lost the race"));
     assert!(home
         .root
         .join(format!(".git/aida-intake/operation-{checksum}.json"))
@@ -682,6 +688,76 @@ fn explicit_create_comment_and_recovery_do_not_repeat_spec_writes() {
         .unwrap()
         .is_none());
 
+    // Crash after a successful receipt push, before journal cleanup. Reinstall
+    // the same durable journal: retry verifies evidence and removes it.
+    // trace:TASK-3096 | ai:codex
+    let recovered_journal = json!({"version":1,"checksum":recover,"action":"comment","target":destination,"operation":operation,"store":store_path.canonicalize().unwrap()});
+    private
+        .write(
+            &format!("operation-{recover}.json"),
+            &serde_json::to_vec(&recovered_journal).unwrap(),
+        )
+        .unwrap();
+    good(&f.run(&[
+        "intent",
+        "process",
+        &recover,
+        "--action",
+        "comment",
+        "--target",
+        destination,
+    ]));
+    assert!(private
+        .read(&format!("operation-{recover}.json"))
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        load()
+            .get_requirement_unambiguous(destination)
+            .unwrap()
+            .unwrap()
+            .comments
+            .len(),
+        before
+    );
+
+    // Another clone won receipt publication after our separate create write.
+    // Retrying must identify the orphan instead of silently returning its receipt.
+    let duplicate = f.note("Concurrent duplicate create");
+    good(&f.publish());
+    good(&f.run(&["intent", "process", &duplicate, "--action", "create"]));
+    let out = f.run(&[
+        "add",
+        "--title=Orphaned local duplicate",
+        "--type",
+        "task",
+        "--status",
+        "draft",
+        "--tags",
+        &format!("intake-op:{operation}"),
+    ]);
+    good(&out);
+    let duplicate_spec = load()
+        .requirements
+        .into_iter()
+        .find(|r| r.title == "Orphaned local duplicate")
+        .unwrap();
+    let duplicate_journal = json!({"version":1,"checksum":duplicate,"action":"create","target":null,"operation":operation,"store":store_path.canonicalize().unwrap()});
+    private
+        .write(
+            &format!("operation-{duplicate}.json"),
+            &serde_json::to_vec(&duplicate_journal).unwrap(),
+        )
+        .unwrap();
+    let out = f.run(&["intent", "process", &duplicate, "--action", "create"]);
+    bad(&out, "Orphaned duplicate spec write");
+    bad(&out, &duplicate_spec.display_id());
+    assert!(private
+        .read(&format!("operation-{duplicate}.json"))
+        .unwrap()
+        .is_some());
+    let count = load().requirements.len();
+
     // Crash-before-write is indistinguishable from lost evidence: retain the
     // journal and refuse rather than issuing a second potentially duplicate write.
     let ambiguous = f.note("Ambiguous operation");
@@ -920,6 +996,12 @@ fn validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits() {
     let saved = fs::read(&object).unwrap();
     fs::remove_file(&object).unwrap();
     good(&receiver.run(&["intent", "list", "--json"]));
+    sender.note("third, after receiver checkpoint");
+    good(&sender.publish());
+    good(&receiver.run(&["intent", "pull"]));
+    let old = git(&receiver.intake(), &["rev-parse", "HEAD"]);
+    let cached = fs::read_to_string(&checkpoint).unwrap();
+    assert!(cached.ends_with(&format!(":{old}")));
     fs::write(&checkpoint, format!("v0:stale:{old}")).unwrap();
     bad(
         &receiver.run(&["intent", "list", "--json"]),
@@ -1039,4 +1121,123 @@ fn escaped_nul_spawn_failure_leaves_pending_and_dismiss_available() {
     good(&f.run(&["intent", "process", nul, "--action", "pending"]));
     good(&f.run(&["intent", "process", nul, "--action", "dismiss"]));
     good(&f.run(&["intent", "publish"]));
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn https_userinfo_refuses_before_persistence_and_ssh_is_supported() {
+    for remote in [
+        "https://token@example.org/intake.git",
+        "https://user:token@example.org/intake.git",
+    ] {
+        let f = Fixture::new();
+        let out = f.run(&["intent", "enroll", "--remote", remote, "--reviewed"]);
+        bad(&out, "HTTPS userinfo is refused");
+        assert!(!f.root.join(".git/aida-intake/profile.json").exists());
+        assert!(!String::from_utf8_lossy(&out.stderr).contains("token@"));
+    }
+    for remote in [
+        "https://example.org/public.git",
+        "ssh://git@example.org/private.git",
+    ] {
+        let f = Fixture::new();
+        good(&f.run(&["intent", "enroll", "--remote", remote, "--reviewed"]));
+    }
+    // A previously persisted credential-bearing profile must also refuse.
+    let f = Fixture::new();
+    let temp = tempfile::tempdir().unwrap();
+    f.enroll(&remote(&temp));
+    let private =
+        aida_core::transport_policy::Private::open(&f.root.join(".git/aida-intake")).unwrap();
+    private.write("profile.json", &serde_json::to_vec(&json!({"version":1,"remote":"https://token@example.org/intake.git","deny_patterns":[]})).unwrap()).unwrap();
+    bad(&f.run(&["intent", "list"]), "HTTPS userinfo is refused");
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn push_hook_refusal_reports_diagnostic_once_and_keeps_accepted_checkpoint() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    f.enroll(&remote);
+    f.note("accepted");
+    good(&f.publish());
+    let checkpoint = f.root.join(".git/aida-intake/validated-tip");
+    let accepted = fs::read(&checkpoint).unwrap();
+    let tip = git(&f.intake(), &["rev-parse", "HEAD"]);
+    let hook = remote.join("hooks/pre-receive");
+    fs::write(&hook, "#!/bin/sh\necho attempted >> push-attempts\necho 'fixture policy denied this push' >&2\nexit 1\n").unwrap();
+    fs::set_permissions(hook, fs::Permissions::from_mode(0o700)).unwrap();
+    f.note("refused candidate");
+    let out = f.publish();
+    bad(&out, "fixture policy denied this push");
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("lost the race"));
+    assert_eq!(
+        fs::read_to_string(remote.join("push-attempts"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    assert_eq!(git(&f.intake(), &["rev-parse", "HEAD"]), tip);
+    assert_eq!(fs::read(&checkpoint).unwrap(), accepted);
+}
+
+// trace:TASK-3096 | ai:codex
+#[test]
+fn moved_remote_tip_retries_publication_after_an_actual_push_race() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let first = Fixture::new();
+    let second = Fixture::new();
+    first.enroll(&remote);
+    second.enroll(&remote);
+    first.note("initial tip");
+    good(&first.publish());
+    // Pause only the first push after both candidates have synchronized. The
+    // second publisher wins, making the first's ref update a real lost race.
+    let hook = remote.join("hooks/pre-receive");
+    fs::write(&hook, "#!/bin/sh\nif mkdir race-gate 2>/dev/null; then\n  i=0\n  while [ ! -f race-release ]; do\n    i=$((i + 1))\n    [ \"$i\" -le 100 ] || exit 1\n    sleep 0.1\n  done\nfi\n").unwrap();
+    fs::set_permissions(hook, fs::Permissions::from_mode(0o700)).unwrap();
+    first.note("first candidate loses push race");
+    let child = first
+        .cmd(&["intent", "publish", "--file", "envelope.json", "--reviewed"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !remote.join("race-gate").exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let reached_hook = remote.join("race-gate").exists();
+    second.note("second candidate wins push race");
+    let winner = second.publish();
+    fs::write(remote.join("race-release"), b"").unwrap();
+    let retried = child.wait_with_output().unwrap();
+    assert!(
+        reached_hook,
+        "first publisher never reached the receive hook"
+    );
+    good(&winner);
+    good(&retried);
+    good(&second.run(&["intent", "pull"]));
+    assert_eq!(
+        git(&first.intake(), &["rev-parse", "HEAD"]),
+        git(&second.intake(), &["rev-parse", "HEAD"])
+    );
+    let out = first.run(&["intent", "list", "--json"]);
+    good(&out);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
 }

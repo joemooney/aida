@@ -442,9 +442,13 @@ aida intent publish
 
 Enrollment copies the reviewed regex policy, including an intentionally empty
 list, into owner-only clone-local state. Re-enrollment is idempotent only for the
-same destination and policy; use a separate clone to change either. Credentials
-and branch restrictions must be configured at the remote independently. Local
-validation does not certify sanitization or restrict raw Git clients.
+same destination and policy; use a separate clone to change either. HTTPS supports
+anonymous destinations only: credential helpers and askpass are disabled, and
+HTTPS URLs containing userinfo (including embedded tokens) refuse before being
+persisted. Authenticated destinations must use `ssh://` with SSH keys or an SSH
+agent; SSH runs in batch mode. Configure branch restrictions at the remote
+independently. Local validation does not certify sanitization or restrict raw Git
+clients.
 
 The clone's common Git directory contains `aida-intake/profile.json`, a permanent
 lock, and `aida-intake/worktree/` with its own `.git`, index, objects and refs.
@@ -466,7 +470,8 @@ commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
 between commits and blobs. An owner-only `validated-tip` checkpoint skips
 previously validated intermediate trees when its exact commit remains an ancestor
 and the compiled validator sources match;
-unrelated history receives full validation. The checkpoint tree and all its live
+unrelated history receives full validation. Only accepted tips advance the
+checkpoint; unpublished candidates and rejected incoming history do not. The checkpoint tree and all its live
 files are checked again, and blobs are reused within one command. Removing the
 checkpoint triggers full validation. Each Git call has a 30-second timeout and bounded
 output.
@@ -494,7 +499,10 @@ Every write publishes before it becomes local history. `publish --file` and
 one new commit on that tip, and push it; the accepted local branch moves only
 after the remote accepts the push. If another clone published in between, the
 push is refused as a non-fast-forward. The command then pulls again and builds a
-fresh commit on the new tip (up to four attempts). Accepted commits are never
+fresh commit on the new tip (up to four attempts). A failed push is retried only
+when a fresh remote-tip probe confirms that the tip moved. Other failures stop
+immediately and show bounded Git stderr, including hook or authentication errors.
+Accepted commits are never
 rewritten, and the tool never forces, merges or rebases. So sender and receiver
 sites can interleave publications and receipts freely, and nobody needs to pull
 before writing.
@@ -522,7 +530,12 @@ Retry recovers a confirmed successful write without repeating it. After a writer
 fails to spawn, exits, or is killed on timeout, a fresh canonical scan checks the
 operation marker. If absent, the journal is removed and retry is available; writer
 stderr is bounded and shown on failure. If evidence cannot be read or is ambiguous,
-the journal remains and automatic replay refuses.
+the journal remains and automatic replay refuses. If a receipt already exists,
+retry compares any retained local journal's store evidence with the receipt's
+action and destination. A match clears the journal left after a successful push.
+A different destination reports the orphaned duplicate spec for operator
+reconciliation and retains the journal; it never silently adopts another clone's
+receipt after a local spec write.
 
 For a journal left by a crashed parent, first independently confirm that the old
 writer and its helpers have stopped. Then run

@@ -129,6 +129,35 @@ fn digest(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+// trace:TASK-3096 | ai:codex
+fn validate_remote(remote: &str) -> Result<()> {
+    if remote.is_empty()
+        || remote.starts_with('-')
+        || remote.chars().any(char::is_control)
+        || remote.contains("::")
+        || !(remote.starts_with("https://")
+            || remote.starts_with("ssh://")
+            || remote.starts_with('/'))
+    {
+        bail!("Use an explicit absolute local path, https:// URL or ssh:// URL; remote names and helper protocols refuse");
+    }
+    if let Some(url) = remote.strip_prefix("https://") {
+        let authority = url.split(['/', '?', '#']).next().unwrap_or("");
+        if authority.contains('@') {
+            bail!("HTTPS userinfo is refused; use ssh:// with keys or an SSH agent for authenticated intake destinations");
+        }
+    }
+    Ok(())
+}
+
+fn validator_prefix() -> String {
+    use sha2::{Digest, Sha256};
+    let mut validator = Sha256::new();
+    validator.update(include_bytes!("intent_intake.rs"));
+    validator.update(include_bytes!("observation_envelope.rs"));
+    format!("v1:{:x}:", validator.finalize())
+}
+
 // Remove ambient Git routing/configuration. Never inherit product indexes,
 // alternates, replacement objects, URL rewrites, hooks or extra push refspecs.
 fn git_command(root: &Path) -> Command {
@@ -220,16 +249,7 @@ impl Intake {
             if !reviewed {
                 bail!("Enrollment requires --reviewed");
             }
-            if remote.is_empty()
-                || remote.starts_with('-')
-                || remote.chars().any(char::is_control)
-                || remote.contains("::")
-                || !(remote.starts_with("https://")
-                    || remote.starts_with("ssh://")
-                    || remote.starts_with('/'))
-            {
-                bail!("Use an explicit absolute local path, https:// URL or ssh:// URL; remote names and helper protocols refuse");
-            }
+            validate_remote(remote)?;
             envelope::check_patterns("", "", deny_pattern)?;
             let proposed = Profile {
                 version: 1,
@@ -248,16 +268,7 @@ impl Intake {
                 "Intake is not enrolled; use aida intent enroll --remote ... --reviewed",
             )?)?
         };
-        if profile.remote.is_empty()
-            || profile.remote.starts_with('-')
-            || profile.remote.chars().any(char::is_control)
-            || profile.remote.contains("::")
-            || !(profile.remote.starts_with("https://")
-                || profile.remote.starts_with("ssh://")
-                || profile.remote.starts_with('/'))
-        {
-            bail!("Invalid pinned intake destination");
-        }
+        validate_remote(&profile.remote)?;
         if profile.version != 1 {
             bail!("Unsupported intake policy version");
         }
@@ -365,11 +376,7 @@ impl Intake {
         // tree and validate every live file against the current policy as well.
         // Bind proof to the compiled validators, including dirty source changes:
         // future validation rules must never inherit an older validator's proof.
-        use sha2::{Digest, Sha256};
-        let mut validator = Sha256::new();
-        validator.update(include_bytes!("intent_intake.rs"));
-        validator.update(include_bytes!("observation_envelope.rs"));
-        let validator = format!("v1:{:x}:", validator.finalize());
+        let validator = validator_prefix();
         let checkpoint = self
             .private
             .read("validated-tip")?
@@ -515,14 +522,25 @@ impl Intake {
             previous = current;
             parent = Some(fields[0]);
         }
-        self.private
-            .write("validated-tip", format!("{validator}{tip}").as_bytes())?;
         Ok(previous)
+    }
+
+    // Candidate/quarantine validation never replaces proof of an accepted tip.
+    // trace:TASK-3096 | ai:codex
+    fn checkpoint(&self, tip: &str) -> Result<()> {
+        self.private.write(
+            "validated-tip",
+            format!("{}{tip}", validator_prefix()).as_bytes(),
+        )
     }
 
     fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         match self.tip()? {
-            Some(tip) => self.history(&tip),
+            Some(tip) => {
+                let files = self.history(&tip)?;
+                self.checkpoint(&tip)?;
+                Ok(files)
+            }
             None => Ok(BTreeMap::new()),
         }
     }
@@ -546,12 +564,13 @@ impl Intake {
                 return self.push();
             }
             let commit = self.build(tip.as_deref(), path, bytes)?;
-            if self.push_commit(&commit)? {
+            if self.push_commit(&commit, tip.as_deref())? {
                 git(
                     &self.worktree,
                     &["update-ref", BRANCH, &commit, tip.as_deref().unwrap_or("")],
                     &[],
                 )?;
+                self.checkpoint(&commit)?;
                 // Materialize only validated files in the private checkout. No
                 // product checkout/index/ref is ever involved. Safely repeatable.
                 git(
@@ -602,27 +621,53 @@ impl Intake {
         Ok(commit)
     }
 
-    /// Push one validated commit; `false` when the remote refused it (for
-    /// example a non-fast-forward because another writer published first).
-    fn push_commit(&self, commit: &str) -> Result<bool> {
+    /// Retry only a confirmed remote-tip race; preserve other push diagnostics.
+    // trace:TASK-3096 | ai:codex
+    fn push_commit(&self, commit: &str, base: Option<&str>) -> Result<bool> {
         let refspec = format!("{commit}:{BRANCH}");
+        let mut cmd = git_command(&self.worktree);
         // remote-creds-ok(TASK-2001): separately enrolled URL; ambient product credentials/config are intentionally excluded.
-        let (ok, _) = git_result(
-            &self.worktree,
-            &[
-                "-c",
-                "push.default=nothing",
-                "push",
-                "--no-verify",
-                "--no-follow-tags",
-                "--",
-                &self.profile.remote,
-                &refspec,
-            ],
+        cmd.args([
+            "-c",
+            "push.default=nothing",
+            "push",
+            "--no-verify",
+            "--no-follow-tags",
+            "--",
+            &self.profile.remote,
+            &refspec,
+        ]);
+        let (status, _, stderr) = transport_process::bounded_with_stderr(
+            cmd,
             &[],
             CAP,
+            Instant::now() + Duration::from_secs(30),
         )?;
-        Ok(ok)
+        if status.success() {
+            return Ok(true);
+        }
+        let diagnostic = String::from_utf8_lossy(&stderr);
+        let remote = self
+            .remote_tip()
+            .with_context(|| format!("Intake push refused: {diagnostic}"))?;
+        if remote.as_deref() != base {
+            return Ok(false);
+        }
+        bail!("Intake push refused: {diagnostic}");
+    }
+
+    fn remote_tip(&self) -> Result<Option<String>> {
+        // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
+        let advertised = text(git(
+            &self.worktree,
+            &["ls-remote", "--", &self.profile.remote, BRANCH],
+            &[],
+        )?)?;
+        Ok(advertised.lines().find_map(|line| {
+            let mut fields = line.split_whitespace();
+            let tip = fields.next()?;
+            (fields.next() == Some(BRANCH)).then(|| tip.to_owned())
+        }))
     }
 
     /// Publish the accepted tip; a no-op when the remote already has it.
@@ -631,7 +676,7 @@ impl Intake {
             return Ok(());
         };
         self.history(&tip)?;
-        if !self.push_commit(&tip)? {
+        if !self.push_commit(&tip, Some(&tip))? {
             bail!("Intake push refused; the accepted local branch is unchanged. Retry; the tool never forces, merges or rebases");
         }
         Ok(())
@@ -653,16 +698,7 @@ impl Intake {
     fn sync(&self) -> Result<bool> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
-        // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
-        let advertised = text(git(
-            &self.worktree,
-            &["ls-remote", "--", &self.profile.remote, BRANCH],
-            &[],
-        )?)?;
-        if !advertised
-            .lines()
-            .any(|line| line.split_whitespace().nth(1) == Some(BRANCH))
-        {
+        if self.remote_tip()?.is_none() {
             return Ok(false);
         }
         let refspec = format!("{BRANCH}:{INCOMING}");
@@ -689,9 +725,11 @@ impl Intake {
         let old = self.tip()?;
         if let Some(old) = &old {
             if *old == incoming {
+                self.checkpoint(&incoming)?;
                 return Ok(true);
             }
-            self.history(old)?;
+            // old is already accepted. Only incoming needs validation; proof
+            // advances after its fast-forward acceptance below.
             if self.ancestor(&incoming, old)? {
                 // Local is ahead (its push failed after acceptance): keep it;
                 // publication retries it as a fast-forward.
@@ -711,6 +749,7 @@ impl Intake {
             ],
             &[],
         )?;
+        self.checkpoint(&incoming)?;
         git(
             &self.worktree,
             &["read-tree", "--reset", "-u", &incoming],
@@ -788,6 +827,33 @@ fn process(
     let journal_name = format!("operation-{checksum}.json");
     if let Some(bytes) = files.get(&receipt_path) {
         let receipt: Receipt = serde_json::from_slice(bytes)?;
+        // A receipt may have won a concurrent publication, or cleanup may
+        // have crashed after our own push. Never hide a confirmed local write.
+        // trace:TASK-3096 | ai:codex
+        if let Some(bytes) = intake.private.read(&journal_name)? {
+            let journal: Journal = serde_json::from_slice(&bytes)?;
+            if journal.version != 1
+                || journal.checksum != checksum
+                || !matches!(journal.action, Action::Create | Action::Comment)
+                || (journal.action == Action::Comment) != journal.target.is_some()
+                || uuid::Uuid::parse_str(&journal.operation).is_err()
+            {
+                bail!("Invalid processing journal; inspect manually");
+            }
+            let destination = evidence(&journal)?
+                .context("Receipt exists but local operation evidence is missing; journal retained for manual reconciliation")?;
+            if receipt.action != journal.action
+                || receipt.destination.as_deref() != Some(destination.as_str())
+            {
+                let (_, store) = canonical_store()?;
+                let spec = store
+                    .get_requirement_unambiguous(&destination)?
+                    .context("Local operation destination not found")?
+                    .friendly_id();
+                bail!("Orphaned duplicate spec write {spec} ({destination}): published receipt belongs to another operation destination; journal retained for operator reconciliation");
+            }
+            intake.private.remove(&journal_name)?;
+        }
         if receipt.action != action {
             bail!("Observation already processed with another action");
         }
@@ -972,7 +1038,7 @@ fn receipt_view(
         // Listing an observation clone needs no store. Keep UUID if unavailable.
         if let Some(store) = store {
             if let Some(req) = store.get_requirement_unambiguous(id)? {
-                view["destination"] = serde_json::Value::String(req.display_id());
+                view["destination"] = serde_json::Value::String(req.friendly_id());
             }
         }
     }

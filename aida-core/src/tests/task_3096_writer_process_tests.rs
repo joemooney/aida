@@ -3,6 +3,7 @@
 use super::*;
 
 #[test]
+#[cfg(unix)]
 fn writer_refusal_captures_stderr_and_exit_status() {
     let mut cmd = Command::new("/bin/sh");
     cmd.args(["-c", "printf refused >&2; exit 7"]);
@@ -14,6 +15,7 @@ fn writer_refusal_captures_stderr_and_exit_status() {
 }
 
 #[test]
+#[cfg(unix)]
 fn writer_timeout_preserves_diagnostics_and_reaps_the_group() {
     let mut cmd = Command::new("/bin/sh");
     cmd.args(["-c", "printf waiting >&2; exec sleep 30"]);
@@ -24,6 +26,7 @@ fn writer_timeout_preserves_diagnostics_and_reaps_the_group() {
 }
 
 #[test]
+#[cfg(unix)]
 fn writer_diagnostic_overflow_and_spawn_failure_return_promptly() {
     let mut cmd = Command::new("/bin/sh");
     cmd.args(["-c", "printf too-long >&2; exec sleep 30"]);
