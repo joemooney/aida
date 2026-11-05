@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-05T19:15:56.415992608Z
+modified_at: 2026-11-05T19:15:59.374137837Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -78,6 +78,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AGY outcome classification matches the advisor ruling and the real recorded AGY stream shapes, but the inline test in agy_outcome.rs calls coordinator_status_with_handle_guard( from a production-source file, which deterministically trips the bug_2398 LAUNCH_INVENTORY ratchet; plus pipe-EOF wait and untested reviewer carve-outs.. No triage reason was given.'
   created_at: 2026-11-05T19:15:56.415990888Z
   modified_at: 2026-11-05T19:15:56.415990888Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad23-ae53-7ad2-b47f-1383c48f4d1c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2838):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ba26efd0fa26
+    Recorded: 2026-11-05T19:11:39.739535704+00:00
+    Findings:
+    1. BLOCKER (CI): aida-cli-lib/src/agy_outcome.rs:284 - the inline #[cfg(test)] module calls crate::session::coordinator_status_with_handle_guard(. tests/bug_2398_codex_tool_env_tests.rs::bug_2398_final_spawn_boundary_ratchet scans the full text of every src/*.rs not named *_tests.rs (production_sources, line ~800) with no cfg(test) stripping. launch_markers counts 'coordinator_status_with_handle_guard(' (line ~607), so agy_outcome.rs scores 1 launch site, is absent from LAUNCH_INVENTORY, and panics with 'agy_outcome.rs launches a seat-granted child but is not in LAUNCH_INVENTORY'. Fix: move the fake-process/launch-wiring half of task_2838_structured_evidence_and_launch_wiring into a new aida-cli-lib/src/tests/task_2838_agy_outcome_tests.rs, which the scanner excludes. Do not add a test-only file to LAUNCH_INVENTORY.
+    2. MINOR: aida-cli-lib/src/session.rs:6399-6408 (coordinator_status_with_handle_guard, AGY stream branch) - Evidence::read runs to stdout EOF before child.wait(). Any descendant that inherits AGY's stdout keeps the pipe open, such as a process AGY's run_command backgrounds or a daemonizing helper. The coordinator (burndown_run.rs:648/2164, autopilot_intake.rs:1019) then blocks after AGY itself has exited. Before this PR, stdout was a File and child.wait() returned on vendor exit. Fix: read on a thread, wait the child, then join the reader with a bounded grace and treat a still-open pipe as incomplete evidence. Or reuse headless_linger's reap so the process tree is terminated.
+    3. MINOR: aida-cli-lib/src/session.rs:6407-6408 - when Evidence::read fails (a forward write error to the coordinator log, e.g. ENOSPC/EIO), the function waits and then returns Err via evidence?. That discards the child's real exit status, and callers report it as 'failed to launch agy headless coordinator'. The early return also drops the pipe, so AGY can SIGPIPE mid-run. Fix: on a forward error, stop forwarding but keep draining and classifying; at minimum, return the process status with an incomplete diagnostic instead of a launch error.
+    4. MINOR (test coverage, authority relaxation): queue_cmd.rs:15011-15016 and phase_driver_trait.rs:2209-2212 now accept a nonzero (65) AGY reviewer exit when a fresh verdict is collected. No test covers either side of these carve-outs. Missing cases: (a) AGY 65 + collected verdict returns Ok; (b) AGY 65 with no verdict still propagates 65 / fails the reviewer phase; (c) AGY exit 1 (explicit terminal failure) + verdict still fails. Add targeted tests for these, at minimum around the queue_cmd filter predicate, so the refusal path is pinned.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:15:59.187108176Z
+  modified_at: 2026-11-05T19:15:59.187108176Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
