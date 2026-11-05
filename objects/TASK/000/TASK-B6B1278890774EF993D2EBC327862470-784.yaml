@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T02:39:48.773582931Z
+modified_at: 2026-11-05T04:44:24.562322366Z
 req_type: Task
 tags:
 - area:containment
@@ -175,6 +175,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1aa05-bae5-7f51-bb9d-ccacb27aa071
+  author: joe
+  timestamp: 2026-11-05T04:44:24.677604717Z
+  session_id: 01a1aa0493c4
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -183,3 +189,11 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'CI red at head: the new ''Containment conformance evidence tests'' step (ci.yml:286) fails in the CI gates shard, and Build fails at ''Require every CI lane''. Acceptance ''harness exists with tests'' has no green CI evidence.'
+  recovery_hint: address the review findings, move TASK-3046 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T04:44:24.562322366Z
