@@ -1,0 +1,33 @@
+id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-418
+agreed_id: STORY-2492
+title: 'Cross-machine review (trusted node, shared store): verdicts sync through aida-store so a PR implemented on one machine can be reviewed on another'
+description: |-
+  Operator ask (2026-11-04): implement on machine A, review on machine B. Both are trusted and share aida-store through the hubs. This is also the first real multi-node test of AIDA.
+
+  Today: PRs live on the forge and review stories live in aida-store; both already cross machines. Findings are filed as store specs with globally unique origin IDs, so they sync too. The gap: verdicts are written to .aida/gate-ledger/PR-N.jsonl, which is machine-local and git-excluded. An approval recorded on B is invisible to A's ship check and trains.
+
+  Acceptance:
+  1. A verdict recorded by a reviewer is also persisted as a synced record in aida-store (CAS push loop like schedule_ledger). It is pinned to PR number, exact head SHA, reviewer identity (handle, machine/node id, session), decision, and blocking findings by origin ID.
+  2. Ship/train/ready checks on any node accept a synced verdict only when its head matches the PR's current head and the reviewer identity is independent of the author (existing self-approval rules, applied across nodes). Stale-head and self-approval refusals have tests.
+  3. The local gate ledger stays as a cache/derived view; when the two disagree, the synced record wins, and the disagreement is reported, never silently merged.
+  4. aida review watch on node B discovers PRs opened on node A after a store sync, and doesn't double-review a head already reserved on another node (the reservation is synced, or the watcher checks synced verdicts first).
+  5. End-to-end test with two clones and a shared bare hub: A ships, B reviews and approves, A's train lands it; plus B request-changes → A sees the findings and the verdict.
+  6. Docs: a short operator guide for running a second review node.
+
+  Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T04:40:54.168438456Z
+modified_at: 2026-11-05T04:40:54.168438456Z
+req_type: Story
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e1fc3f06903
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
