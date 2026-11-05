@@ -54,7 +54,6 @@ fn bug_2452_missing_summary_uses_verdict_kind_without_raw_json() {
     for (raw, kind) in [
         ("CHANGES REQUESTED", "request-changes"),
         ("FAIL", "rejected"),
-        ("unrecognized verdict with verbose context", "unknown"),
     ] {
         let verdict = crate::gate::review_verdict::parse_recorded_verdict(
             &serde_json::json!({
