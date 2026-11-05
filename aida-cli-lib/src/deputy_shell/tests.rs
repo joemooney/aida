@@ -728,6 +728,7 @@ fn wait_refuses_an_unknown_job_without_a_claim_directory() {
 }
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+// trace:BUG-2439 | ai:codex
 #[cfg(unix)]
 #[test]
 fn status_tells_queued_running_done_and_cancelled_apart() {
@@ -746,7 +747,13 @@ fn status_tells_queued_running_done_and_cancelled_apart() {
     let q = f.q.clone();
     let cfg = f.default_cfg();
     let runner = std::thread::spawn(move || run(&q, &cfg));
-    wait_until("running", || status(&j.id).contains(": running"));
+    // Claiming moves accepted/job.json before publishing state.json. Wait for
+    // that publication before asking status, which can refuse during the gap.
+    wait_until("running", || {
+        f.q.read_state(&j.id)
+            .is_some_and(|s| s.state == JobState::Running)
+    });
+    assert!(status(&j.id).contains(": running"));
     std::fs::write(&fifo, "go\n").unwrap();
     runner.join().unwrap();
     assert!(status(&j.id).contains(": done"));
@@ -767,8 +774,10 @@ fn status_tells_queued_running_done_and_cancelled_apart() {
     let begun = std::time::Instant::now();
     let runner = std::thread::spawn(move || run(&q, &cfg));
     wait_until("the long job to run", || {
-        status(&long.id).contains(": running")
+        f.q.read_state(&long.id)
+            .is_some_and(|s| s.state == JobState::Running)
     });
+    assert!(status(&long.id).contains(": running"));
     f.q.request_cancel(&long.id).unwrap();
     runner.join().unwrap();
     assert!(begun.elapsed() < Duration::from_secs(15));
