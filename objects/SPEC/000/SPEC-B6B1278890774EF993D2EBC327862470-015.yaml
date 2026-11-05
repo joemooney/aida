@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T07:38:28.939718690Z
-modified_at: 2026-11-05T07:38:28.939718690Z
+modified_at: 2026-11-05T16:00:14.778367730Z
 req_type: Task
 tags:
 - from-implementer:BUG-2452
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a1ac70-79ba-70d3-90e3-30495f1c018b
+  author: joe
+  content: 'Advisor triage 2026-11-05: folded into TASK-2879 — same root cause.'
+  created_at: 2026-11-05T16:00:14.778367730Z
+  modified_at: 2026-11-05T16:00:14.778367730Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aac5-ce80-7943-871a-857264556093
   author: joe
