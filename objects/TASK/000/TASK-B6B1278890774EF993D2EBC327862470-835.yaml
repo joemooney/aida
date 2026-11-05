@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T18:22:15.013678578Z
-modified_at: 2026-11-05T20:27:22.745467746Z
+modified_at: 2026-11-05T20:27:28.566859098Z
 req_type: Task
 tags:
 - from-advisor:TASK-2860
@@ -21,6 +21,13 @@ relationships:
   target_id: 01a1a99e-f5c6-7320-957b-d8bd187eddb5
   created_at: 2026-11-05T20:27:22.745464228Z
   created_by: joe
+comments:
+- id: 01a1ad65-21b6-70d1-9cbb-c4719a1ff3ef
+  author: joe
+  content: 'Advisor triage: same defect as TASK-2852 (PR hold cannot resolve an existing seat branch), whose PR #3435 is in rework.'
+  created_at: 2026-11-05T20:27:28.566859098Z
+  modified_at: 2026-11-05T20:27:28.566859098Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1acf2-c995-7422-81b0-e5abff5d210e
   author: joe
