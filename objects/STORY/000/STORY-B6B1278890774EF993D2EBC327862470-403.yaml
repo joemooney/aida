@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T13:20:58.027824152Z
+modified_at: 2026-11-05T13:20:58.874974942Z
 req_type: Story
 relationships:
 - rel_type:
@@ -170,6 +170,12 @@ comments:
   modified_at: 2026-11-05T13:07:28.909261209Z
   session_id: 01a1abc34e6e
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1abde-a968-70a3-a804-4b508bdd8af4
+  author: joe
+  content: '#3398 at e2491c9 conflicts with main again after #3425: aida-cli-lib/src/queue_cmd.rs (2 hunks) and src/tests/queue_work_tests.rs. Main added BUG-057 detect_main_conflict (a conflicting rework PR makes the merge the lane''s first task) and BUG-2451 rework_pr_head_branch_override; this PR adds rework_conflict_route / ReworkConflictLaunch for the same situation. Merge origin/main into the PR branch (merge commit, no force) and UNIFY them: one conflict-detection path (prefer main''s detect_main_conflict as the detector), with this PR''s routing (Claude-required notice, refuse non-Claude resume) applied to its result; keep both test suites, dedupe overlapping cases. One targeted cargo test (queue_work_tests story_2475 bug_2451) plus make check-ci-fast. Push to story-b6b1278890774ef993d2ebc327862470-403.'
+  created_at: 2026-11-05T13:20:58.728119336Z
+  modified_at: 2026-11-05T13:20:58.728119336Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
