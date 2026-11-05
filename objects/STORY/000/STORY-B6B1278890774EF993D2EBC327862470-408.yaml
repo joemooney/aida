@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-05T07:37:09.668404562Z
+modified_at: 2026-11-05T16:16:51.375216193Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -71,6 +71,12 @@ comments:
   created_at: 2026-11-05T07:37:09.668404562Z
   modified_at: 2026-11-05T07:37:09.668404562Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1ac7f-aeaf-7fc2-b035-0673140de4ec
+  author: joe
+  content: 'ADVISOR SIGN-OFF (2026-11-05) on docs/plans/2026-11-05-story-2480-work-ci-relay.md (db289c2): approved as written — separate ci-result receipt schema v1 with the exact key set and limits, home-assigned attempt identity, inventory derived only from the pinned home commit with fail-closed refusal for unsupported job/test syntax, immutable ci-results/<sha>/<attempt>.json with no force-push, hub-side enforcement of the work credential (deployment must fail closed if the hub cannot enforce), and home-only status publication. SEQUENCING: the shared intake transport is TASK-3096 (PR #3415); do not re-implement it here. Implementation of this story starts after #3415 merges, sliced as the sketch''s steps 2-4 (codec+validator, work poller, home processor+status).'
+  created_at: 2026-11-05T16:16:51.375216193Z
+  modified_at: 2026-11-05T16:16:51.375216193Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
