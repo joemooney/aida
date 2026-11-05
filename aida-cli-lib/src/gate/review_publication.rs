@@ -43,6 +43,34 @@ const CAP: usize = 1024 * 1024;
 /// Per-change read budget. A change that exceeds it refuses only itself.
 const MAX_PER_CHANGE: usize = 256;
 
+/// How many unread reports [`report`] keeps for [`take_reports`].
+const REPORT_BACKLOG: usize = 64;
+
+thread_local! {
+    static REPORTS: std::cell::RefCell<std::collections::VecDeque<String>> =
+        const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+}
+
+/// Emit an operator-facing publication report (AC3 disagreement, evidence
+/// treated as absent) on stderr and keep it for [`take_reports`], so gate
+/// paths that only return a verdict still leave a checkable report.
+// trace:STORY-2492 | ai:claude
+pub(crate) fn report(message: String) {
+    eprintln!("{message}");
+    REPORTS.with(|reports| {
+        let mut reports = reports.borrow_mut();
+        if reports.len() == REPORT_BACKLOG {
+            reports.pop_front();
+        }
+        reports.push_back(message);
+    });
+}
+
+/// The reports [`report`] emitted on this thread since the last call.
+pub(crate) fn take_reports() -> Vec<String> {
+    REPORTS.with(|reports| reports.borrow_mut().drain(..).collect())
+}
+
 #[derive(Debug, clap::Subcommand)]
 pub enum NodeCommand {
     /// Enroll a node's public ed25519 key in the shared roster.
@@ -564,11 +592,28 @@ pub(crate) fn publish(
         att.authorizes(verdict.reviewed_sha.as_deref()),
         "recorder is not authorized to review this head"
     );
+    let snapshot = Snapshot::at_head(root)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .context("missing canonical snapshot")?;
+    // The receipt covers the change's bound spec set (its signed authorship
+    // coverage), whichever one spec, or none, the recorder named.
+    let (authors, bound) = author_evidence(root, change)?;
+    let requested = snapshot.resolve(labels);
+    ensure!(
+        requested.unresolved.is_empty() && requested.ambiguous.is_empty(),
+        "unresolved publication specs"
+    );
+    ensure!(
+        requested.members.iter().all(|m| bound.contains(&m.key)),
+        "review names a spec {} was not opened for",
+        change.as_key()
+    );
+    let bound_labels = spec_labels(&snapshot, &bound)?;
     if verdict.kind.approves() {
         ensure!(
             super::review_approval::independent_approval_authorized(
                 root,
-                labels,
+                &bound_labels,
                 verdict.reviewed_branch.as_deref(),
                 &verdict
             ),
@@ -585,14 +630,6 @@ pub(crate) fn publish(
     authenticated_identity.extend(att.identity.iter().cloned());
     authenticated_identity.sort();
     authenticated_identity.dedup();
-    let snapshot = Snapshot::at_head(root)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?
-        .context("missing canonical snapshot")?;
-    let specs = snapshot.resolve(labels);
-    ensure!(
-        !specs.members.is_empty() && specs.unresolved.is_empty() && specs.ambiguous.is_empty(),
-        "unresolved publication specs"
-    );
     let mut origins = Vec::new();
     if let Some(ids) = record.get("blocking_finding_origin_ids") {
         for id in ids.as_array().context("finding origins must be an array")? {
@@ -606,15 +643,16 @@ pub(crate) fn publish(
             origins.push(id.to_string());
         }
     }
-    ensure!(
-        verdict.kind.approves() || verdict.findings.is_empty() || !origins.is_empty(),
-        "publish refusal findings by blocking_finding_origin_ids before syncing"
-    );
+    // An ordinary refusal (`aida review record --finding <TEXT>`, or a
+    // collected reviewer verdict) carries its findings as signed prose; filed
+    // finding origin IDs are optional and, when named, must resolve. A
+    // refusal confers no authority, so it never waits on filing.
+    // trace:STORY-2492 | ai:claude
     origins.sort();
     origins.dedup();
     let tip = head(&store)?;
     let key = change.as_key();
-    let spec_keys: Vec<SpecKey> = specs.members.iter().map(|s| s.key).collect();
+    let spec_keys: Vec<SpecKey> = bound;
     let receipt = Receipt {
         version: 1,
         node: config.node.clone(),
@@ -632,7 +670,7 @@ pub(crate) fn publish(
             .context("missing exact review head")?,
         specs: spec_keys.clone(),
         blocking_finding_origin_ids: origins,
-        authors: author_evidence(root, change, &spec_keys)?,
+        authors,
         reviewer_actor: verdict
             .recorded_by
             .clone()
@@ -766,12 +804,8 @@ fn body(r: &Receipt) -> Result<String> {
 /// The change's current head as this node's code checkout knows it: the tip
 /// of the reviewed branch (`origin/<branch>`, else the local branch). When no
 /// branch resolves, publications that all name one head answer; several
-/// heads with no resolvable branch cannot be ordered and refuse this change.
-fn current_head(
-    root: &Path,
-    change: &str,
-    receipts: &[&(Receipt, Signed, String)],
-) -> Result<String> {
+/// heads with no resolvable branch cannot be ordered (`None`).
+fn current_head(root: &Path, receipts: &[&(Receipt, Signed, String)]) -> Option<String> {
     let mut tips = std::collections::BTreeSet::new();
     for branch in receipts.iter().filter_map(|(r, ..)| r.branch.as_deref()) {
         if let Some(tip) = branch_tip(root, branch) {
@@ -779,18 +813,17 @@ fn current_head(
         }
     }
     if tips.len() == 1 {
-        return Ok(tips.into_iter().next().unwrap_or_default());
+        return tips.into_iter().next();
     }
     let heads: std::collections::BTreeSet<String> = receipts
         .iter()
         .map(|(r, ..)| r.head.to_ascii_lowercase())
         .collect();
-    ensure!(
-        heads.len() == 1,
-        "cannot tell which head of {change} is current: its publications name several \
-         heads and its branch is not fetched here; fetch the branch and retry"
-    );
-    Ok(heads.into_iter().next().unwrap_or_default())
+    if heads.len() == 1 {
+        heads.into_iter().next()
+    } else {
+        None
+    }
 }
 fn branch_tip(root: &Path, branch: &str) -> Option<String> {
     if branch.is_empty() || branch.starts_with('-') || branch.contains("..") {
@@ -839,10 +872,15 @@ fn select(
         .iter()
         .filter(|(r, ..)| roster.nodes.contains_key(&r.node))
         .collect();
-    ensure!(
-        !relevant.is_empty(),
-        "all review publishing nodes of {key} were revoked"
-    );
+    if relevant.is_empty() {
+        // Revocation removes the publisher's evidence, it does not lock the
+        // change: a fresh review (local, or from an enrolled node) answers.
+        report(format!(
+            "review publications of {key} are ignored: every publishing node was revoked; \
+             a fresh review of the change answers for it"
+        ));
+        return Ok(None);
+    }
     let started = std::time::Instant::now();
     for (r, signed, _) in &relevant {
         ensure!(
@@ -889,7 +927,19 @@ fn select(
     );
     let change_head = match expected_head {
         Some(h) => h.trim().to_ascii_lowercase(),
-        None => current_head(root, &key, &relevant)?,
+        None => match current_head(root, &relevant) {
+            Some(h) => h,
+            None => {
+                // No head to order by: absent here, never a standing refusal.
+                // Head-bound gates (merge, train) pass the head and still see
+                // the publication at it.
+                report(format!(
+                    "review publications of {key} are ignored here: they name several heads \
+                     and its branch is not fetched; fetch the branch to apply them"
+                ));
+                return Ok(None);
+            }
+        },
     };
     relevant.retain(|(r, ..)| r.head.eq_ignore_ascii_case(&change_head));
     if relevant.is_empty() {
@@ -1051,8 +1101,8 @@ fn resolve_current(root: &Path, ids: &[&str], head: Option<&str>) -> Option<rv::
                 for id in ids {
                     let local = super::ledger::project::newest_verdict(root, id)
                         .and_then(|record| rv::parse_ledger_record(&record));
-                    if let Some(report) = local.and_then(|l| disagreement(id, &l, &remote)) {
-                        eprintln!("{report}");
+                    if let Some(message) = local.and_then(|l| disagreement(id, &l, &remote)) {
+                        report(message);
                     }
                 }
             }
@@ -1195,12 +1245,20 @@ pub(crate) fn publish_authorship(
     let snapshot = Snapshot::at_head(&root)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?
         .context("missing canonical author snapshot")?;
-    let set = snapshot.resolve(labels);
-    ensure!(
-        !set.members.is_empty() && set.unresolved.is_empty() && set.ambiguous.is_empty(),
-        "unresolved author specs"
-    );
-    let labels: Vec<String> = set.members.iter().flat_map(|m| m.labels.clone()).collect();
+    // A change keeps the spec set it was opened for: a rework head's commit
+    // naming more (or no) IDs neither grows nor empties it.
+    let (_, bound) = read_authorships(&root, change)?;
+    let keys: Vec<SpecKey> = if bound.is_empty() {
+        let set = snapshot.resolve(labels);
+        ensure!(
+            !set.members.is_empty() && set.unresolved.is_empty() && set.ambiguous.is_empty(),
+            "unresolved author specs"
+        );
+        set.members.iter().map(|m| m.key).collect()
+    } else {
+        bound
+    };
+    let labels = spec_labels(&snapshot, &keys)?;
     let authors = authority::author_sessions_at(&root, &labels, None);
     ensure!(
         !authors.is_empty(),
@@ -1224,7 +1282,7 @@ pub(crate) fn publish_authorship(
         change: change.as_key(),
         head: head_sha.to_ascii_lowercase(),
         branch: branch.map(str::to_string),
-        specs: set.members.iter().map(|s| s.key).collect(),
+        specs: keys,
         authors,
     };
     let signed = sign(&config, &evidence)?;
@@ -1283,14 +1341,42 @@ pub(crate) fn publish_checkout_authorship(start: &Path, pr: u64, specs: &[String
     publish_authorship(start, ChangeKey::pr(pr), specs, &sha, branch.as_deref())
 }
 
-/// Signed author sessions for `change`, unioned over every head published
-/// for it (authors only accumulate, so a rework or update-branch head keeps
-/// the earlier heads' exclusions). Only enrolled-node signed evidence counts.
-fn author_evidence(
-    root: &Path,
-    change: ChangeKey,
-    required_specs: &[SpecKey],
-) -> Result<Vec<Vec<String>>> {
+/// Every label of each spec in `keys`, from the canonical snapshot.
+fn spec_labels(snapshot: &Snapshot, keys: &[SpecKey]) -> Result<Vec<String>> {
+    let mut labels = Vec::new();
+    for key in keys {
+        labels.extend(
+            snapshot
+                .spec(*key)
+                .context("bound review spec disappeared")?
+                .labels
+                .iter()
+                .cloned(),
+        );
+    }
+    Ok(labels)
+}
+
+/// Signed author sessions for `change` and its bound spec set: the authors
+/// are unioned over every head published for it (authors only accumulate, so
+/// a rework or update-branch head keeps the earlier heads' exclusions); the
+/// spec set is what the change was opened for. Only enrolled-node signed
+/// evidence counts.
+fn author_evidence(root: &Path, change: ChangeKey) -> Result<(Vec<Vec<String>>, Vec<SpecKey>)> {
+    let (authors, covered) = read_authorships(root, change)?;
+    ensure!(
+        !covered.is_empty()
+            && !authors.is_empty()
+            && authors
+                .iter()
+                .all(|a| a.iter().any(|t| t.starts_with("session:"))),
+        "missing portable author identity evidence; publish authorship for the change first"
+    );
+    Ok((authors, covered))
+}
+
+/// The raw signed authorship of `change` (empty when none is published).
+fn read_authorships(root: &Path, change: ChangeKey) -> Result<(Vec<Vec<String>>, Vec<SpecKey>)> {
     let store = store(root).context("missing author store")?;
     let tip = head(&store)?;
     let roster = roster(&store, &tip)?;
@@ -1331,27 +1417,14 @@ fn author_evidence(
     // Only signed change evidence establishes the author set. Unrelated
     // local leases cannot fill missing remote author evidence.
     ensure!(
-        required_specs.iter().all(|key| covered.contains(key)),
-        "missing portable author spec coverage"
-    );
-    ensure!(
-        covered.iter().all(|key| required_specs.contains(key)),
-        "review publication omits authored PR specs"
-    );
-    ensure!(
-        !authors.is_empty()
-            && authors
-                .iter()
-                .all(|a| a.iter().any(|t| t.starts_with("session:"))),
-        "missing portable author identity evidence; publish authorship for the change first"
-    );
-    ensure!(
         head(&store)? == tip,
         "store moved while reading author evidence"
     );
     authors.sort();
     authors.dedup();
-    Ok(authors)
+    covered.sort();
+    covered.dedup();
+    Ok((authors, covered))
 }
 
 pub(crate) fn publish_local(pr: u64, labels: &[String], findings: &[String]) -> Result<()> {

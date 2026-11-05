@@ -71,10 +71,11 @@ caller's head, or else the tip of the reviewed branch in the local code checkout
 They neither block nor credit the current head. A spec-keyed read uses the newest
 change (highest number) whose publications covered the spec.
 
-Refusals that contain prose findings need filed findings with canonical origin
-IDs. The recorder keeps its local verdict and reports the publication as
-pending (a warning, not a failed record) when those references are missing.
-Supply them and retry publication on B:
+An ordinary refusal (`aida review record --finding <TEXT>`, or a collected
+reviewer verdict) publishes with its prose findings signed into the receipt.
+A refusal may also name filed findings by canonical origin ID; a named ID that
+does not resolve leaves the local verdict recorded and the publication pending
+(a warning, not a failed record). Fix the reference and retry on B:
 
 ```bash
 aida review publish --pr 123 --specs STORY-123 --blocking-findings TASK-node-b-12
@@ -112,7 +113,11 @@ aida review nodes revoke node-b
 
 Commit/push success and consumer store sync are necessary for other hosts to see
 revocation. Once the roster removal is visible, the node's receipts cannot grant
-new approval credit. Already merged PRs are not unmerged. To replace a key, revoke
+new approval credit. Already merged PRs are not unmerged. A change whose only
+publications came from revoked nodes reads as having no synced review (a report
+says so), so a fresh review on an enrolled node or locally answers for it. A
+receipt covers the change's bound spec set: the specs its authorship was first
+published for, whichever spec the recorder named. To replace a key, revoke
 then enroll the node with the new public key; old signatures will no longer verify.
 
 Store writes use the ordinary store writer lock and exact-ref pushes. Immutable
@@ -133,7 +138,10 @@ and `.../authorship/`. Unsigned routing markers under
 must still verify. Version 1 bounds each command's output to 1 MiB, each change's
 evidence listing to 256 entries and its aggregate receipt bytes to 8 MiB. An
 exhausted budget or a malformed blob refuses that change only. Other changes,
-and specs reviewed only locally, are unaffected.
+and specs reviewed only locally, are unaffected. When a change's publications
+name several heads and a reader that has no head of its own cannot resolve the
+branch, those publications are reported and ignored there; head-bound gates
+(merge, train) still apply the publication at their head.
 
 Watcher reservations remain machine-local in slice 1. Do not run competing
 watchers against the same PR heads yet; reservation synchronization is slice 2.

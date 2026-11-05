@@ -121,6 +121,14 @@ impl Fixture {
             "objects/TASK/000/TASK-nodeb-2.yaml",
             serde_yaml::to_string(&finding).unwrap(),
         );
+        let mut spec2 = aida_core::Requirement::new("second spec".into(), "fixture".into());
+        spec2.spec_id = Some("STORY-nodea-3".into());
+        spec2.agreed_id = Some("STORY-2".into());
+        write(
+            &store_a,
+            "objects/STORY/000/STORY-nodea-3.yaml",
+            serde_yaml::to_string(&spec2).unwrap(),
+        );
         let author_key = key(temp.path(), "nodea");
         let signer = key(temp.path(), "nodeb");
         let third = key(temp.path(), "nodec");
@@ -220,14 +228,21 @@ impl Fixture {
             identity,
             ..Default::default()
         };
+        // An ordinary refusal, as `aida review record --finding` writes it:
+        // prose findings, no filed finding origin IDs.
         let mut obj = serde_json::json!({"verdict":decision,"reviewed_sha":sha,"reviewed_branch":"main", "recorded_by":"reviewer B", "recorded_at":chrono::Utc::now().to_rfc3339(), "recorder_attestation":att}).as_object().unwrap().clone();
         if decision != "approved" {
             obj.insert("findings".into(), serde_json::json!(["fix the regression"]));
-            obj.insert(
-                "blocking_finding_origin_ids".into(),
-                serde_json::json!([self.finding.spec_id]),
-            );
         }
+        obj
+    }
+    /// A refusal that also names its filed blocking finding by origin ID.
+    fn record_with_origin(&self, origin: &str) -> rv::JsonObj {
+        let mut obj = self.record("request-changes", "reviewer-session");
+        obj.insert(
+            "blocking_finding_origin_ids".into(),
+            serde_json::json!([origin]),
+        );
         obj
     }
     fn record(&self, decision: &str, identity: &str) -> rv::JsonObj {
@@ -383,12 +398,23 @@ fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
         ledger::event::verdict_event(&f.a, ChangeKey::pr(7), &local, None),
     )
     .unwrap();
+    take_reports();
     assert!(f.selected().kind.blocks_done());
-    let report = disagreement("PR-7", &rv::parse_ledger_record(&local).unwrap(), &refusal)
-        .expect("a same-head local approval against a synced refusal is reported");
+    // The merge gate itself reports the disagreement (AC3), not just the
+    // pure formatter.
+    let reports = take_reports();
     assert!(
-        report.contains("PR-7") && report.contains("disagreement"),
-        "{report}"
+        reports
+            .iter()
+            .any(|r| r.contains("PR-7") && r.contains("disagreement")),
+        "{reports:?}"
+    );
+    // An unknown PR head falls back to the branch-resolved head: the synced
+    // refusal still excludes the local approval (finding 4).
+    let headless = ship::merge_gate_verdict_candidates(&[&f.a], 7, &["STORY-1".into()], None);
+    assert!(
+        !headless.is_empty() && headless.iter().all(|v| v.kind.blocks_done()),
+        "{headless:?}"
     );
     // Remove B from the CURRENT committed roster. Older signatures stop counting.
     let store = f.a.join(".aida-store");
@@ -401,7 +427,18 @@ fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
     )
     .unwrap();
     assert!(verified_identity(&f.a, &verdict).is_err());
-    assert!(f.selected().kind.blocks_done());
+    // Revoked-only evidence is absent with a report, never a standing
+    // refusal: B's receipts no longer answer, and a fresh local review does
+    // (finding 5).
+    take_reports();
+    assert!(current(&f.a, &["PR-7"]).is_none());
+    let reports = take_reports();
+    assert!(reports.iter().any(|r| r.contains("revoked")), "{reports:?}");
+    assert!(f.candidates(&f.a, &f.sha).iter().all(|v| v
+        .attestation
+        .as_ref()
+        .and_then(|a| a.receipt_id.as_deref())
+        .is_none_or(|id| !id.starts_with("publication:"))));
 }
 
 /// Request-changes -> rework -> re-review by another node -> A's train lands
@@ -499,6 +536,23 @@ fn rework_cycle_rereviews_on_another_node_and_the_train_lands_the_new_head() {
     );
     assert!(kind_of(current(&f.a, &["STORY-1"])).is_some_and(|k| k.blocks_done()));
     assert!(rv::read_recorded_verdict(&f.a, "STORY-1").is_some_and(|v| v.kind.blocks_done()));
+    // A node that cannot resolve the branch while PR-7's publications name two
+    // heads treats them as absent with a report, not a standing refusal;
+    // a head-bound gate still sees the publication at its head (finding 5).
+    git_ok(&f.b, &["checkout", "-q", "--detach"]);
+    git_ok(&f.b, &["update-ref", "-d", "refs/heads/main"]);
+    git_ok(&f.b, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    take_reports();
+    assert!(current(&f.b, &["PR-7"]).is_none());
+    let reports = take_reports();
+    assert!(
+        reports.iter().any(|r| r.contains("several heads")),
+        "{reports:?}"
+    );
+    assert_eq!(
+        kind_of(current_at_head(&f.b, &["PR-7"], &h2)),
+        Some(rv::VerdictKind::Approved)
+    );
 }
 
 /// One malformed publication refuses its own change only; a change or spec
@@ -535,27 +589,119 @@ fn a_malformed_publication_refuses_only_its_own_change() {
     assert!(current(&f.a, &["TASK-42"]).is_none());
 }
 
-/// A collected refusal whose findings carry no origin IDs is recorded; its
-/// publication is a reported pending state, not a failed record (finding 7).
+/// An ordinary refusal (prose findings, no origin IDs) publishes through the
+/// real collector; a named origin ID that does not resolve leaves the
+/// verdict recorded and its publication a reported pending state (round 3
+/// finding 2).
 #[test]
-fn an_unpublishable_verdict_still_records_and_stays_pending() {
+fn an_ordinary_refusal_publishes_and_an_unresolvable_origin_stays_pending() {
     if !available() {
         return;
     }
     let f = Fixture::new();
-    let _env = env(&f.temp.path().join("home-b"));
-    let mut record = f.record("request-changes", "reviewer-session");
-    record.remove("blocking_finding_origin_ids");
-    assert!(
-        f.collect(&record).unwrap() > 0,
-        "the local verdict is written"
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let unresolvable = f.record_with_origin("TASK-nodeb-404");
+        assert!(
+            f.collect(&unresolvable).unwrap() > 0,
+            "the local verdict is written"
+        );
+        assert!(f.receipts(&f.b, "PR-7").is_empty(), "nothing was published");
+        assert!(
+            publish(&f.b, ChangeKey::pr(7), &unresolvable, &["STORY-1".into()])
+                .unwrap_err()
+                .to_string()
+                .contains("finding origin")
+        );
+        let filed = f.finding.spec_id.clone().unwrap();
+        f.collect(&f.record_with_origin(&filed)).unwrap();
+        assert_eq!(f.receipts(&f.b, "PR-7").len(), 1);
+        f.collect(&f.record("request-changes", "reviewer-session"))
+            .unwrap();
+        assert_eq!(
+            f.receipts(&f.b, "PR-7").len(),
+            2,
+            "a refusal without origin IDs publishes"
+        );
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    let refusal = f.selected();
+    assert!(refusal.kind.blocks_done());
+    assert_eq!(refusal.findings, vec!["fix the regression"]);
+}
+
+/// A two-spec change publishes from the direct recorder (one named spec) and
+/// from an adopted verdict file (no spec): the receipt covers the change's
+/// bound spec set, and a rework head naming another ID does not grow it
+/// (round 3 finding 3).
+#[test]
+fn a_two_spec_change_publishes_from_the_direct_recorder() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-a"));
+        publish_authorship(
+            &f.a,
+            ChangeKey::pr(11),
+            &["STORY-1".into(), "STORY-2".into()],
+            &f.sha,
+            Some("main"),
+        )
+        .unwrap();
+        // A rework tip whose commit names an extra ID.
+        publish_authorship(
+            &f.a,
+            ChangeKey::pr(11),
+            &["STORY-1".into(), "TASK-42".into()],
+            &f.sha,
+            Some("main"),
+        )
+        .unwrap();
+    }
+    let path = f.b.join(".aida/review-verdicts/PR-11.json");
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        f.sync(&f.b);
+        ledger::record_verdict_at(
+            &path,
+            &f.record("request-changes", "reviewer-session"),
+            Some(&ledger::GateSpec::with_key(
+                "STORY-1",
+                Some(SpecKey(f.spec.id)),
+            )),
+        )
+        .unwrap();
+        assert_eq!(
+            f.receipts(&f.b, "PR-11").len(),
+            1,
+            "direct recorder published"
+        );
+        ledger::adopt_verdict_file(&path, &f.record("approved", "reviewer-session")).unwrap();
+        let receipts = f.receipts(&f.b, "PR-11");
+        assert_eq!(receipts.len(), 2, "adopted verdict published");
+        assert!(
+            receipts.iter().all(|(r, ..)| r.specs.len() == 2),
+            "bound spec set"
+        );
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert_eq!(
+        kind_of(current(&f.a, &["PR-11", "STORY-1", "STORY-2"])),
+        Some(rv::VerdictKind::Approved)
     );
-    assert!(f.receipts(&f.b, "PR-7").is_empty(), "nothing was published");
+    let candidates = ship::merge_gate_verdict_candidates(
+        &[&f.a],
+        11,
+        &["STORY-1".into(), "STORY-2".into()],
+        Some(&f.sha),
+    );
     assert!(
-        publish(&f.b, ChangeKey::pr(7), &record, &["STORY-1".into()])
-            .unwrap_err()
-            .to_string()
-            .contains("blocking_finding_origin_ids")
+        !candidates.is_empty() && candidates.iter().all(|v| v.kind.approves()),
+        "{candidates:?}"
     );
 }
 

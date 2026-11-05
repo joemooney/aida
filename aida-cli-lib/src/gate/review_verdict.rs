@@ -1191,7 +1191,7 @@ fn choose_current(
         let synced = parse_recorded_verdict(&remote.body);
         if let (Some(local), Some(synced)) = (local, synced) {
             if let Some(report) = super::review_publication::disagreement(key, &local, &synced) {
-                eprintln!("{report}");
+                super::review_publication::report(report);
             }
         }
         return Some(remote);
