@@ -880,11 +880,11 @@ writes. Execution still requires a host terminal outside containment with no
 drain running. Legacy leases, worktrees and branches are untouched.
 <!-- trace:BUG-2458 | ai:codex -->
 
-Ownership never uses the creator shell as a witness. Session setup initially
-records the AIDA invocation itself; launching or adopting a worker replaces that
-identity. Legacy creator-only leases have no provable worker and remain unknown
-until a worker is stamped. Linux exposes the subreaper flag only to the process
-itself; remote holder validation rejects PID 1 and known init executables, not
+Ownership never uses the creator shell or the session-start CLI invocation as a
+witness. Session setup records no process witness until a worker is stamped by
+launch or adoption. Creator-only leases remain unknown, including after setup
+exits. Later lease writes and migration derive the same holder from that lease.
+Linux exposes the subreaper flag only to the process itself; remote holder validation rejects PID 1 and known init executables, not
 arbitrary processes that may have enabled that flag.
 
 Repairing an invalid orphan witness does not release its record. Such rows still

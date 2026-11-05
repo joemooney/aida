@@ -1021,6 +1021,7 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
 }
 
 // trace:BUG-2458 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac85e105 | ai:codex
 #[test]
 fn worker_is_the_only_witness_even_when_exited_or_unproven() {
     let mut l = lease("worker", "STORY-1", "creator_pid = 43\ncreator_pid_start_time = \"linux-starttime:9\"\nactive_pid = 42\nactive_pid_start_time = \"linux-starttime:8\"\n");
@@ -1042,6 +1043,7 @@ fn worker_is_the_only_witness_even_when_exited_or_unproven() {
 }
 
 // trace:BUG-2458 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac86ffc0 | ai:codex
 #[test]
 fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
     use aida_core::process_probe::{fixture::FakeProc, Probe, ProbeSource};
@@ -1123,6 +1125,7 @@ fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
 }
 
 // trace:BUG-2458 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac797761 | ai:codex
 #[test]
 fn migrate_repairs_worker_identity_without_changing_phase_and_skips_newer_writes() {
     use aida_core::process_probe::ProbeSource;
@@ -1200,6 +1203,7 @@ fn migrate_repairs_worker_identity_without_changing_phase_and_skips_newer_writes
 }
 
 // trace:BUG-2458 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac236c2c | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
 fn detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit() {
@@ -1306,28 +1310,77 @@ fn detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit() {
 }
 
 // trace:BUG-2458 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac85e105 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-224.ac1d6672 | ai:codex
 #[test]
-fn session_start_snapshot_names_setup_itself_and_preserves_a_stamped_worker() {
-    let source = aida_core::process_probe::ProbeSource::system();
+fn unstamped_session_stays_unknown_after_setup_exits_while_lease_is_live() {
+    dual::enable_for_test();
+    let dir = repo();
+    let id = uuid::Uuid::from_u128(2458);
     let l = lease(
         "setup",
-        "STORY-1",
+        &id.to_string(),
         "creator_pid = 2013\ncreator_pid_start_time = \"linux-starttime:9\"\n",
     );
-    let snapshot = dual::starting_lease_snapshot(&l);
-    assert_eq!(snapshot.active_pid, Some(std::process::id()));
+    let key = WorkKey::Spec { spec: SpecKey(id) };
+    // Any captured setup process has exited by the time the judge runs.
+    let probe = |_: &ProcessIdentity| aida_core::process_probe::Probe::Dead("setup exited".into());
+    let host = HostFacts::for_test(
+        "host-a".into(),
+        Some(BOOT.into()),
+        Some(INITIAL_PID_NAMESPACE_INODE),
+        &probe,
+    );
+    dual::lease_started(dir.path(), &l);
+    let started = repo_store(dir.path()).load(&key).unwrap().unwrap();
+    let h = started.holder.as_ref().unwrap();
+    assert!(h.witnesses.is_empty());
+    let verdict = judge_owner(h, &host, now());
+    assert!(matches!(verdict, OwnerVerdict::Unknown { .. }));
     assert_eq!(
-        snapshot.active_pid_start_time,
-        Some(source.capture(std::process::id()).unwrap().start)
+        compare_one(&l.id, LeaseState::Live, Some(&started), Some(&verdict)),
+        Outcome::Expected(expected::LIVE_UNPROVEN.into())
     );
-    assert!(
-        l.active_pid.is_none(),
-        "legacy lease liveness remains unchanged"
+    // Startup, a later write, and repair must agree for an unstamped lease.
+    dual::lease_written(dir.path(), &l);
+    let rewritten = repo_store(dir.path()).load(&key).unwrap().unwrap();
+    assert_eq!(rewritten.holder, started.holder);
+    assert!(migrate::repair_holders(
+        &[rewritten.clone()],
+        &[l.clone()],
+        &host_writer(),
+        &aida_core::process_probe::ProbeSource::system(),
+        now() + chrono::Duration::seconds(1),
+    )
+    .is_empty());
+    // Repair a record written by the previous setup-PID implementation too.
+    let mut old_setup = rewritten;
+    old_setup.holder.as_mut().unwrap().witnesses = vec![Witness {
+        kind: WitnessKind::Process {
+            host: "host-a".into(),
+            id: ProcessIdentity {
+                pid: 42,
+                start: format!("linux:{BOOT}:9"),
+            },
+            pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+        },
+        recorded_at: now(),
+    }];
+    let repaired = migrate::repair_holders(
+        &[old_setup],
+        &[l.clone()],
+        &host_writer(),
+        &aida_core::process_probe::ProbeSource::system(),
+        now(),
     );
-    let mut worker = l;
-    worker.active_pid = Some(42);
-    worker.active_pid_start_time = Some("linux-starttime:10".into());
-    let snapshot = dual::starting_lease_snapshot(&worker);
-    assert_eq!(snapshot.active_pid, worker.active_pid);
-    assert_eq!(snapshot.active_pid_start_time, worker.active_pid_start_time);
+    assert_eq!(repaired.len(), 1);
+    assert_eq!(repaired[0].holder, started.holder);
+    assert!(migrate::repair_holders(
+        &repaired,
+        &[l],
+        &host_writer(),
+        &aida_core::process_probe::ProbeSource::system(),
+        now() + chrono::Duration::seconds(1),
+    )
+    .is_empty());
 }

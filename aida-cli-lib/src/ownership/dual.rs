@@ -319,23 +319,11 @@ fn store_for(project_root: &Path) -> Option<OwnershipStore> {
     }
 }
 
-/// Setup itself owns the initial snapshot until the actual worker is stamped.
-/// Keep the legacy shell-routing lease unchanged: its creator is not the owner.
+/// Session setup has no owner witness until a worker is stamped. The CLI
+/// invocation and creator shell do not own the session's long-lived work.
 // trace:BUG-2458 | ai:codex
 pub(crate) fn lease_started(project_root: &Path, lease: &crate::SessionLease) {
-    lease_written(project_root, &starting_lease_snapshot(lease));
-}
-
-pub(super) fn starting_lease_snapshot(lease: &crate::SessionLease) -> crate::SessionLease {
-    let mut snapshot = lease.clone();
-    if snapshot.active_pid.is_none() {
-        let source = ProbeSource::system();
-        let pid = std::process::id();
-        snapshot.active_pid = Some(pid);
-        snapshot.active_pid_start_time = source.capture(pid).ok().map(|id| id.start);
-        snapshot.active_pid_ns = source.pid_namespace(pid).ok().map(|ns| ns.to_string());
-    }
-    snapshot
+    lease_written(project_root, lease);
 }
 
 /// A lease was written: its holder acquires the work it names.
