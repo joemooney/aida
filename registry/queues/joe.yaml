@@ -184,3 +184,11 @@
   added_at: 2026-11-05T20:18:41.741724196Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1ad5d-cbb1-7cd2-93fc-9a345aaa493f
+  position: 595000
+  added_by: joe
+  note: auto-queued by `session end` (01a1ad03); covers 0 specs
+  added_at: 2026-11-05T20:19:40.428445507Z
+  for_role: reviewer
+  added_by_machine: imac
