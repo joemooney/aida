@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-217
 agreed_id: BUG-2451
 title: Rework lanes start on a fresh -N branch off main instead of the open PR's branch, producing duplicate incomplete PRs
 description: 'Observed 2026-11-04, five times on both vendors: TASK-2708 (-658-2), TASK-3046 (-784-2, dup PR #3397), BUG-2439 (-208-2 → #3401 and a lost -208-3), TASK-1715 (task-1715-2 → #3404), STORY-2475 (-403-2 → dup PR #3407). When `aida queue work` is launched for a spec whose open PR''s branch is still held by an old seat or lease, or the branch exists without a matching local seat, pickup allocates <branch>-2 from main. The lane then implements only the rework delta on top of main and publishes a second PR missing the original commits. Folding that back needs a cherry-pick, which often conflicts, plus another lane. Acceptance: (1) a rework or queue-work for a spec with an open PR always seats that PR''s head branch; if the branch is held, it reclaims a clean, pushed holder (see BUG-2450) or refuses, naming the holder, and never allocates -N; (2) -N allocation is only for a spec with no open PR, and only when explicitly requested; (3) publication refuses to open a second open PR for the same spec, and pushes to the existing one or errors; (4) regression tests for the held-branch and the stale-seat cases.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T07:03:26.706616640Z
+modified_at: 2026-11-05T07:23:59.852313911Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,6 +125,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aa97-d5ec-7a20-a570-8299b72d8d88
+  author: joe
+  timestamp: 2026-11-05T07:23:59.852344233Z
+  session_id: 01a1aa7ddf84
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -137,3 +145,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T05:50:26.596521283Z
   implemented_by: joe
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 2 publication is blocked by the native sandbox: git add fails creating .git/index.lock with Read-only file system. No findings are disputed. Finding 1: train publication now allows only listed rider PRs, with real-forge fixture coverage. Finding 2: broad scopes skip spec PR lookup and queue passes its resolved result. Finding 3: retained merged branches explicitly refuse with merged PR and date/branch recovery; phase 1 consumes the recovery lease. Finding 4: real session entry regressions cover held heads in worktree/clone modes and origin-only seating. Finding 5: holder/cluster messages follow the existing-head policy. Finding 6: Rework hold records remain positive association evidence. All changes remain uncommitted in this worktree because Git metadata is read-only; PR #3409 is still at the previous commit. Validation passed: 10 BUG-2451 tests, 54 train tests, 64 phase-driver tests, 162 queue tests, 5 preclaim checks, 7 auto-branch tests, help snapshot, PR recovery, shared resolver and publication-hook checks; matching CLI build, cargo fmt check and git diff check pass.'
+  lean: 'Host publication is needed: stage this worktree, commit [AI:codex] fix(pickup): finish rework branch safeguards (BUG-2451), then push the existing bug-b6b1278890774ef993d2ebc327862470-217 branch to update PR #3409. Keep the merge hold and hand off to the separate reviewer; do not ship.'
+  raised_by: implementer
+  raised_at: 2026-11-05T07:23:59.852313911Z
