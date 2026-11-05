@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-018
 agreed_id: TASK-2889
 title: Dispatch fresh-review fixture still lacks sandbox session key in native PID namespace
 description: 'While validating TASK-2886, all 11 test_home tests passed, including live concurrent PID-1 namespaces. The adjacent dispatch module passed 18/19 after building the matching CLI. The remaining bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review also fails alone with a private TMPDIR, so this reproduction is not explained by shared test HOME cleanup. Captured dispatch log: review record rejects the reviewer grant because the sandboxed process namespace does not hold its session key (grant bound to test process PID 4). The fixture mints a reviewer grant and invokes the matching CLI from review-fresh-authority, but the CLI refuses before recording. Evidence: /tmp/task-2886-dispatch-diagnostic-oltpn0be/logs/.tmpi1mEjV/repo/.aida/dispatch/logs/bdd61820-7d0e-47c2-b0b2-81d9a13f2075.log. Test: env -u AIDA_PROJECT_ROOT -u AIDA_DRIVE_ROOT -u AIDA_REVIEW_VERDICT_FILE <matching lib test binary> --exact gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review --nocapture --test-threads=1, with private TMPDIR. Investigate fixture authority/session-key setup without weakening production grant checks. Related historical TASK-2861/TASK-2862. No outside-seat baseline was run.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T18:16:43.532811481Z
-modified_at: 2026-11-05T20:27:36.897956801Z
+modified_at: 2026-11-05T20:27:40.567106571Z
 req_type: Task
 tags:
 - from-implementer:TASK-2886
@@ -29,6 +29,14 @@ history:
   timestamp: 2026-11-05T20:27:38.112587977Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1ad65-5097-7960-bec9-432ba227ed9f
+  author: joe
+  timestamp: 2026-11-05T20:27:40.567103074Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b66ec083185
