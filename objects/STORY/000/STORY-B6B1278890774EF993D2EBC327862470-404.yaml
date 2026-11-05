@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:41:50.351542309Z
+modified_at: 2026-11-05T01:55:47.165267316Z
 req_type: Story
 comments:
 - id: 01a1a946-efb8-79d3-b78f-342e7e4872fe
@@ -41,6 +41,12 @@ comments:
   created_at: 2026-11-05T01:41:50.351542309Z
   modified_at: 2026-11-05T01:41:50.351542309Z
   session_id: 01a1a95c0ed3
+- id: 01a1a96b-595d-77d3-9775-16ab35c7f5da
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 19:00) on sketch f44af0c8273: interpretation ACCEPTED. Each condition is its own alarm kind with its own suppression rule; one kind never suppresses another. pipeline-idle keeps the original rule (silent while any lane runs or a PR is ready); ready-without-train, under-cap, no-merge-90m (measure last merge, not default-branch commit age), stale-advisor-mail, and empty-rework-exit are separate kinds. Use lease/registry identities, not pgrep. Deliver through supervise_cmd::nudge_pass (mailbox, kind=request), with the existing operator fallback. SLICE 1 now: the detector plus pipeline-idle and ready-without-train kinds, dry-run side-effect free, tests. Leave the vendor wake adapters (Claude/agy) and acted-on tracking for follow-up slices: file them as child tasks. Signed off; implement on branch story-b6b1278890774ef993d2ebc327862470-404 and open the PR.'
+  created_at: 2026-11-05T01:55:47.165267316Z
+  modified_at: 2026-11-05T01:55:47.165267316Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
   author: joe
