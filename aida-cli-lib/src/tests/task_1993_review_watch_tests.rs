@@ -2256,3 +2256,69 @@ fn bug2450_a_started_or_ambiguous_reviewer_never_retries_the_same_head() {
         ));
     }
 }
+
+// trace:TASK-3112 | ai:codex
+#[test]
+fn task3112_repeated_preflight_and_spawn_failures_do_not_consume_setup_retry() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    for _ in 0..3 {
+        let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        assert!(!attempt.setup_retry);
+        execute_reservation(
+            &store,
+            &c.key(),
+            &attempt.token,
+            |_| anyhow::bail!("temporary forge probe failure"),
+            |_| panic!("preflight failed"),
+        )
+        .unwrap_err();
+    }
+    for _ in 0..3 {
+        let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        assert!(!attempt.setup_retry);
+        mark_spawn_failed(&store, &c.key(), &attempt.token).unwrap();
+    }
+    assert!(!dispatch(select(&store, &c, None, 1).unwrap()).setup_retry);
+}
+
+// trace:TASK-3112 | ai:codex
+#[test]
+fn task3112_transient_preflight_preserves_pending_setup_retry() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let first = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &first.token,
+        |_| Ok(()),
+        |_| anyhow::bail!("first setup exit"),
+    )
+    .unwrap_err();
+    for _ in 0..3 {
+        let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        assert!(attempt.setup_retry);
+        execute_reservation(
+            &store,
+            &c.key(),
+            &attempt.token,
+            |_| anyhow::bail!("transient preflight"),
+            |_| panic!("preflight failed"),
+        )
+        .unwrap_err();
+    }
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    assert!(attempt.setup_retry);
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Ok(()),
+        |_| anyhow::bail!("second setup exit"),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason) if reason.contains("second setup exit"))
+    );
+}

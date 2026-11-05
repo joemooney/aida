@@ -348,7 +348,10 @@ fn bug2441_rework_branch_trains(trailer_only: bool) {
 fixture_case!(
     bug2441_unknown_rework_branch_without_resolved_spec_refuses,
     bug2441_unresolved_member_refuses,
-    ("bug-b6b1278890774ef993d2ebc327862470-173-2", "fix: rework")
+    (
+        "bug-b6b1278890774ef993d2ebc327862470-999999-2",
+        "fix: rework"
+    )
 );
 fixture_case!(
     bug2441_member_without_spec_ids_refuses,
@@ -1346,5 +1349,42 @@ fn bug2406_required_check_read_classifies_gh_output() {
     assert_ne!(
         crate::forge::judge_commit_checks(&none, &[]),
         crate::forge::CommitCi::Green
+    );
+}
+
+// trace:TASK-3112 | ai:codex
+#[test]
+fn task3112_rework_hint_retains_owning_spec_beside_refs_metadata() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let ids = resolved_member_spec_ids(
+        f.root(),
+        "bug-b6b1278890774ef993d2ebc327862470-173-2",
+        "fix: rework (Refs STORY-2220)",
+        "",
+        "",
+    )
+    .unwrap();
+    assert!(
+        ids.iter()
+            .any(|id| id.eq_ignore_ascii_case("BUG-b6b1278890774ef993d2ebc327862470-173")),
+        "{ids:?}"
+    );
+    assert!(ids.contains(&"STORY-2220".to_string()));
+    let backend = aida_core::GitBackend::new(&f.root().join(".aida-store"))
+        .unwrap()
+        .with_auto_commit(false);
+    let mut store = aida_core::DatabaseBackend::load(&backend).unwrap();
+    store.requirements[0].execution_mode = Some(aida_core::ExecutionMode::Operator);
+    aida_core::DatabaseBackend::save(&backend, &store).unwrap();
+    let policies =
+        crate::pr_cmd::ship_gate_spec_records_for_ids(f.root(), aliases(f.root(), &ids).unwrap());
+    assert!(
+        policies
+            .iter()
+            .any(|(_, _, mode)| *mode == Some(aida_core::ExecutionMode::Operator)),
+        "{policies:?}"
     );
 }
