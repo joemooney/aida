@@ -8,8 +8,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T07:19:14.940834133Z
+modified_at: 2026-11-05T07:27:23.984520916Z
 req_type: Bug
+comments:
+- id: 01a1aa9a-f350-7620-8809-7232430a12ef
+  author: joe
+  content: 'Implementation: standalone rework exits now probe unchanged GitHub heads for current-head blocking verdicts, failed required checks and merge conflicts before PR/no-PR settlement. First empty exit gets a named-blocker brief and shared implementer retry; repeat at the same PR head sends advisor request mail and removes automatic retries. Explicit punt/hold precedence is retained. Targeted tests are compiling locally; the launcher lane-job runner is unavailable in this session.'
+  created_at: 2026-11-05T07:27:23.984520916Z
+  modified_at: 2026-11-05T07:27:23.984520916Z
+  session_id: 01a1aa92b2df
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
   author: joe
