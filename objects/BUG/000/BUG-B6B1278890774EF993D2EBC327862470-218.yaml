@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T07:37:18.487830591Z
+modified_at: 2026-11-05T07:38:07.701014252Z
 req_type: Bug
 comments:
 - id: 01a1aa9a-f350-7620-8809-7232430a12ef
@@ -22,6 +22,12 @@ comments:
   content: 'Validation complete: all 35 standalone implementer tests passed, including six BUG-2452 regressions for the three blockers, explicit disputed-finding punts, persisted retry/brief/advisor-request routing, configured required checks, unchanged/no-PR exits, head movement and unknown forge evidence. cargo fmt --all -- --check and git diff --check passed. Opening the implementation PR for separate review; no shipping or review recording from this lane.'
   created_at: 2026-11-05T07:37:18.487830591Z
   modified_at: 2026-11-05T07:37:18.487830591Z
+  session_id: 01a1aa92b2df
+- id: 01a1aaa4-c5d5-7b62-8158-71f5eb6e049a
+  author: joe
+  content: 'Publication handoff: implementation is staged and all 35 standalone implementer tests passed. git commit refused with read-only .git/index.lock in this native Codex seat. TASK-2712 explicitly requires leaving native seat edits for the host-side post-exit commit, rather than bypassing the sandbox. No commit, push or PR was created here; spec remains In Progress pending host publication. Host recovery from /home/joe/ai/aida: aida ship BUG-2452 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-218 --commit-pending "[AI:codex] fix(queue): reject empty blocked rework exits (BUG-2452)". PR body is /tmp/bug-2452-pr-body.md. After publication run queue done with the recorded test plan. Do not merge from the implementer lane.'
+  created_at: 2026-11-05T07:38:07.701014252Z
+  modified_at: 2026-11-05T07:38:07.701014252Z
   session_id: 01a1aa92b2df
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
