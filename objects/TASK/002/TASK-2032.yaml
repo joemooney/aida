@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-05T01:58:15.129424980Z
+modified_at: 2026-11-05T03:57:47.854517938Z
 req_type: Task
 tags:
 - contained
@@ -122,6 +122,13 @@ comments:
   created_at: 2026-11-05T01:00:44.165168294Z
   modified_at: 2026-11-05T01:00:44.165168294Z
   session_id: 01a1a917521b
+- id: 01a1a9db-0dce-7331-acc4-27b9e8dab264
+  author: joe
+  content: Commit 25044b29439 references this requirement
+  created_at: 2026-11-05T03:57:47.854517938Z
+  modified_at: 2026-11-05T03:57:47.854517938Z
+  session_id: 01a1a9c65ce1
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
