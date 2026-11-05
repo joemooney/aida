@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T16:13:50.564732177Z
+modified_at: 2026-11-05T16:27:56.159266765Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -134,6 +134,12 @@ comments:
   content: 'Round 2 source fixes for PR #3428 are in the current native seat: executable fixture uses test_exec::write_executable; manual uses spec:<spec-id> and top-level aida --file wording; read_pr_state uses the existing gh_bin spelling recognized by the launch-site ratchet; release no-tag behavior is documented with a real Git adapter regression. Read lib-1 job 127269707915: its sole failure was the launch-site ratchet, not the PR-state test. Seven executable-fixture guard tests, formatting and diff checks pass; Rust checks remain compiling. Publication is blocked: git add cannot create .git/index.lock because .git is read-only. TASK-2712 native-seat host exit handling must commit these pending changes. No review finding is disputed; no hold clearance or review verdict was attempted.'
   created_at: 2026-11-05T16:13:50.564732177Z
   modified_at: 2026-11-05T16:13:50.564732177Z
+  session_id: 01a1ac730663
+- id: 01a1ac89-d37f-72b2-ae17-1ad510f2b290
+  author: joe
+  content: 'Round 2 final validation: all four condition adapter tests pass, including the ETXTBSY-safe PR fixture and new real Git release adapter regression. Both launch-ratchet tests pass, including launch_sites_outside_the_launcher_match_the_ledger (the sole failure in CI job 127269707915). All seven executable-fixture guard tests pass. Built the current CLI successfully. The full docs/cli/verify-manual.py run against that binary passed completeness (85 commands), SPEC-ID leaks, reflection (14 surfaces), subcommands and flag accuracy. cargo fmt --all -- --check and git diff --check pass. Three pending source files, 55 additions/7 removals. Full lib-1 confirmation is not green locally: the CI-style nextest run encountered failures in untouched launch/coordination tests, including cleanup explicitly refusing because processes outside this sandbox PID namespace are hidden; stopped that broad run and retained /tmp/story2402-lib1-nextest.log. Targeted outputs: /tmp/story2402-tests.log, /tmp/story2402-launch-ratchet.log, /tmp/story2402-manual-current.log. No findings are disputed. Publication remains blocked by read-only .git (git add cannot create index.lock); the native host launcher must create and push the new commit from these pending edits. Suggested subject: [AI:codex] fix(condition): resolve review CI failures and cover release probes (STORY-2402). Parent story remains partial S1 only; no hold clearance, review verdict, or merge was attempted.'
+  created_at: 2026-11-05T16:27:56.159266765Z
+  modified_at: 2026-11-05T16:27:56.159266765Z
   session_id: 01a1ac730663
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
