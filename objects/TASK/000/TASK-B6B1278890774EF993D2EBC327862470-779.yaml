@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T06:21:28.224828670Z
+modified_at: 2026-11-05T06:21:32.239957904Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -81,6 +81,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (23:25): Codex''s review fix was left uncommitted on a stray branch (-779-2, BUG-2451). It''s saved as a patch at ~/.local/share/aida/ops/advisor-scripts/t2832-backup.patch (deputy_shell_cmd.rs plus deputy_shell/tests.rs; the uncommitted files are also still in seat aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-779-2). On #3394''s branch task-b6b1278890774ef993d2ebc327862470-779: git apply --3way that patch, resolve the conflict in deputy_shell/tests.rs (keep the existing claim-grace tests plus the new ones), run the deputy_shell tests plus make check-ci-fast, and push to #3394.'
   created_at: 2026-11-05T06:21:28.224828670Z
   modified_at: 2026-11-05T06:21:28.224828670Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa5e-a6cf-7630-8328-112d880edd5b
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
+  created_at: 2026-11-05T06:21:32.239956339Z
+  modified_at: 2026-11-05T06:21:32.239956339Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
@@ -177,6 +183,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1aa5e-a6cf-7630-8328-111de004ca19
+  author: joe
+  timestamp: 2026-11-05T06:21:32.239943215Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
