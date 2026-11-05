@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T23:13:43.949453188Z
+modified_at: 2026-11-05T23:35:01.068099521Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -135,6 +135,12 @@ comments:
   created_at: 2026-11-05T23:12:29.001896019Z
   modified_at: 2026-11-05T23:12:29.001896019Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae10-d4cc-7313-a034-7f822f998b08
+  author: joe
+  content: 'Round 2 implemented in new commit 038e06c8862 and pushed to PR #3462. Findings 1-6 addressed: fixed the deputy status claim-window race; narrowed the Codex preview assertion to sandbox flags; checked the original bundle before any reconciliation; only run mutation preflight/merge when the pinned remote head is absent from the imported local history; reuse the resolved explicit spec; use a neutral [host] merge subject. Later refusal/push recovery is documented and tested. Added run_at production fixtures against a moved bare origin, live-owner/conflict/trailer/spec/push refusal paths, and already-committed publication from a live dirty seat. Added actual post_exit_commit forge lookup coverage for Refs and completing titles, including the CLI version probe. Validation: task_2879 10 passed with live Bubblewrap required; deputy_shell::tests 39 passed; Codex posture 14 passed; seat publication 36 passed; ship_from_seat 5 passed; cargo fmt and git diff checks passed. One concurrent seat-group invocation hit a transient Git config-read failure in fixture setup; the complete group passed when rerun alone. Full CI not run locally; merge hold remains unchanged. Push was accepted remotely; the sandbox refused only the subsequent local origin tracking-ref refresh. Standalone implementer stops at the existing PR; no review record or merge command run.'
+  created_at: 2026-11-05T23:35:01.068099521Z
+  modified_at: 2026-11-05T23:35:01.068099521Z
+  session_id: 01a1adfd5044
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
   author: joe
