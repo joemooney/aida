@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-339
 agreed_id: STORY-2343
 title: 'Kernel-attested submit for the script deputy: a SO_PEERCRED socket instead of the file queue''s same-uid residual'
 description: 'Follow-up to STORY-2338 (advisor ruling Q6: later, filed by the implementer). The script deputy (aida deputy shell) attributes a job from the submitter''s validated grant record and re-checks it at claim, but a same-uid, uncontained process can still write incoming/<id>.job naming a live session''s grant (grant records are readable by the user). Close that residual with kernel-attested submission: the runner listens on a unix socket in its 0700 queue; submit connects, the runner reads SO_PEERCRED (pid, uid) and checks the peer pid''s ancestry/session against the grant''s binding before accepting the job. Needs: a live runner at submit time (or a defined fallback), a sandbox socket rule for the advisor seat, and a decision on whether the file queue stays for offline submits. Acceptance: (1) a job submitted over the socket records the kernel-reported peer and is refused when the peer does not run under the named grant''s binding; (2) a forged incoming/ file is refused, or the file path is removed; (3) hermetic tests for both. Architecture-sensitive: sketch + advisor signoff first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-05T00:48:43.007629287Z
+modified_at: 2026-11-05T02:19:56.326127979Z
 req_type: Story
 tags:
 - area:deputy
@@ -162,6 +162,12 @@ comments:
   created_at: 2026-11-04T20:49:03.561923054Z
   modified_at: 2026-11-04T20:49:03.561923054Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a981-7626-7093-97e6-42c274727a06
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and diff meet AC1-AC3 (socket.rs attest/serve_one; verdict refused:unattested; tests a_socket_submit_records_the_kernel_peer..., attest_compares_bindings..., a_file_dropped_where_submitters_used_to_write..., every_unattributable table), but CI lib-1 ''Run tests'' is red at the reviewed head (run 41941547520) and was red on d12c6fef624 too (run 41910234263), while main is green at the merge base; the spec''s gate is CI''s full suite. AC status: (1) code verified, test unconfirmed while lib-1 is red; (2) verified by code (incoming/ removed, accepted/ runner-only, claim refuses no-peer); (3) hermetic tests present, CI-green unverified.. It was punted on: blocked-dependency: Accepted implementation d12c6fef624 is present and clean, but LIGHT cannot execute: lease 01a1a82222c5 names no lane job runner. The profile-agent cargo test request is refused before job creation, and the runner also rejects make check-ci-fast because it accepts cargo only. untested=true; no code changes or new push/PR. See the gate-result comment for exact commands and errors.. No triage reason was given.'
+  created_at: 2026-11-05T02:19:56.326126447Z
+  modified_at: 2026-11-05T02:19:56.326126447Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
@@ -292,6 +298,14 @@ history:
   session_id: 01a1a924af9b
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a981-7626-7093-97e6-42b0b015a531
+  author: joe
+  timestamp: 2026-11-05T02:19:56.326114561Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: cfee54e5aabfce342a2e385a63dc2deb7d3c1d96
   branch: story-2338-sketch
@@ -300,17 +314,3 @@ filed_at:
   aida_build_sha: cfee54e5aab
   vendor: claude
   session: bb607549-3128-4075-9764-5206b7a40790
-attention_reason:
-  category: blocked-dependency
-  detail: 'Accepted implementation d12c6fef624 is present and clean, but LIGHT cannot execute: lease 01a1a82222c5 names no lane job runner. The profile-agent cargo test request is refused before job creation, and the runner also rejects make check-ci-fast because it accepts cargo only. untested=true; no code changes or new push/PR. See the gate-result comment for exact commands and errors.'
-  lean: Resume this exact accepted checkout with a host-published live lane runner and an authorized route for the make fast gate, then finish LIGHT and open the PR.
-  raised_by: implementer
-  raised_at: 2026-11-04T19:57:37.809584547Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design and diff meet AC1-AC3 (socket.rs attest/serve_one; verdict refused:unattested; tests a_socket_submit_records_the_kernel_peer..., attest_compares_bindings..., a_file_dropped_where_submitters_used_to_write..., every_unattributable table), but CI lib-1 ''Run tests'' is red at the reviewed head (run 41941547520) and was red on d12c6fef624 too (run 41910234263), while main is green at the merge base; the spec''s gate is CI''s full suite. AC status: (1) code verified, test unconfirmed while lib-1 is red; (2) verified by code (incoming/ removed, accepted/ runner-only, claim refuses no-peer); (3) hermetic tests present, CI-green unverified.'
-  recovery_hint: address the review findings, move STORY-2343 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T00:48:43.007629287Z
