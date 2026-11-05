@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T03:12:10.923723343Z
+modified_at: 2026-11-05T18:23:22.985164371Z
 req_type: Story
 tags:
 - architecture
@@ -519,6 +519,12 @@ comments:
   created_at: 2026-11-03T03:12:10.923723343Z
   modified_at: 2026-11-03T03:12:10.923723343Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a1acf3-8569-7802-9dfc-7b5ffd12495d
+  author: joe
+  content: 'Advisor 2026-11-05 11:25: signed F-a amendment for Claude M1 recorded on TASK-2708 (socketpair any type; NETLINK_ROUTE only; inet DGRAM; broker CONTINUE only for sockets owned by a non-lane netns via SIOCGSKNS). C1-C12 otherwise unchanged.'
+  created_at: 2026-11-05T18:23:22.985164371Z
+  modified_at: 2026-11-05T18:23:22.985164371Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
