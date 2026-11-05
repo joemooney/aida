@@ -359,7 +359,8 @@ a fixed set of immutable request fields; view markers do not change it.
 Action receipts live in a separate version-1 ledger under the common Git
 mail-lifecycle anchor (`actions-v1.json`), serialized by Lifecycle then
 `actions.lock`. Revisions retain the actor, recipient UUID when available,
-matched inbox keys, message fingerprint, reason, evidence and server time;
+matched inbox keys, original and withdrawn-view message fingerprints, reason,
+evidence and server time;
 the latest authorized revision wins. The ledger refuses at 4096 revisions or
 4 MiB, without pruning history. Corrupt or unsafe ledgers, partial/conflicting
 mail snapshots, retiring sources, changed copies and changed recipient

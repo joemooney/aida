@@ -263,6 +263,7 @@ fn archive_preserves_action_while_withdrawal_and_nonrequests_refuse_new_action()
     for changed in [
         Message {
             retracted: true,
+            body: String::new(),
             ..msg.clone()
         },
         Message {
@@ -279,6 +280,20 @@ fn archive_preserves_action_while_withdrawal_and_nonrequests_refuse_new_action()
         if changed.intent == Intent::Request {
             let receipt = latest(&common, &changed).unwrap().unwrap();
             assert_eq!(receipt.outcome, Outcome::Declined);
+            if !changed.deleted {
+                let (_, observed) = snapshot(root, &who);
+                let record = &observed.records[0];
+                assert_eq!(latest(&common, &record.message).unwrap(), Some(receipt));
+                if changed.retracted {
+                    assert!(record.message.body.is_empty());
+                    assert!(record.message.subject.is_none());
+                    let replaced = Message {
+                        thread_id: "other-thread".into(),
+                        ..record.message.clone()
+                    };
+                    assert!(latest(&common, &replaced).unwrap().is_none());
+                }
+            }
         }
     }
 }

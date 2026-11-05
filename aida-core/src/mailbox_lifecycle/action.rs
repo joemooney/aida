@@ -33,6 +33,9 @@ pub enum Outcome {
 pub struct ActionReceipt {
     pub message_id: String,
     pub fingerprint: String,
+    /// Identity of the redacted withdrawal projection; original hash is retained.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withdrawn_fingerprint: Option<String>,
     pub actor: String,
     pub recipient_uuid: Option<crate::mailbox_delivery::RecipientUuid>,
     pub keys: Vec<String>,
@@ -138,6 +141,9 @@ fn read_ledger(anchor: &Path) -> Result<Ledger> {
             || r.keys.is_empty()
             || r.keys.len() > ack::MAX_PLAN_KEYS
             || r.keys.iter().any(|k| !text_valid(k) || k.len() > 256)
+            || r.withdrawn_fingerprint
+                .as_ref()
+                .is_some_and(|fp| fp.len() != 64 || !fp.bytes().all(|b| b.is_ascii_hexdigit()))
             || r.fingerprint.len() != 64
             || !r.fingerprint.bytes().all(|b| b.is_ascii_hexdigit())
         {
@@ -150,11 +156,31 @@ fn read_ledger(anchor: &Path) -> Result<Ledger> {
 /// Latest authorized revision, or unknown. Reading never initializes a ledger.
 pub fn latest(common: &Path, message: &Message) -> Result<Option<ActionReceipt>> {
     let fp = fingerprint(message)?;
+    let withdrawn = message
+        .retracted
+        .then(|| withdrawn_fingerprint(message))
+        .transpose()?;
     Ok(read_ledger(&common.join("aida/mail-lifecycle"))?
         .revisions
         .into_iter()
         .rev()
-        .find(|r| r.message_id == message.id && r.fingerprint == fp))
+        .find(|r| {
+            r.message_id == message.id
+                && (r.fingerprint == fp
+                    || withdrawn
+                        .as_ref()
+                        .is_some_and(|fp| r.withdrawn_fingerprint.as_ref() == Some(fp)))
+        }))
+}
+
+// Withdrawal physically clears body, and logical views also redact subject.
+// Bind that exact tombstone projection while retaining the full original hash.
+fn withdrawn_fingerprint(message: &Message) -> Result<String> {
+    fingerprint(&Message {
+        body: String::new(),
+        subject: None,
+        ..message.clone()
+    })
 }
 
 /// Carries exact replicas and authority from observation to locked validation.
@@ -220,6 +246,7 @@ impl ActionPlan {
             receipt: ActionReceipt {
                 message_id: record.message.id.clone(),
                 fingerprint: fingerprint(&record.message)?,
+                withdrawn_fingerprint: Some(withdrawn_fingerprint(&record.message)?),
                 actor,
                 recipient_uuid: audience.recipient().cloned(),
                 keys,

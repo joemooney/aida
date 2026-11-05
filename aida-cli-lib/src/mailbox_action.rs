@@ -170,6 +170,7 @@ mod tests {
                 } else {
                     aida_core::mailbox::Intent::Request
                 },
+                subject: Some("request subject".into()),
                 ..mail("read-request", "operator", 10, false)
             };
             crate::mailbox_store::write_message(&r.sib, &request).unwrap();
@@ -187,6 +188,7 @@ mod tests {
                 .unwrap();
                 if case.contains("retracted") {
                     request.retracted = true;
+                    request.body.clear();
                 }
                 if case.contains("archived") {
                     request.archived = true;
@@ -259,7 +261,12 @@ mod tests {
                     let value: serde_json::Value = serde_json::from_str(view).unwrap();
                     assert_eq!(value["schema"], 1, "{case}: {view}");
                     assert_eq!(value["message"]["id"], "read-request");
-                    assert_eq!(value["message"]["body"], "body of read-request");
+                    if state.contains("retracted") {
+                        assert_eq!(value["message"]["body"], "");
+                        assert!(value["message"].get("subject").is_none());
+                    } else {
+                        assert_eq!(value["message"]["body"], "body of read-request");
+                    }
                     if state.starts_with("recorded") {
                         assert_eq!(value["action"]["outcome"], "acted");
                         assert_eq!(value["action"]["actor"], "operator");
@@ -276,6 +283,10 @@ mod tests {
                     }
                 } else {
                     assert!(view.contains("read"), "{case}: {view}");
+                    if state.contains("retracted") {
+                        assert!(!view.contains("body of read-request"), "{view}");
+                        assert!(!view.contains("request subject"), "{view}");
+                    }
                     if state.starts_with("recorded") {
                         for field in [
                             "action: acted",
