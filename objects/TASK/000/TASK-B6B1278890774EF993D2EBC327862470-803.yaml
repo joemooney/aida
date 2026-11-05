@@ -8,17 +8,27 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T02:52:09.542251339Z
-modified_at: 2026-11-05T02:52:09.542251339Z
+modified_at: 2026-11-05T16:03:39.380911997Z
 req_type: Task
 tags:
 - from-advisor:STORY-2479
 - kind:observation
 - linked:STORY-2479
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1a95e-69ad-77a2-b84f-771c9e860a0e
+  created_at: 2026-11-05T16:03:39.380907461Z
+  created_by: joe
 history:
 - id: 01a1a9a4-9331-74f3-8922-e37e24c30e09
   author: joe
   timestamp: 2026-11-05T02:58:17.521964379Z
+  changes: []
+- id: 01a1ac73-9d5e-70b1-b2a4-0bd9a5823035
+  author: joe
+  timestamp: 2026-11-05T16:03:40.510156724Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
 filed_at:
   aida_version: 0.16.0
