@@ -1,0 +1,29 @@
+id: 01a1aa8a-f2e0-7b00-88b3-18b9b4ec18de
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-819
+title: 'non-blocking cosmetic: AGENTS.md:529-537 and OVERVIEW.md:372-383 add per-change…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3077, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking cosmetic: AGENTS.md:529-537 and OVERVIEW.md:372-383 add per-change notes (alias-refusal detail, slice status); repo rule keeps per-change notes in the PR body/spec comments and edits these only for architecture changes - trim to the architectural boundary (pre-startup local entry, wire format pointer).
+
+  PR: #3403
+  Reviewed sha: 237881b4083d63ab331d7c0ee9b679410a4bb5ac
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T07:09:55.296683475Z
+modified_at: 2026-11-05T07:09:55.296683475Z
+req_type: Task
+tags:
+- carried-from:TASK-3077
+- finding-hash:9730da69
+- from-review:PR-3403
+- kind:carried-forward
+filed_at:
+  code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
