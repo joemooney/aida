@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-11-05T00:27:18.271432239Z
+modified_at: 2026-11-05T00:30:24.644195428Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
@@ -63,6 +63,12 @@ comments:
   created_at: 2026-11-05T00:21:57.831895301Z
   modified_at: 2026-11-05T00:21:57.831895301Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a91d-2f84-7400-b00e-e18fdef7e1eb
+  author: joe
+  content: 'Round 2: all three findings addressed in new commit 25a9914bac2, pushed and verified as PR #3384 head. Renamed guarded fixture closure to store_git; maintenance ratchet now passes all 8 tests without baseline/scanner changes (original head reproduced 8 > baseline 7). Corrected PR and commit titles to test(regen): characterize committed fractional-rate refusals; document bounded repair. Added survey comment and plan candidate for serde_json/float_roundtrip; candidate recorded on TASK-2842. Formatting and diff checks pass. Targeted Rust invocation cancelled while queued for a shared Cargo slot; tests did not execute this round. GitHub job metadata confirms Test git auto-maintenance ratchet was the failed CI gates step. Production eligibility unchanged. PR remains open with merge hold for separate reviewer/merge seat; no ship or review record performed.'
+  created_at: 2026-11-05T00:30:24.644195428Z
+  modified_at: 2026-11-05T00:30:24.644195428Z
+  session_id: 01a1a91a4d9c
 history:
 - id: 01a154db-eb1a-7e22-97df-21cd34a4604f
   author: joe
