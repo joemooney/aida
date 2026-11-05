@@ -381,37 +381,7 @@ fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
     }
     s.train_running = crate::merge_lock::observed_train_running(root);
     if let Some((prs, raw)) = forge_snapshot(root) {
-        let mut readiness = Vec::new();
-        let mut blocked = false;
-        let mut train = vec![s.train_running];
-        for pr in prs.by_branch.values() {
-            let row = raw
-                .iter()
-                .find(|r| r["number"].as_u64() == Some(pr.number))
-                .unwrap();
-            if pr.head_branch.starts_with("train/") {
-                // An open train with unknown owner is never evidence of no train.
-                train.push(train_pr_running(
-                    root,
-                    pr.number,
-                    row["body"].as_str().unwrap_or(""),
-                    &mut s.details,
-                ));
-                continue;
-            }
-            let ready = pr_ready(root, pr);
-            readiness.push(ready);
-            let rejected = pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
-                || current_rejection(root, pr);
-            blocked |= pr.ci_rollup.as_deref() == Some("fail") || rejected;
-            if pr.ci_rollup.as_deref() == Some("fail") {
-                s.failed_jobs.push((pr.number, row.clone()));
-            }
-            s.details.extend(pr_digest(root, pr, row, ready, rejected));
-        }
-        s.ready = any(&readiness);
-        s.train_running = any(&train);
-        s.work_waiting = any(&[Some(blocked), queue_waiting(root, home)]);
+        observe_prs(root, home, &prs, &raw, &mut s);
     }
     // A merge train is itself an active pipeline lane even without an agent row.
     s.lanes_running = any(&[s.lanes_running, s.train_running]);
@@ -423,6 +393,47 @@ fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
             .push("Train liveness unknown: unreadable or foreign merge-lease owner".into());
     }
     s
+}
+
+// Shared snapshot processing keeps digest, readiness and deferred log selection aligned.
+fn observe_prs(
+    root: &Path,
+    home: Option<&Path>,
+    prs: &crate::status_prs::OpenPrSnapshot,
+    raw: &[serde_json::Value],
+    s: &mut Snapshot,
+) {
+    let mut readiness = Vec::new();
+    let mut blocked = false;
+    let mut train = vec![s.train_running];
+    for pr in prs.by_branch.values() {
+        let row = raw
+            .iter()
+            .find(|r| r["number"].as_u64() == Some(pr.number))
+            .unwrap();
+        if pr.head_branch.starts_with("train/") {
+            // An open train with unknown owner is never evidence of no train.
+            train.push(train_pr_running(
+                root,
+                pr.number,
+                row["body"].as_str().unwrap_or(""),
+                &mut s.details,
+            ));
+            continue;
+        }
+        let ready = pr_ready(root, pr);
+        readiness.push(ready);
+        let rejected = pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
+            || current_rejection(root, pr);
+        blocked |= pr.ci_rollup.as_deref() == Some("fail") || rejected;
+        if pr.ci_rollup.as_deref() == Some("fail") {
+            s.failed_jobs.push((pr.number, row.clone()));
+        }
+        s.details.extend(pr_digest(root, pr, row, ready, rejected));
+    }
+    s.ready = any(&readiness);
+    s.train_running = any(&train);
+    s.work_waiting = any(&[Some(blocked), queue_waiting(root, home)]);
 }
 
 fn queue_waiting(root: &Path, home: Option<&Path>) -> Option<bool> {
@@ -490,16 +501,67 @@ fn forge_snapshot(
     }
     Some((prs, raw))
 }
-// GitHub treats completed skipped/neutral checks as non-blocking. Keep the
-// shared status display unchanged; preserve required-check absence/unknown guards.
+// Latest attempts are the detector's evidence for both classification and logs.
+// A hold gate is a lifecycle signal (pr_has_merge_hold), not a failing test.
+// trace:STORY-2476 | ai:codex
+fn check_name(check: &serde_json::Value) -> Option<&str> {
+    check["name"].as_str().or(check["context"].as_str())
+}
+fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
+    let mut latest = BTreeMap::new();
+    let mut unnamed = Vec::new();
+    for check in row["statusCheckRollup"].as_array().into_iter().flatten() {
+        let Some(name) = check_name(check) else {
+            unnamed.push(check);
+            continue;
+        };
+        if name == "merge-hold-gate" {
+            continue;
+        }
+        // Compare parsed instants, including offsets. Missing timestamps retain
+        // input order as a tie-breaker; a newer queued attempt supersedes old red.
+        let time = |c: &serde_json::Value| {
+            ["completedAt", "startedAt", "createdAt"]
+                .iter()
+                .filter_map(|key| c[key].as_str())
+                .filter_map(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .max()
+        };
+        let previous = latest.entry(name).or_insert(check);
+        if time(check) >= time(previous) {
+            *previous = check;
+        }
+    }
+    unnamed.extend(latest.into_values());
+    unnamed
+}
+fn check_failed(check: &serde_json::Value) -> bool {
+    matches!(
+        check["conclusion"].as_str().or(check["state"].as_str()),
+        Some("FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
+    )
+}
+
+// Keep shared status displays unchanged and required-check unknown guards intact.
 fn parse_stall_prs(
     raw: &[serde_json::Value],
     required: Option<&[String]>,
 ) -> crate::status_prs::OpenPrSnapshot {
     let mut normalized = raw.to_vec();
     for row in &mut normalized {
+        let checks: Vec<_> = ci_checks(row).into_iter().cloned().collect();
+        row["statusCheckRollup"] = checks.into();
         if let Some(checks) = row["statusCheckRollup"].as_array_mut() {
             for check in checks {
+                // StatusContext uses state/context rather than conclusion/name.
+                if let Some(state) = check["state"].as_str() {
+                    match state {
+                        "SUCCESS" => check["conclusion"] = "SUCCESS".into(),
+                        "FAILURE" | "ERROR" => check["conclusion"] = "FAILURE".into(),
+                        "PENDING" => check["status"] = "PENDING".into(),
+                        _ => {}
+                    }
+                }
                 if check["status"] == "COMPLETED"
                     && matches!(check["conclusion"].as_str(), Some("SKIPPED" | "NEUTRAL"))
                 {
@@ -508,9 +570,16 @@ fn parse_stall_prs(
             }
         }
     }
+    let ci_required = required.map(|names| {
+        names
+            .iter()
+            .filter(|n| n.as_str() != "merge-hold-gate")
+            .cloned()
+            .collect::<Vec<_>>()
+    });
     crate::status_prs::parse_open_pr_snapshot(
         &serde_json::to_string(&normalized).unwrap(),
-        required,
+        ci_required.as_deref(),
     )
 }
 
@@ -529,7 +598,7 @@ fn train_pr_running(
     {
         Some(false)
     } else {
-        details.push(format!("Train PR-{number}: owner liveness unknown; inspect: gh pr view {number}; after confirming abandonment: gh pr close {number} (inspect train lease with aida integrate from {})", root.display()));
+        details.push(format!("Train PR-{number}: owner is live or liveness is unknown; inspect: gh pr view {number}; inspect train lease with aida integrate from {}", root.display()));
         None
     }
 }
@@ -543,14 +612,11 @@ fn failure_details(
     let mut details = Vec::new();
     let mut remaining = 4;
     for (pr, row) in prs {
-        for check in row["statusCheckRollup"].as_array().into_iter().flatten() {
-            if !matches!(
-                check["conclusion"].as_str(),
-                Some("FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
-            ) {
+        for check in ci_checks(row) {
+            if !check_failed(check) {
                 continue;
             }
-            let name = check["name"].as_str().unwrap_or("unknown check");
+            let name = check_name(check).unwrap_or("unknown check");
             let job = check["detailsUrl"]
                 .as_str()
                 .and_then(|url| url.split_once("/job/"))
@@ -592,17 +658,10 @@ fn pr_digest(
     if crate::pr_has_merge_hold(root, pr) {
         blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
     }
-    let checks: Vec<_> = row["statusCheckRollup"]
-        .as_array()
+    let checks: Vec<_> = ci_checks(row)
         .into_iter()
-        .flatten()
-        .filter(|c| {
-            matches!(
-                c["conclusion"].as_str().or(c["state"].as_str()),
-                Some("FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED")
-            )
-        })
-        .filter_map(|c| c["name"].as_str().or(c["context"].as_str()))
+        .filter(|c| check_failed(c))
+        .filter_map(check_name)
         .collect();
     if rejected
         || pr.ci_rollup.as_deref() == Some("fail")
@@ -996,12 +1055,112 @@ mod tests {
         assert_eq!(s.predicates()[0].1, Some(true));
     }
 
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn held_green_pr_is_not_red_ci_and_never_fetches_hold_logs() {
+        let t = tempfile::tempdir().unwrap();
+        let row = serde_json::json!({
+            "number":42,"title":"work (STORY-2476)","headRefName":"topic",
+            "headRefOid":"abcdef1234","mergeable":"MERGEABLE","isDraft":false,
+            "labels":[{"name":"aida:merge-hold"}],
+            "statusCheckRollup":[
+                {"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE",
+                 "detailsUrl":"https://github.com/o/r/actions/runs/1/job/123"},
+                {"name":"Build (ubuntu-latest)","status":"COMPLETED","conclusion":"SUCCESS"}]
+        });
+        let raw = vec![row.clone()];
+        let required = vec!["merge-hold-gate".into(), "Build (ubuntu-latest)".into()];
+        let prs = parse_stall_prs(&raw, Some(&required));
+        assert_eq!(prs.by_branch["topic"].ci_rollup.as_deref(), Some("pass"));
+        let mut s = idle();
+        observe_prs(t.path(), Some(t.path()), &prs, &raw, &mut s);
+        assert_eq!(s.ready, Some(false));
+        assert_eq!(s.work_waiting, Some(false));
+        assert!(s.failed_jobs.is_empty());
+        let digest = s.details.join("\n");
+        assert!(digest.contains("merge hold"));
+        assert!(!digest.contains("queue rework"));
+        assert!(!digest.contains("red CI"));
+        assert!(failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty());
+    }
+
+    #[test]
+    fn latest_check_attempt_controls_readiness_digest_and_log_selection() {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(t.path().join(".aida/review-verdicts")).unwrap();
+        std::fs::write(
+            t.path().join(".aida/review-verdicts/PR-42.json"),
+            r#"{"verdict":"approved","reviewed_sha":"abcdef1234"}"#,
+        )
+        .unwrap();
+        let mut row = serde_json::json!({
+            "number":42,"title":"work","headRefName":"topic","headRefOid":"abcdef1234",
+            "mergeable":"MERGEABLE","isDraft":false,
+            "statusCheckRollup":[
+                {"name":"build","status":"COMPLETED","conclusion":"SUCCESS",
+                 "startedAt":"2026-11-05T05:00:00Z","completedAt":"2026-11-05T05:01:00Z"},
+                {"name":"build","status":"COMPLETED","conclusion":"FAILURE",
+                 "startedAt":"2026-11-05T04:00:00Z","completedAt":"2026-11-05T04:01:00Z"}]
+        });
+        // Timestamp order wins over array order in both directions.
+        for _ in 0..2 {
+            row["statusCheckRollup"].as_array_mut().unwrap().reverse();
+            let prs = parse_stall_prs(&[row.clone()], Some(&["build".into()]));
+            let p = &prs.by_branch["topic"];
+            assert_eq!(p.ci_rollup.as_deref(), Some("pass"));
+            assert_eq!(pr_ready(t.path(), p), Some(true));
+            assert!(!pr_digest(t.path(), p, &row, Some(false), false)
+                .join("\n")
+                .contains("red CI"));
+            assert!(failure_details(&[(42, row.clone())], &mut |_| panic!(
+                "superseded log fetched"
+            ))
+            .is_empty());
+        }
+        row["statusCheckRollup"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({
+                "name":"build","status":"IN_PROGRESS","conclusion":null,
+                "startedAt":"2026-11-05T06:00:00Z","completedAt":null
+            }));
+        assert_eq!(
+            parse_stall_prs(&[row], Some(&["build".into()])).by_branch["topic"]
+                .ci_rollup
+                .as_deref(),
+            Some("pending")
+        );
+    }
+
+    #[test]
+    fn failed_status_context_gets_named_unavailable_test_evidence() {
+        let t = tempfile::tempdir().unwrap();
+        for state in ["FAILURE", "ERROR"] {
+            let row = serde_json::json!({
+                "number":42,"title":"work (STORY-2476)","headRefName":"topic",
+                "statusCheckRollup":[{"context":"legacy-ci","state":state}]
+            });
+            let prs = parse_stall_prs(&[row.clone()], Some(&["legacy-ci".into()]));
+            let p = &prs.by_branch["topic"];
+            assert_eq!(p.ci_rollup.as_deref(), Some("fail"));
+            assert!(pr_digest(t.path(), p, &row, Some(false), false)
+                .join("\n")
+                .contains("red CI [legacy-ci]"));
+            let details = failure_details(&[(42, row)], &mut |_| panic!("context has no job"));
+            assert_eq!(details.len(), 1);
+            assert!(details[0].contains("legacy-ci: failing tests unavailable"));
+        }
+    }
+
     #[test]
     fn failure_logs_have_a_shared_four_job_budget() {
         let row = serde_json::json!({"statusCheckRollup":[{"name":"build","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/1/job/123"}]});
-        let prs = (1..=6).map(|pr| (pr, row.clone())).collect::<Vec<_>>();
+        let hold = serde_json::json!({"statusCheckRollup":[{"name":"merge-hold-gate","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/1/job/456"}]});
+        let mut prs = (10..=15).map(|pr| (pr, hold.clone())).collect::<Vec<_>>();
+        prs.extend((1..=6).map(|pr| (pr, row.clone())));
         let mut calls = 0;
-        let lines = failure_details(&prs, &mut |_| {
+        let lines = failure_details(&prs, &mut |id| {
+            assert_eq!(id, 123, "holds must not consume log slots");
             calls += 1;
             Some("test broken ... FAILED".into())
         });
@@ -1017,11 +1176,14 @@ mod tests {
             "",
             "legacy owner",
             "<!-- aida-train-owner: host=foreign pid=123 -->",
+            &crate::pr_train::owner_line_for_self(),
         ] {
             let mut details = Vec::new();
             assert_eq!(train_pr_running(t.path(), 88, body, &mut details), None);
             assert!(details[0].contains("Train PR-88"));
             assert!(details[0].contains("gh pr view 88"));
+            assert!(details[0].contains("live or liveness is unknown"));
+            assert!(!details[0].contains("gh pr close"));
         }
     }
 

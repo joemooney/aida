@@ -824,8 +824,11 @@ Each alarm requires `--threshold-mins N` minutes of continuous observations
   activity does not suppress this kind.
 
 Readiness uses current-head local review, required CI, mergeability, holds and
-reviewer activity, without the eligible-idle display's age filter. Process
-identity comes from leases, the registry and train ownership, including PID
+reviewer activity, without the eligible-idle display's age filter. The detector
+uses the latest timestamped attempt of each check and reports `merge-hold-gate`
+through the hold blocker, excluding it from CI failures and failed-job log reads.
+StatusContext failures without job logs are labeled as unavailable test evidence.
+Process identity comes from leases, the registry and train ownership, including PID
 namespace checks. Unsupported forges, failed/partial forge reads and invisible
 processes remain unknown. Unknown predicates, cleared predicates, backwards
 clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
