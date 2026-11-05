@@ -2287,17 +2287,21 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
 };
 
 // trace:STORY-631 | ai:claude
-/// Show the AI-generated plain-terms comprehension of WHY a spec exists —
+/// Capture a portable observation, or show the AI-generated comprehension of WHY a spec exists —
 /// its intent, distilled from the spec + its graph neighborhood. Distinct
 /// from `aida why` (a deterministic state classifier): this is a cached,
 /// drift-stamped LLM synthesis. Generated on first call (or `--refresh`),
 /// printed from cache thereafter; a STALE marker shows when the
 /// neighborhood drifted since generation.
 #[derive(clap::Parser, Debug)]
-#[clap(name = "intent")]
+#[clap(name = "intent", subcommand_negates_reqs = true)]
 pub(crate) struct IntentArgs {
+    // trace:STORY-2479 | ai:codex
+    #[clap(subcommand)]
+    pub local: Option<crate::observation_envelope::LocalCommand>,
     /// The SPEC-ID to comprehend (any story/task/bug/feature id).
-    pub id: String,
+    #[clap(required = true)]
+    pub id: Option<String>,
     /// Which register to print: `layman` (prose for a human skimmer) or
     /// `llm` (denser/structured, for an agent loading the spec).
     #[clap(long, value_parser = ["layman", "llm"], default_value = "layman")]
@@ -2320,13 +2324,18 @@ fn run_intent(
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <IntentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let IntentArgs {
-        id,
-        audience,
-        refresh,
-        json,
-    } = &args;
-    return handle_intent(id, audience, *refresh, *json);
+    // trace:STORY-2479 | ai:codex
+    if let Some(local) = &args.local {
+        return crate::observation_envelope::run_local(matches, local, false);
+    }
+    handle_intent(
+        args.id
+            .as_deref()
+            .expect("clap requires a spec or local subcommand"),
+        &args.audience,
+        args.refresh,
+        args.json,
+    )
 }
 
 // trace:STORY-1728 | ai:claude

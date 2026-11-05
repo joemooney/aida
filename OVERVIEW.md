@@ -369,6 +369,18 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 
 ## Architecture
 
+**Store-independent observations.** `aida intent note`, `validate`, and `export`
+produce or inspect an explicit six-field JSON envelope without requirements,
+identity discovery, telemetry, store setup or network calls. A dedicated entry
+path precedes shared CLI startup. SHA-256 covers ordered compact JSON of the five
+payload fields; the full digest is the identity, with a 12-hex display label.
+Reads and serialized size are bounded, imported prose is data, and optional
+explicit regex rules refuse sensitive content without certifying sanitization.
+Manual-email export is a self-contained JSON attachment. Store-only transport
+retains its separate authority; enrolled intake transport and processing are
+future slices. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+<!-- trace:STORY-2479 | ai:codex -->
+
 ### The four layers
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.

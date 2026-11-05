@@ -526,6 +526,14 @@ atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
 snapshot-save writer. Corrupt queues fail closed on mutation; position
 placement is still computed by callers outside the lock. See OVERVIEW.md.
 
+## Local observation envelopes
+
+`aida intent note|validate|export` operate on explicitly supplied data before
+identity, telemetry or store setup. The six-field v1 JSON format and hash are
+specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+Keep these operations independent of store-only transport and spec comprehension.
+<!-- trace:STORY-2479 | ai:codex -->
+
 ## Requirements Management
 
 Before implementing, read the owning requirement:

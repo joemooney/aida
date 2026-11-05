@@ -1,6 +1,8 @@
 # Observation envelopes and isolated intake
 
-Status: proposed; requires master sign-off before implementation.
+Status: approved by advisor ruling on 2026-11-05 at 02:57 UTC.
+Implementation is sliced: local generation/validation/manual-email export first;
+separate intake policy, branch transport, processing and recovery follow.
 Owner: STORY-2479. trace:STORY-2479 | ai:codex
 
 ## Decision requiring sign-off
