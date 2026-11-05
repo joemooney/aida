@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2032",
+  "publishes": [
+    {
+      "at": "2026-11-05T01:58:24.890102084Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:43:22.560477177Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T03:40:56.869363242Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T04:36:20.320064601Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T04:36:20.389932732Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T05:08:48.979803853Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T06:15:50.508168328Z",
+      "spec": "TASK-2032",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2032",
+        "branch": "origin/task-2032",
+        "first_seen": "2026-11-04T06:15:50.507878621+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T08:02:00.027093535Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T09:47:04.983636892Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T13:10:16.049656253Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T18:58:15.899854730Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T18:58:15.923465555Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T19:21:34.641873821Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T19:28:46.587955835Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T00:24:02.837003741Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T01:58:00.071857471Z",
+      "spec": "TASK-2032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3336
+      }
+    },
+    {
+      "ts": "2026-11-05T01:58:24.744466357Z",
+      "spec": "TASK-2032",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "efca74e51a683b314e45f7ccbc9afaccab2b1ec8",
+        "pr": 3336,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
