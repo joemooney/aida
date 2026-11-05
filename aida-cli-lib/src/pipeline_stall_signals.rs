@@ -88,7 +88,7 @@ pub(super) fn observe(
     threshold: u32,
     now: i64,
     details: &mut Vec<String>,
-) -> Vec<Alarm> {
+) -> (Vec<Alarm>, Option<BTreeSet<String>>) {
     let cap = crate::standalone_implementer::configured_cap(root);
     details.push(format!("Implementers: {count:?}, cap {cap}; queued work: {queued:?}; inspect aida queue list --for implementer; dispatch: aida queue work <SPEC>"));
     let under = Alarm::new(
@@ -118,11 +118,11 @@ pub(super) fn observe(
     };
     details
         .push("Advisor mail: inspect aida mailbox inbox; read ACKs do not establish action".into());
-    let empty = match empty_rework(root, prs, details) {
-        Ok(ids) => Some(ids),
+    let (empty, members) = match empty_rework_evidence(root, prs, details) {
+        Ok((ids, members)) => (Some(ids), Some(members)),
         Err(e) => {
             details.push(format!("Empty-rework evidence unknown: {e:#}; inspect .aida/empty-rework and aida integrate"));
-            None
+            (None, None)
         }
     };
     let empty = Alarm::new(
@@ -130,7 +130,7 @@ pub(super) fn observe(
         empty.as_ref().map(|ids| !ids.is_empty()),
         empty.unwrap_or_default().join(","),
     );
-    vec![under, no_merge, stale, empty]
+    (vec![under, no_merge, stale, empty], members)
 }
 
 fn aged(
@@ -161,26 +161,8 @@ fn last_merge(root: &Path) -> Option<i64> {
     if kind != Some(crate::forge::ForgeKind::GitHub) {
         return None;
     }
-    let gh = crate::resolve_gh_binary()?;
-    let mut cmd = std::process::Command::new(gh);
-    // Search orders by update; parse_merge validates the unseen-row bound.
-    cmd.current_dir(root).args([
-        "pr",
-        "list",
-        "--state",
-        "merged",
-        "--search",
-        "sort:updated-desc",
-        "--limit",
-        "100",
-        "--json",
-        "mergedAt,updatedAt",
-    ]);
-    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(10))?;
-    if !out.status.success() {
-        return None;
-    }
-    parse_merge(&out.stdout)
+    let rows = crate::forge::github_recent_merge_rows(root).known()?;
+    parse_merge(rows.as_bytes())
 }
 fn parse_merge(bytes: &[u8]) -> Option<i64> {
     let rows: Vec<serde_json::Value> = serde_json::from_slice(bytes).ok()?;
@@ -263,20 +245,33 @@ fn oldest_unread(
 
 /// Existing unchanged-head retry receipts are evidence of an actual empty exit.
 /// Re-check the current PR/head and blockers; a changed/closed/green PR clears it.
+#[cfg(test)]
 fn empty_rework(
     root: &Path,
     prs: Option<&crate::status_prs::OpenPrSnapshot>,
     details: &mut Vec<String>,
 ) -> Result<Vec<String>> {
+    empty_rework_evidence(root, prs, details).map(|(ids, _)| ids)
+}
+
+// Retention evidence shares the exact receipt/PR read used for active alarms.
+// A CI rerun can clear the predicate without retiring the receipt/head.
+// trace:TASK-3075 | ai:codex
+fn empty_rework_evidence(
+    root: &Path,
+    prs: Option<&crate::status_prs::OpenPrSnapshot>,
+    details: &mut Vec<String>,
+) -> Result<(Vec<String>, BTreeSet<String>)> {
     let receipts = files(&root.join(".aida/empty-rework"))?;
     if receipts
         .iter()
         .all(|p| p.extension().and_then(|s| s.to_str()) != Some("json"))
     {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), BTreeSet::new()));
     }
     let prs = prs.ok_or_else(|| anyhow::anyhow!("PR snapshot unknown"))?;
     let mut ids = Vec::new();
+    let mut members = BTreeSet::new();
     for path in receipts {
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
@@ -292,9 +287,14 @@ fn empty_rework(
         uuid::Uuid::parse_str(spec)?;
         let pr: u64 = pr.parse()?;
         if let Some(p) = prs.by_branch.values().find(|p| p.number == pr) {
-            if p.head_sha.as_deref() != Some(head.as_str()) {
+            let current_head = p
+                .head_sha
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("empty-rework head unknown"))?;
+            if current_head != head {
                 continue;
             }
+            members.insert(format!("{key}-{head}"));
             if p.ci_rollup.as_deref() == Some("fail")
                 || p.mergeable.as_deref() == Some("CONFLICTING")
                 || current_rejection(root, p)
@@ -307,7 +307,7 @@ fn empty_rework(
         }
     }
     ids.sort();
-    Ok(ids)
+    Ok((ids, members))
 }
 
 #[cfg(test)]
@@ -516,7 +516,7 @@ mod tests {
             (Some(0), None, None),
         ] {
             assert_eq!(
-                observe(t.path(), None, count, queued, 30, MIN, &mut details)[0].active,
+                observe(t.path(), None, count, queued, 30, MIN, &mut details).0[0].active,
                 expected
             );
         }
@@ -556,7 +556,8 @@ mod tests {
             let p = prs.by_branch.get_mut("topic").unwrap();
             p.mergeable = Some("MERGEABLE".into());
             p.ci_rollup = Some(ci.into());
-            let ids = empty_rework(t.path(), Some(&prs), &mut details).unwrap();
+            let (ids, members) = empty_rework_evidence(t.path(), Some(&prs), &mut details).unwrap();
+            s.empty_rework_members = Some(members);
             assert_eq!(!ids.is_empty(), expected);
             s.extra = vec![Alarm::new(
                 "empty-rework-exit",
@@ -665,6 +666,95 @@ mod tests {
             .unwrap();
             assert_eq!(report.accepted, ["empty-rework-exit"]);
             assert_eq!(sends, 3);
+        }
+    }
+
+    // trace:TASK-3075 | ai:codex
+    #[test]
+    fn empty_exit_prunes_retired_heads_but_keeps_pending_deliveries() {
+        for cleared_by in [
+            "receipt-removed",
+            "receipt-replaced",
+            "head-changed",
+            "pr-closed",
+        ] {
+            for pending in [false, true] {
+                let t = tempfile::tempdir().unwrap();
+                let dir = t.path().join(".aida/empty-rework");
+                std::fs::create_dir_all(&dir).unwrap();
+                let path = dir.join(format!("{}-42.json", uuid::Uuid::new_v4()));
+                let raw = serde_json::json!([{
+                    "number":42,"title":"work","headRefName":"topic","headRefOid":"oldhead",
+                    "mergeable":"CONFLICTING","isDraft":false
+                }]);
+                let mut prs = parse_stall_prs(raw.as_array().unwrap(), Some(&["build".into()]));
+                // Repeated head replacement must stay bounded, including while
+                // the previous accepted delivery is no longer an active alarm.
+                for round in 0..4 {
+                    let head = format!("head{round}");
+                    std::fs::write(&path, serde_json::to_vec(&head).unwrap()).unwrap();
+                    prs.by_branch.get_mut("topic").unwrap().head_sha = Some(head);
+                    let (ids, members) =
+                        empty_rework_evidence(t.path(), Some(&prs), &mut Vec::new()).unwrap();
+                    let s = Snapshot {
+                        extra: vec![Alarm::new("empty-rework-exit", Some(true), ids.join(","))],
+                        empty_rework_members: Some(members),
+                        ..Default::default()
+                    };
+                    tick(t.path(), &s, (round + 1) * MIN, true, 30, &mut |_| Ok(true)).unwrap();
+                    let state: State = serde_json::from_slice(
+                        &std::fs::read(t.path().join(".aida/pipeline-stalls.json")).unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(state.episodes.len(), 1);
+                }
+                let state_path = t.path().join(".aida/pipeline-stalls.json");
+                let mut state: State =
+                    serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+                let episode = state.episodes.values_mut().next().unwrap();
+                episode.accepted = !pending;
+                episode.delivery_pending = pending;
+                std::fs::write(&state_path, serde_json::to_vec(&state).unwrap()).unwrap();
+                match cleared_by {
+                    "receipt-removed" => std::fs::remove_file(&path).unwrap(),
+                    "receipt-replaced" => std::fs::write(&path, "\"replacement\"").unwrap(),
+                    "head-changed" => {
+                        prs.by_branch.get_mut("topic").unwrap().head_sha =
+                            Some("replacement".into())
+                    }
+                    "pr-closed" => prs.by_branch.clear(),
+                    _ => unreachable!(),
+                }
+                // Unknown evidence cannot retire prior delivery evidence.
+                // Preview also must not persist pruning.
+                tick(
+                    t.path(),
+                    &Snapshot::default(),
+                    5 * MIN,
+                    true,
+                    30,
+                    &mut |_| panic!("unknown evidence"),
+                )
+                .unwrap();
+                let unchanged: State =
+                    serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+                assert_eq!(unchanged.episodes.len(), 1);
+                for preview in [true, false] {
+                    let (_, members) =
+                        empty_rework_evidence(t.path(), Some(&prs), &mut Vec::new()).unwrap();
+                    let s = Snapshot {
+                        empty_rework_members: Some(members),
+                        ..Default::default()
+                    };
+                    tick(t.path(), &s, 6 * MIN, !preview, 30, &mut |_| {
+                        panic!("no active alarms")
+                    })
+                    .unwrap();
+                    let state: State =
+                        serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+                    assert_eq!(state.episodes.len(), usize::from(preview || pending));
+                }
+            }
         }
     }
 
@@ -785,7 +875,7 @@ mod tests {
             .contains("no verified advisor subject"));
         assert!(crate::supervise_cmd::live_advisor_recipient(root).is_none());
         let mut details = Vec::new();
-        let alarms = observe(root, None, Some(0), Some(false), 30, MIN, &mut details);
+        let (alarms, _) = observe(root, None, Some(0), Some(false), 30, MIN, &mut details);
         assert!(alarms
             .iter()
             .find(|a| a.kind == "stale-advisor-mail")

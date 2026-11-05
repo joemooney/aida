@@ -1239,6 +1239,32 @@ pub(crate) fn github_compare_behind_by(root: &Path, base: &str, head: &str) -> O
     .and_then(|s| parse_behind_by(&s))
 }
 
+/// Bounded merge-history read for pipeline alarms. Callers validate the
+/// updated-order completeness bound before treating this as last-merge evidence.
+// trace:TASK-3075 | ai:codex
+pub(crate) fn github_recent_merge_rows(root: &Path) -> Observed<String> {
+    let Some(gh) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh is unavailable".into());
+    };
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root).args([
+        "pr",
+        "list",
+        "--state",
+        "merged",
+        "--search",
+        "sort:updated-desc",
+        "--limit",
+        "100",
+        "--json",
+        "mergedAt,updatedAt",
+    ]);
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        cmd,
+        std::time::Duration::from_secs(10),
+    ))
+}
+
 /// The compare API's `behind_by` field: a count is settled, anything else
 /// (an empty or `null` reply) is `Pending`.
 // trace:STORY-2401 | ai:claude

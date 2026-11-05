@@ -66,6 +66,7 @@ struct Snapshot {
     failed_jobs: Vec<(u64, serde_json::Value)>,
     // trace:TASK-3075 | ai:codex
     extra: Vec<signals::Alarm>,
+    empty_rework_members: Option<std::collections::BTreeSet<String>>,
 }
 impl Snapshot {
     fn predicates(&self) -> Vec<(&'static str, Option<bool>)> {
@@ -224,6 +225,16 @@ fn tick_with_writer(
                 .entry(format!("empty-rework-exit:{member}"))
                 .or_insert(member_episode);
         }
+    }
+    // Retire settled receipt/head episodes only on known evidence. Unresolved
+    // delivery reservations survive even receipt deletion or PR closure.
+    // trace:TASK-3075 | ai:codex
+    if let Some(members) = &snapshot.empty_rework_members {
+        state.episodes.retain(|key, episode| {
+            !key.starts_with("empty-rework-exit:")
+                || episode.delivery_pending
+                || members.contains(&episode.identity)
+        });
     }
     let mut report = Report {
         execute,
@@ -460,7 +471,7 @@ fn observe(root: &Path, home: Option<&Path>, threshold_mins: u32) -> Snapshot {
         observe_prs(root, home, prs, raw, &mut s);
     }
     let now = chrono::Utc::now().timestamp_millis();
-    s.extra = signals::observe(
+    (s.extra, s.empty_rework_members) = signals::observe(
         root,
         forge.as_ref().map(|(prs, _)| prs),
         implementers,

@@ -867,7 +867,10 @@ retain accepted delivery across unknown and false ticks, clock changes and
 observation gaps for the same evidence identity (including pending CI reruns);
 a new merge timestamp, oldest-mail ID or empty-rework head re-arms that kind.
 Empty-rework delivery is tracked separately for each receipt key/head: changes
-to the set of blocked PRs do not resend already accepted heads.
+to the set of blocked PRs do not resend already accepted heads. Settled episodes
+are pruned when their receipt is removed/replaced, the head changes, or the PR
+closes. Unknown evidence preserves episodes; unresolved delivery reservations
+remain even after the receipt/head clears.
 Schedule ticks more frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
 A preview never advances an observation timer.
 
