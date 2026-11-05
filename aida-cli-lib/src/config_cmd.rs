@@ -812,6 +812,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             allowed: &["surface", "dont-block"],
         },
     },
+    // trace:TASK-1059 | ai:claude
+    KnobSpec {
+        section: "presence",
+        key: "questions",
+        doc: "Whether pending decisions (aida questions) surface in aida status while you are away.",
+        default: "quiet-when-away",
+        edit: EditSafety::Enum {
+            allowed: &["quiet-when-away", "always-surface"],
+        },
+    },
     // --- [hints]. ---
     KnobSpec {
         section: "hints",
@@ -3105,6 +3115,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             ("consumers", "on"),
             ("away_drain", "headless-both"),
             ("home_offer", "surface"),
+            ("questions", "quiet-when-away"),
         ] {
             let (value, source) = render_str("presence", key, default);
             rows.push(PolicyRow { key, value, source });

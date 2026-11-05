@@ -334,6 +334,26 @@ pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<P
     Ok(vec![mailbox])
 }
 
+/// TASK-2712: the gate ledger alone, `<main>/.aida/gate-ledger`, where a
+/// reviewer's merge-hold placement takes its lock and appends its event. Never
+/// the enclosing `.aida`. Refuse a symlinked state or ledger directory rather
+/// than binding its target.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn contained_gate_ledger_write_paths(main: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let main = std::fs::canonicalize(main)?;
+    let ledger = crate::gate::ledger::ledger_dir(&main);
+    for path in [&main.join(".aida"), &ledger] {
+        if let Ok(meta) = std::fs::symlink_metadata(path) {
+            anyhow::ensure!(
+                !meta.file_type().is_symlink(),
+                "refusing sandbox gate-ledger path {}: symbolic link",
+                path.display()
+            );
+        }
+    }
+    Ok(vec![ledger])
+}
+
 /// The submit side of `aida deputy` alone: `<main>/.aida/deputy/incoming`,
 /// where `aida deputy submit` and `cancel` write. Never the enclosing
 /// `.aida/deputy` (the running jobs, results, ledger, TTY policy and terminal

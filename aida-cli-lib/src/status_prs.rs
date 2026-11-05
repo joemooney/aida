@@ -1200,7 +1200,23 @@ pub(crate) fn sweep_orphaned_reviews(project_root: &std::path::Path) -> Vec<Stri
 pub(crate) fn live_owned_branches(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
-    list_leases(project_root)
+    branches_of_live_leases(list_leases(project_root))
+}
+
+/// [`live_owned_branches`], failing closed: an unreadable lease directory or
+/// a lease file that stays unparseable is an error (ownership unknown), not a
+/// silently missing owner.
+// trace:TASK-2813 | ai:claude
+pub(crate) fn live_owned_branches_strict(
+    project_root: &std::path::Path,
+) -> Result<std::collections::HashSet<String>, String> {
+    crate::leases::list_leases_strict_all(project_root).map(branches_of_live_leases)
+}
+
+fn branches_of_live_leases(
+    leases: Vec<crate::leases::SessionLease>,
+) -> std::collections::HashSet<String> {
+    leases
         .into_iter()
         .filter(|lease| {
             lease.active_pid.is_some_and(|pid| {

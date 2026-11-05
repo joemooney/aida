@@ -326,6 +326,10 @@ jobs:
       # cargo-slots-<uid> dir (`bug_2435_bwrap_...`) joins the forced-live
       # selection and the exact count, so a probe skip fails the gate.
       # trace:BUG-2435 | ai:claude
+      # TASK-2825/2829/2830: the TASK-2033 lease tests (now `bug_2169_bwrap_`),
+      # the nested-bwrap overlay probe and the no-remount-under-cap-drop check
+      # (both `bug_2435_bwrap_`) join under the existing prefixes and count.
+      # trace:TASK-2825 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |

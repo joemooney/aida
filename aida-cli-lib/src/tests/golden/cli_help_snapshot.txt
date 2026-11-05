@@ -2123,6 +2123,10 @@ Run by: anyone, when: you want to see what's pending (read-only).
 List the decision inbox — every spec with a recorded DecisionRequest, pending ones first. The pure
 read; never prompts (scripting/scanning).
 
+Always shows the full inbox, home or away. Presence only shapes the proactive nudge in `aida
+status`: while away, pending decisions accumulate quietly unless `[presence] questions =
+"always-surface"` (default `"quiet-when-away"`) in `.aida/config.toml`.
+
 Usage: aida questions list [OPTIONS]
 
 Options:
@@ -15255,6 +15259,11 @@ Options:
           check its commit trailers, push it and open the PR. The seat's hooks never run. Never
           merges. With --dry-run, nothing is imported or pushed
 
+      --commit-pending <MSG>
+          With --from-seat: first commit the seat's uncommitted changes with this message, inside
+          AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex
+          seat, which cannot commit in its own sandbox. The message must carry the spec trailer
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -18027,7 +18036,8 @@ win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always apply
 `[presence]` in `.aida/config.toml`: consumers  = "on" | "off"            (master switch; default
 on) away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain) home_offer =
-"surface" | "dont-block" (home-side; default surface)
+"surface" | "dont-block" (home-side; default surface) questions  = "quiet-when-away" |
+"always-surface" (decision-inbox nudge in `aida status` while away; default quiet-when-away)
 
 Hidden alias for `aida presence away` (kept for muscle memory).
 
@@ -45693,6 +45703,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-pending",
+        "takes_value": true,
+        "help": "With --from-seat: first commit the seat's uncommitted changes with this message, inside AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex seat, which cannot commit in its own sandbox. The message must carry the spec trailer"
       },
       {
         "name": "dry-run",

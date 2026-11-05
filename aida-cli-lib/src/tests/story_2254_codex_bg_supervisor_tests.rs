@@ -1098,3 +1098,156 @@ fn story_2254_bg_until_exit_holds_scope_while_worktree_occupied() {
     assert!(reason.contains("not provably over"), "{reason}");
     drop(h.env);
 }
+
+/// Plain git in `dir`, hooks off, a fixed host identity.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+fn host_git(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "core.hooksPath=/dev/null"])
+        .args(["-c", "user.name=host", "-c", "user.email=host@localhost"])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// What one detached lane's post-exit step saw: the step's calls
+/// `(tree, spec, clean_exit)`, the worktree's last commit subject, whether
+/// the child's work is still uncommitted, and the final receipt.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+struct PostExitCase {
+    calls: Vec<(std::path::PathBuf, String, bool)>,
+    subject: String,
+    pending: bool,
+    receipt: LaunchReceipt,
+}
+
+/// Drive a real detached lane end to end through `supervise_until_exit`:
+/// the worktree is a git checkout, the child writes `pending.txt` there and
+/// exits with `code`, and the lane's own post-exit step runs on this thread
+/// with a stand-in commit (plain git, hooks off, the step's own message) in
+/// place of the bwrap'd host commit. `linger` leaves a process in the
+/// worktree, so the exit scan cannot prove the lane over.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+fn post_exit_case(role: &str, code: i32, linger: bool) -> PostExitCase {
+    let h = harness("TASK-2712");
+    crate::test_git::commit_fixture(&h.worktree);
+    let mut lingerer = linger.then(|| {
+        std::process::Command::new("sleep")
+            .arg("30")
+            .current_dir(&h.worktree)
+            .process_group(0)
+            .spawn()
+            .unwrap()
+    });
+    let leader = std::process::Command::new("sh")
+        .args(["-c", &format!("echo work > pending.txt; exit {code}")])
+        .current_dir(&h.worktree)
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let worker = ProcId {
+        pid: leader.id(),
+        start: aida_core::liveness::process_start_identity(leader.id()).unwrap(),
+    };
+    h.transfer(&h.me, &worker);
+    let mut init = h.init(h.sleep_worker("1"));
+    init.role = role.to_string();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&calls);
+    let step: Box<crate::ship_from_seat::PostExitStep> = Box::new(
+        move |_main: &std::path::Path,
+              tree: &std::path::Path,
+              spec: &str,
+              lane: &str,
+              clean: bool| {
+            seen.lock()
+                .unwrap()
+                .push((tree.to_path_buf(), spec.to_string(), clean));
+            host_git(tree, &["add", "-A"]);
+            let message = crate::ship_from_seat::post_exit_message(spec, lane, clean);
+            host_git(tree, &["commit", "-q", "--no-verify", "-m", &message]);
+            crate::ship_from_seat::PostExitCommit::Committed(host_git(tree, &["rev-parse", "HEAD"]))
+        },
+    );
+    crate::ship_from_seat::with_post_exit_step(step, || {
+        supervise_until_exit(&h.dir, &h.attempt, &init, &h.me, &worker, leader, None).unwrap()
+    });
+    if let Some(l) = lingerer.as_mut() {
+        let _ = l.kill();
+        let _ = l.wait();
+    }
+    let case = PostExitCase {
+        calls: calls.lock().unwrap().clone(),
+        subject: host_git(&h.worktree, &["log", "-1", "--format=%s"]),
+        pending: !host_git(&h.worktree, &["status", "--porcelain"]).is_empty(),
+        receipt: h.receipt(),
+    };
+    drop(h.env);
+    case
+}
+
+/// Advisor F3: a detached implementer lane whose child left pending work and
+/// exited 0 ends with the host's post-exit commit, run by the lane itself
+/// (`supervise_until_exit` -> `post_exit_seat_commit`), with a completing
+/// trailer; the receipt still records a clean exit.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_bg_lane_commits_pending_work_after_clean_exit() {
+    let case = post_exit_case("implementer", 0, false);
+    assert_eq!(case.calls.len(), 1, "the post-exit step ran once");
+    let (tree, spec, clean) = &case.calls[0];
+    assert!(tree.ends_with("wt"), "{tree:?}");
+    assert_eq!((spec.as_str(), *clean), ("TASK-2712", true));
+    assert!(!case.pending, "the child's work is committed");
+    assert!(case.subject.ends_with("(TASK-2712)"), "{}", case.subject);
+    assert_eq!(case.receipt.phase, Phase::Exited);
+}
+
+/// Advisor F3/F4: a failed child exit still has its leftovers committed by
+/// the lane, but as salvage with `(Refs SPEC)`, never a completing trailer.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_bg_lane_failed_exit_commits_salvage_with_refs() {
+    let case = post_exit_case("implementer", 3, false);
+    assert_eq!(case.calls.len(), 1);
+    assert!(!case.calls[0].2, "a non-zero exit is not clean");
+    assert!(!case.pending);
+    assert!(
+        case.subject.ends_with("(Refs TASK-2712)"),
+        "{}",
+        case.subject
+    );
+}
+
+/// Advisor F3: the role gate: a non-implementer lane's post-exit step never
+/// commits, so its tree keeps the work uncommitted.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_bg_lane_non_implementer_commits_nothing() {
+    let case = post_exit_case("reviewer", 0, false);
+    assert!(case.calls.is_empty(), "{:?}", case.calls);
+    assert!(case.pending, "the reviewer's tree was committed");
+    assert_eq!(case.subject, "fixture");
+}
+
+/// Advisor F3: the `exit_clear = false` branch: while the exit scan cannot
+/// prove the lane over (a process still runs in the tree), nothing commits.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_bg_lane_unproven_exit_commits_nothing() {
+    let case = post_exit_case("implementer", 0, true);
+    assert!(case.calls.is_empty(), "{:?}", case.calls);
+    assert!(case.pending);
+    assert_eq!(case.receipt.phase, Phase::RecoveryRequired);
+}
