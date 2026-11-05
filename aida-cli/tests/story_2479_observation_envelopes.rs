@@ -258,7 +258,7 @@ fn sensitive_patterns_cover_decoded_text_and_do_not_echo_it() {
         "--category",
         "question",
         "--title",
-        "private title",
+        "private CanaryTitle",
         "--deny-pattern",
         "private",
     ]);
@@ -268,7 +268,7 @@ fn sensitive_patterns_cover_decoded_text_and_do_not_echo_it() {
     let diagnostic = String::from_utf8_lossy(&refused.stderr);
     assert!(diagnostic.contains("rule 1"), "{diagnostic}");
     assert!(!diagnostic.contains("private"), "{diagnostic}");
-    assert!(!diagnostic.contains("private title"), "{diagnostic}");
+    assert!(!diagnostic.contains("CanaryTitle"), "{diagnostic}");
     let invalid = fixture.run(&[
         "intent",
         "validate",
