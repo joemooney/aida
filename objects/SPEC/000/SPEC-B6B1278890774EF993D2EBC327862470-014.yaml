@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:45:47.454316631Z
-modified_at: 2026-11-05T04:45:47.454316631Z
+modified_at: 2026-11-05T08:31:06.425490220Z
 req_type: Task
 tags:
 - from-implementer:STORY-2476
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1aad5-46b9-71d0-9cca-1da9b1cb8e39
+  author: joe
+  content: 'Reproduced while validating TASK-3096 with the final default-feature binary: cargo test --offline --profile agent -p aida-cli --test bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses fails in fixture setup at line 140. The add --status approved fixture is downgraded to Draft with: requested approved needs advisor authority. No audit assertions are reached. TASK-3096 intake/envelope suites pass 8/8 and 11/11 with a correctly namespace-qualified fixture grant; the existing shared audit fixture is unchanged. Log: /tmp/task3096-audit-test.log.'
+  created_at: 2026-11-05T08:31:06.425490220Z
+  modified_at: 2026-11-05T08:31:06.425490220Z
+  session_id: 01a1aaa4cf95
 history:
 - id: 01a1aa76-56a5-74c0-af21-168cef8115d3
   author: joe

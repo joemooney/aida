@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T08:12:10.419681164Z
+modified_at: 2026-11-05T08:33:24.066465640Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -95,6 +95,18 @@ comments:
   content: 'Round 3: findings 1-4 implemented in the current working tree: confirmed merged/no-open retained branches use dated names, pickup/publication enumerate all matching GitHub PRs and refuse duplicates by number, list-sessions skips forge lookup. Corrected the CI clone reentry fixture to name its existing branch explicitly, and guarded fixture Git commit/push calls; actual gates failure was the Git maintenance ratchet, not the intentionally failing lane fixture. Python fixture ratchets: 15 passed; formatting passes; Rust tests compiling. Cannot create required round-3 commit or push: git add fails creating .git/index.lock with Read-only file system because this native seat protects .git. CI finding 5 remains blocked until a writable Git seat commits and pushes.'
   created_at: 2026-11-05T08:11:42.779124432Z
   modified_at: 2026-11-05T08:11:42.779124432Z
+  session_id: 01a1aab9b220
+- id: 01a1aad0-d36c-77b1-a50d-c47153594b36
+  author: joe
+  content: 'Validation update: cargo fmt --all -- --check passed, and Python tests.test_git_maintenance_ratchet plus tests.test_executable_fixture_ratchet passed all 15 checks. Initial Rust compilation found a diagnostic attempting Debug formatting for PrLookup; corrected by converting through change_lookup_from_pr_lookup. Corrected targeted Rust run is still compiling with no new diagnostics; logs: /tmp/bug2451-test.log and /tmp/bug2451-rerun-round3.log. Reviewable patch preserved at /tmp/BUG-2451-round3.patch. No new commit/push is possible in this seat (.git read-only); the punt explicitly names finding 5 and the mandatory commit contract.'
+  created_at: 2026-11-05T08:26:14.764924451Z
+  modified_at: 2026-11-05T08:26:14.764924451Z
+  session_id: 01a1aab9b220
+- id: 01a1aad7-6062-7473-8e8b-7f751c3a7d3a
+  author: joe
+  content: 'Final handoff state: findings 1-4 and the two actual CI fixture failures are implemented locally. Formatting and all 15 Python fixture-ratchet checks pass. Rust regression validation remains incomplete: the corrected library is still compiling in /tmp/bug2451-test.log; /tmp/bug2451-rerun-round3.log is waiting for that build lock. No new diagnostic has appeared after the PrLookup diagnostic fix. Patch: /tmp/BUG-2451-round3.patch. Mandatory commit/push and finding 5 cannot be completed because .git/index.lock creation is refused by the native seat read-only .git profile. Spec is explicitly punted; no findings are disputed and no merge hold was cleared.'
+  created_at: 2026-11-05T08:33:24.066465640Z
+  modified_at: 2026-11-05T08:33:24.066465640Z
   session_id: 01a1aab9b220
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
