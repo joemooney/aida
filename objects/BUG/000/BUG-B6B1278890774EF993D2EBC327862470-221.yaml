@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T11:57:10.220899576Z
+modified_at: 2026-11-05T12:09:50.233610276Z
 req_type: Bug
+comments:
+- id: 01a1ab9d-8799-7f02-b3ac-f417f56bd79c
+  author: joe
+  content: 'Implemented explicit force-claim recovery at private-clone branch occupancy: only proven-exited, clean, fully pushed clones retire automatically using conservative teardown and lease cleanup. Dirty/unpushed/live/unknown/ambiguous holders remain protected; refusals include exact clone path, pending work and tracked diff stat. Resume adoption remains in place. Added four git/bwrap-backed regression tests, all passing, plus CLI docs; cargo fmt and git diff --check pass.'
+  created_at: 2026-11-05T12:09:50.233610276Z
+  modified_at: 2026-11-05T12:09:50.233610276Z
+  session_id: 01a1ab913020
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
   author: joe
