@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T11:18:00.150326666Z
+modified_at: 2026-11-05T11:18:30.534168027Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -88,6 +88,11 @@ comments:
   content: 'Round 2 final validation at 02e4bd31791: BUG-2438 targeted run 4 passed/0 failed (77.21s); surrounding pr_train::verified:: suite 54 passed/0 failed (392.61s), including all BUG-2438 regressions. cargo fmt --all -- --check and git diff --check pass. All four reviewer items addressed with option (a), corrected comments, prior known-failing-head disclosure in PR #3395, and a new commit. Old-head integration coverage is explicitly the earlier carry-over refusal, not isolated proof of the later supersession policy. Publishing this commit to the existing PR; merge hold remains for independent review/authorized merge. No ship/review-record command used.'
   created_at: 2026-11-05T11:18:00.150265921Z
   modified_at: 2026-11-05T11:18:00.150265921Z
+- id: 01a1ab6e-8986-7951-b22a-4494e052c53a
+  author: mcp
+  content: 'Publication: git push origin HEAD advanced the remote PR branch from 2e8fa0b0910 to 02e4bd31791 (push exit 0). Git then reported it could not update the local origin tracking ref because that metadata path is read-only; the remote update itself succeeded. The commit and tested changes are published to PR #3395. Leaving the existing merge hold and spec lifecycle for the separate reviewer/merge seat.'
+  created_at: 2026-11-05T11:18:30.534159448Z
+  modified_at: 2026-11-05T11:18:30.534159448Z
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
   author: joe
