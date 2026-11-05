@@ -57,6 +57,11 @@ it, use `aida deputy shell status <id>`, `wait <id>`, `log <id> [--follow]`,
 `list` and `cancel <id>`. A `wait` that gives up before the job ends exits 75;
 that is not a job failure.
 
+`submit` and `cancel` talk to the running deputy over its socket,
+`~/.aida/deputy-shell/<name>/submit.sock`. With no deputy running, `submit`
+refuses and tells you to start `aida deputy shell run` first; nothing is left
+waiting in a queue.
+
 `submit` refuses unless the session holds a valid seat grant, refuses inside a
 script job (a job cannot queue its successor), and refuses a seat the runner
 does not accept. Only the advisor seat may submit unless you start the runner
@@ -67,7 +72,8 @@ can add a seat, because any merged change could edit that file.
 
 Jobs run strictly one at a time, oldest first. For each one the runner:
 
-1. moves it from `incoming/` into its own `jobs/<id>/` directory, never
+1. moves it from `accepted/` (where the deputy itself filed it when the
+   submit came in over the socket) into its own `jobs/<id>/` directory, never
    replacing anything;
 2. checks who submitted it (below) and refuses it with a named reason if any
    check fails. A refused job never runs, and its script is never written out;
@@ -87,16 +93,42 @@ running when the runner died is recorded as orphaned (130) and never re-run.
 
 ### Who submitted it
 
-At submit, the job records the submitter from its **validated** grant record
-and its own process: session id, seat, subject, principal, grant id, the
-binding token it presented, its pid, the project and this machine's hostname
-and boot id. Nothing is taken from free text.
+At submit, the job records the submitter from its **validated** grant record:
+session id, seat, subject, principal, grant id, the binding token it
+presented, the project and this machine's hostname and boot id. Nothing is
+taken from free text.
+
+The deputy then checks the submitting process itself. When `submit` connects,
+the kernel tells the deputy which process is on the other end (its pid and
+user id). The deputy accepts the job only when:
+
+- that process runs as you;
+- that process, or one of its parents, is a process the named grant is bound
+  to: the shell or agent launcher it was issued to, or that session's leader.
+  A binding recorded in another pid namespace (inside a container) is never
+  matched against a process here;
+- the process is still the same one when the check ends, so a reused pid
+  cannot pass. The deputy holds the kernel's own handle on the process that
+  connected (`SO_PEERPIDFD`, Linux 6.5 or later), never one looked up by pid;
+  on an older kernel every submit is refused as `refused:unattested`.
+
+The deputy handles each connection separately and gives a client 5 seconds to
+send its whole request, so a client that connects and stalls holds up nobody
+else. With 16 requests already in progress, the next is refused as
+`refused:busy`; try it again.
+
+It records that process on the job as the attested submitter, replacing
+anything the client claimed about itself. A submit that fails these checks is
+refused at once with its reason (`refused:foreign-uid`,
+`refused:not-under-grant`, `refused:grant`), recorded in `audit.jsonl` as
+`submit-refused`, and never queued.
 
 Before a job runs, the runner refuses it when:
 
 | Reason | When |
 | --- | --- |
 | `refused:unattributed` | the job names no grant or no presenter token |
+| `refused:unattested` | the job did not come in over the deputy's socket, or the binding it was attested under is not one of the grant's |
 | `refused:foreign-host` | it was submitted on another machine, or before this boot |
 | `refused:grant` | the grant is missing, expired, revoked, outside the roster, or does not match the job's seat, subject or principal |
 | `refused:seat` | the seat may not submit to this deputy |
@@ -113,18 +145,34 @@ write to a shared temp directory, cannot inject a script. Stale and
 unattributed jobs are refused, and every job records who asked in a form you
 can check against the grant store.
 
-It does **not** stop a process running as you, outside any sandbox, from
-writing a job that names a live session's grant: your grant records are
-readable by you. Such a process could already edit your shell profile, so a
-file queue cannot do better. A sandboxed agent session can write only the
-queue's `incoming/` directory, and only when its sandbox names it.
+No session writes into the queue. A job reaches it only through the socket,
+and only from a process the kernel reports as running under the grant the job
+names. A process that merely knows a live session's grant id (your grant
+records are readable by you) cannot submit as that session.
+
+A process running as you, outside any sandbox, can still edit the queue's
+files directly, as it could edit your shell profile; no queue can stop that.
+For the same reason a cancel over the socket checks only that the caller runs
+as you: `cancel` itself refuses another session's job unless you run it at
+your terminal, but any unsandboxed process running as you could cancel a job
+directly over the socket, or by writing its cancel file. A cancel stops a job;
+it never runs anything.
+
+Jobs written into the old `incoming/` directory by a release before the socket
+are never claimed. When it starts, the deputy lists any it finds on your
+terminal and in `audit.jsonl` (`legacy-incoming-ignored`); `status` and `wait`
+report them as unknown. Resubmit them, then delete the directory.
+
+No seat's sandbox is given access to unix sockets, so a contained lane cannot
+reach the deputy at all.
 
 ### Files
 
 ```text
 ~/.aida/deputy-shell/<name>/
-  incoming/<id>.job        what submit writes (the only place it writes)
-  incoming/<id>.cancel     a cancel request
+  submit.sock              the running deputy's socket (submit and cancel)
+  accepted/<id>.job        a job the deputy accepted, waiting to run
+  accepted/<id>.cancel     a cancel request the deputy accepted
   jobs/<id>/job.json       the submitted record, immutable once claimed
   jobs/<id>/script.sh      the exact script (sha256sum it against job.json)
   jobs/<id>/state.json     state, timestamps, exit code, reason, checks
@@ -135,9 +183,11 @@ queue's `incoming/` directory, and only when its sandbox names it.
   paused                   present while paused
 ```
 
-`audit.jsonl` records every state change (`queued`, `claimed`, `refused`,
+`audit.jsonl` records every state change (`submit-refused`, `queued`,
+`claimed`, `refused`,
 `started`, `finished`, `cancel-requested`, `cancelled`, `orphaned`, `acked`,
-`pruned`), the runner starting and stopping, pauses, and each grant refresh.
+`pruned`, `legacy-incoming-ignored`), the runner starting and stopping, pauses,
+and each grant refresh.
 It is never truncated.
 
 ### Grant refresh, mandate, retention
@@ -167,15 +217,27 @@ command that acknowledges it: `aida deputy shell ack <id>` for a script job,
 
 ### Letting a sandboxed advisor submit
 
-A sandboxed advisor session can submit only if its sandbox may write the
-queue's `incoming/` directory. Add exactly `~/.aida/deputy-shell/*/incoming`
-to that session's sandbox write allowlist. Never add the queue's other
-directories. A contained lane is never given this path.
+A sandboxed session cannot reach the deputy: on Linux its sandbox blocks unix
+sockets outright, and the only setting that would allow this one would also
+open every other socket on the machine (Docker, the session bus, ssh-agent) to
+that session. `submit` from a sandboxed session fails and says so.
 
-The runner cannot see a sandboxed session's processes, so it checks the
-session's heartbeat instead. Each prompt, the session's hooks record the
-session key of the seat grant the session holds on its agent registry row.
-The runner accepts a job only when that row belongs to the session that
-submitted it, its key is one of the grant's bindings, and its heartbeat is
-less than 10 minutes old. Start the agent from the terminal where you ran
-`aida role enter advisor`, so the session and its hooks hold the grant.
+An advisor session that runs unsandboxed (started from your own shell) needs
+nothing. For a sandboxed advisor session, you may exempt just the two
+commands that use the socket by adding them to that session's sandbox
+`excludedCommands`:
+
+```json
+{
+  "sandbox": {
+    "excludedCommands": ["aida deputy shell submit", "aida deputy shell cancel"]
+  }
+}
+```
+
+The exempted command runs outside the sandbox but still as a child of the
+agent's process, so the deputy's check still finds the grant's process among
+its parents. Start the agent from the terminal where you ran
+`aida role enter advisor`, so its process runs under that grant. Never add this
+exemption for a contained lane, and do not add the queue directory to any
+sandbox's write allowlist: nothing needs to write there except the deputy.
