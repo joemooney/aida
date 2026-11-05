@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T06:37:22.108508654Z
+modified_at: 2026-11-05T06:37:24.395343219Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -55,6 +55,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-4 have tests, but the new unpushed-commit guard counts every local branch in the shared host repo for ordinary worktree seats, so session end (even --force) and exited-lease reclaim refuse in any real repo. Protocol: bug test-file change met. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-05T06:37:22.108505109Z
   modified_at: 2026-11-05T06:37:22.108505109Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa6d-2db0-74a1-8e9b-4478db34a237
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2450):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 41d2e72ae1b4
+    Recorded: 2026-11-05T05:38:50.669418649+00:00
+    Findings:
+    1. BLOCKING seat_clone.rs remote_missing_commits (worktree branch, ~L1505-1520): 'git rev-list --count --branches HEAD --not --remotes' run in a git worktree walks refs/heads shared with the primary repo, not the seat's own branches. In this repo, a clean review worktree whose HEAD is on origin reports 3027 'unpushed' commits across 2354 shared branches (adr-7 1613, advisor-bless-list 1252, agy/*, backup/*...). So guard_remote_commits (session_end.rs) refuses every worktree-kind 'aida session end', including --force, and check_pr_lease returns Refuse for every exited worktree lease, which breaks AC1 for worktree seats. The error blames the lease ('lease X holds N commits'), and operators end up running --discard-unpushed by habit, which removes the protection. Tests miss it because the shipped_lane fixture's host repo has no unrelated unpushed branch. Fix: for TreeKind::Worktree, scope the count to the seat's HEAD plus lease.branch (and any branch checked out only in that worktree), and add a regression test with an unrelated unpushed branch in the host repo that must not block end or reclaim. The clone path (its own refs) is fine.
+    2. review_watch.rs ~L938-949: every queue-work exit with no reviewer spawned and no live descendants now becomes Phase::Failed, and select() re-dispatches Failed on the next tick with no cap or backoff. That covers non-reclaimable refusals too (dirty or unpushed dead seat per AC2, delegation refusal, budget refusal), so the watcher relaunches queue work on that head every tick indefinitely. It also loses the TASK-1993 Skip that showed the diagnostic ('review of this head exited without completing (...)'). AC3 asks only that a failure from a *reclaimable* lease not consume the attempt. Bound the retries (count or backoff kept on the entry), or keep refusals terminal-with-diagnostic and retry only once the blocker is shown to be cleared, and add a test that a persistent setup refusal does not relaunch without limit.
+    3. Test gap: notify_advisor is unit-tested directly, but its wiring in session_start.rs (Bail path, ~L2646) has no test showing a reviewer launch against a dirty/unpushed exited lease mails the advisor once and keeps the lease. Add one alongside the fix above.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T06:37:24.272105533Z
+  modified_at: 2026-11-05T06:37:24.272105533Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
