@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-801
 agreed_id: TASK-3075
 title: Extend pipeline detector with remaining independent alarm kinds
 description: Follow-up to the approved STORY-2476 slice 1. Add independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit predicates, each with its own suppression and timer policy. Measure last actual merge, never default-branch commit age. Reuse lease/registry identities, nudge request mailbox delivery and operator fallback. Keep unknown evidence and dry-run behavior safe; preserve independence from pipeline-idle and ready-without-train.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T18:12:34.251558894Z
+modified_at: 2026-11-05T18:51:16.728510612Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -87,6 +87,15 @@ history:
   timestamp: 2026-11-05T18:12:35.536337148Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ad0d-0f78-70d3-b7fc-db29f604b150
+  author: aida-orchestrator
+  timestamp: 2026-11-05T18:51:16.728533605Z
+  session_id: 01a1ad0b23a7
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
@@ -99,6 +108,14 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check: passed
   implemented_at: 2026-11-05T18:07:39.448198156Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Four new detector kinds are implemented and tested, but age/event alarms lose their accepted-delivery state after a single unknown or false tick, so the same merge, mail or head is mailed again. This contradicts the documented retain-across-gaps policy and the spec's 'own suppression' requirement.
+  recovery_hint: address the review findings, move TASK-3075 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T18:51:16.728510612Z
 interface_changes:
   cli:
   - aida supervise stalls/watch now report independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit alarms
