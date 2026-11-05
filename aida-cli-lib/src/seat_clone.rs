@@ -3062,6 +3062,11 @@ mod s4b_seat_trees_tests;
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
 
+// trace:TASK-2823 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2823_lane_worktree_reentry_tests.rs"]
+mod lane_worktree_reentry_tests;
+
 // The queue-work launch rollback against a real setup; mounted here for the
 // git fixture. trace:TASK-2807 | ai:claude
 #[cfg(test)]

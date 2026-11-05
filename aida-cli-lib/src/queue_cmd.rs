@@ -13390,8 +13390,11 @@ pub(crate) fn handle_queue_work(
             // BUG-2223: re-enter the orphan's tree in place. Session start
             // re-checks it and bypasses nothing else: a live claim on the
             // scope still refuses. trace:BUG-2223 | ai:claude
-            /* adopt_orphan */
-            adopt_orphan.is_some(),
+            if adopt_orphan.is_some() {
+                crate::session_start::PathReentry::AdoptOrphan
+            } else {
+                crate::session_start::PathReentry::None
+            },
         )
     };
     let setup_receipt = if no_launch {
