@@ -1468,8 +1468,13 @@ fn task_1337_held_branch_refuses_before_any_pickup_mutation() {
     assert_pickup_unstarted(&repo, &home, &spec);
 }
 
+/// TASK-1337 originally kept the setup of a guided launch whose exec failed
+/// and printed a manual continuation. TASK-2808 retired that for a setup the
+/// pickup owns: the failed exec launched nobody, so `aida queue work` rolls
+/// back the worktree and lease (re-running the pickup is the continuation).
+/// trace:TASK-1337 TASK-2808 TASK-2811 | ai:claude
 #[test]
-fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
+fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
     use std::os::unix::fs::PermissionsExt;
     let base = tempfile::tempdir().unwrap();
     let (repo, home, spec) = init_codex_only_project(base.path());
@@ -1503,18 +1508,81 @@ fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
     );
     assert!(!output.status.success(), "{text}");
     assert!(
-        text.contains(&format!("aida worktree enter {spec}")),
-        "{text}"
-    );
-    // BUG-2396: the continuation follows the configured vendor, so a
-    // codex-only project is told to relaunch Codex, not Claude.
-    // trace:BUG-2396 | ai:claude
-    assert!(
-        text.contains(&format!("codex '$aida-guided-implement {spec}'")),
+        text.contains(&format!(
+            "no agent was launched: rolled back the {spec} pickup setup"
+        )),
         "{text}"
     );
     assert!(
-        repo.join(".aida/sessions").exists(),
-        "setup should have succeeded before launch failed"
+        !text.contains(&format!("aida worktree enter {spec}")),
+        "a rolled-back setup offers no tree to enter: {text}"
     );
+    // The lease is gone (lease files only, not their sidecars) ...
+    let sessions = repo.join(".aida/sessions");
+    let leases: Vec<std::path::PathBuf> = std::fs::read_dir(&sessions)
+        .map(|dir| {
+            dir.flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    name.ends_with(".toml")
+                        && !name.ends_with(".manifest.toml")
+                        && !name.ends_with(".activity.toml")
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        leases.iter().all(|p| !std::fs::read_to_string(p)
+            .unwrap_or_default()
+            .contains(spec.as_str())),
+        "the lease is removed: {leases:?}"
+    );
+    // ... and so is the worktree. The pool owns a tree it handed out
+    // (STORY-714: a pooled tree is reset and idled, never removed), so the
+    // rollback returns it: any tree besides the main checkout is a pool
+    // entry on a detached HEAD (the pickup branch is gone) with no lease.
+    // trace:TASK-2811 | ai:claude
+    let worktrees = Command::new("git")
+        .current_dir(&repo)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .unwrap();
+    let worktrees = String::from_utf8_lossy(&worktrees.stdout);
+    let main = std::fs::canonicalize(&repo).unwrap();
+    let pool = aida_core::worktree_pool::read_state(&repo).unwrap();
+    for block in worktrees.split("\n\n").filter(|b| !b.trim().is_empty()) {
+        let path = block
+            .lines()
+            .find_map(|l| l.strip_prefix("worktree "))
+            .map(std::path::PathBuf::from)
+            .unwrap();
+        // The main checkout and the requirement store's own worktree are
+        // not the pickup's.
+        if std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone()) == main
+            || block.lines().any(|l| l == "branch refs/heads/aida-store")
+        {
+            continue;
+        }
+        assert!(
+            aida_core::worktree_pool::is_pool_worktree(&repo, &path),
+            "a tree this setup created is removed: {worktrees}"
+        );
+        assert!(
+            block.lines().any(|l| l == "detached"),
+            "a pooled tree is returned on a detached base: {worktrees}"
+        );
+        let entry = pool
+            .entries
+            .iter()
+            .find(|e| {
+                std::fs::canonicalize(&e.path).unwrap_or_else(|_| e.path.clone())
+                    == std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone())
+            })
+            .unwrap();
+        assert!(
+            !entry.leased && entry.lease_holder.is_none(),
+            "a pooled tree is returned idle: {entry:?}"
+        );
+    }
 }

@@ -543,8 +543,10 @@ mod linux {
     /// Nothing the seat can write makes a directory a host-recorded clone: not
     /// the `aida-seat-*` name plus marker on a main checkout, not a lease naming
     /// the main checkout itself, and not a directory inside a real clone.
+    /// Named into the forced-live CI gate so its bwrap arm cannot skip there.
+    // trace:TASK-2825 | ai:claude
     #[test]
-    fn only_the_host_lease_makes_a_host_recorded_clone() {
+    fn bug_2169_bwrap_only_the_host_lease_makes_a_host_recorded_clone() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
 
@@ -728,9 +730,11 @@ true"#,
     /// grants nothing in either layer: not a directory outside main, not a
     /// sibling seat's target dir, and the seat's real target dir is dropped
     /// too, since the lease no longer names it.
+    /// Named into the forced-live CI gate so its bwrap arm cannot skip there.
     // trace:TASK-2033 | ai:claude
+    // trace:TASK-2825 | ai:claude
     #[test]
-    fn a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
+    fn bug_2169_bwrap_a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("real clone");
@@ -851,7 +855,7 @@ true"#,
         let main_rule = format!("Edit(/{}/**)", fx.main.display());
         assert!(launcher.last().unwrap().contains(&main_rule));
 
-        crate::agent_launch::rescope_contained_settings(&mut config, &clone).unwrap();
+        crate::agent_launch::rescope_contained_settings(&mut config, &clone, None).unwrap();
         assert_eq!(config.default_args.len(), launcher.len());
         let settings = config.default_args.last().unwrap();
         assert!(!settings.contains(&main_rule), "{settings}");
@@ -866,7 +870,7 @@ true"#,
             default_args: launcher.clone(),
             ..config
         };
-        crate::agent_launch::rescope_contained_settings(&mut plain, &clone).unwrap();
+        crate::agent_launch::rescope_contained_settings(&mut plain, &clone, None).unwrap();
         assert_eq!(plain.default_args, launcher);
     }
 
@@ -1396,5 +1400,458 @@ true"#;
         assert!(!seats.exists(), "no clone directory");
         assert_eq!(fx.host_refs(), refs_before, "no pin or branch");
         assert!(!git_ok(&fx.main, &["worktree", "list"]).contains("task-2169"));
+    }
+
+    /// The coordination directories a launch grants, created as the host
+    /// does before a lane starts (the sandbox cannot bind a missing path).
+    // trace:TASK-2712 | ai:claude
+    fn prime_coordination_dirs(main: &Path) {
+        for dir in [
+            "cache-db",
+            "mailbox",
+            "gate-ledger",
+            "deputy/incoming",
+            "sessions",
+        ] {
+            std::fs::create_dir_all(main.join(".aida").join(dir)).unwrap();
+        }
+    }
+
+    /// The `--add-dir` values of a native Codex argv.
+    // trace:TASK-2712 | ai:claude
+    fn add_dirs(flags: &[String]) -> Vec<PathBuf> {
+        flags
+            .windows(2)
+            .filter(|w| w[0] == "--add-dir")
+            .map(|w| PathBuf::from(&w[1]))
+            .collect()
+    }
+
+    /// TASK-2712 N1: a native Codex REVIEWER in a host-recorded seat clone
+    /// gets every grant a contained Claude lane in that clone gets, plus the
+    /// gate ledger. No `.git` at all (the clone's own grant was inert: Codex
+    /// re-protects it, and the host commits instead), and not main's
+    /// `.aida/sessions`.
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_native_codex_clone_gets_the_claude_write_set_and_no_git() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        let _ambient = ambient(&fx.main);
+        let flags =
+            crate::codex_native_sandbox::codex_native_sandbox_flags_in(&clone, Some("reviewer"))
+                .unwrap();
+        assert!(crate::codex_native_sandbox::carries_native_posture(&flags));
+        let dirs = add_dirs(&flags);
+
+        let roots = crate::session::contained_session_write_roots_from(&clone);
+        let claude = crate::session::contained_write_set(&roots).unwrap();
+        for grant in claude.grant_paths.iter().filter(|p| p.is_dir()) {
+            assert!(
+                dirs.contains(grant),
+                "missing {}: {dirs:?}",
+                grant.display()
+            );
+        }
+        let main = fx.main.canonicalize().unwrap();
+        assert!(
+            dirs.iter()
+                .all(|d| !d.components().any(|c| c.as_os_str() == ".git")),
+            "no `.git` is granted: {dirs:?}"
+        );
+        for wanted in [
+            main.join(".aida/gate-ledger"),
+            main.join(".aida/cache-db"),
+            main.join(".aida/mailbox"),
+            main.join(".aida/deputy/incoming"),
+        ] {
+            assert!(
+                dirs.contains(&wanted),
+                "missing {}: {dirs:?}",
+                wanted.display()
+            );
+        }
+        for dir in &dirs {
+            assert!(!dir.starts_with(main.join(".git")), "{}", dir.display());
+            assert!(
+                !dir.starts_with(main.join(".aida/sessions")),
+                "{}",
+                dir.display()
+            );
+            assert_ne!(dir, &main.join(".aida"), "the whole state directory");
+        }
+    }
+
+    /// Advisor ruling 2026-11-03 18:32: the gate ledger is a reviewer grant
+    /// only. An implementer's (and an unknown role's) native Codex flags in
+    /// the same clone carry every other grant but no gate-ledger `--add-dir`,
+    /// and a contained Claude lane's write set never names the ledger.
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_native_codex_implementer_gets_no_gate_ledger() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        let _ambient = ambient(&fx.main);
+        let main = fx.main.canonicalize().unwrap();
+        let ledger = main.join(".aida/gate-ledger");
+        for role in [Some("implementer"), None, Some("advisor")] {
+            let flags =
+                crate::codex_native_sandbox::codex_native_sandbox_flags_in(&clone, role).unwrap();
+            let dirs = add_dirs(&flags);
+            assert!(
+                dirs.iter().all(|d| !d.starts_with(&ledger)),
+                "{role:?} got the gate ledger: {dirs:?}"
+            );
+            assert!(dirs.contains(&main.join(".aida/cache-db")), "{dirs:?}");
+            assert!(
+                !dirs.contains(&clone.canonicalize().unwrap().join(".git")),
+                "{dirs:?}"
+            );
+        }
+        let roots = crate::session::contained_session_write_roots_from(&clone);
+        let claude = crate::session::contained_write_set(&roots).unwrap();
+        assert!(
+            claude.grant_paths.iter().all(|p| !p.starts_with(&ledger)),
+            "a contained Claude lane got the gate ledger: {:?}",
+            claude.grant_paths
+        );
+    }
+
+    /// Advisor F2: the headless reviewer's argv, as the headless spawn
+    /// composes it (`headless_vendor_args` with containment, then the seat
+    /// rescope), carries the gate-ledger `--add-dir`; the same argv for an
+    /// implementer seat does not. The resume and interactive paths go
+    /// through the same helper (ratcheted in the unit tests).
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_headless_reviewer_argv_carries_the_gate_ledger() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        let _ambient = ambient(&fx.main);
+        let ledger = fx.main.canonicalize().unwrap().join(".aida/gate-ledger");
+        for (seat, wants_ledger) in [("reviewer", true), ("implementer", false)] {
+            // What the composed headless argv starts as: the role-less set
+            // from the launcher's tree, then `exec … <prompt>`.
+            let mut args =
+                crate::codex_native_sandbox::codex_native_sandbox_flags_in(&fx.main, None).unwrap();
+            args.extend(["exec".to_string(), "--json".to_string(), "p".to_string()]);
+            crate::session::rescope_native_codex_for_seat(
+                crate::session::HeadlessVendor::Codex,
+                &mut args,
+                &clone,
+                seat,
+            )
+            .unwrap();
+            assert_eq!(
+                add_dirs(&args).contains(&ledger),
+                wants_ledger,
+                "{seat}: {args:?}"
+            );
+            assert_eq!(&args[args.len() - 3..], ["exec", "--json", "p"]);
+        }
+        // The resumed reviewer lane's own tree and role.
+        let resume = crate::session::codex_interactive_resume_args(
+            "t-1",
+            Some(crate::session::CodexLane {
+                tree: &clone,
+                role: Some("reviewer"),
+            }),
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(add_dirs(&resume).contains(&ledger), "{resume:?}");
+    }
+
+    /// TASK-2712 N1: in a linked worktree no `.git` of any kind is granted
+    /// (its gitdir lives in main's common git directory), so the lane cannot
+    /// commit, and `aida ship` refuses it with the named error. In a seat
+    /// clone it is refused too (Codex re-protects the clone's `.git`), with
+    /// the host-commit recovery instead.
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_native_codex_linked_worktree_gets_no_git_and_refuses_publication() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        let _ambient = ambient(&fx.main);
+        let flags = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+            &fx.other_wt,
+            Some("implementer"),
+        )
+        .unwrap();
+        let dirs = add_dirs(&flags);
+        assert!(
+            dirs.iter()
+                .all(|d| !d.components().any(|c| c.as_os_str() == ".git")),
+            "{dirs:?}"
+        );
+        assert!(dirs.contains(&fx.main.canonicalize().unwrap().join(".aida/cache-db")));
+        let err =
+            crate::codex_native_sandbox::refuse_native_publication(Some("native"), &fx.other_wt)
+                .unwrap_err()
+                .to_string();
+        assert!(err.contains("native Codex sandbox"), "{err}");
+        assert!(err.contains("relaunch"), "{err}");
+        let err = crate::codex_native_sandbox::refuse_native_publication(Some("native"), &clone)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("--commit-pending"), "{err}");
+    }
+
+    /// TASK-2712: a Codex launch resolved from the main checkout is rescoped
+    /// to the seat clone the plan names, as a Claude launch's settings are.
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_agent_new_rescopes_the_codex_write_set_to_the_seat() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        let _ambient = ambient(&fx.main);
+        let mut launcher =
+            crate::codex_native_sandbox::codex_native_sandbox_flags_in(&fx.main, None).unwrap();
+        let ledger = fx.main.canonicalize().unwrap().join(".aida/gate-ledger");
+        assert!(!add_dirs(&launcher).contains(&ledger));
+        // A user `--add-dir` anywhere (F7), adjacent to AIDA's run or not,
+        // does not survive the rescope.
+        launcher.extend(["--add-dir".to_string(), "/".to_string()]);
+        launcher.extend(["--model".to_string(), "m".to_string()]);
+        launcher.push("--add-dir=/etc".to_string());
+        let mut config = crate::agent_launch::AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: launcher,
+            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+            contained: false,
+        };
+        assert!(crate::agent_launch::launch_wants_seat_clone(&config));
+        let launched = config.default_args.clone();
+        crate::agent_launch::rescope_contained_settings(&mut config, &clone, Some("implementer"))
+            .unwrap();
+        let mut want =
+            crate::codex_native_sandbox::codex_native_sandbox_flags_in(&clone, Some("implementer"))
+                .unwrap();
+        want.extend(["--model".to_string(), "m".to_string()]);
+        assert_eq!(
+            config.default_args, want,
+            "the clone's write set, and no user --add-dir"
+        );
+        crate::agent_launch::agent_codex_background::refuse_posture_overrides(&config.default_args)
+            .unwrap();
+        assert!(
+            !add_dirs(&config.default_args).contains(&ledger),
+            "an implementer got the gate ledger"
+        );
+        // The same launch as a reviewer gets it.
+        let mut reviewer = crate::agent_launch::AgentLaunchConfig {
+            default_args: launched,
+            ..config.clone()
+        };
+        crate::agent_launch::rescope_contained_settings(&mut reviewer, &clone, Some("reviewer"))
+            .unwrap();
+        assert!(add_dirs(&reviewer.default_args).contains(&ledger));
+        assert_eq!(
+            config
+                .default_args
+                .iter()
+                .filter(|a| *a == "--sandbox")
+                .count(),
+            1,
+            "{:?}",
+            config.default_args
+        );
+    }
+
+    /// TASK-2712 N3, converted to the advisor's fallback after the host probe
+    /// showed Codex re-protects the clone's `.git`, driven through the
+    /// PRODUCTION argv (F5): the write set is the `--add-dir` run the
+    /// agent-new path builds (`tool_contained_flags("codex")` rescoped to the
+    /// clone as an implementer), and `codex` itself must accept that exact
+    /// argv. `codex sandbox` (no model) has no `--add-dir`, so the probe
+    /// passes those same `--add-dir` paths as its `writable_roots`, the
+    /// setting `--add-dir` feeds. Against a disposable clone: a workspace
+    /// edit, a cache write and a `.aida-store` write land; a direct `git
+    /// commit` inside Codex is denied; the host's sandboxed commit
+    /// ([`crate::seat_clone::commit_pending`]) then succeeds; writes to main's
+    /// `.git`, its common git directory and `.aida/sessions` fail. With
+    /// `AIDA_TEST_AIDA_BIN` set, an own-scope `aida edit <spec> --status
+    /// in-progress` run inside the sandbox must land in the store too
+    /// (required under `AIDA_REQUIRE_CODEX_SANDBOX_LIVE`). Needs `codex` on
+    /// PATH and an unprivileged user namespace; otherwise it prints a SKIP
+    /// and passes, unless `AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1`.
+    // trace:TASK-2712 | ai:claude
+    #[test]
+    fn task_2712_codex_sandbox_live_seat_commit_and_denials() {
+        let codex = crate::find_executable_on_path("codex");
+        let live = codex.is_some() && bwrap_live();
+        let required = std::env::var_os("AIDA_REQUIRE_CODEX_SANDBOX_LIVE").is_some();
+        if !live {
+            assert!(
+                !required,
+                "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 but `codex` or an unprivileged user \
+                 namespace is unavailable, so the TASK-2712 gate could not run"
+            );
+            eprintln!("SKIP (codex sandbox unavailable)");
+            return;
+        }
+        let aida = std::env::var("AIDA_TEST_AIDA_BIN").ok();
+        assert!(
+            aida.is_some() || !required,
+            "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 needs AIDA_TEST_AIDA_BIN (the `aida` to claim \
+             with inside the sandbox)"
+        );
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        prime_coordination_dirs(&fx.main);
+        git_ok(&clone, &["config", "user.name", "Seat"]);
+        git_ok(&clone, &["config", "user.email", "seat@example.com"]);
+        let production = {
+            let _ambient = ambient(&fx.main);
+            // What `tool_contained_flags("codex")` yields for a launcher in
+            // the fixture's main (resolved from main, never this checkout).
+            let mut config = crate::agent_launch::AgentLaunchConfig {
+                agent_type: "codex",
+                binary: "codex",
+                default_args: crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+                    &fx.main, None,
+                )
+                .unwrap(),
+                prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+                contained: false,
+            };
+            crate::agent_launch::rescope_contained_settings(
+                &mut config,
+                &clone,
+                Some("implementer"),
+            )
+            .unwrap();
+            config.default_args
+        };
+        // Codex accepts the production argv as is (an unknown flag or a
+        // missing directory fails here, before `--help`).
+        let parsed = Command::new(codex.as_ref().unwrap())
+            .args(&production)
+            .args(["exec", "--help"])
+            .output()
+            .unwrap();
+        assert!(
+            parsed.status.success(),
+            "codex refused the production argv {production:?}: {}",
+            String::from_utf8_lossy(&parsed.stderr)
+        );
+        let dirs = add_dirs(&production);
+        assert!(!dirs.is_empty(), "{production:?}");
+        let roots = toml::Value::Array(
+            dirs.iter()
+                .map(|d| toml::Value::String(d.display().to_string()))
+                .collect(),
+        );
+        let main = fx.main.canonicalize().unwrap();
+        let sh = |script: &str| -> bool {
+            Command::new(codex.as_ref().unwrap())
+                .args(["sandbox", "-P", ":workspace", "-C"])
+                .arg(&clone)
+                .arg("-c")
+                .arg(format!("sandbox_workspace_write.writable_roots={roots}"))
+                .args(["--", "sh", "-c", script])
+                .current_dir(&clone)
+                .status()
+                .is_ok_and(|s| s.success())
+        };
+        let before = fx.host_refs();
+        let seat_head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        // The 2026-11-03 18:45 host probe: Codex re-protects the clone's
+        // `.git` despite the grant. The seat's edit lands, its own commit
+        // does not, and AIDA does not try to defeat that.
+        assert!(
+            sh("echo seat > seat.txt"),
+            "a workspace edit in the seat must land"
+        );
+        assert!(
+            !sh(
+                "git add seat.txt && git -c core.hooksPath=/dev/null commit -qm 'seat (TASK-2712)'"
+            ),
+            "a direct commit inside the Codex sandbox is expected to be denied"
+        );
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), seat_head);
+        // The fallback: the host commits the pending work in AIDA's own
+        // sandbox, hooks off, with the host's identity.
+        git_ok(&fx.main, &["config", "user.name", "Host Operator"]);
+        git_ok(&fx.main, &["config", "user.email", "host@example.com"]);
+        let branch = git_ok(&clone, &["symbolic-ref", "--short", "HEAD"]);
+        let tip = crate::seat_clone::commit_pending(&fx.main, &clone, &branch, "seat (TASK-2712)")
+            .unwrap()
+            .expect("the seat's edit is pending work");
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip);
+        assert_eq!(
+            git_ok(&clone, &["log", "-1", "--format=%s|%an"]),
+            "seat (TASK-2712)|Host Operator"
+        );
+        assert!(
+            sh(&format!(
+                "echo ok > '{}'",
+                main.join(".aida/cache-db/probe").display()
+            )),
+            "a cache write must land"
+        );
+        assert!(main.join(".aida/cache-db/probe").exists());
+        // F5: a `.aida-store` write lands through the store grant.
+        let store_grant = dirs
+            .iter()
+            .find(|d| d.starts_with(main.join(".aida-store")))
+            .unwrap_or_else(|| panic!("no .aida-store grant: {dirs:?}"))
+            .clone();
+        let store_probe = store_grant.join("task-2712-probe");
+        assert!(
+            sh(&format!("echo ok > '{}'", store_probe.display())),
+            "a .aida-store write must land"
+        );
+        assert!(store_probe.exists());
+        std::fs::remove_file(&store_probe).unwrap();
+        // F5: an own-scope claim through the real `aida`, inside the sandbox.
+        if let Some(aida) = &aida {
+            let store = main.join(".aida-store");
+            let cache = aida_core::db::project_cache_path(&main);
+            {
+                use aida_core::db::DatabaseBackend as _;
+                let backend = crate::test_env::home_fixture_cached_backend(&store, &cache).unwrap();
+                let mut req =
+                    aida_core::Requirement::new("TASK-2712 live claim".into(), "d".into());
+                req.spec_id = Some("TASK-2169".to_string());
+                req.status = aida_core::RequirementStatus::Approved;
+                backend.add_requirement(req).unwrap();
+            }
+            assert!(
+                sh(&format!("'{aida}' edit TASK-2169 --status in-progress")),
+                "an own-scope claim inside the native sandbox must succeed"
+            );
+            use aida_core::db::DatabaseBackend as _;
+            let backend = crate::test_env::home_fixture_cached_backend(&store, &cache).unwrap();
+            let claimed = backend
+                .get_requirement_by_spec_id("TASK-2169")
+                .unwrap()
+                .expect("the seeded spec");
+            assert_eq!(
+                claimed.status,
+                aida_core::RequirementStatus::InProgress,
+                "the claim must land in the store"
+            );
+        }
+        for denied in [
+            main.join(".git/probe"),
+            main.join(".git/refs/heads/probe"),
+            main.join(".aida/sessions/probe"),
+        ] {
+            assert!(
+                !sh(&format!("echo x > '{}'", denied.display())),
+                "{} must be read-only",
+                denied.display()
+            );
+            assert!(!denied.exists(), "{}", denied.display());
+        }
+        assert_eq!(fx.host_refs(), before, "main's refs moved");
     }
 }

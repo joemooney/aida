@@ -119,7 +119,10 @@ fn headless_env_launches_route_through_shared_argv_builders() {
             // 20-line window: multi-line builder calls (vendor, prompt,
             // session, containment, model/effort tuning) plus interleaved
             // comments can put the builder name well above the .env anchor.
-            let start = idx.saturating_sub(20);
+            // TASK-2712 added the per-seat Codex rescope step between the
+            // builder and the launch on the resume path, hence 26 lines.
+            // trace:TASK-2712 | ai:claude
+            let start = idx.saturating_sub(26);
             let end = (idx + 3).min(lines.len());
             let window = lines[start..end].join("\n");
             assert!(

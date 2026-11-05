@@ -731,6 +731,18 @@ pub(crate) fn apply_agent_default_flags(
             if !posture.is_empty() {
                 anyhow::bail!("native sandbox, not AIDA-contained: drop conflicting --extra-flag posture options: {}", posture.join(" "));
             }
+            // TASK-2712: the native write set is AIDA's alone; a passthrough
+            // `--add-dir` (agents.toml or `--extra-flag`) is refused, never
+            // forwarded or silently dropped.
+            // trace:TASK-2712 | ai:claude
+            crate::codex_native_sandbox::refuse_user_add_dir(
+                &flag_options.extra_flags,
+                "--extra-flag",
+            )?;
+            crate::codex_native_sandbox::refuse_user_add_dir(
+                &per_tool,
+                "[agents.codex] default_flags in agents.toml",
+            )?;
             if load_agents_bypass(project_root)? {
                 anyhow::bail!(
                     "[agents] bypass and [agents] contained are mutually exclusive launch postures"

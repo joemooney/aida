@@ -22,6 +22,8 @@
       --accent-bright: #ff7a45;
       --accent-soft: rgba(186, 57, 22, 0.12);
       --emerald: #1b6b4c;
+      --emerald-mid: #2d8662;
+      --emerald-light: #479e7b;
       --emerald-soft: rgba(27, 107, 76, 0.13);
       --amber: #b4650c;
       --amber-soft: rgba(180, 101, 12, 0.14);
@@ -49,6 +51,8 @@
       --accent-bright: #ff956e;
       --accent-soft: rgba(255, 120, 73, 0.16);
       --emerald: #3dd68c;
+      --emerald-mid: #34b87a;
+      --emerald-light: #5ce0a0;
       --emerald-soft: rgba(61, 214, 140, 0.15);
       --amber: #f5a623;
       --amber-soft: rgba(245, 166, 35, 0.16);
@@ -218,7 +222,7 @@
     .tab-group { display: inline-flex; border: 1px solid var(--line); background: var(--bg); }
     .tab-btn { border: 0; background: transparent; color: var(--ink-secondary); font-family: var(--mono); font-size: 10.5px; padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--line); transition: all 0.15s; }
     .tab-btn:last-child { border-right: 0; }
-    .tab-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+    .tab-btn.active { background: var(--emerald); color: #fff; font-weight: 600; }
     .bar-list { display: flex; flex-direction: column; gap: 11px; }
     .bar-row { display: grid; grid-template-columns: 230px 1fr 115px; align-items: center; gap: 12px; font-size: 12.5px; padding: 4px 6px; border-radius: 3px; transition: background 0.15s; }
     .bar-row:hover { background: var(--bg-panel); }
@@ -248,17 +252,25 @@
     .spectrum-bar { display: grid; grid-template-columns: 1fr 1.2fr 1.6fr 1fr; border: 1px solid var(--line); margin: 22px 0 12px; background: var(--bg); }
     .spec-tier { padding: 14px 16px; border-right: 1px solid var(--line); position: relative; }
     .spec-tier:last-child { border-right: 0; }
-    .spec-tier.active { background: var(--accent-soft); outline: 2px solid var(--accent); z-index: 1; }
+    .spec-tier.active { background: var(--blue-soft); outline: 2px solid var(--blue); z-index: 1; }
     .spec-tier small { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-secondary); text-transform: uppercase; }
     .spec-tier strong { font-family: var(--serif); font-size: 18px; }
     .sim-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 28px; align-items: center; }
     .slider-group { margin-bottom: 20px; }
     .slider-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; margin-bottom: 6px; }
-    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    input[type="range"] { width: 100%; accent-color: var(--crimson); cursor: pointer; }
     .sim-outputs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .sim-box { padding: 18px; background: var(--bg); border: 1px solid var(--line); }
+    .sim-box { padding: 18px; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--line); transition: border-color 0.2s ease, background 0.2s ease; }
     .sim-box small { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-secondary); text-transform: uppercase; margin-bottom: 6px; }
-    .sim-box strong { font-family: var(--serif); font-size: 30px; color: var(--emerald); }
+    .sim-box strong { font-family: var(--serif); font-size: 30px; color: var(--emerald); transition: color 0.2s ease; }
+    .sim-box.state-bad { border-left-color: var(--crimson); background: var(--crimson-soft); }
+    .sim-box.state-bad strong { color: var(--crimson); }
+    .sim-box.state-poor { border-left-color: var(--amber); background: var(--amber-soft); }
+    .sim-box.state-poor strong { color: var(--amber); }
+    .sim-box.state-neutral { border-left-color: var(--ink-muted); background: var(--bg); }
+    .sim-box.state-neutral strong { color: var(--ink-muted); }
+    .sim-box.state-good { border-left-color: var(--emerald); background: var(--emerald-soft); }
+    .sim-box.state-good strong { color: var(--emerald); }
     .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
     .action-card { background: var(--bg-elevated); border: 1px solid var(--line); border-top: 3px solid var(--accent); padding: 26px; display: flex; flex-direction: column; justify-content: space-between; }
     .action-num { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
@@ -271,6 +283,8 @@
     .term-tip { border-bottom: 1.5px dashed var(--accent); cursor: help; position: relative; display: inline-flex; align-items: center; gap: 4px; transition: color 0.15s, background 0.15s; padding: 0 2px; border-radius: 2px; }
     .term-tip:hover, .term-tip:focus { color: var(--accent); background: var(--accent-soft); outline: none; }
     .term-tip::after { content: "?"; display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); font-family: var(--mono); font-size: 8.5px; font-weight: 700; line-height: 1; flex-shrink: 0; }
+    .framework-tip { border-bottom: 1.5px dashed var(--blue); color: var(--blue); font-weight: 700; cursor: help; padding: 1px 4px; border-radius: 2px; transition: background 0.15s, color 0.15s; }
+    .framework-tip:hover, .framework-tip:focus { background: var(--blue-soft); color: var(--ink); outline: none; }
     .tip-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #ff8658; margin-bottom: 4px; display: block; }
     .tip-title { font-family: var(--serif); font-size: 15px; color: #fff; margin-bottom: 6px; display: block; border-bottom: 1px solid #353d38; padding-bottom: 5px; }
     .tip-body { font-family: var(--sans); font-size: 12px; color: #d5d9d2; line-height: 1.5; display: block; margin-bottom: 8px; }
@@ -372,7 +386,11 @@
         <div class="meta-strip">
           <div><strong>HEAD SHA:</strong> 6a3f67671a974703590efde5ae2a323f3f7471fa</div>
           <div><strong>AUDIT WINDOW:</strong> 2025-11-23 → 2026-11-01</div>
-          <div><strong>FRAMEWORKS:</strong> DORA · GitClear · LinearB</div>
+          <div><strong>FRAMEWORKS:</strong>
+            <span class="framework-tip" tabindex="0" onmousemove="showTip(event, '<span class=\'tip-kicker\'>DEVOPS RESEARCH &amp; ASSESSMENT (DORA.DEV)</span><span class=\'tip-title\'>DORA Four-Key Delivery &amp; Stability Framework</span><span class=\'tip-body\'>Defines four production delivery &amp; stability metrics (dora.dev/guides/dora-metrics/): (1) Deployment Frequency, (2) Lead Time for Changes, (3) Change Failure Rate, and (4) Failed Deployment Recovery Time (MTTR). Because no production deployment or incident log is linked in this repository, Section 04 separates unmeasured production DORA metrics from measured Git trunk proxies.</span><span class=\'tip-meta\'>Used in Section 01 &amp; Section 04: Distinguishes unmeasured production metrics from measured main integration and revert proxies.</span>')" onmouseleave="hideTip()">DORA</span> ·
+            <span class="framework-tip" tabindex="0" onmousemove="showTip(event, '<span class=\'tip-kicker\'>PR DIFF SIZE &amp; BATCH DISTRIBUTION LENS</span><span class=\'tip-title\'>GitClear-Style Diff-Size Buckets &amp; 400-LoC Review Guidance</span><span class=\'tip-body\'>Categorizes merged pull requests by diff size (Small ≤100 LoC, Medium 101–400 LoC, Large 401–1,000 LoC, X-Large &gt;1,000 LoC) alongside the SmartBear/Cisco Systems peer-review guidance (Cohen, 2006; 2,500 reviews) recommending reviewing no more than 200–400 LoC at a time.</span><span class=\'tip-meta\'>Used in Section 03: Evaluates AIDA\'s 2,418 PRs since 2026-05-10 (median 225 LoC, 31.6% &gt;400 LoC, 10.1% &gt;1,000 LoC).</span>')" onmouseleave="hideTip()">GitClear</span> ·
+            <span class="framework-tip" tabindex="0" onmousemove="showTip(event, '<span class=\'tip-kicker\'>CYCLE-TIME PHASES &amp; FILE-WINDOW CHURN LENS</span><span class=\'tip-title\'>LinearB-Style Cycle-Time Anatomy &amp; &lt;21-Day Churn Proxy</span><span class=\'tip-body\'>Decomposes engineering flow into four sub-stages (Coding, PR Pickup Wait, Review Time, Deploy) and tracks 30-day code evolution across New Work, &lt;21-day Rework, and &gt;21-day Refactoring.</span><span class=\'tip-meta\'>Used in Section 05: Evaluates AIDA\'s 30-day file-touch churn proxy (27.7% &lt;21d) and local review-verdict snapshot.</span>')" onmouseleave="hideTip()">LinearB</span>
+          </div>
         </div>
       </div>
 
@@ -561,7 +579,7 @@
 
       <!-- Methodology, Primary Sources & Measured vs. Proxy/Unknown Distinctions -->
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--ink-secondary); line-height: 1.55;">
-        <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent); margin-bottom:8px;">
+        <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--blue); margin-bottom:8px;">
           METHODOLOGY, PRIMARY BENCHMARK SOURCES &amp; MEASURED VS. PROXY / ASSUMED DISTINCTIONS
         </div>
         <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
@@ -629,7 +647,7 @@
           <div style="font-size:12px;color:var(--ink-secondary);margin-top:4px;">Standard commercial SaaS applications</div>
         </div>
         <div class="spec-tier active">
-          <small style="color:var(--accent);font-weight:700;">▲ AIDA POSITION (988,122 CODE LOC)</small>
+          <small style="color:var(--blue);font-weight:700;">▲ AIDA POSITION (988,122 CODE LOC)</small>
           <strong>500k – 2M+ LoC (Large)</strong>
           <div style="font-size:12px;color:var(--ink);margin-top:4px;"><strong>862,574 Rust LoC</strong> (1,440 files) + 125.5k multi-lang/docs</div>
         </div>
@@ -643,7 +661,7 @@
       <!-- 988.1k Net Code vs 1.33M Total Physical Lines Breakdown -->
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-strong);">
         <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-          <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent);">
+          <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--blue);">
             TOKEI LINE COMPOSITION: WHY 988.1K NET CODE LOC VS. 1.33M TOTAL PHYSICAL LINES?
           </div>
           <div style="font-family:var(--mono); font-size:11px; color:var(--ink-secondary);">
@@ -674,7 +692,7 @@
             <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:3px;">Vertical whitespace separating items and blocks (<strong>84,565 blank lines in Rust</strong>).</div>
           </div>
           <div class="spec-tier active" style="padding:10px 12px;">
-            <small style="color:var(--accent);font-weight:700;">∑ TOTAL PHYSICAL LINES (100%)</small>
+            <small style="color:var(--blue);font-weight:700;">∑ TOTAL PHYSICAL LINES (100%)</small>
             <strong style="font-size:16px;">1,328,482 lines</strong>
             <div style="font-size:11.5px;color:var(--ink);margin-top:3px;">Raw file line count across repo (<strong>1,009,352 physical lines in 1,440 Rust files</strong> alone).</div>
           </div>
@@ -1076,22 +1094,22 @@
           </div>
         </div>
         <div class="sim-outputs">
-          <div class="sim-box">
+          <div class="sim-box state-bad" id="sim-box-churn">
             <small>ILLUSTRATIVE &lt;21D CHURN SCENARIO</small>
             <strong id="sim-out-churn">27.7%</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-churn-sub">Baseline: 27.7% (Assumed linear weight)</div>
           </div>
-          <div class="sim-box">
+          <div class="sim-box state-bad" id="sim-box-bug">
             <small>ILLUSTRATIVE BUG-/FIX SHARE</small>
             <strong id="sim-out-bug">31.6%</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-bug-sub">Baseline: 31.6% of main commits</div>
           </div>
-          <div class="sim-box">
+          <div class="sim-box state-poor" id="sim-box-pass">
             <small>ILLUSTRATIVE 1ST-PASS APPROVAL</small>
             <strong id="sim-out-pass">73.5%</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-pass-sub">Baseline: 73.5% (local snapshot)</div>
           </div>
-          <div class="sim-box">
+          <div class="sim-box state-neutral" id="sim-box-saved">
             <small>ILLUSTRATIVE SHIFTED PR CAPACITY</small>
             <strong id="sim-out-saved">+0 PRs/mo</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-saved-sub">Assumption, not a forecast (414.5 PRs/mo)</div>
@@ -1437,7 +1455,7 @@
         bars += `
           <g onmousemove="showTip(event, '${tip}')" onmouseleave="hideTip()" style="cursor:pointer">
             <rect x="${x}" y="${yC}" width="${bw}" height="${hC}" fill="#8c9288" opacity="0.38" rx="2" />
-            <rect x="${x}" y="${yP}" width="${bw}" height="${hP}" fill="var(--accent)" rx="2" />
+            <rect x="${x}" y="${yP}" width="${bw}" height="${hP}" fill="var(--emerald-mid)" rx="2" />
             <text x="${x + bw/2}" y="${yC - 6}" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">${d.c}</text>
             <text x="${x + bw/2}" y="${H - 16}" text-anchor="middle" font-size="10" fill="var(--ink)">${d.m}</text>
           </g>`;
@@ -1447,25 +1465,26 @@
       wrap.innerHTML = `
         <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
           <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="var(--line-strong)" stroke-width="1" />
-          <line x1="${padL}" y1="${yElite}" x2="${W - padR}" y2="${yElite}" stroke="var(--emerald)" stroke-dasharray="4 4" stroke-width="1.5" />
-          <text x="${W - padR - 4}" y="${yElite - 5}" text-anchor="end" font-size="9.5" fill="var(--emerald)">Illustrative* Elite 8-Swe Squad (~150 PRs/mo)</text>
-          <rect x="${padL + 8}" y="6" width="10" height="10" fill="var(--accent)" />
+          <rect x="${padL + 8}" y="6" width="10" height="10" fill="var(--emerald-mid)" rx="2" />
           <text x="${padL + 23}" y="15" font-size="10" fill="var(--ink)">Merged PRs/MRs (2,421)</text>
-          <rect x="${padL + 165}" y="6" width="10" height="10" fill="#8c9288" opacity="0.5" />
+          <rect x="${padL + 165}" y="6" width="10" height="10" fill="#8c9288" opacity="0.5" rx="2" />
           <text x="${padL + 180}" y="15" font-size="10" fill="var(--ink)">Total Main Commits (4,190)</text>
+          <line x1="${padL + 340}" y1="11" x2="${padL + 362}" y2="11" stroke="var(--blue)" stroke-dasharray="4 3" stroke-width="1.8" />
+          <text x="${padL + 367}" y="15" font-size="9.5" fill="var(--blue)" font-weight="600">Illustrative* Elite 8-Swe Squad (~150 PRs/mo)</text>
           ${bars}
+          <line x1="${padL}" y1="${yElite}" x2="${W - padR}" y2="${yElite}" stroke="var(--blue)" stroke-dasharray="4 4" stroke-width="1.5" />
         </svg>`;
     } else {
       const cohorts = [
         { name: 'Industry Median* (8 Swe)', prDay: 2.0, cDay: 4.5, col: '#8c9288' },
-        { name: 'Industry Elite* (8 Swe)',  prDay: 5.0, cDay: 11.5, col: 'var(--emerald)' },
-        { name: 'AIDA 90-Day Avg',         prDay: 9.9, cDay: 16.6, col: 'var(--blue)' },
-        { name: 'AIDA 30-Day Avg',         prDay: 12.9, cDay: 26.8, col: 'var(--accent)' },
-        { name: 'AIDA 60-Day Avg',         prDay: 14.35, cDay: 24.5, col: 'var(--accent)' },
-        { name: 'AIDA 7-Day Avg',          prDay: 14.6, cDay: 28.0, col: 'var(--accent)' },
-        { name: 'AIDA Peak Month (26-06)', prDay: 27.8, cDay: 30.6, col: 'var(--crimson)' }
+        { name: 'Industry Elite* (8 Swe)',  prDay: 5.0, cDay: 11.5, col: 'var(--blue)' },
+        { name: 'AIDA 90-Day Avg',         prDay: 9.9, cDay: 16.6, col: 'var(--emerald-light)' },
+        { name: 'AIDA 30-Day Avg',         prDay: 12.9, cDay: 26.8, col: 'var(--emerald-mid)' },
+        { name: 'AIDA 60-Day Avg',         prDay: 14.35, cDay: 24.5, col: 'var(--emerald-mid)' },
+        { name: 'AIDA 7-Day Avg',          prDay: 14.6, cDay: 28.0, col: 'var(--emerald)' },
+        { name: 'AIDA Peak Month (26-06)', prDay: 27.8, cDay: 30.6, col: 'var(--emerald)' }
       ];
-      const W = 680, H = 290, padL = 175, padR = 65, padT = 24, padB = 26;
+      const W = 680, H = 290, padL = 175, padR = 168, padT = 24, padB = 26;
       const plotW = W - padL - padR, plotH = H - padT - padB;
       const maxV = 32;
       const rowH = plotH / cohorts.length;
@@ -1510,9 +1529,9 @@
         const gx = padL + i * groupW + 10;
         const bw = (groupW - 26) / 3;
         const vals = [
-          { v: d.aida, col: 'var(--accent)', name: 'AIDA PRs' },
+          { v: d.aida, col: 'var(--emerald-mid)', name: 'AIDA PRs' },
           { v: d.gitclear, col: '#8c9288', name: 'Industry* (illustrative)' },
-          { v: d.elite, col: 'var(--emerald)', name: 'Elite* (illustrative)' }
+          { v: d.elite, col: 'var(--blue)', name: 'Elite* (illustrative)' }
         ];
         vals.forEach((item, j) => {
           const h = (item.v / maxP) * plotH;
@@ -1534,9 +1553,9 @@
           <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="var(--line-strong)" />
           <line x1="${divX}" y1="${padT}" x2="${divX}" y2="${padT + plotH}" stroke="var(--crimson)" stroke-dasharray="4 4" stroke-width="1.5" />
           <text x="${divX + 6}" y="${padT + 10}" font-size="9" fill="var(--crimson)">400-LoC Guidance → (AIDA: 31.6%)</text>
-          <rect x="${padL}" y="6" width="9" height="9" fill="var(--accent)" /><text x="${padL+13}" y="14" font-size="9.5" fill="var(--ink)">AIDA PRs</text>
+          <rect x="${padL}" y="6" width="9" height="9" fill="var(--emerald-mid)" /><text x="${padL+13}" y="14" font-size="9.5" fill="var(--ink)">AIDA PRs</text>
           <rect x="${padL+85}" y="6" width="9" height="9" fill="#8c9288" /><text x="${padL+98}" y="14" font-size="9.5" fill="var(--ink)">Industry*</text>
-          <rect x="${padL+205}" y="6" width="9" height="9" fill="var(--emerald)" /><text x="${padL+218}" y="14" font-size="9.5" fill="var(--ink)">Elite*</text>
+          <rect x="${padL+205}" y="6" width="9" height="9" fill="var(--blue)" /><text x="${padL+218}" y="14" font-size="9.5" fill="var(--ink)">Elite*</text>
           ${svgBars}
           <text x="${padL}" y="${H - 3}" font-size="8.5" fill="var(--ink-secondary)">* Illustrative reference distributions, not from a cited report.</text>
         </svg>`;
@@ -1556,7 +1575,7 @@
           <!-- AIDA Empirical Log10(LoC) Density: Left 68.4% (<=400 LoC) vs Right 31.6% (>400 LoC) -->
           <polygon points="${ptsLeft}" fill="var(--blue-soft)" />
           <polygon points="${ptsRight}" fill="var(--crimson-soft)" />
-          <polyline points="${ptsLine}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+          <polyline points="${ptsLine}" fill="none" stroke="var(--emerald-mid)" stroke-width="2.5" />
 
           <!-- Share callouts inside the two regions -->
           <text x="218" y="182" text-anchor="middle" font-size="9.5" fill="var(--blue)" font-weight="700">68.4% ≤ 400 LoC</text>
@@ -1699,8 +1718,16 @@
     const prOver400 = parseFloat(document.getElementById('sim-pr-slider').value);
     const crateShare = parseFloat(document.getElementById('sim-crate-slider').value);
 
-    document.getElementById('sim-pr-label').textContent = prOver400.toFixed(1) + '%';
-    document.getElementById('sim-crate-label').textContent = crateShare.toFixed(1) + '%';
+    const prLabel = document.getElementById('sim-pr-label');
+    const crateLabel = document.getElementById('sim-crate-label');
+    prLabel.textContent = prOver400.toFixed(1) + '%';
+    crateLabel.textContent = crateShare.toFixed(1) + '%';
+    const prColor = prOver400 <= 15.0 ? 'var(--emerald)' : (prOver400 <= 25.0 ? 'var(--amber)' : 'var(--crimson)');
+    const crateColor = crateShare <= 25.0 ? 'var(--emerald)' : (crateShare <= 50.0 ? 'var(--amber)' : 'var(--crimson)');
+    prLabel.style.color = prColor;
+    crateLabel.style.color = crateColor;
+    document.getElementById('sim-pr-slider').style.accentColor = prColor;
+    document.getElementById('sim-crate-slider').style.accentColor = crateColor;
 
     // Illustrative linear what-if formula using assumed weights anchored at measured baselines (no fitted calibration or causal/predictive validity)
     const prDelta = (31.6 - prOver400) / 19.6;       // 0 at baseline, ~1 at assumed target
@@ -1714,14 +1741,22 @@
     document.getElementById('sim-out-churn').textContent = projChurn.toFixed(1) + '%';
     document.getElementById('sim-out-churn-sub').textContent =
       projChurn < 8.5 ? 'Illustrative <8.5% band (assumed weights)' : (projChurn < 15 ? 'Illustrative <15% band (assumed weights)' : 'Baseline >15% band (assumed weights)');
+    const churnBox = document.getElementById('sim-box-churn');
+    if (churnBox) churnBox.className = 'sim-box ' + (projChurn < 10.5 ? 'state-good' : (projChurn < 15.0 ? 'state-poor' : 'state-bad'));
 
     document.getElementById('sim-out-bug').textContent = projBug.toFixed(1) + '%';
     document.getElementById('sim-out-bug-sub').textContent = `Illustrative ${(31.6 - projBug).toFixed(1)}% delta vs 31.6% baseline`;
+    const bugBox = document.getElementById('sim-box-bug');
+    if (bugBox) bugBox.className = 'sim-box ' + (projBug < 16.0 ? 'state-good' : (projBug < 24.0 ? 'state-poor' : 'state-bad'));
 
     document.getElementById('sim-out-pass').textContent = projPass.toFixed(1) + '%';
     document.getElementById('sim-out-pass-sub').textContent = `Illustrative multi-round share: ${(100 - projPass).toFixed(1)}%`;
+    const passBox = document.getElementById('sim-box-pass');
+    if (passBox) passBox.className = 'sim-box ' + (projPass >= 85.0 ? 'state-good' : (projPass >= 70.0 ? 'state-poor' : 'state-bad'));
 
     document.getElementById('sim-out-saved').textContent = '+' + reclaimedPRs + ' PRs/mo';
+    const savedBox = document.getElementById('sim-box-saved');
+    if (savedBox) savedBox.className = 'sim-box ' + (reclaimedPRs >= 45 ? 'state-good' : (reclaimedPRs >= 15 ? 'state-poor' : 'state-neutral'));
   }
 
   function setSimPreset(prVal, crateVal) {
