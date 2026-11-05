@@ -8,13 +8,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T04:48:10.186942102Z
+modified_at: 2026-11-05T16:13:05.204851893Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
 - kind:architectural-concern
 - linked:STORY-2492
 - severity:major
+comments:
+- id: 01a1ac7c-3b34-7fe3-bf96-0d6ed1419a99
+  author: joe
+  content: 'Advisor triage 2026-11-05: approved as SKETCH-FIRST. Deliverable of the first round is the design sketch on this spec (portable publication receipt + distributed reservation), no code; implementation waits for advisor signoff on the sketch.'
+  created_at: 2026-11-05T16:13:05.204851893Z
+  modified_at: 2026-11-05T16:13:05.204851893Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa76-52e6-7370-b6c4-2f6dbc6d878a
   author: joe
