@@ -463,6 +463,32 @@ pub(crate) enum QueueDoneOwnership {
     Forced(String),
 }
 
+// Branch evidence is required independently of the PR-check override.
+// trace:TASK-2887 | ai:codex
+pub(crate) fn queue_done_ownership_branch(
+    root: &Path,
+    force: bool,
+    branch_at_root: impl FnOnce(&Path) -> anyhow::Result<String>,
+) -> anyhow::Result<Option<String>> {
+    match branch_at_root(root) {
+        Ok(branch) => Ok(Some(branch)),
+        Err(error) => {
+            let reason = format!(
+                "cannot determine the current branch in {}: {error:#}",
+                root.display()
+            );
+            if force {
+                eprintln!("warning: --force overriding queue-done ownership check: {reason}.");
+                Ok(None)
+            } else {
+                anyhow::bail!(
+                    "queue done refused: {reason}.\nRestore branch lookup access or check out the spec's branch, then re-run; the spec and queue are unchanged. Only --force overrides the ownership check."
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QueueDoneCommitEvidence {
     pub(crate) commits_seen: usize,
@@ -731,9 +757,9 @@ pub fn queue_done_precheck_diagnose(
                     "queue done refused: cannot determine the current branch for {display_id} in {}: {e:#}",
                     project_root.display()
                 ),
-                "Restore branch lookup access, then re-run; the spec and queue are unchanged.".to_string(),
+                "Restore branch lookup access or check out the spec's branch, then re-run; the spec and queue are unchanged.".to_string(),
                 format!(
-                    "Override when you know the work shipped another way: `aida queue done {display_id} --skip-pr-check`."
+                    "Override when you know the work shipped another way: `aida queue done {display_id} --force`."
                 ),
             ]);
         }
@@ -1411,6 +1437,29 @@ mod tests {
 
     // trace:TASK-2887 | ai:codex
     #[test]
+    fn ownership_branch_lookup_refuses_unless_forced() {
+        let root = root_ok().unwrap();
+        for force in [false, true] {
+            let result = queue_done_ownership_branch(&root, force, |_| {
+                Err(anyhow::anyhow!("host git refused: seat clone"))
+            });
+            if force {
+                assert_eq!(result.unwrap(), None);
+            } else {
+                let error = result.unwrap_err().to_string();
+                assert!(error.contains("queue done refused"), "{error}");
+                assert!(error.contains("host git refused: seat clone"), "{error}");
+                assert!(error.contains("Only --force"), "{error}");
+            }
+        }
+        assert_eq!(
+            queue_done_ownership_branch(&root, false, |_| Ok("task-2887".into())).unwrap(),
+            Some("task-2887".into())
+        );
+    }
+
+    // trace:TASK-2887 | ai:codex
+    #[test]
     fn diagnose_refuses_when_branch_lookup_fails() {
         let result = queue_done_precheck_diagnose(
             "TASK-2887",
@@ -1424,8 +1473,12 @@ mod tests {
                 let text = lines.join("\n");
                 assert!(text.contains("queue done refused"), "{text}");
                 assert!(text.contains("host git refused: seat clone"), "{text}");
-                assert!(text.contains("/tmp/fake-project"), "{text}");
-                assert!(text.contains("TASK-2887 --skip-pr-check"), "{text}");
+                assert!(
+                    text.contains(&root_ok().unwrap().display().to_string()),
+                    "{text}"
+                );
+                assert!(text.contains("TASK-2887 --force"), "{text}");
+                assert!(text.contains("check out the spec's branch"), "{text}");
             }
             other => panic!("expected refusal, got {other:?}"),
         }

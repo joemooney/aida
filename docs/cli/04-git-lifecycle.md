@@ -69,9 +69,12 @@ or forced completion is needed for an ID remapping.
 <!-- trace:TASK-2887 | ai:codex -->
 `aida queue done` refuses before changing the spec or queue when the current
 branch cannot be read, including a seat-clone safety refusal or detached HEAD.
-The diagnostic preserves the Git error. Restore branch lookup access and retry;
-`--skip-pr-check` (or `--force`) remains an explicit override for work known to
-have shipped another way. `--yes` only skips confirmation.
+The diagnostic preserves the Git error. Restore branch lookup access or check
+out the spec's branch and retry. `aida queue done <ID> --force` overrides the
+ownership and PR checks for work known to have shipped another way;
+`aida queue done <ID> --skip-pr-check` bypasses only the PR check and still
+requires readable branch ownership evidence. `aida queue done <ID> --yes` only
+skips confirmation.
 
 ---
 

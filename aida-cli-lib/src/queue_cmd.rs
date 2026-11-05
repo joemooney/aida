@@ -5100,7 +5100,12 @@ pub(crate) fn handle_queue_command(
             // `--force` remains the explicit, ledgered recovery escape hatch.
             // trace:BUG-1244 | ai:codex
             if let Ok(root) = find_project_root() {
-                if let Some(branch) = current_branch_at(&root) {
+                // trace:TASK-2887 | ai:codex
+                if let Some(branch) = workflow_hints::queue_done_ownership_branch(
+                    &root,
+                    *force,
+                    crate::gate::kernel_deps::current_branch_at_checked,
+                )? {
                     let commit_evidence = queue_done_commit_evidence(&root, &branch);
                     // BUG-1629: the same configured prefixes auto-complete
                     // phase 1 checks with. trace:BUG-1629 | ai:claude

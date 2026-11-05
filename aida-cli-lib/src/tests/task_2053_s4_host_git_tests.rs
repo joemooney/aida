@@ -88,6 +88,23 @@ fn routine_status_and_drain_paths_run_no_host_git_in_a_seat_clone() {
     // a warning and mark the spec done. No host Git may run in the clone.
     // trace:TASK-2887 | ai:codex
     let expected = aida_core::seat_clone_detect::host_git_refusal(&clone);
+    // Ownership still refuses when the caller skips the separate PR check.
+    let error = crate::workflow_hints::queue_done_ownership_branch(
+        &clone,
+        false,
+        crate::gate::kernel_deps::current_branch_at_checked,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains(&expected), "{error:#}");
+    assert_eq!(
+        crate::workflow_hints::queue_done_ownership_branch(
+            &clone,
+            true,
+            crate::gate::kernel_deps::current_branch_at_checked,
+        )
+        .unwrap(),
+        None
+    );
     let result = crate::workflow_hints::queue_done_precheck_diagnose(
         "TASK-2887",
         Ok(clone.clone()),
