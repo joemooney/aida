@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-768",
+  "publishes": [
+    {
+      "at": "2026-11-05T02:58:43.658256564Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T11:05:06.270086355Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T12:20:20.745178925Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T13:18:52.296116859Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-768",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-768",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-768",
+        "first_seen": "2026-11-04T13:18:52.296058676+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-05T00:47:41.736602625Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T01:07:49.323478171Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T02:58:42.590266942Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "785f19331c297eed8a062f3475932441c5ab8cf1",
+        "pr": 3373,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-05T02:58:43.492223677Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-768",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "785f19331c297eed8a062f3475932441c5ab8cf1",
+        "pr": 3373,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
