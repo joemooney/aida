@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-211
 agreed_id: BUG-2442
 title: Review watcher treats a stale lease as a live author and skips the PR indefinitely
 description: 'Observed 2026-11-04: PRs #3372, #3367, #3336 and #3386 got no fresh review for hours. The watcher logged ''stale overlapping head already notified; the author''s session on <branch> is live and owns the merge'', while `aida session leases` showed those leases as ⚠ stale (the Codex lane had exited and the seats were clean and pushed). review_watch_update::author_live -> status_prs::live_owned_branches_strict counts a lease live when its active OR creator process is alive. The creator for advisor-launched lanes is a long-lived process (the deputy or advisor), so an exited lane stays ''live'' forever. Acceptance: (1) liveness for review gating uses the same verdict as the leases view''s stale marker (the lane''s own process, not the launcher); (2) a lease whose lane has exited with a clean, pushed seat is not live; (3) a regression test pins an alive creator plus a dead active process to ''not live''; (4) the watcher log names the lease id when it skips for a live author.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:36.411397250Z
-modified_at: 2026-11-05T01:33:06.356037594Z
+modified_at: 2026-11-05T02:19:48.764631749Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-11-05T01:28:06.189202763Z
   modified_at: 2026-11-05T01:28:06.189202763Z
   session_id: 01a1a9485113
+- id: 01a1a981-589c-7153-9c47-3c78823cc98a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2-4 met (exited lane with live creator now reads stale; skip log names lease id), but AC1 only partly: live_leases drops Dormant leases, which the leases view does not mark stale, so a shell-only session with a live creator loses branch protection. CI still pending at review time.. It was punted on: blocked-dependency: Tested implementation is ready, but publishing is blocked: .git is read-only (git add cannot create index.lock); command deputy runs at main checkout with no cwd option; script deputy explicitly refuses implementer seat. Three modified tracked Rust files remain in the assigned worktree. Host publication required before PR and queue completion.. No triage reason was given.'
+  created_at: 2026-11-05T02:19:48.764629191Z
+  modified_at: 2026-11-05T02:19:48.764629191Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-0e7e-7b01-8e98-3f6cd4cac68d
   author: joe
@@ -69,6 +75,14 @@ history:
   session_id: 01a1a9551a8f
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a981-589c-7153-9c47-3c6971874085
+  author: joe
+  timestamp: 2026-11-05T02:19:48.764607003Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -77,17 +91,3 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: blocked-dependency
-  detail: 'Tested implementation is ready, but publishing is blocked: .git is read-only (git add cannot create index.lock); command deputy runs at main checkout with no cwd option; script deputy explicitly refuses implementer seat. Three modified tracked Rust files remain in the assigned worktree. Host publication required before PR and queue completion.'
-  lean: Publish the existing tested diff through an authorized host lane publisher, then complete BUG-2442 and hand the PR to separate review.
-  raised_by: implementer
-  raised_at: 2026-11-05T01:28:08.751981776Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC2-4 met (exited lane with live creator now reads stale; skip log names lease id), but AC1 only partly: live_leases drops Dormant leases, which the leases view does not mark stale, so a shell-only session with a live creator loses branch protection. CI still pending at review time.'
-  recovery_hint: address the review findings, move BUG-2442 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T01:33:06.356037594Z
