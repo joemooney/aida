@@ -9017,16 +9017,82 @@ pub(crate) fn preclaim_collision_check(
     PreclaimDecision::Proceed
 }
 
+/// Explicit queue resumes must publish before returning control to the
+/// launcher's process exit, under the same vendor/role gate as fresh lanes.
+// trace:STORY-2475 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_queue_resume_to_exit(
+    host_main: Option<&std::path::Path>,
+    target: &session::HeadlessResume<'_>,
+    prompt: &str,
+    log: &std::path::Path,
+    tree: &std::path::Path,
+    tee: &headless_tee::TeeOptions,
+    contained: bool,
+    role: &str,
+    publication: (&std::path::Path, &str, &str),
+) -> Result<std::process::ExitStatus> {
+    let status = session::spawn_vendor_headless_resume(
+        host_main, target, prompt, log, tree, tee, contained, role,
+    )?;
+    if target.vendor == session::HeadlessVendor::Codex
+        && contained
+        && crate::canonical_role_name(role) == "implementer"
+    {
+        crate::ship_from_seat::publish_queue_exit(
+            publication.0,
+            tree,
+            publication.1,
+            publication.2,
+            status.success(),
+        )?;
+    }
+    Ok(status)
+}
+
+/// Resolve the host merge result before any vendor is launched. Successful
+/// conflicts require advisor delivery; an existing non-Claude thread refuses.
+// trace:STORY-2475 | ai:codex
+pub(crate) fn rework_conflict_route(
+    prepared: Result<Vec<String>>,
+    vendor: session::HeadlessVendor,
+    resume: bool,
+    scope: &str,
+    pr: u64,
+    branch: &str,
+    notify: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<(session::HeadlessVendor, Vec<String>)> {
+    let files = prepared?;
+    if files.is_empty() {
+        return Ok((vendor, files));
+    }
+    notify(
+        "Rework merge conflicts require Claude",
+        &format!(
+            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
+         Conflict resolution requires Claude on branch {branch}. Fresh route: \
+         aida queue work {scope} --vendor claude --fresh --no-human.",
+            files.join(", ")
+        ),
+    )?;
+    if resume && vendor != session::HeadlessVendor::Claude {
+        anyhow::bail!(
+            "conflicting rework requires a fresh Claude lane: \
+            aida queue work {scope} --vendor claude --fresh --no-human"
+        );
+    }
+    Ok((session::HeadlessVendor::Claude, files))
+}
+
 /// BUG-022: whether this pickup resolves the spec's open PR head as its
 /// branch. `aida queue rework` sends a refused spec back to Approved, which the
-/// status test alone reads as a fresh pickup — so a Rework hold standing on
-/// the spec's PR also qualifies. An explicit `--branch` always wins: it is the
-/// deliberate way to start a new branch instead.
+/// status test alone reads as a fresh pickup. Every single-spec implementer
+/// pickup now looks up its open forge PR, even without a Rework hold.
+/// An explicit `--branch` always wins: it deliberately starts a new branch.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
 pub(crate) fn queue_work_wants_rework_pr_branch(
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-    _spec_rework_held: bool,
 ) -> bool {
     explicit_branch.is_none()
         && (queue_work_plan_wants_pr_head_branch(plan)
@@ -9075,10 +9141,12 @@ fn rework_pr_head_branch_override(
         return None;
     }
     let spec = plan.entries.first()?.spec_id.as_str();
-    let held_prs = rework_held_prs_for_spec(project_root, spec);
-    if !queue_work_wants_rework_pr_branch(plan, explicit_branch, !held_prs.is_empty()) {
+    if !queue_work_wants_rework_pr_branch(plan, explicit_branch) {
         return None;
     }
+    // Hold records still establish PR association when the forge's metadata
+    // omits the spec; they no longer decide whether to perform the lookup.
+    let held_prs = rework_held_prs_for_spec(project_root, spec);
     // BUG-1023: a findings-led rework belongs on the already-open PR branch.
     // Seed session_start with that head so the implementer lease and phase 2
     // drive the same branch instead of deriving the plain spec branch.
@@ -13425,33 +13493,21 @@ pub(crate) fn handle_queue_work(
                     &project_root,
                     &lease.worktree_path,
                     branch,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                );
+                let (route_vendor, files) = rework_conflict_route(
+                    files,
+                    launch_vendor,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    &plan.scope,
+                    *pr,
+                    branch,
+                    |subject, body| {
+                        crate::ship_from_seat::advisor_request(&project_root, subject, body)
+                    },
                 )?;
                 if !files.is_empty() {
-                    crate::ship_from_seat::advisor_request(
-                        &project_root,
-                        "Rework merge conflicts routed to Claude",
-                        &format!(
-                            "{} PR #{pr} conflicts with origin/main in: {}. The host aborted \
-                             the merge and will not launch Codex. Routing conflict resolution \
-                             to Claude on branch {branch}. Fresh route: aida queue work {} \
-                             --vendor claude --fresh --no-human.",
-                            plan.scope,
-                            files.join(", "),
-                            plan.scope
-                        ),
-                    )?;
-                    // A recorded Codex thread cannot resume as Claude. Refuse
-                    // with a concrete fresh-launch route instead of resuming it.
-                    if matches!(launch, Some(QueueWorkLaunch::Resume(_)))
-                        && launch_vendor != session::HeadlessVendor::Claude
-                    {
-                        anyhow::bail!(
-                            "conflicting rework requires a fresh Claude lane: \
-                            aida queue work {} --vendor claude --fresh --no-human",
-                            plan.scope
-                        );
-                    }
-                    session::install_headless_vendor_override("claude");
+                    session::install_headless_vendor_override(route_vendor.as_str());
                     launch_vendor = session::resolve_enabled_headless_vendor(&project_root)?;
                     session::preflight_launch_vendor(launch_vendor, !no_human)?;
                     session::require_vendor_containment(
@@ -14023,7 +14079,7 @@ pub(crate) fn handle_queue_work(
                     };
                     // Counted by `AgentLaunchMark` once the child spawned:
                     // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
-                    let status = session::spawn_vendor_headless_resume(
+                    let status = run_queue_resume_to_exit(
                         host_main.as_deref(),
                         &session::HeadlessResume {
                             vendor,
@@ -14037,20 +14093,8 @@ pub(crate) fn handle_queue_work(
                         contained,
                         // trace:BUG-1808 | ai:claude — the seat the preflight validated.
                         &crate::canonical_role_name(&role),
+                        (&project_root, &plan.scope, &lease.id),
                     )?;
-                    // trace:STORY-2475 | ai:codex
-                    if vendor == session::HeadlessVendor::Codex
-                        && contained
-                        && crate::canonical_role_name(&role) == "implementer"
-                    {
-                        crate::ship_from_seat::publish_queue_exit(
-                            &project_root,
-                            &lease.worktree_path,
-                            &plan.scope,
-                            &lease.id,
-                            status.success(),
-                        )?;
-                    }
                     std::process::exit(status.code().unwrap_or(1));
                 }
                 eprintln!(

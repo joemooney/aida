@@ -2385,16 +2385,15 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
 /// The host never resolves a conflict: collect its paths and abort it.
 // trace:STORY-2475 | ai:codex
-pub(crate) fn prepare_rework_merge(main: &Path, tree: &Path, branch: &str) -> Result<Vec<String>> {
+pub(crate) fn prepare_rework_merge(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
-    let clone = host_recorded_clone(tree);
+    let clone = host_recorded_clone(main, tree);
     let pinned = dir_identity(tree)?;
-    if let Some(seat) = &clone {
-        anyhow::ensure!(
-            seat.main == main.canonicalize()?,
-            "rework clone belongs to another host"
-        );
-    }
     let host_value = |key: &str| -> Result<String> {
         let mut cmd = git(main);
         cmd.args(["config", "--get", key]);
@@ -2441,49 +2440,67 @@ pub(crate) fn prepare_rework_merge(main: &Path, tree: &Path, branch: &str) -> Re
             }
         }
     };
+    prepare_rework_merge_with(&execute, branch, resume, || {
+        // Fetch in the trusted host, never through a seat-controlled origin.
+        let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+        fetch
+            .args([
+                "fetch",
+                "--no-write-fetch-head",
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+                &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+            ])
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .stdin(std::process::Stdio::null());
+        anyhow::ensure!(
+            crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
+                .is_some_and(|out| out.status.success()),
+            "could not fetch origin/main for rework"
+        );
+        let mut resolve = git(main);
+        resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
+        let base = run(resolve, "pin rework base")?;
+        let mut resolve_head = git(main);
+        resolve_head.args([
+            "rev-parse",
+            "--verify",
+            &format!("refs/remotes/origin/{branch}^{{commit}}"),
+        ]);
+        let pr_head = run(resolve_head, "pin rework PR head")?;
+        Ok((base, pr_head))
+    })
+}
+
+// Keep launch admission and the Git operations together: any failed fetch,
+// ancestry check, merge or abort propagates before the vendor can start.
+// trace:STORY-2475 | ai:codex
+fn prepare_rework_merge_with(
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
     anyhow::ensure!(
         execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
         "rework seat is not on the PR head branch {branch}"
     );
     anyhow::ensure!(
-        execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty(),
-        "rework seat has pending changes; merge refused"
-    );
-    anyhow::ensure!(
         execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
         "rework seat already has an unfinished merge"
     );
-    // Fetch in the trusted host, never through a seat-controlled origin.
-    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
-    fetch
-        .args([
-            "fetch",
-            "--no-write-fetch-head",
-            "origin",
-            "+refs/heads/main:refs/remotes/origin/main",
-            &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
-        ])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(std::process::Stdio::null());
-    anyhow::ensure!(
-        crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
-            .is_some_and(|out| out.status.success()),
-        "could not fetch origin/main for rework"
-    );
-    let mut resolve = git(main);
-    resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
-    let base = run(resolve, "pin rework base")?;
-    let mut resolve_head = git(main);
-    resolve_head.args([
-        "rev-parse",
-        "--verify",
-        &format!("refs/remotes/origin/{branch}^{{commit}}"),
-    ]);
-    let pr_head = run(resolve_head, "pin rework PR head")?;
+    let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
+    // Resume preserves the existing lane's edits. A clean resume still gets
+    // the normal preparation and conflict refusal before launching.
+    if resume && dirty {
+        return Ok(Vec::new());
+    }
+    anyhow::ensure!(!dirty, "rework seat has pending changes; merge refused");
+    let (base, pr_head) = fetch_heads()?;
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
         "seated rework branch is behind the PR head; retry pickup with its current head",
     )?;
-    finish_rework_merge(&execute, &base)
+    finish_rework_merge(execute, &base)
 }
 
 // trace:STORY-2475 | ai:codex
@@ -2520,6 +2537,94 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // Exercise admission against real Git state; the fetch seam pins heads
+    // without a network dependency and must never run for local refusals.
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_prepare_refuses_wrong_dirty_merging_and_behind_seats() {
+        let fx = tests::fixture();
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let no_fetch =
+            || -> Result<(String, String)> { panic!("local refusal must precede fetch") };
+        let why = prepare_rework_merge_with(&execute, "wrong", false, no_fetch).unwrap_err();
+        assert!(why.to_string().contains("PR head branch"));
+        std::fs::write(fx.main.join("pending"), "edits").unwrap();
+        let why = prepare_rework_merge_with(&execute, "main", false, no_fetch).unwrap_err();
+        assert!(why.to_string().contains("pending changes"));
+        // The same dirty seat resumes without touching the edits or fetching.
+        assert!(prepare_rework_merge_with(&execute, "main", true, no_fetch)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+            "edits"
+        );
+        let before = execute(&["rev-parse", "HEAD"]).unwrap();
+        std::fs::write(fx.main.join(".git/MERGE_HEAD"), format!("{before}\n")).unwrap();
+        for resume in [false, true] {
+            let why = prepare_rework_merge_with(&execute, "main", resume, no_fetch).unwrap_err();
+            assert!(why.to_string().contains("unfinished merge"));
+        }
+        std::fs::remove_file(fx.main.join(".git/MERGE_HEAD")).unwrap();
+        std::fs::remove_file(fx.main.join("pending")).unwrap();
+        execute(&["checkout", "-b", "pr"]).unwrap();
+        execute(&["commit", "--allow-empty", "-m", "new PR head"]).unwrap();
+        let ahead = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "main"]).unwrap();
+        let why =
+            prepare_rework_merge_with(&execute, "main", false, || Ok((before.clone(), ahead)))
+                .unwrap_err();
+        assert!(why.to_string().contains("behind the PR head"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
+        let why =
+            prepare_rework_merge_with(&execute, "main", false, || anyhow::bail!("fetch refused"))
+                .unwrap_err();
+        assert_eq!(why.to_string(), "fetch refused");
+        assert!(!fx.main.join(".git/MERGE_HEAD").exists());
+    }
+
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_merge_and_abort_failures_refuse() {
+        for conflicts in [false, true] {
+            let execute = |args: &[&str]| -> Result<String> {
+                match args[0] {
+                    "merge" if args[1] == "--abort" => anyhow::bail!("abort failed"),
+                    "merge" => anyhow::bail!("merge failed"),
+                    "diff" => Ok(if conflicts {
+                        "conflict\0".into()
+                    } else {
+                        String::new()
+                    }),
+                    "rev-parse" => anyhow::bail!("no merge in progress"),
+                    _ => panic!("unexpected command {args:?}"),
+                }
+            };
+            let why = finish_rework_merge(&execute, "base")
+                .unwrap_err()
+                .to_string();
+            assert!(
+                why.contains(if conflicts {
+                    "could not abort"
+                } else {
+                    "without conflict paths"
+                }),
+                "{why}"
+            );
+        }
+    }
+
     #[test]
     fn story_2475_real_merge_commits_clean_or_restores_conflicting_branch() {
         for conflicting in [false, true] {

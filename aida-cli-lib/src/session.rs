@@ -6376,6 +6376,39 @@ pub(crate) fn exec_vendor_headless(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<()> {
+    let status = run_vendor_headless_to_exit(
+        host_main,
+        vendor,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        lease_id,
+        seat,
+        child_grant,
+        lane_tree,
+    )?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Wait for the headless child and settle host publication before returning
+/// its status. Kept separate from process exit for launch integration tests.
+// trace:STORY-2475 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_vendor_headless_to_exit(
+    host_main: Option<&Path>,
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    lease_id: Option<&str>,
+    seat: &str,
+    child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
+    lane_tree: Option<(&Path, &str)>,
+) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
     // lane job runner too, so it can run its targeted tests outside its
@@ -6456,7 +6489,7 @@ pub(crate) fn exec_vendor_headless(
         }
     }
 
-    std::process::exit(status.code().unwrap_or(1));
+    Ok(status)
 }
 
 /// Job eligibility is vendor-neutral; resume eligibility below remains Claude-only.

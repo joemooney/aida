@@ -1419,3 +1419,30 @@ fn bug_home_038_seat_pr_body_notes_the_seat() {
         "{body}"
     );
 }
+
+/// The final lane-state reader uses clone facts and the recorded host's
+/// origin, even though ordinary host Git is forbidden in the clone.
+// trace:STORY-2475 | ai:codex
+#[test]
+fn story_2475_final_seat_state_reads_recorded_clone_through_its_host() {
+    let fx = fixture();
+    let clone = leased_clone(&fx, "final-state", "c0ffee247500");
+    std::fs::write(clone.join("pending"), "unfinished edit").unwrap();
+    let expected = crate::seat_clone::probe(&fx.main, &clone);
+    let state = crate::headless_background::SeatState::read(&clone, "main");
+    assert_eq!(
+        state.origin,
+        crate::headless_background::OriginHead::At(git_ok(&fx.main, &["rev-parse", "HEAD"]))
+    );
+    match expected {
+        Probe::Known(facts) => {
+            assert!(!facts.dirty.is_empty());
+            assert_eq!(state.head, facts.head);
+            assert_eq!(state.uncommitted, Some(facts.dirty.len()));
+        }
+        Probe::Unknown(_) | Probe::HasSubmodules(_) => {
+            assert_eq!(state.head, None);
+            assert_eq!(state.uncommitted, None);
+        }
+    }
+}

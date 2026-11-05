@@ -355,22 +355,22 @@ fn approved_or_review_pickup_does_not_use_pr_head_branch() {
     assert!(!queue_work_plan_wants_pr_head_branch(&review_plan));
 }
 
-// BUG-022: `aida queue rework` returns the spec to Approved, so a Rework hold
-// on its open PR — not the status — is what routes the lane onto that PR.
+// Approved single-spec pickups also look up their PR, without requiring a
+// Rework hold. The explicit branch and reviewer/cluster exclusions remain.
+// trace:STORY-2475 | ai:codex
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
 #[test]
-fn rework_held_approved_pickup_wants_pr_head_branch() {
+fn approved_pickup_wants_pr_head_branch_without_a_hold() {
     let r = req("TASK-116", None, RequirementType::Task);
     let approved = resolved("TASK-116", entry(r.id, Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Item, "TASK-116", vec![approved]);
 
-    assert!(queue_work_wants_rework_pr_branch(&plan, None, true));
-    assert!(queue_work_wants_rework_pr_branch(&plan, None, false));
+    assert!(queue_work_wants_rework_pr_branch(&plan, None));
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
 #[test]
-fn explicit_branch_forks_even_with_rework_hold() {
+fn explicit_branch_forks_instead_of_reusing_pr_head() {
     let r = req("TASK-116", None, RequirementType::Task);
     let e = resolved_with_status(
         "TASK-116",
@@ -381,17 +381,16 @@ fn explicit_branch_forks_even_with_rework_hold() {
 
     assert!(!queue_work_wants_rework_pr_branch(
         &plan,
-        Some("task-116-alt"),
-        true
+        Some("task-116-alt")
     ));
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
 #[test]
-fn rework_hold_does_not_reroute_review_or_cluster_pickups() {
+fn pr_head_lookup_does_not_reroute_review_or_cluster_pickups() {
     let review = resolved("PR-3107", entry(Uuid::now_v7(), Some("reviewer"), None));
     let review_plan = plan_with(QueueWorkMode::Item, "PR-3107", vec![review]);
-    assert!(!queue_work_wants_rework_pr_branch(&review_plan, None, true));
+    assert!(!queue_work_wants_rework_pr_branch(&review_plan, None));
 
     let a = req("TASK-116", None, RequirementType::Task);
     let b = req("TASK-117", None, RequirementType::Task);
@@ -403,7 +402,7 @@ fn rework_hold_does_not_reroute_review_or_cluster_pickups() {
             resolved("TASK-117", entry(b.id, Some("implementer"), None)),
         ],
     );
-    assert!(!queue_work_wants_rework_pr_branch(&cluster, None, true));
+    assert!(!queue_work_wants_rework_pr_branch(&cluster, None));
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
@@ -4514,4 +4513,87 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
         "fix: prose",
         "Traces TASK-1538.",
     ));
+}
+
+// trace:STORY-2475 | ai:codex
+#[test]
+fn story_2475_conflicts_notify_and_route_only_fresh_or_claude_threads() {
+    use crate::session::HeadlessVendor;
+    use std::cell::Cell;
+    for vendor in [HeadlessVendor::Codex, HeadlessVendor::Claude] {
+        for resume in [false, true] {
+            let notified = Cell::new(false);
+            let result = rework_conflict_route(
+                Ok(vec!["src/conflict.rs".into()]),
+                vendor,
+                resume,
+                "STORY-2475",
+                3398,
+                "rework",
+                |subject, body| {
+                    notified.set(true);
+                    assert!(subject.contains("Claude"));
+                    assert!(body.contains("src/conflict.rs"));
+                    assert!(body.contains("aborted"));
+                    assert!(body.contains("--vendor claude --fresh"));
+                    assert!(!body.contains("will not launch Codex"));
+                    Ok(())
+                },
+            );
+            assert!(notified.get());
+            if resume && vendor == HeadlessVendor::Codex {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("fresh Claude lane"));
+            } else {
+                // Nonempty paths select the caller's Claude override before
+                // vendor/containment preflight and the eventual launch.
+                let (routed, files) = result.unwrap();
+                assert_eq!(routed, HeadlessVendor::Claude);
+                assert_eq!(files, vec!["src/conflict.rs"]);
+            }
+        }
+    }
+}
+
+// trace:STORY-2475 | ai:codex
+#[test]
+fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
+    use crate::session::HeadlessVendor;
+    for why in ["fetch failed", "merge failed", "abort failed"] {
+        let error = rework_conflict_route(
+            Err(anyhow::anyhow!(why)),
+            HeadlessVendor::Codex,
+            false,
+            "STORY-2475",
+            3398,
+            "rework",
+            |_, _| panic!("failed preparation must stop first"),
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), why);
+    }
+    assert!(rework_conflict_route(
+        Ok(vec!["conflict".into()]),
+        HeadlessVendor::Codex,
+        false,
+        "STORY-2475",
+        3398,
+        "rework",
+        |_, _| anyhow::bail!("mail unavailable"),
+    )
+    .is_err());
+    assert!(rework_conflict_route(
+        Ok(vec![]),
+        HeadlessVendor::Codex,
+        false,
+        "STORY-2475",
+        3398,
+        "rework",
+        |_, _| panic!("clean preparation needs no mail"),
+    )
+    .unwrap()
+    .1
+    .is_empty());
 }

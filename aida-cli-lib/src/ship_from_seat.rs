@@ -373,11 +373,6 @@ pub(crate) fn publish_queue_exit(
     clean_exit: bool,
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
-    if crate::punt::read_signal(&crate::punt::signal_path(&main, spec)).is_some()
-        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(&main, spec)).is_some()
-    {
-        return Ok(());
-    }
     let publish = || {
         run_at(
             &main,
@@ -390,20 +385,13 @@ pub(crate) fn publish_queue_exit(
             },
         )
     };
-    finish_queue_exit(
-        post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+    publish_queue_exit_with(
+        &main,
+        spec,
+        || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+        || crate::seat_clone::probe(&main, tree),
         publish,
         || {
-            // A child may have committed itself, or only the host's clean
-            // pre-launch merge is pending. Publish those commits too.
-            match crate::seat_clone::probe(&main, tree) {
-                crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => publish()?,
-                crate::seat_clone::Probe::Unknown(why)
-                | crate::seat_clone::Probe::HasSubmodules(why) => {
-                    anyhow::bail!("could not inspect clean lane for pending publication: {why}")
-                }
-                _ => {}
-            }
             advisor_request(
                 &main,
                 "Queue-work lane exited without changes",
@@ -416,6 +404,35 @@ pub(crate) fn publish_queue_exit(
             )
         },
     )
+}
+
+// These effects are injected at the publication boundary so tests exercise
+// the same veto, probe and dispatch as all three lane exit paths.
+// trace:STORY-2475 | ai:codex
+fn publish_queue_exit_with(
+    main: &Path,
+    spec: &str,
+    commit: impl FnOnce() -> PostExitCommit,
+    probe: impl FnOnce() -> crate::seat_clone::Probe,
+    publish: impl Fn() -> Result<()>,
+    notify: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
+        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
+    {
+        return Ok(());
+    }
+    finish_queue_exit(commit(), &publish, || {
+        match probe() {
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
+            crate::seat_clone::Probe::Unknown(why)
+            | crate::seat_clone::Probe::HasSubmodules(why) => {
+                anyhow::bail!("could not inspect clean lane for pending publication: {why}")
+            }
+            _ => {}
+        }
+        notify()
+    })
 }
 
 // trace:STORY-2475 | ai:codex
@@ -465,6 +482,111 @@ pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Resu
 #[cfg(test)]
 mod queue_exit_tests {
     use super::*;
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_punt_and_hold_veto_every_publication_effect() {
+        for hold in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let main = tmp.path();
+            let spec = "STORY-2475";
+            if hold {
+                crate::punt::write_hold_signal(
+                    &crate::punt::hold_signal_path(main, spec),
+                    &crate::punt::HoldSignal {
+                        spec: spec.into(),
+                        branch: "rework".into(),
+                        reason: None,
+                        spec_key: None,
+                    },
+                )
+                .unwrap();
+            } else {
+                crate::punt::write_signal(
+                    &crate::punt::signal_path(main, spec),
+                    &crate::punt::PuntSignal {
+                        spec: spec.into(),
+                        category: aida_core::PuntCategory::DesignFork,
+                        detail: "advisor decision needed".into(),
+                        lean: None,
+                    },
+                )
+                .unwrap();
+            }
+            publish_queue_exit_with(
+                main,
+                spec,
+                || panic!("veto must precede commit"),
+                || panic!("veto must precede probe"),
+                || panic!("veto must precede publication"),
+                || panic!("veto must precede no-change mail"),
+            )
+            .unwrap();
+            // Also cover the public boundary with actual on-disk signals.
+            publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
+        }
+    }
+
+    // trace:STORY-2475 | ai:codex
+    #[test]
+    fn story_2475_clean_unpushed_publishes_without_no_change_mail() {
+        use crate::seat_clone::{Probe, ProbeFacts};
+        use std::cell::Cell;
+        let tmp = tempfile::tempdir().unwrap();
+        for unpushed in [0, 1] {
+            let published = Cell::new(0);
+            let notified = Cell::new(0);
+            publish_queue_exit_with(
+                tmp.path(),
+                "STORY-2475",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        unpushed,
+                        ..Default::default()
+                    })
+                },
+                || {
+                    published.set(published.get() + 1);
+                    Ok(())
+                },
+                || {
+                    notified.set(notified.get() + 1);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(published.get(), unpushed);
+            assert_eq!(notified.get(), usize::from(unpushed == 0));
+        }
+        for probe in [
+            Probe::Unknown("probe failed".into()),
+            Probe::HasSubmodules("submodules".into()),
+        ] {
+            let why = publish_queue_exit_with(
+                tmp.path(),
+                "STORY-2475",
+                || PostExitCommit::Clean,
+                || probe,
+                || panic!("unknown must not publish"),
+                || panic!("unknown must not claim no changes"),
+            )
+            .unwrap_err();
+            assert!(why.to_string().contains("could not inspect clean lane"));
+        }
+        assert!(publish_queue_exit_with(
+            tmp.path(),
+            "STORY-2475",
+            || PostExitCommit::Clean,
+            || Probe::Known(ProbeFacts {
+                unpushed: 1,
+                ..Default::default()
+            }),
+            || anyhow::bail!("push refused"),
+            || panic!("failed publication is not no changes")
+        )
+        .is_err());
+    }
+
     #[test]
     fn story_2475_publication_and_notification_are_exclusive_and_fail_closed() {
         use std::cell::Cell;

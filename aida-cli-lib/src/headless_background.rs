@@ -475,7 +475,10 @@ impl SeatState {
         // Host Git refuses a seat clone. Read it through the sandbox and
         // query origin through its trusted host, including after publication.
         // trace:STORY-2475 | ai:codex
-        if let Some(seat) = crate::seat_clone::host_recorded_clone(worktree) {
+        if let Some(seat) = crate::seat_clone::host_recorded_clone(
+            &crate::main_worktree_root_from(worktree),
+            worktree,
+        ) {
             let facts = match crate::seat_clone::probe(&seat.main, &seat.root) {
                 crate::seat_clone::Probe::Known(facts) => Some(facts),
                 _ => None,
