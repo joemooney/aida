@@ -5302,10 +5302,17 @@ fn run_history(
                             view.name()
                         );
                         }
-                        let status = args
+                        // trace:TASK-1954 trace:TASK-1762 | ai:claude
+                        let statuses = args
                             .status
                             .as_deref()
-                            .map(|raw| self::resolve_status_filter("--status", raw))
+                            .map(crate::history_views::resolve_view_status_filter)
+                            .transpose()?
+                            .unwrap_or_default();
+                        let priority = args
+                            .priority
+                            .as_deref()
+                            .map(crate::history_views::resolve_view_priority_filter)
                             .transpose()?;
                         let query = crate::history_views::ViewQuery {
                             since: since.clone(),
@@ -5315,11 +5322,12 @@ fn run_history(
                             limit: limit_flag,
                             all_events: args.all_events,
                             oldest_first: args.oldest_first,
+                            created_floor: None,
                             filters: crate::history_views::ViewFilters {
                                 req_type: r#type.clone(),
-                                priority: args.priority.clone(),
+                                priority,
                                 tags: args.tags.clone(),
-                                status,
+                                statuses,
                                 archive: if *all {
                                     aida_core::ArchiveFilter::Both
                                 } else if *archived {

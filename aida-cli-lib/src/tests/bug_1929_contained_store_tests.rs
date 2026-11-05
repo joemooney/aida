@@ -1680,6 +1680,13 @@ fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
     let doctor_findings =
         crate::doctor_root::collect_doctor_findings(&main, &loaded, Some("store-worktree"))
             .unwrap();
+    // TASK-1624: a contained seat is denied `<main>/.git` by design, so the
+    // same unwritable metadata is not reported there.
+    // trace:TASK-1954 trace:TASK-1624 | ai:claude
+    let contained_findings = {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
+        crate::doctor_root::collect_doctor_findings(&main, &loaded, Some("store-worktree")).unwrap()
+    };
 
     // Restore permissions before assertions so cleanup always succeeds.
     std::fs::set_permissions(&objects_git, orig_perms.clone()).unwrap();
@@ -1696,6 +1703,12 @@ fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
             .any(|f| f.id == "store-worktree-gitdir-unwritable"
                 && f.summary.contains("cannot write ")),
         "expected store-worktree-gitdir-unwritable doctor finding, got: {doctor_findings:?}"
+    );
+    assert!(
+        !contained_findings
+            .iter()
+            .any(|f| f.id == "store-worktree-gitdir-unwritable"),
+        "a contained doctor run must not report the by-design unwritable git dir: {contained_findings:?}"
     );
 
     // 3. On the host (with default config `auto_push = manual`),
