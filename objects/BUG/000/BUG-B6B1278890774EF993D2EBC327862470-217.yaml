@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T11:27:00.944492532Z
+modified_at: 2026-11-05T11:29:43.322371546Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -149,6 +149,12 @@ comments:
   created_at: 2026-11-05T11:19:21.547083786Z
   modified_at: 2026-11-05T11:19:21.547083786Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab78-cd9a-75d3-b1e5-84e01b37157c
+  author: joe
+  content: 'Round 5: CI log confirms only task_2707_notice_leaf_epoch_and_crossed_dedup failed; the failing lane fixture is intentional and its parent test passed. Investigating inherited flock descriptors during parallel process spawning, adding deterministic release coverage, and replacing the train/ literal with pr_train::BRANCH_PREFIX. Will run grant-notice and BUG-2451 regressions plus the live gate where supported. The supervised merge hold remains untouched.'
+  created_at: 2026-11-05T11:29:43.322371546Z
+  modified_at: 2026-11-05T11:29:43.322371546Z
+  session_id: 01a1ab76474c
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
   author: joe
