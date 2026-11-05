@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
+  position: 112000
+  added_by: role:implementer
+  note: 'Address the latest review on #3401 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-208-2 (no new branch). LIGHT gate.'
+  added_at: 2026-11-05T13:19:28.494511183Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ab80-1ae4-71c1-862a-a0e0c3115581
   position: 113000
   added_by: role:implementer
@@ -65,13 +72,6 @@
   added_by: role:implementer
   note: '#3411 conflicts with main and CI red. Rebase onto main on the PR branch, resolve conflicts, push.'
   added_at: 2026-11-05T09:48:19.950481259Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
-  position: 127000
-  added_by: role:implementer
-  note: 'CI red at a9ea09f: CI (gates) failing. Read the gates log, fix on the PR branch. After it lands close #3382.'
-  added_at: 2026-11-05T09:48:13.900968754Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1aa02-abc4-7ee2-a89a-635ae0f2c5c3
