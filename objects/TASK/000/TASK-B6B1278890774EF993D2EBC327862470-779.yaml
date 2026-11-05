@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T05:36:36.570617893Z
+modified_at: 2026-11-05T06:21:28.224828670Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -75,6 +75,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 2 findings 1 and 2 accepted; source fix prepared with injectable 300ms claim grace and upper/lower elapsed bounds. Cannot produce required new commit or push PR #3394: launcher starts this worktree on newer main without fa97b48bcb09 and managed permissions explicitly mount .git read-only. git merge fails creating .git/ORIG_HEAD.lock with Read-only file system. Needs host relaunch on existing PR branch with authorized git writes. Incremental patch relative to fa97b48bcb09: /tmp/task-2832-round-2.patch. Validation in progress.. No triage reason was given.'
   created_at: 2026-11-05T05:36:33.060835061Z
   modified_at: 2026-11-05T05:36:33.060835061Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa5e-9720-7e51-b252-12157e9571c0
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (23:25): Codex''s review fix was left uncommitted on a stray branch (-779-2, BUG-2451). It''s saved as a patch at ~/.local/share/aida/ops/advisor-scripts/t2832-backup.patch (deputy_shell_cmd.rs plus deputy_shell/tests.rs; the uncommitted files are also still in seat aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-779-2). On #3394''s branch task-b6b1278890774ef993d2ebc327862470-779: git apply --3way that patch, resolve the conflict in deputy_shell/tests.rs (keep the existing claim-grace tests plus the new ones), run the deputy_shell tests plus make check-ci-fast, and push to #3394.'
+  created_at: 2026-11-05T06:21:28.224828670Z
+  modified_at: 2026-11-05T06:21:28.224828670Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
