@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T09:01:08.945543711Z
+modified_at: 2026-11-05T09:01:20.849933772Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -84,6 +84,12 @@ comments:
     All three findings are addressed; none is disputed. Native-seat handoff: .git is read-only (git add failed creating index.lock), so this round's changes remain uncommitted in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-216. The launcher must create and push a NEW commit after this process exits; the previous 41d2e72ae1b4 commit does not count. Suggested subject: [AI:codex] fix(sessions): scope worktree guards and bound review retries (BUG-2450). PR #3408 is already open. No pr ship, review record, merge-hold clearance, or queue completion was attempted. Leave the spec in progress until the new commit is published. Final test logs: /tmp/bug2450-tests-final.log, /tmp/bug2450-takeover-final.log, /tmp/bug2450-watcher-final.log, /tmp/bug2450-pool-verified.log, /tmp/bug2450-bug_2205_session_end_pushed_index-verified.log, /tmp/bug2450-story_1843_c2_session_end_retention-verified.log, /tmp/bug2450-task_1283_protocol_cli-verified.log, /tmp/bug2450-no-default-final.log, /tmp/bug2450-ratchet-verified.log.
   created_at: 2026-11-05T07:13:49.722214317Z
   modified_at: 2026-11-05T07:13:49.722214317Z
+- id: 01a1aaf0-f651-7491-8875-e86411036e3c
+  author: joe
+  content: 'ADVISOR BRIEF (01:58): PR #3408 is approved, but CI (cli-1) fails in the ''Test time budget'' step and the Build job is red. Find the test exceeding its nextest budget (the step output names it) and make it fast, or move it to the slow lane per the budget rules. Don''t raise the budget. Push to bug-b6b1278890774ef993d2ebc327862470-216.'
+  created_at: 2026-11-05T09:01:20.849933772Z
+  modified_at: 2026-11-05T09:01:20.849933772Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
   author: joe
