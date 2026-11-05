@@ -276,6 +276,10 @@ fn archive_preserves_action_while_withdrawal_and_nonrequests_refuse_new_action()
     ] {
         write_local_message(root, &changed).unwrap();
         assert!(prepare(root, &who, Outcome::Acted).is_err());
+        if changed.intent == Intent::Request {
+            let receipt = latest(&common, &changed).unwrap().unwrap();
+            assert_eq!(receipt.outcome, Outcome::Declined);
+        }
     }
 }
 

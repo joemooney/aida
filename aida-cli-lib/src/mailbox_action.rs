@@ -77,9 +77,53 @@ pub(crate) fn record(
             serde_json::to_string(&serde_json::json!({"schema": 1, "action": receipt}))?
         );
     } else {
-        println!("Disposition recorded: {}", serde_json::to_string(&receipt)?);
+        println!("Disposition recorded: {}", receipt_summary(&receipt));
     }
     Ok(())
+}
+
+// trace:TASK-3074 | ai:codex
+pub(crate) fn receipt_summary(receipt: &ActionReceipt) -> String {
+    let outcome = match receipt.outcome {
+        Outcome::Acted => "acted",
+        Outcome::Declined => "declined",
+        Outcome::Deferred => "deferred",
+    };
+    let time = |millis| {
+        chrono::DateTime::from_timestamp_millis(millis)
+            .map(|t| t.to_rfc3339())
+            .unwrap_or_else(|| format!("{millis} ms since epoch"))
+    };
+    format!(
+        "{outcome}; actor: {}; reason: {}; evidence: {}; until: {}; recorded: {}",
+        receipt.actor,
+        receipt.reason,
+        receipt.evidence.as_deref().unwrap_or("none"),
+        receipt.until.map(time).unwrap_or_else(|| "none".into()),
+        time(receipt.recorded_at)
+    )
+}
+
+pub(crate) fn read_json(
+    message: &Message,
+    action: &Result<Option<ActionReceipt>>,
+) -> serde_json::Value {
+    match action {
+        Ok(receipt) => serde_json::json!({"schema": 1, "message": message, "action": receipt}),
+        Err(error) => serde_json::json!({"schema": 1, "message": message, "action": null,
+            "action_error": format!("{error:#}")}),
+    }
+}
+
+pub(crate) fn read_summary(message: &Message, action: &Result<Option<ActionReceipt>>) -> String {
+    if message.intent != aida_core::mailbox::Intent::Request {
+        return "n/a (not a request)".into();
+    }
+    match action {
+        Ok(Some(receipt)) => receipt_summary(receipt),
+        Ok(None) => "unknown".into(),
+        Err(error) => format!("unavailable ({error:#})"),
+    }
 }
 
 pub(crate) fn inspect(
@@ -104,6 +148,160 @@ pub(crate) fn inspect(
 mod tests {
     use super::*;
     use crate::mailbox_view::tests::{mail, mail_repo};
+
+    // Exercise the real command dispatcher in a child so stdout capture does
+    // not redirect other concurrently running tests' output.
+    // trace:TASK-3074 | ai:codex
+    #[test]
+    fn mailbox_read_handler_projects_action_in_text_and_json() {
+        const CHILD: &str = "AIDA_TEST_ACTION_READ_CASE";
+        if let Ok(case) = std::env::var(CHILD) {
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
+                ("AIDA_USER", Some("operator")),
+                ("AIDA_SESSION_ROLE", Some("advisor")),
+                ("AIDA_AGENT_TYPE", None),
+            ]);
+            let r = mail_repo();
+            let mut request = Message {
+                intent: if case.starts_with("fyi") {
+                    aida_core::mailbox::Intent::Fyi
+                } else if case.starts_with("handoff") {
+                    aida_core::mailbox::Intent::Handoff
+                } else {
+                    aida_core::mailbox::Intent::Request
+                },
+                ..mail("read-request", "operator", 10, false)
+            };
+            crate::mailbox_store::write_message(&r.sib, &request).unwrap();
+            if case.starts_with("recorded") {
+                record(
+                    &r.main,
+                    &r.store,
+                    &request.id,
+                    DispositionOutcome::Acted,
+                    "handled",
+                    Some("PR-1"),
+                    None,
+                    false,
+                )
+                .unwrap();
+                if case.contains("retracted") {
+                    request.retracted = true;
+                }
+                if case.contains("archived") {
+                    request.archived = true;
+                }
+                crate::mailbox_store::write_message(&r.sib, &request).unwrap();
+            }
+            if case.starts_with("corrupt") {
+                let anchor = r.main.join(".git/aida/mail-lifecycle");
+                std::fs::create_dir_all(&anchor).unwrap();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&anchor, std::fs::Permissions::from_mode(0o700))
+                        .unwrap();
+                }
+                std::fs::write(anchor.join("actions-v1.json"), "{bad").unwrap();
+                // Mutations continue to refuse corrupt evidence.
+                assert!(record(
+                    &r.main,
+                    &r.store,
+                    &request.id,
+                    DispositionOutcome::Declined,
+                    "no",
+                    None,
+                    None,
+                    true
+                )
+                .is_err());
+            }
+            println!("READ_OUTPUT_BEGIN");
+            crate::mailbox_cmd::handle_mailbox_command(
+                &crate::cli::MailboxCommand::Read {
+                    message_id: request.id,
+                    json: case.ends_with("json"),
+                },
+                &r.store,
+            )
+            .unwrap();
+            println!("READ_OUTPUT_END");
+            return;
+        }
+        for state in [
+            "unknown",
+            "recorded",
+            "recorded-retracted",
+            "recorded-archived",
+            "corrupt",
+            "fyi",
+            "handoff",
+        ] {
+            for mode in ["text", "json"] {
+                let case = format!("{state}-{mode}");
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "mailbox_action::tests::mailbox_read_handler_projects_action_in_text_and_json", "--nocapture"])
+                    .env(CHILD, &case).output().unwrap();
+                assert!(output.status.success(), "{case}: {output:?}");
+                let stdout = String::from_utf8(output.stdout).unwrap();
+                if state.starts_with("recorded") {
+                    assert!(stdout.contains("Disposition recorded: acted; actor: operator; reason: handled; evidence: PR-1; until: none; recorded: "), "{case}: {stdout}");
+                }
+                let view = stdout
+                    .split("READ_OUTPUT_BEGIN\n")
+                    .nth(1)
+                    .unwrap()
+                    .split("READ_OUTPUT_END")
+                    .next()
+                    .unwrap()
+                    .trim();
+                if mode == "json" {
+                    let value: serde_json::Value = serde_json::from_str(view).unwrap();
+                    assert_eq!(value["schema"], 1, "{case}: {view}");
+                    assert_eq!(value["message"]["id"], "read-request");
+                    assert_eq!(value["message"]["body"], "body of read-request");
+                    if state.starts_with("recorded") {
+                        assert_eq!(value["action"]["outcome"], "acted");
+                        assert_eq!(value["action"]["actor"], "operator");
+                    } else {
+                        assert!(value["action"].is_null(), "{case}: {view}");
+                    }
+                    if state == "corrupt" {
+                        assert!(value["action_error"]
+                            .as_str()
+                            .unwrap()
+                            .contains("invalid action ledger"));
+                    } else {
+                        assert!(value.get("action_error").is_none());
+                    }
+                } else {
+                    assert!(view.contains("read"), "{case}: {view}");
+                    if state.starts_with("recorded") {
+                        for field in [
+                            "action: acted",
+                            "actor: operator",
+                            "reason: handled",
+                            "evidence: PR-1",
+                            "until: none",
+                            "recorded: ",
+                        ] {
+                            assert!(view.contains(field), "{case}: {view}");
+                        }
+                    } else if state == "corrupt" {
+                        assert!(view.contains("body of read-request"), "{view}");
+                        assert!(
+                            view.contains("action: unavailable (invalid action ledger"),
+                            "{view}"
+                        );
+                    } else if state == "unknown" {
+                        assert!(view.contains("action: unknown"), "{view}");
+                    } else {
+                        assert!(view.contains("action: n/a (not a request)"), "{view}");
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn disposition_cli_parses_contract_and_rejects_inspection_selector() {

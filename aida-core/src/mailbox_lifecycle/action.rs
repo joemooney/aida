@@ -80,10 +80,20 @@ fn validate_input(
     Ok(())
 }
 
-/// Archive is a view marker and does not change the identity of a request.
+/// Fixed v1 request identity: view markers and future Message fields do not
+/// invalidate recorded evidence. Keep this field set stable.
 pub fn fingerprint(message: &Message) -> Result<String> {
-    let mut immutable = message.clone();
-    immutable.archived = false;
+    let immutable = serde_json::json!({
+        "id": message.id,
+        "thread_id": message.thread_id,
+        "from": message.from,
+        "to": message.to,
+        "timestamp": message.timestamp,
+        "in_reply_to": message.in_reply_to,
+        "subject": message.subject,
+        "body": message.body,
+        "intent": message.intent,
+    });
     Ok(super::hex(&Sha256::digest(serde_json::to_vec(&immutable)?)))
 }
 

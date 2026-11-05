@@ -935,20 +935,18 @@ pub(crate) fn handle_mailbox_command(
         MailboxCommand::Read { message_id, json } => {
             let book = crate::mailbox_view::addressable(project_root, store_root);
             let msg = book.resolve(message_id)?;
-            let action = crate::mailbox_action::inspect(project_root, store_root, msg)?;
+            let action = crate::mailbox_action::inspect(project_root, store_root, msg);
             if *json || crate::output_format_is_json() {
                 println!(
                     "{}",
-                    serde_json::to_string(
-                        &serde_json::json!({"schema": 1, "message": msg, "action": action})
-                    )?
+                    serde_json::to_string(&crate::mailbox_action::read_json(msg, &action))?
                 );
             } else {
                 print_mailbox_line(msg);
-                match action {
-                    Some(receipt) => println!("action: {}", serde_json::to_string(&receipt)?),
-                    None => println!("action: unknown"),
-                }
+                println!(
+                    "action: {}",
+                    crate::mailbox_action::read_summary(msg, &action)
+                );
             }
             Ok(())
         }

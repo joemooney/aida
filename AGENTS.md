@@ -524,12 +524,6 @@ that branch; `.aida/cache.db` is a rebuildable read cache. Do not create
 parallel requirement files. Use AIDA tools and MCP for durable
 coordination state.
 
-Explicit mailbox request responses live locally in the common Git directory's
-`aida/mail-lifecycle/actions-v1.json`, separate from read receipts and the spec
-store. Only recipient-authorized dispositions write this ledger; its assertions
-carry no spec-completion or merge authority. See [mailbox responses](docs/mailbox.md#explicit-responses-to-requests).
-<!-- trace:TASK-3074 | ai:codex -->
-
 When using a sibling worktree, link the store worktree if the local CLI
 needs direct git-canonical access:
 

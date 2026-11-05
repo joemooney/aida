@@ -352,7 +352,9 @@ reason of at most 4096 bytes. `acted` also requires `--evidence`: this is the
 recipient's assertion, not verified completion of a spec, review, or merge.
 `deferred` requires a future RFC3339 deadline within 24 hours; other outcomes
 refuse `--until`. Retractions, deletions and non-request messages refuse.
-Archived requests retain their evidence.
+Archived and retracted requests retain existing action evidence. Retraction
+blocks new dispositions without erasing prior receipts. The fingerprint covers
+a fixed set of immutable request fields; view markers do not change it.
 
 Action receipts live in a separate version-1 ledger under the common Git
 mail-lifecycle anchor (`actions-v1.json`), serialized by Lifecycle then
@@ -365,8 +367,13 @@ authority fail closed.
 
 `mailbox disposition --json` returns `{schema: 1, action: <receipt>}`.
 `mailbox read --json` returns `{schema: 1, message: <message>, action:
-<receipt-or-null>}`. `null` means action unknown, including older mail with a
-read watermark. Neither command advances read ACKs. A disposition closes only
+<receipt-or-null>}`. `null` means no action evidence, including older mail with a
+read watermark and non-request mail. If the action ledger cannot be read,
+the message still prints with `action: null` and an `action_error` string.
+Text reads show `action: unavailable (<reason>)`, `unknown` for requests
+without a receipt, or `n/a (not a request)` for informational/handoff mail.
+Recorded dispositions show outcome, actor, reason, evidence, deadline and
+recorded time in text mode. Neither command advances read ACKs. A disposition closes only
 the response obligation; it does not establish that a pipeline stall cleared.
 Alarm correlation and unresolved/persistent escalation follow in a separate
 implementation slice.
