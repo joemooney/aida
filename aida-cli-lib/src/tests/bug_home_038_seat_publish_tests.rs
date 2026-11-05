@@ -1505,3 +1505,279 @@ fn task_2879_publication_merge_uses_host_identity_without_seat_hooks() {
         "a seat hook ran during publication merge"
     );
 }
+
+// Exercise the production host/sandbox/bundle/push path, including an
+// explicitly supplied spec on a branch and scope which name no spec.
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for case in [
+        "merge",
+        "live",
+        "conflict",
+        "bad-trailer",
+        "wrong-spec",
+        "push-refused",
+    ] {
+        let fx = fixture();
+        let branch = "publication";
+        let id = "c0ffee287910";
+        let subject = match case {
+            "bad-trailer" => "local work without trailer",
+            "wrong-spec" => "local work (Refs BUG-2)",
+            _ => "local work (Refs BUG-1)",
+        };
+        let (clone, _) = seat_with_commit(&fx, "moved", id, branch, subject);
+        let lease = crate::lease_path(&fx.main, id);
+        let text = std::fs::read_to_string(&lease)
+            .unwrap()
+            .replace("TASK-2053", "publication");
+        std::fs::write(&lease, &text).unwrap();
+        if case == "conflict" {
+            std::fs::write(clone.join("README.md"), "local conflict\n").unwrap();
+            git_ok(&clone, &["add", "README.md"]);
+            git_ok(
+                &clone,
+                &["commit", "-qm", "conflicting local work (Refs BUG-1)"],
+            );
+        }
+        let local = git_ok(&clone, &["rev-parse", "HEAD"]);
+        let remote_file = if case == "conflict" {
+            "README.md"
+        } else {
+            "remote.txt"
+        };
+        std::fs::write(fx.main.join(remote_file), "remote change\n").unwrap();
+        git_ok(&fx.main, &["add", remote_file]);
+        git_ok(&fx.main, &["commit", "-qm", "remote work (Refs BUG-1)"]);
+        let remote = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        git_ok(
+            &fx.main,
+            &["push", "-q", "origin", &format!("HEAD:refs/heads/{branch}")],
+        );
+        std::fs::write(fx.main.join(".git/FETCH_HEAD"), "preserve fetch head\n").unwrap();
+        let sentinel = fx.root.join("seat-hook-ran");
+        plant_hooks(&clone, &sentinel, &fx.root);
+        let mut owner = if case == "live" {
+            let owner = std::process::Command::new("sleep")
+                .arg("60")
+                .spawn()
+                .unwrap();
+            let start = aida_core::liveness::process_start_identity(owner.id()).unwrap();
+            std::fs::write(
+                &lease,
+                format!(
+                    "{text}active_pid = {}\nactive_pid_start_time = {}\n",
+                    owner.id(),
+                    aida_core::toml_quote::toml_string(&start)
+                ),
+            )
+            .unwrap();
+            Some(owner)
+        } else {
+            None
+        };
+        if case == "push-refused" {
+            use std::os::unix::fs::PermissionsExt;
+            let hook = fx.origin.join("hooks/pre-receive");
+            std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        if let Some(owner) = &mut owner {
+            let _ = owner.kill();
+            let _ = owner.wait();
+        }
+        if case == "merge" {
+            result.unwrap();
+            let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+                head
+            );
+            assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^1"]), local);
+            assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+            assert_eq!(
+                git_ok(&clone, &["log", "-1", "--format=%s"]),
+                "[host] chore(seat): merge remote PR head (Refs BUG-1)"
+            );
+        } else {
+            let why = format!("{:#}", result.unwrap_err());
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+                remote
+            );
+            if case == "push-refused" {
+                assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), local);
+                assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+                assert!(
+                    why.contains("git push")
+                        && why.contains("reconciled commit remains in the seat"),
+                    "{why}"
+                );
+            } else {
+                assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), local);
+                assert!(import_refs(&fx.main).is_empty());
+                let expected = match case {
+                    "live" => "refusing to merge the remote PR head",
+                    "conflict" => "could not merge the remote PR head",
+                    "bad-trailer" => "no seat commit",
+                    "wrong-spec" => "you named BUG-1",
+                    _ => unreachable!(),
+                };
+                assert!(why.contains(expected), "{case}: {why}");
+            }
+            assert!(!clone.join(".git/MERGE_HEAD").exists());
+        }
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join(".git/FETCH_HEAD")).unwrap(),
+            "preserve fetch head\n"
+        );
+        assert!(git_ok(
+            &fx.main,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/aida/publication/"
+            ]
+        )
+        .is_empty());
+        assert!(!sentinel.exists(), "seat hook ran for {case}");
+    }
+}
+
+// A lane can publish already-committed work while still running, including
+// when it has unrelated untracked scratch files. No merge means no seat write.
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_run_at_publishes_live_dirty_seat_without_unneeded_merge() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for remote_exists in [false, true] {
+        let fx = fixture();
+        let branch = "already-committed";
+        let (clone, tip) = seat_with_commit(
+            &fx,
+            "committed",
+            "c0ffee287911",
+            branch,
+            "work (Refs BUG-1)",
+        );
+        if remote_exists {
+            git_ok(
+                &fx.main,
+                &[
+                    "push",
+                    "-q",
+                    "origin",
+                    &format!("origin/main:refs/heads/{branch}"),
+                ],
+            );
+        }
+        std::fs::write(clone.join("scratch.txt"), "scratch\n").unwrap();
+        let mut owner = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let lease = crate::lease_path(&fx.main, "c0ffee287911");
+        let text = std::fs::read_to_string(&lease).unwrap();
+        let start = aida_core::liveness::process_start_identity(owner.id()).unwrap();
+        std::fs::write(
+            &lease,
+            format!(
+                "{text}active_pid = {}\nactive_pid_start_time = {}\n",
+                owner.id(),
+                aida_core::toml_quote::toml_string(&start)
+            ),
+        )
+        .unwrap();
+        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        let _ = owner.kill();
+        let _ = owner.wait();
+        result.unwrap();
+        assert_eq!(
+            git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+            tip
+        );
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip);
+        assert_eq!(
+            std::fs::read_to_string(clone.join("scratch.txt")).unwrap(),
+            "scratch\n"
+        );
+    }
+}
+
+// Test the actual forge constructor/lookup used by post_exit_commit, not just
+// title parsing: fake gh sees the recorded branch and returns a Refs PR.
+// trace:TASK-2879 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_2879_post_exit_commit_looks_up_refs_pr() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
+    let bin = fx.root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let gh = bin.join("gh");
+    std::fs::write(
+        &gh,
+        r##"#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/called"
+case "$*" in
+  --version) printf '%s\n' 'gh version 2.0.0' ;;
+  *"--head refs-pr"*) /bin/cat "$(dirname "$0")/response" ;;
+  *) exit 23 ;;
+esac
+"##,
+    )
+    .unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _env = crate::test_env::EnvVarGuard::set("PATH", &path);
+    for (title, trailer) in [
+        ("partial work (Refs BUG-1)", "(Refs BUG-1)"),
+        ("complete work (BUG-1)", "(BUG-1)"),
+    ] {
+        std::fs::write(
+            bin.join("response"),
+            format!("77\t{title}\thttps://example.test/pr/77\trefs-pr\n"),
+        )
+        .unwrap();
+        std::fs::write(clone.join("more-work.txt"), title).unwrap();
+        let outcome = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "lane",
+            true,
+            &test_commit,
+        );
+        assert!(
+            matches!(outcome, crate::ship_from_seat::PostExitCommit::Committed(_)),
+            "{outcome:?}"
+        );
+        let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+        assert!(subject.ends_with(trailer), "{subject}");
+        let calls = std::fs::read_to_string(bin.join("called")).unwrap();
+        assert!(calls.contains("--head refs-pr"), "{calls}");
+    }
+}

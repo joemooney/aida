@@ -132,19 +132,38 @@ pub(crate) fn pending_commit_preflight(
     explicit_spec: Option<&str>,
     message: &str,
 ) -> Result<PendingCommit> {
+    seat_write_preflight(
+        main,
+        clone,
+        explicit_spec,
+        message,
+        "commit the seat's pending work",
+        "Nothing was committed",
+    )
+}
+
+// trace:TASK-2879 | ai:codex
+fn seat_write_preflight(
+    main: &Path,
+    clone: &Path,
+    explicit_spec: Option<&str>,
+    message: &str,
+    action: &str,
+    unchanged: &str,
+) -> Result<PendingCommit> {
     let meta = std::fs::symlink_metadata(clone)
         .with_context(|| format!("could not read the seat path {}", clone.display()))?;
     anyhow::ensure!(
         !meta.file_type().is_symlink(),
-        "refusing to commit the seat's pending work: {} is a symbolic link; name the seat \
-         clone itself. Nothing was committed",
+        "refusing to {action}: {} is a symbolic link; name the seat \
+         clone itself. {unchanged}",
         clone.display()
     );
     let seat = recorded_seat(main, clone)?;
     let lease = seat_lease(&seat).map_err(|e| {
         anyhow::anyhow!(
-            "refusing to commit the seat's pending work: {e:#} (an ended lease no longer \
-             vouches for the clone). Nothing was committed"
+            "refusing to {action}: {e:#} (an ended lease no longer \
+             vouches for the clone). {unchanged}"
         )
     })?;
     if let Some(pid) = lease.active_pid {
@@ -155,9 +174,9 @@ pub(crate) fn pending_commit_preflight(
                     pid,
                     lease.active_pid_start_time.as_deref()
                 ),
-            "refusing to commit the seat's pending work in {}: its lease is held by live \
+            "refusing to {action} in {}: its lease is held by live \
              process {pid}, which may still be writing. Let that lane finish (or end its \
-             lease), then rerun. Nothing was committed",
+             lease), then rerun. {unchanged}",
             seat.root.display()
         );
     }
@@ -1205,45 +1224,18 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
 
 // trace:STORY-2475 | ai:codex
 pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
-    let dry_run = opts.dry_run;
-    run_from(
+    run_from_with_reconciliation(
         cwd,
         opts,
         &Deps {
-            // Reconcile only after pending work has been committed, and
-            // before the bundle is inspected/pushed. Dry runs mutate nothing.
-            // trace:TASK-2879 | ai:codex
-            bundle: &|main, tree, branch| {
-                if !dry_run {
-                    let seat = recorded_seat(main, tree)?;
-                    let (_, scope) = lease_branch(&seat)?;
-                    let spec = crate::ship::resolve_spec(None, branch, Some(&scope))
-                        .context("could not resolve publication spec")?;
-                    let message =
-                        format!("[AI:codex] chore(seat): merge remote PR head (Refs {spec})");
-                    // Preserve the live-owner and identity checks for this
-                    // write as well as for committing pending edits.
-                    let plan = pending_commit_preflight(main, tree, Some(&spec), &message)?;
-                    let pinned = pin_remote_branch(main, branch)?;
-                    if let Some(remote) = &pinned {
-                        crate::seat_clone::merge_publication_head(
-                            main,
-                            tree,
-                            branch,
-                            &remote.tip,
-                            &message,
-                            plan.pinned,
-                        )?;
-                    }
-                }
-                crate::seat_clone::bundle_branch(main, tree, branch)
-            },
+            bundle: &crate::seat_clone::bundle_branch,
             commit: &crate::seat_clone::commit_pending,
             forge: &|main| crate::forge::forge_for_open_change(main),
             after_open: &|main, branch| {
                 let _ = crate::queue_review_for_open_pr(main, branch);
             },
         },
+        true,
     )
 }
 
@@ -1330,6 +1322,18 @@ fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin
 /// [`run`] from `cwd`.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Result<()> {
+    run_from_with_reconciliation(cwd, opts, deps, false)
+}
+
+// Reconciliation belongs after admission of the original bundle. Passing the
+// resolved spec here preserves explicit specs on otherwise unscoped branches.
+// trace:TASK-2879 | ai:codex
+fn run_from_with_reconciliation(
+    cwd: &Path,
+    opts: FromSeatOptions,
+    deps: &Deps<'_>,
+    reconcile: bool,
+) -> Result<()> {
     if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(cwd) {
         anyhow::bail!(
             "`aida ship --from-seat` runs from the main checkout, not from inside the seat \
@@ -1392,9 +1396,56 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         }
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
-    let staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
+    let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
     let checked = check_staged(&main, &staged, &opts);
     drop_quarantine_on_refusal(&staged, opts.dry_run, checked)?;
+    // A plain publish never writes the seat unless the pinned remote head is
+    // missing from its committed history. Live/dirty seats remain publishable
+    // when their existing commits already contain that head (or it is absent).
+    // trace:TASK-2879 | ai:codex
+    let mut merged = false;
+    if reconcile && !opts.dry_run {
+        let result = (|| -> Result<()> {
+            if let Some(remote) = pin_remote_branch(&main, &branch)? {
+                let ancestry = aida_core::git_ops::host_git_command(&main)
+                    .args(["merge-base", "--is-ancestor", &remote.tip, &staged.tip])
+                    .status()?;
+                match ancestry.code() {
+                    Some(0) => return Ok(()),
+                    Some(1) => {}
+                    _ => anyhow::bail!("could not check remote PR head ancestry; nothing pushed"),
+                }
+                let message = format!("[host] chore(seat): merge remote PR head (Refs {spec})");
+                let plan = seat_write_preflight(
+                    &main,
+                    &opts.clone,
+                    Some(&spec),
+                    &message,
+                    "merge the remote PR head",
+                    "Nothing was merged or pushed",
+                )?;
+                crate::seat_clone::merge_publication_head(
+                    &main,
+                    &seat.root,
+                    &branch,
+                    &remote.tip,
+                    &message,
+                    plan.pinned,
+                )?;
+                merged = true;
+                let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
+                staged = stage_bundle(&main, &branch, &bytes, false)?;
+                check_staged(&main, &staged, &opts)?;
+            }
+            Ok(())
+        })();
+        let result = if merged {
+            result.context("the reconciled commit remains in the seat; nothing pushed; fix the refusal and rerun publication")
+        } else {
+            result
+        };
+        drop_quarantine_on_refusal(&staged, false, result)?;
+    }
     let (quarantine, tip) = (&staged.reference, &staged.tip);
     if opts.dry_run {
         eprintln!(
@@ -1416,9 +1467,14 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         .status()
         .context("could not invoke `git push`")?;
     if !push.success() {
+        let recovery = if merged {
+            "; the reconciled commit remains in the seat; push not confirmed; inspect origin before retrying publication"
+        } else {
+            ""
+        };
         anyhow::bail!(
             "`git push origin {quarantine}:refs/heads/{branch}` failed — investigate before \
-             retrying"
+             retrying{recovery}"
         );
     }
     // Pushed: the quarantine ref has done its job (a failure above keeps it
