@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T13:47:57.221772946Z
+modified_at: 2026-11-05T13:52:40.773250744Z
 req_type: Story
 relationships:
 - rel_type:
@@ -176,6 +176,13 @@ comments:
   created_at: 2026-11-05T13:20:58.728119336Z
   modified_at: 2026-11-05T13:20:58.728119336Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abfb-af45-7923-98f9-eaada30fe88a
+  author: joe
+  content: Commit 93b9f98db7d references this requirement
+  created_at: 2026-11-05T13:52:40.773250744Z
+  modified_at: 2026-11-05T13:52:40.773250744Z
+  session_id: 01a1abf75368
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
