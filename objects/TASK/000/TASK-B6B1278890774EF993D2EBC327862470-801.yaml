@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T18:07:39.448198156Z
+modified_at: 2026-11-05T18:07:43.389284737Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -58,6 +58,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1ace5-2fb1-7d63-b7fa-00dc59db5327
+  author: joe
+  timestamp: 2026-11-05T18:07:43.537397113Z
+  session_id: 01a1acca079a
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
@@ -67,3 +72,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T18:07:39.448198156Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida supervise stalls/watch now report independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit alarms
