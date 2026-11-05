@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private raw evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. Source and sanitized evidence will be in the TASK-3046 PR.
 
   Acceptance: design and independently approve a mediated store mutation path that preserves legitimate CLI/coordination writes while denying direct terminal/file-tool writes to objects. Same-profile real-vendor C2 negatives must pass with parent-observed unchanged targets and mediated AIDA operations must have positive controls. Keep compatibility labeling and existing operator policy until explicitly changed.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-05T02:30:03.387100724Z
+modified_at: 2026-11-05T02:53:50.427222205Z
 req_type: Bug
 tags:
 - area:containment
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1a9a0-7fdb-7631-9ba3-77eba482db60
+  author: aida-session-start
+  timestamp: 2026-11-05T02:53:50.427221323Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
