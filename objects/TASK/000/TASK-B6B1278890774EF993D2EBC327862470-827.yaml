@@ -14,12 +14,12 @@ description: |-
   2. Cosmetic: the test comment at task_1471_show_docs_tests.rs:154-157 (and the round-4 note) says a first edge introduces the 'relationships' key because it is skip-if-empty. That is not true of the show JSON projection: run_show always inserts 'relationships' (requirements_cli.rs:6801-6804), even as []. The subset-and-EDGE_DELTA assertions are still sound, but correct the comment so the next reader does not chase a non-existent key addition.
   3. Cosmetic: the docs/cli/02-specs.md 'Linked documentation in aida show' paragraph does not say that archived, Rejected and Superseded Docs are omitted (show_docs.rs:96-104). Add one clause so a user who does not see a declined Doc knows why.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T13:20:00.040570133Z
-modified_at: 2026-11-05T15:59:17.503875487Z
+modified_at: 2026-11-05T15:59:18.682614107Z
 req_type: Task
 tags:
 - from-advisor:TASK-1471
@@ -40,6 +40,14 @@ history:
   author: joe
   timestamp: 2026-11-05T15:54:30.401697193Z
   changes: []
+- id: 01a1ac6f-9e9a-7672-b1c4-b9a672a11136
+  author: joe
+  timestamp: 2026-11-05T15:59:18.682611736Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c38a77db6092f4a4199140b2eeb185ee16f5e489
   branch: main
