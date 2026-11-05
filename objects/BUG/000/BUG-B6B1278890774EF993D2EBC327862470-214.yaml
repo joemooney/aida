@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. This proves access to the fixture capability, not exploitation of an actual host broker. Production refusal matrix, grant revocation and descendant teardown were not measured and remain unknown.
 
   Acceptance: restrict host-capable IPC to explicitly scoped mediated capabilities, with an independently reviewed policy that preserves authenticated vendor startup. A same-profile real-vendor host-IPC negative must deliver no nonce while its host positive control succeeds. Also validate real launcher lifecycle/teardown; do not substitute this synthetic canary for actual broker authorization tests.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-05T03:00:01.198271464Z
+modified_at: 2026-11-05T03:00:48.713060939Z
 req_type: Bug
 tags:
 - area:containment
@@ -26,6 +26,30 @@ relationships:
 - rel_type: Child
   target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
   created_at: 2026-11-05T01:34:32.000393920Z
+comments:
+- id: 01a1a9a6-dd94-7d52-863e-272d1eee6457
+  author: joe
+  content: |-
+    trace:BUG-2448 | ai:codex
+
+    Implementation assessment / proposed sketch, 2026-11-04:
+    Picked up as implementer; active queue head routes this defect to advisor. No code or policy changed.
+
+    Evidence: STORY-2460 signed Q5 explicitly retains Codex native as a separately labeled compatibility exception and says not to revoke it. Its latest S1 correction retains C4 fail from a parent-observed canary violation but withdraws C0/C1 positive credit; production launcher/lifecycle and broker authorization remain unmeasured. This checkout 785f19331c2 predates publication of scripts/containment/conformance.py. Current source containment/mod.rs initializes ordinary_launch_supported=false and retains native_composition/vendor_lifecycle as remaining protections. TASK-2706's completed broker is expressly synthetic-only. TASK-2707's Completed status is not evidence that this checkout has a production IPC boundary; TASK-2708 remains Approved.
+
+    Decision required before implementation: should BUG-2448 integrate a separately selected shared AIDA boundary while retaining native compatibility, or change the native profile/launcher itself? Denying all AF_UNIX or wrapping the current native launch without an authenticated-startup inventory risks breaking Codex startup and contradicts the preserved exception. A workspace write restriction alone does not constrain socket capabilities.
+
+    Recommended implementation contract for advisor review:
+    1. Reuse shared boundary broker/supervisor work under STORY-2238; no independent Codex-specific security engine and no synthetic-probe promotion to ordinary launch.
+    2. Inventory authenticated Codex startup/refresh, private runtime/daemon endpoints and inherited descriptors without copying/logging credentials. Define exact mediated capabilities and ownership/lifetime; refuse untyped host sockets, including pathname, abstract and inherited-FD routes. Pin approved endpoints rather than authorize pathname prefixes or mutable-memory CONTINUE.
+    3. Keep native compatibility labeling and opt-in unchanged unless a separate explicit ruling replaces Q5. The protected route must be selected and reported distinctly; no fallback or conformance credit on partial integration.
+    4. Verify same-version/profile real terminal negative with no delivered nonce and successful host positive; also authenticated startup, actual broker authorization negatives, child grant revocation and descendant teardown through real launcher paths. Synthetic canary results alone cannot close acceptance.
+    5. Use current S1 immutable-runner revisions after publication, preserving C0/C1 unknown until valid fresh host evidence; independent policy review before production enablement.
+
+    No tests run because no implementation was changed. No PR opened and no queue-done: acceptance remains unmet. Punt requests advisor selection/signoff of the production IPC integration and exact startup capability inventory.
+  created_at: 2026-11-05T03:00:47.636119132Z
+  modified_at: 2026-11-05T03:00:47.636119132Z
+  session_id: 01a1a9a4f513
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
@@ -51,7 +75,21 @@ history:
   timestamp: 2026-11-05T03:00:01.337587243Z
   session_id: 01a1a9a4f513
   changes: []
+- id: 01a1a9a6-e1c9-7443-b781-184e0138ec9f
+  author: joe
+  timestamp: 2026-11-05T03:00:48.713078967Z
+  session_id: 01a1a9a4f513
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'Production IPC policy needs advisor signoff: signed STORY-2460 Q5 preserves Codex native compatibility, while the available shared IPC tracer explicitly disallows ordinary launch. Proposed integration and real-vendor acceptance plan posted on BUG-2448; authenticated startup capabilities and lifecycle boundary must be selected before enforcement.'
+  lean: Reuse shared STORY-2238 broker/supervisor integration under a separately selected protected posture; preserve existing native compatibility until explicit policy ruling.
+  raised_by: implementer
+  raised_at: 2026-11-05T03:00:48.713060939Z
