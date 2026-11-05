@@ -12,12 +12,12 @@ description: |-
   Investigate test-context isolation or explicitly classify these as host-only fixtures; do not weaken native authority or filesystem boundaries. A baseline outside this seat has not been established. The three new cross-node publication tests pass, including the revocation conflict test; these residual fixtures concern existing launch/root paths outside that slice.
 
   State metadata from `aida state-snapshot --spec STORY-2492 --json`: branch=null, pr.state=none, drain.phase=null, drain.mode=interactive, drain.orchestrator=false, tests='not run', fmt='not run', plan.state=none. Snapshot branch/commit are unknown inside the native seat. Direct test results are separate best-effort observations; the standalone lease has no lane job runner (formal untested=true).
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T06:40:20.321747849Z
-modified_at: 2026-11-05T16:01:07.365253559Z
+modified_at: 2026-11-05T16:13:42.804208387Z
 req_type: Task
 tags:
 - from-implementer:STORY-2492
@@ -38,6 +38,14 @@ history:
   timestamp: 2026-11-05T16:01:08.474478104Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ac7c-ce14-7563-9831-5505d45b0a49
+  author: joe
+  timestamp: 2026-11-05T16:13:42.804205454Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
