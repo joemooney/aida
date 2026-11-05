@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-05T04:49:39.954255893Z
+modified_at: 2026-11-05T04:49:46.738276724Z
 req_type: Story
 tags:
 - operator-held
@@ -25,8 +25,14 @@ history:
   timestamp: 2026-11-05T04:49:40.071137910Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1aa0a-a596-70d1-b496-41b3a6091671
+  author: joe
+  timestamp: 2026-11-05T04:49:46.902503396Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes: []
 deferred: true
 deferred_at: 2026-11-05T04:49:39.954255893Z
+deferred_until: STORY-2492 completed
 deferred_reason: 'Operator 2026-11-04: do trusted-node cross-machine review (STORY-2492) first'
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
