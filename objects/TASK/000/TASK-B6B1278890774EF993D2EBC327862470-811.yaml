@@ -1,5 +1,6 @@
 id: 01a1aa76-a6ed-7870-a96e-ecd47bf62119
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-811
+agreed_id: TASK-2863
 title: 'Non-blocking: the fresh host-side run of the shipped harness (sha f692a8eb) aga…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:9fb4b21d
 - from-review:PR-3392
 - kind:carried-forward
+history:
+- id: 01a1aa87-9c8c-7a71-8b0a-4c0d93c222c0
+  author: joe
+  timestamp: 2026-11-05T07:06:16.588445974Z
+  changes: []
 filed_at:
   code_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
   branch: main

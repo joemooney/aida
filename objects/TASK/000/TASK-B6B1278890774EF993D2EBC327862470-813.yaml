@@ -1,5 +1,6 @@
 id: 01a1aa76-f1d6-7112-a921-0ede31a3d143
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-813
+agreed_id: TASK-2865
 title: 'Cosmetic/docs: C1/C2 can never reach overall ''pass'' in this runner (evaluate() …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:db1d51cd
 - from-review:PR-3392
 - kind:carried-forward
+history:
+- id: 01a1aa87-9cdd-73c0-8989-927889f21e44
+  author: joe
+  timestamp: 2026-11-05T07:06:16.669600845Z
+  changes: []
 filed_at:
   code_sha: 05c0ce9a2e0eba8dfcf4e78270bfc0d7db5151e4
   branch: main
