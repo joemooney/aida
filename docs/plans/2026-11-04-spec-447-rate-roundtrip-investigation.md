@@ -125,3 +125,39 @@ repair complete.
 
 All 18 consensus tests pass. `cargo fmt --all -- --check` and `git diff --check`
 pass. The control survey also passes in the full control-group run.
+
+## TASK-2842 repair
+
+<!-- trace:TASK-2842 | ai:codex -->
+
+Evaluated the parser alternative in an isolated Cargo package pinned to
+serde_json 1.0.149 with `float_roundtrip`: the same 131,840-ratio survey had
+zero changed values. `cargo tree -e features -i serde_json --offline` shows
+that the repository currently unifies default/std/raw_value features across
+CLI, core, server, TUI and their dependencies. Adding `float_roundtrip` would
+therefore change JSON parsing throughout that graph, even if declared only
+by the CLI library. It is a viable broader alternative, but this repair keeps
+the task's explicit strict-`require_execution` scope and applies the proposed
+two-ULP consistency bound there. No dependency features change.
+
+The strict validator still requires exact nonempty check-derived counts,
+finite rates in `[0, 1]`, and numerically exact endpoint rates (including
+signed zero). Only interior redundant rates may differ by up to two ULPs.
+The stored aggregate remains untouched; discriminating results still derive
+from checks. Display and consensus validation retain their own policies.
+
+The committed fixture now positively exercises `from_records`, `load`, and
+independently `apply` for the previously failing fractions and unchanged
+fractions. New tests cover both directions at one, two and three ULPs,
+endpoint neighbors, signed zero, missing aggregates, empty checks, wrong
+counts, nonfinite, out-of-range and materially wrong rates for each shared
+execution-validation mode. Existing authority-gate tests remain in place.
+These fixtures are synthetic execution evidence, not a live confined run.
+
+Repair validation: all 16 admitted `regen::score::controls::tests` pass,
+including the committed fractional fixtures, new ULP/invalid-evidence matrix,
+scalar survey and existing authority refusals. The same two `/var/tmp`
+integration tests listed above were excluded. `cargo fmt --all -- --check`
+and `git diff --check` pass.
+All 18 `regen::consensus::tests` also pass, including committed fractional
+rates and invalid-score/provenance refusals.
