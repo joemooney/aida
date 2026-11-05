@@ -18,12 +18,12 @@ description: |
 
   ## Remaining parent scope
   Independent intake-policy enrollment/pinned remote, orphan aida-intent publication/pull, receipts/processing and backup-comment recovery remain under STORY-2479 for subsequent slices. Existing store-only transport must remain unchanged.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T03:08:13.526173495Z
-modified_at: 2026-11-05T03:46:48.296296558Z
+modified_at: 2026-11-05T07:06:29.569737461Z
 req_type: Task
 tags:
 - docs:impacted
@@ -43,6 +43,11 @@ comments:
   created_at: 2026-11-05T03:11:59.811370211Z
   modified_at: 2026-11-05T03:11:59.811370211Z
   session_id: 01a1a9a8fe02
+- id: 01a1aa87-cf41-70b2-af4b-92726e4ddd16
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (8a5e625) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-11-05T07:06:29.569736322Z
+  modified_at: 2026-11-05T07:06:29.569736322Z
 history:
 - id: 01a1a9ad-dc8f-7860-b3be-c9c032be5c1b
   author: joe
@@ -70,6 +75,13 @@ history:
   session_id: 01a1a9ccb5cf
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1aa87-cf41-70b2-af4b-9267ccc6b123
+  author: aida-auto-bump
+  timestamp: 2026-11-05T07:06:29.569734143Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: efca74e51a6
