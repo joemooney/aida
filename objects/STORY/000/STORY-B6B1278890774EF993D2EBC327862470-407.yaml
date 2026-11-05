@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T05:52:53.829796943Z
+modified_at: 2026-11-05T05:55:20.056681704Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -177,6 +177,25 @@ comments:
   created_at: 2026-11-05T05:36:50.411933848Z
   modified_at: 2026-11-05T05:36:50.411933848Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa46-a978-79f3-a4c5-85056583337c
+  author: mcp
+  content: |-
+    ## Implementer approach — PR #3403 round 2
+
+    ### Acceptance criteria as tests
+    - Command-level: rerun first-slice envelope generation, strict schema/tampering/size/deny-pattern checks, canonical hash vectors, manual email round trips and no-store/ref/index/home mutation checks. Intake/publication/processing/recovery remain later slices per advisor approval.
+    - Command-level: extension arguments containing intent/export must reach the extension; late alias local dispatch must refuse with direct-spelling guidance; explicit/environment JSON output remains structured; legacy comprehension reaches store discovery rather than clap exit 2.
+    - Fixture: regenerate and verify exhaustive global JSON audit and both-form intent help snapshot. CI shards validate integration; supervised merge hold stays for advisor.
+
+    ### Expected files
+    - aida-cli-lib/src/observation_envelope.rs and plan_intent.rs
+    - aida-cli/tests/story_2479_observation_envelopes.rs
+    - docs/cli-format-json-audit.md and aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+
+    ### Ambiguities / conflicts as questions
+    None. Reviewer permits refusing late alias dispatch; select this bounded fix to preserve startup isolation.
+  created_at: 2026-11-05T05:55:20.056664501Z
+  modified_at: 2026-11-05T05:55:20.056664501Z
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
   author: joe
