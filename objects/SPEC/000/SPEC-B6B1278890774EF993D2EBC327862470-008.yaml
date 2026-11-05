@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T16:00:53.147986638Z
-modified_at: 2026-11-05T17:35:53.487864062Z
+modified_at: 2026-11-05T17:36:22.658834391Z
 req_type: Task
 tags:
 - from-implementer:BUG-2440
@@ -20,6 +20,12 @@ comments:
   content: 'Disposition (2026-11-05): CLI mutation is intended, not connector-only. Current codex_native_sandbox::codex_native_write_paths reuses contained_write_set and grants main .aida/cache-db, including SQLite sidecars. Existing TASK-2712 fixture coverage asserts the grant for implementer/advisor/unknown roles and tests actual sandbox cache writes plus optional real aida edit. In this standalone native implementer lane, .aida/cache-db resolves to /home/joe/ai/aida/.aida/cache-db and aida edit TASK-2836 --status in-progress succeeded using live binary 70a5d68133a. Store Git metadata commit was queued for the host, a separate expected protected-.git limitation. This observation does not warrant reopening cache-boundary implementation or claim all TASK-2712 publication acceptance is complete. Added setup documentation describing CLI coordination, linked-cache grant and launch-time recovery; no permission widening.'
   created_at: 2026-11-05T17:34:45.988264177Z
   modified_at: 2026-11-05T17:34:45.988264177Z
+  session_id: 01a1acc51fcb
+- id: 01a1acc8-7c82-72c0-923e-3ffa8ce7902d
+  author: joe
+  content: 'Validation and handoff: documentation link target/trace, cargo fmt --all -- --check and staged diff whitespace check passed. The fast-gate runner was interrupted after beginning a fresh Rust dependency build; it did not complete and no Rust test pass is claimed. Documentation is staged in docs/cli/07-project-setup.md. Git commit refused with read-only .git/index.lock; no commit, push or PR was created in the lane. Preserve staged bytes for the native launcher host post-exit commit/publication path. Intended subject: [AI:codex] docs(codex): clarify linked-cache coordination contract (TASK-2836). Cache finding disposition itself is complete: current CLI mutation succeeded; broader publication remains TASK-2712 ownership.'
+  created_at: 2026-11-05T17:36:22.658834391Z
+  modified_at: 2026-11-05T17:36:22.658834391Z
   session_id: 01a1acc51fcb
 history:
 - id: 01a1a769-c350-7b21-8fbc-14a580bffafe
