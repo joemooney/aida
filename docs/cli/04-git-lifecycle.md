@@ -66,6 +66,16 @@ requirement (including existing dashed child variants); an unrelated branch
 cannot gain ownership through an alias in a commit trailer. No branch rename
 or forced completion is needed for an ID remapping.
 
+<!-- trace:TASK-2887 | ai:codex -->
+`aida queue done` refuses before changing the spec or queue when the current
+branch cannot be read, including a seat-clone safety refusal or detached HEAD.
+The diagnostic preserves the Git error. Restore branch lookup access or check
+out the spec's branch and retry. `aida queue done <ID> --force` overrides the
+ownership and PR checks for work known to have shipped another way;
+`aida queue done <ID> --skip-pr-check` bypasses only the PR check and still
+requires readable branch ownership evidence. `aida queue done <ID> --yes` only
+skips confirmation.
+
 ---
 
 ### `aida ship`

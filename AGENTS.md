@@ -1,3 +1,8 @@
+Queue completion requires readable branch ownership evidence even with
+`--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
+warns and retains its ledgered override. See OVERVIEW.md.
+<!-- trace:TASK-2887 | ai:codex -->
+
 Trusted default-branch `[contained.vendors] codex = "native"` opts Codex into its workspace-write
 sandbox with approvals disabled, reported as “native sandbox, not AIDA-contained”.
 Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
