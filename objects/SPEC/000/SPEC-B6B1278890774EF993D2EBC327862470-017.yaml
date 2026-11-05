@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-017
 agreed_id: TASK-2887
 title: Queue done skips its PR check when native seat branch lookup is refused
 description: 'While completing TASK-2852 from the standalone implementer clone /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-803, git branch --show-current and commit/push succeeded, but aida queue done TASK-2852 warned: queue-done PR-check skipped: current_branch_at returned None ... Gate did not fire. It then marked the task done and dequeued it. This appears to be another caller swallowing host_git_command''s seat-clone safety refusal (TASK-2852 fixes pr hold''s diagnostic only). Investigate preserving lookup errors and refusing or explicitly handling unavailable PR-check evidence rather than silently skipping the gate. No publication authority change was attempted in TASK-2852.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T17:05:53.929122922Z
-modified_at: 2026-11-05T18:22:04.314339713Z
+modified_at: 2026-11-05T18:22:06.301315402Z
 req_type: Task
 tags:
 - from-implementer:TASK-2852
@@ -59,6 +59,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1acf2-59dd-7d31-a5ee-d4cb5f663afa
+  author: joe
+  timestamp: 2026-11-05T18:22:06.301330662Z
+  session_id: 01a1acea5bcc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70a5d68133a
+attention_reason:
+  category: blocked-dependency
+  detail: 'Implementation and validation complete (85 tests, formatting and diff checks passed), but this native seat mounts .git read-only: git add fails creating .git/index.lock with Read-only file system. Cannot commit, push, open a PR, or legitimately complete/dequeue. Please perform host-side commit and PR handoff from this dirty seat; detailed implementation and validation are in spec comments.'
+  lean: Publish the existing seven-file change from the host, then complete the queue item with the updated branch-lookup gate.
+  raised_by: implementer
+  raised_at: 2026-11-05T18:22:06.301315402Z
