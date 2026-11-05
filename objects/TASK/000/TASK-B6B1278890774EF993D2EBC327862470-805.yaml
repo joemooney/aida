@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T18:22:23.227243832Z
+modified_at: 2026-11-05T18:48:57.954344010Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -200,6 +200,12 @@ comments:
   created_at: 2026-11-05T18:22:23.227243832Z
   modified_at: 2026-11-05T18:22:23.227243832Z
   session_id: 01a1acef1adb
+- id: 01a1ad0a-f162-76e1-af1b-cc3599586949
+  author: joe
+  content: 'ADVISOR SIGNOFF 2026-11-05 12:00 MST on the first-round sketch (da96608, branch task-...-805): APPROVED. Topology fork ruled: the SINGLE authoritative admission hub is GitHub origin (github.com/joemooney/aida), ref refs/aida/review-admission. The work GitLab remote is a MIRROR only: it distributes evidence and can never admit. The hourly reconcile bridge copies, it does not admit. Never infer authority from a node''s origin alias; the hub URL and ref are explicit config ([review] admission_hub, admission_ref). No failover during a partition: if the hub is unreachable, admission refuses with a named error. A topology change is an operator migration with admission stopped. The publication contract and the reservation state table are approved as written, with the OpenSSH sshsig signer per the STORY-2492 amendment. Next: incorporate this ruling into the plan doc and open the docs PR titled ''(TASK-2860)''. Implementation belongs to STORY-2492 slice 2, not this task.'
+  created_at: 2026-11-05T18:48:57.954344010Z
+  modified_at: 2026-11-05T18:48:57.954344010Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aa76-52e6-7370-b6c4-2f6dbc6d878a
   author: joe
