@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-015
 agreed_id: TASK-2872
 title: Native implementer finish prompt still requires commits and a PR from a read-only git seat
 description: 'Observed while implementing BUG-2452 in native Codex seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-218: the injected pickup/standalone finish instructions require commit, push, queue done and an open PR before stopping, but git commit fails on read-only .git/index.lock. TASK-2712 / codex_native_sandbox explicitly requires leaving pending changes for the host-side post-exit commit and host `aida ship --from-seat ... --commit-pending ...` publication. The test runner also correctly reports no lane job runner for this agent-new launch; direct local tests passed (35). Align native finish prompts and launcher result classification with the host publication handoff so tested pending work is not mistaken for either success or an empty rework before host commit. BUG-2452 code is staged and its publication command/test evidence are recorded on the spec; no commit/push/PR was possible in the seat.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T07:38:28.939718690Z
-modified_at: 2026-11-05T16:00:14.778367730Z
+modified_at: 2026-11-05T16:00:16.809406436Z
 req_type: Task
 tags:
 - from-implementer:BUG-2452
@@ -26,6 +26,14 @@ history:
   author: joe
   timestamp: 2026-11-05T08:14:12.608589459Z
   changes: []
+- id: 01a1ac70-81a9-78c1-a0e9-7b80f04f9449
+  author: joe
+  timestamp: 2026-11-05T16:00:16.809404028Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
