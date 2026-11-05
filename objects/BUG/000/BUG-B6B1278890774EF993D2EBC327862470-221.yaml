@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T13:19:12.611568134Z
+modified_at: 2026-11-05T13:19:15.793513727Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -28,6 +28,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic is sound and fail-closed (dead+clean+pushed only, KeepUnshipped re-probe, release_lease_files), but the four bwrap-dependent regression tests are outside CI''s forced-live bwrap gate, so acceptance (3) has no CI proof; plus minor message/coverage nits. CI still pending at review time.. Triage reason: Address the latest review on #3421 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-221 (no new branch). LIGHT gate.'
   created_at: 2026-11-05T13:19:12.611565734Z
   modified_at: 2026-11-05T13:19:12.611565734Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdd-16ed-7be0-aa9c-ac0c7f29d02e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2455):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a6d75016809f
+    Recorded: 2026-11-05T12:18:09.023541696+00:00
+    Findings:
+    1. [major] aida-cli-lib/src/tests/bug_2455_force_claim_clone_tests.rs: all four tests call bwrap_live() and return early with 'SKIP (bwrap unavailable)' unless AIDA_REQUIRE_BWRAP_LIVE is set. That variable is set only in ci.yml 'Live bwrap OS-wrap confinement gate' (lines ~342-358), and that gate selects tests by the prefixes bug_2169_/task_2053_/bug_2224_/bug_2383_/bug_2435_bwrap_ and checks the expected count. The bug2455_* names match none of them. In the normal lib shards, AppArmor userns restriction is not lifted, so these tests probably pass without running. Fix: rename to bug_2455_bwrap_* and add bug_2455 to the cargo filter and to both the expected/ran grep regexes in ci.yml (with a trace comment), so a skip fails the gate. This is the only CI evidence for BUG-2455 acceptance (1)-(3).
+    2. [minor] queue_cmd.rs reclaim_exited_branch_clone: the error from ensure!(leases.len() == 1) says 'ambiguous lease ownership' even when the clone has zero leases (an orphan clone). No test covers the 0-lease or N-lease case. Name the two cases separately (no lease vs several) and add a test that a clone with no matching lease is refused and kept.
+    3. [cosmetic] seat_clone.rs pending_diff_stat: the empty-diff fallback 'no tracked changes (see untracked paths above)' appears in every refusal, including Live, NotProvable (no pid) and clean-but-unpushed. In those messages no untracked-path listing comes before it, so the hint misleads. Only point at untracked paths when the reason really lists dirty paths, or say just 'no tracked changes'.
+    4. [cosmetic] queue_cmd.rs doc comment on reclaim_exited_branch_clone says force-claim 'never discards or salvages unpublished work'. But DestroyMode::KeepUnshipped calls salvage() and writes a patch when the re-probe finds unshipped work (a race after check_pr_lease). The clone is still kept, so no work is lost. Reword to 'never removes a clone holding unpublished work'.
+    5. [minor] queue_cmd.rs preflight loop: with several unadopted clones on the same branch, earlier clones are retired before a later one refuses, so the command fails after partly changing state. Either check every clone with check_pr_lease before destroying any, or document this behaviour. No test covers N>1.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T13:19:15.693363882Z
+  modified_at: 2026-11-05T13:19:15.693363882Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
