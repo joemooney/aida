@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-011
 agreed_id: TASK-2842
 title: Repair strict regen aggregate validation for committed JSON fractional rates
 description: 'SPEC-447 investigation confirms the remaining strict control defect using committed Git JSON fixtures: serde_json 1.0.149 parses 1/11 and 43/44 one ULP away from count-derived division. Original in-memory controls pass; committed stub controls refuse in ControlGate::from_records/load, and independently committed ordinary trials refuse in ControlGate::apply, with ''control aggregate does not match checks''. Both characterization and consensus regression tests passed. Investigation/design: docs/plans/2026-11-04-spec-447-rate-roundtrip-investigation.md. Implement a reviewed bounded consistency check in strict require_execution only: retain exact check-derived nonempty passed/total counts; finite in-range redundant rates; exact 0/1 endpoints; proposed <=2 ULP for interior rates (survey of 131840 ratios had 13710 changes, max 1 ULP). Preserve all existing provenance, latest-reference batch/repeat identities, reference 100% pass, generated-noop stub, confinement, guard, fresh-root, flags, exit, survivor, committed-only and file-identity gates. Do not silently reuse optional display validation or change consensus policy. Replace investigation refusal assertions with positive committed-fixture regressions; add ULP boundary, nonfinite, wrong-count, materially wrong/out-of-range rate negatives and rerun authority-gate tests. Current SPEC-447 change leaves production eligibility unchanged and uses synthetic execution records in real temporary Git repositories, not a live confined execution.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T19:25:59.128821503Z
-modified_at: 2026-11-05T17:10:56.109310959Z
+modified_at: 2026-11-05T19:24:10.075633526Z
 req_type: Task
 tags:
 - from-implementer:SPEC-447
@@ -77,6 +77,20 @@ history:
   timestamp: 2026-11-05T17:10:57.602989894Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ad2b-2bd7-73a1-91ac-d3fbfe862785
+  author: aida-auto-bump
+  timestamp: 2026-11-05T19:24:10.071794271Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1ad2b-2bdb-7870-8342-c92fc4ff154d
+  timestamp: 2026-11-05T19:24:10.075628861Z
+  agent: aida
+  commit_sha: 3f210b799539177105bee1e983cb04e07bc8b055
+  summary: Strict require_execution keeps exact counts/endpoints, finite [0,1] range, <=2 ULP interior allowance; committed-fixture from_records/load/apply now positive; ULP/invalid matrix added; all authority gates unchanged; CI green, CLEAN.
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e44c9e595a7
@@ -84,3 +98,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T17:08:23.929394072Z
   implemented_by: joe
+  completed_at: 2026-11-05T19:24:10.071787279Z
+  completion_sha: 3f210b799539177105bee1e983cb04e07bc8b055
