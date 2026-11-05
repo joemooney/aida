@@ -45,8 +45,13 @@ A scalar survey serializes/parses all 131,840 count pairs with denominators
 1 through 512. Of these, 13,710 change, with a maximum observed difference of
 one ULP (one neighboring representable floating value). This is measured
 coverage, not a universal parser error guarantee. Enabling serde_json's
-`float_roundtrip` feature could change these results; that dependency-wide
-policy change is outside this investigation.
+`float_roundtrip` feature is expected to eliminate this drift and flip the
+survey's `changed > 0` assertion. TASK-2842 should evaluate it as a candidate
+repair before adding a tolerance: exact float roundtrips could retain the
+existing zero-tolerance comparator. Check feature unification and rerun the
+committed fixtures and authority-gate refusal matrix before choosing between
+that dependency-wide parser change and the bounded comparator below. Enabling
+the feature remains outside this investigation.
 
 The consensus fixture commits three matching ordinary trials for each of the
 above fractions plus 11/11. It exercises analysis and the command handler.

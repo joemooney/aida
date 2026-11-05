@@ -626,7 +626,9 @@ mod tests {
     }
     // Survey redundant-rate parsing independently of the committed fixtures.
     // This bounds the proposed repair against many small-denominator ratios;
-    // it does not establish a universal serde_json error bound.
+    // it does not establish a universal serde_json error bound. Enabling
+    // serde_json/float_roundtrip is expected to make changed == 0 and flip
+    // the changed > 0 characterization assertion below (repair: TASK-2842).
     // trace:SPEC-447 | ai:codex
     #[test]
     fn json_fraction_roundtrip_error_survey() {
@@ -700,7 +702,7 @@ mod tests {
             rows.push(trial);
 
             let store = tempfile::tempdir().unwrap();
-            let git = |args: &[&str]| {
+            let store_git = |args: &[&str]| {
                 let out = crate::test_git::git_command()
                     .arg("-C")
                     .arg(store.path())
@@ -713,9 +715,9 @@ mod tests {
                     String::from_utf8_lossy(&out.stderr)
                 );
             };
-            git(&["init", "-b", "aida-store"]);
-            git(&["config", "user.name", "Test"]);
-            git(&["config", "user.email", "test@example.com"]);
+            store_git(&["init", "-b", "aida-store"]);
+            store_git(&["config", "user.name", "Test"]);
+            store_git(&["config", "user.email", "test@example.com"]);
             std::fs::create_dir_all(store.path().join("regen/trials")).unwrap();
             for row in &rows {
                 std::fs::write(
@@ -726,8 +728,8 @@ mod tests {
                 )
                 .unwrap();
             }
-            git(&["add", "regen/trials"]);
-            git(&["commit", "-m", "fractional execution fixtures"]);
+            store_git(&["add", "regen/trials"]);
+            store_git(&["commit", "-m", "fractional execution fixtures"]);
             // Prove the reader uses committed blobs, not the working files.
             for row in &rows {
                 std::fs::remove_file(
