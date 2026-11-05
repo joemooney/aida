@@ -1,0 +1,33 @@
+id: 01a1ad09-bfc5-79f3-938d-57eabb5981b8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-224
+agreed_id: BUG-2458
+title: Ownership dual-write records systemd --user (subreaper) as the holder pid, so the judge reads detached lanes as alive forever
+description: |
+  ## Problem
+  `aida own show --compare` (2026-11-05 11:50 MST, main c02cb56) reports about 30 UNEXPLAINED rows whose ownership judge says "alive: pid 2013 is running". PID 2013 is `/usr/lib/systemd/systemd --user`. Lanes launched detached (setsid/nohup through aida-deputy-shell, or `claude --bg`) are reparented to the user systemd subreaper. The STORY-2325 dual-write records that parent, or some other non-owner pid, as the holder, so the judge treats every such record as permanently alive. Examples: 01a1a99108e6 (STORY-2343), 01a1aceb0a45 (STORY-1468) and 01a1abea0b97: today's lease reads stale or no lease, while the judge reads alive via pid 2013.
+
+  ## Acceptance
+  - The ownership record's holder identity is the owning process itself (pid plus start time, via the shared process-identity primitive, regroup R3), never a parent or subreaper, and never pid 1 or a `systemd --user` instance.
+  - The judge refuses to treat a holder whose identity resolves to an init or subreaper process as alive; it reports "holder identity invalid" instead.
+  - `aida own migrate` rewrites existing records with bad holders (single user, surgery OK; no compat shim).
+  - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
+  - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
+  Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T18:47:39.717568886Z
+modified_at: 2026-11-05T18:47:39.717568886Z
+req_type: Bug
+tags:
+- from-advisor:STORY-2325
+- regroup
+filed_at:
+  code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
