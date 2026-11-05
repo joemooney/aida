@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-05T05:42:36.242645365Z
+modified_at: 2026-11-05T12:29:51.890887926Z
 req_type: Story
 tags:
 - area:containment
@@ -190,6 +190,12 @@ comments:
   modified_at: 2026-11-05T05:42:36.242645365Z
   session_id: 01a1aa38555f
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1abaf-dd92-7030-b5f6-74e9125239da
+  author: joe
+  content: 'ADVISOR RULING 2026-11-05 05:32 on TASK-3046 review finding 3: option (a). Historical reports predate the shipped harness, so they cannot satisfy S1. The advisor runs the shipped harness fresh for codex and agy through script deputy 3 (job conformance-fresh.job.sh, outputs ~/aida-conformance-{codex,agy}-FRESH-20261105) and records both report.json results here. TASK-3048 proceeds on that evidence; agy stays refused until real all-tool conformance passes.'
+  created_at: 2026-11-05T12:29:51.890887926Z
+  modified_at: 2026-11-05T12:29:51.890887926Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
