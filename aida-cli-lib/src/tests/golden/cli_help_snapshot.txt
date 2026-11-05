@@ -15295,16 +15295,22 @@ Commands:
                      configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via
                      `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
                      and authenticated
+  review             Start the independent review pipeline for an open PR/MR. Runs exactly `aida
+                     queue work <PR-N|MR-N> --auto-complete`: a separate reviewer session reviews
+                     the change, rework goes back to the implementer, and the pipeline continues
+                     through merge only where merge is already authorized. Ownership, leases, merge
+                     holds and supervised/draft restrictions apply as they do for `queue work`; this
+                     command grants no extra authority
   list               List every open PR/MR with its spec ID (when one can be found), CI state and
                      rebase status [aliases: mr]
   rebase             Rebase a PR onto its base in a temporary worktree, then force-push-with-lease
                      the rebased branch. Collapses the standard 6-command "rebase a PR before
                      review" recipe into one call
   ship               Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware
-                     cleanup. The direct-publish counterpart to `aida queue work PR-N
-                     --auto-complete` (which drives the full reviewer pipeline) — use this for
-                     human-pre-approved work where no orchestrator review phase is needed (docs PRs,
-                     master-signed architecture work, recovery merges)
+                     cleanup. The direct-publish counterpart to `aida pr review N` / `aida queue
+                     work PR-N --auto-complete` (which drive the full reviewer pipeline) — use this
+                     for already-approved work where no orchestrator review phase is needed (docs
+                     PRs, master-signed architecture work, recovery merges)
   train              Land a batch of approved PRs together through a merge train, so two PRs that
                      are each green cannot break main together
   ship-batch         Ship several PRs that need a human merge, one at a time, in order
@@ -15390,6 +15396,42 @@ Options:
           Branch to look up the PR for. Defaults to the current branch via `git branch
           --show-current`
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida pr review
+Start the independent review pipeline for an open PR/MR. Runs exactly `aida queue work <PR-N|MR-N>
+--auto-complete`: a separate reviewer session reviews the change, rework goes back to the
+implementer, and the pipeline continues through merge only where merge is already authorized.
+Ownership, leases, merge holds and supervised/draft restrictions apply as they do for `queue work`;
+this command grants no extra authority.
+
+A bare number resolves through the project's configured forge: `PR-N` on GitHub, `MR-N` on GitLab.
+Pass `PR-N` or `MR-N` to name the forge explicitly.
+
+Compare: `aida ship --no-merge` finishes implementation and opens the PR/MR; `aida pr review` gets
+it independently reviewed; `aida pr ship` lands work that is already approved.
+
+Usage: aida pr review [OPTIONS] <N|PR-N|MR-N>
+
+Arguments:
+  <N|PR-N|MR-N>
+          The change to review: `N`, `PR-N` or `MR-N`
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15494,9 +15536,9 @@ Options:
           Print help (see a summary with '-h')
 ===== aida pr ship
 Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The
-direct-publish counterpart to `aida queue work PR-N --auto-complete` (which drives the full reviewer
-pipeline) — use this for human-pre-approved work where no orchestrator review phase is needed (docs
-PRs, master-signed architecture work, recovery merges).
+direct-publish counterpart to `aida pr review N` / `aida queue work PR-N --auto-complete` (which
+drive the full reviewer pipeline) — use this for already-approved work where no orchestrator review
+phase is needed (docs PRs, master-signed architecture work, recovery merges).
 
 With no `<N>`, the command targets the current branch's open PR — creating one via `gh pr create`
 (deriving title/body from the latest commit) if none exists. `aida pull` runs from the main worktree
@@ -45873,6 +45915,32 @@ Working on aida itself
     "path": [
       "aida",
       "pr",
+      "review"
+    ],
+    "about": "Start the independent review pipeline for an open PR/MR. Runs exactly `aida queue work <PR-N|MR-N> --auto-complete`: a separate reviewer session reviews the change, rework goes back to the implementer, and the pipeline continues through merge only where merge is already authorized. Ownership, leases, merge holds and supervised/draft restrictions apply as they do for `queue work`; this command grants no extra authority",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
       "list"
     ],
     "about": "List every open PR/MR with its spec ID (when one can be found), CI state and rebase status",
@@ -45962,7 +46030,7 @@ Working on aida itself
       "pr",
       "ship"
     ],
-    "about": "Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The direct-publish counterpart to `aida queue work PR-N --auto-complete` (which drives the full reviewer pipeline) — use this for human-pre-approved work where no orchestrator review phase is needed (docs PRs, master-signed architecture work, recovery merges)",
+    "about": "Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The direct-publish counterpart to `aida pr review N` / `aida queue work PR-N --auto-complete` (which drive the full reviewer pipeline) — use this for already-approved work where no orchestrator review phase is needed (docs PRs, master-signed architecture work, recovery merges)",
     "flags": [
       {
         "name": "allow-stacked-base",
