@@ -652,7 +652,7 @@ fn wait_recovers_when_a_claim_publishes_its_state() {
     // Reproduce the runner's claim window without racing the actual runner:
     // job.json has moved, but state.json has not been published yet.
     std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
-    std::fs::rename(f.q.incoming_job(&j.id), f.q.job_json(&j.id)).unwrap();
+    std::fs::rename(f.q.accepted_job(&j.id), f.q.job_json(&j.id)).unwrap();
     assert!(f.q.locate(&j.id).unwrap().is_none());
     let q = f.q.clone();
     let id = j.id.clone();
@@ -685,7 +685,7 @@ fn wait_refuses_an_interrupted_claim_after_the_grace_expires() {
     let f = Fixture::new("t");
     let j = f.submit("true");
     std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
-    std::fs::rename(f.q.incoming_job(&j.id), f.q.job_json(&j.id)).unwrap();
+    std::fs::rename(f.q.accepted_job(&j.id), f.q.job_json(&j.id)).unwrap();
     let grace = Duration::from_millis(300);
     // No caller timeout: the claim grace itself must bound this wait.
     let q = f.q.clone();
