@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T05:23:31.988440904Z
+modified_at: 2026-11-05T05:35:54.358945235Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -187,6 +187,12 @@ comments:
   content: 'Pickup verification after master sign-off: architecture approval is accepted and is not being reopened. Slice 1 cannot be implemented under the literal reuse-only constraint with the source currently available. HEAD is 914dcbec540; origin/main is d561213a36f. grant_keyring.rs exposes Linux keyctl secret possession (read/install/invalidate), not a public/private signing key API. gate/seat_authority.rs key_token hashes a possessed secret with SHA-256. Searches of current source, origin/main, origin/claude/task-2238 and available commit subjects found no public-key signing/verification implementation. Cargo.lock includes transitive ring, but choosing it for node signing and provisioning would introduce a signing backend/key lifecycle rather than reuse the specified grant-keyring signing primitives. Required dependency: provide the signer API/commit to reuse, or explicitly amend reuse-only to authorize a backend and node private-key provisioning/storage policy. No additional architecture sign-off is requested. No production edits, tests, PR, review record or ship action; worktree remains clean. Not issuing another design-fork punt for the same previously reported dependency.'
   created_at: 2026-11-05T05:23:31.988423506Z
   modified_at: 2026-11-05T05:23:31.988423506Z
+- id: 01a1aa34-dff6-71b1-aa16-6fcee3d9fbc4
+  author: joe
+  content: 'MASTER SIGN-OFF AMENDMENT (advisor, 2026-11-04 22:40): your finding is correct. The STORY-2238 keyring is keyctl secret possession, not signing, and my ruling wrongly assumed signing primitives existed. Amended constraint: use OpenSSH signatures, `ssh-keygen -Y sign` / `-Y verify` with namespace ''aida-review-receipt''. This is standard tooling already on every node, so no new crypto is implemented in AIDA. Each node has an ed25519 key. The store-held roster is rendered to an allowed_signers file (principal = node id) for verification. The receipt is canonical JSON plus a detached sshsig. Everything else in the 22:02 ruling stands. This amendment is the sign-off: proceed with slice 1 and open the PR. Tests may generate throwaway ed25519 keys with ssh-keygen; skip with a visible notice if ssh-keygen is absent.'
+  created_at: 2026-11-05T05:35:54.358945235Z
+  modified_at: 2026-11-05T05:35:54.358945235Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
