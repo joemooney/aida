@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-05T03:00:48.713060939Z
+modified_at: 2026-11-05T03:16:03.336346425Z
 req_type: Bug
 tags:
 - area:containment
@@ -50,6 +50,12 @@ comments:
   created_at: 2026-11-05T03:00:47.636119132Z
   modified_at: 2026-11-05T03:00:47.636119132Z
   session_id: 01a1a9a4f513
+- id: 01a1a9b4-d688-7551-8f8a-9f91bd4bd4d5
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 20:20), applying the operator''s STORY-2460 principle: a vendor''s native sandbox earns a posture by passing the conformance suite, and AIDA''s shared boundary is the fallback. Do NOT build a Codex-specific production boundary, proxy or broker. Same disposition as BUG-2447. Option chosen: integrate the shared AIDA boundary (STORY-2238 broker/supervisor) and retain native compatibility as a labelled exception. Do not change the native profile or deny all AF_UNIX ad hoc. The authenticated Codex startup/descriptor inventory you list is a prerequisite task under STORY-2238, so file it as a child there. BLOCKED on TASK-2708 / STORY-2238. Close when C4 passes for Codex under the shared boundary.'
+  created_at: 2026-11-05T03:16:03.336346425Z
+  modified_at: 2026-11-05T03:16:03.336346425Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
