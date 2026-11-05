@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T17:36:23.578523496Z
+modified_at: 2026-11-05T18:24:29.024548408Z
 req_type: Bug
 tags:
 - area:compete
@@ -235,6 +235,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-05T17:36:22.751597649Z
   modified_at: 2026-11-05T17:36:22.751597649Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acf4-8760-7041-9206-ed0418016456
+  author: joe
+  content: 'Advisor 11:26: closed #3382 as superseded by #3401; #3401 is the single open change (reviewer running at its head).'
+  created_at: 2026-11-05T18:24:29.024548408Z
+  modified_at: 2026-11-05T18:24:29.024548408Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
