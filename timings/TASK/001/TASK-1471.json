@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1471",
+  "publishes": [
+    {
+      "at": "2026-11-05T16:48:30.050731629Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:42:02.034062997Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T11:07:00.140455468Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T13:18:52.296375447Z",
+      "spec": "TASK-1471",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1471",
+        "branch": "origin/task-1471",
+        "first_seen": "2026-11-04T13:18:52.296309215+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T17:12:36.826521095Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T19:00:28.077846383Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T00:25:33.059062810Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T02:20:18.366452368Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T02:33:39.458141347Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T02:59:48.460546636Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T05:36:44.884534368Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T05:45:10.544927557Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T09:48:48.647359152Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T09:53:22.207924198Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T13:19:57.344506952Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T14:57:26.651282030Z",
+      "spec": "TASK-1471",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1471",
+        "branch": "pr-3367",
+        "first_seen": "2026-11-05T14:57:26.651112401+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-05T16:47:51.279879598Z",
+      "spec": "TASK-1471",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3367
+      }
+    },
+    {
+      "ts": "2026-11-05T16:48:29.818777210Z",
+      "spec": "TASK-1471",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b66ec0831851a66cca11ce10a840fb60d9aee7d0",
+        "pr": 3367,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
