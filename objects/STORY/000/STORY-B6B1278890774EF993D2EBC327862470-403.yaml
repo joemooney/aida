@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T09:51:32.577514076Z
+modified_at: 2026-11-05T09:52:55.426065889Z
 req_type: Story
 relationships:
 - rel_type:
@@ -126,6 +126,12 @@ comments:
   created_at: 2026-11-05T09:48:25.893026767Z
   modified_at: 2026-11-05T09:48:25.893026767Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab20-2e82-7633-b886-3aaed378b637
+  author: joe
+  content: 'Round 3: fix advisor CLI executable resolution; update TASK-2807 resume ratchet while retaining spawn-time marking; reproduce all nine publication matrix cases and repair fixture/code; rerun live bwrap selection and report exact missing tests if constrained; document the queue-work reroute integration boundary including pre-provisioned seats and interactive pickups.'
+  created_at: 2026-11-05T09:52:55.426065889Z
+  modified_at: 2026-11-05T09:52:55.426065889Z
+  session_id: 01a1ab1ee084
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
