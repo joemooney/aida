@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T19:24:39.923878431Z
-modified_at: 2026-11-05T19:24:39.923878431Z
+modified_at: 2026-11-05T20:27:08.434469985Z
 req_type: Task
 tags:
 - carried-from:TASK-2841
 - finding-hash:56da7887
 - from-review:PR-3434
 - kind:carried-forward
+comments:
+- id: 01a1ad64-d312-70f0-9b10-da821b77fb87
+  author: joe
+  content: 'Advisor triage 2026-11-05 13:40: duplicate of TASK-2891 (generic ''fix: address CI failures and review findings'' squash titles); folded there.'
+  created_at: 2026-11-05T20:27:08.434469985Z
+  modified_at: 2026-11-05T20:27:08.434469985Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad63-629a-7913-8f3e-f7e7282ff758
   author: joe
