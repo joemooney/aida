@@ -1,5 +1,6 @@
 id: 01a1acf2-7be5-72c0-a16c-e500efc63deb
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-835
+agreed_id: TASK-2888
 title: Native seat PR hold cannot resolve an existing local branch
 description: 'TASK-2860 native seat: aida pr hold reports local branch task-b6b1278890774ef993d2ebc327862470-805 does not exist, but git show-ref --verify resolves da96608695759e2346569a2c72dc510b5ea1dd0e. No hold marker created. Direct git push published that branch; ls-remote confirms the SHA. Local upstream and remote-tracking updates refused read-only Git metadata. Queue done separately warned current_branch_at returned None and its PR-check did not fire. Similar hold failure is recorded in STORY-2492 comments. Diagnose CLI branch discovery in native seats; do not infer a successful PR hold from a remote branch alone.'
 status: Draft
@@ -15,6 +16,11 @@ tags:
 - kind:observation
 - linked:TASK-2860
 - severity:minor
+history:
+- id: 01a1acf2-c995-7422-81b0-e5abff5d210e
+  author: joe
+  timestamp: 2026-11-05T18:22:34.901058003Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b66ec083185
