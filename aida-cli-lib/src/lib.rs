@@ -281,6 +281,8 @@ mod shift;
 mod shipped_linkage;
 // trace:BUG-2221 | ai:claude — `aida show` negative-linkage ancestry proof.
 mod show_negative;
+// trace:TASK-1471 | ai:claude — linked Docs section in human `aida show`.
+mod show_docs;
 // trace:BUG-2221 | ai:claude — `aida show` incremental spec-id -> commit index.
 mod linkage_index;
 mod terminal_cmd;
@@ -412,6 +414,7 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 mod forge;
+mod forge_observed;
 mod forge_profiles;
 mod gate_cmd;
 // trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.
