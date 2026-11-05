@@ -449,6 +449,12 @@ pub enum SessionCommand {
         #[clap(long)]
         force: bool,
 
+        /// Explicitly discard commits on HEAD or any local branch that no
+        /// remote has. --force alone never permits losing these commits.
+        // trace:BUG-2450 | ai:codex
+        #[clap(long)]
+        discard_unpushed: bool,
+
         /// Remove the worktree, or reset it back into the warm pool, even
         /// while live processes use it. Without this, `session end` refuses
         /// and names each pid and command: a live `claude` inside the
@@ -1473,6 +1479,19 @@ pub enum AgentNewCommand {
         #[clap(value_name = "SPEC", requires = "bg")]
         #[clap(value_parser = crate::spec_arg::spec_id)]
         spec_positional: Option<String>,
+
+        /// Put the detached lane's worktree on BRANCH (only with `--bg`). An
+        /// existing branch, local or on origin, is checked out; a new one
+        /// forks from `--base`.
+        // trace:BUG-2390 | ai:claude
+        #[clap(long, value_name = "BRANCH", requires = "bg")]
+        branch: Option<String>,
+
+        /// Ref a new `--branch` forks from (only with `--bg`; default: the
+        /// project's default branch). Ignored when BRANCH already exists.
+        // trace:BUG-2390 | ai:claude
+        #[clap(long, value_name = "REF", requires = "bg")]
+        base: Option<String>,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.

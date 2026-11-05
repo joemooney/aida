@@ -138,15 +138,54 @@ fn analysis_pass_is_contained_by_config_toml_contained_enable() {
 }
 
 /// An explicitly contained parent is never downgraded by a project file that
-/// says `contained = false`.
+/// says `contained = false`. A contained parent refuses the `AIDA_AGENT_CMD`
+/// seam (STORY-2326), so the fake is the `claude` on PATH instead.
+// trace:STORY-2326 | ai:claude
 #[test]
 fn explicit_parent_containment_wins_over_a_false_knob() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture(Some("[agents]\ncontained = false\n"));
+    let bin = fx.project.parent().unwrap().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::copy(&fx.fake, bin.join("claude")).unwrap();
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .unwrap();
     {
-        let _ambient = fx.ambient(Some("1"));
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &fx.project,
+            "advisor",
+            &["advisor", "implementer"],
+            &[
+                ("AIDA_AGENT_CMD", None),
+                ("PATH", path.to_str()),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_HEADLESS_VENDOR", None),
+                ("AIDA_CONTAINED", Some("1")),
+                ("AIDA_TEST_CAPTURE", Some(fx.capture.to_str().unwrap())),
+            ],
+        );
         fx.analysis_pass().unwrap();
     }
     fx.assert_contained_claude_launch();
+}
+
+/// STORY-2326: a contained parent never swaps the vendor for the
+/// `AIDA_AGENT_CMD` program; the launch is refused before the spawn.
+// trace:STORY-2326 | ai:claude
+#[test]
+fn contained_parent_refuses_the_agent_cmd_override() {
+    let fx = fixture(None);
+    let _ambient = fx.ambient(Some("1"));
+    let err = fx.analysis_pass().unwrap_err();
+    assert!(
+        format!("{err:#}").contains("`AIDA_AGENT_CMD` cannot replace"),
+        "{err:#}"
+    );
+    assert!(!fx.capture.exists(), "refused before the spawn");
 }
 
 /// Uncontained stays uncontained: no env, no knob, no containment.
@@ -326,8 +365,13 @@ fn questions_clarify_posture_honours_configured_containment_without_the_env() {
                 .unwrap();
         assert_eq!(vendor, session::HeadlessVendor::Claude);
         assert!(contained);
-        let plan =
-            session::advisor_interactive_launch_plan(vendor, "/aida-clarify X", contained).unwrap();
+        let plan = session::advisor_interactive_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
+            vendor,
+            "/aida-clarify X",
+            contained,
+        )
+        .unwrap();
         assert!(
             plan.args.iter().any(|a| a == "--settings"),
             "{:?}",

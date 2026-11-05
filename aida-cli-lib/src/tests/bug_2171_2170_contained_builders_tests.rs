@@ -6,7 +6,7 @@
 //! Under a contained parent:
 //! - `--permission-mode` must be refused for burndown run and autopilot intake.
 //! - The launch posture defaults to `dontAsk` for burndown run and autopilot intake.
-//! - Containment flags (`claude_contained_flags().unwrap()`) are added to argv.
+//! - Containment flags (`claude_contained_flags(crate::seat_clone::launcher_main().as_deref(), ).unwrap()`) are added to argv.
 //! - Interactive questions clarify adds containment flags to argv.
 //! - `AIDA_CONTAINED=1` is exported to child commands.
 //! - BUG-050: every headless lane (contained or not) carries the headless

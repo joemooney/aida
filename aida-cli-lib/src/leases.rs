@@ -2121,6 +2121,25 @@ pub(crate) fn list_leases_strict(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> Result<Vec<SessionLease>, String> {
+    list_leases_strict_inner(project_root, spec_ids, false)
+}
+
+/// Lease listing for a branch-ownership judgement: like
+/// [`list_leases_strict`], but EVERY lease file that stays unreadable or
+/// unparseable after the retry is an error, since any lease could own the
+/// branch being judged (a torn write may cut off its `branch` line).
+// trace:TASK-2813 | ai:claude
+pub(crate) fn list_leases_strict_all(
+    project_root: &std::path::Path,
+) -> Result<Vec<SessionLease>, String> {
+    list_leases_strict_inner(project_root, &[], true)
+}
+
+fn list_leases_strict_inner(
+    project_root: &std::path::Path,
+    spec_ids: &[&str],
+    any_unparseable_is_unknown: bool,
+) -> Result<Vec<SessionLease>, String> {
     let dir = leases_dir(project_root);
     if !dir.exists() {
         return Ok(Vec::new());
@@ -2137,10 +2156,27 @@ pub(crate) fn list_leases_strict(
         if !is_session_lease_file(name) {
             continue;
         }
+        // An `aida lock` lock-only entry is not a session lease and names no
+        // branch, so it cannot own one: skip it. One that does not parse as a
+        // lock entry falls through and still fails closed.
+        // trace:TASK-2813 | ai:claude
+        if any_unparseable_is_unknown
+            && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
+            && std::fs::read_to_string(&p)
+                .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
+        {
+            continue;
+        }
         let label = p.display().to_string();
         match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
-            LeaseFileRead::OtherScope => {}
+            LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
+            LeaseFileRead::OtherScope => {
+                if !p.exists() {
+                    continue;
+                }
+                return Err(format!("the lease {label} does not parse"));
+            }
             LeaseFileRead::Unknown(why) => {
                 // A lease removed between the listing and the read is gone,
                 // not unknown.
@@ -4448,7 +4484,10 @@ impl StaleLeaseRecoveryReport {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
 pub(crate) fn lease_tree_dirty_entries(lease: &SessionLease) -> Vec<String> {
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
-        if let Some(clone) = crate::seat_clone::host_recorded_clone(&lease.worktree_path) {
+        if let Some(clone) = crate::seat_clone::recorded_clone_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            &lease.worktree_path,
+        ) {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
             return match crate::seat_clone::probe_counting_origin(
                 &clone.main,

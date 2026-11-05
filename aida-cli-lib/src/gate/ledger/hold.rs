@@ -13,7 +13,7 @@
 // mandate-gate
 
 use super::event::{EventBody, GateEvent};
-use super::{legacy, store, store_root, ChangeKey};
+use super::{legacy, store, store_root, ChangeKey, GateSpec};
 use crate::gate::merge_hold_core::{parse_hold_marker, MergeHoldRecord};
 use crate::gate::review_verdict::JsonObj;
 use std::path::{Path, PathBuf};
@@ -228,7 +228,27 @@ pub(crate) fn append(
             );
             import.head = open.target_head_sha.clone();
             import.spec = open.spec.clone();
+            import.spec_key = open
+                .spec
+                .as_deref()
+                .and_then(|s| GateSpec::resolve(&root, s).key);
             events.push(import);
+        }
+    }
+    // trace:STORY-2324 | ai:claude — E3: the hold's spec resolves once, here,
+    // and the event and the hold record both carry its canonical key.
+    let spec = spec
+        .map(|s| GateSpec::resolve(&root, s))
+        .filter(|s| !s.label.is_empty() && ChangeKey::parse(&s.label).is_none());
+    let mut body = body;
+    if let (EventBody::Hold { hold, .. }, Some(spec)) = (&mut body, spec.as_ref()) {
+        if hold.spec_key.is_none()
+            && hold
+                .spec
+                .as_deref()
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case(&spec.label))
+        {
+            hold.spec_key = spec.key;
         }
     }
     let mut event = GateEvent::new(change, body);
@@ -236,9 +256,8 @@ pub(crate) fn append(
         .map(str::trim)
         .filter(|h| !h.is_empty())
         .map(str::to_string);
-    event.spec = spec
-        .map(|s| s.trim().to_ascii_uppercase())
-        .filter(|s| !s.is_empty() && ChangeKey::parse(s).is_none());
+    event.spec_key = spec.as_ref().and_then(|s| s.key);
+    event.spec = spec.map(|s| s.label);
     if let Some(head) = event.head.as_deref() {
         (event.base_ref, event.base_tip, event.patch_id) =
             super::event::patch_identity(&root, head);

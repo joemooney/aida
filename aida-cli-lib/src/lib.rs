@@ -90,6 +90,8 @@ mod config_edit;
 mod config_init;
 // trace:BUG-1928 | ai:claude — contained-posture write boundary (absolute allowed roots).
 mod contained_boundary;
+// trace:TASK-2712 | ai:claude — native Codex launches' shared write set.
+mod codex_native_sandbox;
 // trace:TASK-2705 | ai:codex
 mod containment;
 mod context_prompt;
@@ -153,6 +155,8 @@ mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
 mod lane_cmd;
 mod lane_job;
+// One agent launcher. trace:STORY-2326 | ai:claude
+mod launch;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
@@ -486,6 +490,7 @@ mod integrate_checkout;
 mod integrate_view;
 mod intent;
 mod internal_cmd;
+mod observation_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
 mod mail_retention;
 mod mailbox_cmd;

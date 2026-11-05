@@ -92,6 +92,7 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
     // Pure argv builders for other vendors retain their prior behavior.
     assert_eq!(
         crate::session::headless_vendor_args(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Agy,
             "fixture",
             "session",
@@ -102,8 +103,16 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
         .unwrap(),
         crate::session::agy_headless_args("fixture")
     );
-    let claude =
-        crate::session::claude_session_args(None, None, Some("hello"), None, false, None).unwrap();
+    let claude = crate::session::claude_session_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        None,
+        None,
+        Some("hello"),
+        None,
+        false,
+        None,
+    )
+    .unwrap();
     assert!(!claude.join(" ").contains("shell_environment_policy"));
 }
 
@@ -240,7 +249,8 @@ fn real_codex_roles(native: bool) {
         .env("AIDA_SESSION_SCOPE", "TASK-1")
         .env(
             "AIDA_CONTAINMENT_POSTURE",
-            if native { "native" } else { "aida" },
+            // trace:TASK-2708 | ai:claude — `aida` is refused at this finalizer.
+            if native { "native" } else { "none" },
         )
         .env("AIDA_SESSION_ID", "bug2398-independent-session")
         .env("AIDA_AGENT_TYPE", "codex")
@@ -492,7 +502,9 @@ enum Finalization {
 /// launches would have been caught.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
-    ("agent_launch.rs", 3, Finalization::PrepareLaunch(2)),
+    // STORY-2326: the fg/bg seat writes moved into launch::assign_seat; the
+    // 2 grant writes plus 5 launcher calls (2 spawn_agent, 3 assign_seat).
+    ("agent_launch.rs", 7, Finalization::PrepareLaunch(2)),
     // STORY-2254: the detached Codex worker (one grant assignment, one
     // finalization, after its own grant/headless/identity assignments).
     (
@@ -520,7 +532,27 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "bash running a script-deputy job under the operator's grant; no agent vendor",
         ),
     ),
-    ("dispatch.rs", 1, Finalization::PrepareLaunch(1)),
+    // trace:BUG-2390 | ai:claude — the one marker is the Claude/Agy
+    // implementer builder blanking the grant (Boundary B). A Codex take/impl
+    // lane runs `aida agent new codex --bg`, a separate aida process that
+    // finalizes in agent_codex_background.rs.
+    (
+        "dispatch.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "Claude/Agy implementer lanes blank the grant; Codex lanes launch through \
+             `aida agent new codex --bg`, finalized in agent_codex_background.rs",
+        ),
+    ),
+    // trace:STORY-2326 | ai:claude — the one seat writer; its Codex callers
+    // finalize at their own (inventoried) sites.
+    (
+        "launch/spawn.rs",
+        3,
+        Finalization::NotACodexLaunch(
+            "launch::assign_seat, the seat writer every converted site calls",
+        ),
+    ),
     ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
@@ -531,7 +563,11 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // `aida session resume`, `queue work --resume` and the reviewer resume
     // call last) and the headless `spawn_vendor_headless_resume_granted`
     // (punt/bg resume), which finalizes before stdio and revokes on refusal.
-    ("session.rs", 14, Finalization::PrepareLaunch(7)),
+    // STORY-2326: exec, headless forking, reviewer, advisor and coordinator
+    // seat writes moved into launch::assign_seat: 9 grant/coordinator markers
+    // plus 12 launcher calls (6 spawn_agent, 6 assign_seat).
+    // trace:STORY-2326 | ai:claude
+    ("session.rs", 21, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
@@ -629,11 +665,95 @@ fn grant_env_aliases(normalized: &str) -> Vec<String> {
     aliases
 }
 
+/// Calls of the STORY-2326 launcher in raw source. `spawn_agent` builds a
+/// child and `assign_seat` writes its role and grant inside
+/// `launch/spawn.rs`, so each caller is a launch site the `.env(..)` scans
+/// would miss once its writes moved behind the launcher (advisor ruling 2,
+/// round 5). A definition (`fn assign_seat(`) is not a call, a longer name
+/// (`exec_or_spawn_agent(`) is not either, and an import alias
+/// (`use ..assign_seat as NAME`) is followed.
+// trace:STORY-2326 | ai:claude
+fn launcher_calls(raw: &str) -> usize {
+    fn is_ident(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+    let calls = |name: &str| {
+        raw.match_indices(name)
+            .filter(|(at, _)| {
+                let before = &raw[..*at];
+                let defines = before
+                    .trim_end()
+                    .strip_suffix("fn")
+                    .is_some_and(|b| !b.ends_with(is_ident));
+                !before.ends_with(is_ident)
+                    && raw[at + name.len()..].trim_start().starts_with('(')
+                    && !defines
+            })
+            .count()
+    };
+    ["assign_seat", "spawn_agent"]
+        .iter()
+        .map(|&name| {
+            let aliases: usize = raw
+                .split(&format!("{name} as "))
+                .skip(1)
+                .map(|rest| {
+                    rest.chars()
+                        .take_while(|c| is_ident(*c))
+                        .collect::<String>()
+                })
+                .filter(|alias| !alias.is_empty())
+                .map(|alias| calls(alias.as_str()))
+                .sum();
+            calls(name) + aliases
+        })
+        .sum()
+}
+
+/// The LAUNCH_INVENTORY count of the production source `src`.
+fn launch_sites(src: &str) -> usize {
+    launch_markers(&src.split_whitespace().collect::<String>()) + launcher_calls(src)
+}
+
 /// Whether the final ratchet would flag `src` as an unlisted launch site if
 /// it were the production file `rel`.
 fn flagged_as_unlisted(rel: &str, src: &str) -> bool {
-    let normalized = src.split_whitespace().collect::<String>();
-    launch_markers(&normalized) > 0 && !LAUNCH_INVENTORY.iter().any(|(f, ..)| *f == rel)
+    launch_sites(src) > 0 && !LAUNCH_INVENTORY.iter().any(|(f, ..)| *f == rel)
+}
+
+/// Advisor ruling 2 (round 5): a file that launches only through
+/// `launch::spawn_agent` / `launch::assign_seat` writes no selector itself,
+/// yet is a launch site in both inventories.
+// trace:STORY-2326 | ai:claude
+#[test]
+fn story_2326_inventories_count_launcher_callers() {
+    let seat = "fn launch(ctx: &LaunchContext, g: &str) -> Result<()> {\n\
+                let mut cmd = crate::launch::spawn_agent(ctx)?;\n\
+                crate::launch::assign_seat(&mut cmd, ctx.kind(),\n\
+                SeatDecision::Child { role: \"implementer\", grant: g })?; Ok(()) }";
+    assert_eq!(launcher_calls(seat), 2);
+    assert!(flagged_as_unlisted("fixture_launcher.rs", seat));
+    assert!(role_flagged_as_unlisted("fixture_launcher.rs", seat));
+    let aliased = "use crate::launch::{assign_seat as seat_of, spawn_agent as build};\n\
+                   fn launch(ctx: &LaunchContext) -> Result<()> {\n\
+                   let mut cmd = build (ctx)?;\n\
+                   seat_of(&mut cmd, ctx.kind(), NO_SEAT) }";
+    assert_eq!(launcher_calls(aliased), 2);
+    assert!(flagged_as_unlisted("fixture_aliased.rs", aliased));
+    assert!(role_flagged_as_unlisted("fixture_aliased.rs", aliased));
+    let returned = "fn build(ctx: &LaunchContext) -> Result<Command> { return spawn_agent(ctx); }";
+    assert_eq!(launcher_calls(returned), 1);
+    // A definition, a longer name and a doc link are not calls.
+    let clean = "/// Built by [`spawn_agent`].\n\
+                 pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> { todo!() }\n\
+                 fn assign_seat (cmd: &mut Command) {}\n\
+                 fn go(cmd: &mut Command) { exec_or_spawn_agent(cmd); my_assign_seat(cmd); }";
+    assert_eq!(launcher_calls(clean), 0);
+    assert!(!flagged_as_unlisted("fixture_clean_launcher.rs", clean));
+    assert!(!role_flagged_as_unlisted(
+        "fixture_clean_launcher.rs",
+        clean
+    ));
 }
 
 // One negative test per selector spelling the inventory scan must catch.
@@ -701,11 +821,10 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     production_sources(&src, &mut files);
-    let normalize = |text: &str| text.split_whitespace().collect::<String>();
     let mut found = std::collections::BTreeMap::new();
     for path in files {
         let text = std::fs::read_to_string(&path).unwrap();
-        let markers = launch_markers(&normalize(&text));
+        let markers = launch_sites(&text);
         if markers > 0 {
             let rel = path
                 .strip_prefix(&src)
@@ -1357,7 +1476,9 @@ fn bug_2398_real_codex_inherit_all_drops_unassigned_launcher_context() {
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_USER", "bug2398-child")
         .env("AIDA_PROJECT_ROOT", root)
-        .env("AIDA_CONTAINMENT_POSTURE", "aida")
+        // trace:TASK-2708 | ai:claude — an `aida` stamp is refused by name at
+        // this finalizer; the whitelisted key still carries a public value.
+        .env("AIDA_CONTAINMENT_POSTURE", "native")
         .env("AIDA_AGENT_TYPE", "codex");
     let aida_path = crate::test_exec::matching_aida_cli();
     let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());
@@ -1409,12 +1530,9 @@ fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delega
     let project = tmp.path().join("project");
     std::fs::create_dir_all(home.join(".aida")).unwrap();
     std::fs::create_dir_all(&project).unwrap();
-    assert!(Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&project)
-        .status()
-        .unwrap()
-        .success());
+    // trace:TASK-2708 | ai:claude — a real project (a resolvable default
+    // branch): the finalizer refuses a root whose trusted sha cannot resolve.
+    crate::test_git::commit_fixture(&project);
     let capture = tmp.path().join("advisor-grant.txt");
     let fake = tmp.path().join("fake-codex");
     crate::test_exec::write_executable(
@@ -1606,6 +1724,34 @@ enum RoleRoute {
     /// A Codex launch that does not finalize yet; the reason names the
     /// follow-up. Moving an entry out of here is the fix, not editing it.
     KnownGap(&'static str),
+    /// `launch::assign_seat`, the one seat writer: it launches nothing
+    /// itself, and every caller is counted at its own site.
+    // trace:STORY-2326 | ai:claude
+    SeatWriter,
+}
+
+/// The ROLE_LAUNCH_SITES count of the production source `src`: each child
+/// role write (`.env(` keyed by the literal or `ROLE_ENV`) plus each call of
+/// the launcher, which writes the role behind the caller's back.
+// trace:BUG-2395 STORY-2326 | ai:claude
+fn role_sites(src: &str) -> usize {
+    let normalized: String = src.split_whitespace().collect();
+    let writes = normalized
+        .split(".env(")
+        .skip(1)
+        .filter(|call| {
+            let key = call.split([',', ')']).next().unwrap_or_default();
+            let key = key.trim_start_matches('&');
+            key == "\"AIDA_SESSION_ROLE\"" || key == "ROLE_ENV" || key.ends_with("::ROLE_ENV")
+        })
+        .count();
+    writes + launcher_calls(src)
+}
+
+/// Whether the role ratchet would flag `src` as an unlisted role-launch site
+/// if it were the production file `rel`.
+fn role_flagged_as_unlisted(rel: &str, src: &str) -> bool {
+    role_sites(src) > 0 && !ROLE_LAUNCH_SITES.iter().any(|(f, ..)| *f == rel)
 }
 
 /// BUG-2395 (verify-only, advisor ruling): every production file that hands a
@@ -1613,11 +1759,23 @@ enum RoleRoute {
 /// here until it is audited for Codex finalization and recorded.
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
-    ("agent_launch.rs", 2, RoleRoute::LaunchInventory),
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
+    // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 3
+    // assign_seat calls. trace:STORY-2326 | ai:claude
+    ("agent_launch.rs", 5, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
-    ("dispatch.rs", 1, RoleRoute::LaunchInventory),
+    // trace:BUG-2390 | ai:claude
+    (
+        "dispatch.rs",
+        1,
+        RoleRoute::AidaChild(
+            "the role site is the Claude/Agy implementer builder; Codex take/impl run \
+             `aida agent new codex --bg`, which finalizes in agent_codex_background.rs",
+        ),
+    ),
+    // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
+    ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
     (
         "orchestrator_leases.rs",
         1,
@@ -1628,7 +1786,10 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // from the delegated grant) and `spawn_vendor_headless_resume_granted`
     // (punt/bg resume); both finalize through `prepare_launch`.
     // trace:BUG-2386 | ai:claude
-    ("session.rs", 8, RoleRoute::LaunchInventory),
+    // STORY-2326: the headless forking and reviewer writes moved into
+    // launch::assign_seat; 6 literal writes plus 12 launcher calls (6
+    // spawn_agent, 6 assign_seat). trace:STORY-2326 | ai:claude
+    ("session.rs", 18, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 
@@ -1640,11 +1801,7 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
     production_sources(&src, &mut files);
     let mut found = std::collections::BTreeMap::new();
     for path in files {
-        let normalized: String = std::fs::read_to_string(&path)
-            .unwrap()
-            .split_whitespace()
-            .collect();
-        let n = normalized.matches(".env(\"AIDA_SESSION_ROLE\",").count();
+        let n = role_sites(&std::fs::read_to_string(&path).unwrap());
         if n > 0 {
             let rel = path
                 .strip_prefix(&src)
@@ -1681,6 +1838,14 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
                 "{rel} claims LAUNCH_INVENTORY finalization but is not finalized there"
             ),
             RoleRoute::AidaChild(why) | RoleRoute::KnownGap(why) => assert!(!why.is_empty()),
+            // The seat writer's callers are the launch sites: at least one
+            // other inventoried file must call the launcher.
+            RoleRoute::SeatWriter => assert!(
+                ROLE_LAUNCH_SITES.iter().any(|(f, _, r)| f != rel
+                    && matches!(r, RoleRoute::LaunchInventory)
+                    && LAUNCH_INVENTORY.iter().any(|(l, ..)| l == f)),
+                "{rel}: the seat writer's callers are not inventoried"
+            ),
         }
     }
 }
@@ -1700,6 +1865,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
         "purpose = \"Lane fixture purpose\"\n",
     )
     .unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(&project);
 
     let mut cmd = Command::new("codex");
     cmd.args(["exec", "--", "prompt"])
@@ -1751,6 +1919,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
 #[test]
 fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
     let tmp = tempfile::TempDir::new().unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(tmp.path());
     let launch = crate::session::GuidedSessionLaunch {
         program: "codex",
         prompt: "guided prompt".into(),
@@ -1801,4 +1972,76 @@ fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
         args(&cmd),
         vec![std::ffi::OsString::from("/aida-guided-implement TASK-9")]
     );
+}
+
+// trace:BUG-2440 | ai:codex
+#[test]
+fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::create_dir_all(&bin).unwrap();
+    // Stub only the host namespace availability probe: no model or real
+    // sandbox launch is needed to verify argv construction and adaptation.
+    crate::test_exec::write_executable(&bin.join("bwrap"), "#!/bin/sh\nexit 0\n");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    for (os_wrap, config) in [
+        (Some("1"), "[contained]\nos_wrap = false\n"),
+        (None, "[contained]\nos_wrap = true\n"),
+    ] {
+        std::fs::write(root.join(".aida/config.toml"), config).unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            &root,
+            Some("advisor"),
+            &[("PATH", Some(path.as_str())), ("AIDA_OS_WRAP", os_wrap)],
+        );
+        for vendor in ["codex", "claude", "agy"] {
+            let executable = format!("/opt/vendor/{vendor}");
+            let args = vec!["exec".into(), "--".into(), "prompt mentioning codex".into()];
+            let (program, wrapped) =
+                crate::session::os_wrapped_program_and_args(None, &root, &executable, args.clone())
+                    .unwrap();
+            assert_eq!(program, "bwrap");
+            let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
+            assert_eq!(wrapped[separator + 1], executable);
+            assert_eq!(&wrapped[separator + 2..], &args);
+            assert!(wrapped[..separator]
+                .iter()
+                .any(|arg| arg == "--die-with-parent"));
+            if vendor == "codex" {
+                let mut child = std::process::Command::new(&program);
+                child
+                    .args(&wrapped)
+                    .current_dir(&root)
+                    // The launcher stamps the posture it resolved. This
+                    // fixture root is no git repo, so without the stamp the
+                    // TASK-2708 fail-closed check would (rightly) refuse.
+                    // trace:TASK-2708 | ai:claude
+                    .env("AIDA_CONTAINMENT_POSTURE", "native")
+                    .env("AIDA_SESSION_GRANT", "")
+                    .env("AIDA_USER", "wrapped-child");
+                prepare_launch(&mut child).unwrap();
+                let prepared: Vec<_> = child
+                    .get_args()
+                    .map(|arg| arg.to_str().unwrap().to_string())
+                    .collect();
+                assert_eq!(&prepared[..separator + 2], &wrapped[..separator + 2]);
+                assert_eq!(&prepared[prepared.len() - args.len()..], &args);
+                assert!(prepared[separator + 2..].windows(2).any(|pair| {
+                    pair[0] == "-c"
+                        && pair[1] == "shell_environment_policy.set.AIDA_USER=\"wrapped-child\""
+                }));
+                assert_eq!(child.get_current_dir(), Some(root.as_path()));
+            }
+        }
+    }
 }

@@ -18,6 +18,8 @@ use crate::deputy_shell::{
     self as ds, JobState, JobView, Queue, ShellJob, OPERATOR_TTY, RC_WAIT_TIMEOUT,
 };
 
+/// How long `wait` treats a job dir with no state as a claim in progress.
+const CLAIM_GRACE: Duration = Duration::from_secs(10);
 /// The seats a refreshed grant may delegate unless `--delegate-seat` says.
 const DEFAULT_DELEGATE_SEATS: [&str; 4] = ["advisor", "implementer", "reviewer", "integrator"];
 
@@ -224,6 +226,7 @@ fn start(a: &ShellRunArgs) -> Result<()> {
         bash: "bash".into(),
         max_jobs: None,
         max_rounds: None,
+        serve_socket: true,
     };
     ds::runner::run(&q, &cfg, &stop)?;
     Ok(())
@@ -311,14 +314,21 @@ pub(crate) fn submit(
         spec: a.spec.clone(),
         submitter,
     };
-    q.submit(&job)?;
-    writeln!(out, "{}", job.id)?;
+    // trace:STORY-2343 | ai:claude
     if q.live_runner().is_none() {
-        eprintln!(
-            "no script deputy {:?} is running yet; the job waits until the operator starts `aida deputy shell run --name {}`",
-            q.name, q.name
+        bail!(
+            "no script deputy {:?} is running; the operator starts it with `aida deputy shell run --name {}` in their terminal first",
+            q.name,
+            q.name
         );
     }
+    ds::socket::expect_accepted(
+        q,
+        &ds::socket::Request::Submit {
+            job: Box::new(job.clone()),
+        },
+    )?;
+    writeln!(out, "{}", job.id)?;
     if !a.wait {
         eprintln!(
             "queued for script deputy {:?}. Result: `aida deputy shell status {id}`; wait: `aida deputy shell wait {id}`",
@@ -346,10 +356,23 @@ pub(crate) fn wait(
 ) -> Result<i32> {
     let begun = std::time::Instant::now();
     let mut last_note = std::time::Instant::now();
+    let mut claiming_since: Option<std::time::Instant> = None;
     loop {
         let Some(view) = q.locate(id)? else {
+            // Mid-claim the runner has moved the job out of `accepted/` into
+            // its `jobs/<id>/` dir but not yet written `state.json`, so for a
+            // moment it is in neither place. Keep polling through that window
+            // (bounded, so an interrupted claim still errors) instead of
+            // reporting a live job as missing.
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+            let since = *claiming_since.get_or_insert_with(std::time::Instant::now);
+            if q.job_dir(id).is_dir() && since.elapsed() < CLAIM_GRACE {
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
             bail!("no script job {id} in deputy {:?}", q.name);
         };
+        claiming_since = None;
         if finished(&view.state) {
             if let Ok(bytes) = std::fs::read(q.transcript_path(id)) {
                 out.write_all(&bytes)?;
@@ -505,7 +528,7 @@ pub(crate) fn cancel(
             owner.as_deref().unwrap_or("an unknown session")
         );
     }
-    q.request_cancel(id)?;
+    ds::socket::expect_accepted(q, &ds::socket::Request::Cancel { id: id.to_string() })?;
     writeln!(
         out,
         "script job {id}: cancel requested; the runner stops it {}",

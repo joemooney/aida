@@ -971,10 +971,17 @@ fn mcp_id_cell(canonical: &str) -> String {
 /// branch / worktree, shipped state, PR). `verbose` expands the per-commit
 /// and trace-file lists, matching `aida show --verbose`. Returns an empty
 /// string when there is no git context, so callers can append unconditionally.
-// trace:STORY-82 | ai:claude
-fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> String {
+///
+/// TASK-2000: this is the MCP face of `aida show`, so it runs under the same
+/// one linkage deadline ([`crate::SHOW_LINKAGE_DEADLINE`]) the CLI show
+/// surfaces use: default-branch resolution, the worktree probe, and every
+/// per-call budget are clipped to it, and a scan it cuts short renders as
+/// unknown / incomplete below instead of stalling the tool call.
+// trace:STORY-82 trace:TASK-2000 | ai:claude
+pub(crate) fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> String {
     let ids = vec![spec_id.to_string()];
-    let linkage = crate::collect_git_linkage(project_root, &ids);
+    let deadline = std::time::Instant::now() + crate::SHOW_LINKAGE_DEADLINE;
+    let linkage = crate::collect_git_linkage_until(project_root, &ids, deadline);
 
     // BUG-1594 (PRIN-5): a bounded scan that stopped early is reported as
     // partial, never as a complete (or empty) linkage. trace:BUG-1594 | ai:claude

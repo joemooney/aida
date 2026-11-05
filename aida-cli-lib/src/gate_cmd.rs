@@ -62,6 +62,21 @@ pub(crate) fn handle_gate_command(cmd: &GateCommand) -> Result<()> {
             compare,
             json,
         } => gate_state_cmd::run_state(change, *compare, *json),
+        // trace:STORY-2324 | ai:claude
+        GateCommand::Migrate {
+            dry_run: _,
+            execute,
+            rollback,
+            json,
+        } => {
+            use crate::gate::ledger::migrate::{run, RunMode};
+            let mode = match (*execute, *rollback) {
+                (true, _) => RunMode::Execute,
+                (_, true) => RunMode::Rollback,
+                _ => RunMode::DryRun,
+            };
+            run(mode, *json)
+        }
         GateCommand::Run { name, spec, json } => {
             let gate = gates::resolve(std::slice::from_ref(name)).map_err(anyhow::Error::msg)?;
             let project_root = find_project_root()?;

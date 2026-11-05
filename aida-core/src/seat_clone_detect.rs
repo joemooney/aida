@@ -74,7 +74,12 @@ static HOST_MAINS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::n
 
 /// Record `main` (a checkout with a real `.git` directory that is not itself a
 /// seat clone) as a host main whose clone leases [`seat_clone_root`] honours.
+/// Detection only: it lets [`seat_clone_root`] still recognise a clone whose
+/// seat removed its marker and name, so host git keeps refusing to run in it.
+/// It grants nothing; the cli's `host_recorded_clone` never consults it and
+/// trusts only the main its caller passes (TASK-2032).
 // trace:BUG-2169 | ai:claude
+// trace:TASK-2032 | ai:claude
 pub fn note_host_main(main: &Path) {
     let Ok(main) = main.canonicalize() else {
         return;
@@ -106,18 +111,6 @@ fn host_mains() -> Vec<PathBuf> {
         }
     }
     mains
-}
-
-/// Whether `main` is a main checkout THIS host process resolved itself:
-/// one recorded by [`note_host_main`] (host `git worktree list` on a path
-/// that is not a seat clone) or the git root of this process's cwd. Never
-/// derived from a seat clone's marker, which the seat can rewrite.
-// trace:BUG-2169 | ai:claude
-pub fn is_host_main(main: &Path) -> bool {
-    let Ok(main) = main.canonicalize() else {
-        return false;
-    };
-    host_mains().iter().any(|m| *m == main)
 }
 
 /// The trees of `main`'s `clone` session leases, read from the host-side
@@ -238,6 +231,14 @@ fn clone_by_name_or_marker(start: &Path) -> Option<PathBuf> {
             named || std::fs::symlink_metadata(dir.join(MARKER_RELATIVE)).is_ok()
         })
         .map(Path::to_path_buf)
+}
+
+/// Whether `start` or any ancestor is named `aida-seat-*` or holds a marker
+/// entry. Unlike [`seat_clone_root`] it reads no lease and no process-wide
+/// state, so its answer for a path never depends on what else the process saw.
+// trace:TASK-2032 | ai:claude
+pub fn is_named_or_marked_clone(start: &Path) -> bool {
+    clone_by_name_or_marker(start).is_some()
 }
 
 /// The seat clone `start` is inside, if any. A path counts when ANY ancestor

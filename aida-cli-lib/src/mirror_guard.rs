@@ -102,11 +102,11 @@ pub(crate) fn chain_guard_into(hook: &str) -> Result<String> {
     Ok(format!("{first}\n{}{rest}", guard_chain_block()))
 }
 
-/// Write `body` to `path` as an executable hook.
+/// Write `body` to `path` as an executable hook (staged, fsynced, 0755).
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
 fn write_hook(path: &Path, body: &str) -> Result<()> {
-    std::fs::write(path, body).with_context(|| format!("failed to write {}", path.display()))?;
-    aida_core::git_ops::set_hook_mode(path)
-        .with_context(|| format!("failed to make {} executable", path.display()))
+    aida_core::git_ops::write_hook_file(path, body.as_bytes())
+        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// `aida remote mirror-guard-check --install-guard [--force]`: install the

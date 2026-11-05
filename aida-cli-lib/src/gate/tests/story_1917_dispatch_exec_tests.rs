@@ -4002,3 +4002,453 @@ fn story_1917_activate_lock_refuses_when_proc_cannot_see_other_processes() {
         assert_eq!(meta.ino(), orig_ino);
     }
 }
+
+/// BUG-2390: a fake `aida` that plays `agent new codex --bg`: it records its
+/// argv and the dispatch-only env, prints the STORY-2254 acceptance line (or
+/// not), leaves a long-running "worker" behind, and returns at once.
+fn fake_codex_bg_aida(f: &ExecFixture, log: &Path, accept: bool) -> PathBuf {
+    let accepted = if accept {
+        "echo 'accepted: detached Codex implementer (attempt att-2390)'\n"
+    } else {
+        ""
+    };
+    f.write_executable_script(
+        if accept {
+            "fake-aida-codex-bg.sh"
+        } else {
+            "fake-aida-codex-refused.sh"
+        },
+        &format!(
+            "#!/bin/sh\n\
+             printf 'ARGS=%s\\nTOKEN=%s\\nPURPOSE=%s\\n' \"$*\" \"${}\" \"$AIDA_SESSION_PURPOSE\" >> '{}'\n\
+             {accepted}\
+             (sleep 30 </dev/null >/dev/null 2>&1 &)\n\
+             exit 0\n",
+            DISPATCH_CLAIM_TOKEN_ENV,
+            log.display()
+        ),
+    )
+}
+
+fn write_agents_vendor(root: &Path, vendor: &str) {
+    std::fs::write(
+        root.join(".aida/agents.toml"),
+        format!("[agents]\nvendor = \"{vendor}\"\n"),
+    )
+    .unwrap();
+}
+
+/// BUG-2390 AC1: with no `--vendor`, take/impl run the project's configured
+/// `[agents] vendor`; an explicit `--vendor` still wins; the rendered prompt
+/// names the resolved vendor.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_take_and_impl_default_to_the_configured_vendor() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "claude");
+    assert_eq!(resolve_lane_vendor(&f.root, None), DispatchVendor::Claude);
+    write_agents_vendor(&f.root, "codex");
+    assert_eq!(resolve_lane_vendor(&f.root, None), DispatchVendor::Codex);
+    assert_eq!(
+        resolve_lane_vendor(&f.root, Some(DispatchVendor::Claude)),
+        DispatchVendor::Claude,
+        "an explicit --vendor overrides the configured vendor"
+    );
+
+    let now = Utc::now();
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let body = match &take.request.action {
+        DispatchVerb::Take {
+            brief_relpath,
+            brief_sha256,
+            ..
+        } => verify_frozen_brief(&f.root, &take.request.id, brief_relpath, brief_sha256).unwrap(),
+        other => panic!("expected take, got {other:?}"),
+    };
+    let prompt = render_lane_prompt(
+        &f.root,
+        Path::new(CODEX_LANE_WORKTREE),
+        &take.request.action,
+        &body,
+        now,
+    )
+    .unwrap();
+    assert!(prompt.contains("ai:codex"), "{prompt}");
+    assert!(!prompt.contains("ai:claude"), "{prompt}");
+}
+
+/// BUG-2390 AC2/AC3: a Codex take/impl lane goes through `aida agent new
+/// codex --bg` with the lane branch and base, not a foreground `codex exec`.
+/// The outcome is the spawn acceptance: the tick returns while the detached
+/// worker is still running, and dispatch prepares no worktree of its own.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_codex_take_and_impl_launch_detached_and_report_acceptance() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-bg.log");
+    let fake_aida = fake_codex_bg_aida(&f, &log, true);
+    // No vendor binary may run directly: one that would fail loudly.
+    let direct = f.write_executable_script("direct-agent.sh", "#!/bin/sh\nexit 97\n");
+    let _bins = install_test_bins(Some(fake_aida), Some(direct));
+
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // `aida dispatch serve` runs them: it holds the advisor grant the
+    // detached launch delegates from.
+    for id in [&take.request.id, &imp.request.id] {
+        let started = std::time::Instant::now();
+        let res = execute_one_request(&f.root, &f.mandate_dir, id, true, now).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "dispatch must not wait for the detached worker ({:?})",
+            started.elapsed()
+        );
+        assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+        assert_eq!(res.spawned_session.as_deref(), Some("att-2390"));
+    }
+
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let take_prompt = briefs_dir(&f.root).join(format!("{}.prompt.md", take.request.id));
+    let impl_prompt = briefs_dir(&f.root).join(format!("{}.prompt.md", imp.request.id));
+    assert!(
+        calls.contains(&format!(
+            "ARGS=agent new codex --role implementer --bg --spec TASK-100 \
+             --branch claude/fix-100 --base origin/claude/fix-100 --prompt-file {}",
+            take_prompt.display()
+        )),
+        "{calls}"
+    );
+    assert!(
+        calls.contains(&format!(
+            "ARGS=agent new codex --role implementer --bg --spec STORY-1917 \
+             --branch codex/story-1917-s2 --base origin/main --prompt-file {}",
+            impl_prompt.display()
+        )),
+        "{calls}"
+    );
+    assert_eq!(
+        calls.matches("TOKEN=\nPURPOSE=\n").count(),
+        2,
+        "the dispatch worker token and purpose are not passed on: {calls}"
+    );
+    let prompt = std::fs::read_to_string(&take_prompt).unwrap();
+    assert!(prompt.contains(CODEX_LANE_WORKTREE), "{prompt}");
+
+    // The lane's own launch creates its worktree; dispatch made none.
+    let wt_root = worktrees_root(&f.root);
+    assert!(!wt_root.join("take-100").exists());
+    assert!(!wt_root.join("impl-1917").exists());
+}
+
+/// TASK-2823: a Codex take whose PR branch is already checked out in another
+/// linked worktree re-enters that worktree (`--cwd`), as the Claude path
+/// does, instead of a `git worktree add` that git refuses. An impl lane and a
+/// take whose branch is checked out nowhere name no `--cwd`.
+// trace:TASK-2823 | ai:claude
+#[test]
+fn task_2823_codex_take_reuses_the_worktree_already_on_the_pr_branch() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-reuse.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+
+    let existing = f._tmp.path().join("pr-100-checkout");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "claude/fix-100",
+            existing.to_str().unwrap(),
+            "origin/claude/fix-100",
+        ],
+    );
+
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &take.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let take_prompt = briefs_dir(&f.root).join(format!("{}.prompt.md", take.request.id));
+    let listed = existing.canonicalize().unwrap();
+    assert!(
+        calls.contains(&format!(
+            "ARGS=agent new codex --role implementer --bg --spec TASK-100 \
+             --branch claude/fix-100 --base origin/claude/fix-100 --prompt-file {} --cwd {}\n",
+            take_prompt.display(),
+            listed.display()
+        )),
+        "{calls}"
+    );
+    assert!(
+        !worktrees_root(&f.root).join("take-100").exists(),
+        "dispatch made no worktree of its own"
+    );
+
+    // The branch checked out nowhere: no --cwd, the lane makes its own tree.
+    let target = CodexLaneTarget {
+        spec: "STORY-1917",
+        branch: "codex/story-1917-s2",
+        base: "origin/main",
+        fetch_ref: Some("main"),
+        existing_worktree: None,
+    };
+    let cmd = build_codex_lane_command(Path::new("aida"), &f.root, &target, Path::new("p.md"));
+    assert!(
+        !cmd.get_args().any(|a| a == "--cwd"),
+        "{:?}",
+        cmd.get_args().collect::<Vec<_>>()
+    );
+}
+
+/// BUG-2390: the schedule `dispatch tick` holds no seat grant, and the
+/// detached Codex launch mints its worker's grant from one. The tick decides
+/// that at claim time and leaves a Codex take/impl `Pending` (waiting for
+/// serve) instead of claiming and refusing it, so a tick that wins the race
+/// with `dispatch serve` loses nothing; serve then runs both.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_tick_leaves_codex_take_and_impl_pending_for_serve() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-tick.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: Some(DispatchVendor::Codex),
+        },
+        now,
+    )
+    .unwrap();
+
+    let tick = run_dispatch_tick_sync(&f.root, &f.mandate_dir, now).unwrap();
+    assert_eq!(tick.spawned, 0, "{tick:?}");
+    assert_eq!(tick.waiting_for_serve, 2, "{tick:?}");
+    for id in [&take.request.id, &imp.request.id] {
+        let (_, res) = load_pair(&f.root, id).unwrap();
+        assert_eq!(res.status, DispatchStatus::Pending, "{res:?}");
+        assert!(res.claim_token().is_none(), "{res:?}");
+    }
+    assert!(
+        !log.exists(),
+        "no detached Codex launch may run from the tick"
+    );
+
+    // `aida dispatch serve` then claims and runs both.
+    let pass = claim_and_dispatch_pass(&f.root, true, false, now).unwrap();
+    assert_eq!(pass.spawned, 2, "{pass:?}");
+    for id in [&take.request.id, &imp.request.id] {
+        let token = load_pair(&f.root, id)
+            .unwrap()
+            .1
+            .claim_token()
+            .map(str::to_string);
+        let res = execute_one_request_with_token(
+            &f.root,
+            &f.mandate_dir,
+            id,
+            true,
+            token.as_deref(),
+            now,
+        )
+        .unwrap();
+        assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+        assert_eq!(res.spawned_session.as_deref(), Some("att-2390"));
+    }
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(calls.matches("ARGS=agent new codex").count(), 2, "{calls}");
+}
+
+/// BUG-2390: `aida dispatch run <id>` without `--via-serve` on a Codex lane
+/// is refused with a remedy that names real commands: resubmit, then run
+/// `aida dispatch serve` from a role-entered advisor terminal.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_direct_run_refuses_codex_lane_naming_the_real_remedy() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-direct.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    let res = execute_one_request(&f.root, &f.mandate_dir, &imp.request.id, false, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Refused, "{res:?}");
+    let reason = res.refusal_reason.as_deref().unwrap_or_default();
+    assert!(reason.contains(CODEX_LANE_NEEDS_GRANT), "{reason}");
+    assert!(
+        reason.contains("aida dispatch request take|impl"),
+        "{reason}"
+    );
+    assert!(reason.contains("aida dispatch serve"), "{reason}");
+    assert!(!reason.contains("aida dispatch take "), "{reason}");
+    assert!(!log.exists(), "no detached Codex launch may run");
+}
+
+/// BUG-2390: a launcher that exits 0 without an `accepted:` line did not
+/// start a worker; the request fails rather than reporting success.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_codex_lane_without_acceptance_fails() {
+    let f = ExecFixture::new(&["implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-refused.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, false)), None);
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: Some(DispatchVendor::Codex),
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &imp.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+    assert!(res.spawned_session.is_none());
+
+    assert_eq!(
+        parse_codex_lane_acceptance(
+            "noise\naccepted: detached Codex implementer (attempt 1234-abcd)\n  worker: pid 9\n"
+        )
+        .as_deref(),
+        Some("1234-abcd")
+    );
+    assert_eq!(
+        parse_codex_lane_acceptance(
+            "accepted: detached Codex implementer (attempt x); the supervisor's report was lost\n"
+        )
+        .as_deref(),
+        Some("x")
+    );
+    assert_eq!(parse_codex_lane_acceptance("refused\n"), None);
+}
+
+/// BUG-2390: occupancy names a live Codex lane as well as a Claude one.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_occupancy_names_live_codex_and_claude_lanes() {
+    use aida_core::liveness::{AgentKind, LiveAgentProcess};
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join("lane/sub")).unwrap();
+    let wt = tmp.path().join("lane").canonicalize().unwrap();
+    let live = |pid, agent, cwd: PathBuf| LiveAgentProcess {
+        pid,
+        agent,
+        cwd,
+        stale_cwd: false,
+        start_time: None,
+        tty: None,
+    };
+    let codex = vec![live(41, AgentKind::Codex, wt.join("sub"))];
+    assert_eq!(live_agent_in_worktree(&codex, &wt), Some(("codex", 41)));
+    let claude = vec![live(42, AgentKind::Claude, wt.clone())];
+    assert_eq!(live_agent_in_worktree(&claude, &wt), Some(("claude", 42)));
+    let elsewhere = vec![live(43, AgentKind::Codex, tmp.path().to_path_buf())];
+    assert_eq!(live_agent_in_worktree(&elsewhere, &wt), None);
+}

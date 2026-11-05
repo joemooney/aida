@@ -822,17 +822,32 @@ pub(crate) struct HostRecordedClone {
 ///
 /// The trust comes from the `clone` lease in `<main>/.aida/sessions`, which
 /// the host writes and which sits outside every root a contained seat may
-/// write. The main itself must be one THIS host process resolved
-/// ([`aida_core::seat_clone_detect::is_host_main`]): [`main_for`] reads main
-/// from the seat-writable marker, so without that anchor a seat could point
-/// its marker at a forged "main" in a directory it can write and plant a
-/// lease there. On top of that, `root` must be the clone root itself (not a
-/// directory inside one), be named `aida-seat-*`, and neither contain the
-/// main checkout nor sit inside it. The cargo target directory is accepted
-/// only at exactly `<main>/target/worktrees/<clone dir>`, as a real
-/// directory, never a symlink.
+/// write. `main` is the launcher's main checkout, passed in by the caller
+/// (resolved once at the launch entry point, see [`launcher_main`]); the
+/// clone's marker must name exactly it.
+/// [`main_for`] reads main from the seat-writable marker, so without that
+/// anchor a seat could point its marker at a forged "main" in a directory it
+/// can write and plant a lease there. TASK-2032: the anchor is the one main
+/// this launch is for, not every main the process ever resolved, so a
+/// long-lived process does not widen it. The trust rests on that caller
+/// contract: `main` is host-resolved, never read from a seat-writable file.
+/// As defense in depth `main` must also pass [`plausible_host_main`], which
+/// refuses a clone or a repository under a `target/worktrees` directory. That
+/// is a partial filter, not a forgery guarantee: a repository a seat
+/// `git init`s in another root it writes (its sandbox TMPDIR, say) passes it,
+/// so only the caller contract keeps such a path out. On top of that,
+/// `root` must be the clone root itself (not a directory inside one), be
+/// named `aida-seat-*`, and neither contain the main checkout nor sit inside
+/// it. The cargo target directory is accepted only at exactly
+/// `<main>/target/worktrees/<clone dir>`, as a real directory, never a
+/// symlink.
 // trace:BUG-2169 | ai:claude
-pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn host_recorded_clone(main: &Path, root: &Path) -> Option<HostRecordedClone> {
+    let launcher_main = main.canonicalize().ok()?;
+    if !plausible_host_main(&launcher_main) {
+        return None;
+    }
     let root = root.canonicalize().ok()?;
     if seat_clone_root(&root).as_deref() != Some(root.as_path()) {
         return None;
@@ -847,7 +862,7 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
     let MainFor::Verified(main) = main_for(&root) else {
         return None;
     };
-    if !aida_core::seat_clone_detect::is_host_main(&main) {
+    if main != launcher_main {
         return None;
     }
     if main.starts_with(&root) || root.starts_with(&main) {
@@ -871,6 +886,92 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
         main,
         cargo_target_dir,
     })
+}
+
+/// Whether `main` may anchor a seat clone at all: a checkout with a real
+/// `.git` directory that is not itself, nor inside, a seat clone (by name or
+/// marker; no lease or process-wide state is read, so the answer never
+/// depends on what else the process resolved), and that does not sit under a
+/// `target/worktrees` directory, where every seat's cargo target directory
+/// lives and a seat could `git init` a forged main (TASK-2032 round 2).
+// trace:TASK-2032 | ai:claude
+pub(crate) fn plausible_host_main(main: &Path) -> bool {
+    let under_seat_targets = main.ancestors().skip(1).any(|dir| {
+        dir.file_name().is_some_and(|n| n == "worktrees")
+            && dir
+                .parent()
+                .and_then(Path::file_name)
+                .is_some_and(|n| n == "target")
+    });
+    aida_core::seat_clone_detect::has_real_git_dir(main)
+        && !aida_core::seat_clone_detect::is_named_or_marked_clone(main)
+        && !under_seat_targets
+}
+
+/// The host main for a launch that starts in `start` (a host directory, never
+/// a seat's): the main checkout host git resolves from it. `None` when
+/// `start` is inside a seat clone, whose main comes only from its
+/// seat-writable marker and so can anchor nothing.
+// trace:TASK-2032 | ai:claude
+pub(crate) fn host_main_from(start: &Path) -> Option<PathBuf> {
+    if main_for(start) != MainFor::NotAClone {
+        return None;
+    }
+    let main = crate::main_worktree_root_from(start).canonicalize().ok()?;
+    plausible_host_main(&main).then_some(main)
+}
+
+/// The launcher's main checkout: [`host_main_from`] the project this process
+/// runs in (its cwd, or a test's pinned project root). A launch entry point
+/// calls this ONCE, before it changes directory into a seat, and threads the
+/// result explicitly through every boundary builder: after a chdir into a
+/// seat clone the cwd names the clone, and this returns `None`. Boundary
+/// builders never call it: they take the host main as a parameter. The
+/// functions allowed to call it are listed in
+/// `tests/task_2032_launcher_main_ratchet_tests.rs`, which fails on any new
+/// caller.
+// trace:TASK-2032 | ai:claude
+pub(crate) fn launcher_main() -> Option<PathBuf> {
+    host_main_from(&crate::find_project_root().ok()?)
+}
+
+/// Test seam: pins this thread's project root (and so [`launcher_main`]) to
+/// `main` for the guard's lifetime, without the env lock an
+/// `AmbientGuard` holds, so a test may still take one beside it.
+// trace:TASK-2032 | ai:claude
+#[cfg(test)]
+pub(crate) struct LauncherMainPin(Option<crate::test_ambient::Ambient>);
+
+#[cfg(test)]
+impl LauncherMainPin {
+    pub(crate) fn new(main: &Path) -> Self {
+        Self(crate::test_ambient::replace(Some(
+            crate::test_ambient::Ambient {
+                project_root: main.to_path_buf(),
+                stdin_is_terminal: false,
+                stdout_is_terminal: false,
+                stderr_is_terminal: false,
+            },
+        )))
+    }
+}
+
+#[cfg(test)]
+impl Drop for LauncherMainPin {
+    fn drop(&mut self) {
+        crate::test_ambient::replace(self.0.take());
+    }
+}
+
+/// [`host_recorded_clone`] for a launch whose entry point resolved
+/// `host_main`; `None` (no host main) recognises no clone, so every boundary
+/// fails closed.
+// trace:TASK-2032 | ai:claude
+pub(crate) fn recorded_clone_for(
+    host_main: Option<&Path>,
+    root: &Path,
+) -> Option<HostRecordedClone> {
+    host_recorded_clone(host_main?, root)
 }
 
 /// The extra paths a host-recorded clone seat writes beyond its own root: its
@@ -1030,6 +1131,94 @@ pub(crate) fn probe_sandbox_args(
     read_allowlist: &[String],
     repo_config: &Path,
 ) -> Vec<std::ffi::OsString> {
+    sandbox_args(clone, main, read_allowlist, repo_config, &[])
+}
+
+/// TASK-2712: [`probe_sandbox_args`] for the host's commit of a native
+/// Codex seat's pending work. Identical, except the clone (its `.git`
+/// included) is bound read-WRITE and the commit identity is set in the
+/// cleared environment. Main's `.git` stays read-only and `repo_config`
+/// stays bound read-only over the clone's own config, so no seat-written
+/// config, hook, filter or fsmonitor runs, and there is still no network.
+/// When the clone's read-only bind cannot be found (the probe sandbox's
+/// shape changed), this is an error: a commit sandbox that silently kept the
+/// clone read-only would fail later with a misleading git error.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn commit_sandbox_args(
+    clone: &Path,
+    main: &Path,
+    read_allowlist: &[String],
+    repo_config: &Path,
+    identity: &[(&'static str, std::ffi::OsString)],
+) -> Result<Vec<std::ffi::OsString>> {
+    let args = sandbox_args(clone, main, read_allowlist, repo_config, identity);
+    writable_clone_bind(args, clone)
+}
+
+/// `args` with the clone's `--ro-bind <clone> <clone>` turned into a
+/// writable `--bind`: exactly one such bind must exist.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn writable_clone_bind(
+    mut args: Vec<std::ffi::OsString>,
+    clone: &Path,
+) -> Result<Vec<std::ffi::OsString>> {
+    let clone_os = clone.as_os_str();
+    let binds: Vec<usize> = args
+        .windows(3)
+        .enumerate()
+        .filter(|(_, w)| w[0] == "--ro-bind" && w[1] == *clone_os && w[2] == *clone_os)
+        .map(|(at, _)| at)
+        .collect();
+    anyhow::ensure!(
+        binds.len() == 1,
+        "refusing to commit the seat's pending work: the commit sandbox found {} read-only \
+         binds of {} (expected exactly one), so it cannot make the clone writable. Nothing \
+         was committed",
+        binds.len(),
+        clone.display()
+    );
+    args[binds[0]] = "--bind".into();
+    Ok(args)
+}
+
+/// TASK-2712: `(device, inode)` of `dir`, which must be a real directory
+/// (never a symbolic link).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn dir_identity(dir: &Path) -> Result<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt as _;
+    let meta = std::fs::symlink_metadata(dir)
+        .with_context(|| format!("could not read the seat clone {}", dir.display()))?;
+    anyhow::ensure!(
+        meta.file_type().is_dir(),
+        "refusing to commit the seat's pending work: {} is not a directory (a symbolic link \
+         or a replaced path). Nothing was committed",
+        dir.display()
+    );
+    Ok((meta.dev(), meta.ino()))
+}
+
+/// TASK-2712: refuse when `dir` is no longer the directory pinned as
+/// `pinned` (it was replaced or swapped for a symbolic link since it was
+/// checked).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn ensure_dir_identity(dir: &Path, pinned: (u64, u64)) -> Result<()> {
+    anyhow::ensure!(
+        dir_identity(dir)? == pinned,
+        "refusing to commit the seat's pending work: {} was replaced after it was checked. \
+         Nothing was committed",
+        dir.display()
+    );
+    Ok(())
+}
+
+// trace:TASK-2053 trace:TASK-2712 | ai:claude
+fn sandbox_args(
+    clone: &Path,
+    main: &Path,
+    read_allowlist: &[String],
+    repo_config: &Path,
+    extra_env: &[(&'static str, std::ffi::OsString)],
+) -> Vec<std::ffi::OsString> {
     let mut args: Vec<std::ffi::OsString> = ["--unshare-all", "--die-with-parent", "--new-session"]
         .iter()
         .map(Into::into)
@@ -1081,7 +1270,7 @@ pub(crate) fn probe_sandbox_args(
         ("GIT_CONFIG_VALUE_1", "false".into()),
         (ACCESSOR_ENV, "1".into()),
     ];
-    for (name, value) in env {
+    for (name, value) in env.into_iter().chain(extra_env.iter().cloned()) {
         args.extend(["--setenv".into(), name.into(), value]);
     }
     args.push("--".into());
@@ -1135,6 +1324,41 @@ fn run_sandboxed_until(
     cap: u64,
     deadline: Option<std::time::Instant>,
 ) -> std::result::Result<Vec<u8>, SandboxFailure> {
+    run_sandboxed_as(clone, main, program, args, cap, deadline, None)
+}
+
+/// TASK-2712: [`run_sandboxed`] in the commit sandbox
+/// ([`commit_sandbox_args`]): the clone writable, `identity` set, hooks off.
+// trace:TASK-2712 | ai:claude
+fn run_commit_sandboxed(
+    clone: &Path,
+    main: &Path,
+    args: &[&std::ffi::OsStr],
+    identity: &[(&'static str, std::ffi::OsString)],
+) -> std::result::Result<Vec<u8>, SandboxFailure> {
+    run_sandboxed_as(
+        clone,
+        main,
+        "git",
+        args,
+        PROBE_OUTPUT_CAP,
+        None,
+        Some(identity),
+    )
+}
+
+/// The one sandbox runner: the probe sandbox when `commit_identity` is
+/// `None`, the commit sandbox with that identity otherwise.
+// trace:TASK-2053 trace:TASK-2712 | ai:claude
+fn run_sandboxed_as(
+    clone: &Path,
+    main: &Path,
+    program: &str,
+    args: &[&std::ffi::OsStr],
+    cap: u64,
+    deadline: Option<std::time::Instant>,
+    commit_identity: Option<&[(&'static str, std::ffi::OsString)]>,
+) -> std::result::Result<Vec<u8>, SandboxFailure> {
     let failed = |why: String| SandboxFailure::Failed(why);
     let repo_config = tempfile::NamedTempFile::new()
         .and_then(|mut file| {
@@ -1144,16 +1368,18 @@ fn run_sandboxed_until(
         })
         .map_err(|error| failed(format!("could not write the probe's git config: {error}")))?;
     let read_allowlist = crate::session::contained_read_allowlist(main);
+    let sandbox = match commit_identity {
+        None => probe_sandbox_args(clone, main, &read_allowlist, repo_config.path()),
+        Some(identity) => {
+            commit_sandbox_args(clone, main, &read_allowlist, repo_config.path(), identity)
+                .map_err(|e| failed(format!("{e:#}")))?
+        }
+    };
     let mut cmd = std::process::Command::new("bwrap");
-    cmd.args(probe_sandbox_args(
-        clone,
-        main,
-        &read_allowlist,
-        repo_config.path(),
-    ))
-    .arg(program)
-    .args(args)
-    .stdin(std::process::Stdio::null());
+    cmd.args(sandbox)
+        .arg(program)
+        .args(args)
+        .stdin(std::process::Stdio::null());
     let timeout = deadline
         .map(|end| {
             end.saturating_duration_since(std::time::Instant::now())
@@ -1194,6 +1420,137 @@ fn probe_run(
     run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
         .map(|out| String::from_utf8_lossy(&out).into_owned())
         .map_err(|failure| failure.to_string())
+}
+
+/// Count commits held by the seat but by no remote: HEAD and the lease branch
+/// for worktrees, all local branches for private clones. Unlike salvage
+/// accounting, a local host ref or base pin never excuses a commit.
+/// Clone Git stays inside the existing read-only probe sandbox.
+// trace:BUG-2450 | ai:codex
+pub(crate) fn remote_missing_commits(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+) -> Result<u64> {
+    let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
+    // A remote tip absent from the clone cannot excuse anything there. Git
+    // failures (including a broken HEAD) refuse rather than guessing zero.
+    let script = r#"set -eu
+head=''
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  head=HEAD
+else
+  branch=$(git symbolic-ref -q HEAD) || exit 1
+  if git show-ref --verify --quiet "$branch"; then exit 1; else
+    code=$?
+    [ "$code" -eq 1 ] || exit 1
+  fi
+fi
+negative=''
+if [ "$#" -gt 0 ]; then
+  objects=$(printf '%s\n' "$@" | git cat-file --batch-check='%(objectname) %(objecttype)')
+  negative=$(printf '%s\n' "$objects" | awk '$2 == "commit" {print "^" $1}')
+fi
+printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
+"#;
+    let output = if is_clone {
+        let out = run_sandboxed_until(
+            seat,
+            main,
+            "sh",
+            &["-c".as_ref(), REF_TIPS_SCRIPT.as_ref()],
+            PROBE_OUTPUT_CAP,
+            deadline,
+        )
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let out = String::from_utf8_lossy(&out);
+        let (tips, candidates) = split_tips(&out);
+        let remote_tips = main_reachable_commits_via(
+            main,
+            tips.into_iter().chain(candidates),
+            deadline,
+            "--remotes",
+        );
+        let count_with = |tips: &[String]| -> Result<String> {
+            let mut args: Vec<&std::ffi::OsStr> = vec![
+                "-c".as_ref(),
+                script.as_ref(),
+                "aida-remote-missing".as_ref(),
+            ];
+            args.extend(tips.iter().map(|s| std::ffi::OsStr::new(s)));
+            let out = run_sandboxed_until(seat, main, "sh", &args, PROBE_OUTPUT_CAP, deadline)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            Ok(String::from_utf8(out)?)
+        };
+        let first = count_with(&remote_tips)?;
+        if first.trim() == "0" {
+            first
+        } else {
+            // Explicit-refspec pushes need not leave tracking refs in either
+            // checkout. Use the same bounded origin-tip evidence as the
+            // existing clone probe; host-only refs still excuse nothing.
+            // trace:BUG-2450 | ai:codex
+            let remaining = deadline
+                .unwrap()
+                .saturating_duration_since(std::time::Instant::now());
+            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            if heads.is_empty() {
+                first
+            } else {
+                let tips: Vec<String> = remote_tips.into_iter().chain(heads).collect();
+                count_with(&tips)?
+            }
+        }
+    } else {
+        let mut cmd = aida_core::git_ops::host_git_command(seat);
+        // Use Git directly for ordinary worktrees; the negative tips are
+        // already in their shared object database and remote namespace.
+        let mut head = aida_core::git_ops::host_git_command(seat);
+        head.args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+        let has_head = run_bounded(head, "", deadline).is_some();
+        if !has_head {
+            let mut symbolic = aida_core::git_ops::host_git_command(seat);
+            symbolic.args(["symbolic-ref", "--quiet", "HEAD"]);
+            let branch = run_bounded(symbolic, "", deadline).context("cannot read HEAD")?;
+            let mut exists = aida_core::git_ops::host_git_command(seat);
+            exists.args(["show-ref", "--verify", "--quiet", branch.trim()]);
+            let out = crate::command_output_with_timeout(exists, std::time::Duration::from_secs(5))
+                .context("cannot validate unborn HEAD")?;
+            anyhow::ensure!(out.status.code() == Some(1), "HEAD is unreadable");
+        }
+        // Worktrees share refs/heads with every other seat. Only this
+        // seat's current HEAD and its recorded branch belong to this lease.
+        // HEAD also covers a different branch currently checked out here.
+        // trace:BUG-2450 | ai:codex
+        let lease_ref = format!("refs/heads/{lease_branch}");
+        let mut exists = aida_core::git_ops::host_git_command(seat);
+        exists.args(["show-ref", "--verify", "--quiet", &lease_ref]);
+        let status = crate::command_output_with_timeout(exists, std::time::Duration::from_secs(5))
+            .context("cannot validate lease branch")?
+            .status;
+        anyhow::ensure!(
+            matches!(status.code(), Some(0 | 1)),
+            "cannot read lease branch"
+        );
+        let has_branch = status.success();
+        if !has_head && !has_branch {
+            return Ok(0);
+        }
+        cmd.args(["rev-list", "--count"]);
+        if has_branch {
+            cmd.arg(&lease_ref);
+        }
+        if has_head {
+            cmd.arg("HEAD");
+        }
+        cmd.args(["--not", "--remotes"]);
+        run_bounded(cmd, "", deadline).context("cannot count commits absent from remotes")?
+    };
+    output
+        .trim()
+        .parse::<u64>()
+        .context("invalid remote-missing commit count")
 }
 
 /// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
@@ -1745,6 +2102,18 @@ pub(crate) fn main_reachable_commits<'a>(
     tips: impl Iterator<Item = &'a str>,
     deadline: Option<std::time::Instant>,
 ) -> Vec<String> {
+    main_reachable_commits_via(main, tips, deadline, "--all")
+}
+
+// Only remote refs grant teardown coverage; ordinary salvage accounting
+// continues to use all host refs through the wrapper above.
+// trace:BUG-2450 | ai:codex
+fn main_reachable_commits_via<'a>(
+    main: &Path,
+    tips: impl Iterator<Item = &'a str>,
+    deadline: Option<std::time::Instant>,
+    refs: &str,
+) -> Vec<String> {
     let mut tips: Vec<&str> = tips.filter(|oid| is_full_oid(oid)).collect();
     tips.sort_unstable();
     tips.dedup();
@@ -1768,7 +2137,7 @@ pub(crate) fn main_reachable_commits<'a>(
     // `rev-list <tips> --not --all` lists what main's refs do not reach; a
     // tip missing from it is reachable.
     let mut unreached = git(main);
-    unreached.args(["rev-list", "--stdin", "--not", "--all"]);
+    unreached.args(["rev-list", "--stdin", "--not", refs]);
     let input: String = commits.iter().map(|oid| format!("{oid}\n")).collect();
     let Some(out) = run_bounded(unreached, &input, deadline) else {
         return Vec::new();
@@ -2153,6 +2522,212 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
         );
     }
     Ok(path)
+}
+
+/// TASK-2712 (the advisor's N3 fallback): commit the seat's pending work for
+/// a native Codex seat, which cannot commit inside its own sandbox (Codex
+/// re-protects `<clone>/.git`). Every git run is AIDA's own bwrap job: the
+/// checks in the read-only probe sandbox, `git add -A` and `git commit` in
+/// the commit sandbox ([`commit_sandbox_args`]: the clone writable, main's
+/// `.git` read-only, the clone's config replaced, hooks and fsmonitor off, no
+/// network). The clone's HEAD must be the lease's `branch`. The identity is
+/// the host's own `user.name`/`user.email` from MAIN's config, never the
+/// seat's, read before any sandbox runs. `Ok(None)` when there is nothing to
+/// commit; `Ok(Some(tip))` with the new commit otherwise. The clone root is
+/// pinned (device and inode) at the start and re-checked before staging and
+/// before committing, so a path replaced mid-run is refused. On a failure
+/// the working tree is untouched, and a failure after staging restores the
+/// index to the exact tree it held before (`git write-tree` snapshot, then
+/// `git read-tree`), so nothing is left staged, but only while HEAD has not
+/// moved ([`index_restore_allowed`]).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn commit_pending(
+    main: &Path,
+    clone: &Path,
+    branch: &str,
+    message: &str,
+) -> Result<Option<String>> {
+    anyhow::ensure!(
+        !message.trim().is_empty(),
+        "refusing to commit the seat's pending work with an empty message"
+    );
+    let pinned = dir_identity(clone)?;
+    let read_identity = |key: &str| -> Result<String> {
+        let mut cmd = git(main);
+        cmd.args(["config", "--get", key]);
+        run(cmd, &format!("read the host's {key}"))
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .with_context(|| {
+                format!(
+                    "refusing to commit the seat's pending work: the main checkout has no \
+                     `{key}`. Set it with `git config {key} …` in {}; nothing was committed",
+                    main.display()
+                )
+            })
+    };
+    let (name, email) = (read_identity("user.name")?, read_identity("user.email")?);
+    let os = |s: &'static str| -> &'static std::ffi::OsStr { s.as_ref() };
+    let probe_text = |args: &[&std::ffi::OsStr]| {
+        run_sandboxed(clone, main, "git", args, PROBE_OUTPUT_CAP)
+            .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+            .map_err(|failure| {
+                anyhow::anyhow!(
+                    "could not read the seat {} inside the seat sandbox: {failure}",
+                    clone.display()
+                )
+            })
+    };
+    let head = probe_text(&[os("symbolic-ref"), os("-q"), os("HEAD")])?;
+    let want = format!("refs/heads/{branch}");
+    anyhow::ensure!(
+        head == want,
+        "refusing to commit the seat's pending work: {} is on `{}`, not its lease's branch \
+         `{branch}`. Nothing was committed; the working tree is untouched",
+        clone.display(),
+        head.escape_debug()
+    );
+    // The host's own seat marker is never seat work, ignored or not.
+    let exclude_marker = format!(
+        ":(exclude){}",
+        aida_core::seat_clone_detect::MARKER_RELATIVE
+    );
+    let pathspec: [&std::ffi::OsStr; 3] = [os("--"), os("."), exclude_marker.as_ref()];
+    let mut status_args = vec![
+        os("status"),
+        os("--porcelain=v1"),
+        os("--untracked-files=all"),
+    ];
+    status_args.extend(pathspec);
+    let status = probe_text(&status_args)?;
+    if status.is_empty() {
+        return Ok(None);
+    }
+    let identity: [(&'static str, std::ffi::OsString); 4] = [
+        ("GIT_AUTHOR_NAME", name.clone().into()),
+        ("GIT_AUTHOR_EMAIL", email.clone().into()),
+        ("GIT_COMMITTER_NAME", name.into()),
+        ("GIT_COMMITTER_EMAIL", email.into()),
+    ];
+    let recovery = |step: &str, failure: SandboxFailure| {
+        anyhow::anyhow!(
+            "could not {step} the seat's pending work in {} inside AIDA's sandbox: {failure}. \
+             The working tree is untouched; fix the cause and rerun `aida ship --from-seat {} \
+             --commit-pending …`",
+            clone.display(),
+            clone.display()
+        )
+    };
+    // HEAD before anything is staged: the index is restored only while HEAD
+    // still points here (F5), never behind a commit that did land.
+    // trace:TASK-2712 | ai:claude
+    let head_before = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
+    // The index as it is now, so a failure after staging can put it back.
+    ensure_dir_identity(clone, pinned)?;
+    let index_tree = run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+        .map_err(|failure| recovery("snapshot the index before staging", failure))?;
+    anyhow::ensure!(
+        index_tree.len() >= 40 && index_tree.bytes().all(|b| b.is_ascii_hexdigit()),
+        "refusing to commit the seat's pending work: `git write-tree` in {} printed `{}`, not \
+         a tree id. Nothing was committed",
+        clone.display(),
+        index_tree.escape_debug()
+    );
+    let staged = (|| -> Result<String> {
+        // Stage everything `.gitignore`/`info/exclude` allow. No explicit
+        // marker exclude here: git refuses an add whose pathspec names an
+        // ignored path ("paths are ignored"), and the marker normally IS
+        // ignored. Never `-f`.
+        // trace:TASK-2712 | ai:claude
+        run_commit_sandboxed(
+            clone,
+            main,
+            &[os("add"), os("-A"), os("--"), os(".")],
+            &identity,
+        )
+        .map_err(|failure| recovery("stage", failure))?;
+        // Should the seat's exclude no longer ignore the marker, unstage it.
+        let staged_marker = probe_text(&[
+            os("diff"),
+            os("--cached"),
+            os("--name-only"),
+            os("--"),
+            os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+        ])?;
+        if !staged_marker.is_empty() {
+            run_commit_sandboxed(
+                clone,
+                main,
+                &[
+                    os("reset"),
+                    os("-q"),
+                    os("--"),
+                    os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+                ],
+                &identity,
+            )
+            .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+        }
+        ensure_dir_identity(clone, pinned)?;
+        run_commit_sandboxed(
+            clone,
+            main,
+            &[
+                os("commit"),
+                os("--no-verify"),
+                os("-q"),
+                os("-m"),
+                message.as_ref(),
+            ],
+            &identity,
+        )
+        .map_err(|failure| recovery("commit", failure))?;
+        probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")])
+    })();
+    match staged {
+        Ok(tip) => Ok(Some(tip)),
+        Err(error) => {
+            // Put the index back exactly, but only while HEAD has not moved:
+            // after a commit that landed, the index matches the new HEAD and
+            // rolling it back would stage a reversal. Never touch the tree.
+            let head_now = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
+            if !index_restore_allowed(head_before.as_deref(), head_now.as_deref()) {
+                return Err(error.context(format!(
+                    "HEAD of {} moved or could not be read after the commit step, so its index \
+                     was left as is (not rolled back to tree {index_tree}); check `git log -1` \
+                     in the seat",
+                    clone.display()
+                )));
+            }
+            let restored = ensure_dir_identity(clone, pinned).is_ok()
+                && run_commit_sandboxed(
+                    clone,
+                    main,
+                    &[os("read-tree"), index_tree.as_ref()],
+                    &identity,
+                )
+                .is_ok();
+            if restored {
+                Err(error)
+            } else {
+                Err(error.context(format!(
+                    "the index of {} could not be restored to tree {index_tree}; restore it \
+                     with `git read-tree {index_tree}` in the seat",
+                    clone.display()
+                )))
+            }
+        }
+    }
+}
+
+/// [`commit_pending`]'s failure path may roll the index back only when HEAD
+/// was read before staging and still reads the same now. A HEAD that moved
+/// (the commit landed) or could not be read leaves the index alone.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn index_restore_allowed(head_before: Option<&str>, head_now: Option<&str>) -> bool {
+    matches!((head_before, head_now), (Some(before), Some(now)) if before == now)
 }
 
 /// A bundle of `refs/heads/<branch>` alone, made by git inside the probe
@@ -2611,6 +3186,10 @@ mod lifecycle_tests;
 mod bwrap_tests;
 
 #[cfg(test)]
+#[path = "tests/task_2032_launcher_main_ratchet_tests.rs"]
+mod launcher_main_ratchet_tests;
+
+#[cfg(test)]
 #[path = "tests/task_2053_s4_host_git_tests.rs"]
 mod s4_host_git_tests;
 
@@ -2625,6 +3204,17 @@ mod s4b_seat_trees_tests;
 #[cfg(test)]
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
+
+// trace:TASK-2823 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2823_lane_worktree_reentry_tests.rs"]
+mod lane_worktree_reentry_tests;
+
+// The queue-work launch rollback against a real setup; mounted here for the
+// git fixture. trace:TASK-2807 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2807_pickup_launch_rollback_tests.rs"]
+mod pickup_launch_rollback_tests;
 
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]

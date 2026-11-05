@@ -281,6 +281,15 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_codex_mail_wake.py
 
+      # Disposable Git/OpenSSL fixtures; no vendor credentials or model calls.
+      # trace:TASK-3046 | ai:codex
+      - name: Containment conformance evidence tests
+        if: matrix.shard == 'gates'
+        run: |
+          command -v git
+          command -v openssl
+          python3 -m unittest tests/test_containment_conformance.py
+
       # Test-timing parser, budget gate and local test-profile reshape: pure
       # Python, no cargo. trace:STORY-1853 | ai:claude
       - name: STORY-1853 test-speed tooling tests
@@ -322,6 +331,14 @@ jobs:
       # (`bug_2383_bwrap_overlay_...`, unshare -Urm + overlayfs around the
       # lane-job bwrap) joins under the same prefix and count.
       # trace:BUG-2383 | ai:claude
+      # BUG-2435: the overlay job that takes its cargo slot in the host
+      # cargo-slots-<uid> dir (`bug_2435_bwrap_...`) joins the forced-live
+      # selection and the exact count, so a probe skip fails the gate.
+      # trace:BUG-2435 | ai:claude
+      # TASK-2825/2829/2830: the TASK-2033 lease tests (now `bug_2169_bwrap_`),
+      # the nested-bwrap overlay probe and the no-remount-under-cap-drop check
+      # (both `bug_2435_bwrap_`) join under the existing prefixes and count.
+      # trace:TASK-2825 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
@@ -331,11 +348,11 @@ jobs:
           # TASK-2705 nested userns is host-attested; keep its normal shard mode.
           # TASK-2706 slice B is required-live on this runner. trace:TASK-2706 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ containment::tests::task_2706_egress_ipc_live 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
-          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
-          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
+          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
@@ -343,6 +360,19 @@ jobs:
           # trace:TASK-2706 | ai:codex — a typo/zero-match filter cannot count
           # as egress/IPC acceptance. This regression has no skip arm.
           grep -q 'containment::tests::task_2706_egress_ipc_live \.\.\. ok$' "$log"
+          # trace:TASK-2708 | ai:claude — the TASK-2707 contained-launch
+          # boundary tests (F-a..d, F-ENV, G-i, receipt timing) run
+          # required-live: AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 turns their
+          # live_available() skip into a failure, and every task_2707_ test
+          # must report ok, so a zero-match filter or silent skip cannot pass.
+          # The installed-Codex native-composition test is opt-in under its
+          # own AIDA_REQUIRE_CODEX_INSTALLED_LIVE (this runner has no Codex),
+          # so it is left out of both sides of the required count.
+          not_required_2707='task_2707_native_composition_companion_empty_grant_and_generated_profile'
+          expected_2707=$(grep -rhoE 'fn task_2707_[a-z0-9_]+' aida-cli-lib/src | grep -v "$not_required_2707" | sort -u | wc -l)
+          ran_2707=$(grep -oE 'task_2707_[a-z0-9_]+ \.\.\. ok$' "$log" | grep -v "$not_required_2707" | sort -u | wc -l)
+          echo "task_2707 contained-launch tests: $ran_2707 of $expected_2707 ran ok"
+          if [ "$ran_2707" -ne "$expected_2707" ]; then echo "::error::only $ran_2707 of $expected_2707 task_2707_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction

@@ -79,7 +79,7 @@ fn bug2426_dead_author_stale_head_is_updated_then_reviewed_next_tick() {
     let stale = change(1, true);
     notify(temp.path(), &store, &stale);
     let updates = Cell::new(0);
-    let dead = |_: &forge::Change| Some(false);
+    let dead = |_: &forge::Change| -> std::result::Result<Option<String>, String> { Ok(None) };
     let forge_ok = |c: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
         assert_eq!(c.id, 7);
         updates.set(updates.get() + 1);
@@ -136,12 +136,228 @@ fn bug2426_live_or_unknown_author_branch_is_not_updated() {
     let (temp, store) = fixture();
     let stale = change(1, true);
     notify(temp.path(), &store, &stale);
-    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &|_| Some(true), &never)
-    else {
+    let Some(Action::Skip(reason)) = pass(
+        temp.path(),
+        &store,
+        &stale,
+        &|_| Ok(Some("lane-lease".into())),
+        &never,
+    ) else {
         panic!("skip expected")
     };
     assert!(reason.contains("is live"), "{reason}");
+    assert!(reason.contains("lane-lease"), "{reason}");
     assert!(advisor_mail(temp.path()).is_empty());
+}
+
+/// Write a session lease on `lane-branch` held by this (live) test process.
+fn write_live_lease(root: &Path) {
+    let me = std::process::id();
+    let lease: crate::leases::SessionLease = serde_json::from_value(serde_json::json!({
+        "id": "lane-lease",
+        "pid_namespace": crate::agent_registry::current_pid_namespace(),
+        "scope": "TASK-1",
+        "slug": "task-1",
+        "owner": "test",
+        "worktree_path": root,
+        "branch": "lane-branch",
+        "started_at": "2026-11-03T00:00:00Z",
+        "hostname": crate::coordination::hostname(),
+        "active_pid": me,
+        "active_pid_start_time": crate::process_probe::process_start_identity(me),
+    }))
+    .expect("fixture lease parses");
+    std::fs::create_dir_all(crate::leases::leases_dir(root)).unwrap();
+    std::fs::write(
+        crate::leases::lease_path(root, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+}
+
+// A long-lived launcher cannot keep an exited lane with a retained worktree
+// owned. Git cleanliness and push state do not override the stale verdict.
+// trace:BUG-2442 | ai:codex
+#[test]
+fn bug2442_alive_creator_dead_active_lane_is_not_live_and_is_updated() {
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    let path = crate::leases::lease_path(temp.path(), "lane-lease");
+    let mut lease: crate::leases::SessionLease =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    lease.creator_pid = Some(std::process::id());
+    lease.creator_pid_start_time = crate::process_probe::process_start_identity(std::process::id());
+    // A reaped child supplies a real exited process, with no guessed dead PID.
+    let mut child = Command::new("/bin/true").spawn().unwrap();
+    lease.active_pid = Some(child.id());
+    lease.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    assert!(child.wait().unwrap().success());
+    std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+    let listed = crate::leases::classify_session_leases(temp.path(), &[lease]);
+    assert!(matches!(listed[0].1, crate::LeaseState::Stale));
+    assert!(crate::status_prs::live_owned_branches(temp.path()).is_empty());
+    let stale = change(1, true);
+    assert_eq!(
+        update::AuthorLiveness::default().author_live(temp.path(), &stale),
+        Ok(None)
+    );
+    notify(temp.path(), &store, &stale);
+    let updates = Cell::new(0);
+    let live = |c: &forge::Change| update::AuthorLiveness::default().author_live(temp.path(), c);
+    let forge_ok = |_: &forge::Change| {
+        updates.set(updates.get() + 1);
+        Ok(())
+    };
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &forge_ok) else {
+        panic!("skip expected")
+    };
+    assert_eq!(updates.get(), 1);
+    assert!(reason.starts_with(update::STALE_UPDATED), "{reason}");
+}
+
+// TASK-2813: the REAL liveness probe sees a live lease on the branch, so the
+// branch is left to its author.
+#[test]
+fn task2813_real_author_live_sees_a_live_lease() {
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    let stale = change(1, true);
+    assert_eq!(
+        update::AuthorLiveness::default().author_live(temp.path(), &stale),
+        Ok(Some("lane-lease".into()))
+    );
+    notify(temp.path(), &store, &stale);
+    let live = |c: &forge::Change| update::AuthorLiveness::default().author_live(temp.path(), c);
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &never) else {
+        panic!("skip expected")
+    };
+    assert!(reason.contains("is live"), "{reason}");
+    assert!(reason.contains("lane-lease"), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty());
+}
+
+// TASK-2813: a torn (unparseable) lease file could be the author's live lease
+// with its `branch` line cut off. Liveness is unknown: the branch is NOT
+// updated, and the change is routed to the advisor once.
+#[test]
+fn task2813_torn_lease_file_makes_liveness_unknown_not_dead() {
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    std::fs::write(
+        crate::leases::lease_path(temp.path(), "torn-lease"),
+        "id = \"torn-lease\"\nscope = \"TASK-9\"\nbranch = \"lane-bra",
+    )
+    .unwrap();
+    // Another branch: the live lease does not hold it, but the torn one might.
+    let mut stale = change(1, true);
+    stale.head_branch = Some("other-branch".into());
+    let probe = update::AuthorLiveness::default().author_live(temp.path(), &stale);
+    assert!(
+        probe.as_ref().is_err_and(|why| why.contains("torn-lease")),
+        "{probe:?}"
+    );
+    notify(temp.path(), &store, &stale);
+    let live = |c: &forge::Change| update::AuthorLiveness::default().author_live(temp.path(), c);
+    for _ in 0..2 {
+        let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &never) else {
+            panic!("skip expected")
+        };
+        assert!(
+            reason.contains("cannot read the session leases"),
+            "{reason}"
+        );
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    assert_eq!(advisor_mail(temp.path()).len(), 1, "routed once");
+}
+
+/// Write an `aida lock` lock-only entry (`lock-<slug>.toml`) as
+/// `worktree_lock::acquire` does; it is not a session lease.
+fn write_lock_only_entry(root: &Path) -> std::path::PathBuf {
+    let entry = crate::worktree_lock::LockOnlyEntry {
+        scope: "aida:lock:wt".into(),
+        worktree_path: root.display().to_string(),
+        started_at: "2026-11-03T00:00:00Z".into(),
+        authorized_by: "advisor".into(),
+        aida_lock_only: true,
+    };
+    let dir = crate::leases::leases_dir(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{}wt.toml", crate::worktree_lock::LOCK_ONLY_PREFIX));
+    std::fs::write(&path, toml::to_string_pretty(&entry).unwrap()).unwrap();
+    path
+}
+
+// TASK-2813 rework: an `aida lock` lock-only entry names no branch and so
+// owns none. Its presence leaves a dead author's change on the update path.
+#[test]
+fn task2813_lock_only_entry_does_not_block_the_update_path() {
+    let (temp, store) = fixture();
+    let lock = write_lock_only_entry(temp.path());
+    let stale = change(1, true);
+    assert_eq!(
+        update::AuthorLiveness::default().author_live(temp.path(), &stale),
+        Ok(None)
+    );
+    notify(temp.path(), &store, &stale);
+    let updates = Cell::new(0);
+    let live = |c: &forge::Change| update::AuthorLiveness::default().author_live(temp.path(), c);
+    let forge_ok = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
+        updates.set(updates.get() + 1);
+        Ok(())
+    };
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &forge_ok) else {
+        panic!("skip expected")
+    };
+    assert_eq!(updates.get(), 1, "the dead author's branch is updated");
+    assert!(reason.starts_with(update::STALE_UPDATED), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty());
+    // A corrupt lock-named file is not provably a lock entry: still unknown.
+    std::fs::write(&lock, "scope = \"aida:lock:wt\"\nworktree_pa").unwrap();
+    assert!(update::AuthorLiveness::default()
+        .author_live(temp.path(), &stale)
+        .is_err());
+}
+
+// TASK-2813: an unreadable lease directory makes liveness unknown: the
+// branch is not updated and the change is routed once.
+#[cfg(unix)]
+#[test]
+fn task2813_unreadable_lease_dir_makes_liveness_unknown() {
+    use std::os::unix::fs::PermissionsExt;
+    // SAFETY: geteuid never fails and has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipped: root ignores directory permissions");
+        return;
+    }
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    let dir = crate::leases::leases_dir(temp.path());
+    let original = std::fs::metadata(&dir).unwrap().permissions();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let mut stale = change(1, true);
+    stale.head_branch = Some("other-branch".into());
+    let probe = update::AuthorLiveness::default().author_live(temp.path(), &stale);
+    notify(temp.path(), &store, &stale);
+    let live = |c: &forge::Change| update::AuthorLiveness::default().author_live(temp.path(), c);
+    let mut reasons = Vec::new();
+    for _ in 0..2 {
+        if let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &never) {
+            reasons.push(reason);
+        }
+    }
+    let mail = advisor_mail(temp.path()).len();
+    std::fs::set_permissions(&dir, original).unwrap();
+    assert!(probe.is_err(), "{probe:?}");
+    assert_eq!(reasons.len(), 2, "{reasons:?}");
+    for reason in &reasons {
+        assert!(
+            reason.contains("cannot read the session leases"),
+            "{reason}"
+        );
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    assert_eq!(mail, 1, "routed once");
 }
 
 // AC2: when liveness cannot be judged (no branch reported), the branch is
@@ -153,8 +369,13 @@ fn bug2426_unknown_author_branch_routes_once_to_the_advisor() {
     stale.head_branch = None;
     notify(temp.path(), &store, &stale);
     for _ in 0..2 {
-        let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &|_| None, &never)
-        else {
+        let Some(Action::Skip(reason)) = pass(
+            temp.path(),
+            &store,
+            &stale,
+            &|c| update::AuthorLiveness::default().author_live(temp.path(), c),
+            &never,
+        ) else {
             panic!("skip expected")
         };
         assert!(
@@ -185,7 +406,7 @@ fn bug2426_transient_update_failure_is_retried_once_then_routed() {
             "update-branch did not run or exceeded 60 seconds",
         ))
     };
-    let dead = |_: &forge::Change| Some(false);
+    let dead = |_: &forge::Change| -> std::result::Result<Option<String>, String> { Ok(None) };
     let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &flaky) else {
         panic!("skip expected")
     };
@@ -234,7 +455,7 @@ fn bug2426_accepted_update_without_new_head_routes_after_wait() {
     let (temp, store) = fixture();
     let stale = change(1, true);
     notify(temp.path(), &store, &stale);
-    let dead = |_: &forge::Change| Some(false);
+    let dead = |_: &forge::Change| -> std::result::Result<Option<String>, String> { Ok(None) };
     let ok = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> { Ok(()) };
     pass(temp.path(), &store, &stale, &dead, &ok);
     // Within the wait: still parked, nobody mailed, no second update.
@@ -286,7 +507,7 @@ fn bug2426_conflicting_update_routes_to_the_advisor_and_is_listed() {
             "update-branch conflicts: merge conflict between base and head",
         ))
     };
-    let dead = |_: &forge::Change| Some(false);
+    let dead = |_: &forge::Change| -> std::result::Result<Option<String>, String> { Ok(None) };
     for _ in 0..2 {
         let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &conflicts)
         else {
@@ -344,6 +565,10 @@ fn bug2426_parking_skips_are_recorded_and_cleared() {
     assert!(!parks("head already has a recorded review"));
     assert!(!parks("head already reserved (Running)"));
     assert!(!parks("global reviewer capacity (2) is held by PR-1"));
+    // TASK-2813: a supersede in flight is not parked.
+    assert!(!parks(
+        "a review of an earlier head still holds this change (PR-7); it is superseded once the change is seen at a new head"
+    ));
     let (temp, store) = fixture();
     let c = change(3, false);
     record_skip(&store, &c, Some("two-round review cap reached")).unwrap();
@@ -352,6 +577,107 @@ fn bug2426_parking_skips_are_recorded_and_cleared() {
     // A steady skip keeps its first-seen time.
     record_skip(&store, &c, Some("two-round review cap reached")).unwrap();
     assert_eq!(skipped_changes(temp.path())[0].3, first[0].3);
-    record_skip(&store, &c, Some("head already has a recorded review")).unwrap();
+    // TASK-2813: a new reason on the same head keeps the parked-since time.
+    record_skip(&store, &c, Some(update::STALE_NOTIFIED)).unwrap();
+    let renamed = skipped_changes(temp.path());
+    assert_eq!(renamed[0].2, update::STALE_NOTIFIED);
+    assert_eq!(renamed[0].3, first[0].3, "since is since-parked");
+    // A new head restarts it.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    record_skip(&store, &change(4, false), Some(update::STALE_NOTIFIED)).unwrap();
+    assert!(skipped_changes(temp.path())[0].3 > first[0].3);
+    record_skip(
+        &store,
+        &change(4, false),
+        Some("head already has a recorded review"),
+    )
+    .unwrap();
     assert!(skipped_changes(temp.path()).is_empty());
+}
+
+// Real classifier evidence must protect each non-stale state from branch writes.
+// trace:BUG-2442 | ai:codex
+fn assert_non_stale_author_protected(foreign_namespace: bool) {
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    let path = crate::leases::lease_path(temp.path(), "lane-lease");
+    let mut lease: crate::leases::SessionLease =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    lease.started_at = chrono::Utc::now();
+    lease.creator_pid = Some(std::process::id());
+    lease.creator_pid_start_time = crate::process_probe::process_start_identity(std::process::id());
+    lease.active_pid = None;
+    lease.active_pid_start_time = None;
+    let expected = if foreign_namespace {
+        lease.pid_namespace = Some(
+            crate::agent_registry::current_pid_namespace()
+                .unwrap()
+                .wrapping_add(1),
+        );
+        crate::LeaseState::Unknown
+    } else {
+        crate::LeaseState::Dormant
+    };
+    std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+    let listed = crate::leases::classify_session_leases(temp.path(), &[lease]);
+    assert_eq!(listed[0].1, expected);
+    assert!(crate::status_prs::live_owned_branches(temp.path()).contains("lane-branch"));
+    let stale = change(1, true);
+    let authors = update::AuthorLiveness::default();
+    assert_eq!(
+        authors.author_live(temp.path(), &stale),
+        Ok(Some("lane-lease".into()))
+    );
+    notify(temp.path(), &store, &stale);
+    let Some(Action::Skip(reason)) = pass(
+        temp.path(),
+        &store,
+        &stale,
+        &|c| authors.author_live(temp.path(), c),
+        &never,
+    ) else {
+        panic!("protected author must skip")
+    };
+    assert!(reason.contains("lane-lease"), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty());
+}
+
+#[test]
+fn bug2442_dormant_shell_author_branch_is_not_updated() {
+    assert_non_stale_author_protected(false);
+}
+
+#[test]
+fn bug2442_unknown_namespace_author_branch_is_not_updated() {
+    assert_non_stale_author_protected(true);
+}
+
+// The same pass uses one snapshot; a new pass refreshes both successes and errors.
+// trace:BUG-2442 | ai:codex
+#[test]
+fn bug2442_author_snapshot_is_reused_per_pass_and_refreshed_next_pass() {
+    let (temp, _) = fixture();
+    write_live_lease(temp.path());
+    let c = change(1, true);
+    let authors = update::AuthorLiveness::default();
+    assert_eq!(
+        authors.author_live(temp.path(), &c),
+        Ok(Some("lane-lease".into()))
+    );
+    let path = crate::leases::lease_path(temp.path(), "lane-lease");
+    std::fs::write(&path, "torn lease").unwrap();
+    assert_eq!(
+        authors.author_live(temp.path(), &c),
+        Ok(Some("lane-lease".into()))
+    );
+    let next = update::AuthorLiveness::default();
+    assert!(next.author_live(temp.path(), &c).is_err());
+    std::fs::remove_file(&path).unwrap();
+    let mut other = c.clone();
+    other.head_branch = Some("other-branch".into());
+    assert!(next.author_live(temp.path(), &other).is_err());
+    assert_eq!(
+        update::AuthorLiveness::default().author_live(temp.path(), &c),
+        Ok(None)
+    );
 }

@@ -114,6 +114,11 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
         PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
+        // `pr review` needs the store; `run_pr` routes it to the shared
+        // queue-work dispatch instead of here. trace:TASK-1715 | ai:claude
+        PrCommand::Review { .. } => {
+            anyhow::bail!("`aida pr review` runs through the store dispatcher, not here")
+        }
     }
 }
 
@@ -146,11 +151,7 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     // confirm origin's tip matches before recording the hold or saying so.
     // trace:TASK-2793 | ai:claude
     let pushed_sha = push_and_verify_held_branch(&cwd, "origin", &branch)?;
-    let signal = punt::HoldSignal {
-        spec: spec.clone(),
-        branch: branch.clone(),
-        reason: reason.map(str::to_string),
-    };
+    let signal = hold_signal(&project_root, &spec, &branch, reason);
 
     // Prefer the orchestrator-provisioned absolute path (handshake); fall back
     // to the conventional marker path under the main root for a standalone hold.
@@ -186,6 +187,24 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         noun,
     );
     Ok(())
+}
+
+/// The [`punt::HoldSignal`] `aida pr hold` records for `spec` on `branch`.
+/// The held spec resolves once, here, against the committed store of the
+/// project at `project_root` (STORY-2324 E3).
+// trace:STORY-2324 | ai:claude
+pub(crate) fn hold_signal(
+    project_root: &std::path::Path,
+    spec: &str,
+    branch: &str,
+    reason: Option<&str>,
+) -> punt::HoldSignal {
+    punt::HoldSignal {
+        spec: spec.to_string(),
+        branch: branch.to_string(),
+        reason: reason.map(str::to_string),
+        spec_key: crate::gate::canon::GateSpec::resolve(project_root, spec).key,
+    }
 }
 
 /// Push `branch` from `repo` to `remote` (setting upstream), then read the
@@ -6504,6 +6523,10 @@ pub(crate) fn find_open_approved_prs(
 }
 
 #[cfg(test)]
+#[path = "tests/task_1715_pr_review_alias_tests.rs"]
+mod task_1715_pr_review_alias_tests;
+
+#[cfg(test)]
 #[path = "tests/bug_2164_default_branch_ship_refusal_tests.rs"]
 mod bug_2164_default_branch_ship_refusal_tests;
 
@@ -8354,13 +8377,98 @@ pub(crate) struct PrArgs {
 // command's side-effects all live in git / gh / self-invoked `aida
 // add` calls; it doesn't need the global Storage handle.
 // trace:STORY-90 | ai:claude
+//
+// TASK-1715: `pr review` is the one subcommand that needs the store — it runs
+// `queue work <change> --auto-complete` through the queue's own dispatch, so
+// it defers past the early point; every other subcommand still finishes there.
+// trace:TASK-1715 | ai:claude
 fn run_pr(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::command_registry::{Flow, StoreCtx};
     let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let pr_cmd = &args.inner;
-    return handle_pr_command(pr_cmd);
+    let PrCommand::Review { id } = &args.inner else {
+        // Only the early point reaches here: non-review subcommands return.
+        crate::spec_arg::ensure_alias_map();
+        handle_pr_command(&args.inner)?;
+        return Ok(Flow::Return);
+    };
+    match &ctx.store {
+        // Defer to the dispatcher that serves the project's store.
+        None | Some(StoreCtx::Distributed { .. }) => Ok(Flow::Continue),
+        Some(StoreCtx::Git { .. } | StoreCtx::Legacy { .. }) => {
+            let root = crate::find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            let change = review_change_id(id, crate::forge::resolve_forge_kind(&root))?;
+            crate::queue_cmd::dispatch_queue_args(&review_queue_args(&change)?, ctx)
+        }
+    }
+}
+
+/// Normalize a `pr review` target to the `PR-N` / `MR-N` change ID that
+/// `queue work` resolves. Explicit `PR-N` / `MR-N` (any case) are kept as
+/// named; a bare `N` (or `#N`) takes the configured forge's prefix.
+// trace:TASK-1715 | ai:claude
+pub(crate) fn review_change_id(id: &str, forge: crate::forge::ForgeKind) -> Result<String> {
+    use crate::forge::ForgeKind;
+    use crate::session_start::{format_review_label, parse_review_scope, ReviewForge};
+    if let Some((review_forge, n)) = parse_review_scope(id) {
+        return Ok(format_review_label(review_forge, n));
+    }
+    let trimmed = id.trim();
+    let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    let n: u64 = match digits.parse() {
+        Ok(n) if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => n,
+        _ => anyhow::bail!(
+            "`{id}` is not a change to review; pass a number, `PR-N` (GitHub) or `MR-N` (GitLab)"
+        ),
+    };
+    match forge {
+        ForgeKind::GitHub => Ok(format_review_label(ReviewForge::GitHub, n)),
+        ForgeKind::GitLab => Ok(format_review_label(ReviewForge::GitLab, n)),
+        ForgeKind::None => anyhow::bail!(
+            "this project has no GitHub or GitLab forge configured, so `{id}` cannot be \
+             resolved; pass `PR-{n}` or `MR-{n}`"
+        ),
+    }
+}
+
+/// The exact `queue work <change> --auto-complete` arguments `pr review`
+/// runs, parsed by the queue's own clap definition.
+// trace:TASK-1715 | ai:claude
+pub(crate) fn review_queue_args(change: &str) -> Result<crate::queue_cmd::QueueArgs> {
+    <crate::queue_cmd::QueueArgs as clap::Parser>::try_parse_from(review_queue_argv(change))
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+fn review_queue_argv(change: &str) -> [&str; 4] {
+    ["queue", "work", change, "--auto-complete"]
+}
+
+/// `pr review` answers the cross-cutting gates exactly as `queue work` does;
+/// every other subcommand keeps the `pr` policy.
+// trace:TASK-1715 | ai:claude
+fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    let review = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .ok()
+        .and_then(|args| match args.inner {
+            PrCommand::Review { id } => Some(id),
+            _ => None,
+        });
+    if let Some(id) = review {
+        let queue = <crate::queue_cmd::QueueArgs as clap::CommandFactory>::command()
+            .try_get_matches_from(review_queue_argv(&id));
+        if let Ok(queue) = queue {
+            return crate::queue_cmd::queue_cli_policy(&queue);
+        }
+    }
+    crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
 }
 
 // trace:STORY-1728 | ai:claude
@@ -8368,13 +8476,8 @@ pub(crate) static PR: crate::command_registry::CommandReg = crate::command_regis
     name: "pr",
     help_after: "ship",
     command: <PrArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
-        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-        per_write_auto_push: false,
-        skip_role_restore_prompt: false,
-        team_identity_write: false,
-    },
-    run: crate::command_registry::Handler::Early(run_pr),
+    policy: pr_cli_policy,
+    run: crate::command_registry::Handler::Store(run_pr),
 };
 
 /// The one-shot HUMAN-implementer finish. From inside a worktree where
@@ -8446,6 +8549,19 @@ pub(crate) struct ShipArgs {
         conflicts_with_all = ["message", "keep_worktree", "no_trailer_check", "no_merge"]
     )]
     pub from_seat: Option<std::path::PathBuf>,
+
+    /// With --from-seat: first commit the seat's uncommitted changes with
+    /// this message, inside AIDA's own sandbox with the seat's hooks off, on
+    /// the seat's own branch. For a native Codex seat, which cannot commit
+    /// in its own sandbox. The message must carry the spec trailer.
+    // trace:TASK-2712 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(
+        long,
+        value_name = "MSG",
+        requires = "from_seat",
+        allow_hyphen_values = true
+    )]
+    pub commit_pending: Option<String>,
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -8467,6 +8583,7 @@ fn run_ship(
         dry_run,
         no_trailer_check,
         from_seat,
+        commit_pending,
     } = &args;
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
@@ -8475,8 +8592,18 @@ fn run_ship(
             spec: spec.clone(),
             no_pr: *no_pr,
             dry_run: *dry_run,
+            // trace:TASK-2712 | ai:claude
+            commit_pending: commit_pending.clone(),
         });
     }
+    // TASK-2712: a native Codex lane's git directory is read-only, a seat
+    // clone's included; say so, with the host-commit recovery, before any
+    // git runs.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_native_publication(
+        std::env::var("AIDA_CONTAINMENT_POSTURE").ok().as_deref(),
+        &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+    )?;
     return run_human_finish_ceremony(HumanFinishOptions {
         spec: spec.clone(),
         message: message.clone(),

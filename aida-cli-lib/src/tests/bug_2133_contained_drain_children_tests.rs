@@ -109,6 +109,7 @@ fn contained_child_wrapper_refuses_codex_and_passes_uncontained_through() {
     let _os_wrap = EnvVarsGuard::apply(&[("AIDA_OS_WRAP", Some("0"))]);
     let args = vec!["exec".to_string(), "prompt".to_string()];
     let (prog, out) = contained_child_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         false,
         None,
@@ -125,6 +126,7 @@ fn contained_child_wrapper_refuses_codex_and_passes_uncontained_through() {
     );
 
     let err = contained_child_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         true,
         Some(tmp.path()),
@@ -147,6 +149,7 @@ fn ci_fix_argv_is_contained_and_scoped_to_its_worktree() {
     let wt = std::fs::canonicalize(&wt).unwrap();
 
     let contained = session::headless_vendor_args_contained_in(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Claude,
         "fix ci",
         SID,
@@ -168,6 +171,7 @@ fn ci_fix_argv_is_contained_and_scoped_to_its_worktree() {
 
     // Uncontained is byte-identical to the pre-BUG-2133 call.
     let uncontained = session::headless_vendor_args_contained_in(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Claude,
         "fix ci",
         SID,
@@ -178,8 +182,16 @@ fn ci_fix_argv_is_contained_and_scoped_to_its_worktree() {
     .unwrap();
     assert_eq!(
         uncontained,
-        session::headless_vendor_args(HeadlessVendor::Claude, "fix ci", SID, false, None, None)
-            .unwrap()
+        session::headless_vendor_args(
+            None,
+            HeadlessVendor::Claude,
+            "fix ci",
+            SID,
+            false,
+            None,
+            None
+        )
+        .unwrap()
     );
 }
 
@@ -193,6 +205,7 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
 
     for is_fork in [false, true] {
         let (prog, args) = session::advisor_tier_program_and_args_with_posture(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             is_fork,
             "seeded /aida-advise",
@@ -216,6 +229,7 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
 
         // Uncontained is byte-identical to the pre-BUG-2133 builder.
         let (_, plain) = session::advisor_tier_program_and_args_with_posture(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             is_fork,
             "seeded /aida-advise",
@@ -525,6 +539,7 @@ fn task_1770_uncontained_children_honour_os_wrap() {
     let _env = EnvVarsGuard::apply(&[("PATH", Some(&path)), ("AIDA_OS_WRAP", Some("1"))]);
     for child in ["CI-fix session", "advisor session"] {
         let (prog, args) = contained_child_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             false,
             None,

@@ -199,9 +199,6 @@ memory before relying on it. Prefer the `$aida-memory-query` and
         // `aida list` for project size; this file is conventions, not
         // state. trace:TASK-1-098 | ai:claude
         s.push_str("\n\n");
-        // BUG-2174: "Where change notes go" keeps per-change paragraphs out of
-        // AGENTS.md/OVERVIEW.md, which made every merge re-conflict open PRs.
-        // trace:BUG-2174 | ai:claude
         s.push_str(
             "### Agent surface\n\
              \n\
@@ -284,8 +281,14 @@ memory before relying on it. Prefer the `$aida-memory-query` and
              \n\
              Set `AIDA_COMMIT_STRICT=true` (or commit through the `/aida-commit` skill) to\n\
              enforce; otherwise the commit-msg hook just warns on non-conforming messages.\n\
-             \n\
-             ## Where change notes go\n\
+             \n",
+        );
+        // BUG-2174: "Where change notes go" keeps per-change paragraphs out of
+        // AGENTS.md/OVERVIEW.md, which made every merge re-conflict open PRs.
+        // trace:BUG-2174 | ai:claude
+        // trace:TASK-1954 | ai:claude  trace:TASK-2016 | ai:claude
+        s.push_str(
+            "## Where change notes go\n\
              \n\
              Do not add per-change notes to `AGENTS.md` or `OVERVIEW.md`; record them in\n\
              the PR body and an `aida comment add` on the spec. Edit these files only for a\n\

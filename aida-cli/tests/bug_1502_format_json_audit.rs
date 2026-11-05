@@ -502,7 +502,45 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         })
         .collect();
 
+    // Local envelope commands bypass shared dispatch; attachments are always
+    // JSON, while validation supports both format spellings.
+    // trace:STORY-2479 | ai:codex
+    std::fs::write(repo.join("note.md"), "body").unwrap();
+    let note_args = [
+        "intent",
+        "note",
+        "--category",
+        "observation",
+        "--title",
+        "title",
+        "--file",
+        "note.md",
+    ];
+    let attachment = aida(&repo, &home, &note_args);
+    let note_value = json(&attachment, "observation attachment");
+    std::fs::write(repo.join("observation.json"), &attachment.stdout).unwrap();
+    let attachment_probes: &[(&str, &[&str])] = &[
+        ("aida intent note", &note_args),
+        (
+            "aida intent export",
+            &["intent", "export", "--file", "observation.json"],
+        ),
+    ];
+    for (path, args) in attachment_probes {
+        let mut via_format = args.to_vec();
+        via_format.extend(["--format", "json"]);
+        assert_eq!(
+            audit_json(&aida(&repo, &home, &via_format), path),
+            note_value
+        );
+        assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
+    }
+
     let probes: &[(&str, &[&str])] = &[
+        (
+            "aida intent validate",
+            &["intent", "validate", "--file", "observation.json"],
+        ),
         // Closed unsupported-vendor report exercises JSON without OS prerequisites.
         // A named refusal exits nonzero while preserving the structured report.
         // trace:TASK-2705 | ai:codex
@@ -558,7 +596,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }
 
-    let verified: BTreeSet<&str> = probes.iter().map(|(path, _)| *path).collect();
+    let verified: BTreeSet<&str> = probes
+        .iter()
+        .chain(attachment_probes.iter())
+        .map(|(path, _)| *path)
+        .collect();
     let mut unsupported: Vec<String> = Vec::new();
     for entry in catalog.as_array().unwrap() {
         let path = entry["path"]
@@ -616,6 +658,25 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
                             !out.status.success(),
                             "unsupported catalog path silently succeeded: {path}\n{}",
                             String::from_utf8_lossy(&out.stdout)
+                        );
+                        // The failure must be the refusal itself, not some
+                        // other error: the unsupported-pin message (or a
+                        // renamed local --format's), or a clap usage error
+                        // for missing operands. trace:TASK-1954 trace:TASK-1969 | ai:claude
+                        // A JSON pin may route the error envelope to stdout.
+                        let combined = format!(
+                            "{}{}",
+                            String::from_utf8_lossy(&out.stdout),
+                            String::from_utf8_lossy(&out.stderr)
+                        );
+                        let pin_refused = combined.contains("has no JSON projection")
+                            || combined.contains("sets the CLI output format");
+                        let usage_error =
+                            out.status.code() == Some(2) && combined.contains("Usage:");
+                        assert!(
+                            pin_refused || usage_error,
+                            "unsupported catalog path failed without the JSON refusal: {path}\nexit {:?}\n{combined}",
+                            out.status.code()
                         );
                     }
                 })

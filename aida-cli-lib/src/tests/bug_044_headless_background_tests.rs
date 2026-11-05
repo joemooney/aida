@@ -603,6 +603,7 @@ impl Fixture {
             branch: "claude/story-9",
             contained: false,
             child_grant: &grant,
+            host_main: None,
         })
     }
 
