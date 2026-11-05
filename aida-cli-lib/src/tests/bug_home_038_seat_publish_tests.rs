@@ -1490,6 +1490,29 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             assert_ne!(head, before);
             assert_eq!(remote, head);
             assert!(import_refs(&fx.main).is_empty());
+            // Tip mismatch must clean up the imported ref before refusing.
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &before)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("changed before publication"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+
+            // A concurrent origin update rejects the actual host push. The
+            // clone import must be removed on this failure too.
+            git_ok(&fx.main, &["checkout", "-qb", "racer", &head]);
+            git_ok(
+                &fx.main,
+                &["commit", "--allow-empty", "-qm", "remote advances"],
+            );
+            let raced = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "racer:refs/heads/feat"]);
+            git_ok(&fx.main, &["checkout", "main"]);
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &head)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("rejected"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), raced);
         }
         assert!(!sentinel.exists(), "seat hooks must never execute");
         assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
