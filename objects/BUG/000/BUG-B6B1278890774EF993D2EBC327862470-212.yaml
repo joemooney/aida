@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private raw evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. Source and sanitized evidence will be in the TASK-3046 PR.
 
   Acceptance: design and independently approve a mediated store mutation path that preserves legitimate CLI/coordination writes while denying direct terminal/file-tool writes to objects. Same-profile real-vendor C2 negatives must pass with parent-observed unchanged targets and mediated AIDA operations must have positive controls. Keep compatibility labeling and existing operator policy until explicitly changed.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-05T02:56:01.308601964Z
+modified_at: 2026-11-05T02:56:19.784855786Z
 req_type: Bug
 tags:
 - area:containment
@@ -85,7 +85,21 @@ history:
   timestamp: 2026-11-05T02:54:45.058918777Z
   session_id: 01a1a9a0772b
   changes: []
+- id: 01a1a9a2-c748-7f21-84e6-edc36d9cf536
+  author: joe
+  timestamp: 2026-11-05T02:56:19.784876629Z
+  session_id: 01a1a9a0772b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: SKETCH v1 posted on BUG-2446; awaiting independent advisor signoff on synchronous typed host mutation service versus spool, native protected-subtree enforcement, and coordination with TASK-2712/shared boundary. Current direct store grants are required by compatibility workflow; removing them without mediation breaks legitimate AIDA operations. No production change or conformance pass claimed.
+  lean: Prefer synchronous typed host mediation with host-owned store/cache and explicit native subtree capability checks; preserve existing operator-approved native compatibility until an independently approved cutover.
+  raised_by: implementer
+  raised_at: 2026-11-05T02:56:19.784855786Z
