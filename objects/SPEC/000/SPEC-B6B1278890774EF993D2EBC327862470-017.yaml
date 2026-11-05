@@ -1,5 +1,6 @@
 id: 01a1acac-9509-7283-8d39-8d3571ea3c5f
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-017
+agreed_id: TASK-2887
 title: Queue done skips its PR check when native seat branch lookup is refused
 description: 'While completing TASK-2852 from the standalone implementer clone /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-803, git branch --show-current and commit/push succeeded, but aida queue done TASK-2852 warned: queue-done PR-check skipped: current_branch_at returned None ... Gate did not fire. It then marked the task done and dequeued it. This appears to be another caller swallowing host_git_command''s seat-clone safety refusal (TASK-2852 fixes pr hold''s diagnostic only). Investigate preserving lookup errors and refusing or explicitly handling unavailable PR-check evidence rather than silently skipping the gate. No publication authority change was attempted in TASK-2852.'
 status: Draft
@@ -13,6 +14,11 @@ tags:
 - from-implementer:TASK-2852
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1acd1-6e75-7751-bfde-a9d6216d0d60
+  author: joe
+  timestamp: 2026-11-05T17:46:08.885852605Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70a5d68133a

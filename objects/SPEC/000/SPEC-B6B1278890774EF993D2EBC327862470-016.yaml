@@ -1,5 +1,6 @@
 id: 01a1ac9d-51f2-7552-b3d0-9670aa09a9fc
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-016
+agreed_id: TASK-2886
 title: Top-level lib test homes still use PID-only names across native PID namespaces
 description: While validating TASK-2861, dispatch neighboring tests intermittently lost advisor/reviewer grant files (14/19 passed in a parallel module run; 9/19 in another namespace). test_home.rs create_test_home uses /tmp/aida-lib-test-home-<pid> and removes an existing same-name directory; sweep_stale_test_homes probes bare PIDs from its own namespace. Separate native tool invocations share /tmp but reuse local PIDs, so neither operation establishes ownership of another namespace's home. A private TMPDIR made the named dispatch regression pass. TASK-2861 gives run_path_isolated_test children a unique private TMPDIR; top-level non-isolated lib test binaries remain exposed unless their runner supplies a private TMPDIR. Follow up with namespace-safe unique home ownership/cleanup and a concurrent cross-namespace regression, without weakening authority checks. This is a source-supported diagnosis; no outside-seat baseline was run.
 status: Draft
@@ -13,6 +14,11 @@ tags:
 - from-implementer:TASK-2861
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
+  author: joe
+  timestamp: 2026-11-05T17:46:08.884235413Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70a5d68133a
