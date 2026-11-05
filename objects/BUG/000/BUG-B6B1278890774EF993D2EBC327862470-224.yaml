@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:27:37.598726690Z
+modified_at: 2026-11-05T21:27:41.630838733Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -120,6 +120,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3: code-level findings resolved (no setup-PID witness; startup/later-write/migrate derive one holder; AC1-AC4 traced and tested), but AC5 host evidence is still absent and PR CI at 842e6e6 is queued, not green.. It was punted on: missing-context: Round 3 findings 3 and 5 remain open, and the required new commit cannot be produced in this native lane: git add refuses .git/index.lock with Read-only file system. Finding 3 / AC5 needs operator-run host own migrate --execute followed by own show --compare with residual rows classified; execute refuses without an operator terminal and this lane is PID namespace 4026533032, so its output is not host evidence. No criterion narrowing or orphan-release policy is assumed. Finding 5 needs green CI at the new head, which requires host publication first. Findings 1, 2 and 4 are addressed locally: setup no longer stamps its ephemeral CLI PID; startup/write/repair share worker-only derivation; replacement regression covers Unknown/live compare and repair idempotence; all five criteria now have canonical test traces. Tests are running, final validation will be appended. Keep the merge hold.. No triage reason was given.'
   created_at: 2026-11-05T21:27:37.598725234Z
   modified_at: 2026-11-05T21:27:37.598725234Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad9c-42af-7272-8557-97bf7bb66071
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2458):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 842e6e618e96
+    Recorded: 2026-11-05T21:23:33.263168686+00:00
+    Findings:
+    1. AC5 (ac1d6672) UNVERIFIED — blocking: no operator-run host output shows 'aida own migrate --execute' followed by 'aida own show --compare' with zero UNEXPLAINED holder-pid rows. unstamped_session_stays_unknown_after_setup_exits_while_lease_is_live (writer_tests.rs:1316) is a local regression, not host acceptance. docs/cli/06-roles-sessions.md:892-896 says repaired orphan rows stay UNEXPLAINED 'never released'. Close it by (a) attaching host migrate+compare output to the spec, with every remaining UNEXPLAINED row assigned a cause that is not holder pid, or (b) an advisor ruling that narrows AC5. The implementer lane cannot do this (foreign PID namespace, execute refused); it needs operator/advisor action.
+    2. CI not proven green at head 842e6e618e96: every CI job in run 42111575194 (lib-0, lib-1, cli-0, cli-1, contracts, gates, rest) was queued when reviewed. Re-review must cite a green run at this head. merge-hold-gate failure is the expected supervised hold, not a defect.
+    3. COSMETIC dual.rs:322-327: lease_started is now a one-line pass-through to lease_written with no behavior of its own. Inline it at session_start.rs:3433 (and in the test) or keep it with a comment saying it is deliberately a seam.
+    4. COSMETIC docs/cli/06-roles-sessions.md:887: the round-3 reflow left a ~130-character line ('Linux exposes the subreaper flag ... not'). Rewrap it to match the paragraph.
+    5. MINOR dual.rs:130-135: identity_from_record's new parse_start_identity branch accepts a 'linux:<boot>:<ticks>' start without comparing it to the writer's boot argument, unlike the linux-starttime branch. A start captured in a previous boot is recorded as a witness and then rejected only by the judge. Compare recorded_boot with boot, or document why the judge-side check is enough.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T21:27:41.487879034Z
+  modified_at: 2026-11-05T21:27:41.487879034Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
