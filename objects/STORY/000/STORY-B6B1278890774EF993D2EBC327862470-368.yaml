@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T20:02:56.169729033Z
+modified_at: 2026-11-05T20:18:02.610042169Z
 req_type: Story
 relationships:
 - rel_type:
@@ -185,6 +185,17 @@ comments:
   content: 'Current pickup: prior round-3 fixes are already in PR #3428 at merged-main head 0835c12ead95. CI run 42083886747 gates and contracts pass. Retrieved lib-1 job 127443734903 log: 7609/7610 tests passed; the sole failure is story_2401_no_new_raw_gh_reads_outside_forge, flagging condition_cmd.rs''s raw gh resolution newly prohibited by merged STORY-2401. Addressing this by moving the bounded PR-state probe into forge.rs, returning Observed<bool> and mapping unsettled reads to the condition''s Unknown verdict. No findings disputed. Native git add still refuses index.lock (read-only .git), so pending source will require documented host-exit commit publication. Python maintenance/executable fixture guards pass 15/15; Rust validation compiling in the seat-specific writable target.'
   created_at: 2026-11-05T20:02:56.169712465Z
   modified_at: 2026-11-05T20:02:56.169712465Z
+- id: 01a1ad5c-7ef2-7371-b260-15073e0cd114
+  author: joe
+  content: |
+    PR #3428 pickup final: no review finding disputed. Prior fixes already landed on this branch. Current lib-1 job 127443734903 failed solely on story_2401_no_new_raw_gh_reads_outside_forge after main merged. Pending patch moves condition PR probes behind forge.rs with Observed<bool>, retaining the 15-second timeout and Unknown on failed or malformed observations. Fixture asserts Transient failures; AGENTS.md and OVERVIEW.md updated.
+
+    Validation passes: 4 adapter tests; exact failed forge-read guard; launch-site guard; 15 Python Git-maintenance/executable fixture tests; cargo fmt and git diff checks. Logs: /tmp/story2402-r4-tests.log, /tmp/story2402-r4-forge-direct.log, /tmp/story2402-r4-launch-ratchet.log. Remote gates/contracts green at 0835c12ead95; new patch has no remote CI result.
+
+    Publication blocker: git add refuses read-only .git/index.lock. TASK-2712 host exit handler must commit/push five pending files to existing PR #3428. Suggested subject: [AI:codex] fix(condition): route PR probes through forge observations (STORY-2402). MCP post_punt refused because it requires approval and policy is never; subsequent add_comment failed because transport closed. This CLI comment is the final handoff. S1 only; parent remains incomplete. No ship, review record, hold clearance or merge attempted. Turn ended.
+  created_at: 2026-11-05T20:18:02.610042169Z
+  modified_at: 2026-11-05T20:18:02.610042169Z
+  session_id: 01a1ad4bdc48
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe

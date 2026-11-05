@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:13:42.115962312Z
+modified_at: 2026-11-05T20:17:27.701803338Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -123,6 +123,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ad5b-f6b3-7f53-b9ff-a3a0107cc135
+  author: joe
+  timestamp: 2026-11-05T20:17:27.731168123Z
+  session_id: 01a1ad52961b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -135,3 +143,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
+attention_reason:
+  category: design-fork
+  detail: 'Round 2 findings 5 and 6 remain open: production HostFacts validation is centralized, but generic remote Linux subreaper detection cannot be provided by PR_GET_CHILD_SUBREAPER (self only) or ordinary procfs; current refusal covers PID 1 and known init executables. Finding 6 requires host-terminal migrate --execute and host compare evidence; this lane is a foreign PID namespace and execute refused, and repaired no-lease orphans still need operator-reviewed lifecycle repair rather than reclassification. Publication is also blocked: git add refuses .git/index.lock with Read-only file system, so this lane cannot produce the requested new commit or push. Findings 1-4 and the constructor portion of 5 are implemented in the worktree; regression verification is running. Please retain the merge hold, decide the generic-subreaper/orphan-release policy, and publish the reviewed worktree changes from the authorized host.'
+  lean: Keep known-init rejection and fail-closed orphan records; require host migration evidence before PR-C cutover.
+  raised_by: implementer
+  raised_at: 2026-11-05T20:17:27.701803338Z
