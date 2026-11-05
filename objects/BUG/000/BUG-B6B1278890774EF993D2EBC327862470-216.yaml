@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T04:46:04.203159820Z
+modified_at: 2026-11-05T05:04:40.719964830Z
 req_type: Bug
 comments:
 - id: 01a1aa05-1068-7553-b16c-23edf47a2495
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-11-05T04:43:41.032416811Z
   modified_at: 2026-11-05T04:43:41.032416811Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa18-490f-78e0-8047-93885d9cc604
+  author: joe
+  content: 'Implementation is pending in the native Codex seat: remote-reachability guard for session end (including --force), explicit --discard-unpushed CLI override, safe exited-lease takeover for all-pushed work and pushed staged indexes, advisor notices for refused dead seats, and watcher retries before reviewer spawn. Default and --no-default-features CLI checks passed; focused regression test binary is still building. The seat .git is read-only, so the documented host post-exit commit/from-seat publication path is required. No ship or review-record action was run.'
+  created_at: 2026-11-05T05:04:40.719964830Z
+  modified_at: 2026-11-05T05:04:40.719964830Z
+  session_id: 01a1aa054d1b
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
   author: joe
