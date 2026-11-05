@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T17:05:53.929122922Z
-modified_at: 2026-11-05T19:30:17.702348229Z
+modified_at: 2026-11-05T19:30:20.557776469Z
 req_type: Task
 tags:
 - from-implementer:TASK-2852
@@ -50,6 +50,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix logic is correct (branch-lookup failure now refuses queue done before mutation, error preserved, covered by unit + seat-clone tests), but the PR turns two CI gates red: portability ratchet (new /tmp literal) and CLI-manual drift guard (bare --skip-pr-check cited under the aida done section).. It was punted on: blocked-dependency: Implementation and validation complete (85 tests, formatting and diff checks passed), but this native seat mounts .git read-only: git add fails creating .git/index.lock with Read-only file system. Cannot commit, push, open a PR, or legitimately complete/dequeue. Please perform host-side commit and PR handoff from this dirty seat; detailed implementation and validation are in spec comments.. No triage reason was given.'
   created_at: 2026-11-05T19:30:17.702346462Z
   modified_at: 2026-11-05T19:30:17.702346462Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad30-d237-7ba2-a6e8-dbf2bbaf67d0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2887):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e2620621c6e5
+    Recorded: 2026-11-05T18:56:59.605994925+00:00
+    Findings:
+    1. [blocking/CI gates: Check Rust test portability ratchet] aida-cli-lib/src/workflow_hints.rs:1427 adds a new tmp-literal hit: assert!(text.contains("/tmp/fake-project")). Only the root_ok() literal at :1386 is allowlisted (scripts/portability-allowlist.txt:147), so the ratchet sees growth. Fix: assert against root_ok().unwrap().display().to_string() (or a shared const) instead of repeating the literal; do not grow the allowlist.
+    2. [blocking/CI contracts: CLI-manual drift-guard] docs/cli/04-git-lifecycle.md:73: the new paragraph sits under the '### aida done' section and cites bare `--skip-pr-check` / `--force` / `--yes`. verify-manual.py parse_chapters resolves pathless flag citations against the section command (aida done), which has no --skip-pr-check (declared only in queue_cmd_args.rs:474). Fix: cite full commands, e.g. `aida queue done <ID> --skip-pr-check`, `aida queue done <ID> --force`, so the flags resolve to aida queue done. (Job log blob was unreachable from the sandbox; failed step name confirmed via the jobs API, and the cause was confirmed by reading verify-manual.py.)
+    3. [minor] aida-cli-lib/src/queue_cmd.rs:5103: the BUG-1244 ownership gate still calls the Option-returning current_branch_at, so a seat-clone host-git refusal silently skips the ownership check. The spec describes exactly this class of caller swallowing the refusal. Combined with --skip-pr-check (not --force), queue done in a seat clone now bypasses ownership with no diagnostic. Use current_branch_at_checked there too: refuse, or warn when --force, and add a refusal test.
+    4. [cosmetic] aida-cli-lib/src/workflow_hints.rs refusal line 2 ('Restore branch lookup access, then re-run') does not help the detached-HEAD case that this change now also refuses (docs/cli/04-git-lifecycle.md:70). Suggest also telling the user to check out the spec's branch.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:30:20.343152384Z
+  modified_at: 2026-11-05T19:30:20.343152384Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1acd1-6e75-7751-bfde-a9d6216d0d60
