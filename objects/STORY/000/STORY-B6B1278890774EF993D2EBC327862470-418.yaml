@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T16:26:53.553600571Z
+modified_at: 2026-11-05T20:25:26.837383187Z
 req_type: Story
 tags:
 - docs:impacted
@@ -335,6 +335,12 @@ comments:
   modified_at: 2026-11-05T16:26:53.553600571Z
   session_id: 01a1ac7029be
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1ad63-4635-7e00-8b37-85990568d0cd
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 13:30 MST: slice 1 landed (#3411, 0b0f8a6). Next is slice 2, the completing PR: watcher discovery of synced publications plus distributed head reservations, per TASK-2860''s approved sketch and my 12:00 topology ruling. The single admission hub is GitHub origin, ref refs/aida/review-admission, configured explicitly ([review] admission_hub and admission_ref); GitLab is a mirror and never admits; no failover. Implement the reservation state table (Reserved -> Running -> Terminal; Reserved -> Cancelled on proven pre-spawn failure) with CAS pushes to that ref, unpredictable claim tokens and signed transitions using slice 1''s sshsig signer. The review watcher reserves through it before dispatch. Tests: two simulated nodes racing one head (exactly one wins); hub unreachable refuses by name; a mirror cannot admit. LIGHT gate, STRICT review.'
+  created_at: 2026-11-05T20:25:26.837383187Z
+  modified_at: 2026-11-05T20:25:26.837383187Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
