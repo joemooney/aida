@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-04T09:41:53.973588280Z
+modified_at: 2026-11-05T13:14:17.225427071Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -94,6 +94,18 @@ comments:
   created_at: 2026-11-04T07:12:18.369233946Z
   modified_at: 2026-11-04T07:12:18.369233946Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1abd8-8909-73b3-9cb7-86570bdae445
+  author: mcp
+  content: |-
+    S1 implementer handoff (Codex, 2026-11-05): restored the prior S1 implementation from origin/story-b6b1278890774ef993d2ebc327862470-368 (0bb68bad1ea) onto the current base as pending edits, then reworked its live facts adapter. PR probes now validate known JSON states and time out after 15 seconds; malformed/missing/failed observations stay Unknown. Release probes are bounded too. Canonical store reads are strict, never fall back after corruption, never create missing stores, and refuse ambiguous spec IDs. The checker honours --file and global JSON. Added multiword query-filter parsing and refusal of PR zero, adapter regressions, CLI docs, regenerated help, and the actual-binary JSON audit probe.
+
+    Validation passed: 12 core condition tests; 3 CLI adapter tests (including malformed store, ambiguous IDs, missing store, PR states and timeout); exact help snapshot comparison; real-binary exhaustive JSON audit; cargo fmt --all -- --check; git diff --check. The initial store fixture used the wrong directory depth; corrected it to objects/TYPE/SHARD and reran successfully.
+
+    Only the signed-off S1 slice is delivered here. S2-S5 and derived attention remain outstanding; the parent story has not been marked Done/Completed. The generic rework brief contained no detailed findings, and no STORY-2402-specific finding or original PR association was found in the consulted surfaces, so this handoff does not claim to resolve an unavailable prior review list.
+
+    Publication boundary: native Codex has read-only .git. Both git cherry-pick and aida ship's preview refused; edits are intentionally uncommitted per docs/cli/04-git-lifecycle.md (TASK-2712). The native lane's host-side exit step owns committing pending edits, and host publication uses aida ship STORY-2402 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-368. No PR was opened, and no ship/merge verdict was recorded.
+  created_at: 2026-11-05T13:14:17.225411528Z
+  modified_at: 2026-11-05T13:14:17.225411528Z
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
