@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T13:44:09.959719128Z
+modified_at: 2026-11-05T13:46:41.691190139Z
 req_type: Task
 tags:
 - docs
@@ -75,6 +75,12 @@ comments:
   content: 'Round 3: corrected server ownership to aida-cli-lib (164 families; aida-tui 1), removed server ownership controls and described its standalone daemon. Regenerated the full commands snapshot from installed build c38a77db609 dated 2026-11-05: 165 families / 781 routes (547 public, 234 hidden), including all five missing routes. Page states snapshot build/date to reconcile the original acceptance counts; PR #3342 body corrected. Exact route/description/visibility/flag comparison, showcase build check, all 21 showcase tests, and JavaScript syntax check pass. Fast CI gate run in progress.'
   created_at: 2026-11-05T13:44:09.959719128Z
   modified_at: 2026-11-05T13:44:09.959719128Z
+  session_id: 01a1abf1c209
+- id: 01a1abf6-349b-7952-b253-974987499d26
+  author: joe
+  content: 'Round 3 delivered in commit 094e20e7570, pushed and verified as PR #3342 head. Working tree clean. Final targeted verification passes: exact 781-route inventory comparison, build.py --check, 21 showcase tests, node --check, git diff --check. Additional make check-ci-fast remains unfinished at handoff (Cargo compilation); no fast-gate pass or remote CI result is claimed. No ship or review record action taken.'
+  created_at: 2026-11-05T13:46:41.691190139Z
+  modified_at: 2026-11-05T13:46:41.691190139Z
   session_id: 01a1abf1c209
 history:
 - id: 01a1a4ee-75d9-73f1-810d-e41d3e072f38
