@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T06:37:28.628108250Z
+modified_at: 2026-11-05T06:37:32.939542045Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -42,6 +42,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core pickup/publication guards match AC1-3 at unit level, but open_change_bound''s new duplicate refusal breaks the merge train (riders are open PRs for the same specs), session start now fails closed on forge lookup for every non-review scope, and acceptance tests stop at helpers. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-05T06:37:28.628106773Z
   modified_at: 2026-11-05T06:37:28.628106773Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa6d-4f12-7122-97c1-7a9a4855ed69
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2451):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4ff52fba2753
+    Recorded: 2026-11-05T05:58:16.757455350+00:00
+    Findings:
+    1. [major] aida-cli-lib/src/gate/ledger/mod.rs:308-335 + pr_train.rs:2210-2246: the merge train calls open_change_bound for a NEW train branch with every car's specs while each car's rider PR is still open (riders are closed only after landing, pr_train.rs:2553). With the real GitHub forge, change_for_spec(car spec) returns the rider PR (its title carries the spec trailer) on a different branch, so open_change_bound bails 'already has open change ... refusing a second change' and every 'aida pr train' land refuses. Exempt train publication (e.g. accept a Found change whose id is one of the train's riders, or give the train path a bypass) and add a train test whose fake forge reports the rider for change_for_spec.
+    2. [major] aida-cli-lib/src/session_start.rs:2027-2036: session_start_with_receipt runs pickup_pr_branch(owns) for every non-review scope, including EPIC clusters, feature:<tag> and path/** globs, and bails on CliMissing/CliFailed/Unreachable. 'aida session start --owns feature:x' therefore refuses in a GitHub repo with no gh or when offline, and each start pays a full open-PR scan with commit evidence (pr_lookup.rs:898-980). Limit the lookup to spec-ID scopes (and to single-spec queue pickups that have not already resolved it), and pass the already-resolved rework branch through instead of looking it up again.
+    3. [minor] aida-cli-lib/src/session_start.rs:724 + phase_driver_trait.rs:58: auto style now returns only the slug, so a reopened spec whose earlier PR merged with its branch kept (reviewers merge with --delete-branch=false) refuses with 'all 1 candidate branch names are taken (slug ...); pass --branch explicitly'. This also hits the auto-complete phase-1 fallback (resolve_pickup_workspace(..., "auto")), which cannot pass --branch. Decide the merged-branch policy explicitly. At minimum, give a message that names the merged PR and the --branch-style date / --branch recovery, and make the phase-1 fallback handle it.
+    4. [minor] AC4 coverage: the new tests call pickup_pr_branch, rework_pr_head_branch_override and preflight_queue_work_branch directly (auto_branch_tests.rs bug_2451_*, queue_work_tests.rs bug_2451_*). No test drives session_start_with_receipt or handle_queue_work to prove the wiring: that a held head refuses through the real pickup, that a clone/seat start cannot bypass it (session_start.rs:2455), or that an origin-only PR head is seated rather than forked. Add at least one integration regression for the held-branch case and one for the stale-seat/no-local-branch case through the real entry point.
+    5. [cosmetic] Messages now contradict the new policy: preflight_queue_work_branch_adopting (queue_cmd.rs:11356-11361 and the worktree branch) still says 'or choose another --branch', which pickup_pr_branch now refuses when an open PR exists. The preclaim open-PR refusal (queue_cmd.rs:9008) is unreachable for single-spec pickups and tells the user to re-run the same 'aida queue work <spec>' command.
+    6. [cosmetic] queue_cmd.rs:9022-9041: removing the BUG-022 Rework-hold association (rework_held_prs_for_spec and its tests) means a held PR is found only through title/branch/commit-trailer evidence. Confirm that is intended, or keep the hold record as a positive association signal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T06:37:32.818517096Z
+  modified_at: 2026-11-05T06:37:32.818517096Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
