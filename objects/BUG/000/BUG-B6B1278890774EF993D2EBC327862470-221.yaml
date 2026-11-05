@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T13:21:27.159230863Z
+modified_at: 2026-11-05T13:50:02.589971240Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,12 @@ comments:
   created_at: 2026-11-05T13:19:15.693363882Z
   modified_at: 2026-11-05T13:19:15.693363882Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abf9-455d-7622-89a1-4140bb11c33f
+  author: joe
+  content: 'Round 2: addressed findings 1-5: required-live bwrap CI filter/count wiring, distinct zero/multiple lease refusals with retention coverage, plain empty-diff diagnostic, corrected teardown documentation, and all-clone admission before retirement. Fixed original held-branch fixture delegation and Git-maintenance ratchet recognition. Validation: all 6 BUG-2455 tests pass with AIDA_REQUIRE_BWRAP_LIVE=1; original held-branch test passes; cargo fmt and 8 maintenance ratchet tests pass. Broader queue_work_dry_run suite is 14/15: rollback lease-removal test fails, also isolated and with ambient AIDA variables removed; baseline not checked. Git staging refuses .git/index.lock: Read-only file system, so no new commit or push could be made. Patch /tmp/bug2455-round2.patch retained; host publication needed for PR #3421.'
+  created_at: 2026-11-05T13:50:02.589971240Z
+  modified_at: 2026-11-05T13:50:02.589971240Z
+  session_id: 01a1abdf1077
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
   author: joe
