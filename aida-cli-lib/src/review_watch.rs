@@ -935,7 +935,18 @@ impl Store {
                     "review-watch completion identity changed"
                 );
             }
-            attempt.phase = phase;
+            // A queue setup failure before reviewer spawn is not a review
+            // attempt. Retry this head once its lease/setup blocker clears.
+            // An ambiguous or still-live child retains the terminal refusal.
+            // trace:BUG-2450 | ai:codex
+            attempt.phase = if phase == Phase::Exited
+                && !attempt.reviewer_spawning
+                && attempt.descendants_gone()
+            {
+                Phase::Failed
+            } else {
+                phase
+            };
             attempt.diagnostic = diagnostic.map(|d| bounded_diagnostic(&d));
             Ok(attempt.clone())
         })

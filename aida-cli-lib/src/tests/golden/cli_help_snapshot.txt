@@ -14153,6 +14153,10 @@ Options:
           never require `--force` and are always discarded. `--force` does NOT override the
           live-process check; that is `--include-in-use`
 
+      --discard-unpushed
+          Explicitly discard commits on HEAD or any local branch that no remote has. --force alone
+          never permits losing these commits
+
       --include-in-use
           Remove the worktree, or reset it back into the warm pool, even while live processes use
           it. Without this, `session end` refuses and names each pid and command: a live `claude`
@@ -14168,13 +14172,6 @@ Options:
           sessions whose cwd no longer exists. Without this flag, the dir is left in place and a
           hint is printed pointing at `aida session prune --orphans`
 
-      --wait-ci
-          Block until the PR's CI run reaches a terminal state (green or red) before releasing the
-          lease — the SILENT variant: polls every 30s and prints only the poll ticks + final result.
-          Use it to tail a long/overnight build without prompt noise. For live per-check progress
-          instead, use `--watch-ci`. No-op when the session has no associated PR or `gh` isn't on
-          PATH
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -14185,15 +14182,22 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --wait-ci
+          Block until the PR's CI run reaches a terminal state (green or red) before releasing the
+          lease — the SILENT variant: polls every 30s and prints only the poll ticks + final result.
+          Use it to tail a long/overnight build without prompt noise. For live per-check progress
+          instead, use `--watch-ci`. No-op when the session has no associated PR or `gh` isn't on
+          PATH
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --watch-ci
           Block until CI reaches a terminal state — the LIVE variant: streams `gh run watch` so each
           check resolves on screen as it happens. Use it when you want interactive feedback; use the
           quieter `--wait-ci` to tail a build without the live display. Same end-session decision
           tree as `--wait-ci` once CI is terminal (green proceeds, red prompts)
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --skip-ci
           Skip CI awareness entirely (release the lease without probing the PR's CI run). Use when
@@ -44615,6 +44619,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "discard-unpushed",
+        "takes_value": false,
+        "help": "Explicitly discard commits on HEAD or any local branch that no remote has. --force alone never permits losing these commits"
       },
       {
         "name": "force",

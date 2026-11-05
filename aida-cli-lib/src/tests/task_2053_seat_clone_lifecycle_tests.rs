@@ -574,9 +574,9 @@ fn task_2053_bwrap_t7_planted_config_never_runs_on_the_host() {
     );
 }
 
-/// Session end on a clone lease: refuses unshipped work without `--force`
-/// (lease, clone and pin unchanged), then with `--force` salvages it, removes
-/// the clone, its cargo target and its pin, and deletes the lease.
+/// Session end on a clone lease keeps unpublished commits even with `--force`.
+/// Explicit `--force --discard-unpushed` salvages them, removes the clone,
+/// its cargo target and pin, and deletes the lease.
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
@@ -594,8 +594,8 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
     let pin = pin_ref(&clone).unwrap();
     seat_commit(&clone, "work.txt");
     let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
-    let end = |force: bool| {
-        crate::session_end::session_end(
+    let end = |force: bool, discard_unpushed: bool| {
+        crate::session_end::session_end_with_discard_unpushed(
             Some(id),
             None,
             None,
@@ -608,18 +608,25 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
             false,
             false,
             false,
+            discard_unpushed,
         )
     };
 
-    let refused = end(false).unwrap_err();
+    let refused = end(false, false).unwrap_err();
     assert!(
-        format!("{refused:#}").contains("origin does not have"),
+        format!("{refused:#}").contains("--discard-unpushed"),
         "{refused:#}"
     );
     assert!(clone.exists() && target.exists() && ref_exists(&fx.main, &pin));
     assert!(crate::lease_path(&fx.main, id).exists());
 
-    end(true).unwrap();
+    // trace:BUG-2450 | ai:codex
+    assert!(
+        end(true, false).is_err(),
+        "--force alone must preserve commits"
+    );
+    assert!(clone.exists() && crate::lease_path(&fx.main, id).exists());
+    end(true, true).unwrap();
     assert!(!clone.exists());
     assert!(!target.exists());
     assert!(!ref_exists(&fx.main, &pin));
@@ -1420,8 +1427,9 @@ fn untagged_git_in(log: &Path, clone: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Review round 3: `aida session end --force` and `aida worktree dismiss` on
-/// a clone run no untagged git in it (signoff condition 1), and session end
+/// Review round 3: `aida session end --force --discard-unpushed` and
+/// `aida worktree dismiss` run no untagged git in a clone (signoff condition 1).
+/// Session end
 /// never follows a seat-planted `<clone>/.aida` symlink: the decoy it points
 /// at keeps its `sessions` link and its files.
 #[cfg(target_os = "linux")]
@@ -1465,10 +1473,33 @@ fn task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_cl
         shim_dir.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let _ambient =
-        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
+        ],
+    );
 
-    end_session(id, true).unwrap();
+    // This fixture deliberately salvages unpublished commits.
+    // trace:BUG-2450 | ai:codex
+    crate::session_end::session_end_with_discard_unpushed(
+        Some(id),
+        None,
+        None,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+    )
+    .unwrap();
     assert!(!ended.exists());
     assert!(
         std::fs::symlink_metadata(decoy.join("sessions")).is_ok_and(|m| m.file_type().is_symlink())
@@ -1694,8 +1725,14 @@ fn bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses() {
     assert_eq!(facts.unpushed, 1, "{facts:?}");
     assert_eq!(facts.unpushed_refs, vec!["1 commit(s) on refs/heads/side"]);
     let refused = format!("{:#}", end_session(id, false).unwrap_err());
-    assert!(refused.contains("refs/heads/side"), "{refused}");
+    assert!(refused.contains("--discard-unpushed"), "{refused}");
     git_ok(&clone, &["branch", "-q", "-D", "side"]);
+    // trace:BUG-2450 | ai:codex
+    assert!(
+        end_session(id, true).is_err(),
+        "a host-only local branch is not remote coverage"
+    );
+    git_ok(&fx.main, &["push", "-q", "origin", "wip/local"]);
 
     std::fs::write(clone.join("README.md"), "stashed\n").unwrap();
     git_ok(
@@ -2258,4 +2295,37 @@ fn bug_2384_probe_cap_is_scoped_to_ship_cleanup() {
     assert_eq!(ship_cleanup_cap(None), None);
     let later = std::time::Instant::now() + std::time::Duration::from_secs(3600);
     assert_eq!(ship_cleanup_cap(Some(later)), Some(later));
+}
+
+// trace:BUG-2450 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2450_bwrap_remote_coverage_protects_host_only_side_branches() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "remote-coverage", "b2450c0ffee1");
+    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 0);
+    git_ok(&clone, &["checkout", "-q", "-b", "only-local"]);
+    seat_commit(&clone, "precious.txt");
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 1);
+    // Copy it to a host-local ref. Salvage accounting excuses this, but
+    // teardown still needs a remote copy, independent of upstream config.
+    git_ok(
+        &fx.main,
+        &[
+            "fetch",
+            "-q",
+            clone.to_str().unwrap(),
+            "only-local:host-copy",
+        ],
+    );
+    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 1);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "host-copy:published-copy"],
+    );
+    assert_eq!(remote_missing_commits(&fx.main, &clone, true).unwrap(), 0);
 }

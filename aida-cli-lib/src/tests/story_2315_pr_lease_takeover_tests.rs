@@ -454,3 +454,173 @@ fn refusal_message_names_a_reviewers_own_branch() {
         "{msg}"
     );
 }
+
+// trace:BUG-2450 | ai:codex
+fn exited_lease(fx: &Fixture) -> crate::SessionLease {
+    let mut lease = seat_lease(&fx.seat);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("gone".into());
+    lease
+}
+
+#[test]
+fn bug2450_reviewer_reclaims_a_clean_pushed_dead_seat() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let lease = exited_lease(&fx);
+    assert_eq!(owner_liveness(&lease), OwnerLiveness::Dead);
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::ForceEnd
+    );
+    assert!(fx.seat.exists(), "planning itself never removes a seat");
+}
+
+#[test]
+fn bug2450_reviewer_reclaims_an_already_pushed_staged_index() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    git(&fx.seat, &["reset", "--soft", "HEAD~1"]);
+    let lease = exited_lease(&fx);
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::ForceEnd
+    );
+    std::fs::write(fx.seat.join("work.txt"), "unstaged work").unwrap();
+    assert!(matches!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::Bail(_)
+    ));
+}
+
+#[test]
+fn bug2450_all_pushed_branches_are_safe_even_when_not_in_this_pr() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    // A seat's HEAD moved on, but that work is safely on a different remote
+    // branch. Comparing only to the PR head falsely refused this clean seat.
+    commit(&fx.seat, "later.txt", "pushed elsewhere");
+    git(&fx.seat, &["push", "origin", "HEAD:published-elsewhere"]);
+    let lease = exited_lease(&fx);
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::ForceEnd
+    );
+}
+
+#[test]
+fn bug2450_side_branch_without_upstream_blocks_force_cleanup_until_discard_is_explicit() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    git(&fx.seat, &["checkout", "-b", "only-local"]);
+    let only_copy = commit(&fx.seat, "precious.txt", "only copy");
+    git(&fx.seat, &["checkout", "feat"]);
+    let lease = exited_lease(&fx);
+    let error = crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap_err();
+    let text = error.to_string();
+    assert!(
+        text.contains(&lease.id) && text.contains("--discard-unpushed"),
+        "{text}"
+    );
+    assert!(matches!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::Bail(_)
+    ));
+    assert_eq!(git(&fx.seat, &["rev-parse", "only-local"]), only_copy);
+    crate::session_end::guard_remote_commits(&fx.main, &lease, true).unwrap();
+    git(&fx.seat, &["push", "origin", "only-local"]);
+    // Pushing with no upstream configured is sufficient evidence.
+    crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::ForceEnd
+    );
+}
+
+#[test]
+fn bug2450_detached_head_unpushed_commits_are_protected() {
+    let fx = shipped_lane();
+    git(&fx.seat, &["checkout", "--detach"]);
+    commit(&fx.seat, "detached.txt", "only in HEAD");
+    let lease = exited_lease(&fx);
+    assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
+}
+
+#[test]
+fn bug2450_unsafe_seat_notice_names_lease_and_preserves_work() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    std::fs::write(fx.seat.join("uncommitted.txt"), "keep me").unwrap();
+    let lease = exited_lease(&fx);
+    let LeaseEndAction::Bail(message) = plan_lease_end(&fx.main, &lease, Some("feat")) else {
+        panic!("dirty seat must refuse");
+    };
+    notify_advisor(&fx.main, &lease, &message).unwrap();
+    notify_advisor(&fx.main, &lease, &message).unwrap();
+    let messages = aida_core::mailbox::read_local_messages(&fx.main).unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].to,
+        aida_core::mailbox::Recipient::Agent("advisor".into())
+    );
+    assert!(messages[0].body.contains(&lease.id));
+    assert!(messages[0].body.contains("uncommitted.txt"));
+    assert!(fx.seat.join("uncommitted.txt").exists());
+}
+
+// trace:BUG-2450 | ai:codex
+#[test]
+fn bug2450_force_session_end_refuses_before_changing_the_lease_or_tree() {
+    let fx = shipped_lane();
+    commit(&fx.seat, "only-local.txt", "never pushed");
+    let lease = exited_lease(&fx);
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let original = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let error = crate::session_end::session_end(
+        Some(&lease.id),
+        None,
+        None,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap_err();
+    assert!(
+        format!("{error:#}").contains("--discard-unpushed"),
+        "{error:#}"
+    );
+    assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+    assert_eq!(
+        std::fs::read_to_string(fx.seat.join("only-local.txt")).unwrap(),
+        "never pushed"
+    );
+}
