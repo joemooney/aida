@@ -699,14 +699,16 @@ Train intent is stored as versioned JSON under the main worktree's `.aida/train/
 with a permanent `run.lock` serializing recovery and admission. Atomic replacement,
 file fsync and directory fsync precede forge operations. Each entry pins the tested
 head, base and member heads, records its lifecycle step and completed member cleanup,
-and checkpoints nested forge reads and transport attempts. A failed write refuses
-the call. A later non-dry train invocation reconciles unfinished entries before
-admitting new riders: exact-number metadata and fresh `forge_confirmation` evidence
+and checkpoints nested forge reads and transport attempts, including the final
+merge gate's legacy metadata retries. A failed write refuses the call. A later
+non-dry train invocation reconciles unfinished entries before admitting new riders:
+exact-number metadata and fresh `forge_confirmation` evidence
 recognize completed merges, finish outstanding member closes, or complete a recorded
 retirement. Unknown or changed evidence retains the journal and stops admission.
 Completed closes are recognized from forge state, and completed journal entries are
-skipped. Recovery reuses an existing PR and tested head, rechecks CI and live gates
-under the ordinary merge lease, and never restores persisted mandate authority.
+durably marked Done then pruned. Recovery reuses an existing PR and tested head,
+rechecks CI and live gates under the ordinary merge lease, and never restores
+persisted mandate authority.
 Remote branches are retained by journaled retirement, avoiding deletion after an
 uncertain close or a moved branch. Legacy trains without journals retain their
 confirmed owner-liveness cleanup. Workflow-definition digest evidence remains slice 5.

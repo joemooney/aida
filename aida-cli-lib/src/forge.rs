@@ -2362,7 +2362,12 @@ impl Forge for GitHubForge {
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let label = format!("gh pr view {id} --json metadata");
         let project_root = self.project_root.clone();
-        let out = crate::network_retry::run_with_retry(&label, &cfg, sink, || {
+        let out = crate::network_retry::run_with_retry_checked(&label, &cfg, sink, || {
+            // The final verified-train gate also uses this legacy reader.
+            // Checkpoint every attempt, including retries after transport errors.
+            // trace:STORY-2401 | ai:codex
+            crate::pr_train::before_train_forge_call("GitHub metadata attempt")
+                .map_err(std::io::Error::other)?;
             let mut c = Command::new(&gh);
             c.current_dir(&project_root).args([
                 "pr",
@@ -2371,7 +2376,7 @@ impl Forge for GitHubForge {
                 "--json",
                 "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]);
-            c
+            Ok(c)
         })
         .context("could not invoke `gh pr view`")?;
         anyhow::ensure!(

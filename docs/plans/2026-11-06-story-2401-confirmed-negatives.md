@@ -405,3 +405,45 @@ Git policy and completed successfully using their local-evidence path.
 `git diff --check` passed. No implementation or validation blocker remains.
 The host must create the new round-7 commit and publish the recorded Refs subject;
 existing merge-hold clearance remains a separate authorized review action.
+
+## Slice-4 integration follow-up: nested metadata retries (2026-11-06)
+
+The current branch already contains the resumable journal and round-7 repairs,
+plus main's BUG-2463 (#3519) and cross-node train-review changes (#3508).
+The verified train gate calls `GitHubForge::change_metadata` while collecting
+and refreshing its proof. That legacy reader used unchecked transport retries,
+so a retry could spawn without another durable journal checkpoint. It now uses
+`run_with_retry_checked` and refuses each attempt if the active journal cannot
+be persisted. The checkpoint is a no-op for callers outside an active train.
+
+A PATH-isolated production-adapter regression exercises both a failed initial
+checkpoint and a retryable first forge response that replaces the journal
+directory with an unavailable path. It asserts zero and one actual forge calls,
+respectively, the retry count, and retained pinned Merge recovery evidence.
+The existing SIGKILL-after-merge and SIGKILL-after-eject tests remain in the
+binding `pr_train` test filter. No workflow-digest changes are included.
+
+Changed files in this follow-up: `aida-cli-lib/src/forge.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, `AGENTS.md`, `OVERVIEW.md`,
+and this plan. Native Git metadata remains untouched; host publication must
+retain a Refs STORY-2401 trailer, with slice 5 outstanding. Validation results
+follow below.
+
+Follow-up validation passed:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **169 passed, zero failures**, 12,554 filtered out; test runtime 59.84s,
+  fresh build 8m 54s. Both SIGKILL recovery cases and the new production
+  metadata-attempt checkpoint fixture passed.
+  Log: `/tmp/story2401-current-train.log`.
+- `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`: **all 38 gates passed**.
+  Log: `/tmp/story2401-current-fast.log`. Guards reporting read-only
+  `.git/FETCH_HEAD` refusals passed using their existing local-evidence path.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint final-gate metadata retries (Refs STORY-2401)`.
+All five changed files remain uncommitted for the host. No commit, push, PR
+creation, merge, review record, hold clearance or queue completion was performed.
+No implementation or validation blocker remains. Slice 5 remains outstanding;
+existing punt/hold signals remain publication vetoes. Turn ends with this handoff.

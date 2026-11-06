@@ -2,7 +2,8 @@ Train intent journals under the main worktree's `.aida/train/` persist tested
 head/member pins and lifecycle progress before forge operations. Non-dry train
 startup recovers unfinished entries under `run.lock` from fresh forge confirmation;
 unknown evidence stops admission. Recovery skips completed merges/member closes
-and rechecks live authority; journaled retirement retains remote branches. See OVERVIEW.md.
+and rechecks live authority; journaled retirement retains remote branches. Nested
+metadata retries in the final merge gate also require a durable checkpoint. See OVERVIEW.md.
 <!-- trace:STORY-2401 | ai:codex -->
 
 Question parking with an empty consequence preserves an existing deferral trigger

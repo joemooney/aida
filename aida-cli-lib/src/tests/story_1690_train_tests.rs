@@ -4150,6 +4150,76 @@ esac
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_metadata_retry_refuses_when_checkpoint_fails() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::forge::Forge;
+    #[derive(Default)]
+    struct Retries(usize);
+    impl crate::network_retry::RetrySink for Retries {
+        fn on_retry(&mut self, _: &crate::network_retry::RetryEvent) {
+            self.0 += 1;
+        }
+    }
+    let root = repo();
+    let r = root.path();
+    std::fs::create_dir_all(r.join(".aida")).unwrap();
+    write(
+        r,
+        ".aida/config.toml",
+        "[orchestrator]\nretry_max_attempts = 3\nretry_base_delay_ms = 0\n",
+    );
+    let gh = r.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+mv intent intent-saved || exit 2
+printf 'unavailable' > intent
+echo 'error connecting to api.github.com' >&2
+exit 1
+"#,
+    );
+    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", &path),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    for fail_before_first in [true, false] {
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/retry-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if fail_before_first {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let forge = crate::forge::GitHubForge::new(r);
+        let mut sink = Retries::default();
+        let error = forge.change_metadata(901, &mut sink).unwrap_err();
+        assert!(format!("{error:#}").contains("could not persist train intent"));
+        assert_eq!(sink.0, usize::from(!fail_before_first));
+        let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(!fail_before_first));
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(
+            saved.len(),
+            1,
+            "failed checkpoint must retain recovery evidence"
+        );
+        assert_eq!(saved[0].step, journal::Step::Merge);
+        assert_eq!(saved[0].train.tip, "car1");
+        std::fs::remove_file(&dir).unwrap();
+        std::fs::remove_dir_all(r.join("intent-saved")).unwrap();
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_prunes_old_done_and_reports_corrupt_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/old-1".into());
