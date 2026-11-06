@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T00:17:47.353132282Z
+modified_at: 2026-11-06T00:17:52.021876179Z
 req_type: Story
 tags:
 - architecture
@@ -32,6 +32,13 @@ relationships:
   target_id: 01a1ad09-bfc5-79f3-938d-57eabb5981b8
   created_at: 2026-11-06T00:17:47.353127464Z
   created_by: joe
+comments:
+- id: 01a1ae38-0f95-7a32-96b6-b137a07d649b
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 17:25 MST: SKETCH ONLY in this lane (docs/plans/2026-11-05-story-2537-proc-identity.md plus a spec comment); no production code. Inventory the existing helpers: TASK-1750''s primitive, the leases/ownership judge, merge_lock, review_watch reservations, mail-wake bindings, and the --bind-pid comm check. Define the judge for each namespace case, including subreaper/init refusal (BUG-2458) and clock steps (BUG-2130). Propose the slice order. Open the docs PR titled ''(Refs STORY-2537)''.'
+  created_at: 2026-11-06T00:17:52.021876179Z
+  modified_at: 2026-11-06T00:17:52.021876179Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
