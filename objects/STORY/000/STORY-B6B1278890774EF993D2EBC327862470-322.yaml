@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T08:16:12.067701734Z
+modified_at: 2026-11-06T08:20:06.449645349Z
 req_type: Story
 tags:
 - architecture
@@ -501,6 +501,12 @@ history:
   timestamp: 2026-11-06T08:16:13.178343665Z
   session_id: 01a1afd07f09
   changes: []
+- id: 01a1aff1-910d-73f2-a9e4-ca1e48994b1f
+  author: joe
+  timestamp: 2026-11-06T08:20:06.541507873Z
+  session_id: 01a1afef73a4
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -515,3 +521,11 @@ attention_reason:
   lean: Resume via a headless implementer launch that provisions a lane job runner, preserve Refs STORY-2324 until the complete PR-C cutover and import/archive work is validated.
   raised_by: implementer
   raised_at: 2026-11-06T07:59:21.179751332Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Partial PR-C slice (pure-core spec_key precedence, PR3306 fixture enabled) shipped under a COMPLETING (STORY-2324) trailer; spec's own handoff says PR-C is incomplete. Retitle to Refs, fix the listed core issues; CI was still pending at review time.
+  recovery_hint: address the review findings, move STORY-2324 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T08:20:06.449645349Z
