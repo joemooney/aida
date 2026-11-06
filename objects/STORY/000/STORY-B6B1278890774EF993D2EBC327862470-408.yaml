@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:21:01.280844498Z
+modified_at: 2026-11-06T15:22:14.890418006Z
 req_type: Story
 relationships:
 - rel_type:
@@ -164,6 +164,12 @@ comments:
   created_at: 2026-11-06T15:13:28.183880561Z
   modified_at: 2026-11-06T15:13:28.183880561Z
   session_id: 01a1b159080c
+- id: 01a1b174-0bea-71c0-831e-3c081a340c10
+  author: joe
+  content: 'ADVISOR RULING (PR #3504 round-2 F1, unbounded history revalidation). Bound it by design rather than with a bigger deadline. (1) On a checkpoint miss, revalidate only the newest N attempts (N=32, a named constant) plus any attempt a current reader asks for by (attempt, SHA). (2) Older attempts are reported as unverified-history and are never trusted as receipts; they stay readable for audit. (3) Write a fresh checkpoint after the bounded pass, so the next run is incremental. (4) The validator-source fingerprint change invalidates the checkpoint but follows the same bounded path. Tests: a fresh clone with more than N attempts finishes within the deadline and marks the rest unverified; a per-attempt read of an old attempt revalidates just that one. Fail-closed is unchanged. No other findings remain open from round 2. Gate: CI green at the head, including the contracts e2e step.'
+  created_at: 2026-11-06T15:22:14.890418006Z
+  modified_at: 2026-11-06T15:22:14.890418006Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
