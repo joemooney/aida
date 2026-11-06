@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: aida-store diverged gitlab+25/origin+6; reconciled union 226985138c0e, pushed both hubs; main in sync
+due_since: 2026-11-06T20:56:50.706053382Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-06T20:52:39.828608487Z
+  job: hub-drift-guard
+  error: 'exit 1: '
