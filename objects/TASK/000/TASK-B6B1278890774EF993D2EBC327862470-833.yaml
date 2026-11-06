@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-833
 agreed_id: TASK-3114
 title: 'Nit sweep C: containment harness and docs findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2863 TASK-2864 TASK-2865 TASK-2870 TASK-2871'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T19:57:51.505674911Z
+modified_at: 2026-11-06T00:08:31.858760045Z
 req_type: Task
 tags:
 - from-advisor
@@ -157,6 +157,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ae2f-834f-7dd2-bb7b-f0c8f2ec0441
+  author: aida-auto-bump
+  timestamp: 2026-11-06T00:08:31.823352722Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ae2f-8372-7161-b490-bc19caa88a77
+  timestamp: 2026-11-06T00:08:31.858757436Z
+  agent: aida
+  commit_sha: 0a00836e1750bc9b7e33289eccef87804eb8c760
+  summary: 'All 5 superseded findings addressed: TASK-2864 repo-relative bounded origin/main lookup with ValueError refusal + 3 regression tests (outside-cwd, missing ref, timeout); TASK-2865/2870/2871 doc trims + pr-review cast title/slug with test; TASK-2863 disposition documented. CI run 42098834825 fully green at head (gates conformance step now passes).'
+  review_verdict: approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -165,3 +179,7 @@ filed_at:
   aida_build_sha: c38a77db609
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T00:08:31.823348575Z
+  completion_sha: 0a00836e1750bc9b7e33289eccef87804eb8c760
