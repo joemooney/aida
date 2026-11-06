@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T11:21:35.296540665Z
+modified_at: 2026-11-06T12:41:30.338915194Z
 req_type: Story
 relationships:
 - rel_type:
@@ -213,6 +213,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 3 (Refs STORY-2401, AC2): all six round-2 findings are addressed in source with tests (closed-train receipt, absent-head squash, one-read keep answers, per-sweep fetch, Known(Err) refusals + sink, live suspend documented), but CI is red at this head: lib-1 Run tests failed and lib-0/lib-1/cli-0 Test time budget failed while main is green; the hard-coded 3s confirmation backoff has no test seam and slows binary tests 4-5x. AC1 landed in #3427 (not regressed); AC3/AC4 are slices 4-5.. No triage reason was given.'
   created_at: 2026-11-06T11:21:32.991964222Z
   modified_at: 2026-11-06T11:21:32.991964222Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0e0-e1e2-77c2-8aae-2d1fca572dba
+  author: joe
+  content: |-
+    ADVISOR LOOP-GUARD RESOLUTION + BRIEF 2026-11-06 05:50 MST (TASK-2933). The recurrence happened because the 04:21 round was a CI-triggered rework that fixed CI only. The six review findings on PR #3493 are ALL accepted and are in scope for THIS PR (none deferred). Rulings:
+    F1 (major): a CLOSED member whose train car is on base counts as landed. Treat Closed + a matching train-member receipt (subject '(#N)' plus the 'Aida-Train-Member: #N at <head>' trailer naming the head SHA) as a consistent landed-by-train state. Add a real-git fixture: a closed member whose car is on main.
+    F2 (major): confirm only before an AUTHORIZING answer. Take one read and return at once on the answer that authorizes nothing (Open for close/GC; not-Merged for credit). Run confirm_snapshot plus the Git fetch only when the first read would authorize the destructive or credit-granting transition. Fetch the base once per sweep, not once per PR.
+    F3: when the head object is absent locally (git cat-file -e fails), skip ancestry and consult the receipt; add an absent-head test.
+    F4: observe_change_metadata records retries through its RetrySink and keeps definitive refusals (404, not found, auth) as Known, via observe_gh.
+    F5: type the gate's settled refusals as Known(Err), so a refused member is EJECTED (restore BUG-2214) and the train is not suspended; add a live-path test.
+    F6: declare the subject with aida ship -m '[AI:codex] feat(forge): confirmed negatives before destructive transitions (Refs STORY-2401)'. The PR title is already Refs.
+    LIGHT gate: one targeted cargo test -p aida-cli-lib --lib story_2401 forge_confirmation plus make check-ci-fast.
+  created_at: 2026-11-06T12:41:30.338915194Z
+  modified_at: 2026-11-06T12:41:30.338915194Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
