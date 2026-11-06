@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-889
 agreed_id: TASK-2939
 title: Rotation gap-mail fixture leaves a message unread with NotAGitCheckout
 description: 'Observed during BUG-2467 validation: agent_launch::story_101_rotation_launch_tests::mail_sent_in_the_gap_reaches_generation_two_exactly_once fails at the final unread count (left 1, right 0); relay cleanup reports cannot read the relay run mail: NotAGitCheckout. The fixture creates .aida/config.toml but no Git checkout, and this test uses plan(role=None), so it does not enter the changed child-grant issuance path. Six other existing rotation tests and 143 existing authority/launcher tests passed. Reproducer: RUST_MIN_STACK=8388608 <aida-cli-lib test binary> agent_launch::story_101_rotation_launch_tests::mail_sent_in_the_gap_reaches_generation_two_exactly_once --exact --test-threads=1. Log: /tmp/bug2467-rotation-regressions.log. Please triage the receipt/fixture contract separately; no unrelated mailbox changes were made.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T17:48:01.471228401Z
-modified_at: 2026-11-06T20:45:10.696226020Z
+modified_at: 2026-11-06T20:45:13.498841978Z
 req_type: Task
 tags:
 - from-advisor:BUG-2467
@@ -27,6 +27,14 @@ history:
   author: joe
   timestamp: 2026-11-06T18:03:19.605826552Z
   changes: []
+- id: 01a1b29b-bd9a-7e03-a531-5a7771563193
+  author: joe
+  timestamp: 2026-11-06T20:45:13.498839454Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dcb86ca85d
