@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-06T15:43:16.336994659Z
+modified_at: 2026-11-06T16:07:54.246406864Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -236,6 +236,12 @@ comments:
   created_at: 2026-11-06T15:43:14.628808542Z
   modified_at: 2026-11-06T15:43:14.628808542Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b19d-d886-7522-8b20-7e121a327794
+  author: joe
+  content: 'PR #3483 round 3 adds a cooperative detached-worker handoff and an end-to-end regression through the actual lease stamp and ownership derivation: setsid worker survives launcher exit, persisted holder PID is the worker rather than its reaper, and lease/ownership judges read Dead after it exits. Final test binary passes that regression, the ownership suite and headless rework cases; core ProcIdentity tests and all 38 fast gates pass. Legacy heartbeat evidence is preserved without granting unadmitted process authority. Host migrate/compare evidence and ownership cutover remain separate acceptance work. Native seat leaves edits uncommitted for host publication; required squash subject ends (Refs STORY-2537) (BUG-2458).'
+  created_at: 2026-11-06T16:07:54.246406864Z
+  modified_at: 2026-11-06T16:07:54.246406864Z
+  session_id: 01a1b1643ab6
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
