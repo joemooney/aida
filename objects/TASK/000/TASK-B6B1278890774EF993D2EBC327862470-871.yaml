@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T08:47:24.529897522Z
+modified_at: 2026-11-06T09:05:31.666402688Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,8 +27,22 @@ history:
   timestamp: 2026-11-06T08:35:46.262278297Z
   session_id: 01a1aff312e8
   changes: []
+- id: 01a1b01b-26a5-7ea0-bd2d-1edd4264ef47
+  author: joe
+  timestamp: 2026-11-06T09:05:31.813522312Z
+  session_id: 01a1b0166d7f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a8e8311d546
   vendor: codex
   session: 01a1aff312e8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-4 findings 1-6 and 8-10 are addressed: per-PR shards, a direct-human signed re-anchor for crashed or revoked owners, hub config opt-in, sync refusal skips one pass, local cleanup on every error path, cached remote holds, bounded network calls outside the store lock, and liveness tests. Finding 7 is handled by re-trailering the title to TASK-3196, so STORY-2492 stays open with AC5 unmet. Blocker: the new store-tip check in update() hard-fails a Running/Terminal/Cancelled transition whenever any local store commit lands during the hub round-trip, wedging the claim until a stopped-fleet human reconcile.'
+  recovery_hint: address the review findings, move TASK-3196 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T09:05:31.666402688Z
