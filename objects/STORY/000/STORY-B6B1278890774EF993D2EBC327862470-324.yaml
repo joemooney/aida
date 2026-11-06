@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T21:48:28.662517860Z
+modified_at: 2026-11-06T23:46:35.538799075Z
 req_type: Story
 tags:
 - architecture
@@ -706,6 +706,12 @@ comments:
   created_at: 2026-11-06T21:48:28.662517860Z
   modified_at: 2026-11-06T21:48:28.662517860Z
   session_id: 01a1b2b5141e
+- id: 01a1b341-c992-7b73-913e-8f2d80aab249
+  author: joe
+  content: 'Advisor 16:50: host-merged main into PR-C (#3531, 978e95e). BUG-2467 (#3523) conflicts: PR-C moved issue_launch_child into crate::launch, so the delegation-aware issuance is exposed as launch::issue_launch_child_with_delegation, which wraps BUG-2467''s seat_authority implementation. agent_launch''s role launch calls it, and BUG-2467''s tests point at launch::issue_launch_child. Verified on dell1: fmt is clean, cargo check --tests passes, and bug_2467 plus story_2326 pass 45/46. The one failure (bug_2467_standing_orders_dispatch_inherits_parent_delegation: ''allocation setting must be a bounded owned regular file'') fails on plain main on dell1 too, so it is a host environment issue. The delta re-review should check the ratchet rule that grant issuance goes only through crate::launch.'
+  created_at: 2026-11-06T23:46:35.538799075Z
+  modified_at: 2026-11-06T23:46:35.538799075Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
