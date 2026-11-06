@@ -2,6 +2,6 @@ job: session-hygiene-route
 due_since: 2026-11-04T02:13:25.912207698Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-06T07:01:59.957955339Z
+  trip_id: session-hygiene@2026-11-06T08:02:21.752339279Z
   job: session-hygiene
-  error: 'exit 1: /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-658 is a contained seat''s private clone, but its marker, alternates and lease do not agree on a main checkout, so it is not used as one. Run this from the main checkout.'
+  error: 'exit 1: '
