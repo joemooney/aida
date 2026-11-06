@@ -1,5 +1,6 @@
 id: 01a1b1c6-6d9d-7593-b472-5bbd0f0ff2a3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-887
+agreed_id: TASK-2938
 title: 'minor (non-blocking): headless_background.rs:546-550 treats an unreadable reach…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2464, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:41510bb2
 - from-review:PR-3510
 - kind:carried-forward
+history:
+- id: 01a1b1de-81d1-7d93-9528-12065eae7989
+  author: joe
+  timestamp: 2026-11-06T17:18:31.889374410Z
+  changes: []
 filed_at:
   code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
   branch: main
