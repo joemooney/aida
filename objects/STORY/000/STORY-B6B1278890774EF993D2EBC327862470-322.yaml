@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T12:27:32.203900106Z
+modified_at: 2026-11-06T12:36:39.522345461Z
 req_type: Story
 tags:
 - architecture
@@ -380,6 +380,12 @@ comments:
   created_at: 2026-11-06T12:25:54.549468139Z
   modified_at: 2026-11-06T12:25:54.549468139Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0dc-71e2-7520-99d2-c7707cb3d037
+  author: joe
+  content: 'Round 3 rework of PR #3499 at 105a7c81d7d0: addressed all three current findings. .github/workflows/ci.yml now builds the docs-only CLI in gates as well as contracts before the landing smoke. OVERVIEW.md and docs/internal/agents/aida-repository-guide.md now describe aida gate migrate --dry-run/--execute/--rollback, interactive host execution/rollback, and in-place rollback preserving later events; both retain one-way collection of pre-M1-slice-2 worktree markers and state that current writers create no worktree markers. Validation: umask 022; make check-ci-fast exited 0, all 38 fast-tier gates passed, including formatting and docs checks. python3 -m unittest tests/test_ci_test_shards.py: 25 passed. Landing smoke with AIDA_TEST_BIN=/home/joe/.local/bin/aida: 1 passed. Parsed workflow condition matrix confirms gates and contracts build before binary consumers for both full_ci=true and false. git diff --check passed. Older ruling Rust test command attempted through aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- gate:: migrate story_2324; refused because lease 01a1b0d40bc7 has no lane runner (untested=true for that run). No direct cargo test fallback. Fast guards reported read-only .git/FETCH_HEAD on internal fetch attempts but returned success. Native publication declaration recorded: [AI:codex] docs(gate): canonical ledger gate architecture (STORY-2324). Three changed files remain uncommitted per native-seat rules. Host must commit/publish this round and rerun CI gates on the new head; existing merge hold remains untouched.'
+  created_at: 2026-11-06T12:36:39.522345461Z
+  modified_at: 2026-11-06T12:36:39.522345461Z
+  session_id: 01a1b0d40bc7
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
