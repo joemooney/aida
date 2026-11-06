@@ -8,13 +8,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T17:48:01.471228401Z
-modified_at: 2026-11-06T17:48:01.471228401Z
+modified_at: 2026-11-06T20:45:10.696226020Z
 req_type: Task
 tags:
 - from-advisor:BUG-2467
 - kind:observation
 - linked:BUG-2467
 - severity:minor
+comments:
+- id: 01a1b29b-b2a8-7603-8d48-897f7d9d0ed0
+  author: joe
+  content: 'Advisor 13:46: rejected. The test passes in CI on main (green). The NotAGitCheckout failure happens only in a contained seat whose fixture lacks a git checkout, which is a seat-environment artifact and not a product defect. Reopen if it fails in CI.'
+  created_at: 2026-11-06T20:45:10.696226020Z
+  modified_at: 2026-11-06T20:45:10.696226020Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b207-84b5-73c0-9980-f047a2e02eb3
   author: joe
