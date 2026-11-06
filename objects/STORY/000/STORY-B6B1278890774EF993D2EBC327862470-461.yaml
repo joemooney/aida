@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T17:11:57.243598241Z
+modified_at: 2026-11-06T17:44:44.655690319Z
 req_type: Story
 tags:
 - architecture
@@ -116,6 +116,33 @@ comments:
   modified_at: 2026-11-06T17:04:39.680102382Z
   session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b1f3-e829-7b21-86b0-0507490b9e12
+  author: joe
+  content: |
+    Round 2 rework for PR #3515 (reviewed 3403d57daf27), Codex native seat. Source fixes ready; final library test compilation is still pending at this progress checkpoint.
+
+    Addressed findings 1-5: Rust keywords no longer hide leading-:: environment paths; independent keyword mutants cover strict/reserved/weak keywords plus if/match/while/&mut examples. Function bodies have delimiter-bounded scopes, restoring enclosing functions after nested functions and <module> after outer functions; static/const/Lazy and trait/extern declaration fixtures cover the boundary. Growth checks allow only navigation relocation backed by retired operation+expression-digest multiplicity, with no ceiling growth or capacity borrowed from retained entries. Git-tracked workspace/tests sources are scanned from working-tree contents; ignored/untracked scratch/virtualenv files are excluded, deliberately tracked target paths remain included, deleted sources retire entries, and tracked non-UTF-8 sources give a path diagnostic. Merge-group base_sha is included in CI base selection.
+
+    The two CI HOME guard failures came from snapshot .var("HOME") assertions, not process reads. These now assert absence via snapshot get; the typed Missing assertion remains covered with a different key. No existing home guard was weakened. No launch/ files, LaunchContext::resolve, deployed forwarding policy or env_clear activation changed.
+
+    Ledger navigation corrections preserve operation/expression multiplicity. Initial inventory is 1216 rather than 1215 because this checkout already merged main PR #3493 (5af57cdbc221), including one unchanged forge_confirmation::pause read. Verified that source byte-for-byte against origin/main; all other ledger changes pass the new relocation-only comparison. origin/main has no pre-existing ledger, so this is still the initial inventory bootstrap, not a relaxation of later growth checks.
+
+    Changed files (6): .github/workflows/ci.yml; aida-core/src/exec_context.rs; scripts/check-exec-context.py; scripts/exec-context-legacy.json; tests/test_exec_context_ratchet.py; docs/internal/testing/exec-context-migration.md.
+
+    Completed validation: ExecContext 8 passed, with the ignored exact-child capture fixture executed successfully by its parent; core no_direct_home_resolution_outside_this_module passed; all 14 scanner tests passed after the tracked-target correction, plus the final tracked-file fixture passed independently; --base origin/main ledger check passed; make check-ci-fast passed all 39 gates (including the CLI no-default-features and TUI checks); cargo fmt --all -- --check, git diff --check, documentation link/path checks passed. Some fast guards printed read-only FETCH_HEAD refusals and passed their fallback checks.
+
+    Pending local validation at this checkpoint: aida-cli-lib no_direct_home_resolution_in_crate is compiling its cold agent-profile test binary; the core launch_policy suite is queued on that build lock. They have not yet supplied final results.
+
+    Finding 6 remains a host publication/re-review obligation: publish a NEW commit for this round and cite a green exact-head CI run. No green published run is claimed from uncommitted edits. Existing merge-hold/manual clearance remains in force. Native publication declaration recorded: [AI:codex] fix(core): close execution-context ratchet review gaps (Refs STORY-2538). Edits are uncommitted for the host; no commit/push/PR creation, queue done, pr ship, review record or hold clearance from this seat. STORY-2538 remains an incomplete staged migration.
+  created_at: 2026-11-06T17:41:54.345892692Z
+  modified_at: 2026-11-06T17:41:54.345892692Z
+  session_id: 01a1b1d87212
+- id: 01a1b1f6-816f-72c2-b66a-1560325ed13f
+  author: joe
+  content: 'PR-C coordination: STORY-2326 owns Codex prepare_launch extraction into aida-cli-lib/src/launch/profile.rs (VendorProfile keyed by existing LaunchVendor), one launch::issue_launch_child entry, and selector-only control_env/control_child. No env_clear or alternate ambient context added here; R4 retains input/allowlist injection. Existing Codex TOOL_ENV remains unchanged.'
+  created_at: 2026-11-06T17:44:44.655690319Z
+  modified_at: 2026-11-06T17:44:44.655690319Z
+  session_id: 01a1b1f00f15
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
