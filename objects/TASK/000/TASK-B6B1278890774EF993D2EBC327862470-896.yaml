@@ -1,0 +1,29 @@
+id: 01a1b292-dee2-72f1-ae84-596488b08212
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-896
+title: 'minor (non-blocking): runner_status_with (deputy_shell/mod.rs) requires a liter…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2468, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): runner_status_with (deputy_shell/mod.rs) requires a literal 'run' argv; the bash script's supported back-compat start form 'aida-deputy-shell N' (bare name, case arm [A-Za-z0-9]*) has a live runner.pid but falls to native -> 'runner: NOT running', the same false negative BUG-2468 targets. Accept argv[script+1]==name too, or report UNKNOWN when runner.pid is live and argv names aida-deputy-shell but the shape is unrecognized.
+
+  PR: #3530
+  Reviewed sha: d0030668f326367acc868fa54a530172ced0f9f3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T20:35:32.194830913Z
+modified_at: 2026-11-06T20:35:32.194830913Z
+req_type: Task
+tags:
+- carried-from:BUG-2468
+- finding-hash:0b39cb3f
+- from-review:PR-3530
+- kind:carried-forward
+filed_at:
+  code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
