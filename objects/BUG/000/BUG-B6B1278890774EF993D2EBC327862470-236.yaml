@@ -1,0 +1,27 @@
+id: 01a1b232-95ba-7a10-975d-9e3450b49914
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-236
+agreed_id: BUG-2470
+title: Conformance harness appends a second [contained] table to the fixture config.toml (init already writes one), so spec-add and queue-add fail to parse and C0-C4 report unknown
+description: |-
+  Seen 2026-11-06 11:49 MST: the first C3/C4 re-run after BUG-2465 (#3520) landed. Run: python3 scripts/containment/conformance.py --vendor codex --boundary aida --output ~/.aida/conformance-aida-1793990948 --timeout 120. role enter now passes. Then spec-add and queue-add fail with 'TOML parse error at line 539: duplicate key contained in document root', every check is unknown (fixture-production-launch-not-accepted), and whole_lane_pass is false.
+
+  Cause: scripts/containment/conformance.py:626-630 opens .aida/config.toml in append mode and writes [agents], [contained] and [contained.vendors] tables. The aida init template has written its own [contained] allowed_hosts table since BUG-2392, so the result has two [contained] tables.
+
+  Fix: merge the fixture policy into the existing tables instead of appending. Either parse with tomllib and rewrite, or append keys under the existing headers: allowed_hosts must be exactly the fixture list, replacing init's list, because C3 tests that a non-listed host is denied. Also set [agents] contained/vendor and [contained.vendors] codex. Add a harness unit test that runs setup against a freshly init'd fixture and parses the config with tomllib. Afterwards the advisor re-runs C3/C4 for BUG-2447/BUG-2448.
+
+  Gate: python unit tests for scripts/containment plus make check-ci-fast; no cargo needed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T18:50:22.010183066Z
+modified_at: 2026-11-06T18:50:22.010183066Z
+req_type: Bug
+filed_at:
+  code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
