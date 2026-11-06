@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T21:28:23.224952071Z
+modified_at: 2026-11-06T21:47:33.037585764Z
 req_type: Task
 tags:
 - area:containment
@@ -196,6 +196,24 @@ comments:
   created_at: 2026-11-06T21:03:29.123822052Z
   modified_at: 2026-11-06T21:03:29.123822052Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2d4-cd2d-7950-b45c-c55a64dbc65a
+  author: mcp
+  content: |-
+    Native-seat Refs-only S2 handoff continuing origin/main df7655109ef and #3518 under the newest advisor brief.
+
+    Implemented a generic RuntimeCredentialsFile mechanism on the existing common wrapper, with AGY runtime/credential/auth-host/argv/write-policy values in containment/vendors.toml. The private mode-0700 runtime starts with empty settings; host runtime parents are masked from descriptor data for every vendor, and the opaque credential is pinned read-only by handle without copying. Runtime-file profiles keep store/cache and Git metadata read-only, including private-clone Git. Exact host validation is shared; inventory entries require pinned trusted allowed_hosts approval and never add grants automatically. Common-wrapper exec remains receipt-gated; candidate bypass argv still refuses missing/deserialized receipts. AGY-specific duplicate runtime/argv data was removed from launch/agy.rs.
+
+    The only endpoint found in recorded host log evidence is daily-cloudcode-pa.googleapis.com. auth_inventory_complete remains false; both session admission and direct wrapper preparation remain refused. No real vendor calls, token contents, deputy jobs, production enablement or passing all-tool credit claimed.
+
+    Remaining TASK-3048 acceptance: complete refresh/login host inventory, verify private read-only token refresh/expiry behavior, demonstrate mediated-write positive controls, wire production argv/caller routing (including legacy bypass-path migration/refusal) and the AGY shared-boundary harness, then obtain fresh passing all-tool host evidence before opening admission. The current runtime-file arm accepts only -p <prompt>; existing headless builders are not claimed integrated.
+
+    Validation: all 38 make check-ci-fast gates PASS; 41 offline conformance tests PASS; final cargo check -p aida-cli --no-default-features PASS; cargo fmt and git diff --check PASS. The first fast run caught a /tmp literal in a new path-rejection test; changed to a neutral absolute path and the full rerun passed. Rust execution untested=true: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_3048 refused because lease 01a1b2c3374d has no lane job runner. New runtime/credential/mask/live-wrapper regressions and launch::agy::tests need host/CI execution; model-free wrapper tests are not AGY conformance.
+
+    Eight files remain uncommitted: OVERVIEW.md; containment/{mod.rs,tests.rs,tests/launch_tests.rs,vendors.toml}; launch/{agy.rs,contained.rs}; docs/internal/testing/containment-conformance.md (source paths under aida-cli-lib/src where applicable).
+    Recorded publication declaration: [AI:codex] feat(containment): prepare shared private runtime for agy; Refs STORY-2460 (Refs TASK-3048).
+    No commit, push, PR, queue done, ship/merge or review verdict performed. TASK-3048 remains open. Host publication after process exit must retain Refs and honor existing punt/hold vetoes.
+  created_at: 2026-11-06T21:47:33.037567970Z
+  modified_at: 2026-11-06T21:47:33.037567970Z
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
