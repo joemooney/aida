@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2020",
+  "publishes": [
+    {
+      "at": "2026-11-06T10:01:22.114095139Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:43:08.227065089Z",
+      "spec": "TASK-2020",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T10:59:50.086596312Z",
+      "spec": "TASK-2020",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T07:12:26.571728557Z",
+      "spec": "TASK-2020",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T08:25:17.710189229Z",
+      "spec": "TASK-2020",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T10:00:46.777802331Z",
+      "spec": "TASK-2020",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3488
+      }
+    },
+    {
+      "ts": "2026-11-06T10:01:21.924123529Z",
+      "spec": "TASK-2020",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "883f6d983a5c3158cbbf01987388ff6ddf878857",
+        "pr": 3488,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
