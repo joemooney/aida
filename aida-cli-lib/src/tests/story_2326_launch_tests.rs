@@ -1372,3 +1372,29 @@ fn story_2326_pr_b_compete_builds_real_templates_without_scanning_prompts() {
         }
     }
 }
+
+/// Queue selection must never change this process's authority. Both Claude
+/// exec arms set the selected seat on their command before the shared exec.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_queue_exec_assigns_child_seat_without_parent_role_export() {
+    let src = include_str!("../queue_cmd.rs");
+    let body = src
+        .split("pub(crate) fn handle_queue_work(")
+        .nth(1)
+        .unwrap()
+        .split("\n}\n")
+        .next()
+        .unwrap();
+    assert!(!body.contains("set_var(\"AIDA_SESSION_ROLE\""));
+    for builder in [
+        "session::build_claude_exec_command(",
+        "session::build_claude_resume_exec_command(",
+    ] {
+        let arm = body.split(builder).nth(1).unwrap();
+        let seat = arm.find("crate::launch::assign_seat(").unwrap();
+        let exec = arm.find("crate::launch::spawn::exec_agent(").unwrap();
+        assert!(seat < exec);
+        assert!(arm[seat..exec].contains("child_grant_id.as_deref().unwrap_or(\"\")"));
+    }
+}

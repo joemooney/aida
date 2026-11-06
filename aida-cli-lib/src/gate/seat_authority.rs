@@ -2234,30 +2234,13 @@ impl ChildGrantRefused {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn issue_child(
     project_root: &Path,
     requested_seat: &str,
     child_subject: &str,
 ) -> Result<SeatGrant> {
     issue_child_for(project_root, requested_seat, child_subject, false)
-}
-
-/// The child grant for a launched worker. A `contained` worker's tool calls
-/// run in a sandbox, so it can present its grant only through the keyring
-/// key: a child the keyring could not hold is refused (a
-/// [`ChildGrantRefused`]) before the worker runs. An uncontained worker keeps
-/// [`issue_child`]'s warn-only proc-only fallback. Every launch path that
-/// knows its containment (fresh or resumed, headless or interactive, any
-/// seat) mints through here, directly or via [`issue_headless_child`].
-// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
-pub(crate) fn issue_launch_child(
-    project_root: &Path,
-    requested_seat: &str,
-    child_subject: &str,
-    contained: bool,
-) -> Result<SeatGrant> {
-    issue_child_for(project_root, requested_seat, child_subject, contained)
 }
 
 /// STORY-2254: the one-use authority a detached Codex launch carries from the
@@ -2346,7 +2329,7 @@ impl DetachedLaunchCapability {
 
 /// STORY-2254: mint the detached worker's OWN child grant and capture the
 /// one-use capability for it, in one gate-owned step. The parent is validated
-/// exactly as [`issue_launch_child`] validates it (delegation, roster,
+/// exactly as [`crate::launch::issue_launch_child`] validates it (delegation, roster,
 /// inline-parent rule) and the grant is minted by the same core: empty
 /// delegable seats, expiry bounded by the parent, keyring key installed
 /// before the worker exists. `require_key` makes a keyring failure a refusal:
@@ -2364,7 +2347,12 @@ pub(crate) fn issue_detached_launch_child(
     let issuer = own_process_token().context(
         "cannot issue a detached launch grant: this launcher's start identity could not be read",
     )?;
-    let grant = issue_child_for(project_root, requested_seat, child_subject, require_key)?;
+    let grant = crate::launch::issue_launch_child(
+        project_root,
+        requested_seat,
+        child_subject,
+        require_key,
+    )?;
     if require_key && !has_key_binding(&grant) {
         let _ = revoke_by_id(&grant.id);
         return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
@@ -2546,7 +2534,7 @@ pub(crate) fn preflight_sandboxed_child_key(seat: &str) -> Result<()> {
     }
 }
 
-fn issue_child_for(
+pub(crate) fn issue_child_for(
     project_root: &Path,
     requested_seat: &str,
     child_subject: &str,
@@ -2783,7 +2771,7 @@ impl HeadlessChildGrant {
 
 /// BUG-2139: mint the authority for a fresh headless child in `seat`.
 /// [`preflight_headless_child`] decides; a delegated seat goes through
-/// [`issue_launch_child`], which re-validates, so a roster edit or a parent
+/// [`crate::launch::issue_launch_child`], which re-validates, so a roster edit or a parent
 /// revoked between preflight and launch still fails closed, and a `contained`
 /// child whose key the keyring could not hold is refused before it spawns.
 // trace:BUG-2139 | ai:claude
@@ -2799,12 +2787,9 @@ pub(crate) fn issue_headless_child(
     let authority = preflight_headless_child(project_root, &seat)
         .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     match authority {
-        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_launch_child(
-            project_root,
-            &seat,
-            child_subject,
-            contained,
-        )?)),
+        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(
+            crate::launch::issue_launch_child(project_root, &seat, child_subject, contained)?,
+        )),
         HeadlessChildAuthority::Baseline { cause } => Ok(HeadlessChildGrant::Baseline { cause }),
     }
 }
@@ -2861,7 +2846,7 @@ pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
     bind_grant_token(id, &token)
 }
 
-/// TASK-2708: bind a launch child's grant (minted by [`issue_launch_child`])
+/// TASK-2708: bind a launch child's grant (minted by [`crate::launch::issue_launch_child`])
 /// to the worker an AIDA containment wrapper started. The wrapper re-parents
 /// the vendor under bubblewrap, so the worker named in the containment
 /// receipt is no longer the launcher's direct descendant; this is the same

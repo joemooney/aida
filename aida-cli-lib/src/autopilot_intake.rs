@@ -1011,9 +1011,20 @@ pub(crate) fn handle_intake_command(
         contained,
     )?;
 
-    let child_grant =
-        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+    let child_grant = crate::launch::issue_launch_child(
+        &project_root,
+        "advisor",
+        &current_user_id(None),
+        session::sandboxed_child_grant(vendor, contained)?,
+    )?;
+    crate::launch::assign_seat(
+        &mut command,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        crate::launch::SeatDecision::Child {
+            role: "advisor",
+            grant: &child_grant.id,
+        },
+    )?;
 
     // trace:BUG-2398 | ai:claude
     let status_code = session::coordinator_status_with_handle_guard(
@@ -1068,8 +1079,6 @@ pub(crate) fn build_autopilot_intake_command(
     command
         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         .env(crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1")
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
         .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
         .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))

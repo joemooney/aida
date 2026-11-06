@@ -712,6 +712,20 @@ impl RealPhaseDriver {
         self.aida_exe.clone()
     }
 
+    // Unit fixtures supply their current image through the existing aida_exe
+    // field. Production never substitutes that field for the kernel's image.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn control_child(&self) -> Result<std::process::Command> {
+        #[cfg(test)]
+        {
+            crate::launch::control::control_child_for_test(&self.aida_exe)
+        }
+        #[cfg(not(test))]
+        {
+            crate::launch::control_child(&self.aida_exe)
+        }
+    }
+
     /// TASK-1421: the injection seam. An injected
     /// [`crate::forge::ForgeFactory`] reaches the forges built through
     /// `lifecycle_forge()` and `project_forge()`: merge, the phase-1 PR
@@ -1376,10 +1390,10 @@ impl RealPhaseDriver {
         }
         let content = read_headless_log_for_session(&self.project_root, session_uuid)?;
         let punt = pending_text_question_from_headless_log(&content)?;
-        let status = std::process::Command::new(self.aida_exe())
+        let status = crate::launch::control_child(self.aida_exe())
+            .ok()?
             .current_dir(worktree_path)
             .args(build_auto_punt_args(&self.spec, &punt.detail, &punt.lean))
-            .env("AIDA_SESSION_ROLE", "implementer")
             .status_retrying_etxtbsy()
             .ok()?;
         if !status.success() {
@@ -2291,7 +2305,7 @@ impl RealPhaseDriver {
         // trace:BUG-2398 | ai:codex — Codex tools get their own delegation,
         // never the consult launcher's ambient advisor selector.
         let codex_grant = if vendor == session::HeadlessVendor::Codex {
-            let grant = crate::gate::seat_authority::issue_launch_child(
+            let grant = crate::launch::issue_launch_child(
                 &self.project_root,
                 "advisor",
                 &crate::current_user_id(None),
@@ -2304,7 +2318,7 @@ impl RealPhaseDriver {
                 .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
                 .env("AIDA_USER", crate::current_user_id(None))
                 .env("AIDA_PROJECT_ROOT", &self.project_root);
-            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut child_cmd) {
+            if let Err(error) = crate::launch::profile::finalize_codex(&mut child_cmd) {
                 session::revoke_headless_child_grant(&grant.id);
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,

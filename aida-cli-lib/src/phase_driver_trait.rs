@@ -344,8 +344,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             headless_impl,
             self.permission_mode.as_deref(),
         );
-        let mut cmd = std::process::Command::new(self.aida_exe());
-        cmd.current_dir(&self.project_root).args(&args);
+        let mut cmd = self.control_child().map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("control child: {e:#}"),
+            )
+        })?;
+        cmd.current_dir(&self.project_root)
+            .args(&args)
+            .args(["--role", "implementer"]);
         // BUG-1485: the child may complete `queue done` / `pr ship` and release
         // its lease before this parent regains control. Give queue-work a
         // durable, session-keyed handoff path so phase 1 can still recover the
@@ -2056,12 +2063,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     .map(|(_, suffix)| suffix.to_string());
             }
         }
-        let mut cmd = std::process::Command::new(self.aida_exe());
+        let mut cmd = self.control_child().map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("control child: {e:#}"),
+            )
+        })?;
         cmd.current_dir(&self.project_root)
             .args([
                 "queue",
                 "work",
                 &scope,
+                "--role",
+                "reviewer",
                 "--session-id",
                 &session_uuid,
                 "--no-pull",
@@ -2071,8 +2085,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             cmd.env("AIDA_GRADED_REVIEW_CONTEXT", context);
         }
         // BUG-233/BUG-901/BUG-1038: use the same orchestrator phase envelope as
-        // the implementer child: token, variant, phase role, and captured queue
-        // owner all travel together.
+        // the implementer child: token, variant and captured queue owner.
+        // The requested reviewer role travels in argv, separate from authority.
         for (key, value) in orchestrator_phase_child_env(
             &self.run_token,
             auto_complete::Phase::Reviewer,
@@ -3928,7 +3942,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(lease) = &self.implementer_lease {
                 child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
             }
-            crate::codex_tool_env::prepare_launch(&mut child_cmd)
+            crate::launch::profile::finalize_codex(&mut child_cmd)
                 .map_err(|e| std::io::Error::other(format!("{e:#}")))
         } else {
             Ok(())

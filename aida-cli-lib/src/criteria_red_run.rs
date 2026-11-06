@@ -950,7 +950,7 @@ mod tests {
             .unwrap();
         let lease = body.find("let lease = list_leases(&project_root)").unwrap();
         let hook = body.find("criteria_red_run::after_lane_created(").unwrap();
-        let launch = body.find("session::exec_claude_with_session(").unwrap();
+        let launch = body.find("session::build_claude_exec_command(").unwrap();
         assert!(created < lease && lease < hook && hook < launch);
         let auto = include_str!("auto_complete.rs");
         assert!(!auto.contains(&["record_red", "_run("].concat()));

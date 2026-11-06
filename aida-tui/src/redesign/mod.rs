@@ -1498,8 +1498,8 @@ fn apply_drive_outcome(
 /// interactive drive in-terminal, so the child's stdio is nulled and it is left
 /// to run independently (the operator watches it with `aida drain status`).
 /// Mirrors the other verbs' launchers but uses `spawn` (fire-and-forget) instead
-/// of `output` (capture-and-wait), and carries advisor authority on the spawned
-/// command so the drive isn't refused by the role gate. `--force` is the
+/// of `output` (capture-and-wait), forwarding the caller's selector for the
+/// child's ordinary authority checks. `--force` is the
 /// operator's answer to a SOFT gate hold (STORY-744): it overrides the
 /// under-specified / coupled warnings, never the hard refusals. `--solo` (when
 /// `solo`) is the operator's answer to the ADR-6 routing affordance (TASK-1076):
@@ -1521,8 +1521,10 @@ fn spawn_drive(id: &str, force: bool, solo: bool) -> bool {
     }
     // Kicking off the drive commits the team to autonomously execute the spec —
     // an advisor-authority act (like routing it onto the implementer queue), so
-    // carry advisor authority on the spawned command.
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    // forward the caller's selector; the child gate validates its authority.
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     // Detach: the drive outlives this gesture and runs on its own. Null the
     // stdio so it never fights the TUI for the terminal.
     cmd.stdin(std::process::Stdio::null())
@@ -1543,7 +1545,13 @@ fn run_drive_remedy(id: &str) -> VerbResult {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["questions", "remedy", id]);
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if !apply_control_env(&mut cmd) {
+        return VerbResult::drive_after(
+            "cannot inherit authority for this control child",
+            false,
+            id,
+        );
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1606,7 +1614,12 @@ fn clarify_and_reoffer(
     let status = term::suspend_for_child(|| {
         let mut cmd = Command::new(&exe);
         cmd.args(["questions", "clarify", &id_owned]);
-        cmd.env("AIDA_SESSION_ROLE", "advisor");
+        if !apply_control_env(&mut cmd) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "control child program is not the running AIDA executable",
+            ));
+        }
         if let Ok(cwd) = std::env::current_dir() {
             cmd.current_dir(cwd);
         }
@@ -1691,7 +1704,9 @@ fn probe_drive_gate(id: &str) -> std::result::Result<DriveGateVerdict, String> {
     cmd.args(["zen", id, "--json"]);
     // Advisor authority for parity with the drive it stands in for (the probe
     // itself only reads, but keeps the provenance consistent).
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if !apply_control_env(&mut cmd) {
+        return Err("control child program is not the running AIDA executable".into());
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1753,7 +1768,7 @@ fn groom_args() -> [&'static str; 1] {
 /// always shows *something*. This is a keypress-triggered one-shot read, not a
 /// poll-cadence read; it remains a subprocess because the advisor disposition
 /// planner lives in the CLI and the propose pass itself performs no writes.
-/// Carries advisor authority for provenance.
+/// Forwards the caller's selector for provenance.
 // trace:STORY-703 | ai:claude
 // trace:TASK-1252 | ai:codex
 fn run_groom_propose() -> (String, String) {
@@ -1761,7 +1776,12 @@ fn run_groom_propose() -> (String, String) {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(groom_args());
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if !apply_control_env(&mut cmd) {
+        return (
+            "control child program is not the running AIDA executable".into(),
+            title,
+        );
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1790,15 +1810,16 @@ fn archive_args(id: &str) -> [&str; 2] {
     ["archive", id]
 }
 
-/// Archive one spec via `aida archive <id>`. Returns `true` on success. Carries
-/// advisor authority on the spawned command (archival is an advisor-authority
-/// disposition, mirroring the other backlog verbs).
+/// Archive one spec via `aida archive <id>`. Returns `true` on success.
+/// The CLI checks the caller's inherited selector for this disposition.
 // trace:STORY-703 | ai:claude
 fn archive_spec(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(archive_args(id));
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1881,11 +1902,11 @@ fn queue_for_advisor(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["queue", "add", "--for", "advisor", id]);
-    // BUG-630: carry advisor authority on the spawned command (like approve_spec
-    // / accept), so `aida queue add` isn't refused by the TASK-647 gate. Once
-    // BUG-631 lands (the gate exempts --for advisor), this becomes unnecessary
-    // for the advisor-routing case. trace:BUG-630 | ai:claude
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    // The CLI checks the caller's authority; routing intent is explicit argv.
+    // trace:STORY-2326 | ai:codex
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1930,7 +1951,9 @@ fn queue_for_implementer(id: &str) -> bool {
     // BUG-630: dispatching to the implementer queue needs advisor authority
     // (the TASK-647 gate, correctly — this commits the team to execute). Carry
     // it on the spawned command, mirroring approve_spec/accept. trace:BUG-630
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1969,15 +1992,16 @@ fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> Str
 /// Directly approve one draft spec. Returns `true` on success. Runs the
 /// advisor-gated transition `aida edit <id> --status approved` — the approval
 /// transition is REFUSED from a non-advisor identity, so the spawned command
-/// carries advisor authority via `AIDA_SESSION_ROLE=advisor` in its env. The
+/// forwards the caller's selector for validation by the CLI. The
 // do-it-yourself mirror of [`queue_for_advisor`]. trace:TASK-920 | ai:claude
 fn approve_spec(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["edit", id, "--status", "approved"]);
-    // The approved-status transition is advisor-gated; carry advisor authority
-    // on the spawned command so it is not refused as a non-advisor identity.
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    // Approval is advisor-gated; forward the caller's selector for validation.
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -2050,16 +2074,17 @@ fn batch_approve_status(outcome: &BatchApproveOutcome) -> String {
 /// Directly reject one draft spec. Returns `true` on success. Runs the
 /// advisor-gated transition `aida edit <id> --status rejected` — the rejection
 /// transition is REFUSED from a non-advisor identity, so the spawned command
-/// carries advisor authority via `AIDA_SESSION_ROLE=advisor` in its env. The
+/// forwards the caller's selector for validation by the CLI. The
 /// sibling of [`approve_spec`].
 // trace:TASK-949 | ai:claude
 fn reject_spec(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["edit", id, "--status", "rejected"]);
-    // The rejected-status transition is advisor-gated; carry advisor authority
-    // on the spawned command so it is not refused as a non-advisor identity.
-    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    // Rejection is advisor-gated; forward the caller's selector for validation.
+    if !apply_control_env(&mut cmd) {
+        return false;
+    }
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -2127,8 +2152,8 @@ fn accept_comment_args(id: &str) -> [&str; 4] {
 /// `from ∈ {Draft, NeedsAttention}` (un-triaged/punted intent), so a
 /// `Done → Completed` flip is an un-gated, implementer-legitimate transition
 /// (the same path `aida done` rides). So `accept` runs the real transition
-/// rather than faking it. The spawned command carries `AIDA_SESSION_ROLE=reviewer`
-/// to record reviewer provenance (and to mirror `approve_spec`'s authority env).
+/// rather than faking it. The spawned command forwards the caller's selector
+/// for the CLI to validate and record the caller's provenance.
 /// The reviewer-acceptance comment is best-effort (recorded after a successful
 /// transition); the transition itself is the load-bearing result.
 ///
@@ -2141,9 +2166,10 @@ fn accept_spec(id: &str) -> bool {
     let cwd = std::env::current_dir().ok();
     let mut edit = Command::new(&exe);
     edit.args(accept_edit_args(id));
-    // The Done → Completed transition is reviewer work — carry reviewer
-    // authority on the spawned command for provenance (and role activity).
-    edit.env("AIDA_SESSION_ROLE", "reviewer");
+    // Record this transition under the caller's validated selector.
+    if !apply_control_env(&mut edit) {
+        return false;
+    }
     if let Some(cwd) = cwd.as_ref() {
         edit.current_dir(cwd);
     }
@@ -2156,7 +2182,9 @@ fn accept_spec(id: &str) -> bool {
     // result — so the accept is still reported as succeeded.
     let mut note = Command::new(&exe);
     note.args(accept_comment_args(id));
-    note.env("AIDA_SESSION_ROLE", "reviewer");
+    if !apply_control_env(&mut note) {
+        return true;
+    }
     if let Some(cwd) = cwd.as_ref() {
         note.current_dir(cwd);
     }
@@ -5321,5 +5349,54 @@ mod drive_gate_probe_tests {
         let s = r#"{"spec":"TASK-5","verdict":"ready","class":"ready","reason":"","under_specified":false,"forceable":false,"route":"into-scope","scope":"  "}"#;
         let v: DriveGateVerdict = serde_json::from_str(s).expect("parses");
         assert!(!v.routes_into_scope());
+    }
+}
+
+/// Forward the caller's selector to this executable only. Ordinary CLI gates
+/// validate it; TUI gestures never manufacture advisor/reviewer role authority.
+// trace:STORY-2326 | ai:codex
+fn apply_control_env(cmd: &mut Command) -> bool {
+    let current = std::fs::canonicalize("/proc/self/exe");
+    let program = std::path::Path::new(cmd.get_program()).canonicalize();
+    if !matches!((current, program), (Ok(current), Ok(program)) if current == program) {
+        return false;
+    }
+    let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);
+    for (key, value) in aida_core::launch_policy::control_env(selector.as_deref()) {
+        match value {
+            Some(value) => {
+                cmd.env(key, value);
+            }
+            None => {
+                cmd.env_remove(key);
+            }
+        }
+    }
+    true
+}
+
+#[cfg(test)]
+mod story_2326_control_tests {
+    use super::*;
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn story_2326_tui_control_forwards_selector_without_fabricating_role() {
+        let current = std::fs::canonicalize("/proc/self/exe").unwrap();
+        let mut cmd = Command::new(&current);
+        cmd.env(aida_core::launch_policy::ROLE_ENV, "advisor");
+        let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);
+        assert!(apply_control_env(&mut cmd));
+        let env: std::collections::BTreeMap<_, _> = cmd.get_envs().collect();
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("AIDA_SESSION_ROLE")),
+            Some(&None)
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("AIDA_SESSION_GRANT")),
+            Some(&selector.as_deref())
+        );
+        let mut vendor = Command::new("/bin/true");
+        assert!(!apply_control_env(&mut vendor));
+        assert!(vendor.get_envs().next().is_none());
     }
 }

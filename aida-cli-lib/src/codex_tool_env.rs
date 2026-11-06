@@ -190,71 +190,9 @@ pub(crate) fn refuse_unwired_aida_posture_with(
     Ok(())
 }
 
-/// Call once, after the child grant, identity and customization are final,
-/// immediately before spawn/exec. Other vendors never enter this adapter.
-pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
-    refuse_unwired_aida_posture(child)?;
-    // The child Command is the full source of truth for whitelisted metadata:
-    // under Codex's default inherit="all", a key the launcher process has but
-    // the child never assigned would otherwise leak into the tool shell and
-    // fail the context digest (or present the launcher's own context).
-    // trace:BUG-2398 | ai:claude
-    for key in TOOL_ENV {
-        if !child.get_envs().any(|(k, _)| k == *key) {
-            child.env_remove(key);
-        }
-    }
-    let overrides = codex_tool_env_overrides(child)?;
-    let grant = child
-        .get_envs()
-        .find(|(key, _)| *key == GRANT_ENV)
-        .and_then(|(_, value)| value);
-    anyhow::ensure!(grant.is_some(), "Codex child has no explicit grant decision; provide its delegated grant or an explicit empty baseline");
-    if let Some(seat) = child
-        .get_envs()
-        .find(|(key, _)| *key == "AIDA_SESSION_ROLE")
-        .and_then(|(_, value)| value)
-        .and_then(|value| value.to_str())
-    {
-        anyhow::ensure!(
-            crate::gate::seat_authority::is_baseline_seat(seat) || !grant.unwrap().is_empty(),
-            "Codex requested seat requires its own nonempty delegated grant"
-        );
-    }
-    if grant.unwrap().is_empty() {
-        refuse_baseline_conflicts(child)?;
-    }
-    preflight(child, &overrides)?;
-    let prefix = codex_argv_start(child)?;
-    let original: Vec<_> = child.get_args().map(|arg| arg.to_owned()).collect();
-    let mut replacement = Command::new(child.get_program());
-    if let Some(cwd) = child.get_current_dir() {
-        replacement.current_dir(cwd);
-    }
-    for (key, value) in child.get_envs() {
-        match value {
-            Some(value) => {
-                replacement.env(key, value);
-            }
-            None => {
-                replacement.env_remove(key);
-            }
-        }
-    }
-    replacement
-        .args(&original[..prefix])
-        .args(overrides)
-        .args(&original[prefix..]);
-    // Managed constructors use default env inheritance and no process hooks.
-    // Every managed caller finalizes before configuring stdio or process
-    // hooks. Rebuilding preserves the explicit env, cwd and wrapper argv.
-    *child = replacement;
-    Ok(())
-}
-
 /// bwrap's explicit command separator pins the wrapped executable. Never
 /// search arbitrary argv (especially prompts) for a token named codex.
-fn codex_argv_start(child: &Command) -> Result<usize> {
+pub(crate) fn codex_argv_start(child: &Command) -> Result<usize> {
     if std::path::Path::new(child.get_program()).file_name() != Some(std::ffi::OsStr::new("bwrap"))
     {
         return Ok(0);
@@ -382,7 +320,7 @@ pub(crate) fn tool_shell_command_for_test(
 /// replacements that could unmask ambient authority or replace their explicit
 /// empty selector. Profiles remain below the exact-key CLI prefix precedence.
 // trace:BUG-2398 | ai:codex
-fn refuse_baseline_conflicts(child: &Command) -> Result<()> {
+pub(crate) fn refuse_baseline_conflicts(child: &Command) -> Result<()> {
     let args = sandbox_args(child)?;
     for pair in args
         .windows(2)
@@ -437,7 +375,7 @@ fn refuse_baseline_conflicts(child: &Command) -> Result<()> {
     Ok(())
 }
 
-fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
+pub(crate) fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
     use std::ffi::OsStr;
     let explicit = |key: &str| {
         child

@@ -1,7 +1,8 @@
 //! Pure launch policy for agent children: the closed vendor and kind sets,
 //! the AIDA environment keys a launch owns, and the posture-bearing flags a
 //! caller-supplied argv may not carry. No I/O; `aida-cli-lib`'s `launch/`
-//! module is the only consumer that turns this into a process.
+//! module constructs vendor processes. The TUI shares the control-env policy
+//! for its checked AIDA children.
 //!
 //! TASK-1749 C1 holds here: nothing in this module clears the environment.
 //! The launcher strips exactly the [`OWNED_KEYS`] it does not set and lets
@@ -370,4 +371,21 @@ mod tests {
             assert!(refuse_posture_flags(&argv(args)).is_ok(), "{args:?}");
         }
     }
+}
+
+/// An AIDA control child forwards this process's selector, never a requested
+/// role. The receiving CLI validates the selector using its ordinary gate.
+/// An absent selector is explicitly removed, so it cannot arrive ambiently.
+/// Callers must pin the command to the canonical current AIDA executable.
+// trace:STORY-2326 | ai:codex
+pub fn control_env(
+    own_grant_selector: Option<&std::ffi::OsStr>,
+) -> [(&'static str, Option<std::ffi::OsString>); 2] {
+    [
+        (ROLE_ENV, None),
+        (
+            GRANT_ENV,
+            own_grant_selector.map(std::ffi::OsStr::to_os_string),
+        ),
+    ]
 }

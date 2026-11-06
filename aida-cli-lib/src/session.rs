@@ -653,7 +653,7 @@ pub(crate) fn resume_with(
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
-        return exec_or_spawn_agent(&mut cmd);
+        return crate::launch::spawn::exec_agent(&mut cmd);
     }
     exec_resume_command(&target, None, false)
 }
@@ -864,26 +864,6 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
     file.write_all(&bytes)
         .with_context(|| format!("writing {}", dest.display()))?;
     Ok(())
-}
-
-/// Replace this process with `cmd` (spawn + wait where exec is unavailable).
-// trace:BUG-2157 | ai:claude
-fn exec_or_spawn_agent(cmd: &mut std::process::Command) -> Result<()> {
-    // BUG-2386: a Codex resume execs through here too; name the real program.
-    let program = cmd.get_program().to_string_lossy().into_owned();
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = cmd.exec();
-        anyhow::bail!("failed to exec {program}: {}", err);
-    }
-    #[cfg(not(unix))]
-    {
-        let status = cmd
-            .status()
-            .with_context(|| format!("failed to spawn {program}"))?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
@@ -2158,7 +2138,7 @@ fn spawn_vendor_headless_forking(
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
+    let child_grant = crate::launch::issue_launch_child(
         &headless_worktree_root(),
         seat.as_str(),
         &crate::current_user_id(None),
@@ -2186,7 +2166,7 @@ fn spawn_vendor_headless_forking(
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
     }
     if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&child_grant.id);
             return Err(error);
         }
@@ -2924,7 +2904,7 @@ pub fn exec_codex_session(
             cmd.env(key, value);
         }
     }
-    crate::codex_tool_env::prepare_launch(&mut cmd)?;
+    crate::launch::profile::finalize_codex(&mut cmd)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -3030,7 +3010,7 @@ pub fn exec_codex_resume(
 /// [`build_codex_resume_command`] exactly like a fresh interactive Codex
 /// launch ([`exec_codex_session`]): public child metadata, the seat the
 /// delegated grant names (unless the caller already set one), then
-/// [`crate::codex_tool_env::prepare_launch`]. Call last, after the caller's
+/// [`crate::launch::profile::finalize_codex`]. Call last, after the caller's
 /// cwd/seat customization and before any stdio or spawn/exec. A caller that
 /// issued the grant revokes it when this refuses.
 // trace:BUG-2386 | ai:claude
@@ -3059,7 +3039,7 @@ pub(crate) fn finalize_codex_resume(
     cmd.env("AIDA_USER", user)
         .env("AIDA_PROJECT_ROOT", project_root)
         .env("AIDA_AGENT_TYPE", "codex");
-    crate::codex_tool_env::prepare_launch(cmd)
+    crate::launch::profile::finalize_codex(cmd)
 }
 
 /// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
@@ -3281,7 +3261,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     // A contained reviewer's tool calls run in a sandbox, where only a
     // keyring-held key presents its grant: refuse before the review is spent.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let grant = crate::gate::seat_authority::issue_launch_child(
+    let grant = crate::launch::issue_launch_child(
         project_root,
         "reviewer",
         &crate::current_user_id(None),
@@ -3306,7 +3286,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if plan.vendor == HeadlessVendor::Codex {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", project_root);
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&grant.id);
             return Err(error);
         }
@@ -6528,7 +6508,7 @@ pub(crate) fn finalize_coordinator_launch(
     }
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", project_root);
-    crate::codex_tool_env::prepare_launch(cmd)
+    crate::launch::profile::finalize_codex(cmd)
 }
 
 /// Finalize, then wait on a coordinator `cmd`, releasing the child handle
@@ -7282,7 +7262,7 @@ fn run_vendor_headless_child(
     if vendor == HeadlessVendor::Codex
         && containment_posture(vendor, contained)? != ContainmentPosture::Aida
     {
-        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
+        crate::launch::profile::finalize_codex(&mut child_cmd)?;
     }
     // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
     // broker and proxy until the wrapper is reaped. No model before receipt.
@@ -7991,12 +7971,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     }
     // A contained resume is sandboxed like a fresh launch: refuse a grant
     // its tool calls could not present. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
-        cwd,
-        seat,
-        &crate::current_user_id(None),
-        contained,
-    )?;
+    let child_grant =
+        crate::launch::issue_launch_child(cwd, seat, &crate::current_user_id(None), contained)?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
         .args(args)
@@ -8139,7 +8115,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
             target.resume_id,
         )?,
     )?;
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
+    let child_grant = crate::launch::issue_launch_child(
         cwd,
         seat,
         &crate::current_user_id(None),
@@ -8165,7 +8141,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     // live child grant. trace:BUG-2386 | ai:claude
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", headless_worktree_root());
-    if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+    if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
         tee.stop();
         revoke_headless_child_grant(&child_grant.id);
         return Err(error);
@@ -9564,7 +9540,7 @@ fn exec_resume_command(
         // BUG-2386: exec `codex resume <id>` rather than printing it. The
         // resume is native (no bypass): a resume never widens the posture a
         // fresh `aida session new` would need consent for.
-        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(
+        "codex" => crate::launch::spawn::exec_agent(&mut codex_session_resume_command(
             host_main.as_deref(),
             target,
             contained,
@@ -9681,7 +9657,7 @@ pub fn exec_claude_resume(
 ) -> Result<()> {
     let mut cmd =
         build_claude_resume_exec_command(host_main, id, permission_mode, contained, grant_id)?;
-    exec_or_spawn_agent(&mut cmd)
+    crate::launch::spawn::exec_agent(&mut cmd)
 }
 
 /// TASK-2031: the tree a contained `aida session resume` is bounded to: the

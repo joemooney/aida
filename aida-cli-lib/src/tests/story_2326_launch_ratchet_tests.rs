@@ -25,9 +25,8 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_codex_background.rs", 8, "slice C: STORY-2254 detached Codex worker (landed on main after slice A)"),
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
-    ("aida-cli-lib/src/autopilot_intake.rs", 3, "slice C: autopilot intake"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 3, "slice C: Codex finalize respawns the built child (get_program), twice in production; the third is the #[cfg(test)] fn tool_shell_command_for_test from main, which production() does not skip (it skips cfg(test) modules only)"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -53,31 +52,26 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/manual.rs", 1, "not a vendor child: pager"),
     ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
     ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
-    ("aida-cli-lib/src/orchestrator_leases.rs", 1, "slice C: control child"),
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
-    ("aida-cli-lib/src/phase_driver.rs", 6, "slice C: phase advisor and auto-punt control child"),
+    ("aida-cli-lib/src/phase_driver.rs", 5, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
     ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
-    ("aida-cli-lib/src/questions.rs", 1, "slice C: questions clarify"),
-    ("aida-cli-lib/src/queue_cmd.rs", 1, "slice C: the process-wide AIDA_SESSION_ROLE export (resume and Codex exec still read it)"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
     ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
-    ("aida-cli-lib/src/session.rs", 42, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
+    ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
     ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
     ("aida-cli-lib/src/transport_scan.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
-    ("aida-cli-lib/src/zen_drive_root.rs", 3, "slice C: control child"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
     ("aida-core/src/db/refresh_worker.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-tui/src/actions.rs", 1, "generic helper: TUI action argv"),
     ("aida-tui/src/dispatch.rs", 1, "generic helper: TUI run_child"),
-    ("aida-tui/src/redesign/mod.rs", 12, "slice C: control_env"),
 ];
 
 /// The slice-A total. A later slice lowers it; it is zero after slice D.
@@ -90,7 +84,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // PR-B removes 13 markers: compete (-3), dispatch (-3), phase builders
 // (their legacy Aida markers remain), fresh Codex session/exec (-7).
 // trace:STORY-2326 | ai:codex
-const CEILING: usize = 157;
+// PR-C moves finalization (-1), phase control (-1), gate control (-1),
+// zen vendor/seat (-3), and TUI control seats (-12) into the launcher.
+// Coordinator seat writes (-4), queue process role export (-1), exec owner (-1).
+const CEILING: usize = 133;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -441,4 +438,88 @@ fn scanner_catches_every_mutant_spelling() {
     for src in clean {
         assert_eq!(markers(src), 0, "false positive: {src}");
     }
+}
+
+/// Finalization and grant issuance remain owned by the launch layer even for
+/// the inventoried builders awaiting conversion. A new direct backend caller
+/// cannot bypass those entry points unnoticed.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_profile_and_grant_issuance_have_one_owner() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    rust_files(&root, &mut files);
+    for file in files {
+        let rel = file.strip_prefix(&root).unwrap().to_string_lossy();
+        if rel.ends_with("_tests.rs") || rel.ends_with("tests.rs") {
+            continue;
+        }
+        let src = production(&std::fs::read_to_string(&file).unwrap());
+        if rel != "launch/profile.rs" {
+            assert!(
+                !src.contains("fn prepare_launch("),
+                "private profile finalizer escaped into {rel}"
+            );
+        }
+        if rel != "launch/grant.rs" && rel != "gate/seat_authority.rs" {
+            assert!(
+                !src.contains("issue_child_for("),
+                "direct grant backend caller in {rel}"
+            );
+            assert!(
+                !src.contains("seat_authority::issue_child("),
+                "legacy child issuer in {rel}"
+            );
+        }
+        assert!(
+            !src.contains("seat_authority::issue_launch_child("),
+            "legacy launch issuer in {rel}"
+        );
+    }
+    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    assert!(profile.contains("fn prepare_launch("));
+    assert!(!profile.contains("pub(crate) fn prepare_launch("));
+}
+
+/// The pure selector policy can only be applied by the two checked AIDA
+/// constructors. Vendor code cannot reuse it to request inherited authority.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_control_env_users_are_checked_aida_constructors() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut found = BTreeMap::new();
+    for krate in CRATES {
+        let mut files = Vec::new();
+        rust_files(&root.join(krate).join("src"), &mut files);
+        for path in files {
+            if path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with("_tests.rs")
+            {
+                continue;
+            }
+            let src = production(&std::fs::read_to_string(&path).unwrap());
+            let normalized: String = src.split_whitespace().collect();
+            let n = calls(&normalized, "control_env(").count();
+            if n > 0 {
+                found.insert(
+                    path.strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    n,
+                );
+            }
+        }
+    }
+    assert_eq!(
+        found,
+        BTreeMap::from([
+            ("aida-cli-lib/src/launch/control.rs".to_string(), 1),
+            ("aida-tui/src/redesign/mod.rs".to_string(), 1),
+        ]),
+        "control_env must only run inside checked AIDA control constructors"
+    );
 }

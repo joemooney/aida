@@ -537,14 +537,14 @@ fn story_2254_bg_source_contract() {
     let src = include_str!("../agent_codex_background.rs");
     let build = src.split("fn build_worker_exec(").nth(1).unwrap();
     let at = |needle: &str| build.find(needle).unwrap_or_else(|| panic!("{needle}"));
-    assert!(at(".env_clear()") < at("crate::codex_tool_env::prepare_launch(&mut command)"));
+    assert!(at(".env_clear()") < at("crate::launch::profile::finalize_codex(&mut command)"));
     assert!(
         at("seat_authority::GRANT_ENV, grant_id)")
-            < at("crate::codex_tool_env::prepare_launch(&mut command)")
+            < at("crate::launch::profile::finalize_codex(&mut command)")
     );
-    assert!(at("headless_wait_envs(") < at("crate::codex_tool_env::prepare_launch(&mut command)"));
+    assert!(at("headless_wait_envs(") < at("crate::launch::profile::finalize_codex(&mut command)"));
     assert_eq!(
-        src.matches("crate::codex_tool_env::prepare_launch(")
+        src.matches("crate::launch::profile::finalize_codex(")
             .count(),
         1
     );
