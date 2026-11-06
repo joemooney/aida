@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-801
 agreed_id: TASK-3075
 title: Extend pipeline detector with remaining independent alarm kinds
 description: Follow-up to the approved STORY-2476 slice 1. Add independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit predicates, each with its own suppression and timer policy. Measure last actual merge, never default-branch commit age. Reuse lease/registry identities, nudge request mailbox delivery and operator fallback. Keep unknown evidence and dry-run behavior safe; preserve independence from pipeline-idle and ready-without-train.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T22:32:15.417259335Z
+modified_at: 2026-11-06T00:58:19.676200540Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -277,6 +277,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ae5d-1a78-7472-8c05-aa803a280db5
+  author: aida-auto-bump
+  timestamp: 2026-11-06T00:58:19.640753783Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ae5d-1a9c-7b60-94f9-e9f541ccba10
+  timestamp: 2026-11-06T00:58:19.676197046Z
+  agent: aida
+  commit_sha: 007215a9ffc737f9fa5730fcfab37f3a47bf86ca
+  summary: 'Round 5: all TASK-3075 criteria covered in code and tests. Round-4 fixes are correct: merge-history read moved behind forge.rs Observed (the lib-1 ratchet failure), and settled empty-rework episodes are pruned only on known evidence, keeping pending deliveries. CI run 42134950004 is 8/8 green at 79c6dfa5.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
@@ -289,6 +303,8 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check: passed
   implemented_at: 2026-11-05T18:07:39.448198156Z
   implemented_by: joe
+  completed_at: 2026-11-06T00:58:19.640748234Z
+  completion_sha: 007215a9ffc737f9fa5730fcfab37f3a47bf86ca
 interface_changes:
   cli:
   - aida supervise stalls/watch now report independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit alarms
