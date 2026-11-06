@@ -2952,7 +2952,10 @@ fn write_fake_gh_for_pr_states(
 
 // trace:BUG-1432 | ai:codex
 #[test]
-fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
+fn story_2401_stranded_review_pr_forge_failure_is_preserved_for_reporting() {
+    // The timing artifact for run 42224787380 measured 15.59s here. Exercise
+    // every retry without real transport sleeps. trace:STORY-2401 | ai:codex
+
     let (_tmp, project_root, store_path) = init_test_project();
     run_git(
         &project_root,
@@ -2963,6 +2966,12 @@ fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
             "https://github.com/acme/repo.git",
         ],
     );
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    std::fs::write(
+        project_root.join(".aida/config.toml"),
+        "[orchestrator]\nretry_base_delay_ms = 0\n",
+    )
+    .unwrap();
     seed_review_story_at(&store_path, "STORY-1432", 1432, "lookup fails", "approved");
     let missing_gh = project_root.join("missing-gh");
     let _env = crate::test_env::EnvVarsGuard::set(&[(

@@ -768,11 +768,12 @@ impl RealPhaseDriver {
             // and match before applying this destructive lifecycle action.
             let forge = self.project_forge();
             let mut sink = crate::network_retry::NoopSink;
-            let metadata = crate::forge_confirmation::metadata(
+            let metadata = crate::forge_confirmation::metadata_for(
                 &self.project_root,
                 forge.as_ref(),
                 pr.number,
                 &mut sink,
+                |m| m.state == crate::forge::ChangeState::Open,
             );
             let owner = forge.authenticated_user_login();
             let ownership = match (metadata, owner) {

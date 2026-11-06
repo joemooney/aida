@@ -5123,6 +5123,8 @@ pub(crate) mod fake {
         /// Scripted state served by `change_metadata` (default `Open`).
         // trace:TASK-1552 | ai:claude
         pub(crate) metadata_state: ChangeState,
+        // trace:STORY-2401 | ai:codex — pin live train reconciliation fixtures.
+        pub(crate) metadata_head: String,
         /// When set, `change_metadata` fails with this message — the
         /// unreadable-forge path of the retraction ownership probe.
         // trace:TASK-1552 | ai:claude
@@ -5160,6 +5162,7 @@ pub(crate) mod fake {
                 author: Some("codex-bot".into()),
                 is_draft: false,
                 metadata_state: ChangeState::Open,
+                metadata_head: "abc".into(),
                 metadata_error: None,
                 close_error: None,
                 closed: Arc::new(Mutex::new(Vec::new())),
@@ -5269,7 +5272,7 @@ pub(crate) mod fake {
                 merged_at: None,
                 base_ref: "main".into(),
                 head_ref: "codex/task".into(),
-                head_sha: "abc".into(),
+                head_sha: self.metadata_head.clone(),
                 is_draft: self.is_draft,
                 is_cross_repository: false,
                 head_repo: None,

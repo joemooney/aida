@@ -3403,20 +3403,14 @@ fn bug2423_head_or_state_change_ejects_members_with_the_reason() {
 
 #[test]
 // trace:BUG-2423 | ai:claude
-fn story_2401_missing_required_check_timeout_suspends_members() {
+fn story_2401_missing_required_check_timeout_ejects_members() {
     let mut f = FakeForge::mains(&["m0"]);
     f.ci_states = Some(
         std::iter::repeat_with(|| TrainCiReadiness::Missing(vec!["Build".into()]))
             .take(100)
             .collect(),
     );
-    let mut rails = ForgeRails::new(&mut f, "t".into());
-    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
-    assert!(out.error.unwrap().contains("missing: Build"));
-    assert!(out.ejected.is_empty());
-    assert!(out.landed.is_empty());
-    assert!(f.retired.is_empty());
-    assert_eq!(f.comments, [901]);
+    bug2423_assert_deterministic_ci_failure_ejects(f, "missing: Build");
 }
 
 #[test]
@@ -3602,16 +3596,23 @@ fn story_2401_positive_during_abort_keeps_landing_credit() {
     assert!(f.retired.is_empty());
 }
 
-// The legacy gate mixes policy refusals and failed secondary reads. The live
-// adapter deliberately suspends on either until a typed gate can distinguish
-// them; this retains every member and its hold for operator recovery.
+// Settled live policy refusals eject the member while preserving its hold.
 // trace:STORY-2401 | ai:codex
 #[test]
-fn story_2401_live_preland_gate_refusal_suspends() {
+fn story_2401_live_preland_gate_refusal_ejects() {
     let tmp = repo();
     let mut forge = crate::forge::fake::RecordingForge::new();
     forge.metadata_state = crate::forge::ChangeState::Open;
     forge.is_draft = true;
+    let r = tmp.path();
+    git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    let base = git(r, &["rev-parse", "main"]);
+    git(r, &["checkout", "-b", "train"]);
+    std::fs::write(r.join("train-change"), "train").unwrap();
+    git(r, &["add", "train-change"]);
+    git(r, &["commit", "-m", "train fixture"]);
+    let tip = git(r, &["rev-parse", "HEAD"]);
+    forge.metadata_head = tip.clone();
     crate::gate::merge_hold_core::write_hold(tmp.path(), 42, "new merge hold").unwrap();
     let mut host = LiveTrainForge {
         project_root: tmp.path().into(),
@@ -3623,15 +3624,12 @@ fn story_2401_live_preland_gate_refusal_suspends() {
         dispatch_abort: None,
     };
     assert!(
-        matches!(host.observe_gate(42), crate::forge_observed::Observed::Transient(why)
+        matches!(host.observe_gate(42), crate::forge_observed::Observed::Known(Err(why))
         if why.contains("it is a draft"))
     );
-    let r = tmp.path();
-    git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
-    let base = git(r, &["rev-parse", "main"]);
     let train = Built {
         base: base.clone(),
-        tip: base.clone(),
+        tip,
         dropped: vec![],
         cars: vec![Car {
             member: member(42, "approved-head", "member"),
@@ -3647,13 +3645,34 @@ fn story_2401_live_preland_gate_refusal_suspends() {
         title: None,
     };
     let mut rails = ForgeRails::new(&mut host, "live-refusal".into());
-    rails.opened.push((base, change.clone()));
+    rails.opened.push((train.tip.clone(), change.clone()));
+    rails.built.insert(change.id, train.clone());
     rails.live.push(change);
-    let error = rails.land(&train).unwrap_err();
-    assert!(error.downcast_ref::<TrainCiUnavailable>().is_some());
-    assert_eq!(rails.live.len(), 1, "train remains open for recovery");
+    let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
+        panic!("settled draft refusal must eject");
+    };
+    assert_eq!(ejected.len(), 1);
+    assert_eq!(ejected[0].pr, 42);
+    assert!(ejected[0].reason.contains("it is a draft"));
+    assert!(rails.live.is_empty(), "refused train is retired");
     assert!(rails.landed_on_main.is_empty());
     drop(rails);
-    assert!(forge.closed.lock().unwrap().is_empty());
+    assert_eq!(forge.closed.lock().unwrap()[0].0, 100);
     assert!(crate::gate::merge_hold_core::hold_is_open(tmp.path(), 42));
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() {
+    let mut checks = FakeChecks::new();
+    checks.labels = Err("HTTP 503".into());
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Unavailable(why)) if why.contains("HTTP 503")));
+    checks.labels = Ok(None);
+    checks.pin = None;
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Refused(why)) if why.contains("no approval")));
+    checks.hold = Some("new hold".into());
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Refused(why)) if why.contains("merge hold")));
 }

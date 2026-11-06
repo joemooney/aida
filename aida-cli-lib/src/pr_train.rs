@@ -788,18 +788,17 @@ fn wait_train_ci(
         if let TrainCiReadiness::Missing(names) = &waiting {
             let since = *missing_since.get_or_insert(now);
             if now.saturating_sub(since) >= TRAIN_CI_REGISTRATION_SECS {
-                return Err(TrainCiUnavailable(format!(
+                return Err(anyhow::anyhow!(
                     "no CI registered within {TRAIN_CI_REGISTRATION_SECS}s for train PR #{pr} after its other checks settled (missing: {})", names.join(", ")
-                )).into());
+                ));
             }
         } else {
             missing_since = None;
         }
         if settle_limit != 0 && now >= settle_limit {
-            return Err(TrainCiUnavailable(format!(
+            return Err(anyhow::anyhow!(
                 "train PR #{pr} CI not ready within {settle_limit}s: {waiting:?}"
-            ))
-            .into());
+            ));
         }
         sleep();
     }
@@ -1023,6 +1022,25 @@ pub(crate) trait MemberChecks {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, String>;
+    // trace:STORY-2401 | ai:codex
+    fn checked_approval_pin(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<Option<String>, MemberGateError> {
+        self.approval_pin(pr, head_ref, head)
+            .map_err(MemberGateError::Refused)
+    }
+    fn checked_corpus(
+        &mut self,
+        pr: u64,
+        hints: &[String],
+        head: &str,
+    ) -> std::result::Result<(), MemberGateError> {
+        self.corpus(pr, hints, head)
+            .map_err(MemberGateError::Refused)
+    }
     /// The root whose STORY-1405 review-in-progress markers ship honours.
     fn marker_root(&self) -> &Path;
     fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String>;
@@ -1126,25 +1144,54 @@ pub(crate) fn member_spec_policy_refusal(
 /// minus the CI wait (the train's own CI replaces it), and with no way to
 /// release a hold. `Ok` carries the commit message ship would write.
 // trace:STORY-1690 | ai:claude
+// Settled policy refusals eject; failed evidence reads retain the train.
+// trace:STORY-2401 | ai:codex
+#[derive(Debug)]
+pub(crate) enum MemberGateError {
+    Refused(String),
+    Unavailable(String),
+}
+impl From<String> for MemberGateError {
+    fn from(why: String) -> Self {
+        Self::Refused(why)
+    }
+}
+impl MemberGateError {
+    fn reason(self) -> String {
+        match self {
+            Self::Refused(why) | Self::Unavailable(why) => why,
+        }
+    }
+}
 pub(crate) fn gate_member_with(
     checks: &mut dyn MemberChecks,
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, String> {
-    let meta = checks.metadata(pr)?;
+    typed_gate_member_with(checks, base, pr).map_err(MemberGateError::reason)
+}
+
+fn typed_gate_member_with(
+    checks: &mut dyn MemberChecks,
+    base: &str,
+    pr: u64,
+) -> std::result::Result<Member, MemberGateError> {
+    let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
-        return Err(why);
+        return Err(why.into());
     }
     let head = meta.head_sha.trim().to_string();
     let head_ref = meta.head_ref.trim().to_string();
     if head.is_empty() || head_ref.is_empty() {
-        return Err("its head could not be read from the forge; failing closed".to_string());
+        return Err(MemberGateError::Unavailable(
+            "its head could not be read from the forge; failing closed".to_string(),
+        ));
     }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
     if let Some(detail) = checks.drive_block(pr) {
-        return Err(format!(
+        return Err(MemberGateError::Refused(format!(
             "a live drive owns it ({detail}); its independent reviewer gates the merge"
-        ));
+        )));
     }
     // BUG-2214 (Q2 ruling): with no active mandate a held member refuses
     // byte-identically to before; under one, the judgment defers to the
@@ -1153,23 +1200,23 @@ pub(crate) fn gate_member_with(
     let held = checks.hold_marker(pr);
     if let Some(reason) = &held {
         if !checks.mandate_active() {
-            return Err(format!(
+            return Err(MemberGateError::Refused(format!(
                 "it is under a merge hold ({}); the train never releases a hold",
                 reason.trim()
-            ));
+            )));
         }
     }
     match checks.labels(pr) {
         Ok(Some(c)) => {
             if let Some(why) = member_label_refusal(&c, held.is_some()) {
-                return Err(why);
+                return Err(why.into());
             }
         }
         Ok(None) => {}
         Err(e) => {
-            return Err(format!(
+            return Err(MemberGateError::Unavailable(format!(
                 "its labels could not be read ({e}); failing closed"
-            ))
+            )))
         }
     }
     // STORY-1405: a reviewer's claim on this head blocks the train exactly
@@ -1177,22 +1224,22 @@ pub(crate) fn gate_member_with(
     if let crate::gate::review_marker::MergeGate::UnderReview(m) =
         crate::gate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
     {
-        return Err(crate::gate::review_marker::refusal_message(&m));
+        return Err(crate::gate::review_marker::refusal_message(&m).into());
     }
-    checks
-        .fetch_head(&head_ref)
-        .map_err(|e| format!("its head could not be fetched ({e})"))?;
-    let pin = match checks.approval_pin(pr, &head_ref, &head) {
+    checks.fetch_head(&head_ref).map_err(|e| {
+        MemberGateError::Unavailable(format!("its head could not be fetched ({e})"))
+    })?;
+    let pin = match checks.checked_approval_pin(pr, &head_ref, &head) {
         Ok(Some(pin)) => pin,
-        Ok(None) => return Err("no approval is recorded for it".to_string()),
+        Ok(None) => return Err("no approval is recorded for it".to_string().into()),
         Err(why) => return Err(why),
     };
     if !crate::forge::head_matches_pin(&pin, &head) {
-        return Err(format!(
+        return Err(MemberGateError::Refused(format!(
             "its approval is pinned to {}, not its head {}",
             short(&pin),
             short(&head)
-        ));
+        )));
     }
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
@@ -1201,8 +1248,10 @@ pub(crate) fn gate_member_with(
         &head_ref,
         crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title)),
     );
-    checks.corpus(pr, &hints, &head)?;
-    let (subject, body) = checks.message(pr, &meta, &head)?;
+    checks.checked_corpus(pr, &hints, &head)?;
+    let (subject, body) = checks
+        .message(pr, &meta, &head)
+        .map_err(MemberGateError::Unavailable)?;
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
     let ids = checks.covered_ids(
@@ -1223,7 +1272,7 @@ pub(crate) fn gate_member_with(
         cover_slot = Some(cover);
         outcome
     }) {
-        return Err(why);
+        return Err(why.into());
     }
     // BUG-2214: a held member is admitted exactly when ship's mandate cover
     // would release its hold; the release itself happens at land time, under
@@ -1239,11 +1288,11 @@ pub(crate) fn gate_member_with(
             match cover {
                 Ok(cover) => Some(cover),
                 Err(why) => {
-                    return Err(format!(
+                    return Err(MemberGateError::Refused(format!(
                         "it is under a merge hold ({}); the mandate does not release it{}",
                         reason.trim(),
                         why.map(|w| format!(" — {w}")).unwrap_or_default(),
-                    ))
+                    )))
                 }
             }
         }
@@ -1270,9 +1319,17 @@ pub(crate) struct LiveChecks<'a> {
 
 impl MemberChecks for LiveChecks<'_> {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
-        self.forge
-            .change_metadata(pr, &mut crate::network_retry::NoopSink)
-            .map_err(|e| format!("its metadata could not be read ({e:#})"))
+        match self
+            .forge
+            .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+        {
+            crate::forge_observed::Observed::Known(Ok(meta)) => Ok(meta),
+            crate::forge_observed::Observed::Known(Err(why))
+            | crate::forge_observed::Observed::Pending(why)
+            | crate::forge_observed::Observed::Transient(why) => {
+                Err(format!("its metadata could not be read ({why})"))
+            }
+        }
     }
     fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String> {
         crate::gate::trailer_coverage::covered_gate_ids(self.project_root, head_ref, Some(pr), ids)
@@ -1314,6 +1371,47 @@ impl MemberChecks for LiveChecks<'_> {
             Some(head_ref),
             Some(head),
         )
+    }
+    // trace:STORY-2401 | ai:codex
+    fn checked_approval_pin(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<Option<String>, MemberGateError> {
+        match crate::gate::approval::observe_merge_path_approval_gate(
+            self.project_root,
+            pr,
+            &[],
+            Some(head_ref),
+            Some(head),
+        ) {
+            crate::forge_observed::Observed::Known(result) => {
+                result.map_err(MemberGateError::Refused)
+            }
+            crate::forge_observed::Observed::Pending(why)
+            | crate::forge_observed::Observed::Transient(why) => {
+                Err(MemberGateError::Unavailable(why))
+            }
+        }
+    }
+    fn checked_corpus(
+        &mut self,
+        pr: u64,
+        hints: &[String],
+        head: &str,
+    ) -> std::result::Result<(), MemberGateError> {
+        let decision = crate::gate::merge_hold_core::corpus_gate_decision(
+            self.project_root,
+            pr,
+            hints,
+            Some(self.base),
+            || Some(head.to_string()),
+            true,
+        )
+        .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?;
+        crate::gate::merge_hold_core::enforce_corpus_decision(self.project_root, pr, decision)
+            .map_err(|e| MemberGateError::Refused(format!("{e:#}")))
     }
     fn marker_root(&self) -> &Path {
         self.main_worktree
@@ -1742,11 +1840,12 @@ fn close_abandoned_train(
     }
     // trace:STORY-2401 | ai:codex — a listing is not cleanup authority.
     let forge = crate::forge::forge_for(main_worktree);
-    let observed = crate::forge_confirmation::metadata(
+    let observed = crate::forge_confirmation::metadata_for(
         main_worktree,
         forge.as_ref(),
         train,
         &mut crate::network_retry::NoopSink,
+        |m| m.state == crate::forge::ChangeState::Open,
     );
     if !matches!(observed, crate::forge_observed::Observed::Known(ref m)
         if m.state == crate::forge::ChangeState::Open && m.head_ref == branch)
@@ -2283,16 +2382,29 @@ impl TrainForge for LiveTrainForge<'_> {
         )
     }
 
-    // Legacy gate errors mix local refusals and unavailable secondary reads.
-    // Conservatively preserve work until that gate can supply typed refusals.
     // trace:STORY-2401 | ai:codex
     fn observe_gate(
         &mut self,
         pr: u64,
     ) -> crate::forge_observed::Observed<std::result::Result<Member, String>> {
-        match self.gate(pr) {
-            Ok(member) => crate::forge_observed::Observed::Known(Ok(member)),
-            Err(why) => crate::forge_observed::Observed::Transient(why),
+        use crate::forge_observed::Observed;
+        if let Err(e) = self.dispatch_check() {
+            return Observed::Transient(format!("{e:#}"));
+        }
+        match typed_gate_member_with(
+            &mut LiveChecks {
+                project_root: &self.project_root,
+                main_worktree: &self.main_worktree,
+                forge: self.forge,
+                base: &self.base,
+                named: self.named,
+            },
+            &self.base,
+            pr,
+        ) {
+            Ok(member) => Observed::Known(Ok(member)),
+            Err(MemberGateError::Refused(why)) => Observed::Known(Err(why)),
+            Err(MemberGateError::Unavailable(why)) => Observed::Transient(why),
         }
     }
     fn confirmation_backoff(&self) -> std::time::Duration {
@@ -3010,9 +3122,8 @@ impl Rails for ForgeRails<'_> {
         // Re-gate every member right before the merge: a hold, a new push or
         // a withdrawn approval since the build ejects that member. BUG-2214:
         // the fresh gate re-runs the mandate cover under the lease, so a
-        // lapsed mandate is rechecked here with its hold intact. The live gate
-        // currently suspends on an untyped refusal; typed Known(Err) ports
-        // eject the member. See the slice-3 inventory (STORY-2401).
+        // lapsed mandate is rechecked here with its hold intact. Settled
+        // refusals eject; unavailable secondary reads suspend the train.
         // trace:BUG-2214 | ai:claude
         let mut refused = Vec::new();
         let mut fresh: Vec<Member> = Vec::new();

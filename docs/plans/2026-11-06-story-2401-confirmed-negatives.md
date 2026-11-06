@@ -109,21 +109,19 @@ share one fetched tip per repository/base; no fetched result survives the sweep.
 Metadata refusals are `Known(Err)` and stop immediately; bounded transport
 retries emit the caller's BUG-286 sink events.
 
-For finding 5 this slice deliberately retains **suspension**, the review's
-permitted alternative: the live member gate still mixes settled local refusals
-with unavailable secondary reads. A newly refused pre-land member (including a
-lapsed mandate) suspends the train with every member, PR and hold intact, instead
-of ejecting that member. The live-path regression exercises a local draft
-refusal through `LiveTrainForge` and `ForgeRails::land`, verifies the typed
-unavailable error and open train, and retains a pre-existing hold. Scripted
-`Known(Err)` gates can still eject. Restoring selective live ejection requires a
-later typed member-gate boundary; no string classification is introduced here.
-This supersedes the older BUG-2214 ejection claim for this live adapter.
+Round 5 supersedes the earlier suspension decision per the advisor's F5 ruling.
+The live member gate now separates settled policy refusals from unavailable
+metadata, labels, head fetches, approval base reads, corpus artifacts and message
+reads. Confirmed settled refusals eject members; failed evidence reads suspend.
+The live-path test retires a negatively confirmed train after a draft refusal,
+ejects its member and preserves the member's hold. Corpus decisions retain their
+ordinary hold mirrors. A missing approval and a newly placed hold are covered by
+the typed gate regression.
 
 Publication must use the non-completing subject above. This native seat cannot
 rewrite historical commit d726665ca8f or create the new round's commit; the host
-must publish the declared Refs subject and correct the historical completing
-subject if retaining it in published history. AC3 and AC4 remain unimplemented.
+must publish the declared Refs subject. Per round-5 finding 7, reword the
+historical subject only if rebuilding the branch. AC3 and AC4 remain unimplemented.
 
 Round-3 changed files (left uncommitted for the host):
 
@@ -157,3 +155,74 @@ Round-3 validation is complete. No source/test blocker remains. The host owns
 commit creation, historical subject repair and publication; the existing merge
 hold still requires its ordinary authorized clearance. No queue completion,
 merge, review recording, commit or push was performed by this seat.
+
+## Round 5 review repairs (2026-11-06)
+
+- Finding 1: downloaded `test-timings-lib-0` from run 42224787380. The only
+  unbudgeted test above 10 seconds was
+  `auto_bump_done_tests::stranded_review_pr_forge_failure_is_preserved_for_reporting`
+  at 15.59s. This is an in-process missing-gh fixture, rather than a spawned
+  binary. Its isolated config now sets `retry_base_delay_ms = 0`, retaining
+  retries and failure assertions. The test joins the `story_2401` filter.
+- Finding 2: settled live member-gate refusals are `Known(Err)`; unavailable
+  secondary reads remain transient. Confirmation and hold release gates remain
+  in place, and live ejection retains the member hold.
+- Finding 3: required-check registration and explicit settlement deadlines again
+  produce bounded deterministic failures. After negative landing confirmation,
+  the train retires and members receive ejection reasons, instead of repeatedly
+  suspending the same member set. Transport failures still suspend.
+- Finding 4: a defaulted per-head fetch-failure counter survives attempt replacement.
+  Three fetch-unavailable dispatches stop automatic launches; a new head or the
+  existing operator release path can retry. The regression exercises exhaustion,
+  setup-retry preservation, freed capacity and a fresh head.
+- Finding 5: filed BUG-2463 (canonical BUG-HOME-229) under STORY-2401 for independent
+  confirmation of rebase merges when the original PR head is absent locally.
+- Finding 6: publication retraction and abandoned-train cleanup confirm only Open
+  observations. Terminal observations return after one read without a pause/fetch.
+- Finding 7: branch history was not rebuilt; historical d726665ca8f is unchanged.
+  Host publication must retain the descriptive, non-completing Refs subject.
+
+The active merge hold remains in force. This native seat leaves edits uncommitted
+for host publication and does not publish, clear the hold, or mark the queue done.
+
+Native publication declaration recorded successfully:
+`[AI:codex] fix(forge): restore settled train refusals and bound retries (Refs STORY-2401)`.
+This records host publication intent only; no commit or push occurred in this seat.
+
+Round-5 changed files:
+
+- `aida-cli-lib/src/forge.rs`
+- `aida-cli-lib/src/gate/approval.rs`
+- `aida-cli-lib/src/phase_driver.rs`
+- `aida-cli-lib/src/pr_train.rs`
+- `aida-cli-lib/src/review_watch.rs`
+- `aida-cli-lib/src/tests/auto_bump_done_tests.rs`
+- `aida-cli-lib/src/tests/story_1690_train_tests.rs`
+- `aida-cli-lib/src/tests/story_2401_forge_observed_tests.rs`
+- `aida-cli-lib/src/tests/task_1993_review_watch_tests.rs`
+- This plan.
+
+Validation notes: the first targeted run compiled successfully and passed 35/36
+checks in 2.00s. The new live fixture alone failed because its opened train was
+indexed under its base rather than tip; the fixture now indexes by tip. The
+first fast-gate run found one formatting difference in an included test file;
+that was corrected and the extra `rustfmt --edition 2021 --check
+ aida-cli-lib/src/lib_part*.rs` check passed. Both full requested checks are
+being rerun after these corrections; final results follow below.
+
+Final targeted validation: `cargo test -p aida-cli-lib story_2401 --lib --profile
+agent` passed **36 tests, zero failures**, 12,626 unrelated tests filtered out;
+runtime **1.84s**. Log: `/tmp/story2401-round5-targeted-final.log`. This includes
+the corrected live ejection/hold fixture, zero-delay timing regression,
+registration-deadline ejection and per-head fetch cap. No broader Rust test run
+was performed.
+
+Final fast validation: `make check-ci-fast` passed **all 38 gates**. Log:
+`/tmp/story2401-round5-fast-rerun.log`. Formatting includes both ordinary Cargo
+modules and the extra `lib_part*.rs` inclusion graph. `git diff --check` passed.
+Some read-only guards printed refused `.git/FETCH_HEAD` writes and used their
+local-evidence path; every gate still returned success. No implementation or
+validation blocker remains. The host must create the new round's commit and
+publish the recorded Refs subject; existing merge-hold clearance remains a
+separate authorized review action. No commit, push, merge, review record or
+queue completion was performed by this seat.

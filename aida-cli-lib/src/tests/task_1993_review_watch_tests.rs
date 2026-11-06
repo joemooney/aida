@@ -1232,6 +1232,7 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             reviewer_spawning: false,
                             setup_retry: false,
                             retryable_fetch: false,
+                            fetch_failures: 0,
                             reviewer: None,
                             pgid: None,
                             supersede: None,
@@ -2361,7 +2362,7 @@ fn story_2401_review_fetch_retries_with_bounded_backoff() {
 
 // trace:STORY-2401 | ai:codex
 #[test]
-fn story_2401_review_exhausted_fetch_never_consumes_terminal_setup_retry() {
+fn story_2401_review_exhausted_fetch_is_capped_per_head() {
     let (_temp, store) = fixture();
     let c = change(42, 1, false);
     for iteration in 0..3 {
@@ -2404,6 +2405,15 @@ fn story_2401_review_exhausted_fetch_never_consumes_terminal_setup_retry() {
         assert!(!active(a));
         assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
     }
+    assert!(
+        matches!(select(&store, &c, None, 2).unwrap(), Action::Skip(why) if why.contains("three dispatches"))
+    );
+    let next = change(42, 2, false);
+    let attempt = dispatch(select(&store, &next, None, 2).unwrap());
+    assert_eq!(
+        attempt.fetch_failures, 0,
+        "a new head starts a new bounded retry cycle"
+    );
 }
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex

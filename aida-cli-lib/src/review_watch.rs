@@ -292,6 +292,10 @@ struct Attempt {
     // trace:STORY-2401 | ai:codex
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     retryable_fetch: bool,
+    // Persist across attempt replacement; three dispatches maximum per head.
+    // trace:STORY-2401 | ai:codex
+    #[serde(default)]
+    fetch_failures: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reviewer: Option<Identity>,
     // The dispatcher's process group (it leads it), recorded by the watcher
@@ -1316,6 +1320,13 @@ fn select(
             anyhow::ensure!(known, "notification identity changed; pending message retained");
             return Ok(Action::Notify(notice.clone()));
         }
+        let fetch_failures = entry.attempts.iter()
+            .filter(|a| a.head == change.head)
+            .map(|a| a.fetch_failures.saturating_add(u8::from(a.retryable_fetch)))
+            .max().unwrap_or(0);
+        if fetch_failures >= 3 {
+            return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
+        }
         if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !a.retryable_fetch && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))) {
             // trace:TASK-1993 | ai:claude
             return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head, route it to the advisor, or retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
@@ -1336,7 +1347,7 @@ fn select(
         // and spawn failures do not consume a retry; preserve an inherited one.
         // trace:TASK-3112 | ai:codex
         let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
-        let attempt = Attempt { admission_hub: None, setup_retry, retryable_fetch: false, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let attempt = Attempt { admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();

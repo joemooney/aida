@@ -635,6 +635,16 @@ fn story_2401_keep_answers_and_refusals_need_one_read_and_no_git() {
         assert!(matches!(result, Observed::Known(m) if m.state == ChangeState::Open));
         assert_eq!(forge.metadata.borrow().len(), 1);
     }
+    // Retraction/abandoned-train callers only authorize on Open. Terminal
+    // observations must also skip both the confirmation pause and Git read.
+    // trace:STORY-2401 | ai:codex
+    for state in ["CLOSED", "MERGED"] {
+        let forge = metadata_forge(state, &"a".repeat(40), 2);
+        assert!(matches!(crate::forge_confirmation::metadata_for(
+            root, &forge, 42, &mut crate::network_retry::NoopSink,
+            |m| m.state == ChangeState::Open), Observed::Known(m) if m.state != ChangeState::Open));
+        assert_eq!(forge.metadata.borrow().len(), 1);
+    }
     let forge = metadata_forge("OPEN", &"a".repeat(40), 0);
     *forge.metadata.borrow_mut() = vec![
         Observed::Known(Err("HTTP 404".into())),
