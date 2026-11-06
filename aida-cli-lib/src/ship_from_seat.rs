@@ -17,7 +17,7 @@
 //!      repository instead and stops here, leaving no ref in main. A refusal
 //!      here deletes the quarantine ref;
 //!   5. the quarantined commit is pushed to `origin/<branch>`, the quarantine
-//!      ref is deleted, and the PR is opened, titled with the commit subject.
+//!      ref is deleted, and the PR is opened with a spec-derived title.
 //!
 //! Every run first prunes quarantine refs older than a day (by their reflog's
 //! import time), so an interrupted or failed run leaves nothing for long.
@@ -1554,6 +1554,17 @@ fn finish_published(
     let pr = match forge.change_for_branch(branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
             eprintln!("  found open PR-{} for branch {branch}", change.id);
+            // Repair titles left by older rework publishers without overwriting
+            // a descriptive title an author has already chosen.
+            // trace:TASK-2891 | ai:codex
+            if let Some(subject) = change
+                .title
+                .as_deref()
+                .filter(|title| generic_rework_title(title))
+            {
+                let title = publication_title(main, spec, subject)?;
+                forge.set_change_title(change.id, &title)?;
+            }
             // trace:STORY-2492 | ai:claude — a rework push is a new head; its
             // author sessions travel with it so a remote re-review can publish.
             let message = git_text(main, &["log", "-1", "--format=%B", tip]).unwrap_or_default();
@@ -1565,7 +1576,9 @@ fn finish_published(
             );
             change.id
         }
-        Ok(crate::forge::ChangeLookup::NoChange) => open_seat_pr(&*forge, main, seat, branch, tip)?,
+        Ok(crate::forge::ChangeLookup::NoChange) => {
+            open_seat_pr(&*forge, main, seat, branch, spec, tip)?
+        }
         Ok(other) => anyhow::bail!(
             "{branch} was pushed, but looking up its open PR failed ({}); no PR was opened. \
              Check the forge CLI, then run `aida ship --from-seat {}` again",
@@ -1617,21 +1630,20 @@ pub(crate) fn seat_pr_body(message: &str, seat_name: &str) -> String {
     body
 }
 
-/// Open the PR for a published seat branch at `tip`: titled with the commit
-/// subject, its body [`seat_pr_body`].
+/// Open the PR for a published seat branch at `tip`: titled from the owning
+/// spec when the commit subject is generic, its body [`seat_pr_body`].
 // trace:BUG-HOME-038 | ai:claude
 fn open_seat_pr(
     forge: &dyn crate::forge::Forge,
     main: &Path,
     seat: &HostRecordedClone,
     branch: &str,
+    spec: &str,
     tip: &str,
 ) -> Result<u64> {
     let message = git_text(main, &["log", "-1", "--format=%B", tip])?;
-    let title = git_text(main, &["log", "-1", "--format=%s", tip])?;
-    if title.is_empty() {
-        anyhow::bail!("the seat's commit has an empty subject; cannot title the PR");
-    }
+    let subject = git_text(main, &["log", "-1", "--format=%s", tip])?;
+    let title = publication_title(main, spec, &subject)?;
     let seat_name = seat
         .root
         .file_name()
@@ -1659,4 +1671,159 @@ fn open_seat_pr(
         change.id
     );
     Ok(change.id)
+}
+
+/// Recognize the old rework summary independently of AI attribution/scope.
+// trace:TASK-2891 | ai:codex
+fn generic_rework_title(title: &str) -> bool {
+    let title = title.trim();
+    let title = if title.starts_with("[AI:") {
+        title.split_once(']').map_or(title, |(_, rest)| rest.trim())
+    } else {
+        title
+    };
+    let summary = title.split_once(": ").map_or(title, |(_, rest)| rest);
+    let summary = summary.split_once('(').map_or(summary, |(head, _)| head);
+    summary
+        .trim()
+        .eq_ignore_ascii_case("address CI failures and review findings")
+}
+
+// trace:TASK-2891 | ai:codex
+fn publication_title(main: &Path, spec: &str, subject: &str) -> Result<String> {
+    if !generic_rework_title(subject) {
+        return seat_pr_title(None, subject);
+    }
+    let store = crate::load_store_for_lookup(main);
+    let requirement = store.as_ref().and_then(|store| {
+        store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+                || r.agreed_id
+                    .as_deref()
+                    .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+        })
+    });
+    seat_pr_title(requirement, subject)
+}
+
+/// Spec text supplies the summary and, when conventional, its type/scope.
+/// Preserve descriptive commit subjects. For generic subjects, prefer the
+/// commit's conventional prefix over the requirement type/feature default.
+/// Keep the commit's AI tag
+/// and exact authority-bearing suffix: a salvage Refs must stay a Refs, and
+/// a multi-spec completion group must neither lose nor gain IDs.
+// trace:TASK-2891 | ai:codex
+pub(crate) fn seat_pr_title(
+    requirement: Option<&aida_core::Requirement>,
+    subject: &str,
+) -> Result<String> {
+    let subject = subject.trim();
+    anyhow::ensure!(
+        !subject.is_empty(),
+        "the seat's commit has an empty subject; cannot title the PR"
+    );
+    if !generic_rework_title(subject) {
+        return Ok(subject.to_string());
+    }
+    let requirement = requirement.ok_or_else(|| anyhow::anyhow!(
+        "cannot derive a descriptive PR title: the owning spec is unavailable; restore store access and retry"
+    ))?;
+    // Retain all adjacent completing/reference groups verbatim. Do not infer
+    // completion authority from the spec whose prose supplies the summary.
+    let mut head = subject;
+    loop {
+        if crate::pr_ship::extract_trailing_spec_ids_from_subject(head).is_empty()
+            && crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(head).is_empty()
+        {
+            break;
+        }
+        let Some(at) = head.rfind('(') else { break };
+        head = head[..at].trim_end();
+    }
+    let suffix = &subject[head.len()..];
+    let retained_refs = crate::pr_ship::refs_spec_ids_in_text(suffix);
+    let missing_refs: Vec<_> = crate::pr_ship::refs_spec_ids_in_text(subject)
+        .into_iter()
+        .filter(|id| !retained_refs.contains(id))
+        .collect();
+    let refs = if missing_refs.is_empty() {
+        String::new()
+    } else {
+        format!(" (Refs {})", missing_refs.join(" "))
+    };
+    let ai = subject
+        .strip_prefix("[AI:")
+        .and_then(|_| subject.find(']'))
+        .map(|end| &subject[..=end]);
+    let title = requirement
+        .title
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    anyhow::ensure!(
+        !title.is_empty() && !generic_rework_title(&title),
+        "the owning spec needs a descriptive title before publication"
+    );
+    let conventional = regex::Regex::new(
+        r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([A-Za-z0-9_.-]+\))?!?: .+"
+    ).expect("constant conventional title regex");
+    let summary = if conventional.is_match(&title) {
+        title
+    } else {
+        use aida_core::RequirementType;
+        let kind = match requirement.req_type {
+            RequirementType::Bug => "fix",
+            RequirementType::Doc | RequirementType::Faq => "docs",
+            RequirementType::Task
+            | RequirementType::Spike
+            | RequirementType::Decision
+            | RequirementType::Meta => "chore",
+            _ => "feat",
+        };
+        let feature = requirement.feature.trim();
+        let scope = if feature.is_empty() || feature.eq_ignore_ascii_case("uncategorized") {
+            String::new()
+        } else {
+            let token = feature
+                .to_ascii_lowercase()
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("-");
+            if token.is_empty() {
+                String::new()
+            } else {
+                format!("({token})")
+            }
+        };
+        let commit_head = ai
+            .and_then(|tag| head.strip_prefix(tag))
+            .unwrap_or(head)
+            .trim();
+        let prefix = if conventional.is_match(commit_head) {
+            commit_head.split_once(':').map(|(prefix, _)| prefix)
+        } else {
+            None
+        };
+        format!(
+            "{}: {title}",
+            prefix
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{kind}{scope}"))
+        )
+    };
+    let title = format!(
+        "{}{summary}{refs}{suffix}",
+        ai.map(|tag| format!("{tag} ")).unwrap_or_default()
+    );
+    anyhow::ensure!(
+        crate::pr_ship::extract_trailing_spec_ids_from_subject(&title)
+            == crate::pr_ship::extract_trailing_spec_ids_from_subject(subject)
+            && crate::pr_ship::refs_spec_ids_in_text(&title)
+                == crate::pr_ship::refs_spec_ids_in_text(subject),
+        "the owning spec title would change completion/reference credit; remove authority-bearing groups from its summary"
+    );
+    Ok(title)
 }
