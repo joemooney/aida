@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T19:36:23.730673704Z
+modified_at: 2026-11-06T19:37:25.651135066Z
 req_type: Story
 tags:
 - architecture
@@ -195,6 +195,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-06T19:35:10.755144555Z
   modified_at: 2026-11-06T19:35:10.755144555Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b25d-ab93-7061-9161-d31ff38807a7
+  author: joe
+  content: 'ADVISOR RULING 12:38 (#3515 round 4, ruled once per the 2026-10-28 order): F1-F4 must be fixed in this round. F5 (extern crate alias) is accepted as documentation only: add it to the migration doc''s Limits paragraph, with no code. To stop main merges from invalidating the ledger every round: (a) the regenerate path must be one command (scripts/check-exec-context.py --write-ledger or similar), run after every main merge and before every push; (b) docs cite the ledger''s ceiling field, never literal counts; (c) remove the OVERVIEW.md:1-7 prepend and the round-specific AGENTS.md sentences. Push only after merging the current origin/main and regenerating. Re-review then needs exact-head green CI including the gates ExecContext step. No further non-blocking findings will be raised on this PR.'
+  created_at: 2026-11-06T19:37:25.651135066Z
+  modified_at: 2026-11-06T19:37:25.651135066Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
