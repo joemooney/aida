@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-06T08:32:15.366416717Z
+modified_at: 2026-11-06T10:43:53.947662827Z
 req_type: Story
 relationships:
 - rel_type:
@@ -311,8 +311,25 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b075-346a-7900-b23f-295a44bd05da
+  author: aida-auto-bump
+  timestamp: 2026-11-06T10:43:53.578190315Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b075-35db-73b3-9491-de935716b0b4
+  timestamp: 2026-11-06T10:43:53.947658581Z
+  agent: aida
+  commit_sha: 066c1609bf8d8720e3460d2e2859c44c14ea9a48
+  summary: 'All STORY-1468 + 2026-11-05 signoff criteria met and tested; round-2 findings fixed (ci-gate-tiers entry, existence-only deferred staging, 20-char prose token [REDACTED] CI run 42189871099 all green at head. merge-hold-gate red is the supervised-spec hold, not a code defect: needs human/advisor clear.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-05T20:32:30.974468575Z
   implemented_by: joe
+  completed_at: 2026-11-06T10:43:53.578183801Z
+  completion_sha: 066c1609bf8d8720e3460d2e2859c44c14ea9a48
   reopened_at_sha: 0b0f8a6b701d61070c28481226836b48cb257fe4
