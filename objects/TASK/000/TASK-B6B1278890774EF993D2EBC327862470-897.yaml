@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:35:34.914132727Z
-modified_at: 2026-11-06T21:10:36.719408514Z
+modified_at: 2026-11-06T21:29:02.108015446Z
 req_type: Task
 tags:
 - carried-from:BUG-2468
@@ -37,6 +37,11 @@ comments:
   content: 'Native implementer: edits are ready in the assigned seat, uncommitted for host publication. Legacy detection now accepts explicit run and bare-name starts while excluding reserved verbs; native submit diagnoses a live legacy runner and gives legacy-submit/native-restart guidance without granting native submission authority. Added focused regressions and updated docs/cli/06-roles-sessions.md. Formatting and git diff --check pass. Validation is still running: the no-default-features CLI check and TUI seam guard have passed within make check-ci-fast; cold compilation of the deputy-shell test library is pending. Final results will follow.'
   created_at: 2026-11-06T21:10:36.719392239Z
   modified_at: 2026-11-06T21:10:36.719392239Z
+- id: 01a1b2c3-d99c-7673-b560-02c424e29357
+  author: mcp
+  content: 'Implementation complete in the assigned native seat; edits intentionally remain uncommitted for host commit/publication and queue completion. Changed aida-cli-lib/src/deputy_shell/mod.rs (recognize bare-name legacy starts, exclude reserved verbs), aida-cli-lib/src/deputy_shell_cmd.rs (legacy-live submit refusal with legacy submit and native restart guidance; injectable observation for sandbox-safe regression tests), aida-cli-lib/src/deputy_shell/tests.rs (both start forms, refusal/no job writes, reserved/wrong names and unrelated commands), docs/cli/06-roles-sessions.md. Validation PASS: cargo test -p aida-cli-lib --lib --profile agent deputy_shell::tests -- --test-threads=4 (44 passed, 0 failed); make check-ci-fast (38 gates passed); cargo fmt --all and git diff --check. Cold test build took 34m46s under host contention; tests ran in 1.51s. Fast guards logged read-only FETCH_HEAD fetch refusals but continued with existing refs and passed. No implementation blockers; no commit, push, PR creation, queue-done, ship, or review-record performed.'
+  created_at: 2026-11-06T21:29:02.108006537Z
+  modified_at: 2026-11-06T21:29:02.108006537Z
 history:
 - id: 01a1b29c-ded1-76a2-880a-ec897b7fc412
   author: joe
