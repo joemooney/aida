@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T18:53:02.628623791Z
+modified_at: 2026-11-06T18:55:15.032474555Z
 req_type: Story
 relationships:
 - rel_type:
@@ -327,6 +327,12 @@ comments:
   created_at: 2026-11-06T18:07:59.469347774Z
   modified_at: 2026-11-06T18:07:59.469347774Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b237-0e58-7a10-8237-2ec6ef7a3ede
+  author: joe
+  content: 'Slice 4 approach under the binding advisor brief: add a versioned, atomic and fsynced intent journal in .aida/train, serialized by a permanent run lock. pr_train.rs ForgeRails records pinned Built/member evidence and lifecycle steps before port calls; production ports checkpoint nested forge calls. Startup recovers journaled trains before abandoned-train cleanup/admission, re-reads exact forge state and uses the existing forge_confirmation boundary before destructive cleanup; completed merges and member closes are reconciled instead of replayed. Persisted mandate covers are excluded and live gates remain authoritative. Expected files: pr_train.rs, new pr_train_journal.rs, train tests, AGENTS.md, OVERVIEW.md, slice plan. Tests: killed-child recovery after merge call and retirement/eject decision, unknown evidence/write failures and completed-step replay protection; LIGHT gate only. Slice 5 workflow digest remains deferred. No edits to forge_confirmation.rs, preserving BUG-2463 overlap.'
+  created_at: 2026-11-06T18:55:15.032474555Z
+  modified_at: 2026-11-06T18:55:15.032474555Z
+  session_id: 01a1b23500ad
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
