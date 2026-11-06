@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T12:30:13.043099065Z
+modified_at: 2026-11-06T12:38:46.605131521Z
 req_type: Task
 tags:
 - architecture
@@ -895,6 +895,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b0de-6ff2-70c1-87a1-cf76e3f10291
+  author: joe
+  timestamp: 2026-11-06T12:38:50.098775060Z
+  session_id: 01a1b0d91c6f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -908,3 +914,11 @@ attention_reason:
   lean: Accept the Linux 5.19+ floor and handled-signal delay explicitly for this slice to retain exactly-once brokered sends; keep the behavior limitation visible in the testing note. If ordinary handled-signal interruption is mandatory, require a separately reviewed alternative before publishing.
   raised_by: implementer
   raised_at: 2026-11-06T12:30:13.043099065Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-5 F1 is fixed correctly: target_socket reads Tgid before the plain pidfd_open, proves KCMP_FILES before using the leader pidfd, and a real-nonleader EINVAL regression test covers it. But round-5 F2 (handled signals deferred under WAIT_KILLABLE_RECV, plus a Linux 5.19+ floor for every lane, Codex included) is still an unaccepted keep-existing-behavior deviation. TASK-2708 sits in NeedsAttention on the implementer''s punt, with no advisor signoff recorded. CI at e16c5274 was still pending (cli-1 pass, 5 shards running) when this was recorded. AC1: PARTIAL (only F2''s signoff is missing). AC2/AC3: not applicable (Refs slice, not started).'
+  recovery_hint: address the review findings, move TASK-2708 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T12:38:46.605131521Z
