@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-06T01:31:16.801419680Z
+modified_at: 2026-11-06T01:45:15.652606368Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -122,6 +122,12 @@ comments:
   created_at: 2026-11-06T01:29:56.764991853Z
   modified_at: 2026-11-06T01:29:56.764991853Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae88-1284-7090-a8cf-41fe1f0aaf17
+  author: joe
+  content: 'Round 3 addressed all findings in 9a95ace15c9, pushed to existing PR #3448. CI blocker identified from launcher logs as session::tests::spawn_vendor_headless_with_seat_codex_and_agy_refuse_contained_launch: its fake vendor emitted no AGY terminal result, so the new classifier correctly returned incomplete; fixture now emits valid SUCCESS evidence without changing containment assertions. CoordinatorPipe now polls/drains ready output and EOF before honoring cancellation on an idle pipe. Regression delays the reader 300 ms beyond child exit with buffered retry/success and terminal-error evidence. Added 256/257 distinct-tool boundary coverage with recovery, plus child-process stderr assertions for direct log classification and quiet coordinator launches with tee disabled. Validation: all seven TASK-2838 tests, exact failing session test, launch-inventory ratchet, all 37 fast CI gates, cargo fmt check and whitespace checks passed. Remote push succeeded; sandbox refused only the local remote-tracking ref refresh. Existing merge hold retained; no ship or review record invoked.'
+  created_at: 2026-11-06T01:45:15.652606368Z
+  modified_at: 2026-11-06T01:45:15.652606368Z
+  session_id: 01a1ae7b3dde
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
   author: joe
