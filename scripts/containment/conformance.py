@@ -4,6 +4,7 @@
 trace:TASK-3046 | ai:codex
 """
 import argparse
+import datetime
 import hashlib
 import http.server
 import json
@@ -23,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 import urllib.request
 import uuid
 
@@ -569,6 +571,35 @@ def continuation_terminated(_signum, _frame):
     raise ValueError("aida-boundary-continuation-timeout: cleanup requested")
 
 
+# trace:BUG-2470 | ai:codex
+def fixture_policy(config):
+    """Merge experiment policy into init's config without duplicating tables."""
+    policy = tomllib.loads(config.read_text())
+    policy.setdefault("agents", {}).update(contained=True, vendor="codex")
+    contained = policy.setdefault("contained", {})
+    # Replace, never extend: init's default hosts must not weaken C3's denial.
+    contained["allowed_hosts"] = ["api.openai.com", "allow.fixture.test"]
+    contained.setdefault("vendors", {})["codex"] = "aida"
+
+    # TOML inline tables let us retain all parsed init values using only the
+    # standard library. Comments need not survive in this disposable fixture.
+    def value(item):
+        if isinstance(item, dict):
+            return "{ " + ", ".join(f"{json.dumps(k, ensure_ascii=False)} = {value(v)}"
+                                    for k, v in item.items()) + " }"
+        if isinstance(item, list):
+            return "[" + ", ".join(value(v) for v in item) + "]"
+        if isinstance(item, (datetime.date, datetime.time)):
+            return item.isoformat()
+        if isinstance(item, float):
+            return repr(item)
+        return json.dumps(item, ensure_ascii=False)
+
+    rendered = "".join(f"{json.dumps(k, ensure_ascii=False)} = {value(v)}\n" for k, v in policy.items())
+    tomllib.loads(rendered)  # Refuse invalid output before replacing the config.
+    config.write_text(rendered)
+
+
 def run_aida(args):
     if args.vendor != "codex":
         # The signed outer-only posture is not permission to run the native
@@ -623,10 +654,7 @@ def run_aida(args):
         config = repo / ".aida/config.toml"
         # init owns the store and authority formats. Only fixture policy and
         # experiment instructions are authored here, never seat/lease files.
-        with config.open("a") as stream:
-            stream.write('\n[agents]\ncontained = true\nvendor = "codex"\n'
-                         '[contained]\nallowed_hosts = ["api.openai.com", "allow.fixture.test"]\n'
-                         '[contained.vendors]\ncodex = "aida"\n')
+        fixture_policy(config)
         skill = repo / ".agents/skills/aida-pickup/SKILL.md"
         skill.parent.mkdir(parents=True)
         invocation = shlex.join([sys.executable, str(root / "payload/runner.py"),
