@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-324
 agreed_id: STORY-2326
 title: 'One agent launcher: LaunchContext + spawn_agent with an env-clear allowlist and declared sandbox resources'
 description: 'Regroup target 3, 2026-11-02. Build the context once (seat, validated grant, containment posture, worktree, vendor). Every agent spawn goes through spawn_agent, which clears the environment and sets an allowlist; a ratchet forbids other spawn sites. The containment profile declares cargo slots, sccache and the target directory, so lanes can run the LIGHT gate. Slice by vendor; high risk. Evidence: TASK-1749, TASK-1758, TASK-1788, TASK-1333, STORY-1486, BUG-1669, TASK-2772. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T20:44:23.255723580Z
+modified_at: 2026-11-06T20:56:09.251662097Z
 req_type: Story
 tags:
 - architecture
@@ -679,6 +679,12 @@ comments:
   content: 'PR #3531 round 5 final native-seat handoff: findings 1-3 implemented. Both CLI control children and the 12 TUI control paths execute /proc/self/exe, so cached build paths and promote/rollback rename/unlink do not refuse inheritance. Auto-punt uses self.control_child() and logs a refusal. Intake/clarify share scoped grant cleanup, with deterministic quota/key-install refusal and success/spawn-error revocation tests. TUI diagnostics now put the actual refusal first; all 12 paths render that reason visibly at 80 columns, and worker results carry the same diagnostics. Final validation (exit 0): cargo test --profile agent -p aida-cli-lib --lib story_2326: 37 passed; cargo test --profile agent -p aida-tui --lib story_2326: 3 passed; make check-ci-fast: all 38 gates passed; git diff --check: clean. untested=false. Twelve files remain modified and uncommitted for the native host publisher: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/{autopilot_intake.rs,grant_keyring.rs,launch/control.rs,launch/grant.rs,launch/mod.rs,phase_driver.rs,questions.rs,tests/real_phase_driver_wiring_tests.rs,tests/story_2326_launch_tests.rs}, and aida-tui/src/redesign/mod.rs. Recorded publication subject: [AI:codex] fix(launch): preserve running-image control children and report refusals (Refs STORY-2326). Finding 4 remains a host publication/re-review gate: publish a NEW commit on PR #3531, then cite green CI at that exact new head. Published run 42280808820 was still pending at the last check; local passes do not claim new-head CI evidence. No code commit, push, PR creation, queue completion, pr ship or review record was performed in this seat.'
   created_at: 2026-11-06T20:28:24.949271423Z
   modified_at: 2026-11-06T20:28:24.949271423Z
+- id: 01a1b2a5-bf23-7860-bd11-a65c9dc7eec3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 fixes close prior findings 1-3 (control children execute /proc/self/exe with rename/unlink regression; auto-punt routes through self.control_child() and logs refusal; intake/clarify scoped AdvisorChildGrant with keyring-refusal + revocation tests; 12 TUI paths surface refusal reasons) and PR-C scope is met (profile-private prepare_launch, single issue_launch_child, ratchet 157->133), but CI at 7dcdba3ab1f9 is still entirely queued (run 42289630187; prior-head run 42288789494 also queued) so no green PR CI exists, and executing /proc/self/exe without arg0 renames every control child to argv0/comm ''exe''.. No triage reason was given.'
+  created_at: 2026-11-06T20:56:09.251657301Z
+  modified_at: 2026-11-06T20:56:09.251657301Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
@@ -982,6 +988,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b2a5-bf23-7860-bd11-a64409c7838d
+  author: joe
+  timestamp: 2026-11-06T20:56:09.251647520Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -990,11 +1004,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-5 fixes close prior findings 1-3 (control children execute /proc/self/exe with rename/unlink regression; auto-punt routes through self.control_child() and logs refusal; intake/clarify scoped AdvisorChildGrant with keyring-refusal + revocation tests; 12 TUI paths surface refusal reasons) and PR-C scope is met (profile-private prepare_launch, single issue_launch_child, ratchet 157->133), but CI at 7dcdba3ab1f9 is still entirely queued (run 42289630187; prior-head run 42288789494 also queued) so no green PR CI exists, and executing /proc/self/exe without arg0 renames every control child to argv0/comm 'exe'.
-  recovery_hint: address the review findings, move STORY-2326 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T20:44:23.255723580Z
