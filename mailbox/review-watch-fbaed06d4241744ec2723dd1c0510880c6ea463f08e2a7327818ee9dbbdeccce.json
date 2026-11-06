@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-fbaed06d4241744ec2723dd1c0510880c6ea463f08e2a7327818ee9dbbdeccce",
+  "thread_id": "review-watch-fbaed06d4241744ec2723dd1c0510880c6ea463f08e2a7327818ee9dbbdeccce",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1793980943727,
+  "body": "PR-3504 at e090be44c03e927e0271f252c6ba83c85b0d0517 is behind its base branch `main` with overlapping paths. Merge `main` into the branch and push before review. The watcher did not update the branch.",
+  "subject": "PR-3504: merge `main` before review",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
