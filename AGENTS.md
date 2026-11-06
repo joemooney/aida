@@ -484,12 +484,6 @@ stays pending; new raw GitHub spawns outside
 transition migration remain; see [forge observations](OVERVIEW.md#forge-observations).
 <!-- trace:STORY-2401 STORY-2402 | ai:codex -->
 
-Process holder admission and local lease liveness use `aida_core::proc_identity`:
-one cooperative worker generation, with legacy/refused holders retained Unknown.
-See [process identity](OVERVIEW.md#process-identity-and-holder-admission) for the
-capture boundary, migration and remaining consumers.
-<!-- trace:STORY-2537 trace:BUG-2458 | ai:codex -->
-
 ## Child launch containment
 
 Headless and interactive reviewer/resume launches strictly inherit

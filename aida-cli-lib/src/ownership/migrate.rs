@@ -468,26 +468,15 @@ pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Appl
         })
         .collect();
     for old in &plan.existing {
-        let mut repaired = old.clone();
-        if let Some(holder) = &mut repaired.holder {
-            // Do not attach today's process to yesterday's legacy PID. A
-            // refusal is retained for operator repair, never a release.
-            for witness in &mut holder.witnesses {
-                if matches!(witness.kind, super::types::WitnessKind::Process { .. })
-                    && witness.admission.is_none()
-                {
-                    witness.admission = Some(aida_core::proc_identity::HolderRecord::refused(
-                        aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
-                            "legacy holder cannot be rebound; operator repair required".into(),
-                        ),
-                    ));
-                }
-            }
-        }
-        let changed = repaired != *old;
+        // Existing legacy evidence stays byte-for-byte under its old reader
+        // policy. Migration cannot admit an arbitrary old PID, nor should it
+        // turn a heartbeat-backed row into a refused holder.
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
         steps.push(Step {
-            key: old.key.clone(), op: "repair-holder".into(), expect: Expect::Generation(old.generation),
-            transition: Box::new(move |_| changed.then(|| (repaired, Some("legacy holder retained with admission refusal; phase and tree unchanged".into())))),
+            key: old.key.clone(),
+            op: "retain-legacy-holder".into(),
+            expect: Expect::Generation(old.generation),
+            transition: Box::new(|_| None),
         });
     }
     let out = store.update_all(steps)?;
@@ -800,7 +789,7 @@ fn report_json(plan: &MigrationPlan, applied: Option<&Applied>) -> serde_json::V
         "leases": plan.leases.len(),
         "counts": plan.counts().into_iter().map(|(c, n)| (serde_json::to_value(c).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), n)).collect::<BTreeMap<_, _>>(),
         "records": plan.records().len(),
-        "holder_repair_candidates": plan.existing.iter().filter(|rec| rec.holder.as_ref().is_some_and(|h| h.witnesses.iter().any(|w| matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()))).map(|rec| serde_json::json!({"key": rec.key, "generation": rec.generation, "reason": "legacy holder cannot be rebound; operator repair required"})).collect::<Vec<_>>(),
+        "holder_repair_candidates": plan.existing.iter().filter(|rec| rec.holder.as_ref().is_some_and(|h| h.witnesses.iter().any(|w| matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()))).map(|rec| serde_json::json!({"key": rec.key, "generation": rec.generation, "reason": "legacy evidence retained under existing reader policy; cooperative rebind required before cutover"})).collect::<Vec<_>>(),
         "trains": plan.trains.len(),
         "accounted": plan.accounted,
         "duplicates": plan.duplicates.iter().map(|(k, w)| serde_json::json!({"key": k, "input": w})).collect::<Vec<_>>(),
@@ -838,7 +827,7 @@ fn print_report(plan: &MigrationPlan, applied: Option<&Applied>) {
                 matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()
             })
         }) {
-            println!("  holder repair {:?} generation {}: legacy holder cannot be rebound; retaining phase/tree; operator repair required", rec.key, rec.generation);
+            println!("  holder repair {:?} generation {}: legacy evidence retained under existing reader policy; cooperative rebind required before cutover", rec.key, rec.generation);
         }
     }
     for gap in &plan.gaps {

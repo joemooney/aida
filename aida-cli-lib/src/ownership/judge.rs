@@ -26,8 +26,8 @@ pub(crate) fn heartbeat_window(every_secs: u64) -> u64 {
 }
 
 /// Build the identity envelope in established PID coordinates. This alone
-/// supplies no holder admission; writers attach cooperative evidence and the
-/// judge refuses a legacy/unadmitted envelope.
+/// supplies no holder admission; writers attach cooperative evidence for
+/// generation-bound judgment. Unadmitted process envelopes remain Unknown.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
 pub(crate) fn process_witness(
     writer_pid_ns: Option<u64>,
@@ -63,7 +63,7 @@ pub(crate) fn judge_witness(
         } => {
             let Some(record) = witness.admission.as_ref() else {
                 return WitnessReading::Unknown(
-                    "holder admission unavailable; operator repair required".into(),
+                    "holder admission unavailable; cooperative rebind required".into(),
                 );
             };
             let identity = match record.validate() {
@@ -128,14 +128,45 @@ fn describe(witness: &Witness) -> String {
     }
 }
 
-/// Evaluate exactly one admitted process generation. Activity heartbeats and
-/// creator witnesses cannot rehabilitate a dead, invalid or unknown holder.
+/// Admitted records select one process generation. Legacy rows retain their
+/// heartbeat policy; activity cannot rehabilitate an admitted dead worker.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
 pub(crate) fn judge_owner(
     holder: &Holder,
     host: &HostFacts<'_>,
     now: DateTime<Utc>,
 ) -> OwnerVerdict {
+    // Legacy rows keep the existing heartbeat/combined-witness policy until
+    // cutover. Admitted process generations below never borrow activity from
+    // another witness. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if holder.witnesses.iter().all(|w| w.admission.is_none()) {
+        let mut dead = Vec::new();
+        let mut unknown = Vec::new();
+        for witness in &holder.witnesses {
+            match judge_witness(witness, host, now) {
+                WitnessReading::Alive => {
+                    return OwnerVerdict::Alive {
+                        witness: describe(witness),
+                    }
+                }
+                WitnessReading::Dead(why) => dead.push(why),
+                WitnessReading::Unknown(why) => unknown.push(why),
+            }
+        }
+        return if !dead.is_empty() {
+            OwnerVerdict::Dead {
+                proof: dead.join("; "),
+            }
+        } else {
+            OwnerVerdict::Unknown {
+                why: if unknown.is_empty() {
+                    "the holder records no witness".into()
+                } else {
+                    unknown.join("; ")
+                },
+            }
+        };
+    }
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     let processes: Vec<_> = holder
         .witnesses

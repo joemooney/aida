@@ -1043,7 +1043,7 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
 
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
 #[test]
-fn proc_identity_repair_is_pinned_and_preserves_tree() {
+fn proc_identity_migration_is_pinned_and_preserves_legacy_evidence() {
     let (_d, store) = store();
     let mut old_holder = holder("worker-session");
     let mut legacy = admitted_fixture();
@@ -1078,7 +1078,7 @@ fn proc_identity_repair_is_pinned_and_preserves_tree() {
         now(),
     );
     plan.existing = vec![original.clone()];
-    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 1);
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
     let repaired = store.load(&key).unwrap().unwrap();
     assert_eq!(repaired.phase, original.phase);
     assert_eq!(
@@ -1086,12 +1086,10 @@ fn proc_identity_repair_is_pinned_and_preserves_tree() {
         original.holder.as_ref().unwrap().tree
     );
     assert_eq!(repaired.holder.as_ref().unwrap().session, "worker-session");
-    assert!(repaired.holder.as_ref().unwrap().witnesses[0]
-        .admission
-        .as_ref()
-        .unwrap()
-        .validate()
-        .is_err());
+    assert_eq!(
+        repaired, original,
+        "migration preserves legacy liveness evidence"
+    );
     plan.existing = vec![repaired.clone()];
     assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
     store

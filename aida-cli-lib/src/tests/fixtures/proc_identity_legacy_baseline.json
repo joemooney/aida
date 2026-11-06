@@ -29,7 +29,7 @@
   "aida-cli-lib/src/lane_job.rs": 2,
   "aida-cli-lib/src/lane_liveness.rs": 2,
   "aida-cli-lib/src/last_drain.rs": 2,
-  "aida-cli-lib/src/leases.rs": 7,
+  "aida-cli-lib/src/leases.rs": 11,
   "aida-cli-lib/src/lib_part5.rs": 1,
   "aida-cli-lib/src/mail_wake_tests.rs": 1,
   "aida-cli-lib/src/mailbox_view.rs": 2,

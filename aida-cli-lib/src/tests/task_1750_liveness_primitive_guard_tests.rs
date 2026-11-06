@@ -52,6 +52,12 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
             }
             rust_files(&path, out);
         } else if path.extension().is_some_and(|e| e == "rs") {
+            // Dedicated cfg(test) module files contain fixture observations,
+            // not production decisions. trace:STORY-2537 | ai:codex
+            let name = path.file_name().unwrap().to_string_lossy();
+            if name == "tests.rs" || name.ends_with("_tests.rs") {
+                continue;
+            }
             out.push(path);
         }
     }

@@ -6596,6 +6596,7 @@ pub(crate) fn run_vendor_headless_to_exit(
             let run_once =
                 |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
                     run_vendor_headless_child(
+                        None,
                         host_main,
                         vendor,
                         prompt,
@@ -7030,6 +7031,7 @@ pub(crate) fn resume_session_args(mut args: Vec<String>, session_id: &str) -> Re
 // trace:STORY-1662 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_standalone_implementer_child(
+    project_root: &Path,
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
@@ -7042,6 +7044,7 @@ pub(crate) fn run_standalone_implementer_child(
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     run_vendor_headless_child(
+        Some(project_root),
         host_main,
         vendor,
         prompt,
@@ -7070,6 +7073,7 @@ pub(crate) fn revoke_standalone_implementer_grant(
 // trace:BUG-2139 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn run_vendor_headless_child(
+    lease_root: Option<&Path>,
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
@@ -7233,24 +7237,25 @@ fn run_vendor_headless_child(
     if let Some(on_spawn) = hooks.on_spawn {
         on_spawn(child.id());
     }
-    if vendor != HeadlessVendor::Claude {
-        if let Some(id) = lease_id {
-            if let Err(e) = stamp_lease_active_pid(id, child.id()) {
-                eprintln!(
-                    "{} could not stamp active agent pid on lease {}: {e}",
-                    "Warning:".yellow().bold(),
-                    id
-                );
-            }
-        }
-    }
     #[cfg(target_os = "linux")]
     if let Some(id) = lease_id {
         let holder = holder_capture.finish(&mut child);
-        let stamped = crate::find_project_root()
+        // Resolve from the explicit launch context, never the launcher's cwd:
+        // standalone/rework launches can run for another linked checkout.
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        let worker_cwd = child_cmd
+            .get_current_dir()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(headless_worktree_root);
+        let stamped = lease_root
+            .or(host_main)
+            .map(Path::to_path_buf)
+            .map(Ok)
+            .unwrap_or_else(|| crate::find_project_root_from(&worker_cwd))
+            .map(|root| crate::main_worktree_root_from(&root))
             .and_then(|root| stamp_lease_holder_at(&root, id, child.id(), &holder));
         if let Err(error) = stamped {
-            // The retained Child pins this PID. A refused handoff must not
+            // The retained Child pins this PID. A failed handoff must not
             // leave the just-spawned worker running without its lease stamp.
             let _ = child.kill();
             let _ = child.wait();
@@ -7569,12 +7574,34 @@ pub(crate) fn stamp_lease_holder_at(
 /// new pid). The persisted lease is re-read and verified before returning.
 /// Authorship is recorded separately (one resource lock at a time).
 // trace:STORY-2254 | ai:claude
+#[cfg(test)]
 pub(crate) fn stamp_lease_detached_worker_at(
     project_root: &Path,
     lease_id: &str,
     expected_grant: &str,
     pid: u32,
     start: &str,
+) -> Result<()> {
+    let holder = aida_core::proc_identity::HolderRecord::capture(pid);
+    stamp_lease_detached_worker_with_holder_at(
+        project_root,
+        lease_id,
+        expected_grant,
+        pid,
+        start,
+        &holder,
+    )
+}
+
+// A spawn receipt must accompany foreign-PID admission; capture(pid) alone
+// cannot attest a child. trace:STORY-2537 trace:BUG-2458 | ai:codex
+pub(crate) fn stamp_lease_detached_worker_with_holder_at(
+    project_root: &Path,
+    lease_id: &str,
+    expected_grant: &str,
+    pid: u32,
+    start: &str,
+    holder: &aida_core::proc_identity::HolderRecord,
 ) -> Result<()> {
     use toml_edit::{value, DocumentMut};
     anyhow::ensure!(
@@ -7614,9 +7641,13 @@ pub(crate) fn stamp_lease_detached_worker_at(
             }
         }
         // trace:STORY-2537 trace:BUG-2458 | ai:codex
-        doc["holder_record"] = value(serde_json::to_string(
-            &aida_core::proc_identity::HolderRecord::capture(pid),
-        )?);
+        if let Ok(identity) = holder.validate() {
+            anyhow::ensure!(
+                identity.pid == pid && start == format!("linux-starttime:{}", identity.starttime),
+                "detached worker holder does not match its stamped identity"
+            );
+        }
+        doc["holder_record"] = value(serde_json::to_string(holder)?);
         doc["active_pid"] = value(i64::from(pid));
         doc["active_pid_start_time"] = value(start);
         if let Some(ns) = crate::agent_registry::current_pid_namespace() {
@@ -14664,6 +14695,7 @@ mod tests {
         let _cwd = contained_cwd_seam::pin(root.path());
         let log = root.path().join("failed.log");
         let result = run_vendor_headless_child(
+            None,
             None,
             HeadlessVendor::Claude,
             "prompt",

@@ -23,8 +23,9 @@
 //! Binding rules from the advisor signoff:
 //! - Slice 1 (STORY-2537 / BUG-2458): one cooperative, generation-bound
 //!   process holder; boot/PID-namespace/PID/start ticks name that process.
-//!   Missing admission, invalid holders and incomplete/foreign views retain
-//!   Unknown. Creator metadata and heartbeat activity cannot mask worker death.
+//!   Invalid admitted holders and incomplete/foreign views retain Unknown.
+//!   Creator metadata and heartbeat activity cannot mask an admitted worker's
+//!   death; legacy rows retain their existing heartbeat policy until cutover.
 //! - A7: [`Reclaim::Free`] means the work key may be acquired; it never
 //!   licenses touching the old holder's tree.
 //!

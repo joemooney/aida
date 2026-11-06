@@ -76,6 +76,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/zen_drive_root.rs", 3, "slice B: control child"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
     ("aida-core/src/db/refresh_worker.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-core/src/proc_identity.rs", 1, "not a vendor launch: shared cooperative pre_exec self-check receipt; does not construct or spawn a command"),
     ("aida-tui/src/actions.rs", 1, "generic helper: TUI action argv"),
     ("aida-tui/src/dispatch.rs", 1, "generic helper: TUI run_child"),
     ("aida-tui/src/redesign/mod.rs", 12, "slice B: control_env"),
@@ -88,7 +89,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 /// merges after 0ff32132 brought in +3 (lane_job.rs, seat_target_overlay.rs,
 /// and codex_tool_env.rs's cfg(test) fn), all ledgered above. The rebase onto
 /// main 339203a5 brought in +3 (STORY-2338's deputy_shell/runner.rs), ledgered.
-const CEILING: usize = 170;
+// Shared cooperative identity capture adds one pre_exec self-check receipt,
+// not a vendor command/spawn; the exact file/count/reason is ledgered above.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+const CEILING: usize = 171;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
