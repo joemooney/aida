@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T16:09:44.053925110Z
+modified_at: 2026-11-06T16:22:51.150840172Z
 req_type: Task
 tags:
 - architecture
@@ -329,6 +329,12 @@ comments:
   content: 'S1a implementer handoff (trace:TASK-3222 | ai:codex). Followed the 07:10 split and 15:31 execution-mode ruling; no further sketch/punt, no runtime/authority/IPC/grant changes. Uncommitted files: scripts/store-writers.toml (805 deterministic source records with sink, lock, gate, disposition and evidence; 34 boundary-family records carry source-checked notes, conservative unresolved candidates remain explicit blockers), scripts/check-store-writers.py (source discovery, fixed-point wrapper callers, pinned CLI dispatch evidence, production-source hashes and schema/stale/duplicate refusal), docs/internal/security/store-mutation-writers.md (audit queries, concrete CLI/MCP/storage/cache/coordination seams, format, limits and cutover blocker listing), tests/test_store_writer_inventory.py, .github/workflows/ci.yml, scripts/ci-gate-tiers.toml. Both new CI steps classified fast; Makefile already delegates to the workflow-derived runner. 797 blocked records explicitly require S2 destination/lock/gate resolution; host-only rows retain host ownership requirements. The candidate superset is not a claim that every lexical match is a canonical writer or that source regex proves completeness. Validation: 16 Python unit/mutation/CLI/CI-wiring tests pass; required raw-fs, wrapper-caller and cache-on-read mutants refuse before classification and pass after fixture classification. Real inventory guard passes; Python compilation, git diff --check, CI gate audit (all 72 steps classified), existing documentation link/path checks and explicit new-document link resolution pass. make -n check-ci-fast resolves to the expected workflow-derived runner. Full make check-ci-fast NOT RUN: its current fast plan begins with cargo check -p aida-cli --no-default-features and includes cargo formatting, conflicting with this lane''s no-Cargo instruction; host/CI must run aggregate validation. No Cargo commands, commits, pushes, PR, queue-done, ship-to-forge or review-record actions were performed. Native-seat edits remain uncommitted for host publication; no S1b/S2/S3 or C2 completion claimed.'
   created_at: 2026-11-06T16:01:55.614868932Z
   modified_at: 2026-11-06T16:01:55.614868932Z
+- id: 01a1b1ab-880e-7be0-92bb-1dd00b74f23c
+  author: joe
+  content: 'ADVISOR RULING (PR #3511, verdict at 858e7227): the guard keys on SINK SITES, not file hashes. (1) Drop whole-file hashes entirely. Each inventory row identifies a site as path + enclosing item (fn/impl path) + sink kind (e.g. fs::write, with_store_write_lock, update_atomically, SQLite execute). The guard fails only when the token-aware scan finds a sink site with no row (an addition) or a row whose site no longer exists (stale, which tells you to delete the row). Edits elsewhere in a file never fail the gate. (2) Wrapper propagation follows only functions whose body contains a sink or a call to an already-classified wrapper, matched by qualified path, never by bare method name. join, display, is_empty and other non-writers can never become sinks; add a mutant proving a bare-name collision is NOT flagged. (3) Resolve CLI and MCP writers per operation (command or tool name to sink rows); unresolved operations are listed as cutover blockers, not omitted. (4) Regenerate the inventory against the current main after a merge; staleness from main moving is fixed by the regenerate step, documented in the guard''s failure message. Keep the three original mutants. LIGHT gate (python tests plus make check-ci-fast). No other findings are open.'
+  created_at: 2026-11-06T16:22:51.150840172Z
+  modified_at: 2026-11-06T16:22:51.150840172Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
