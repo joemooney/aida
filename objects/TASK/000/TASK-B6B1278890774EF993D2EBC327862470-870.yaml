@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:00:03.003758314Z
-modified_at: 2026-11-06T09:20:36.340530507Z
+modified_at: 2026-11-06T09:33:50.308692573Z
 req_type: Task
 tags:
 - conformance
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-11-06T08:58:28.704616533Z
   modified_at: 2026-11-06T08:58:28.704616533Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b035-1164-7780-8354-81205e978ef6
+  author: joe
+  content: 'Round 2 addresses all five findings at reviewed head 2d3f41941e2e. launch_aida_continuation now catches BaseException, requests SIGTERM group cleanup, waits 10s, escalates to SIGKILL with a bounded wait, and re-raises non-timeout interruptions. Tests cover KeyboardInterrupt and RuntimeError with graceful and forced cleanup. write_json now publishes via a same-directory temporary file and os.replace; tests verify complete replacement and preservation of previous evidence on interruption. The real-process timeout test now allows 10s for interpreter/fork startup. The hidden-output fixture explicitly uses /tmp and also passes with TMPDIR=/home/joe/.aida. Added the disappearing-manifest FileNotFoundError refusal test. Validation: python3 -m unittest tests.test_containment_conformance tests.test_containment_conformance_aida passed all 35 tests; make check-ci-fast passed all 38 gates; cargo fmt --all -- --check, py_compile and git diff --check passed. Rust receipt test untested=true: aida lane job run refused because this standalone native seat has no lane job runner; an initial direct cold build was stopped before test execution. Changed files: scripts/containment/conformance.py and tests/test_containment_conformance.py. Left uncommitted per native-seat contract; host must create the new round commit and publish. Existing merge hold remains unchanged.'
+  created_at: 2026-11-06T09:33:50.308692573Z
+  modified_at: 2026-11-06T09:33:50.308692573Z
+  session_id: 01a1b028e968
 history:
 - id: 01a1afdf-9319-7fb2-af7c-e62f7e294029
   author: joe
