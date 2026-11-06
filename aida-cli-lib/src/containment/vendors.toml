@@ -17,3 +17,12 @@ credentials = "unverified"
 native = "none"
 ipc = "unverified"
 credentials = "unverified"
+
+# Signed 2026-11-05 outer-only ruling. This describes posture, not launch
+# admission: auth inventory and integrated all-tool evidence remain unverified.
+# trace:TASK-3048 | ai:codex
+[vendor.agy]
+native = "none"
+native_layer = "none"
+ipc = "private_runtime"
+credentials = "unverified"
