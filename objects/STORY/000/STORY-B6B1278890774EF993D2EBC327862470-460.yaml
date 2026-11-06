@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T00:21:19.594520891Z
+modified_at: 2026-11-06T00:22:55.763154354Z
 req_type: Story
 tags:
 - architecture
@@ -39,6 +39,24 @@ comments:
   created_at: 2026-11-06T00:17:52.021876179Z
   modified_at: 2026-11-06T00:17:52.021876179Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae3c-b213-7272-8fee-4317954ec567
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - No automated test (sketch lane): review the proposed ProcIdentity type, namespace decision table, existing-helper inventory and migration slices against source. Advisor signoff is a later action and is not claimed here.
+    - Slice-1 production acceptance (type/judge/ratchet, ownership/leases, namespace/reparenting/reuse/clock-step tests) is deferred by the binding sketch-only brief; the plan will specify these future tests. Later child specs are proposed only, not filed before signoff.
+    - Command-level: docs diff/link checks and an open docs PR titled (Refs STORY-2537) prove this lane deliverable.
+
+    ### Expected files
+    - docs/plans/2026-11-05-story-2537-proc-identity.md only, plus this spec comment and a final evidence comment. No production changes or STORY completion.
+
+    ### Ambiguities / conflicts as questions
+    - None for this lane: the advisor brief supersedes implementation acceptance. Proposed design decisions will be labeled for advisor signoff in the sketch.
+  created_at: 2026-11-06T00:22:55.763154354Z
+  modified_at: 2026-11-06T00:22:55.763154354Z
+  session_id: 01a1ae3b3293
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
