@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-831
 agreed_id: TASK-3111
 title: 'Nit sweep A: test hygiene findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2833 TASK-2839 TASK-2843 TASK-2845 TASK-2846 TASK-2847 TASK-2855 TASK-2866 TASK-2869'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-06T02:05:26.653314877Z
+modified_at: 2026-11-06T02:06:42.962264647Z
 req_type: Task
 tags:
 - from-advisor
@@ -253,6 +253,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ae9b-b712-7ff3-8c58-37079197322f
+  author: aida-session-start
+  timestamp: 2026-11-06T02:06:42.962259273Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
