@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-226
 agreed_id: BUG-2460
 title: Shared-boundary conformance harness hangs in fixture aida init when stdin is a terminal
 description: 'Observed 2026-11-06 00:09 and 00:23 MST: python3 scripts/containment/conformance.py --vendor codex --boundary aida, run from the operator''s script deputy (a TTY), reported fixture-init-unavailable twice. The fixture ''aida init --footprint minimal ...'' hit the harness''s 30s timeout. Root cause: fixture_command() (scripts/containment/conformance.py ~:491) calls subprocess.run(capture_output=True) without stdin, so the child inherits the terminal and blocks. With stdin detached the same harness completes init in about 3s and reaches role enter (verified 00:31 MST). Fix: pass stdin=subprocess.DEVNULL to every fixture setup command except the step that deliberately needs the operator''s terminal (role enter), and add an offline test that runs fixture init with a pty on stdin. Acceptance: (1) fixture setup never blocks on an inherited TTY; (2) the regression test fails before the fix; (3) docs/internal/testing/containment-conformance.md notes the stdin contract. LIGHT gate.'
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:26:45.721586405Z
-modified_at: 2026-11-06T08:00:37.694550440Z
+modified_at: 2026-11-06T08:33:32.084100209Z
 req_type: Bug
 tags:
 - conformance
@@ -73,6 +73,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1affd-db78-7291-ab08-4d9f8781d3e8
+  author: aida-auto-bump
+  timestamp: 2026-11-06T08:33:32.024873263Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1affd-dbb4-7c71-89a5-025becf1b98c
+  timestamp: 2026-11-06T08:33:32.084095754Z
+  agent: aida
+  commit_sha: 6454b6e602ad7717c4f051b692c0e2d4d482a93a
+  summary: 'BUG-2460 PASS: fixture_command passes stdin=DEVNULL to every setup command (conformance.py:497), role-enter keeps the operator TTY by design; PTY-stdin regression test passes in CI gates step ''Shared-boundary production fixture refusal''; docs note the stdin contract; bug protocol (test file touched) met; full PR CI green'
+  review_verdict: approved
 filed_at:
   code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
   branch: main
@@ -81,3 +95,7 @@ filed_at:
   aida_build_sha: a8e8311d546
   vendor: claude
   session: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T08:33:32.024866302Z
+  completion_sha: 6454b6e602ad7717c4f051b692c0e2d4d482a93a
