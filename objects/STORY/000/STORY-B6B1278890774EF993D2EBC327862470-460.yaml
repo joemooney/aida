@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T15:05:00.727172774Z
+modified_at: 2026-11-06T15:11:25.797763193Z
 req_type: Story
 tags:
 - architecture
@@ -198,6 +198,12 @@ comments:
   created_at: 2026-11-06T14:58:37.715703124Z
   modified_at: 2026-11-06T14:58:37.715703124Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b16a-2465-7550-a1b4-9fc62ccb0fec
+  author: joe
+  content: 'Round 3 PR #3483: restoring legacy lease reader/advisory/worktree/TTL policy for absent or explicitly refused captures; admitted generations keep ProcIdentity, and corrupted admitted records remain Unknown. Foreign lease policy runs first. Detached Codex supervisor now passes a cooperative pre-exec receipt to the real lease stamp; regression covers setsid, reparenting, worker PID persistence and Dead after exit. Legacy ownership heartbeat/combination policy is retained; migration preserves existing evidence without refusing every legacy witness. No heartbeat-policy removal is proposed. Documentation is shortened to architecture. Required host publication/squash subject must end (Refs STORY-2537) (BUG-2458); never use the old bde0fca4580 completing STORY trailer. Validation in progress; native seat cannot write Git metadata.'
+  created_at: 2026-11-06T15:11:25.797763193Z
+  modified_at: 2026-11-06T15:11:25.797763193Z
+  session_id: 01a1b1643ab6
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
