@@ -226,6 +226,8 @@ impl Fx {
             .env("AIDA_TELEMETRY", "0")
             .env("AIDA_OUTPUT_FORMAT", "human")
             .env("NO_COLOR", "1")
+            // No real pause between confirmed forge reads. trace:STORY-2401 | ai:claude
+            .env("AIDA_FORGE_CONFIRM_PAUSE_MS", "0")
             .env("AIDA_TEST_GH_BINARY", &self.gh)
             .env("AIDA_TEST_GLAB_BINARY", self.bin.join("glab"))
             .env("FIXTURE_STATE", &self.state)

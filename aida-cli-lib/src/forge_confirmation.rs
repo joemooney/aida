@@ -7,8 +7,48 @@ use std::path::Path;
 use std::process::{Output, Stdio};
 use std::time::Duration;
 
+/// Milliseconds between the paired reads of a confirmation (default 3s).
+/// Binary-level tests set it to 0 on the spawned `aida` so every confirmed
+/// read does not pay a real pause; this crate's own unit tests default to 0
+/// and inject explicit pauses where the pause matters. trace:STORY-2401 | ai:claude
+pub(crate) const PAUSE_ENV: &str = "AIDA_FORGE_CONFIRM_PAUSE_MS";
+const DEFAULT_PAUSE: Duration = if cfg!(test) {
+    Duration::ZERO
+} else {
+    Duration::from_secs(3)
+};
+
+pub(crate) fn pause_from(value: Option<&str>) -> Duration {
+    value
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(DEFAULT_PAUSE)
+}
+
+pub(crate) fn pause() -> Duration {
+    pause_from(std::env::var(PAUSE_ENV).ok().as_deref())
+}
+
 pub(crate) fn backoff() {
-    std::thread::sleep(Duration::from_secs(3));
+    let pause = pause();
+    if !pause.is_zero() {
+        std::thread::sleep(pause);
+    }
+}
+
+#[cfg(test)]
+mod pause_tests {
+    use super::*;
+
+    // trace:STORY-2401 | ai:claude
+    #[test]
+    fn story_2401_confirmation_pause_is_configurable() {
+        assert_eq!(pause_from(Some("0")), Duration::ZERO);
+        assert_eq!(pause_from(Some(" 250 ")), Duration::from_millis(250));
+        // Unset or unparsable falls back to the default (zero in unit tests).
+        assert_eq!(pause_from(None), DEFAULT_PAUSE);
+        assert_eq!(pause_from(Some("soon")), DEFAULT_PAUSE);
+    }
 }
 
 fn git(root: &Path, args: &[&str], remote: bool) -> Result<Output> {
@@ -92,34 +132,46 @@ fn base_tip(root: &Path, base: &str) -> Observed<String> {
         let _ = git(root, &["update-ref", "-d", &private], false);
         result
     })());
-    TIPS.with(|tips| {
-        if let Some(tips) = tips.borrow_mut().as_mut() {
-            tips.insert(key, tip.clone());
-        }
-    });
+    // Only a fetched tip is shared across the sweep: one transient blip must
+    // not leave every later candidate unconfirmed. trace:STORY-2401 | ai:claude
+    if matches!(tip, Observed::Known(_)) {
+        TIPS.with(|tips| {
+            if let Some(tips) = tips.borrow_mut().as_mut() {
+                tips.insert(key, tip.clone());
+            }
+        });
+    }
     tip
 }
 
 fn receipt(root: &Path, tip: &str, head: &str, pr: u64, train_only: bool) -> Result<bool> {
     let suffix = format!(r"\((#|!){pr}\)$");
-    let commits = stdout(
-        root,
-        &[
-            "log",
-            "--format=%H",
-            "--extended-regexp",
-            "--grep",
-            &suffix,
-            tip,
-        ],
-    )?;
+    // A GitHub merge commit names the PR in its subject instead of a squash
+    // suffix; it is a receipt for an ordinary landing, never for a train
+    // member (that needs the exact member trailer). trace:STORY-2401 | ai:claude
+    let merge_prefix = format!("Merge pull request #{pr} from ");
+    let merge_pattern = format!("^{merge_prefix}");
+    let mut args: Vec<&str> = vec![
+        "log",
+        "--format=%H",
+        "--extended-regexp",
+        "--grep",
+        suffix.as_str(),
+    ];
+    if !train_only {
+        args.extend(["--grep", merge_pattern.as_str()]);
+    }
+    args.push(tip);
+    let commits = stdout(root, &args)?;
     for commit in commits.lines() {
         let subject = stdout(root, &["show", "-s", "--format=%s", commit])?;
-        if !(subject.ends_with(&format!("(#{pr})")) || subject.ends_with(&format!("(!{pr})"))) {
-            continue;
-        }
-        if !train_only {
+        let squash =
+            subject.ends_with(&format!("(#{pr})")) || subject.ends_with(&format!("(!{pr})"));
+        if !train_only && (squash || subject.starts_with(&merge_prefix)) {
             return Ok(true);
+        }
+        if !squash {
+            continue;
         }
         let trailers = stdout(
             root,

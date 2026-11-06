@@ -760,4 +760,31 @@ fn story_2401_closed_train_receipt_and_absent_squash_head_real_git() {
     assert!(
         matches!(metadata(r, &forge, 43, &mut crate::network_retry::NoopSink), Observed::Known(m) if m.state == ChangeState::Closed)
     );
+    // A transient fetch failure is not cached for the rest of the sweep: the
+    // next candidate fetches again. trace:STORY-2401 | ai:claude
+    {
+        let _sweep = Sweep::new();
+        confirmation_git(r, &["remote", "remove", "origin"]);
+        assert!(matches!(
+            on_base(r, "main", &head, 43),
+            Observed::Transient(_)
+        ));
+        confirmation_git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+        assert_eq!(on_base(r, "main", &head, 43), Observed::Known(true));
+    }
+    // A GitHub merge commit is a receipt even when the PR head was never
+    // fetched locally. trace:STORY-2401 | ai:claude
+    assert_eq!(on_base(r, "main", &head, 44), Observed::Known(false));
+    confirmation_git(
+        r,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Merge pull request #44 from fork/topic\n\nTopic",
+        ],
+    );
+    assert_eq!(on_base(r, "main", &head, 44), Observed::Known(true));
+    assert_eq!(on_base(r, "main", &head, 4), Observed::Known(false));
+    assert_eq!(train_landed(r, "main", &head, 44), Observed::Known(false));
 }

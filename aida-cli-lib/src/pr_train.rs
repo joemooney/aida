@@ -2296,7 +2296,7 @@ impl TrainForge for LiveTrainForge<'_> {
         }
     }
     fn confirmation_backoff(&self) -> std::time::Duration {
-        std::time::Duration::from_secs(3)
+        crate::forge_confirmation::pause()
     }
 
     // trace:STORY-2401 | ai:codex
@@ -2783,6 +2783,15 @@ impl<'a> ForgeRails<'a> {
         }
     }
 
+    /// Retire on a dispatch-authority abort without masking the typed abort:
+    /// an unconfirmed cleanup leaves the train PR open (members retained) and
+    /// is reported as a warning. trace:STORY-2401 | ai:claude
+    fn retire_on_abort(&mut self, change: &crate::forge::ChangeRef, why: &str) {
+        if let Err(e) = self.retire(change, why) {
+            self.warn(format!("{e:#}"));
+        }
+    }
+
     fn change_for(&self, tip: &str) -> Result<crate::forge::ChangeRef> {
         self.opened
             .iter()
@@ -2908,6 +2917,11 @@ impl Rails for ForgeRails<'_> {
             // red train. Reconcile a possible landing, otherwise preserve it.
             let mut v = match self.ports.wait_ci(change, train) {
                 Ok(v) => v,
+                // A revoked dispatch authority is not a CI refusal to confirm:
+                // surface the typed abort untouched. trace:STORY-2401 | ai:claude
+                Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
+                    return Err(e)
+                }
                 Err(e) if e.downcast_ref::<TrainCiReadError>().is_some() => {
                     match self.ports.confirm_not_landed(change, train) {
                         crate::forge_observed::Confirmed::Positive => {
@@ -3068,10 +3082,10 @@ impl Rails for ForgeRails<'_> {
                 Err(why) => {
                     let rearm = self.rearm_released(&released);
                     if self.ports.dispatch_abort().is_some() {
-                        self.retire(
+                        self.retire_on_abort(
                             &change,
                             "Dispatch authority was revoked during hold release; the train aborts.",
-                        )?;
+                        );
                         if !rearm.is_empty() {
                             self.warn(format!("{why}.{rearm}"));
                         }
@@ -3097,10 +3111,10 @@ impl Rails for ForgeRails<'_> {
                 Ok(true) => {}
                 Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
                     let rearm = self.rearm_released(&released);
-                    self.retire(
+                    self.retire_on_abort(
                         &change,
                         "Dispatch authority was revoked during the hold-gate wait; the train aborts.",
-                    )?;
+                    );
                     if !rearm.is_empty() {
                         self.warn(format!("{e:#}.{rearm}"));
                     }
