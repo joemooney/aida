@@ -13,12 +13,12 @@ description: |-
   3. The rotate relay's relaunch carries the same set.
   4. A test asserts that an advisor child launched via agent new can mint a reviewer grandchild (review watch admits one) and an implementer grandchild.
   5. The standing orders and handoff launch line ('aida agent new claude --role advisor --permission-mode auto') then work as written, with no bypass needed (feeds STORY-2571).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T19:49:30.545429548Z
+modified_at: 2026-11-06T19:59:43.504463138Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-11-06T18:52:59.891366672Z
   modified_at: 2026-11-06T18:52:59.891366672Z
   session_id: 01a1b21657b8
+- id: 01a1b272-1590-7cb3-aaa8-6d8e04ea74c8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Delegation inheritance/narrowing, rotation, resume, detached and chain revalidation look correct and are tested, but none of the 5 acceptance criteria is traced (aida criteria: all untraced) and the detached Codex registry row records the effective set as an explicit selection; CI at head still queued.. No triage reason was given.'
+  created_at: 2026-11-06T19:59:43.504461483Z
+  modified_at: 2026-11-06T19:59:43.504461483Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
   author: aida-session-start
@@ -117,6 +123,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b272-1590-7cb3-aaa8-6d73dc8137ad
+  author: joe
+  timestamp: 2026-11-06T19:59:43.504449479Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6fe228acc8ba529a71396d2a8236545d2d009d1a
   branch: main
@@ -125,11 +139,3 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Delegation inheritance/narrowing, rotation, resume, detached and chain revalidation look correct and are tested, but none of the 5 acceptance criteria is traced (aida criteria: all untraced) and the detached Codex registry row records the effective set as an explicit selection; CI at head still queued.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-233 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T19:49:30.545429548Z
