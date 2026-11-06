@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-870
 agreed_id: TASK-3194
 title: 'Conformance harness hardening: no grant before output refusal, timeout reaps the lane group, named refusal for a missing manifest, pinned receipt line'
 description: 'Carries four non-blocking findings from the #3475 (TASK-3131) review, ruled ONCE by the advisor 2026-11-06 01:05 MST (10-28 ruling). They were first bundled into BUG-2460, but #3482 was approved first, so it ships as is and they land here in ONE PR: (a) TASK-2922: refuse /tmp and /run --output in run_aida() BEFORE any setup, so no grant is minted for a refused output; (b) TASK-2923: on TimeoutExpired kill the whole ''aida queue work'' process group, close Network, never let the stale pre-continuation report overwrite setup evidence, and size the outer timeout to cover continuation setup plus bounded_launch; (c) TASK-2925: --await-payload with an absent manifest yields a named refusal, not a FileNotFoundError traceback; (d) TASK-2924: a Rust test pinning the ''aida-contained-receipt sha256=.. policy_sha=..'' line the harness regex depends on (keep the line; the stderr noise is accepted). LIGHT gate: the harness python tests plus one targeted cargo test for (d).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:00:03.003758314Z
-modified_at: 2026-11-06T08:58:28.859389541Z
+modified_at: 2026-11-06T09:20:36.340530507Z
 req_type: Task
 tags:
 - conformance
@@ -93,6 +93,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b028-f3f4-7921-90b6-2fed7861efa8
+  author: aida-session-start
+  timestamp: 2026-11-06T09:20:36.340526089Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
   branch: main
