@@ -877,6 +877,7 @@ pub(crate) fn gather_merge_facts_pinned(
 /// and the process-liveness probe. Nothing is mutated here.
 // trace:TASK-1177 | ai:claude
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
+    let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
     scan_reapable_with(project_root, |pr| {
         crate::queue_cmd::review_pr_is_merged_or_closed(
             project_root,

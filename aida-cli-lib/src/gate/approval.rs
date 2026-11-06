@@ -306,6 +306,22 @@ pub(crate) fn merge_path_approval_gate(
     head_branch: Option<&str>,
     head_sha: Option<&str>,
 ) -> std::result::Result<Option<String>, String> {
+    match observe_merge_path_approval_gate(project_root, pr, known_ids, head_branch, head_sha) {
+        crate::forge_observed::Observed::Known(result) => result,
+        crate::forge_observed::Observed::Pending(why)
+        | crate::forge_observed::Observed::Transient(why) => Err(why),
+    }
+}
+
+// Preserve a failed secondary base read separately from a settled approval refusal.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn observe_merge_path_approval_gate(
+    project_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head_sha: Option<&str>,
+) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
     let main_worktree = crate::main_worktree_root_from(project_root);
     let (candidates, policy) = merge_approval_inputs(
         &[project_root, main_worktree.as_path()],
@@ -318,20 +334,31 @@ pub(crate) fn merge_path_approval_gate(
     // TASK-1960: the base is read from the forge (prove time and again right
     // before the caller merges). trace:TASK-1960 | ai:claude
     let site = crate::gate::review_carryover::CarryOverSite::new(&main_worktree, None);
-    merge_path_approval_decision(
+    let unavailable = std::cell::RefCell::new(None);
+    let decision = merge_path_approval_decision(
         &main_worktree,
         pr,
         &candidates,
         &policy,
         head_sha,
         &site,
-        &|| {
-            crate::forge::forge_for(project_root)
-                .change_metadata(pr, &mut crate::network_retry::NoopSink)
-                .ok()
-                .map(|m| m.base_ref)
+        &|| match crate::forge::forge_for(project_root)
+            .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+        {
+            crate::forge_observed::Observed::Known(Ok(m)) => Some(m.base_ref),
+            crate::forge_observed::Observed::Known(Err(why))
+            | crate::forge_observed::Observed::Pending(why)
+            | crate::forge_observed::Observed::Transient(why) => {
+                *unavailable.borrow_mut() =
+                    Some(format!("approval base evidence unavailable: {why}"));
+                None
+            }
         },
-    )
+    );
+    match unavailable.into_inner() {
+        Some(why) => crate::forge_observed::Observed::Transient(why),
+        None => crate::forge_observed::Observed::Known(decision),
+    }
 }
 
 /// [`merge_path_approval_gate`] once its inputs are gathered: authority,

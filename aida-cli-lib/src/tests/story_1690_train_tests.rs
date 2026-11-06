@@ -1181,6 +1181,8 @@ struct FakeForge {
     rechecks: usize,
     merge_refused: bool,
     ci_unreadable: bool,
+    // trace:STORY-2401 | ai:codex
+    confirmation: Option<crate::forge_observed::Confirmed>,
     // trace:BUG-2423 | ai:codex
     ci_states: Option<VecDeque<TrainCiReadiness>>,
     /// A non-transient CI-wait error (e.g. head/state changed), once.
@@ -1288,6 +1290,20 @@ impl TrainForge for FakeForge {
     ) -> Result<bool> {
         self.gate_checked_covers = covers.to_vec();
         Ok(self.gate_green)
+    }
+    fn confirm_ci_refusal(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> bool {
+        true
+    }
+    fn confirm_not_landed(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _train: &Built,
+    ) -> crate::forge_observed::Confirmed {
+        self.confirmation
+            .unwrap_or(crate::forge_observed::Confirmed::Negative)
+    }
+    fn confirm_member_head(&mut self, _pr: u64, _head: &str) -> bool {
+        true
     }
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
         self.retired.push((change.id, why.to_string()));
@@ -1521,15 +1537,15 @@ fn a_merge_error_retires_the_open_train_and_tells_every_member() {
 }
 
 #[test]
-fn an_open_error_ejects_the_members_instead_of_aborting_the_run() {
+fn story_2401_open_error_retains_members_for_ambiguous_publication() {
     let mut f = FakeForge::mains(&["m0"]);
     f.open_fails_at = Some(1);
     let mut rails = ForgeRails::new(&mut f, "t".into());
     let out = drive(&mut rails, fms(&[1])).unwrap();
     assert!(out.error.as_deref().unwrap().contains("connection reset"));
-    assert_eq!(out.ejected.len(), 1);
+    assert!(out.ejected.is_empty());
     assert!(f.retired.is_empty(), "nothing was open");
-    assert_eq!(f.comments, vec![1]);
+    assert!(f.comments.is_empty(), "no member ejection notice");
 }
 
 #[test]
@@ -3105,14 +3121,14 @@ fn bug_2412_only_a_dead_same_host_owner_abandons_a_train() {
 /// The observed failure: `aida pr train 3214 3240` was killed mid-run and
 /// left train PR #3248 (members #3240) open with no owning process; the next
 /// train refused #3240 as "already riding live train PR #3248". Now the
-/// lookup reports #3248 abandoned, #3240 boards, a real run closes #3248 with
-/// a comment, and an ownerless legacy train, a train owned from another PID
+/// lookup reports #3248 abandoned. Unknown cleanup proof stops new admission
+/// and leaves #3248 open. An ownerless legacy train, a train owned from another PID
 /// namespace, and a dead-owner train still named by a live train lease all
 /// keep blocking their riders and are never closed.
 // trace:BUG-2412 | ai:claude
 #[cfg(unix)]
 #[test]
-fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
+fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -3196,18 +3212,15 @@ fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
         train_rider_refusal(3214, &open, &leased).is_some(),
         "an ownerless train is not judged dead and still blocks"
     );
-    close_abandoned_train(&root, 3248, "train/killed-1", &dead, true);
+    close_abandoned_train(&root, 3248, "train/killed-1", &dead, true).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(
         !calls.contains("pr close"),
         "a dry run closes nothing: {calls}"
     );
-    close_abandoned_train(&root, 3248, "train/killed-1", &dead, false);
+    assert!(close_abandoned_train(&root, 3248, "train/killed-1", &dead, false).is_err());
     let calls = std::fs::read_to_string(&log).unwrap();
-    assert!(
-        calls.contains("pr close 3248 --comment Closed by a later `aida pr train`"),
-        "{calls}"
-    );
+    assert!(!calls.contains("pr close"), "{calls}");
     // A live train merge-lease still naming #3248 means a train is landing
     // it: it is not abandoned, it keeps blocking #3240, and nothing closes it.
     let _lease = crate::merge_lock::acquire(
@@ -3390,7 +3403,7 @@ fn bug2423_head_or_state_change_ejects_members_with_the_reason() {
 
 #[test]
 // trace:BUG-2423 | ai:claude
-fn bug2423_missing_required_check_timeout_ejects_members() {
+fn story_2401_missing_required_check_timeout_ejects_members() {
     let mut f = FakeForge::mains(&["m0"]);
     f.ci_states = Some(
         std::iter::repeat_with(|| TrainCiReadiness::Missing(vec!["Build".into()]))
@@ -3486,4 +3499,180 @@ exit 1
     std::fs::remove_file(root.path().join("fail")).unwrap();
     write(root.path(), "malformed", "");
     assert!(forge.check_rows(&change).is_err());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_train_unconfirmed_failure_suspends_without_ejection_or_close() {
+    let mut f = FakeForge::mains(&["base"]);
+    f.ci_error = Some("train state could not be read".into());
+    f.confirmation = Some(crate::forge_observed::Confirmed::Unconfirmed);
+    let mut rails = ForgeRails::new(&mut f, "confirm".into());
+    let outcome = drive(&mut rails, vec![member(1, "head1", "s")]).unwrap();
+    assert!(outcome.error.is_some());
+    assert!(outcome.ejected.is_empty());
+    assert!(f.retired.is_empty());
+    assert!(f.landed_members.is_empty());
+    assert!(!f.comments.is_empty());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_train_transient_then_merged_finishes_landing() {
+    let mut f = FakeForge::mains(&["base"]);
+    f.ci_unreadable = true;
+    f.confirmation = Some(crate::forge_observed::Confirmed::Positive);
+    let mut rails = ForgeRails::new(&mut f, "confirm".into());
+    let outcome = drive(&mut rails, vec![member(1, "head1", "s")]).unwrap();
+    assert!(outcome.error.is_none());
+    assert!(outcome.ejected.is_empty());
+    assert_eq!(outcome.landed.len(), 1);
+    assert_eq!(f.landed_members, vec![1]);
+    assert!(f.retired.is_empty());
+    assert!(
+        f.merged.is_empty(),
+        "reconciled landing must not issue another merge"
+    );
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_train_confirmed_closed_failure_can_retire() {
+    let mut f = FakeForge::mains(&["base"]);
+    f.ci_error = Some("train is closed".into());
+    f.confirmation = Some(crate::forge_observed::Confirmed::Negative);
+    let mut rails = ForgeRails::new(&mut f, "confirm".into());
+    let outcome = drive(&mut rails, vec![member(1, "head1", "s")]).unwrap();
+    assert!(outcome.error.is_some());
+    assert_eq!(outcome.ejected.len(), 1);
+    assert_eq!(f.retired.len(), 1);
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_git_confirmation_fetches_private_ref_and_refuses_unknown() {
+    use crate::forge_observed::Observed;
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    let head = pr_branch(r, "candidate", |r| write(r, "new.txt", "candidate"));
+    assert_eq!(
+        crate::forge_confirmation::on_base(r, "main", &head, 42),
+        Observed::Known(false)
+    );
+    git(r, &["merge", "--quiet", "--ff-only", "candidate"]);
+    assert_eq!(
+        crate::forge_confirmation::on_base(r, "main", &head, 42),
+        Observed::Known(true)
+    );
+    assert!(git(r, &["for-each-ref", "refs/aida/confirm/"]).is_empty());
+    // A stale local origin/main must never substitute for a failed fetch.
+    git(
+        r,
+        &["remote", "set-url", "origin", "/no-such-story-2401-origin"],
+    );
+    assert!(matches!(
+        crate::forge_confirmation::on_base(r, "main", &head, 42),
+        Observed::Transient(_)
+    ));
+    assert!(git(r, &["for-each-ref", "refs/aida/confirm/"]).is_empty());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_positive_during_abort_keeps_landing_credit() {
+    let mut f = FakeForge::mains(&["base"]);
+    f.ci_error = Some("train is no longer open".into());
+    f.confirmation = Some(crate::forge_observed::Confirmed::Positive);
+    let mut rails = ForgeRails::new(&mut f, "confirm".into());
+    let outcome = drive(&mut rails, vec![member(1, "head1", "s")]).unwrap();
+    assert_eq!(outcome.landed.len(), 1);
+    assert!(
+        outcome.error.is_none(),
+        "a fully reconciled landing is not a failed train"
+    );
+    assert!(outcome.ejected.is_empty());
+    assert_eq!(f.landed_members, vec![1]);
+    assert!(f.retired.is_empty());
+}
+
+// Settled live policy refusals eject the member while preserving its hold.
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_live_preland_gate_refusal_ejects() {
+    let tmp = repo();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.metadata_state = crate::forge::ChangeState::Open;
+    forge.is_draft = true;
+    let r = tmp.path();
+    git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    let base = git(r, &["rev-parse", "main"]);
+    git(r, &["checkout", "-b", "train"]);
+    std::fs::write(r.join("train-change"), "train").unwrap();
+    git(r, &["add", "train-change"]);
+    git(r, &["commit", "-m", "train fixture"]);
+    let tip = git(r, &["rev-parse", "HEAD"]);
+    forge.metadata_head = tip.clone();
+    crate::gate::merge_hold_core::write_hold(tmp.path(), 42, "new merge hold").unwrap();
+    let mut host = LiveTrainForge {
+        project_root: tmp.path().into(),
+        main_worktree: tmp.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    assert!(
+        matches!(host.observe_gate(42), crate::forge_observed::Observed::Known(Err(why))
+        if why.contains("it is a draft"))
+    );
+    let train = Built {
+        base: base.clone(),
+        tip,
+        dropped: vec![],
+        cars: vec![Car {
+            member: member(42, "approved-head", "member"),
+            commit: base.clone(),
+            patch_id: "patch".into(),
+        }],
+    };
+    let change = crate::forge::ChangeRef {
+        id: 100,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "main".into(),
+        title: None,
+    };
+    let mut rails = ForgeRails::new(&mut host, "live-refusal".into());
+    rails.opened.push((train.tip.clone(), change.clone()));
+    rails.built.insert(change.id, train.clone());
+    rails.live.push(change);
+    let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
+        panic!("settled draft refusal must eject");
+    };
+    assert_eq!(ejected.len(), 1);
+    assert_eq!(ejected[0].pr, 42);
+    assert!(ejected[0].reason.contains("it is a draft"));
+    assert!(rails.live.is_empty(), "refused train is retired");
+    assert!(rails.landed_on_main.is_empty());
+    drop(rails);
+    assert_eq!(forge.closed.lock().unwrap()[0].0, 100);
+    assert!(crate::gate::merge_hold_core::hold_is_open(tmp.path(), 42));
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() {
+    let mut checks = FakeChecks::new();
+    checks.labels = Err("HTTP 503".into());
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Unavailable(why)) if why.contains("HTTP 503")));
+    checks.labels = Ok(None);
+    checks.pin = None;
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Refused(why)) if why.contains("no approval")));
+    checks.hold = Some("new hold".into());
+    assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
+        Err(MemberGateError::Refused(why)) if why.contains("merge hold")));
 }
