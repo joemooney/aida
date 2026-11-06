@@ -702,6 +702,16 @@ watcher is parking, with its reason and since when (`review_watch_skipped` in
 `--json`). Changes that are only waiting for a reviewer slot, or that are under
 review or already reviewed, are not listed.
 
+On enrolled publishing hosts, watcher discovery first synchronizes committed
+publications. Distributed admission additionally requires explicit trusted
+`[review] admission_hub` and `admission_ref` settings. A signed claim at the single
+GitHub authority must be accepted and confirmed before dispatch; GitLab and
+bridges only mirror, with no failover. Synced publications answer even without a
+local verdict directory and override contradictory local history. Active earlier
+heads and uncertain outcomes retain their hub claims. Local `--release` cannot
+clear a distributed claim. See [second-node setup and recovery](../agents/second-review-node.md#run-distributed-watchers).
+<!-- trace:STORY-2492 | ai:codex -->
+
 Version-1 atomic state lives under the main worktree's `.aida/review-watch/`.
 Permanent admission and per-change lock files coordinate watcher instances.
 Each launch is reserved before spawn, and its dispatcher records PID, process

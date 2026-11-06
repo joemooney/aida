@@ -179,12 +179,28 @@ fn findings_message(
     );
     // The current verdict file always holds the latest round; an archived
     // round file is named when this verdict was also read from one.
-    let mut files = vec![format!(
-        ".aida/review-verdicts/{}",
-        verdict_file(&key, history)
-    )];
+    // Synced-only reviews have no local verdict file to point the author at.
+    // trace:STORY-2492 | ai:codex
+    let synced = history
+        .files
+        .get(verdict)
+        .into_iter()
+        .flatten()
+        .any(|f| f.starts_with(".aida-store/"));
+    let mut files = if synced {
+        Vec::new()
+    } else {
+        vec![format!(
+            ".aida/review-verdicts/{}",
+            verdict_file(&key, history)
+        )]
+    };
     for file in history.files.get(verdict).into_iter().flatten() {
-        let path = format!(".aida/review-verdicts/{file}");
+        let path = if file.starts_with(".aida-store/") {
+            file.clone()
+        } else {
+            format!(".aida/review-verdicts/{file}")
+        };
         if !files.contains(&path) {
             files.push(path);
         }
