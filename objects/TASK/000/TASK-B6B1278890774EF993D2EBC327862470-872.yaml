@@ -1,5 +1,6 @@
 id: 01a1b028-38dd-77e2-9112-cde8d44adbfa
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-872
+agreed_id: TASK-2928
 title: 'MINOR (test robustness, non-blocking): aida-cli-lib/src/tests/task_2838_agy_out…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2838, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -64,6 +65,10 @@ history:
   author: joe
   timestamp: 2026-11-06T09:51:27.213323722Z
   session_id: 01a1b0390333
+  changes: []
+- id: 01a1b04d-ef4a-7183-98e0-c9dc3e59188a
+  author: joe
+  timestamp: 2026-11-06T10:00:59.978081953Z
   changes: []
 filed_at:
   code_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
