@@ -209,7 +209,20 @@ fn is_open_refusal(v: &rv::RecordedVerdict) -> bool {
 /// collection of an old round), nor any refusal when its own order time is
 /// unknown.
 // trace:STORY-2324 | ai:claude
-fn sequence_verdict(events: Vec<GateEvent>, head: &str, change_events: &[GateEvent]) -> Verdict {
+fn sequence_verdict(
+    events: Vec<GateEvent>,
+    head: &str,
+    change_events: &[GateEvent],
+    member: bool,
+) -> Verdict {
+    // trace:STORY-2324 | ai:codex — only a member's proved old-head
+    // refusal can be answered across buckets by a later change approval.
+    // Unknown/foreign refusals stay protective; authority is checked later.
+    let events: Vec<_> = events
+        .iter()
+        .filter(|event| !member || !superseded_refusal(event, head, &events, change_events))
+        .cloned()
+        .collect();
     let parsed: Vec<(GateEvent, Option<rv::RecordedVerdict>)> = events
         .iter()
         .map(|e| {
@@ -258,6 +271,41 @@ fn sequence_verdict(events: Vec<GateEvent>, head: &str, change_events: &[GateEve
             approval_at_head(newest.seq, &v, head, change_events)
         }
     }
+}
+
+// trace:STORY-2324 | ai:codex
+fn superseded_refusal(
+    event: &GateEvent,
+    head: &str,
+    member_events: &[GateEvent],
+    change_events: &[GateEvent],
+) -> bool {
+    let Some(record) = event.verdict_record().and_then(rv::parse_ledger_record) else {
+        return false;
+    };
+    let full_sha = |s: &str| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit());
+    let Some(reviewed) = record.reviewed_sha.as_deref().filter(|s| full_sha(s)) else {
+        return false;
+    };
+    if !is_open_refusal(&record) || !full_sha(head) || rv::same_reviewed_sha(reviewed, head) {
+        return false;
+    }
+    let change_level = change_events
+        .iter()
+        .filter(|e| e.spec_key.is_none() && e.spec.as_deref().is_none_or(|s| s.trim().is_empty()));
+    member_events.iter().chain(change_level).any(|approval| {
+        let Some(v) = approval.verdict_record().and_then(rv::parse_ledger_record) else {
+            return false;
+        };
+        approval.seq > event.seq
+            && v.kind.approves()
+            && !v.is_closed()
+            && v.reviewed_sha
+                .as_deref()
+                .is_some_and(|s| rv::same_reviewed_sha(s, head))
+            && matches!((rv::ledger_order_time(approval), rv::ledger_order_time(event)),
+                (Some(a), Some(b)) if a > b)
+    })
 }
 
 /// An approval against the head: covered directly, or through the newest
@@ -372,6 +420,23 @@ pub(crate) fn effective_gate_state(
     let mut change_own: Vec<GateEvent> = Vec::new();
     let mut per_member: BTreeMap<SpecKey, Vec<GateEvent>> = BTreeMap::new();
     for e in &verdict_events {
+        // trace:STORY-2324 | ai:codex — a persisted UUID is the identity;
+        // the original label is retained only for audit. Do not let a remap
+        // or absent label reassign a stamped event to another requirement.
+        if let Some(key) = e.spec_key {
+            if let Some(member) = set.member(key) {
+                per_member
+                    .entry(key)
+                    .or_default()
+                    .push(canonical_spelling(member, (*e).clone()));
+            } else {
+                foreign
+                    .entry(e.spec.clone().unwrap_or_else(|| key.to_string()))
+                    .or_default()
+                    .push((*e).clone());
+            }
+            continue;
+        }
         match e.spec.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             None => change_own.push((*e).clone()),
             Some(label) => match set.member_for_label(label) {
@@ -390,7 +455,7 @@ pub(crate) fn effective_gate_state(
     // trace:STORY-2324 | ai:claude
     let foreign_answers: Vec<Verdict> = foreign
         .into_values()
-        .map(|events| sequence_verdict(events, head, &view.change_events))
+        .map(|events| sequence_verdict(events, head, &view.change_events, false))
         .filter(|v| {
             matches!(
                 v,
@@ -421,14 +486,31 @@ pub(crate) fn effective_gate_state(
             .collect();
         let events: Vec<GateEvent> = unbound.into_iter().chain(bound).collect();
         let mode = member_mode(set, m);
-        members.push((m, mode, sequence_verdict(events, head, &view.change_events)));
+        members.push((
+            m,
+            mode,
+            sequence_verdict(events, head, &view.change_events, true),
+        ));
     }
-    let change_verdict = sequence_verdict(change_own, head, &view.change_events);
-    let verdict = aggregate(
+    let change_verdict = sequence_verdict(change_own, head, &view.change_events, false);
+    let mut verdict = aggregate(
         std::iter::once(&change_verdict)
             .chain(std::iter::once(&foreign_verdict))
             .chain(members.iter().map(|(_, _, v)| v)),
     );
+    // trace:STORY-2324 | ai:codex — a file/index bucket cannot override a
+    // persisted UUID either. A misplaced unbound event is unsafe evidence,
+    // including a refusal; dropping it would lose a protective answer.
+    if view.unbound.iter().any(|(key, events)| {
+        set.member(*key).is_none()
+            || events
+                .iter()
+                .any(|e| e.spec_key.is_some_and(|stamped| stamped != *key))
+    }) {
+        verdict = Verdict::Unsafe {
+            reason: "an unbound ledger bucket disagrees with its canonical spec key".into(),
+        };
+    }
     let hold = fold_hold(&view.change_events);
     let supervised: Vec<(String, String)> = members
         .iter()
