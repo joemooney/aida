@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-021
 agreed_id: TASK-2902
 title: Native lane clean-exit commits cannot preserve approved partial-spec Refs trailers
 description: 'Observed while implementing TASK-3074 PR-A under the advisor''s explicit two-PR signoff (2026-11-05 18:42 UTC): PR-A must use (Refs TASK-3074), and PR-B completes. In a native Codex seat, `aida ship TASK-3074 --no-merge --dry-run` refuses publication and requires host-side post-exit commit. `aida-cli-lib/src/ship_from_seat.rs::post_exit_message` unconditionally gives every clean exit a completing `(SPEC)` trailer, whereas only failed-exit salvage uses `(Refs SPEC)`. `open_pr` takes its title from that commit subject. Thus the default host path cannot represent this approved partial implementation without a manual host subject override. Suggested follow-up: carry an explicit non-completing/Refs publication intent through the native exit handshake, while retaining ordinary successful completion. For this pickup, host publication must use `[AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074)` and keep TASK-3074 In Progress for PR-B.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T07:40:08.517446854Z
+modified_at: 2026-11-06T09:19:32.814729494Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -204,6 +204,24 @@ history:
   timestamp: 2026-11-06T07:04:46.877857987Z
   session_id: 01a1afaa71a4
   changes: []
+- id: 01a1b027-fba8-7f22-a0f5-334822eb5fc0
+  author: aida-auto-bump
+  timestamp: 2026-11-06T09:19:32.776115660Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b027-fbce-75e2-813c-84b1014f94f7
+  timestamp: 2026-11-06T09:19:32.814724702Z
+  agent: aida
+  commit_sha: aaf1023fa9f555b0b3431798679fbb4fb6fa05a7
+  summary: 'Round 2: all six round-1 findings fixed (rotation keeps the declaration after generation 1; declared completion goes through the TASK-2879 forge downgrade; tests cover every launch path; resume gated to Codex; bindings removed on lease release/reap/session end; veto logged). CI green at 6c7bf1c; merge-hold-gate is the supervised human gate only.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T09:19:32.776107568Z
+  completion_sha: aaf1023fa9f555b0b3431798679fbb4fb6fa05a7
