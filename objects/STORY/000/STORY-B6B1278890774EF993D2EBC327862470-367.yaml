@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T14:07:27.213644735Z
+modified_at: 2026-11-06T14:27:30.033731167Z
 req_type: Story
 relationships:
 - rel_type:
@@ -292,6 +292,12 @@ comments:
   content: 'Round 5 repairs on PR #3493: downloaded run 42224787380 lib-0 timing artifact; the failing unbudgeted test was stranded_review_pr_forge_failure_is_preserved_for_reporting at 15.59s. Its isolated fixture now uses zero retry delay. Live pre-land gates distinguish settled refusals (Known Err, member ejection) from unavailable evidence (suspension), preserving holds. Required-check registration and settle deadlines again terminate deterministically after negative landing confirmation. Review watch retains a per-head counter and caps fetch-unavailable dispatches at three. Retraction/abandoned-train cleanup use Open-only confirmation. Rebase-merge confirmation follow-up filed as BUG-2463. Historical commit remains unchanged because this branch was not rebuilt. Targeted story_2401 tests and make check-ci-fast are running; this native seat leaves edits uncommitted for the host and does not clear the merge hold.'
   created_at: 2026-11-06T14:07:27.213644735Z
   modified_at: 2026-11-06T14:07:27.213644735Z
+  session_id: 01a1b124f63b
+- id: 01a1b141-ec71-7240-a23f-6cae81831e86
+  author: joe
+  content: 'Round 5 final validation: cargo test -p aida-cli-lib story_2401 --lib --profile agent passed all 36 tests in 1.84s, with 12626 unrelated tests filtered out. make check-ci-fast passed all 38 gates; git diff --check passed. Initial reruns corrected a fixture train-tip lookup and included-file formatting. No implementation/validation blocker remains. Details and changed-file inventory are in docs/plans/2026-11-06-story-2401-confirmed-negatives.md. BUG-2463 tracks review finding 5. Native publication declaration recorded: [AI:codex] fix(forge): restore settled train refusals and bound retries (Refs STORY-2401). Edits remain uncommitted for the host; no push, merge, review record, hold clearance or queue completion was performed.'
+  created_at: 2026-11-06T14:27:30.033731167Z
+  modified_at: 2026-11-06T14:27:30.033731167Z
   session_id: 01a1b124f63b
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
