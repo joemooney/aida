@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-324
 agreed_id: STORY-2326
 title: 'One agent launcher: LaunchContext + spawn_agent with an env-clear allowlist and declared sandbox resources'
 description: 'Regroup target 3, 2026-11-02. Build the context once (seat, validated grant, containment posture, worktree, vendor). Every agent spawn goes through spawn_agent, which clears the environment and sets an allowlist; a ratchet forbids other spawn sites. The containment profile declares cargo slots, sccache and the target directory, so lanes can run the LIGHT gate. Slice by vendor; high risk. Evidence: TASK-1749, TASK-1758, TASK-1788, TASK-1333, STORY-1486, BUG-1669, TASK-2772. Sketch-first; advisor signoff required.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T20:28:24.949279721Z
+modified_at: 2026-11-06T20:44:23.255723580Z
 req_type: Story
 tags:
 - architecture
@@ -973,6 +973,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b29a-f957-7381-ab31-280a45274fd2
+  author: aida-orchestrator
+  timestamp: 2026-11-06T20:44:23.255747055Z
+  session_id: 01a1b295f625
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -981,3 +990,11 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round-5 fixes close prior findings 1-3 (control children execute /proc/self/exe with rename/unlink regression; auto-punt routes through self.control_child() and logs refusal; intake/clarify scoped AdvisorChildGrant with keyring-refusal + revocation tests; 12 TUI paths surface refusal reasons) and PR-C scope is met (profile-private prepare_launch, single issue_launch_child, ratchet 157->133), but CI at 7dcdba3ab1f9 is still entirely queued (run 42289630187; prior-head run 42288789494 also queued) so no green PR CI exists, and executing /proc/self/exe without arg0 renames every control child to argv0/comm 'exe'.
+  recovery_hint: address the review findings, move STORY-2326 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T20:44:23.255723580Z
