@@ -38,6 +38,9 @@ relationships:
   target_id: 01a1a957-4952-7c90-b4d6-3be4093e1638
   created_at: 2026-11-06T13:40:59.086926739Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a1b12f-fd86-7b40-a906-aca362cd3b47
+  created_at: 2026-11-06T14:08:20.793399391Z
 comments:
 - id: 01a1b117-7394-7550-8351-8a79c4687905
   author: joe
@@ -74,6 +77,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b130-75ea-7cb2-aae7-571612c1a8af
+  author: joe
+  timestamp: 2026-11-06T14:08:25.578445585Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
