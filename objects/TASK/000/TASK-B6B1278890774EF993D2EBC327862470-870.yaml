@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:00:03.003758314Z
-modified_at: 2026-11-06T08:58:21.191343239Z
+modified_at: 2026-11-06T08:58:28.859389541Z
 req_type: Task
 tags:
 - conformance
@@ -35,6 +35,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All four items implemented and tested (a: hidden-output refusal before setup; b: SIGTERM group reap + Network close + evidence preserved + timeout+180; c: named payload refusal; d: pinned receipt line), but the new process group orphans the continuation/lane on any non-timeout interruption, and the evidence handoff reads a non-atomically written report. CI was still queued at the reviewed head.. No triage reason was given.'
   created_at: 2026-11-06T08:58:21.191340777Z
   modified_at: 2026-11-06T08:58:21.191340777Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b014-b1e0-78c0-b189-207171593e9a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3194):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2d3f41941e2e
+    Recorded: 2026-11-06T08:41:02.408380931+00:00
+    Findings:
+    1. MAJOR (containment, b): scripts/containment/conformance.py:511-527 launch_aida_continuation starts the continuation with process_group=0, which takes it out of the terminal's foreground group, so the operator's Ctrl+C no longer reaches it. It only handles subprocess.TimeoutExpired. On a KeyboardInterrupt, or any other exception in communicate(), Popen.__exit__ waits about 0.25s and returns without killing the child. The continuation, the 'aida queue work' lane (its own group) and the fixture Network servers then keep running orphaned, holding the seat grant, for up to timeout+180s. Before this PR, subprocess.run's catch-all killed the child, and the continuation got SIGINT directly as a foreground-group member. Fix: catch BaseException, not only TimeoutExpired; apply the same SIGTERM, then wait 10s, then SIGKILL sequence to the group; then re-raise. Add a test that interrupts launch_aida_continuation (for example a mocked communicate raising KeyboardInterrupt) and asserts the group is signalled.
+    2. MINOR (b, evidence): run_aida's except handler (conformance.py:631-635) now runs json.loads on report.json after the continuation exits. write_json (conformance.py:53) is a plain non-atomic write_text, and continue_aida now rewrites the file after every setup stage (conformance.py:647-650). If the SIGKILL fallback (conformance.py:524) lands mid-write, or the SIGTERM handler raises inside write_text, the file is truncated. json.loads then raises JSONDecodeError inside the except block, which replaces the real timeout reason and leaves no unsupported_reason in the report. Fix: make write_json atomic (temp file + os.replace), or tolerate a decode failure by falling back to the in-memory report.
+    3. MINOR (test flake): tests/test_containment_conformance.py test_outer_timeout_reaps_lane_closes_network_and_preserves_setup gives launch_aida_continuation a 1-second deadline. Within that second two fresh Python interpreters must start (the continuation, which imports conformance.py, and the forked lane) and both lane pids must reach stdout.jsonl, which the test asserts (len(pids)==2). A loaded CI runner can miss that window and fail intermittently. Use a readiness signal (wait for stdout.jsonl to hold 2 lines before letting the timeout fire) or a larger deadline.
+    4. MINOR (test portability, a): test_hidden_output_refuses_before_any_setup_or_grant expects Path(tempfile.TemporaryDirectory())/'output' to be hidden, which only holds when TMPDIR resolves under /tmp or /run. With TMPDIR elsewhere (for example ~/tmp), run_aida passes the check and calls the mocked shutil.which, and the test fails (the Args stub has no timeout and which returns a MagicMock). Create the first case explicitly under /tmp (tempfile.TemporaryDirectory(dir='/tmp')) or skip it when the tempdir is not hidden.
+    5. COSMETIC (c): conformance.py:986-989, the 'manifest disappeared' FileNotFoundError branch of --await-payload has no test. Only the absent-after-deadline path is covered. Add one test that makes payload() raise FileNotFoundError.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T08:58:28.704616533Z
+  modified_at: 2026-11-06T08:58:28.704616533Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1afdf-9319-7fb2-af7c-e62f7e294029
