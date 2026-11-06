@@ -44,6 +44,37 @@ pub struct CachedGitBackend {
 }
 
 impl CachedGitBackend {
+    // trace:STORY-1468 | ai:codex
+    pub fn add_requirement_with_origin_prompt(
+        &self,
+        requirement: Requirement,
+        prompt: Option<&crate::origin_prompt::OriginPrompt>,
+    ) -> Result<Requirement> {
+        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
+        let _lock = self.inner.lock_store()?;
+        let pre_write_head = self.current_head_sha();
+        let added = self
+            .inner
+            .add_requirement_with_origin_prompt(requirement, prompt)?;
+        let post_write_head = self.current_head_sha();
+        if let Err(e) = self.upsert_requirement_with_schema_retry(&added) {
+            // Cache write failure is non-fatal — mark stale by clearing the
+            // recorded SHA so the next read triggers a rebuild.
+            let _ = self.cache.set_source_head_sha("");
+            eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
+        } else {
+            // BUG-626: a new child shifts its parent epic's rollup status.
+            self.refresh_epics_then_restamp(&[&added], &pre_write_head, &post_write_head);
+        }
+        Ok(added)
+    }
+
     /// Open an existing git store at `git_root` with a SQLite cache at
     /// `cache_path`. Missing caches are rebuilt; compatible stale caches use
     /// the single-flight read policy. Queries record their snapshot labels.
@@ -1902,27 +1933,7 @@ impl DatabaseBackend for CachedGitBackend {
     }
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
-        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
-        // BUG-1951: take the store lock (re-entrant) first, so no writer that
-        // respects it can commit between the capture and our own commit.
-        // trace:BUG-1951 | ai:claude
-        self.refuse_store_write_on_read_only_cache()?;
-        #[cfg(unix)]
-        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
-        let _lock = self.inner.lock_store()?;
-        let pre_write_head = self.current_head_sha();
-        let added = self.inner.add_requirement(requirement)?;
-        let post_write_head = self.current_head_sha();
-        if let Err(e) = self.upsert_requirement_with_schema_retry(&added) {
-            // Cache write failure is non-fatal — mark stale by clearing the
-            // recorded SHA so the next read triggers a rebuild.
-            let _ = self.cache.set_source_head_sha("");
-            eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
-        } else {
-            // BUG-626: a new child shifts its parent epic's rollup status.
-            self.refresh_epics_then_restamp(&[&added], &pre_write_head, &post_write_head);
-        }
-        Ok(added)
+        self.add_requirement_with_origin_prompt(requirement, None)
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
