@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-06T02:05:23.383567930Z
+modified_at: 2026-11-06T02:05:26.653314877Z
 req_type: Task
 tags:
 - from-advisor
@@ -118,6 +118,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 9 batched findings are addressed and gates is now green, but lib-0 fails at 06f9eb7: main''s TASK-3112 rework-suffix stripping turns the new coverage-refusal test''s fixture into a covered member, so the train merges and the test''s unwrap_err panics.. No triage reason was given.'
   created_at: 2026-11-06T02:05:23.383566536Z
   modified_at: 2026-11-06T02:05:23.383566536Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae9a-8c88-7fb3-b582-fce17163ca13
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3111):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 06f9eb752d11
+    Recorded: 2026-11-06T02:00:00.149146069+00:00
+    Findings:
+    1. BLOCKING (CI lib-0, TASK-2843/TASK-2845): bug2441_resolved_but_uncovered_member_names_coverage_refusal panics at aida-cli-lib/src/tests/bug2406_train_tests.rs:414 (.unwrap_err() on Ok, so merge_verified merged). Cause is a semantic conflict with main's TASK-3112 change to resolved_member_spec_ids (pr_train_verified.rs:545-578), which arrived in merges 5feb2ac/06f9eb7. CI was fully green at 362e836, before those merges. The fixture branch 'story-b6b1278890774ef993d2ebc327862470-123-2' now strips its numeric suffix to STORY-b6b...-123, the canonical id of fixture spec STORY-2220 (bug2406_train_tests.rs:180-184). So ids = [STORY-2220, BUG-2400], the lease scope STORY-2220 covers it, covered is non-empty, and the new ensure! at pr_train_verified.rs:316 does not fire. The production guard is fine; the fixture is stale. Fix: use a branch whose suffix-stripped base does not resolve, e.g. 'story-b6b1278890774ef993d2ebc327862470-999999-2' (matching what main did to bug2441_unknown_rework_branch_without_resolved_spec_refuses), keep lease scope STORY-2220 and title 'Refs BUG-2400', so ids = [BUG-2400] is fully uncovered. Then show lib-0 green at the new head.
+    2. non-blocking observation (TASK-2847): the exit-77 skip arm in the bug_2435 positive capability control (bug_2383_seat_target_overlay_tests.rs:~728) means CI gates passing does not prove the retain_admin=true REMOUNT-CONTROL arm actually ran on the runner. Round 2 found unshare(CLONE_NEWNS) gets EPERM there, so it probably skips on CI. The negative assertions are still required-live, so this is acceptable. State it in the PR body (the positive control runs only on hosts that allow it).
+    3. non-blocking note (TASK-2843): the new guard refuses only when all resolved ids are uncovered. Partially covered members still silently drop the uncovered ids' policy gates. This matches the finding's scope (a misleading message for the fully filtered case), so no change is required.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T02:05:26.536368586Z
+  modified_at: 2026-11-06T02:05:26.536368586Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
