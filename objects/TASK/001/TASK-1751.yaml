@@ -24,13 +24,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:25.477355443Z
-modified_at: 2026-10-19T16:08:25.551914335Z
+modified_at: 2026-11-06T00:18:44.068333732Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
 - operator-held
 - tech-debt
+comments:
+- id: 01a1ae38-dae4-70f2-ae4c-28201a168e29
+  author: joe
+  content: 'Advisor 2026-11-05 17:30: folded into the regroup R4 story STORY-2538.'
+  created_at: 2026-11-06T00:18:44.068333732Z
+  modified_at: 2026-11-06T00:18:44.068333732Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a154eb-dc28-7a21-b9d7-0eabe519f4f9
   author: joe
