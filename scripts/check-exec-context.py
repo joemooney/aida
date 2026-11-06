@@ -200,6 +200,28 @@ def rust_sites(source):
     return found
 
 
+def python_expression(node):
+    """Canonical AST encoding, independent of ast.dump's versioned defaults.
+
+    Ignore locations and absent optional fields (including Constant.kind,
+    removed in Python 3.14). Keep node types, field names and ordered values
+    so argument/key/operator changes still produce different fingerprints.
+    """
+    def normalize(value):
+        if isinstance(value, ast.AST):
+            return [type(value).__name__, {
+                field: normalize(child) for field, child in ast.iter_fields(value)
+                if child is not None and child != []
+            }]
+        if isinstance(value, list):
+            return [normalize(child) for child in value]
+        # repr also handles bytes, complex numbers and Ellipsis constants,
+        # which are valid AST values but are not JSON scalar types.
+        return [type(value).__name__, repr(value)]
+
+    return json.dumps(normalize(node), sort_keys=True, separators=(",", ":"))
+
+
 def python_sites(source):
     tree = ast.parse(source)
     aliases = {"os": "os"}
@@ -240,7 +262,7 @@ def python_sites(source):
                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     scope = ancestor.name
                     break
-            expression = ast.dump(expression_node, include_attributes=False)
+            expression = python_expression(expression_node)
             digest = hashlib.sha256(expression.encode()).hexdigest()[:20]
             found.append(f"{scope}:{name(node)}:{digest}")
     return found

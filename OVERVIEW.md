@@ -1,3 +1,11 @@
+The execution-input exception ledger hashes Python environment expressions using
+a normalized AST encoding that ignores interpreter display defaults and absent
+optional fields. Rust and Python golden keys guard fingerprint drift; the
+inventory contains 1,217 exact legacy sites, including the latest merged main
+fixture read. See the
+[migration ledger](docs/internal/testing/exec-context-migration.md).
+<!-- trace:STORY-2538 | ai:codex -->
+
 Mailbox delivery resolves named agents against current registry liveness,
 shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
 and empty role/vendor audiences, and lists group readers. Known people retain

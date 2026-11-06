@@ -7,6 +7,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("exec_ratchet", Path(__file__).resolve().parents[1] / "scripts/check-exec-context.py")
 GUARD = importlib.util.module_from_spec(SPEC)
@@ -14,6 +15,40 @@ SPEC.loader.exec_module(GUARD)
 
 
 class ExecContextRatchetTests(unittest.TestCase):
+    def test_rust_site_golden_key(self):
+        self.assertEqual(
+            ["f:var:196145c86d8506ab9d01"],
+            GUARD.rust_sites('fn f() { std::env::var("HOME"); }'),
+            "Rust token fingerprint changed; review the encoding before updating the ledger",
+        )
+
+    def test_python_site_golden_keys(self):
+        for expression, expected in [
+            ('os.getenv("HOME")', "f:os.getenv:95e6a881ac9b4f838e78"),
+            ('os.environ["HOME"]', "f:os.environ:41a731e6c09dd1a631a3"),
+        ]:
+            with self.subTest(expression=expression):
+                source = f'import os\ndef f():\n return {expression}'
+                self.assertEqual(
+                    [expected], GUARD.python_sites(source),
+                    "Python AST fingerprint changed; review the encoding before updating the ledger",
+                )
+                # Interpreter changes to ast.dump must never affect identity.
+                with patch.object(GUARD.ast, "dump", side_effect=AssertionError("versioned AST display")):
+                    self.assertEqual([expected], GUARD.python_sites(source))
+
+    def test_python_encoding_ignores_absent_optional_fields(self):
+        call = GUARD.ast.parse('os.getenv("HOME")', mode="eval").body
+        expected = GUARD.python_expression(call)
+        # Model the removal of Constant.kind and omission of empty Call
+        # fields across Python versions, independently of this interpreter.
+        literal = call.args[0]
+        literal._fields = tuple(field for field in literal._fields if field != "kind")
+        call._fields = tuple(field for field in call._fields if field != "keywords")
+        self.assertEqual(expected, GUARD.python_expression(call))
+        literal.value = "OTHER"
+        self.assertNotEqual(expected, GUARD.python_expression(call))
+
     def test_qualified_imported_grouped_and_aliased_readers(self):
         for source in [
             'fn f() { std::env::var("HOME"); }',

@@ -67,13 +67,16 @@ Initial inventory (including import bindings and Python harness references):
 | aida-cli-lib | 890 | R4: functional clusters after coordination with PR-C |
 | aida-server | 31 | R4: explicit request/service boundaries |
 | aida-tui | 21 | R4: UI/service request boundaries |
-| tests | 90 | R4: Python harness reads and mutation bindings |
-| **Total** | **1,216** | R4 slices B–D; not a zero-legacy claim |
+| tests | 91 | R4: Python harness reads and mutation bindings |
+| **Total** | **1,217** | R4 slices B–D; not a zero-legacy claim |
 
 The initial inventory also includes one unchanged `forge_confirmation::pause`
 reader from PR #3493 (`5af57cdbc221`), merged from main after the first review.
 The 1,215-site reviewed inventory otherwise changes only function navigation
 keys corrected by enclosing-scope tracking; it gains no replacement allowances.
+The subsequent main merge (`b34755f19c7`) adds one unchanged Python environment
+read in `test_continuation_preserves_actual_terminal_stdin`. It is included in
+this initial ledger, bringing the current inventory to 1,217 sites.
 
 All workspace members are discovered from Cargo.toml, including build scripts,
 examples and Rust integration tests; `tests/**/*.rs` and `tests/**/*.py` are
@@ -95,7 +98,14 @@ character literals and lifetimes have mutant coverage, as do absolute paths
 after Rust keywords (including `if`, `match`, `while` and `mut`). Unrelated
 imports must not be recursively expanded (e.g. `anyhow::{anyhow}` is not an env alias).
 Python harnesses use AST scanning of os environment references, imports and
-aliases, including references used to mutate `os.environ`.
+aliases, including references used to mutate `os.environ`. Python fingerprints
+hash a canonical JSON AST walk with sorted field names, ordered children and
+typed literal values. Locations and absent optional fields are omitted,
+including the removed `Constant.kind` field; interpreter-specific `ast.dump`
+formatting is never hashed. Literal golden site keys for Rust and Python point
+to encoding drift before a whole-ledger comparison fails. The Python digest
+regeneration preserves the existing 85 Python keys (90 occurrences) and adds
+only that one merged-main site (86 keys, 91 occurrences). Rust keys are unchanged.
 
 This is a source-token ratchet, not a Rust compiler or whole-program taint
 analysis. It does not resolve cross-module reexports, macro expansion, dynamic
