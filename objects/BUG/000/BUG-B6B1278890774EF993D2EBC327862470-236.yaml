@@ -10,13 +10,21 @@ description: |-
   Fix: merge the fixture policy into the existing tables instead of appending. Either parse with tomllib and rewrite, or append keys under the existing headers: allowed_hosts must be exactly the fixture list, replacing init's list, because C3 tests that a non-listed host is denied. Also set [agents] contained/vendor and [contained.vendors] codex. Add a harness unit test that runs setup against a freshly init'd fixture and parses the config with tomllib. Afterwards the advisor re-runs C3/C4 for BUG-2447/BUG-2448.
 
   Gate: python unit tests for scripts/containment plus make check-ci-fast; no cargo needed.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:50:22.010183066Z
-modified_at: 2026-11-06T18:50:22.010183066Z
+modified_at: 2026-11-06T19:03:10.486984554Z
 req_type: Bug
+history:
+- id: 01a1b23e-4f96-70e2-9a96-8121704154ae
+  author: aida-session-start
+  timestamp: 2026-11-06T19:03:10.486983449Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
