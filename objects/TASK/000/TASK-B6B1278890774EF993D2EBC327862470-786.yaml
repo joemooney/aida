@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T16:52:55.222115298Z
+modified_at: 2026-11-06T16:55:03.926174542Z
 req_type: Task
 tags:
 - area:containment
@@ -325,6 +325,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b1c9-05f6-72b3-9eb1-4c93abc32448
+  author: joe
+  timestamp: 2026-11-06T16:55:03.926192074Z
+  session_id: 01a1b1bfc08b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -333,3 +341,8 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: missing-context
+  detail: 'Finding 1 (AC unmet) remains open under the binding outer-only ruling; no finding is disputed. The common wrapper from PR #3449 is present, but only Codex API-key and Claude credential/expiry mechanisms are represented, and it grants raw store writes. AGY still needs the approved auth/refresh-host inventory, generic runtime/credential and mediated-only write policy representation, migration/refusal of legacy bypass launch paths, and advisor-owned integrated all-tool host evidence. This seat must not invent approved hosts or claim candidate argv tests as a passing AGY lane. New uncommitted preparation records native_layer=none and receipt-gates candidate bypass argv, preserves named unsupported reports/tests and the closed production gate. Rust tests are untested=true (no lane job runner); no host measurement or completion claimed. Existing/new punts and holds remain publication vetoes. Requested non-completing host subject was declared with Refs STORY-2460 and (Refs TASK-3048); edits remain for triage, not automatic completion.'
+  raised_by: implementer
+  raised_at: 2026-11-06T16:55:03.926174542Z
