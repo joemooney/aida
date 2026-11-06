@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T04:26:44.486929434Z
+modified_at: 2026-11-06T05:04:54.755315858Z
 req_type: Story
 tags:
 - architecture
@@ -133,6 +133,12 @@ comments:
   created_at: 2026-11-06T04:26:44.486929434Z
   modified_at: 2026-11-06T04:26:44.486929434Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af3e-dbe3-7563-a4c7-8bad2aef438e
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-06T05:04:54.755311964Z
+  modified_at: 2026-11-06T05:04:54.755311964Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
@@ -220,6 +226,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1af3e-dbe3-7563-a4c7-8b95a0d853fd
+  author: joe
+  timestamp: 2026-11-06T05:04:54.755305107Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
