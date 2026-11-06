@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T14:46:06.427942519Z
+modified_at: 2026-11-06T14:49:46.400314487Z
 req_type: Task
 tags:
 - architecture
@@ -131,6 +131,99 @@ comments:
   created_at: 2026-11-06T14:08:59.418211150Z
   modified_at: 2026-11-06T14:08:59.418211150Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b156-50a0-7c20-8ca8-6e2758f5c1c5
+  author: codex
+  content: |
+    SKETCH v1 source refresh — TASK-3222 / STORY-2561 — sketch-only handoff
+    trace:TASK-3222 | ai:codex
+
+    2026-11-06; inspected checkout 3267a3e97d804a85abacdeb04cce3b104ec34e5e. Read STORY-2561 operator rulings and BUG-2446 sketch v1 before launcher inspection. No production/documentation edits, Cargo, vendor execution, PR, or conformance claim.
+
+    Scope and existing signoff
+
+    The explicit incoming brief still requires a sketch comment followed by a design-fork punt, with no implementation. The substrate already contains sketch v1 and the 14:08 UTC advisor signoff: option A is selected, S1 verbs are read-only, TASK-3222 is inventory-only S1a, and runtime transport/lifecycle belongs to TASK-3225 (S1b, after PR #3449). This refresh preserves that signoff; it does not reopen the ruled transport choice. The advisor must reconcile the stale sketch-only launch brief with the approved S1a implementation assignment before a new implementation launch. Sections below cover all seven requested subjects, with their current ownership explicit.
+
+    STORY-2561 remains its own cross-vendor keystone. Shared AIDA bubblewrap enforcement is S2; current grants in contained_boundary.rs::contained_store_write_paths and session.rs::contained_write_set stay unchanged for S1. The native compatibility exception and its labeling stay unchanged. S1 is not raw-store denial or C2 completion. BUG-2448 remains separately owned.
+
+    1. Transport and isolation (TASK-3225)
+
+    Keep approved option A: host-owned synchronous typed service, outside the sandbox, with a fresh AF_UNIX SOCK_SEQPACKET socketpair for each admitted client. A lane requests one exact synthetic address /run/aida-mutation/<launch-epoch>/service. There is no host pathname listener, abstract listener, TCP port, shared-directory prefix grant, mailbox/deputy spool, generic MCP forwarding, shell or argv deputy.
+
+    The concrete broker seam is aida-cli-lib/src/containment/contained_host.py::broker_connect_contained. Its current AF_UNIX branch permits private-state pathname sockets using state_prefix plus openat2_beneath. Add a separate exact-address branch before that branch; do not expand state_prefix. Snapshot the sockaddr once, validate seccomp notification identity and trapped socket type, create the per-lane pair, retain its server end in the trusted service, and inject only the client end using ADDFD. Never CONTINUE a request using a mutable client sockaddr. Use bounded receive/send and close rejected descriptors.
+
+    Only this launch's broker maps this epoch to this service. A sibling broker has no such mapping, even if it guesses the address. No service/control FDs cross vendor exec. The host helper must remain non-dumpable and inaccessible through the lane's procfs view; no alternate pathname, abstract socket, /proc/*/fd reopening or inherited endpoint is a fallback. Reject SCM_RIGHTS and other capability transfer requests at the service. Per-message sender validation also rejects a sibling using a copied client FD. Isolation must be demonstrated rather than inferred from UID or random address secrecy. If it cannot be established, refuse a service-required launch.
+
+    This authorizes precisely one typed capability for one pinned lane. It adds no arbitrary host connect permission and makes no claim to fix BUG-2448. Existing private-state socket behavior is not enlarged. Unsupported/native compatibility surfaces do not silently receive a globally reachable substitute.
+
+    2. Launch identity and request proof (TASK-3225)
+
+    The host fixes canonical project/authority root, pinned store root identity, owned spec UUID(s), seat/role, validated child and parent grant IDs, lease/registry identity, permitted verb enum, expiry, launch epoch, policy/build revision and attested worker process/start and namespace identities. Pin filesystem/process/namespace handles where possible; a caller path, cwd, PID string or environment value is not authority. Epoch identifies this launch; it is not a bearer credential.
+
+    Reuse launch/contained.rs::ContainmentReceipt::validate and gate/seat_authority.rs::bind_contained_launch_worker. These are evidence inputs, not sufficient authorization on their own. In particular bind_contained_launch_worker currently returns success for an empty grant ID; service-required launch must explicitly reject missing required grant/lease binding instead of treating that no-op as proof.
+
+    Broker admission checks the kernel notification's sending task against the pinned lane. Enable SO_PASSCRED on each receiving SEQPACKET endpoint before exposure; validate kernel SCM_CREDENTIALS on EVERY message against host-visible process identity/start, UID mapping and pinned PID/user/mount namespaces. SO_PEERCRED on a host-created socketpair only identifies the creator and is insufficient. UID equality is insufficient. Unknown, reused, dead or uncorroborated processes refuse, including credentials that cannot be independently corroborated. A valid descendant must remain within this launch's pinned boundary. Explicit credentials or inherited/transferred descriptors cannot expand that boundary.
+
+    Combine live sender checks with gate/seat_authority.rs::grant_check_for(project_root, grant_id, caller), current lease/roster/parent-grant checks and verb-specific gates. Pass binding data explicitly to service authorization; never temporarily mutate process-global AIDA_SESSION_* variables. Recheck at dispatch and, for S2 mutations, after acquiring the store writer lock. Missing, expired, revoked, foreign or sibling evidence refuses. Inventory baseline non-authoritative operations explicitly rather than inventing broader role authority.
+
+    3. Closed protocol, bounds and retries (TASK-3225; mutation transaction is S2)
+
+    Preserve approved v1 envelope: one UTF-8 JSON object per SEQPACKET, {version:1, launch_epoch, request_id, op, data}. Exact typed schemas reject duplicate/unknown keys, unsupported versions/ops and trailing data. No generic command/tool name, paths, executables, Git configuration, authority selectors, argv or whole-object replacement. Text is inert and never interpreted as executable/path authority.
+
+    Production S1 op set is exactly session_probe {challenge} and request_status {request_id}. Probe returns bounded challenge/readiness and non-secret binding summary. Status is restricted to this launch's request records; unknown is explicitly unknown. Every mutation verb, including own_claim, comment_add, spec_edit and queue_done, returns UnsupportedOperation. No production fixture mutation verb.
+
+    Retain v1 bounds: request and response each at most 64 KiB; reject MSG_TRUNC/MSG_CTRUNC, missing/multiple credentials and extraneous ancillary data. Maximum depth 16, 32 object keys per object, 16 KiB per string, 128-byte challenge, exact UUID/epoch syntax; validate before unbounded allocation. Limit to 8 connections, one in-flight operation per lane, 4096 accepted request IDs with no dedupe eviction, and 5-second I/O/lock-admission deadlines. Capacity returns Busy before acceptance. Response carries version, epoch, request_id, closed outcome and result OR error. Closed errors: InvalidRequest, UnsupportedVersion, UnsupportedOperation, Unauthorized, Expired, Revoked, Conflict, Busy, Unavailable, OutcomeUnknown. Do not leak host paths/secrets/raw child diagnostics. EOF/timeout never means success.
+
+    Idempotency key: (host binding, launch_epoch, request_id), plus digest of canonical typed op/data and expected revision where applicable. Same key/payload replays the recorded result only after live authorization; changed payload conflicts. Concurrent duplicates serialize. Client retains its ID before send; at most two bounded identical retries, no new ID after uncertain delivery, no cross-epoch replay. S1 read-only outcomes may live in bounded session memory; a dead epoch is unavailable, not a recovered mutation result.
+
+    STORY-2561 requires durable success for mutations. TASK-3223 may enable no mutation until a separate transaction sketch is approved: canonical mutation AND dedupe outcome must share one recoverable transaction under aida-core/src/db/store_lock.rs::with_store_write_lock. A separate success sidecar is insufficient. Crash after persistence/before reply must not duplicate a comment; ambiguous recovery yields OutcomeUnknown without blind rerun. This is a known S2 gate, not an S1 crash-safety claim.
+
+    4. Lifecycle and STORY-2326 launcher hooks (TASK-3225)
+
+    Current code: launch/context.rs::LaunchContext::resolve resolves intent/posture; launch/spawn.rs::spawn_agent returns a Command, not a running child. assign_seat and caller identity setup follow. Do not start a service in a pure context constructor, command builder, preview or clone.
+
+    Use a proposed private validated StoreMutationBinding plus non-cloneable StoreMutationSession in new aida-cli-lib/src/store_mutation/{protocol,identity,service,client}.rs. Finalize the binding after assign_seat, then reject later command/identity divergence. Integrate ownership at launch/contained.rs::PreparedLaunch::prepare/spawn and retain it in ContainedChild. The concrete existing sequence in session.rs::spawn_vendor_headless_forking is PreparedLaunch::prepare -> spawn -> accepted receipt -> bind_contained_launch_worker -> ContainedChild::release. Audit the parallel granted/resume path, including spawn_vendor_headless_resume_granted; do not assume every path already shares this seam. Current code's explicit Codex/Aida branch is not proof of cross-vendor coverage.
+
+    Start the host service and exact broker mapping before any child tools. Attest the worker while vendor exec is blocked, bind live grant/lease/registry, and complete an actual in-lane typed probe in the trusted pre-exec path before release. Include epoch/service readiness in host-attested receipt validation. Missing service, mapping, identity, protection, receipt or successful probe refuses before the vendor/tool marker. Unsupported launch surfaces refuse service-required launch, with no fallback to raw grants. Ordinary compatibility launches remain governed by their existing policy.
+
+    On normal exit, failed prepare/spawn/receipt/probe, parent death, lease release/reap, expiry or explicit revocation: close admission, reject later requests, resolve accepted work according to its transaction state, close channels, stop/reap service and only then release resources. Extend ContainedChild cleanup beyond the existing kill/wait Drop; lease cleanup must revoke the same epoch even if child cleanup lags. Reuse host supervision/PDEATHSIG and bounded event-loop checks, not model polling or a global watcher. Every request rechecks authority independently. Resume requires a fresh binding/epoch/channel; an old open channel is unusable after revocation.
+
+    5. Inventory and ratchet (TASK-3222 S1a; proposed files, not created here)
+
+    Use docs/plans/2026-10-19-store-writer-inventory.md as a prior lock inventory, not completeness evidence. Reconcile top-down CLI command_registry.rs::REGISTRY, legacy CLI dispatch/aliases, MCP tool registry and mcp.rs handler dispatch against bottom-up writers. Include hooks, TUI/scripts, orchestrator/control children, init/import/doctor/sync and lazily writing read/cache paths.
+
+    Reproducible search seeds over aida-cli-lib/src and aida-core/src:
+    rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\('
+    rg -n 'fs::(write|rename|remove_file|create_dir_all)|OpenOptions|File::create|execute_batch|queue_(add|remove|reorder)'
+    Also search SQLite execute/transactions, atomic-write wrappers, Git index/commit/ref writes, mail/deputy/claims/leases/registry/cache artifacts, and script-language file writes. Follow aliases, trait implementations, wrappers, macros and callers both ways. Do not drop an entire file because it contains inline tests. Classify fixture-only sites separately. At this checkout these two broad expressions match 170 and 795 files respectively; these are candidate counts including tests/false positives, not counts of verified writers.
+
+    Concrete anchors verified: requirements_cli.rs::run_add/run_edit; edit_rebase.rs::write_edit_atomically; comment_cmd.rs::add_comment_cli_relayed; queue_cmd.rs::handle_queue_command including Done; findings_gate.rs::handle_findings_add; mcp.rs::tool_add_requirement/tool_update_requirement/tool_add_comment/tool_claim_task/tool_file_finding/tool_queue_done/tool_send_message; mailbox_store.rs::write_message_with_deliveries/digest_snapshot_to_canonical. Follow findings/handoff and local coordination into canonical digestion, rather than searching only for a function named handoff. Sink anchors: aida-core/src/storage.rs::Storage::update_atomically, db/git_backend.rs::update_atomically_tracked/save_reporting_with_origin, db/cached_git_backend.rs::rebuild_cache and db/cache.rs::rebuild_from_store. Backend paths belong to aida-core, not aida-cli-lib/src/db.
+
+    Proposed scripts/store-writers.toml: version = 1, source_revision = <audited SHA>, stable sorted [[writer]] records. Each record contains id, surface, selector, entrypoint (relative path + symbol), calls, artifacts, sink, lock, gate, side_effects, disposition, proposed_operation or refusal, cutover_owner and evidence_tests. Artifact classes distinguish canonical_objects, store_metadata, authority, cache, local_coordination and store_git. Split mixed destinations into separate records. Allowed dispositions: s2_typed, host_only, lane_private, read_only, blocked. Missing lock/gate is explicit evidence such as 'none; blocker', never blank. Read-only requires evidence. An unresolved/dynamic writer becomes a listed cutover blocker, not an omitted row.
+
+    docs/internal/security/store-mutation-writers.md records exact commands, source scope, test exclusions, graph-review method and blocker rows. scripts/check-store-writers.py checks schema, stable unique row IDs, paths/symbols, candidate sink sites and caller-to-sink coverage against dispatch catalogs. A bounded Python source index must notice a newly added caller of an inventoried wrapper, not just added direct fs calls. Unknown languages/macros/dynamic resolution require explicit coverage/exclusion evidence. Regex is a review ratchet, not proof of semantic completeness. Include three mandatory mutation fixtures: raw fs writer, wrapper caller and cache-on-read writer; each must fail classification until inventoried. No baseline auto-blessing of new hits.
+
+    Wire the Python guard and its unit tests into the fast-gate catalog .github/workflows/ci.yml and scripts/ci-gate-tiers.toml consumed by scripts/check-ci-gates.py; Makefile::check-ci-fast delegates there. Do not add only a Makefile command that the CI-derived runner never sees. S1a implementation validation is Python unit/mutation tests plus make check-ci-fast, no Cargo, per advisor amendment.
+
+    6. Test plan mapped to S1 refusals (not executed)
+
+    Protocol fixtures in proposed aida-cli-lib/src/tests/task_3225_store_mutation_tests.rs and containment/tests/store_mutation_tests.rs: malformed JSON, duplicate/unknown keys, version/op refusal, path/argv/replacement/identity fields, exact size limits plus overflow, truncation, nested payload, invalid credentials/SCM_RIGHTS and capacity/deadline exhaustion. All assert no dispatch/write/authority change; probe/status positive controls share the same endpoint.
+
+    Identity fixtures: wrong project/store/spec/role/epoch, same-UID sibling, copied/inherited/transferred FD, dead sender, PID reuse, namespace mismatch, absent/expired/revoked child or parent grant, roster/lease removal and revocation between initial admission and dispatch. Assert actual sending task corroboration and no service use across lanes; synthetic PID strings alone are not test evidence.
+
+    Endpoint fixtures: exact address succeeds; guessed/old epoch, alternate prefix, symlink/path replacement, abstract endpoint, proc-FD access and sibling broker refuse. No host listener exists to replace. Attempt replacing broker/service private state and retain parent sentinels. Generic host-IPC canary must remain inaccessible while typed probe succeeds; keep BUG-2448 acceptance separately visible.
+
+    Lifecycle fixtures: absent/start-failed/crashed service, broker or receipt missing, failed in-lane probe, worker death before release, parent death, lease release/reap and surviving descendants. Tool-start marker stays absent on launch refusal. Already-open channels fail after revocation; resume gets a new epoch. Independent process watchdogs bound tests. S1 retry tests cover same-key/same-payload replay, changed-payload Conflict, duplicate serialization, full journal and disconnect/timeout. S2 separately tests stale revision, concurrent edits and fault points before/after durable persistence with no duplicate comment and OutcomeUnknown on ambiguity.
+
+    Inventory fixtures: required sink/lock/gate/disposition fields, bidirectional CLI/MCP-to-sink coverage and all three mandatory mutants. Check current shared cache/coordination writers and local-to-canonical mail/handoff paths. Existing launcher ratchet/receipt/grant tests and Claude launch behavior must remain intact; current grants/native label unchanged. Host service never executes lane-owned hooks, config or binaries. Real-vendor raw create/append/rename terminal AND file-tool negatives and independently observed mediated positives remain S2/S3 evidence, not S1 test substitutes.
+
+    Validation and disposition
+
+    Read-only source inspection and rg only; git status --short is clean. No Cargo/tests run, no checked-in inventory or guard created, no production code, no PR. The task was already In Progress with queue head TASK-3222; six unrelated findings await triage. A read-only aida ps query reported partial PID-namespace liveness and did not finish promptly, so it was interrupted; no live-work claim is based on it.
+
+    Per explicit incoming brief, punt TASK-3222 as design-fork and exit. The blocker is launch-scope reconciliation: the prior transport/protocol signoff already stands, but this run explicitly forbids the S1a implementation that the later substrate amendment authorizes. Recommended next advisor action: acknowledge this refresh and issue an inventory-only implementation brief under TASK-3222; keep transport under TASK-3225 and crash-atomic mutation activation under TASK-3223's separate approved transaction sketch. No publication declaration or completion claim from this sketch-only seat.
+  created_at: 2026-11-06T14:49:46.400314487Z
+  modified_at: 2026-11-06T14:49:46.400314487Z
+  session_id: 01a1b152ec13
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
