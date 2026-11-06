@@ -1588,6 +1588,24 @@ pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
     interactive_tty && named
 }
 
+// Recovery settles riders before admission, including an invocation whose only
+// candidates were just recovered. It must not schedule those members again.
+// trace:STORY-2401 | ai:codex
+fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    candidates.retain(|n| seen.insert(*n));
+    let had_candidates = !candidates.is_empty();
+    candidates.retain(|n| {
+        !recovered.landed.iter().any(|(pr, _)| pr == n)
+            && !recovered.ejected.iter().any(|e| e.pr == *n)
+    });
+    anyhow::ensure!(
+        had_candidates || !recovered.landed.is_empty() || !recovered.ejected.is_empty(),
+        "no PRs to train: name them (`aida pr train 12 13`) or pass --all-ready"
+    );
+    Ok(())
+}
+
 /// BUG-2220: why `pr` already rides a live train, or `None`. `open_trains`
 /// are the open `train/*` PRs as `(number, parsed members line)`;
 /// `leased_trains` are the train PRs named by live train merge-leases that
@@ -2264,6 +2282,14 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
+    // A journal persists intent, never a previous terminal's consent. Naming a
+    // different PR now cannot authorize any recovered member.
+    // trace:STORY-2401 | ai:codex
+    fn for_recovery(mut self) -> Self {
+        self.named = false;
+        self
+    }
+
     /// Re-check the dispatch request's authority (a no-op for an ordinary
     /// train), remembering the first failure for [`TrainForge::dispatch_abort`].
     // trace:STORY-1917 trace:TASK-2344 | ai:claude
@@ -3793,10 +3819,11 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             main_worktree: main_worktree.clone(),
             base: base.clone(),
             forge: forge.as_ref(),
-            named: prs_named_on_command_line(opts),
+            named: false,
             dispatch_ctx,
             dispatch_abort: None,
-        };
+        }
+        .for_recovery();
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
             .resume()?
@@ -3816,17 +3843,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
-    let mut seen = std::collections::BTreeSet::new();
-    candidates.retain(|n| seen.insert(*n));
-    let had_candidates = !candidates.is_empty();
-    candidates.retain(|n| {
-        !recovered.landed.iter().any(|(pr, _)| pr == n)
-            && !recovered.ejected.iter().any(|e| e.pr == *n)
-    });
-    anyhow::ensure!(
-        had_candidates || !recovered.landed.is_empty() || !recovered.ejected.is_empty(),
-        "no PRs to train: name them (`aida pr train 12 13`) or pass --all-ready"
-    );
+    filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
         anyhow::bail!(why);
     }

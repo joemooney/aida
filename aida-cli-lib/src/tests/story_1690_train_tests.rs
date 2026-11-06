@@ -3809,10 +3809,7 @@ fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
             assert_eq!(out.ejected[0].pr, 1);
             assert!(out.landed.is_empty());
         }
-        assert_eq!(
-            journal::entries(dir.path()).unwrap()[0].step,
-            journal::Step::Done
-        );
+        assert!(journal::entries(dir.path()).unwrap().is_empty());
         assert!(
             rails.resume().unwrap().landed.is_empty(),
             "completed journal must not replay"
@@ -3948,4 +3945,231 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         attempts,
         "changed heads must stop before closing"
     );
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
+    let dir = tempfile::tempdir().unwrap();
+    let recording = crate::forge::fake::RecordingForge::new();
+    // The current command names #50; the old train carries supervised #41.
+    let opts = TrainOptions {
+        prs: &[50],
+        all_ready: false,
+        dry_run: false,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    let host = LiveTrainForge {
+        project_root: dir.path().into(),
+        main_worktree: dir.path().into(),
+        base: "main".into(),
+        forge: &recording,
+        named: prs_named_on_command_line(&opts),
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    }
+    .for_recovery();
+    let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    checks.tty = tty_consents(true, host.named);
+    let refusal = gate_member_with(&mut checks, "main", 41).unwrap_err();
+    assert!(refusal.contains("TASK-9 is marked"), "{refusal}");
+    assert!(checks.calls.contains(&"mandate"));
+    let train = train_of("main", &fms(&[41]));
+    let mut entry = journal::Entry::new(train, "train/old-all-ready-1".into());
+    entry.change_id = Some(901);
+    entry.step = journal::Step::Merge;
+    journal::activate(dir.path(), entry).unwrap();
+    journal::clear();
+    let mut forge = FakeForge::mains(&["main"]);
+    forge.gates.insert(41, Err(refusal));
+    let mut rails = ForgeRails::new(&mut forge, "new".into()).with_journal(dir.path());
+    assert_eq!(rails.resume().unwrap().ejected[0].pr, 41);
+    drop(rails);
+    assert!(forge.merged.is_empty());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_recovered_ci_waits_and_retires_confirmed_red() {
+    for step in [journal::Step::Gate, journal::Step::Merge] {
+        for red in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/ci-1".into());
+            entry.change_id = Some(901);
+            entry.step = step.clone();
+            journal::activate(dir.path(), entry).unwrap();
+            journal::clear();
+            let mut forge = FakeForge::mains(&["main"]);
+            let settled = || {
+                if red {
+                    TrainCiReadiness::Red("failed check".into())
+                } else {
+                    TrainCiReadiness::Green
+                }
+            };
+            forge.ci_states = Some(VecDeque::from([
+                TrainCiReadiness::Pending(vec!["Build".into()]),
+                settled(),
+                settled(),
+            ]));
+            let mut rails = ForgeRails::new(&mut forge, "resume".into()).with_journal(dir.path());
+            let out = rails.resume().unwrap();
+            assert_eq!(out.ci_runs, 1);
+            assert!(journal::entries(dir.path()).unwrap().is_empty());
+            assert!(rails.resume().unwrap().landed.is_empty());
+            drop(rails);
+            assert_eq!(forge.retired.len(), usize::from(red));
+            assert_eq!(forge.merged.len(), usize::from(!red));
+            assert_eq!(forge.opened, 0);
+        }
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_recovered_candidate_filter_and_empty_guard() {
+    let recovered = Outcome {
+        landed: vec![(1, "landed".into())],
+        ejected: vec![Ejected {
+            pr: 2,
+            reason: "refused".into(),
+        }],
+        ..Outcome::default()
+    };
+    let mut candidates = vec![1, 2, 3, 3];
+    filter_recovered_candidates(&mut candidates, &recovered).unwrap();
+    assert_eq!(candidates, vec![3]);
+    let mut candidates = vec![1, 2];
+    filter_recovered_candidates(&mut candidates, &recovered).unwrap();
+    assert!(candidates.is_empty());
+    filter_recovered_candidates(&mut vec![], &recovered).unwrap();
+    assert!(filter_recovered_candidates(&mut vec![], &Outcome::default()).is_err());
+}
+
+// Live recovery uses the real gh branch-search argv and real local push, with
+// RecordingForge supplying only the forge create/metadata boundary.
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_live_recover_reopens_ambiguity_and_pin_mismatches() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = repo();
+    let r = root.path();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--quiet", "--bare"]);
+    git(
+        r,
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    let gh = r.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+case "$*" in
+  'pr list --state all --head train/recover-1 --limit 1000 --json number') cat rows.json ;;
+  *) echo "unexpected gh: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", &path),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    let tip = git(r, &["rev-parse", "HEAD"]);
+    let mut train = train_of(&tip, &fms(&[1]));
+    train.tip = tip.clone();
+    let entry = journal::Entry::new(train, "train/recover-1".into());
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.opens_as = Some(901);
+    forge.metadata_head = tip.clone();
+    forge.metadata_branch = entry.branch.clone();
+    write(r, "rows.json", "[]");
+    let run = |forge: &crate::forge::fake::RecordingForge| {
+        let mut host = LiveTrainForge {
+            project_root: r.into(),
+            main_worktree: r.into(),
+            base: "main".into(),
+            forge,
+            named: false,
+            dispatch_ctx: None,
+            dispatch_abort: None,
+        };
+        host.recover_change(&entry)
+    };
+    let (change, state) = run(&forge).unwrap();
+    assert_eq!(change.id, 901);
+    assert_eq!(state, crate::forge::ChangeState::Open);
+    assert_eq!(
+        std::fs::read_to_string(r.join("gh-calls"))
+            .unwrap()
+            .lines()
+            .count(),
+        2
+    );
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+    assert_eq!(
+        git(remote.path(), &["rev-parse", "refs/heads/train/recover-1"]),
+        tip
+    );
+    write(r, "rows.json", r#"[{"number":901},{"number":902}]"#);
+    assert!(run(&forge)
+        .unwrap_err()
+        .to_string()
+        .contains("no unique forge change"));
+    write(r, "rows.json", r#"[{"number":901}]"#);
+    assert!(run(&forge).is_ok());
+    forge.metadata_head = "different-head".into();
+    assert!(run(&forge)
+        .unwrap_err()
+        .to_string()
+        .contains("head/base changed"));
+    forge.metadata_head = tip;
+    forge.metadata_base = "other-base".into();
+    assert!(run(&forge)
+        .unwrap_err()
+        .to_string()
+        .contains("head/base changed"));
+    forge.metadata_base = "main".into();
+    forge.metadata_branch = "other-branch".into();
+    assert!(run(&forge)
+        .unwrap_err()
+        .to_string()
+        .contains("head/base changed"));
+    assert_eq!(
+        forge.opened.lock().unwrap().len(),
+        1,
+        "only two empty reads may reopen"
+    );
+    assert!(forge.closed.lock().unwrap().is_empty());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_prunes_old_done_and_reports_corrupt_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/old-1".into());
+    entry.step = journal::Step::Done;
+    write(
+        dir.path(),
+        "old-1.json",
+        &serde_json::to_string(&entry).unwrap(),
+    );
+    assert!(journal::entries(dir.path()).unwrap().is_empty());
+    assert!(!dir.path().join("old-1.json").exists());
+    write(dir.path(), "broken.json", "{");
+    let err = journal::entries(dir.path()).unwrap_err().to_string();
+    assert!(err.contains("broken.json"), "{err}");
+    // The documented discard moves the file outside the live scan.
+    std::fs::create_dir(dir.path().join("archive")).unwrap();
+    std::fs::rename(
+        dir.path().join("broken.json"),
+        dir.path().join("archive/broken.json"),
+    )
+    .unwrap();
+    assert!(journal::entries(dir.path()).unwrap().is_empty());
 }

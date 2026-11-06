@@ -350,3 +350,58 @@ Changed files: `AGENTS.md`, `OVERVIEW.md`, `aida-cli-lib/src/forge.rs`,
 `aida-cli-lib/src/pr_train.rs`, new `aida-cli-lib/src/pr_train_journal.rs`,
 `aida-cli-lib/src/tests/story_1690_train_tests.rs`,
 `docs/cli/04-git-lifecycle.md`, and this plan.
+
+## Round 7: journal recovery review repairs (2026-11-06)
+
+All four findings on PR #3533 at 649d36756499 are accepted.
+
+1. Recovery ports explicitly clear named-member terminal consent. A regression
+   starts with an interactive command naming #50 and a journal carrying guided
+   #41; the member needs a fresh mandate and is refused without one. Both merge
+   and retirement recovery use these same ports.
+2. Gate/Merge recovery reuses normal CI waiting, repeated red observation and
+   independently confirmed retirement. Pending CI waits rather than wedging
+   admission. Changed pins and malformed/invalid journals remain fail-closed;
+   the CLI guide documents inspection and operator discard under `run.lock`,
+   preserving the entry in an unscanned archive after manual reconciliation.
+3. Done is durably written before unlinking and directory fsync. Its active
+   checkpoint is cleared so later nested calls cannot recreate the receipt.
+   Startup prunes valid legacy Done receipts. Completed-train and crash-recovery
+   fixtures require no remaining live journal; a fixture also tests legacy
+   pruning and archiving a corrupt file outside the scan.
+4. A PATH-isolated production-port fixture combines RecordingForge with a strict
+   stubbed `gh pr list` and a real local Git remote. It tests the two-empty-read
+   reopen, a unique existing change, ambiguous results, and each changed pin
+   (head/base/branch), asserting no extra create or close. Handler candidate
+   filtering is extracted unchanged and tested for landed/ejected exclusions,
+   deduplication, all-recovered candidates and the empty-invocation guard.
+
+Changed files: `aida-cli-lib/src/pr_train.rs`,
+`aida-cli-lib/src/pr_train_journal.rs`, `aida-cli-lib/src/forge.rs` (test fixture
+fields only), `aida-cli-lib/src/tests/story_1690_train_tests.rs`,
+`docs/cli/04-git-lifecycle.md`, and this plan.
+
+Native-seat handoff: edits remain uncommitted; the host must create a new round-7
+commit and publish it. No prior-round commit counts. Publication uses a Refs
+STORY-2401 trailer because slice 5 remains outstanding. Existing merge holds and
+punt signals remain authoritative. Validation results follow below.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): constrain recovery authority and prune completed journals (Refs STORY-2401)`.
+This records host publication intent only; no commit, push, PR creation, merge,
+review record, hold clearance or queue completion was performed by this seat.
+
+Round-7 focused validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p
+aida-cli-lib --lib pr_train` ran **168 tests, zero failures**, with 12,546
+unrelated tests filtered out. Test runtime: **135.12s**; fresh unoptimized
+build: **10m 11s**. Log: `/tmp/story2401-round7-train.log`. The five added
+regressions and the updated real crash-recovery fixture all passed.
+
+Round-7 fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`
+completed **all 38 gates**. Log: `/tmp/story2401-round7-fast.log`. Formatting,
+feature-disabled CLI, standalone TUI, documentation and guard fixtures passed.
+Some guards printed refused `.git/FETCH_HEAD` writes under the native read-only
+Git policy and completed successfully using their local-evidence path.
+`git diff --check` passed. No implementation or validation blocker remains.
+The host must create the new round-7 commit and publish the recorded Refs subject;
+existing merge-hold clearance remains a separate authorized review action.

@@ -82,8 +82,14 @@ fn save(dir: &Path, entry: &Entry) -> Result<()> {
             .open(&temporary)?;
         file.write_all(&serde_json::to_vec_pretty(entry)?)?;
         file.sync_all()?;
-        std::fs::rename(&temporary, path)?;
+        std::fs::rename(&temporary, &path)?;
         File::open(dir)?.sync_all()?;
+        // Persist Done before pruning: a crash in between leaves a harmless
+        // terminal entry which the next startup also prunes.
+        if entry.step == Step::Done {
+            std::fs::remove_file(&path)?;
+            File::open(dir)?.sync_all()?;
+        }
         Ok(())
     })();
     let _ = std::fs::remove_file(temporary);
@@ -92,7 +98,13 @@ fn save(dir: &Path, entry: &Entry) -> Result<()> {
 
 pub(super) fn activate(dir: &Path, entry: Entry) -> Result<()> {
     save(dir, &entry).map_err(|e| TrainCiUnavailable(format!("{e:#}")))?;
-    ACTIVE.with(|a| *a.borrow_mut() = Some((dir.to_path_buf(), entry)));
+    ACTIVE.with(|a| {
+        *a.borrow_mut() = if entry.step == Step::Done {
+            None
+        } else {
+            Some((dir.to_path_buf(), entry))
+        };
+    });
     Ok(())
 }
 pub(super) fn clear() {
@@ -104,6 +116,9 @@ fn update(f: impl FnOnce(&mut Entry)) -> Result<()> {
         if let Some((dir, entry)) = active.as_mut() {
             f(entry);
             save(dir, entry).map_err(|e| TrainCiUnavailable(format!("{e:#}")))?;
+            if entry.step == Step::Done {
+                *active = None;
+            }
         }
         Ok(())
     })
@@ -131,14 +146,26 @@ pub(super) fn entries(dir: &Path) -> Result<Vec<Entry>> {
     for item in std::fs::read_dir(dir)? {
         let path = item?.path();
         if path.extension().is_some_and(|ext| ext == "json") {
-            let entry: Entry = serde_json::from_slice(&std::fs::read(&path)?)
-                .with_context(|| format!("unreadable train journal {}", path.display()))?;
-            entry.validate()?;
+            let entry: Entry = serde_json::from_slice(
+                &std::fs::read(&path)
+                    .with_context(|| format!("could not read train journal {}", path.display()))?,
+            )
+            .with_context(|| format!("unreadable train journal {}", path.display()))?;
+            entry
+                .validate()
+                .with_context(|| format!("invalid train journal {}", path.display()))?;
             anyhow::ensure!(
                 entry.path(dir) == path,
                 "train journal filename does not match branch"
             );
-            entries.push(entry);
+            if entry.step == Step::Done {
+                // Also collect terminal receipts left by older binaries or a
+                // crash after the final durable write but before removal.
+                std::fs::remove_file(&path)?;
+                File::open(dir)?.sync_all()?;
+            } else {
+                entries.push(entry);
+            }
         }
     }
     entries.sort_by(|a, b| a.branch.cmp(&b.branch));
@@ -278,15 +305,9 @@ impl ForgeRails<'_> {
                     } else {
                         // Resume the existing tested head. No second open/push,
                         // and land() still takes the lease and fresh live gates.
-                        let verdict = if matches!(entry.step, Step::Gate | Step::Merge) {
-                            before("recheck completed CI")?;
-                            match self.ports.observe_ci(&change, &entry.train) {
-                                crate::forge_observed::Observed::Known(CiVerdict::Green) => CiVerdict::Green,
-                                _ => anyhow::bail!("recovered train CI no longer confirmed green; journal retained"),
-                            }
-                        } else {
-                            self.test(std::slice::from_ref(&entry.train))?.remove(0)
-                        };
+                        // Reuse normal waiting, red confirmation and retirement.
+                        // A prior green receipt never freezes CI at that result.
+                        let verdict = self.test(std::slice::from_ref(&entry.train))?.remove(0);
                         out.ci_runs += 1;
                         if verdict == CiVerdict::Green {
                             match self.land(&entry.train)? {
