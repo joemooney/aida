@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-879
 agreed_id: TASK-3222
 title: 'STORY-2561 S1a: checked-in store-writer inventory and ratchet guard'
 description: 'Slice 1 of STORY-2561 (read its operator rulings). Build the host-owned synchronous typed service endpoint and its lifecycle: started before child tools, torn down with the child or lease, and refusing launch when it is unavailable. Add launch-bound identity (project, store, spec, role, verbs fixed by the host) and the request and response framing with request-identity retry semantics. Produce a checked-in inventory of every CLI and MCP store and cache writer (claim, edit, comment, queue done, findings, handoff, mailbox, etc.). No routing cutover yet: grants stay unchanged. Tests: malformed, oversized and path-bearing requests, wrong, expired, revoked or sibling identity, replay and endpoint replacement, and service absence. Post a sketch for advisor signoff before coding; BUG-2448''s generic host-IPC defect is a separate owner and must not be widened.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T14:58:25.575667836Z
+modified_at: 2026-11-06T14:58:30.248252929Z
 req_type: Task
 tags:
 - architecture
@@ -230,6 +230,12 @@ comments:
   created_at: 2026-11-06T14:58:25.575667836Z
   modified_at: 2026-11-06T14:58:25.575667836Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b15e-4ee8-7a22-b9fc-40110f992bcb
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Sketch v1 source refresh posted per explicit sketch-only launch brief: all seven requested subjects covered, no production changes or PR. Prior advisor transport/protocol approval and S1a/S1b split remain accepted. This launch still explicitly forbids the inventory implementation authorized by the later substrate amendment; advisor must reconcile launch scope and issue an inventory-only TASK-3222 implementation brief. Do not reopen approved option A or claim S1 completion.. No triage reason was given.'
+  created_at: 2026-11-06T14:58:30.248248918Z
+  modified_at: 2026-11-06T14:58:30.248248918Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
@@ -292,6 +298,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b15e-4ee8-7a22-b9fc-4000534987d9
+  author: joe
+  timestamp: 2026-11-06T14:58:30.248225514Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -301,9 +315,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'Sketch v1 source refresh posted per explicit sketch-only launch brief: all seven requested subjects covered, no production changes or PR. Prior advisor transport/protocol approval and S1a/S1b split remain accepted. This launch still explicitly forbids the inventory implementation authorized by the later substrate amendment; advisor must reconcile launch scope and issue an inventory-only TASK-3222 implementation brief. Do not reopen approved option A or claim S1 completion.'
-  lean: 'Preserve the existing signoff: TASK-3222 inventory-only, TASK-3225 transport/lifecycle, TASK-3223 mutation transaction sketch gate. Resume implementation only under an updated advisor brief.'
-  raised_by: implementer
-  raised_at: 2026-11-06T14:49:56.274271861Z
