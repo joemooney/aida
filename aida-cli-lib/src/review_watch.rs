@@ -289,6 +289,13 @@ struct Attempt {
     // trace:BUG-2450 | ai:codex
     #[serde(default)]
     setup_retry: bool,
+    // trace:STORY-2401 | ai:codex
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    retryable_fetch: bool,
+    // Persist across attempt replacement; three dispatches maximum per head.
+    // trace:STORY-2401 | ai:codex
+    #[serde(default)]
+    fetch_failures: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reviewer: Option<Identity>,
     // The dispatcher's process group (it leads it), recorded by the watcher
@@ -977,7 +984,7 @@ impl Store {
             // An ambiguous or still-live child retains the terminal refusal.
             // trace:BUG-2450 | ai:codex
             let setup_failed = phase == Phase::Exited
-                && !attempt.setup_retry
+                && (!attempt.setup_retry || attempt.retryable_fetch)
                 && !attempt.reviewer_spawning
                 && attempt.descendants_gone();
             attempt.phase = if setup_failed { Phase::Failed } else { phase };
@@ -1313,7 +1320,14 @@ fn select(
             anyhow::ensure!(known, "notification identity changed; pending message retained");
             return Ok(Action::Notify(notice.clone()));
         }
-        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))) {
+        let fetch_failures = entry.attempts.iter()
+            .filter(|a| a.head == change.head)
+            .map(|a| a.fetch_failures.saturating_add(u8::from(a.retryable_fetch)))
+            .max().unwrap_or(0);
+        if fetch_failures >= 3 {
+            return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
+        }
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !a.retryable_fetch && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))) {
             // trace:TASK-1993 | ai:claude
             return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head, route it to the advisor, or retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
         }
@@ -1332,8 +1346,8 @@ fn select(
         // Only Exited->Failed setup conversions carry a diagnostic. Preflight
         // and spawn failures do not consume a retry; preserve an inherited one.
         // trace:TASK-3112 | ai:codex
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.diagnostic.is_some() || a.setup_retry));
-        let attempt = Attempt { admission_hub: None, setup_retry, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
+        let attempt = Attempt { admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -1992,7 +2006,31 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
     }
     let repository = forge::Repository::load(root)?;
     let mut current = repository.change(root, id)?;
-    repository.probe(root, &mut current)?;
+    if let Err(error) = repository.probe(root, &mut current) {
+        if error.downcast_ref::<forge::FetchUnavailable>().is_some() {
+            let store = Store::open(root, &repository.identity)?;
+            let me = Identity::current()?;
+            store.transaction(&current.key(), |state| {
+                let attempt = state
+                    .entries
+                    .get_mut(&current.key())
+                    .and_then(|entry| {
+                        entry
+                            .attempts
+                            .iter_mut()
+                            .find(|a| admitted(a) && a.head == head)
+                    })
+                    .context("fetch retry reservation disappeared")?;
+                anyhow::ensure!(
+                    attempt.worker.as_ref() == Some(&me) && !attempt.reviewer_spawning,
+                    "fetch retry worker identity changed"
+                );
+                attempt.retryable_fetch = true;
+                Ok(())
+            })?;
+        }
+        return Err(error);
+    }
     anyhow::ensure!(
         current.head == head && current.overlap == Some(false),
         "review-watch head changed before reviewer launch; no review started"

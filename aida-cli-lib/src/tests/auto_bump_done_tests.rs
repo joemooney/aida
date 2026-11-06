@@ -2877,12 +2877,44 @@ fn write_fake_gh_for_pr_states(
     root: &std::path::Path,
     states: &[(u64, &str)],
 ) -> std::path::PathBuf {
+    // trace:STORY-2401 | ai:codex — real, independent local base evidence.
+    // No network: the fake forge and the Git origin are separate ports.
+    let merged_head = run_git(root, &["rev-parse", "main"]).trim().to_string();
+    let empty_tree = run_git(root, &["mktree"]).trim().to_string();
+    let unmerged_head = run_git(
+        root,
+        &[
+            "commit-tree",
+            &empty_tree,
+            "-p",
+            &merged_head,
+            "-m",
+            "unmerged candidate",
+        ],
+    )
+    .trim()
+    .to_string();
+    run_git(
+        root,
+        &["remote", "set-url", "origin", root.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
     #[cfg(windows)]
     {
         let mut script = String::from("@echo off\r\n");
         for (pr, state) in states {
+            let head = if *state == "MERGED" {
+                &merged_head
+            } else {
+                &unmerged_head
+            };
             script.push_str(&format!(
-                "if \"%3\"==\"{pr}\" (echo {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"sha\", \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}& exit /b 0)\r\n"
+                "if \"%3\"==\"{pr}\" (echo {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"{head}\", \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}& exit /b 0)\r\n"
             ));
         }
         script.push_str("exit /b 1\r\n");
@@ -2895,10 +2927,15 @@ fn write_fake_gh_for_pr_states(
     {
         let mut script = String::from("#!/usr/bin/env bash\ncase \"${3:-}\" in\n");
         for (pr, state) in states {
+            let head = if *state == "MERGED" {
+                &merged_head
+            } else {
+                &unmerged_head
+            };
             script.push_str(&format!(
                 "  {pr})\n    cat <<JSON\n\
              {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \
-             \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"sha\", \
+             \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"{head}\", \
              \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}\n\
              JSON\n    exit 0\n    ;;\n"
             ));
@@ -2915,7 +2952,10 @@ fn write_fake_gh_for_pr_states(
 
 // trace:BUG-1432 | ai:codex
 #[test]
-fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
+fn story_2401_stranded_review_pr_forge_failure_is_preserved_for_reporting() {
+    // The timing artifact for run 42224787380 measured 15.59s here. Exercise
+    // every retry without real transport sleeps. trace:STORY-2401 | ai:codex
+
     let (_tmp, project_root, store_path) = init_test_project();
     run_git(
         &project_root,
@@ -2926,6 +2966,12 @@ fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
             "https://github.com/acme/repo.git",
         ],
     );
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    std::fs::write(
+        project_root.join(".aida/config.toml"),
+        "[orchestrator]\nretry_base_delay_ms = 0\n",
+    )
+    .unwrap();
     seed_review_story_at(&store_path, "STORY-1432", 1432, "lookup fails", "approved");
     let missing_gh = project_root.join("missing-gh");
     let _env = crate::test_env::EnvVarsGuard::set(&[(
@@ -2972,7 +3018,7 @@ fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
 /// is still open (STORY-9999 here) is left untouched.
 // trace:TASK-1296 | ai:claude
 #[test]
-fn auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup() {
+fn story_2401_auto_bump_resolves_stranded_review_pr_specs_via_confirmed_forge_lookup() {
     let (_tmp, project_root, store_path) = init_test_project();
     // A GitHub origin so `resolve_forge_kind` routes the lookup through `gh`
     // rather than degrading to the network-free pure-git forge.

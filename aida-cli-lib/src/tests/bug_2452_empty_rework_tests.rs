@@ -87,11 +87,13 @@ fn bug_2452_unknown_local_push_skips_even_if_forge_outcome_has_old_head() {
             head: Some("b".repeat(40)),
             origin: crate::headless_background::OriginHead::Unknown,
             uncommitted: Some(0),
+            head_has_unpushed: Some(true),
         },
         super::super::SeatState {
             head: None,
             origin: crate::headless_background::OriginHead::At(head.clone()),
             uncommitted: Some(0),
+            head_has_unpushed: Some(true),
         },
     ] {
         assert_eq!(seat.pushed_since(launch.head), None);
@@ -133,6 +135,7 @@ fn bug_2452_conflicting_pr_without_registered_checks_is_classified() {
         head: Some(head.clone()),
         origin: crate::headless_background::OriginHead::At(head.clone()),
         uncommitted: Some(0),
+        head_has_unpushed: Some(true),
     };
     for configured in [false, true] {
         std::fs::write(
@@ -184,6 +187,7 @@ fn bug_2452_explicit_disputed_finding_punt_precedes_forge_io() {
         head: None,
         origin: crate::headless_background::OriginHead::Unknown,
         uncommitted: None,
+        head_has_unpushed: Some(true),
     };
     assert!(inspect(
         Path::new("/no-such-root"),
@@ -292,6 +296,7 @@ esac
         head: Some(head.clone()),
         origin: crate::headless_background::OriginHead::At(head.clone()),
         uncommitted: Some(0),
+        head_has_unpushed: Some(true),
     };
     let opened = super::super::Outcome::PrOpened {
         pr: 7,

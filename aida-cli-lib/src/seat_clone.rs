@@ -1452,6 +1452,27 @@ fn probe_run(
         .map_err(|failure| failure.to_string())
 }
 
+/// Read only HEAD reachability for final lane reporting, inside the clone sandbox.
+// trace:BUG-2464 | ai:codex
+pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<bool> {
+    let out = run_sandboxed_until(
+        clone,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--max-count=1".as_ref(),
+            "HEAD".as_ref(),
+            "--not".as_ref(),
+            "--remotes".as_ref(),
+        ],
+        PROBE_OUTPUT_CAP,
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+    )
+    .ok()?;
+    Some(!out.is_empty())
+}
+
 /// Count commits held by the seat but by no remote: HEAD and the lease branch
 /// for worktrees, all local branches for private clones. Unlike salvage
 /// accounting, a local host ref or base pin never excuses a commit.

@@ -174,7 +174,31 @@ pub(crate) fn open_changes_or_none(
     Some(open)
 }
 
+// trace:STORY-2401 | ai:codex
 fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
+    confirm_clear(
+        || query_open_change_once(gh, project_root, spec_id),
+        crate::forge_confirmation::backoff,
+    )
+}
+
+/// Absence is a negative, so a single search page cannot grant completion.
+/// The reconciliation writer separately pins and revalidates the independent
+/// Git completion evidence; two clear searches alone never supply that proof.
+// trace:STORY-2401 | ai:codex
+fn confirm_clear(
+    mut read: impl FnMut() -> OpenChangeCheck,
+    mut pause: impl FnMut(),
+) -> OpenChangeCheck {
+    let first = read();
+    if first != OpenChangeCheck::Clear {
+        return first;
+    }
+    pause();
+    read()
+}
+
+fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
     let out = match std::process::Command::new(gh)
         .current_dir(project_root)
         // BUG-2134: GitHub search is token-fuzzy and also matches review
@@ -1098,5 +1122,32 @@ mod tests {
             "{partial}"
         );
         assert!(!partial.contains("nothing else changed"), "{partial}");
+    }
+}
+
+#[cfg(test)]
+mod story_2401_confirmation_tests {
+    use super::*;
+    #[test]
+    fn story_2401_completion_search_absence_needs_two_reads() {
+        use OpenChangeCheck::*;
+        for second in [
+            Clear,
+            Open(42),
+            Unavailable(EvidenceUnavailable::Undecodable),
+        ] {
+            let mut reads = std::collections::VecDeque::from([Clear, second.clone()]);
+            let mut pauses = 0;
+            assert_eq!(
+                confirm_clear(|| reads.pop_front().unwrap(), || pauses += 1),
+                second
+            );
+            assert_eq!(pauses, 1);
+            assert!(reads.is_empty());
+        }
+        assert_eq!(
+            confirm_clear(|| Open(42), || panic!("an open change blocks immediately")),
+            Open(42)
+        );
     }
 }
