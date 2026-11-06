@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T06:35:42.503376121Z
+modified_at: 2026-11-06T07:48:19.272631986Z
 req_type: Story
 tags:
 - docs:impacted
@@ -394,6 +394,12 @@ comments:
   created_at: 2026-11-06T06:24:36.853309734Z
   modified_at: 2026-11-06T06:24:36.853309734Z
   session_id: 01a1af84b0b7
+- id: 01a1afd4-76c8-7b61-a6c3-40a241923a3d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-2 admission CAS/race/mirror/unreachable cases work and are tested, but the design has fleet-wide liveness holes: an unbounded single-table budget, active claims that never expire with no recovery tool, revocation bricking chains, and a committed hub config that disables dispatch on unenrolled hosts. sync errors kill the watcher, and AC5 is still partial while the trailers complete STORY-2492.. No triage reason was given.'
+  created_at: 2026-11-06T07:48:19.272629663Z
+  modified_at: 2026-11-06T07:48:19.272629663Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
@@ -689,6 +695,14 @@ history:
   session_id: 01a1af8ebac6
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1afd4-76c8-7b61-a6c3-40987c0b2a08
+  author: joe
+  timestamp: 2026-11-06T07:48:19.272618066Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -697,11 +711,3 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Slice-2 admission CAS/race/mirror/unreachable cases work and are tested, but the design has fleet-wide liveness holes: an unbounded single-table budget, active claims that never expire with no recovery tool, revocation bricking chains, and a committed hub config that disables dispatch on unenrolled hosts. sync errors kill the watcher, and AC5 is still partial while the trailers complete STORY-2492.'
-  recovery_hint: address the review findings, move STORY-2492 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T06:35:42.503376121Z
