@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:13:23.889727922Z
-modified_at: 2026-11-06T20:37:39.544801150Z
+modified_at: 2026-11-06T20:37:42.201556450Z
 req_type: Task
 relationships:
 - rel_type:
@@ -37,6 +37,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-path cancellation is correct and documented, but the non-PR key on github.ref serializes main-push CI and lets GitHub replace pending main runs, which breaks the spec''s ''pushes to main are never cancelled'' invariant; PR CI was still queued at review time (33 runs queued) and the implementer reported check-ci-fast not green. No triage reason was given.'
   created_at: 2026-11-06T20:37:39.544799670Z
   modified_at: 2026-11-06T20:37:39.544799670Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b294-da24-71c1-9d31-909f7ddfc1e5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3267):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b6e7c25883a7
+    Recorded: 2026-11-06T20:29:38.977704598+00:00
+    Findings:
+    1. ci.yml:13-15: for push-to-main runs the group CI-refs/heads/main is shared, so main CI now runs one at a time. GitHub keeps only one pending run per group, so with 3+ quick merges the middle main SHA's pending run is replaced (cancelled) and never gets CI, even with cancel-in-progress=false. This breaks the spec invariant 'Pushes to main ... are never cancelled' and is new behaviour (today every main push runs in parallel). Fix: key non-PR events uniquely, e.g. group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }} (merge_group refs are already unique), keep cancel-in-progress gated on pull_request, and update the doc paragraph.
+    2. ci.yml:11 comment 'Non-PR runs keep running.' and docs/internal/agents/aida-repository-guide.md:244-264 describe the github.ref keying. Once the key changes, rewrite them to say non-PR runs are never grouped or cancelled, and drop the 'does not promise every pending push runs' caveat if it no longer applies.
+    3. Gate evidence missing: the spec gate is make check-ci-fast, the implementer handoff says it did not go green (it stopped at the cargo shim), and PR CI at b6e7c258 was all queued/pending when this review was recorded. The rework head needs a green CI (gates) job, which carries the workflow-lint gates, before approval.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:37:42.052206209Z
+  modified_at: 2026-11-06T20:37:42.052206209Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b285-50b8-7060-af24-639abc8b2ed9
