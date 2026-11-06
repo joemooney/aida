@@ -65,7 +65,7 @@ class PolicyRevisionTests(unittest.TestCase):
 class AidaBoundaryTests(unittest.TestCase):
     # trace:TASK-3194 | ai:codex
     def test_hidden_output_refuses_before_any_setup_or_grant(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="/tmp") as directory:
             alias = Path(directory) / "alias"
             alias.symlink_to("/run", target_is_directory=True)
             for output in (Path(directory) / "output", Path("/run/probe"), alias / "probe"):
@@ -88,6 +88,67 @@ class AidaBoundaryTests(unittest.TestCase):
         self.assertEqual(exit.exception.code, 2)
         self.assertIn("fixture-payload-manifest-unavailable", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_disappearing_payload_manifest_is_a_named_refusal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest.json"
+            manifest.touch()
+            with mock.patch.object(c.sys, "argv", [c.__file__, "--await-payload", str(manifest)]), \
+                    mock.patch.object(c, "payload", side_effect=FileNotFoundError) as payload, \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as exit:
+                    c.main()
+            payload.assert_called_once_with(manifest)
+        self.assertEqual(exit.exception.code, 2)
+        self.assertIn("fixture-payload-manifest-unavailable: manifest disappeared", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_continuation_interruptions_signal_group_and_reraise(self):
+        for failure in (KeyboardInterrupt(), RuntimeError("communicate failed")):
+            for needs_kill in (False, True):
+                with self.subTest(failure=type(failure).__name__, needs_kill=needs_kill):
+                    child = mock.MagicMock(pid=12345)
+                    child.communicate.side_effect = failure
+                    if needs_kill:
+                        child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 10), 0]
+                    with mock.patch.object(c.subprocess, "Popen") as popen, \
+                            mock.patch.object(c.os, "killpg") as killpg:
+                        popen.return_value.__enter__.return_value = child
+                        with self.assertRaises(type(failure)) as caught:
+                            c.launch_aida_continuation("script", Path("."), {}, 30)
+                    self.assertIs(caught.exception, failure)
+                    signals = [mock.call(child.pid, c.signal.SIGTERM)]
+                    waits = [mock.call(timeout=10)]
+                    if needs_kill:
+                        signals.append(mock.call(child.pid, c.signal.SIGKILL))
+                        waits.append(mock.call(timeout=5))
+                    self.assertEqual(killpg.call_args_list, signals)
+                    self.assertEqual(child.wait.call_args_list, waits)
+
+    def test_json_publication_is_atomic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.json"
+            c.write_json(path, {"stage": "previous"})
+            replace = c.os.replace
+            def publish(source, destination):
+                self.assertEqual(json.loads(path.read_text()), {"stage": "previous"})
+                self.assertEqual(json.loads(source.read_text()), {"stage": "complete"})
+                replace(source, destination)
+            with mock.patch.object(c.os, "replace", side_effect=publish) as replaced:
+                c.write_json(path, {"stage": "complete"})
+            replaced.assert_called_once()
+            self.assertEqual(json.loads(path.read_text()), {"stage": "complete"})
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_interrupted_json_write_preserves_previous_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.json"
+            c.write_json(path, {"stage": "previous"})
+            with mock.patch.object(c.json, "dumps", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    c.write_json(path, {"stage": "interrupted"})
+            self.assertEqual(json.loads(path.read_text()), {"stage": "previous"})
+            self.assertEqual(list(path.parent.iterdir()), [path])
 
     def test_outer_timeout_keeps_continuation_setup_and_budgets_setup_time(self):
         fixture_home = Path.home() / ".aida"
@@ -160,7 +221,9 @@ except ValueError as error:
 """
             script = "exec " + c.shlex.join([c.sys.executable, "-c", code]) + "\n"
             with self.assertRaisesRegex(ValueError, "continuation-timeout"):
-                c.launch_aida_continuation(script, repo, dict(os.environ), 1)
+                # Allow fresh interpreters and both forked lane processes to
+                # start even on a loaded CI runner.
+                c.launch_aida_continuation(script, repo, dict(os.environ), 10)
             self.assertTrue((root / "network-closed").is_file())
             saved = json.loads((root / "report.json").read_text())
             self.assertEqual([r["stage"] for r in saved["setup"]],

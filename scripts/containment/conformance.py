@@ -20,6 +20,7 @@ import ssl
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -51,7 +52,18 @@ def digest(path):
 
 
 def write_json(path, data):
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    # Publish complete evidence even when continuation cleanup interrupts a write.
+    # trace:TASK-3194 | ai:codex
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent,
+                                         prefix=f".{path.name}.", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(data, indent=2) + "\n")
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 # AGY uses write_file permissions for both native writes and edits, and
@@ -513,7 +525,9 @@ def launch_aida_continuation(script, repo, env, seconds):
                           env=env, process_group=0) as child:
         try:
             child.communicate(script, timeout=seconds)
-        except subprocess.TimeoutExpired as error:
+        except BaseException as error:
+            # The separate group does not receive the operator's Ctrl+C.
+            # Every interrupted wait must request continuation cleanup.
             try:
                 os.killpg(child.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -521,9 +535,14 @@ def launch_aida_continuation(script, repo, env, seconds):
             try:
                 child.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                os.killpg(child.pid, signal.SIGKILL)
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
                 child.wait(timeout=5)
-            raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
+            if isinstance(error, subprocess.TimeoutExpired):
+                raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
+            raise
         return child.returncode
 
 
