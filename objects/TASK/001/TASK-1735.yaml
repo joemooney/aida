@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T02:44:47.629375520Z
-modified_at: 2026-11-04T02:32:14.739071899Z
+modified_at: 2026-11-06T00:15:50.821441037Z
 req_type: Task
 tags:
 - canonical-hub
@@ -25,6 +25,12 @@ comments:
   created_at: 2026-11-04T02:32:13.287629426Z
   modified_at: 2026-11-04T02:32:13.287629426Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1ae36-3625-7160-aeaa-012b8327e1dd
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 2: GitLab-canonical is KEPT DEFERRED. GitHub stays the hub of record, with the hourly bridge.'
+  created_at: 2026-11-06T00:15:50.821441037Z
+  modified_at: 2026-11-06T00:15:50.821441037Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a154db-fe91-7d42-8054-ffdb50844940
   author: joe
