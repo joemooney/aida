@@ -1,0 +1,180 @@
+"""S1a refusal fixtures use disposable source trees; never a live AIDA store."""
+# trace:TASK-3222 | ai:codex
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+SPEC = importlib.util.spec_from_file_location(
+    "store_writer_guard", Path(__file__).resolve().parents[1] / "scripts/check-store-writers.py"
+)
+guard = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(guard)
+
+
+def inventory(root, rows):
+    text = 'version = 1\nsource_revision = "' + '0' * 40 + '"\n'
+    for path, evidence in sorted(rows.items()):
+        row = dict(id=path, path=path, surface="internal", selector="fixture",
+                   lock="none; fixture blocker", gate="none; fixture blocker",
+                   artifacts=["unresolved"], disposition="blocked", refusal="no S2 routing",
+                   cutover_owner="TASK-3223", evidence="disposable fixture",
+                   blocker="fixture policy unresolved", **evidence)
+        text += '\n[[writer]]\n' + ''.join(f'{key} = {json.dumps(value)}\n' for key, value in row.items())
+    target = root / guard.INVENTORY
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text)
+
+
+class WriterInventoryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.put("aida-core/src/writer.rs", '''
+            pub fn write_edit_atomically(path: &Path) {
+                std::fs::write(path, "body").unwrap();
+            }
+        ''')
+        self.classify()
+
+    def put(self, path, text):
+        target = self.root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+
+    def classify(self):
+        inventory(self.root, guard.discover(self.root))
+
+    def assert_refused_then_classified(self):
+        self.assertTrue(guard.check(self.root))
+        self.classify()
+        self.assertEqual([], guard.check(self.root))
+
+    def test_unchanged_evidence_passes(self):
+        self.assertEqual([], guard.check(self.root))
+
+    def test_raw_fs_writer_mutant(self):
+        self.put("aida-cli-lib/src/new_raw.rs", '''
+            fn raw(path: &Path) { std::fs::write(path, "raw").unwrap(); }
+        ''')
+        self.assert_refused_then_classified()
+
+    def test_wrapper_caller_mutant(self):
+        self.put("aida-cli-lib/src/new_surface.rs", '''
+            fn innocent(path: &Path) { crate::writer::write_edit_atomically(path); }
+        ''')
+        errors = guard.check(self.root)
+        self.assertTrue(any("new_surface.rs" in error for error in errors), errors)
+        self.assert_refused_then_classified()
+
+    def test_cache_on_read_mutant(self):
+        self.put("aida-cli-lib/src/show.rs", '''
+            fn show(conn: &Connection) {
+                conn.execute("INSERT INTO cache VALUES (1)", []).unwrap();
+            }
+        ''')
+        self.assert_refused_then_classified()
+
+    def test_new_call_inside_existing_record_is_refused(self):
+        path = self.root / "aida-core/src/writer.rs"
+        path.write_text(path.read_text().replace('"body"', '"new destination or payload"'))
+        self.assert_refused_then_classified()
+
+    def test_missing_lock_gate_sink_and_disposition_refuse(self):
+        path = self.root / guard.INVENTORY
+        text = path.read_text()
+        for field in ("sink", "lock", "gate", "disposition"):
+            with self.subTest(field=field):
+                path.write_text('\n'.join(line for line in text.splitlines() if not line.startswith(field + ' =')))
+                self.assertTrue(guard.check(self.root))
+        path.write_text(text)
+
+    def test_deleted_source_and_duplicate_row_refuse(self):
+        path = self.root / guard.INVENTORY
+        text = path.read_text()
+        path.write_text(text + '\n[[writer]]\n' + text.split('[[writer]]\n')[1])
+        self.assertTrue(any("duplicate" in e for e in guard.check(self.root)))
+        path.write_text(text)
+        (self.root / "aida-core/src/writer.rs").unlink()
+        self.assertTrue(any("stale" in e for e in guard.check(self.root)))
+
+    def test_mixed_file_keeps_production_after_inline_tests(self):
+        self.put("aida-cli-lib/src/mixed.rs", '''
+            #[cfg(test)] mod tests {
+                fn test_only() { std::fs::write("fixture", "test").unwrap(); }
+            }
+            fn production() { std::fs::write("store", "raw").unwrap(); }
+        ''')
+        row = guard.discover(self.root)["aida-cli-lib/src/mixed.rs"]
+        self.assertIn("production", row["entrypoints"])
+        self.assertNotIn("test_only", row["entrypoints"])
+        self.assert_refused_then_classified()
+
+    def test_comments_literals_and_nested_comments_are_not_calls(self):
+        self.put("aida-cli-lib/src/pure.rs", '''
+            /* outer /* std::fs::write("x", "y"); */ nested */
+            fn pure() { let example = r#"std::fs::write(path, value)"#; let byte = br#"{ std::fs::write( }"#; }
+        ''')
+        self.assertNotIn("aida-cli-lib/src/pure.rs", guard.discover(self.root))
+        self.assertEqual([], guard.check(self.root))
+
+    def test_shell_writer_and_python_writer_refuse(self):
+        self.put("scripts/new-writer.sh", 'aida comment add TASK-1 "write"\n')
+        self.put("scripts/cache-read.py", 'cache_path.write_bytes(data)\n')
+        errors = guard.check(self.root)
+        self.assertTrue(any("new-writer.sh" in e for e in errors))
+        self.assertTrue(any("cache-read.py" in e for e in errors))
+        self.assert_refused_then_classified()
+
+    def test_symlink_source_refuses(self):
+        (self.root / "aida-core/src/alias.rs").symlink_to("writer.rs")
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            guard.check(self.root)
+
+    def test_transitive_wrapper_caller_refuses(self):
+        self.put("aida-core/src/relay.rs", "fn relay(p: &Path) { write_edit_atomically(p); }")
+        self.classify()
+        self.put("aida-cli-lib/src/caller.rs", "fn command(p: &Path) { relay(p); }")
+        self.assert_refused_then_classified()
+
+    def test_new_crate_cannot_escape_discovery(self):
+        self.put("aida-future/src/write.rs", "fn future() { std::fs::write(p, data); }")
+        self.assert_refused_then_classified()
+
+    def test_cli_returns_nonzero_for_unclassified_mutant(self):
+        import subprocess
+        import sys
+        self.put("aida-cli-lib/src/cli_mutant.rs", 'fn mutate() { std::fs::write(p, data); }')
+        result = subprocess.run(
+            [sys.executable, str(guard.ROOT / "scripts/check-store-writers.py"), "--root", str(self.root)],
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("unclassified writer/caller", result.stderr)
+
+    def test_actual_ci_fast_tier_wiring(self):
+        import tomllib
+        import yaml
+        root = Path(__file__).resolve().parents[1]
+        tiers = tomllib.loads((root / "scripts/ci-gate-tiers.toml").read_text())["tiers"]
+        steps = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())["jobs"]["build"]["steps"]
+        expected = {
+            "Store writer inventory ratchet": "python3 scripts/check-store-writers.py",
+            "Store writer inventory mutation fixtures": "python3 -m unittest tests/test_store_writer_inventory.py",
+        }
+        for name, command in expected.items():
+            self.assertEqual("fast", tiers[name])
+            matches = [s for s in steps if s.get("name") == name]
+            self.assertEqual(1, len(matches))
+            self.assertEqual(command, matches[0]["run"])
+
+    def test_invalid_schema_refuses(self):
+        (self.root / guard.INVENTORY).write_text('version = 999\n')
+        with self.assertRaises(ValueError):
+            guard.check(self.root)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -843,6 +843,15 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_git_maintenance_ratchet.py
 
+      # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
+      - name: Store writer inventory ratchet
+        if: matrix.shard == 'gates'
+        run: python3 scripts/check-store-writers.py
+
+      - name: Store writer inventory mutation fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_store_writer_inventory.py
+
       - name: Verify pure-move slice stack fixtures
         if: matrix.shard == 'gates'
         run: python3 -m unittest discover scripts/split-lib/tests/
