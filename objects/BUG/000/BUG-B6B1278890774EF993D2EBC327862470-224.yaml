@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-06T03:48:15.767733545Z
+modified_at: 2026-11-06T08:41:33.117428746Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -187,6 +187,12 @@ comments:
   created_at: 2026-11-06T03:48:15.767733545Z
   modified_at: 2026-11-06T03:48:15.767733545Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b005-32bd-76f3-9f41-7e07425274ea
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 5: explicitly dispute routing finding 1 (AC5/ac1d6672) back to an implementer, not its validity. The authoritative review itself says this is blocking but NOT implementer-actionable and must not be re-queued for this alone. AC5 requires operator-run host aida own migrate --execute followed by aida own show --compare, with every residual UNEXPLAINED row attributed to a non-holder-pid cause, or an advisor ruling narrowing AC5. This foreign-PID-namespace headless lane cannot supply operator-terminal evidence; repaired orphans deliberately remain never released per docs/cli/06-roles-sessions.md. Finding 2 is also still open: run 42113364332 at exact head 8cb06e6020af3e05c758988b9495a6491e236207 has lib-0/rest successful, gates/contracts/lib-1 in progress and cli-0/cli-1 queued at the latest read; no green-run claim is made. Finding 3 explicitly requires no implementation changes. Retain the supervised merge hold and open PR #3450. No new source commit is warranted for these external acceptance dependencies; this explicit punt fulfills the round contract.. No triage reason was given.'
+  created_at: 2026-11-06T08:41:33.117426787Z
+  modified_at: 2026-11-06T08:41:33.117426787Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
@@ -336,6 +342,14 @@ history:
   timestamp: 2026-11-06T00:17:44.546138936Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1b005-32bd-76f3-9f41-7df06df111df
+  author: joe
+  timestamp: 2026-11-06T08:41:33.117415719Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -348,9 +362,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 5: explicitly dispute routing finding 1 (AC5/ac1d6672) back to an implementer, not its validity. The authoritative review itself says this is blocking but NOT implementer-actionable and must not be re-queued for this alone. AC5 requires operator-run host aida own migrate --execute followed by aida own show --compare, with every residual UNEXPLAINED row attributed to a non-holder-pid cause, or an advisor ruling narrowing AC5. This foreign-PID-namespace headless lane cannot supply operator-terminal evidence; repaired orphans deliberately remain never released per docs/cli/06-roles-sessions.md. Finding 2 is also still open: run 42113364332 at exact head 8cb06e6020af3e05c758988b9495a6491e236207 has lib-0/rest successful, gates/contracts/lib-1 in progress and cli-0/cli-1 queued at the latest read; no green-run claim is made. Finding 3 explicitly requires no implementation changes. Retain the supervised merge hold and open PR #3450. No new source commit is warranted for these external acceptance dependencies; this explicit punt fulfills the round contract.'
-  lean: Route AC5 to the operator/advisor; obtain host migration and compare evidence or a recorded acceptance ruling, then re-review this unchanged head after CI settles. Do not re-queue implementation solely for AC5 or the expected supervised merge-hold-gate refusal.
-  raised_by: implementer
-  raised_at: 2026-11-05T21:46:35.382416182Z
