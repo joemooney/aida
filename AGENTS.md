@@ -1,3 +1,11 @@
+Contained headless launches can explicitly require the read-only store service
+at finalized `PreparedLaunch` setup (`AIDA_STORE_MUTATION_REQUIRED=1` on the
+host-built Command). It uses an exact synthetic epoch address, broker-injected
+SEQPACKET pairs, per-packet kernel credentials/pidfds and pinned lane namespaces.
+Only `session_probe` and `request_status` exist; native launches and raw write
+grants retain their current behavior. See OVERVIEW.md.
+<!-- trace:TASK-3225 | ai:codex -->
+
 Question parking with an empty consequence preserves an existing deferral trigger
 and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.

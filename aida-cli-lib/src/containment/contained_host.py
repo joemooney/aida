@@ -403,7 +403,7 @@ def broker_send(listener, n, lane_net, lane_user, dup=None, deadline=None, reser
             os.close(fd)
 
 
-def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net, lane_user):
+def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net, lane_user, mutation=None):
     """F-a broker: read the sockaddr ONCE, never CONTINUE. A lane-netns
     stream socket naming the relay port on 127.0.0.1 gets a relay-connected
     socket; a pathname beneath the private state root gets the pinned private
@@ -481,7 +481,23 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port, 
         elif family == socket.AF_UNIX:
             path = address[2:].rstrip(b'\0')
             prefix = state_prefix + b'/'
-            if path.startswith(prefix) and b'\0' not in path and len(path) > len(prefix):
+            if path.startswith(b'/run/aida-mutation/'):
+                # Exact synthetic name only; never resolve/connect a host path.
+                # Read the sockaddr once above, pin the original socket object.
+                # trace:TASK-3225 | ai:codex
+                require(mutation is not None and path == mutation.address and
+                        address[2:] in (path, path + b'\0'), 'store endpoint refused')
+                dup = target_socket(n.pid, target_fd)
+                with socket.socket(fileno=dup) as original:
+                    require(original.family == socket.AF_UNIX and
+                            original.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_SEQPACKET,
+                            'store socket type refused')
+                ioctl(listener, VALID, ident)
+                try:
+                    connected = mutation.connect(n.pid)
+                except MutationRefusal as error:
+                    answer = -errno.EAGAIN if str(error) == 'Busy' else -errno.EACCES
+            elif path.startswith(prefix) and b'\0' not in path and len(path) > len(prefix):
                 target = openat2_beneath(state_fd, path[len(prefix):])
                 try:
                     md = os.fstat(target)
@@ -503,6 +519,8 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port, 
                 return True
             finally:
                 connected.close()
+    except MutationRefusal:
+        answer = -errno.EACCES
     except RuntimeError as error:
         if str(error).startswith('seccomp notification facility unavailable'):
             raise
@@ -561,6 +579,9 @@ def proxy_request(data, fds, allowed, fixture):
 
 
 def host_contained(cfg, receipt_fd, acceptance_fd):
+    checked(LIBC.prctl(4, 0, 0, 0, 0), 'host dumpable flag refused')
+    mutation = None
+    authority = None
     require(platform.machine() == 'x86_64', 'socket broker architecture unsupported')
     abi = LIBC.syscall(444, 0, 0, 1)
     require(abi > 0, 'Landlock capability unavailable; socket-policy selection refused')
@@ -639,6 +660,23 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         lane_net = (lane_md.st_dev, lane_md.st_ino)
         user_md = os.stat('/proc/%d/ns/user' % worker)
         lane_user = (user_md.st_dev, user_md.st_ino)
+        # Private authority FD never enters pass_fds or the lane environment.
+        # The Rust owner rechecks grant/parent/roster/lease and pinned roots.
+        # trace:TASK-3225 | ai:codex
+        if cfg.get('mutation') is not None:
+            binding = cfg['mutation']
+            require(cfg.get('grant'), 'store service requires nonempty grant binding')
+            authority = socket.socket(fileno=binding['authority_fd'])
+            authority.set_inheritable(False)
+            authority.settimeout(1)
+            def authorize():
+                try:
+                    authority.sendall(b'?')
+                    return {b'Y': None, b'E': 'Expired', b'R': 'Revoked'}.get(authority.recv(1), 'Unauthorized')
+                except OSError:
+                    return 'Unavailable'
+            mutation = StoreMutationSession(binding, MutationIdentity(worker), authorize)
+            mutation.live()
         os.write(block_w, b'R')
         os.close(block_w)
         block_w = None
@@ -658,10 +696,12 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             require(time.monotonic() < end and process.poll() is None,
                     'contained requested-seat preflight did not complete')
             drain_pending_sends()
+            if mutation is not None:
+                mutation.poll()
             ready, _, _ = select.select([broker, notification, proxy], [], [], 0.1)
             if notification in ready:
                 broker_connect_contained(notification, state_fd, state_prefix, connector, port,
-                                         lane_net, lane_user)
+                                         lane_net, lane_user, mutation)
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
@@ -682,11 +722,14 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 with open('/proc/%d/stat' % shim) as f:
                     start = f.read().rsplit(')', 1)[1].split()[19]
                 break
+        require(mutation is None or mutation.probed, 'store service preflight absent')
         receipt = dict(version=1, posture='aida', worker_pid=shim, worker_start=start,
                        wrapper_pid=process.pid, namespaces=namespaces,
                        uid_map_identity=True, seat_preflight=True,
                        broker='seccomp_notify_addfd', relay_port=port,
-                       policy_sha=cfg['policy_sha'], keyring='isolated_child_only')
+                       policy_sha=cfg['policy_sha'], keyring='isolated_child_only',
+                       mutation_epoch=mutation.epoch if mutation else None,
+                       mutation_ready=bool(mutation and mutation.probed))
         os.write(receipt_fd, json.dumps(receipt).encode() + b'\n')
         os.close(receipt_fd)
         receipt_fd = None
@@ -695,11 +738,17 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         os.close(acceptance_fd)
         broker.send(b'exec-v1')
         watch = [proxy] + ([notification] if notification is not None else [])
+        next_authority_check = time.monotonic()
         while process.poll() is None:
+            if mutation is not None:
+                if time.monotonic() >= next_authority_check:
+                    mutation.live()
+                    next_authority_check = time.monotonic() + 0.2
+                mutation.poll()
             drain_pending_sends()
             ready, _, _ = select.select(watch, [], [], 0.05 if SEND_PENDING else 0.2)
             if notification in ready and not broker_connect_contained(
-                    notification, state_fd, state_prefix, connector, port, lane_net, lane_user):
+                    notification, state_fd, state_prefix, connector, port, lane_net, lane_user, mutation):
                 if select.poll and _hung_up(notification):
                     watch.remove(notification)
             if proxy in ready:
@@ -712,6 +761,10 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         rc = process.wait()
         return rc if rc >= 0 else 128 - rc
     finally:
+        if mutation is not None:
+            mutation.close()
+        if authority is not None:
+            authority.close()
         if process.poll() is None:
             process.kill()
             process.wait()

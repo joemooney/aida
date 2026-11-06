@@ -2879,6 +2879,11 @@ pub(crate) fn bind_contained_launch_worker(
         receipt.is_accepted(),
         "refusing to bind a session grant to a contained worker: its containment receipt was not accepted"
     );
+    // trace:TASK-3225 | ai:codex — baseline compatibility cannot authorize a service.
+    anyhow::ensure!(
+        !receipt.requires_store_service() || !grant_id.is_empty(),
+        "store service requires a nonempty grant binding"
+    );
     if grant_id.is_empty() {
         return Ok(());
     }

@@ -304,6 +304,10 @@ def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, nested_us
         probe_nested_userns()
     if preflight:
         seat_preflight(preflight)
+    # trace:TASK-3225 | ai:codex — exercise the actual injected lane channel.
+    endpoint = os.environ.get('AIDA_STORE_MUTATION_ENDPOINT')
+    if endpoint is not None:
+        mutation_probe(endpoint)
     # trace:TASK-2707 | ai:codex — no vendor exec before host acceptance.
     require(broker is not None, 'production receipt requires broker')
     # write(2) preserves the shim's SCM_CREDENTIALS; brokered sendto would

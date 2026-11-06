@@ -7265,6 +7265,8 @@ fn run_vendor_headless_child(
     if let Some(customize) = hooks.customize {
         customize(&mut child_cmd);
     }
+    // trace:TASK-3225 | ai:codex — an explicit requirement cannot downgrade to native.
+    crate::containment::launch::require_store_service_surface(&child_cmd, wrapper)?;
     // BUG-050: name the lane's processes, so its launcher finds the build it
     // left running (standalone and drain alike).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude

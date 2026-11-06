@@ -308,6 +308,12 @@ jobs:
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
 
+      # Fixed read-only protocol and kernel-credential channel fixtures.
+      # trace:TASK-3225 | ai:codex
+      - name: Store mutation channel tests
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_store_mutation.py
+
       # Real production setup with fake Codex: stops at the managed-seat refusal.
       # Requires the workspace binary; keep it out of the fast no-build suite.
       # trace:TASK-3131 | ai:codex
