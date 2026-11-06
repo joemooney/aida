@@ -1,0 +1,29 @@
+id: 01a1afda-e3d3-7c52-928a-db85e7b83d61
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-869
+title: 'non-blocking cosmetic (carry-over of round-1 finding 5): PR #3478 title is stil…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3074, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking cosmetic (carry-over of round-1 finding 5): PR #3478 title is still '[AI:codex] fix: Track acted-on request dispositions...' and head commit is 'chore(seat): work native Codex lane ... left uncommitted (TASK-3074)'. The handoff requires '[AI:codex] feat(mailbox): correlate request actions and escalate pipeline stalls (TASK-3074)' with the round-3 PR body. The completing trailer is correct. Retitle before the squash merge, and make seat publication apply the lane's requested subject.
+
+  PR: #3478
+  Reviewed sha: dbe1eca498edc77f806b362d98807005d38c7832
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T07:55:20.403891367Z
+modified_at: 2026-11-06T07:55:20.403891367Z
+req_type: Task
+tags:
+- carried-from:TASK-3074
+- finding-hash:e0bc8df3
+- from-review:PR-3478
+- kind:carried-forward
+filed_at:
+  code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a8e8311d546
+  vendor: claude
