@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T14:39:50.957504483Z
-modified_at: 2026-11-06T14:39:50.957504483Z
+modified_at: 2026-11-06T14:59:36.884287901Z
 req_type: Task
 tags:
 - carried-from:BUG-2462
 - finding-hash:4ecda69c
 - from-review:PR-3503
 - kind:carried-forward
+comments:
+- id: 01a1b15f-5334-74f2-96eb-522d9dafc013
+  author: joe
+  content: 'ADVISOR (10-28 rule, ruled once): accepted as-is, rejected. The offline PTY test''s child writes a few lines of stderr, far below the PTY buffer. The hypothetical block is bounded by the 45s timeout and fails visibly, not silently.'
+  created_at: 2026-11-06T14:59:36.884287901Z
+  modified_at: 2026-11-06T14:59:36.884287901Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 filed_at:
   code_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
   branch: main
