@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T12:19:03.234673555Z
+modified_at: 2026-11-06T12:30:00.249288197Z
 req_type: Task
 tags:
 - architecture
@@ -457,6 +457,14 @@ comments:
     Round 5 F2 remains a manual advisor acceptance decision, not a disputed finding: every contained vendor now has a Linux 5.19+ floor and defers handled signals after broker RECV. An indefinite blocking send with no SO_SNDTIMEO cannot be interrupted by SIGINT/KeyboardInterrupt, SIGALRM, handled SIGTERM or Go SIGURG until a broker response; fatal signals still terminate and configured SO_SNDTIMEO still bounds socket waits. WAIT_KILLABLE_RECV is retained to prevent the previously found post-send signal/restart duplicate-byte race. I cannot record advisor signoff on the advisor's behalf. These two deviations are explicitly documented as acceptance pending; a named F2 punt will request acceptance on this spec or an alternative exactly-once design after final validation. Required-live Rust tests and make check-ci-fast are compiling now. Native-seat source edits remain uncommitted; mechanical bdcec264ee88 remains in history; no publication or merge-hold clearance is attempted.
   created_at: 2026-11-06T12:19:03.234654100Z
   modified_at: 2026-11-06T12:19:03.234654100Z
+- id: 01a1b0d6-5a39-72b1-9000-9d18b031a442
+  author: mcp
+  content: |-
+    Round 5 final validation: required-live TASK-2708 suite passed all 34 tests with AIDA_REQUIRE_BWRAP_LIVE=1 and AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1, with no failures/ignored tests/live skips. Same final-source binary TASK-2707 filter passed 21 tests with both flags; separately opt-in installed-Codex native composition was not exercised. make check-ci-fast passed all 38 gates, including feature-disabled CLI and TUI checks. Formatting, Python compilation and git diff --check passed. The new real-nonleader/EINVAL regression passes against the fixed broker and fails against prior HEAD; proof failure/different tables and permission refusals remain fail closed. Local kernel is 7.0.0-42-generic, so actual Linux 5.19-6.8 boot evidence is not claimed. Mechanical bdcec264ee88 remains an ancestor.
+
+    F1 is fixed in three uncommitted source/docs files: aida-cli-lib/src/containment/contained_host.py; aida-cli-lib/src/containment/tests/launch_tests.rs; docs/internal/testing/task-2708-round2.md. F2 is not disputed: advisor signoff is still required to accept (a) deferred handled signals during broker-owned blocking operations, potentially indefinitely without SO_SNDTIMEO, across all lanes, and (b) the Linux 5.19+ containment floor. The note explicitly records both as acceptance pending. I am filing the required named F2 punt rather than claiming signoff. This manual gate and the existing supervised merge hold veto publication; native-seat edits remain uncommitted. No commit/push, review recording, hold clearance, queue completion or PR ship is performed here.
+  created_at: 2026-11-06T12:30:00.249277732Z
+  modified_at: 2026-11-06T12:30:00.249277732Z
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
