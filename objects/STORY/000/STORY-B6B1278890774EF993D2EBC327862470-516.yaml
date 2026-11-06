@@ -1,0 +1,26 @@
+id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-516
+agreed_id: STORY-2593
+title: 'Contained Codex on the AIDA boundary with ChatGPT login: replace the ''contained ChatGPT auth waits for P3 (PR2)'' refusal with a brokered credential path'
+description: |-
+  Seen 2026-11-06 14:41 MST, the first C3/C4 re-run with a working fixture (after BUG-2465 and BUG-2470). Setup and pickup now succeed, but the AIDA-boundary Codex launch refuses with 'contained ChatGPT auth waits for P3 (PR2)'. launch/contained.rs refuse_chatgpt() refuses whenever <codex home>/auth.json exists, and the operator's Codex is logged in with ChatGPT (no API key). So C0-C4 cannot be measured under --boundary aida, and BUG-2447/BUG-2448 (C3 egress, C4 UNIX canary) cannot be closed. Production Codex lanes today run on Codex's native sandbox, not the AIDA boundary. Report: ~/.aida/conformance-aida-1794001192/.
+
+  Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
+
+  Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T21:41:03.638236900Z
+modified_at: 2026-11-06T21:41:03.638236900Z
+req_type: Story
+execution_mode: guided
+filed_at:
+  code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
