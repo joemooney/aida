@@ -21,7 +21,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T02:12:42.876788830Z
-modified_at: 2026-11-06T02:12:42.876788830Z
+modified_at: 2026-11-06T03:50:00.676066692Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -30,6 +30,13 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1aefa-48e4-7ae2-b404-34aa115f8ba9
+  author: joe
+  content: 'Advisor triage 2026-11-05 21:05: acknowledged. STORY-1651''s repeated rounds come from successive main merges breaking moved-doc links (a docs reorg racing other doc edits), not from unaddressed findings. The rework lane was relaunched at 20:40 with that cause; no separate spec needed.'
+  created_at: 2026-11-06T03:50:00.676066692Z
+  modified_at: 2026-11-06T03:50:00.676066692Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aeb6-0a57-7eb0-8aaf-fe62417a16ec
   author: joe
