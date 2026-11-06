@@ -110,6 +110,17 @@ clone's git config and hooks, checks commit trailers, pushes, and opens the
 PR. It never merges; `--dry-run` imports and pushes nothing.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
 
+Seat publication derives the PR summary from the owning spec. A conventional
+`type(scope): summary` spec title is retained; otherwise the requirement type
+supplies `fix` for bugs, `docs` for docs/FAQs, `chore` for tasks, spikes,
+decisions and meta items, and `feat` for other types. A categorized feature
+supplies the scope. The commit's AI attribution and completing/reference trailers
+are preserved. Rework publication repairs the old generic “address CI failures
+and review findings” PR title while retaining its existing trailers; descriptive
+author titles remain unchanged. If the spec cannot be read, a descriptive commit
+subject remains usable, but the generic rework subject refuses publication.
+<!-- trace:TASK-2891 | ai:codex -->
+
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
 inside its sandbox, and `aida ship` there refuses with the way out. The seat
 leaves its edits uncommitted. When an implementer lane's Codex process exits,

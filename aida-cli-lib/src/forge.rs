@@ -863,6 +863,12 @@ pub trait Forge {
     /// `gh pr create` / `glab mr create` (or push-options) / pure-git no-op.
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef>;
 
+    /// Update only the title of an existing change; unsupported providers refuse.
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, _id: u64, _title: &str) -> Result<()> {
+        anyhow::bail!("this forge cannot update a change title")
+    }
+
     /// `gh pr view` for the branch's open change. Returns a [`ChangeLookup`]
     /// (STORY-516) so callers keep the BUG-257 transient-vs-definitive
     /// distinction the orchestrator's phase-1 verdict depends on.
@@ -2042,6 +2048,17 @@ impl Forge for GitHubForge {
         ForgeKind::GitHub
     }
 
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        let out = self.gh(&["pr", "edit", &id.to_string(), "--title", title])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "could not update change {id} title: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
         let mut args = vec![
             "pr".to_string(),
@@ -2776,6 +2793,17 @@ impl Forge for GitLabForge {
     }
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
+    }
+
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        let out = self.glab(&["mr", "update", &id.to_string(), "--title", title])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "could not update change {id} title: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
@@ -4977,6 +5005,9 @@ pub(crate) mod fake {
         /// Every `open_change` request.
         // trace:BUG-HOME-038 | ai:claude
         pub(crate) opened: Arc<Mutex<Vec<OpenChange>>>,
+        // trace:TASK-2891 | ai:codex
+        pub(crate) retitled: Arc<Mutex<Vec<(u64, String)>>>,
+        pub(crate) retitle_error: Option<String>,
     }
 
     impl RecordingForge {
@@ -4996,6 +5027,8 @@ pub(crate) mod fake {
                 readied: Arc::new(Mutex::new(Vec::new())),
                 opens_as: None,
                 opened: Arc::new(Mutex::new(Vec::new())),
+                retitled: Arc::new(Mutex::new(Vec::new())),
+                retitle_error: None,
             }
         }
 
@@ -5026,6 +5059,14 @@ pub(crate) mod fake {
         }
         fn kind(&self) -> ForgeKind {
             ForgeKind::GitHub
+        }
+        // trace:TASK-2891 | ai:codex
+        fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+            if let Some(error) = &self.retitle_error {
+                anyhow::bail!("{error}");
+            }
+            self.retitled.lock().unwrap().push((id, title.to_string()));
+            Ok(())
         }
         fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
             self.opened.lock().unwrap().push(req.clone());

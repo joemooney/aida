@@ -2297,7 +2297,7 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
 #[clap(
     name = "intent",
     subcommand_negates_reqs = true,
-    override_usage = "aida intent [OPTIONS] <ID>\n       aida intent <note|validate|export> ..."
+    override_usage = "aida intent [OPTIONS] <ID>\n       aida intent <note|validate|export> ...\n       aida intent <enroll|publish|pull|list|process> ..."
 )]
 pub(crate) struct IntentArgs {
     // trace:STORY-2479 | ai:codex
@@ -2331,7 +2331,7 @@ fn run_intent(
     // trace:STORY-2479 | ai:codex
     if args.local.is_some() {
         anyhow::bail!(
-            "Local observation commands must use the direct spelling: aida intent <note|validate|export> ... (without an alias)"
+            "Local observation commands must use the direct spelling: aida intent <note|validate|export|enroll|publish|pull|list|process> ... (without an alias)"
         );
     }
     handle_intent(
