@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T15:30:32.770915217Z
+modified_at: 2026-11-06T15:32:25.020986400Z
 req_type: Story
 relationships:
 - rel_type:
@@ -311,6 +311,12 @@ comments:
   created_at: 2026-11-06T15:01:28.116105071Z
   modified_at: 2026-11-06T15:01:28.116105071Z
   session_id: 01a1b135d315
+- id: 01a1b17d-5b3c-7051-96a7-b5de52b85a09
+  author: joe
+  content: Continuation on inherited resurfacing branch d5255a1410c after main merge 5c4f7fd4981. The hourly trigger implementation is already present; validating that slice only under the LIGHT gate (cargo test -p aida-cli-lib story2402_s4 --lib plus make check-ci-fast). Correcting stale condition-checker documentation that still describes the now-implemented deferral gate and resurfacing job as future work. Derived attention remains excluded; publication retains Refs STORY-2402. Current targeted checks are queued for shared Cargo slots.
+  created_at: 2026-11-06T15:32:25.020986400Z
+  modified_at: 2026-11-06T15:32:25.020986400Z
+  session_id: 01a1b17b9aa7
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
