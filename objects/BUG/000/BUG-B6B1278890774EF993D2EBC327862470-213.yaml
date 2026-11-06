@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-06T18:50:45.322105075Z
+modified_at: 2026-11-06T21:41:29.605217349Z
 req_type: Bug
 tags:
 - area:containment
@@ -29,6 +29,10 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a1ad21-7574-7121-8c62-78fbfbb767db
   created_at: 2026-11-05T19:14:01.555198209Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
+  created_at: 2026-11-06T21:41:29.605214073Z
   created_by: joe
 comments:
 - id: 01a1a9a3-839f-7943-9865-dfd07d3226dc
@@ -128,6 +132,11 @@ history:
   author: joe
   timestamp: 2026-11-05T19:14:03.016995766Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes: []
+- id: 01a1b2cf-467f-7953-9da3-8ba5cff6b281
+  author: joe
+  timestamp: 2026-11-06T21:41:30.879254112Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes: []
 filed_at:
   aida_version: 0.16.0
