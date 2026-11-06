@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T13:04:37.223648190Z
+modified_at: 2026-11-06T13:09:01.210765276Z
 req_type: Story
 tags:
 - architecture
@@ -544,6 +544,12 @@ comments:
   created_at: 2026-11-06T13:03:17.253424286Z
   modified_at: 2026-11-06T13:03:17.253424286Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0fa-129a-7201-87ab-7db33c7a2bfb
+  author: joe
+  content: 'Round 3 F5/F7 tracking: PR-C now owns Codex prepare_launch moving inside the vendor profile; consolidation of the eight grant issuers into issue_launch_child; control_child/control_env migration (including phase/orchestrator/zen/TUI control children); autopilot intake, questions and queue exec; remaining resume and finalization markers. LEDGER labels are updated to C and counts/ceiling do not grow. Amendment 7 CARGO_HOME filing already exists: BUG-2418 explicitly cites this signoff, completed via PR #3281 / commit 6c587ee595c on origin/main; no duplicate bug filed. PR-B change notes removed from AGENTS/OVERVIEW are for the PR body: fresh Codex session/exec, compete, dispatch and Native/None phase construction route through LaunchContext/spawn_agent; callers still finalize after identity/grant setup; dispatch Codex remains an AIDA control child; background Claude carries no seat keys. Resource primitives validate slots, targets and settings without granting write authority; renderers remain PR-C. F1 evidence: lane_env::fix_at reads the covering worktree lease; the SessionStart lane-env hook and MCP apply it. Added a regression proving an existing implementer lease supplies role with all seat env keys absent. Native posture remains permitted under a contained parent by the existing monotonic rule; explicit None session/phase launches refuse WeakerThanParent.'
+  created_at: 2026-11-06T13:09:01.210765276Z
+  modified_at: 2026-11-06T13:09:01.210765276Z
+  session_id: 01a1b0f60225
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
