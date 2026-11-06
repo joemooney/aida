@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T19:39:38.949643294Z
+modified_at: 2026-11-06T19:46:03.681200217Z
 req_type: Story
 tags:
 - architecture
@@ -207,6 +207,12 @@ comments:
   content: 'PR #3515 round 4: refreshed bootstrap ledger at 19139c41d4b7; exactly three inherited main sites added (ci_relay token reader and two test_work_ci_relay environment references), no retirements, ceiling 1220. Removed round-specific OVERVIEW preface and AGENTS implementation notes; migration docs now use ledger ceiling/sites as count source of truth and require bootstrap rescan after every main merge. Added extern crate std alias resolution with direct/imported/raw-alias/mutation regression fixtures. Validation: 18 ratchet tests pass on local Python 3.12.3; python3 scripts/check-exec-context.py --base origin/main passes; cargo fmt --all -- --check and git diff --check pass. Broader make check-ci-fast still running. Finding 4 remains open: run 42278870466 at old head is queued, and native seat cannot commit/push the revised head. Host must publish a new commit, wait for all exact-head CI including gates ExecContext ratchet to pass, and cite the run before re-review. No green runner evidence claimed; story remains incomplete.'
   created_at: 2026-11-06T19:39:38.949643294Z
   modified_at: 2026-11-06T19:39:38.949643294Z
+  session_id: 01a1b25cafde
+- id: 01a1b265-9321-7d32-a8fb-2529987d503a
+  author: joe
+  content: 'Round-4 validation handoff: make check-ci-fast passed Check aida-cli without default features (249.8s), then stalled at TUI seam guard after a shared Cargo build-slot queue notice. Stopped the broader run with Ctrl-C (exit 130); do not treat it as a full fast-gate pass. Targeted ratchet tests (18), ledger check --base origin/main (1220 sites), cargo fmt check and git diff check passed. Six files remain uncommitted for host publication: AGENTS.md, OVERVIEW.md, docs/internal/testing/exec-context-migration.md, scripts/check-exec-context.py, scripts/exec-context-legacy.json, tests/test_exec_context_ratchet.py. Native publication declaration recorded: [AI:codex] fix(exec-context): refresh bootstrap ledger and close alias gap (Refs STORY-2538). Host must commit/publish and obtain fully green exact-head CI (especially gates ExecContext ratchet) before re-review; finding 4 remains open. No finding disputed.'
+  created_at: 2026-11-06T19:46:03.681200217Z
+  modified_at: 2026-11-06T19:46:03.681200217Z
   session_id: 01a1b25cafde
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
