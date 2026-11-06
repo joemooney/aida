@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T23:23:39.724816322Z
+modified_at: 2026-11-06T23:40:16.995703744Z
 req_type: Task
 tags:
 - area:containment
@@ -214,6 +214,21 @@ comments:
     No commit, push, PR, queue done, ship/merge or review verdict performed. TASK-3048 remains open. Host publication after process exit must retain Refs and honor existing punt/hold vetoes.
   created_at: 2026-11-06T21:47:33.037567970Z
   modified_at: 2026-11-06T21:47:33.037567970Z
+- id: 01a1b33c-02e3-73d0-ad75-0f53b5cc45d0
+  author: joe
+  content: |
+    Native-seat Refs-only S2 follow-up to the existing private-runtime/auth-policy preparation at 1ff0066194a. The signed outer-only ruling is now enforced against legacy permission-bypass launches: common LaunchContext resolution checks native_layer descriptor data and refuses receipt-only flags even with an Aida posture marker; prompt option names are vendor data, so prompt contents do not select posture. Agent-new explicit/default bypass checks run before setup. AGY headless preflight consults the existing conformance admission gate before lease/worktree creation. Deferred manual handoffs no longer print a bypass command. No AGY-specific confinement engine was added and admission remains closed.
+
+    Updated legacy spawn regressions to expect refusal before vendor exec, retained pure argv-order tests, added shared-context fresh/resume/exec/background and prompt/default-flag regressions, and kept the native-permission tracked fixture without bypass.
+
+    Validation: make check-ci-fast PASS (38 gates); independent offline containment-conformance tests PASS (43); final cargo check -p aida-cli --no-default-features PASS on the final source; cargo fmt --all -- --check and git diff --check PASS. Targeted Rust execution remains untested=true: aida lane job run --wait 50 -- cargo test --profile agent -p aida-cli-lib --lib -- task_3048 refused because lease 01a1b32f1c5e names no lane job runner. New/updated Rust tests still require host/CI execution, including affected session, agent-launcher and BUG-1686 regressions. No real AGY calls or passing all-tool credit claimed.
+
+    Ten files left uncommitted: aida-cli-lib/src/agent_launch.rs; containment/mod.rs; containment/vendors.toml; launch/agy.rs; launch/context.rs; queue_cmd.rs; session.rs; tests/agent_launcher_tests.rs; tests/bug_1686_agy_headless_argv_tests.rs (all paths after the first under aida-cli-lib/src); docs/internal/testing/containment-conformance.md.
+
+    Remaining acceptance: complete measured login/refresh host inventory beyond daily-cloudcode-pa.googleapis.com; validate private read-only credential refresh/expiry; demonstrate mediated-write positive controls; finish production common-wrapper caller/argv and shared-boundary harness integration; obtain fresh passing all-tool host evidence before opening admission. TASK-3048 remains open. Retain Refs publication credit and honor punt/hold vetoes. No commit, push, PR creation, queue done, merge or review verdict performed.
+  created_at: 2026-11-06T23:40:16.995703744Z
+  modified_at: 2026-11-06T23:40:16.995703744Z
+  session_id: 01a1b32f1c5e
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
