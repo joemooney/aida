@@ -1,0 +1,34 @@
+id: 01a1b076-6aad-7a10-897e-34176ed9dc73
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-480
+agreed_id: STORY-2557
+title: 'Review PR-3495: [AI:codex] fix(seat): derive native publication subjects from owning specs (BUG-2461)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b048`) for branch `bug-b6b1278890774ef993d2ebc327862470-227`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3495>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-227` → `main`
+
+  ## Covers
+
+  - BUG-2461
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3495` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T10:45:13.005643120Z
+modified_at: 2026-11-06T10:45:13.005643120Z
+req_type: Story
+filed_at:
+  code_sha: 066c1609bf8d8720e3460d2e2859c44c14ea9a48
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7823b389971
+  vendor: claude
+  session: 01a1b0484cc6
