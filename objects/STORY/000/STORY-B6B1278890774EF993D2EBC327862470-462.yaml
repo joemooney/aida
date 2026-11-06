@@ -1,0 +1,25 @@
+id: 01a1ae38-489b-7db0-b752-9a823300b6e5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-462
+agreed_id: STORY-2539
+title: 'Vendor profile as data beyond spawn: one VendorProfile registry (regroup R5)'
+description: |
+  Regroup R5: a VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture including today's agy outer-only ruling, mail-wake support, hint text, resume semantics); vendor-name literals allowed only in vendors/; user hints rendered from the profile. Evidence: about 70 vendor commits in 14 days, 430 non-test "claude" literals, STORY-782 and BUG-2390 (both fold here). Trigger: STORY-2326 PR-B merged (the spawn half and its posture tables exist). Sketch-first.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T00:18:06.619162338Z
+modified_at: 2026-11-06T00:18:06.619162338Z
+req_type: Story
+tags:
+- architecture
+- regroup
+- sketch-first
+filed_at:
+  code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bdeb8f49978
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
