@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T23:26:59.268577037Z
+modified_at: 2026-11-06T23:27:01.709092496Z
 req_type: Task
 tags:
 - architecture
@@ -167,6 +167,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Code meets every TASK-3225 criterion; rounds 1-3 findings closed and CI was fully green at 63fc15f (gates live store-mutation step included). At head 7b2888d8 (merge of main, PR diff unchanged) lib-1 ''Run tests'' FAILED, most likely main''s new STORY-2537 proc_identity ratchet tripped by store_mutation/mod.rs:264.. It was punted on: blocked-dependency: Round 4 finding 1 (CI evidence) remains unresolved: PR #3516 current head is 63fc15f17631aa323179ee29369c1f05a50213b8, a merge of reviewed 86df40054746 with main. Run 42297510843 still has lib-0, lib-1 and gates queued; no green current-head evidence exists. I dispute only the mandatory-new-commit clause for this finding: the reviewer explicitly requests no code change and says a green-head reviewer can approve without a new commit. A new commit would invalidate the awaited head evidence. No source edits are warranted. Local forced-live store-mutation suite: 21 passed, zero skips, including test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive. Targeted Rust launch refused: lease 01a1b2c671c5 has no lane job runner; untested=true for Rust this round. make check-ci-fast passed the feature-disabled CLI check, then was interrupted while TUI seam guard waited for a shared Cargo slot; full fast gate not completed. git diff --check passed; worktree clean. Native seat cannot commit, publish or merge. Resume review only after lib-0, lib-1 and gates (including Store mutation channel tests) succeed at the exact PR head. Preserve the advisor-required operator merge hold; do not clear it from this lane.. No triage reason was given.'
   created_at: 2026-11-06T23:26:59.268573675Z
   modified_at: 2026-11-06T23:26:59.268573675Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b32f-dfbd-7433-a76b-2c75d4ea39dd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3225):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7b2888d8b7c3
+    Recorded: 2026-11-06T23:24:12.781790325+00:00
+    Findings:
+    1. [major] CI red at head 7b2888d8: run 42307136910 lib-1 'Run tests' FAILED (job 128199203513); lib-0, gates (Store mutation channel tests step success), cli-0/1, contracts and rest are green, main c4c0461 is green, and this PR was fully green at 63fc15f. Most probable cause (the reviewer sandbox could not fetch the job log or artifacts from blob storage, so confirm with 'gh run view 42307136910 --log-failed'): #3483 (c4c0461, STORY-2537) added the ratchet test proc_identity_legacy_decisions_do_not_expand in aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs. It counts production calls of process_start_identity( etc. per file against tests/fixtures/proc_identity_legacy_baseline.json and says 'counts may fall, never rise'. aida-cli-lib/src/store_mutation/mod.rs:264 (worker_binding_token, production code before #[cfg(test)] mod tests) calls aida_core::liveness::process_start_identity(pid) and that file has no baseline entry, so count 1 > 0. Fix: build the worker binding from the aida_core::proc_identity primitive (e.g. HolderRecord::capture / ProcIdentity) and keep the receipt-start comparison and the author_process_token format, so task_3225_worker_binding_uses_canonical_start_identity still holds. Do not raise the baseline; that needs an explicit advisor exception. Then run 'cargo test --profile agent -p aida-cli-lib --lib -- proc_identity_legacy_decisions store_mutation:: task_3225' and get lib-1 green at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T23:27:01.565104652Z
+  modified_at: 2026-11-06T23:27:01.565104652Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
