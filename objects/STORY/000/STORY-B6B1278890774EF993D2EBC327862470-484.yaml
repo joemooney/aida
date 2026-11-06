@@ -1,0 +1,35 @@
+id: 01a1b115-35fa-7672-a301-b18facd2282a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-484
+agreed_id: STORY-2561
+title: 'Host-mediated typed store mutation: lanes write the AIDA store only through a synchronous host service; raw store writes denied in the shared boundary'
+description: |
+  Cross-vendor keystone, from the operator design session of 2026-11-06 06:40 MST (supervised BUG-2446). Today contained_store_write_paths (contained_boundary.rs) grants the whole .aida-store and .aida/cache-db to every contained vendor, AIDA's own wrapper included, so a lane terminal or file tool can write raw store objects (BUG-2446, measured on Codex C2).
+
+  Operator rulings:
+  (S) This is its own keystone, not a gate on STORY-2238 / EPIC-612. STORY-2238 completes with the grant documented as a known cross-vendor limitation.
+  (Q1) Use a synchronous, typed, host-owned mutation service outside the sandbox. It accepts only named operations with bounded data. The host fixes project, store, process-bound identity, spec, role and permitted verbs at launch, and revalidates live authority and per-operation gates at the write boundary. It writes through the canonical atomic persistence and writer lock, binds retries to the request identity, and never trusts client paths, executables, git config or whole-object replacements. No asynchronous spool, no generic shell or argv deputy.
+  (Q2) Enforce in AIDA's shared bubblewrap boundary: store objects, authority-bearing metadata and the shared derived cache are read-only to every vendor terminal, file tool and descendant, with ancestor grants, symlinks, primary-checkout launches and resume accounted for. A mediated launch refuses when the protection or the service is unavailable. The Codex-native compatibility exception and its labeling stay unchanged.
+  (Q3) Three supervised slices: (1) transport, launch-bound identity and an inventory of every store writer; (2) route CLI and MCP writes through the service and cut over the mediated profile; (3) real-vendor C2 evidence.
+
+  Acceptance: parent-observed raw-write negatives (terminal AND file tool: create, append, rename) on canonical-equivalent objects with unchanged targets; same-profile mediated positive controls (own claim, comment, edit, queue done) visible to an independent host reader; refusal and concurrency tests from the BUG-2446 sketch v1; Claude behavior preserved. Base the design on BUG-2446 sketch v1.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T13:38:39.738282124Z
+modified_at: 2026-11-06T13:38:39.738282124Z
+req_type: Story
+tags:
+- architecture
+- containment
+- keystone
+- security
+execution_mode: guided
+filed_at:
+  code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd852f74c3b
+  vendor: claude
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
