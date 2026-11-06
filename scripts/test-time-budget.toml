@@ -30,6 +30,29 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# Round-4 local debug measurements on the loaded host: x2, rounded up to 5s,
+# minimum 15s. Retain larger prior budgets; CI still kills each test at 180s.
+# trace:TASK-3096 | ai:codex
+"aida-cli::task_3096_intake_transport concurrent_comments_on_one_target_report_the_losing_operation" = 85  # 42.31s
+"aida-cli::task_3096_intake_transport concurrent_duplicate_publication_serializes_interleaves_and_rewrite_refuses" = 45  # 21.36s
+"aida-cli::task_3096_intake_transport configured_sensitive_content_conflicting_bytes_and_unknown_schema_refuse" = 15  # 4.50s
+"aida-cli::task_3096_intake_transport escaped_nul_spawn_failure_leaves_pending_and_dismiss_available" = 20  # 7.13s
+"aida-cli::task_3096_intake_transport explicit_create_comment_and_recovery_do_not_repeat_spec_writes" = 150  # 72.60s
+"aida-cli::task_3096_intake_transport hostile_file_modes_and_orphan_receipts_are_not_accepted" = 70  # 33.67s
+"aida-cli::task_3096_intake_transport hostile_intermediate_history_never_moves_accepted_branch" = 25  # 10.84s
+"aida-cli::task_3096_intake_transport https_userinfo_refuses_before_persistence_and_ssh_is_supported" = 25  # 12.10s
+"aida-cli::task_3096_intake_transport incoming_policy_violation_and_symlink_modes_refuse_before_acceptance" = 15  # 6.13s
+"aida-cli::task_3096_intake_transport intake_human_and_json_renderings_are_distinct" = 40  # 18.79s
+"aida-cli::task_3096_intake_transport linked_product_worktrees_share_only_intake_state_and_preserve_both_indexes" = 20  # 8.22s
+"aida-cli::task_3096_intake_transport moved_remote_tip_retries_publication_after_an_actual_push_race" = 60  # 28.44s
+"aida-cli::task_3096_intake_transport published_receipt_reconciles_a_crash_before_the_local_writer" = 75  # 35.11s
+"aida-cli::task_3096_intake_transport push_hook_refusal_reports_diagnostic_once_and_keeps_accepted_checkpoint" = 25  # 10.07s
+"aida-cli::task_3096_intake_transport round_trip_receipts_duplicates_and_product_store_index_isolation" = 30  # 14.67s
+"aida-cli::task_3096_intake_transport sync_failures_preserve_git_stderr_and_local_ahead_push_keeps_policy_error" = 15  # 2.65s
+"aida-cli::task_3096_intake_transport two_site_process_and_publication_interleave_without_divergence" = 60  # 27.52s
+"aida-cli::task_3096_intake_transport unpublishable_receipt_retries_without_a_second_spec_write" = 85  # 40.07s
+"aida-cli::task_3096_intake_transport validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits" = 15  # 3.31s
+"aida-cli::task_3096_intake_transport writer_refusal_is_diagnostic_and_successful_retry_does_not_duplicate" = 110  # 54.30s
 # Real implementer launch: the production watchdog checks on a 30s cadence.
 # trace:TASK-1954 trace:TASK-1625 | ai:codex
 "aida-cli-lib phase_gates::real_phase_driver_wiring_tests::task_1625_implementer_watchdog_survives_store_commit_refusal" = 65  # 30s watchdog interval plus fixture/driver work, x2 with headroom
