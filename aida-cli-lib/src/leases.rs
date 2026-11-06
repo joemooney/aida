@@ -11,6 +11,10 @@ pub(crate) use leases_args::*;
 // trace:TASK-714
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
 pub(crate) struct SessionLease {
+    /// Versioned cooperative holder evidence; absent/refused captures retain legacy policy.
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) holder_record: Option<String>,
     /// Namespace in which the recorded PIDs are meaningful.
     // trace:BUG-2425 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -350,6 +354,9 @@ pub(crate) fn session_harness_worktree_register(
         .unwrap_or_else(|| "unknown".to_string());
     let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
+        holder_record: active_pid
+            .map(|pid| serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(pid)))
+            .transpose()?,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.clone(),
@@ -490,6 +497,19 @@ pub(crate) fn adopt_spec_lease_for_subagent(
     cwd: &std::path::Path,
     harness_pid: Option<u32>,
 ) -> Option<String> {
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    crate::session::with_lease_write_lock(project_root, || {
+        Ok(adopt_spec_lease_unlocked(project_root, cwd, harness_pid))
+    })
+    .ok()
+    .flatten()
+}
+
+fn adopt_spec_lease_unlocked(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    harness_pid: Option<u32>,
+) -> Option<String> {
     let pid = harness_pid?;
     let entries = std::fs::read_dir(leases_dir(project_root)).ok()?;
     for entry in entries.flatten() {
@@ -544,6 +564,17 @@ pub(crate) fn adopt_spec_lease_for_subagent(
         if already_live {
             continue;
         }
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        let holder = aida_core::proc_identity::HolderRecord::capture(pid);
+        if let Some(ns) = crate::agent_registry::current_pid_namespace() {
+            table.insert("pid_namespace".into(), toml::Value::Integer(ns as i64));
+        } else {
+            table.remove("pid_namespace");
+        }
+        table.insert(
+            "holder_record".into(),
+            toml::Value::String(serde_json::to_string(&holder).ok()?),
+        );
         table.insert(
             "active_pid".to_string(),
             toml::Value::Integer(i64::from(pid)),
@@ -586,6 +617,9 @@ pub(crate) fn adopt_spec_lease_for_subagent(
             continue;
         };
         if write_atomic(&path, &content).is_ok() {
+            if let Ok(lease) = toml::from_str::<SessionLease>(&content) {
+                crate::ownership::dual::lease_written(project_root, &lease);
+            }
             return Some(id);
         }
     }
@@ -1232,12 +1266,9 @@ pub(crate) fn handle_fasttrack_status(
     Ok(())
 }
 
-/// BUG-511: lease-state classification that understands review-verb
-/// advisory leases. A review lease has no worktree, so the standard
-/// worktree/claude/age matrix would always call it stale; its real
-/// liveness signal is the `aida review` process recorded in
-/// `creator_pid`. Session leases fall through to [`classify_lease_state`]
-/// unchanged. trace:BUG-511 | ai:claude
+/// Admitted workers use ProcIdentity; legacy writers retain the established
+/// advisory-lock, worktree and expiry policies.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
 pub(crate) fn lease_state_for(
     l: &SessionLease,
     live_sessions: &[process_probe::LiveSession],
@@ -1262,6 +1293,15 @@ pub(crate) fn lease_state_for(
             has_live_claude,
             now.signed_duration_since(lease_heartbeat(l)).num_hours(),
         );
+    }
+    // Admitted workers use exact identity; unstamped/refused legacy writers
+    // retain their existing consumer policy. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if lease_uses_holder_verdict(l) {
+        return match lease_process_verdict(l) {
+            Ok(aida_core::proc_identity::Verdict::Alive) => LeaseState::Live,
+            Ok(aida_core::proc_identity::Verdict::Dead(_)) => LeaseState::Stale,
+            _ => LeaseState::Unknown,
+        };
     }
     // BUG-511 review leases AND TASK-957 claim leases are advisory locks when
     // they have no worktree of their own — the standard worktree/claude/age
@@ -1316,6 +1356,47 @@ pub(crate) fn lease_state_for(
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
 }
 
+// Distinguish an explicitly refused legacy capture from a corrupted or
+// mismatched admitted generation: only the former uses legacy policy.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+fn lease_uses_holder_verdict(l: &SessionLease) -> bool {
+    l.holder_record.as_deref().is_some_and(|raw| {
+        serde_json::from_str::<aida_core::proc_identity::HolderRecord>(raw)
+            .map(|record| record.refusal().is_none())
+            .unwrap_or(true)
+    })
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+pub(crate) fn lease_holder_record(
+    l: &SessionLease,
+) -> Option<aida_core::proc_identity::HolderRecord> {
+    use aida_core::proc_identity::HolderRecord;
+    let raw = l.holder_record.as_ref()?;
+    Some(
+        aida_core::proc_identity::recorded_holder(
+            raw,
+            l.active_pid,
+            l.active_pid_start_time.as_deref(),
+            l.pid_namespace,
+        )
+        .unwrap_or_else(HolderRecord::refused),
+    )
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+pub(crate) fn lease_process_verdict(
+    l: &SessionLease,
+) -> Result<aida_core::proc_identity::Verdict, aida_core::proc_identity::HolderRefusal> {
+    use aida_core::proc_identity::HolderRefusal;
+    let record = lease_holder_record(l).ok_or_else(|| {
+        HolderRefusal::EvidenceUnavailable(
+            "legacy lease has no admitted worker; operator repair required".into(),
+        )
+    })?;
+    record.observe()
+}
+
 /// BUG-2197: does this lease record a durable owner — an `active_pid`, or a
 /// `creator_pid` that is still alive (or cannot be proven dead)? The ONE rule
 /// behind reap's unknown-owner verdict, the inspector exclusion, the
@@ -1323,7 +1404,8 @@ pub(crate) fn lease_state_for(
 /// dead creator shell (a per-command `bash -c`) has no durable owner.
 // trace:BUG-2197 | ai:claude
 pub(crate) fn lease_has_durable_owner(l: &SessionLease) -> bool {
-    l.active_pid.is_some()
+    l.holder_record.is_some()
+        || l.active_pid.is_some()
         || lease_recorded_owner(l) != aida_core::liveness::RecordedLeaseOwner::Unrecorded
 }
 
@@ -1335,6 +1417,15 @@ pub(crate) fn lease_recorded_owner(l: &SessionLease) -> aida_core::liveness::Rec
     // trace:BUG-2425 | ai:codex
     if !aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
         return aida_core::liveness::RecordedLeaseOwner::NotProvablyDead;
+    }
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if lease_uses_holder_verdict(l) {
+        return match lease_process_verdict(l) {
+            Ok(aida_core::proc_identity::Verdict::Dead(_)) => {
+                aida_core::liveness::RecordedLeaseOwner::Dead
+            }
+            _ => aida_core::liveness::RecordedLeaseOwner::NotProvablyDead,
+        };
     }
     aida_core::liveness::recorded_lease_owner(
         l.active_pid
@@ -4309,6 +4400,16 @@ pub(crate) fn auto_release_decision_for_lease(
     // decides. trace:BUG-2425 | ai:claude
     let pid_observable =
         aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace);
+    // Only admitted holders replace the legacy PID policy. Foreign expiry
+    // remains a consumer policy. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let admitted_alive = if pid_observable && lease_uses_holder_verdict(lease) {
+        Some(!matches!(
+            lease_process_verdict(lease),
+            Ok(aida_core::proc_identity::Verdict::Dead(_))
+        ))
+    } else {
+        None
+    };
     // BUG-511: worktree-less review-verb leases are advisory PID locks — no
     // worktree, no uncommitted work to lose — so liveness is the creator
     // process, full stop. Decided BEFORE the config gate and the mtime clock:
@@ -4326,10 +4427,12 @@ pub(crate) fn auto_release_decision_for_lease(
         // threshold on the lease file's age is the backstop instead.
         // trace:BUG-2425 | ai:claude
         let pid_alive = if pid_observable {
-            lease
-                .creator_pid
-                .map(process_probe::pid_is_alive)
-                .unwrap_or(false)
+            admitted_alive.unwrap_or_else(|| {
+                lease
+                    .creator_pid
+                    .map(process_probe::pid_is_alive)
+                    .unwrap_or(false)
+            })
         } else {
             mtime_age_secs < (config.stale_lease_threshold_minutes as i64).saturating_mul(60)
         };
@@ -4364,12 +4467,14 @@ pub(crate) fn auto_release_decision_for_lease(
     // authoritative child liveness signal; `creator_pid` may be the still-live
     // orchestrator that is trying to reclaim the dead child.
     // trace:BUG-1111 | ai:codex
-    let pid_alive = pid_observable
-        && lease
-            .active_pid
-            .or(lease.creator_pid)
-            .map(process_probe::pid_is_alive)
-            .unwrap_or(false);
+    let pid_alive = admitted_alive.unwrap_or_else(|| {
+        pid_observable
+            && lease
+                .active_pid
+                .or(lease.creator_pid)
+                .map(process_probe::pid_is_alive)
+                .unwrap_or(false)
+    });
 
     // Signal 2: lease-file mtime age. We use the filesystem mtime rather
     // than `started_at` because future writers (mark_lease_escalated_to_human
@@ -5155,6 +5260,14 @@ pub(crate) fn lease_owner_gone(lease: &SessionLease) -> Option<bool> {
             chrono::Utc::now(),
         )
         .then_some(true);
+    }
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if lease_uses_holder_verdict(lease) {
+        return match lease_process_verdict(lease) {
+            Ok(aida_core::proc_identity::Verdict::Alive) => Some(false),
+            Ok(aida_core::proc_identity::Verdict::Dead(_)) => Some(true),
+            _ => None,
+        };
     }
     aida_core::liveness::lease_owner_process_gone(
         lease.active_pid,

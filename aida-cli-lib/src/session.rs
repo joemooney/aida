@@ -6771,6 +6771,7 @@ pub(crate) fn run_vendor_headless_to_exit(
             let run_once =
                 |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
                     run_vendor_headless_child(
+                        None,
                         host_main,
                         vendor,
                         prompt,
@@ -7205,6 +7206,7 @@ pub(crate) fn resume_session_args(mut args: Vec<String>, session_id: &str) -> Re
 // trace:STORY-1662 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_standalone_implementer_child(
+    project_root: &Path,
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
@@ -7217,6 +7219,7 @@ pub(crate) fn run_standalone_implementer_child(
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     run_vendor_headless_child(
+        Some(project_root),
         host_main,
         vendor,
         prompt,
@@ -7245,6 +7248,7 @@ pub(crate) fn revoke_standalone_implementer_grant(
 // trace:BUG-2139 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn run_vendor_headless_child(
+    lease_root: Option<&Path>,
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
@@ -7404,6 +7408,9 @@ fn run_vendor_headless_child(
         tee.stop();
         return result;
     }
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[cfg(target_os = "linux")]
+    let holder_capture = aida_core::proc_identity::prepare_command(&mut child_cmd)?;
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
@@ -7414,15 +7421,30 @@ fn run_vendor_headless_child(
     if let Some(on_spawn) = hooks.on_spawn {
         on_spawn(child.id());
     }
-    if vendor != HeadlessVendor::Claude {
-        if let Some(id) = lease_id {
-            if let Err(e) = stamp_lease_active_pid(id, child.id()) {
-                eprintln!(
-                    "{} could not stamp active agent pid on lease {}: {e}",
-                    "Warning:".yellow().bold(),
-                    id
-                );
-            }
+    #[cfg(target_os = "linux")]
+    if let Some(id) = lease_id {
+        let holder = holder_capture.finish(&mut child);
+        // Resolve from the explicit launch context, never the launcher's cwd:
+        // standalone/rework launches can run for another linked checkout.
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        let worker_cwd = child_cmd
+            .get_current_dir()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(headless_worktree_root);
+        let stamped = lease_root
+            .or(host_main)
+            .map(Path::to_path_buf)
+            .map(Ok)
+            .unwrap_or_else(|| crate::find_project_root_from(&worker_cwd))
+            .map(|root| crate::main_worktree_root_from(&root))
+            .and_then(|root| stamp_lease_holder_at(&root, id, child.id(), &holder));
+        if let Err(error) = stamped {
+            // The retained Child pins this PID. A failed handoff must not
+            // leave the just-spawned worker running without its lease stamp.
+            let _ = child.kill();
+            let _ = child.wait();
+            tee.stop();
+            return Err(error.context("could not establish the spawned worker's holder generation"));
         }
     }
     // trace:STORY-1688 | ai:claude
@@ -7630,6 +7652,17 @@ pub(crate) fn stamp_lease_active_pid_at(
     lease_id: &str,
     pid: u32,
 ) -> Result<()> {
+    let holder = aida_core::proc_identity::HolderRecord::capture(pid);
+    stamp_lease_holder_at(project_root, lease_id, pid, &holder)
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+pub(crate) fn stamp_lease_holder_at(
+    project_root: &Path,
+    lease_id: &str,
+    pid: u32,
+    holder: &aida_core::proc_identity::HolderRecord,
+) -> Result<()> {
     use toml_edit::{value, DocumentMut};
 
     let path = project_root
@@ -7644,7 +7677,34 @@ pub(crate) fn stamp_lease_active_pid_at(
         let mut doc = body
             .parse::<DocumentMut>()
             .with_context(|| format!("parsing lease {}", path.display()))?;
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        let prior = doc
+            .get("holder_record")
+            .and_then(|v| v.as_str())
+            .and_then(|raw| {
+                serde_json::from_str::<aida_core::proc_identity::HolderRecord>(raw).ok()
+            });
+        let prior = prior.as_ref().filter(|record| record.validate().is_ok());
+        if let Some(prior) = prior {
+            let id = prior.validate().expect("validated holder");
+            if (id.pid, format!("linux-starttime:{}", id.starttime).as_str())
+                != (pid, start_time.as_deref().unwrap_or_default())
+            {
+                anyhow::ensure!(matches!(prior.observe(), Ok(aida_core::proc_identity::Verdict::Dead(_))),
+                    "lease {lease_id} retains another admitted worker generation; refusing replacement");
+            }
+        }
+        let selected = prior
+            .filter(|record| {
+                record.identity().is_some_and(|id| {
+                    id.pid == pid
+                        && Some(format!("linux-starttime:{}", id.starttime).as_str())
+                            == start_time.as_deref()
+                })
+            })
+            .unwrap_or(holder);
         doc["active_pid"] = value(i64::from(pid));
+        doc["holder_record"] = value(serde_json::to_string(selected)?);
         // trace:BUG-2425 | ai:codex
         if let Some(ns) = crate::agent_registry::current_pid_namespace() {
             doc["pid_namespace"] = value(ns as i64);
@@ -7653,6 +7713,8 @@ pub(crate) fn stamp_lease_active_pid_at(
         }
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
+        } else {
+            doc.remove("active_pid_start_time");
         }
         // BUG-2419: the pid was read in this process's pid namespace.
         // trace:BUG-2419 | ai:claude
@@ -7665,7 +7727,11 @@ pub(crate) fn stamp_lease_active_pid_at(
         // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
         // trace:STORY-1429 | ai:claude
         aida_core::write_atomic(&path, doc.to_string())
-            .with_context(|| format!("writing lease {}", path.display()))
+            .with_context(|| format!("writing lease {}", path.display()))?;
+        if let Ok(lease) = toml::from_str::<crate::SessionLease>(&doc.to_string()) {
+            crate::ownership::dual::lease_written(project_root, &lease);
+        }
+        Ok(())
     })?;
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
@@ -7692,12 +7758,42 @@ pub(crate) fn stamp_lease_active_pid_at(
 /// new pid). The persisted lease is re-read and verified before returning.
 /// Authorship is recorded separately (one resource lock at a time).
 // trace:STORY-2254 | ai:claude
+#[cfg(test)]
 pub(crate) fn stamp_lease_detached_worker_at(
     project_root: &Path,
     lease_id: &str,
     expected_grant: &str,
     pid: u32,
     start: &str,
+) -> Result<()> {
+    // Legacy test callers may supply synthetic start tokens. They exercise
+    // namespace/authorship transport, not cooperative admission; never pair a
+    // freshly captured generation with their supplied token.
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let holder = aida_core::proc_identity::HolderRecord::refused(
+        aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+            "legacy detached stamp has no cooperative handoff".into(),
+        ),
+    );
+    stamp_lease_detached_worker_with_holder_at(
+        project_root,
+        lease_id,
+        expected_grant,
+        pid,
+        start,
+        &holder,
+    )
+}
+
+// A spawn receipt must accompany foreign-PID admission; capture(pid) alone
+// cannot attest a child. trace:STORY-2537 trace:BUG-2458 | ai:codex
+pub(crate) fn stamp_lease_detached_worker_with_holder_at(
+    project_root: &Path,
+    lease_id: &str,
+    expected_grant: &str,
+    pid: u32,
+    start: &str,
+    holder: &aida_core::proc_identity::HolderRecord,
 ) -> Result<()> {
     use toml_edit::{value, DocumentMut};
     anyhow::ensure!(
@@ -7736,8 +7832,21 @@ pub(crate) fn stamp_lease_detached_worker_at(
                 );
             }
         }
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        if let Ok(identity) = holder.validate() {
+            anyhow::ensure!(
+                identity.pid == pid && start == format!("linux-starttime:{}", identity.starttime),
+                "detached worker holder does not match its stamped identity"
+            );
+        }
+        doc["holder_record"] = value(serde_json::to_string(holder)?);
         doc["active_pid"] = value(i64::from(pid));
         doc["active_pid_start_time"] = value(start);
+        if let Some(ns) = crate::agent_registry::current_pid_namespace() {
+            doc["pid_namespace"] = value(ns as i64);
+        } else {
+            doc.remove("pid_namespace");
+        }
         // BUG-2419: the pid was read in this process's pid namespace; without
         // it `lease_tokens` drops the worker's proc token.
         // trace:TASK-2799 | ai:claude
@@ -7759,6 +7868,9 @@ pub(crate) fn stamp_lease_detached_worker_at(
                 && back.get(LEASE_CHILD_GRANT_KEY).and_then(|v| v.as_str()) == Some(expected_grant),
             "lease {lease_id} did not persist the detached worker stamp"
         );
+        if let Ok(lease) = toml::from_str::<crate::SessionLease>(&doc.to_string()) {
+            crate::ownership::dual::lease_written(project_root, &lease);
+        }
         Ok(())
     })
 }
@@ -14780,6 +14892,7 @@ mod tests {
         let _cwd = contained_cwd_seam::pin(root.path());
         let log = root.path().join("failed.log");
         let result = run_vendor_headless_child(
+            None,
             None,
             HeadlessVendor::Claude,
             "prompt",

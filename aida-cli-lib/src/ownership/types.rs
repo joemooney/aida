@@ -37,6 +37,9 @@ pub(crate) enum WorkKey {
 // trace:STORY-2325 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Witness {
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admission: Option<aida_core::proc_identity::HolderRecord>,
     pub kind: WitnessKind,
     pub recorded_at: DateTime<Utc>,
 }
@@ -133,6 +136,7 @@ pub(crate) struct Ownership {
 /// The host the judge runs on, as the caller read it.
 // trace:STORY-2325 | ai:claude
 pub(crate) struct HostFacts<'a> {
+    pub node_id: Option<String>,
     pub host: String,
     /// This host's boot id; `None` when it could not be read.
     pub boot: Option<String>,
