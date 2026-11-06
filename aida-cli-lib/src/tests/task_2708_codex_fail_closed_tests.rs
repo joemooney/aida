@@ -221,12 +221,43 @@ enum SpawnAgentGuard {
     FinalizedBy(&'static str, &'static str),
     /// Builds Claude only (an `interactive_claude_context`).
     ClaudeOnly,
+    /// Dispatch's Codex arm is unreachable; the detached control route is
+    /// pinned separately by DISPATCH_CODEX_LANE above.
+    DispatchControl,
 }
 
 /// EVERY production `crate::launch::spawn_agent(` call site, by enclosing
 /// function. A new call site fails the count check below until it is audited
 /// and recorded here.
 const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
+    // PR-B: each new constructor retains its finalizer after seat setup.
+    // trace:STORY-2326 | ai:codex
+    (
+        "compete_cmd.rs",
+        "build_compete_arm_command",
+        SpawnAgentGuard::Itself,
+    ),
+    (
+        "dispatch.rs",
+        "build_implementer_launch_command",
+        SpawnAgentGuard::DispatchControl,
+    ),
+    (
+        "phase_driver.rs",
+        "build_phase_driver_advisor_command",
+        SpawnAgentGuard::FinalizedBy("phase_driver.rs", "spawn_advisor_session"),
+    ),
+    (
+        "phase_driver_trait.rs",
+        "build_phase_driver_ci_fix_command",
+        SpawnAgentGuard::FinalizedBy("phase_driver_trait.rs", "attempt_ci_fix"),
+    ),
+    (
+        "session.rs",
+        "build_codex_session_command",
+        SpawnAgentGuard::FinalizedBy("session.rs", "exec_codex_session"),
+    ),
+    ("session.rs", "exec_codex_session", SpawnAgentGuard::Itself),
     (
         "agent_launch.rs",
         "build_agent_new_bg_command",
@@ -322,6 +353,10 @@ fn task_2708_every_spawn_agent_builder_is_inventoried_and_guarded() {
             SpawnAgentGuard::FinalizedBy(f, n) => assert!(
                 inventoried(f, n),
                 "{file}::{name}: its finalizer {f}::{n} is not a CODEX_SPAWN_PATHS entry"
+            ),
+            SpawnAgentGuard::DispatchControl => assert!(
+                body.contains("DispatchVendor::Codex =>") && body.contains("unreachable!("),
+                "dispatch must route Codex through its detached AIDA control child"
             ),
             SpawnAgentGuard::ClaudeOnly => assert!(
                 body.contains("interactive_claude_context("),
