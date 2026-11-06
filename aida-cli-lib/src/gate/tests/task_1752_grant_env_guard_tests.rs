@@ -298,6 +298,13 @@ fn only_seat_authority_names_or_reads_the_grant_env_var() {
         "the scan must reach seat_authority.rs, or it is scanning nothing"
     );
 
+    // TUI cannot depend on cli-lib's authority owner. Its one raw read only
+    // forwards the selector to the same kernel-held image; child CLI gates
+    // still validate it. Permit exactly this line, never the whole file.
+    // trace:STORY-2326 | ai:codex
+    let transport_file = Path::new("aida-tui/src/redesign/mod.rs");
+    let transport_line = "let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);";
+    let mut transport_reads = 0;
     let mut offenders = Vec::new();
     let mut used_exemptions = Vec::new();
     for file in &files {
@@ -308,6 +315,17 @@ fn only_seat_authority_names_or_reads_the_grant_env_var() {
         let source = std::fs::read_to_string(file).expect("read source");
         let lines = production_lines(&source).unwrap_or_else(|e| panic!("{}: {e}", rel.display()));
         // trace:TASK-1952 | trace:TASK-1976 | ai:claude
+        let lines: Vec<_> = lines
+            .into_iter()
+            .filter(|(_, text)| {
+                if rel == transport_file && text.trim() == transport_line {
+                    transport_reads += 1;
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
         let production = lines.iter().map(|(_, t)| *t).collect::<Vec<_>>().join("\n");
         for read in split_or_aliased_env_reads(&production) {
             offenders.push(format!("{}: reads the grant env: {read}", rel.display()));
@@ -340,6 +358,10 @@ fn only_seat_authority_names_or_reads_the_grant_env_var() {
             }
         }
     }
+    assert_eq!(
+        transport_reads, 1,
+        "TUI selector forwarding exemption changed"
+    );
     assert!(
         offenders.is_empty(),
         "the session grant env var is named or read outside seat_authority.rs; ask \

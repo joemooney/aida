@@ -376,7 +376,7 @@ mod tests {
 /// An AIDA control child forwards this process's selector, never a requested
 /// role. The receiving CLI validates the selector using its ordinary gate.
 /// An absent selector is explicitly removed, so it cannot arrive ambiently.
-/// Callers must pin the command to the canonical current AIDA executable.
+/// Callers execute the kernel-held running image with `argv[0]` set to `aida`.
 // trace:STORY-2326 | ai:codex
 pub fn control_env(
     own_grant_selector: Option<&std::ffi::OsStr>,

@@ -5402,6 +5402,9 @@ fn apply_control_env(cmd: &mut Command) -> bool {
         });
         return false;
     }
+    // Preserve AIDA process labels while executing the kernel-held image.
+    use std::os::unix::process::CommandExt;
+    cmd.arg0("aida");
     let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);
     for (key, value) in aida_core::launch_policy::control_env(selector.as_deref()) {
         match value {
@@ -5419,6 +5422,31 @@ fn apply_control_env(cmd: &mut Command) -> bool {
 #[cfg(test)]
 mod story_2326_control_tests {
     use super::*;
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn story_2326_tui_control_argv0_is_aida() {
+        const CHILD: &str = "AIDA_TEST_TUI_CONTROL_ARGV0";
+        if std::env::var_os(CHILD).is_some() {
+            let raw = std::fs::read("/proc/self/cmdline").unwrap();
+            let argv0 = std::str::from_utf8(raw.split(|b| *b == 0).next().unwrap()).unwrap();
+            assert_eq!(std::path::Path::new(argv0).file_name().unwrap(), "aida");
+            return;
+        }
+        let mut cmd = Command::new("/proc/self/exe");
+        assert!(apply_control_env(&mut cmd));
+        let out = cmd
+            .args([
+                "--exact",
+                "redesign::story_2326_control_tests::story_2326_tui_control_argv0_is_aida",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn story_2326_tui_control_forwards_selector_without_fabricating_role() {

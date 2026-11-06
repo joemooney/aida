@@ -334,7 +334,7 @@ pub(crate) fn run_do_drive(
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
             args.join(" ").dimmed()
         );
-        let status = crate::launch::control_child(resolve_aida_exe())?
+        let status = crate::launch::control_child()?
             .args(args)
             .status_retrying_etxtbsy()
             .with_context(|| format!("failed to launch `aida {context}`"))?;
@@ -515,7 +515,7 @@ pub(crate) fn do_micro_groom_mode(
         );
     }
     let mode_str = proposal.mode.to_string();
-    let status = crate::launch::control_child(resolve_aida_exe())?
+    let status = crate::launch::control_child()?
         .args(["edit", display, "--mode", &mode_str])
         .status_retrying_etxtbsy()
         .context("failed to record the confirmed mode via `aida edit --mode`")?;
@@ -949,10 +949,9 @@ pub(crate) fn run_zen_drive(
     // Drive the one spec through the EXISTING orchestrator by self-invoking
     // `aida queue work <spec> --auto-complete --no-human <mode> [...]` — the
     // SAME full per-spec engine burndown uses (ADR-7), so the independent
-    // reviewer + merge run for free (TASK-1049). resolve_aida_exe() (not raw
-    // a fresh OS executable lookup) survives a mid-run `cargo build` swap. The drive owns the
+    // reviewer + merge run for free (TASK-1049). The child runs this image,
+    // even after a build replaces or unlinks it. The drive owns the
     // implement → CI → review → merge → pull sequence.
-    let exe = resolve_aida_exe();
     let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
     eprintln!(
         "  {} zen-driving {} — aida {}",
@@ -960,7 +959,7 @@ pub(crate) fn run_zen_drive(
         display,
         args.join(" ").dimmed()
     );
-    let mut cmd = crate::launch::control_child(&exe)?;
+    let mut cmd = crate::launch::control_child()?;
     cmd.args(&args);
     if let Some(cwd) = &drive_cwd {
         cmd.current_dir(cwd);

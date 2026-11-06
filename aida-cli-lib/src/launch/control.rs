@@ -1,15 +1,15 @@
 //! Same-seat AIDA control children. A role string grants no inheritance.
 // trace:STORY-2326 | ai:codex
 use anyhow::{Context, Result};
-use std::{path::Path, process::Command};
+use std::{os::unix::process::CommandExt, path::Path, process::Command};
 
-pub(crate) fn control_child(_program: impl AsRef<Path>) -> Result<Command> {
+pub(crate) fn control_child() -> Result<Command> {
     // Execute the kernel-held image itself. Cached paths, AIDA_BIN and build
     // profile overrides may name a replacement after promote/rollback. Never
     // canonicalize this magic link: even an unlinked running image is usable.
     control_child_with_current(
         Path::new("/proc/self/exe"),
-        std::env::var_os(aida_core::launch_policy::GRANT_ENV).as_deref(),
+        crate::gate::seat_authority::current_grant_selector().as_deref(),
     )
 }
 
@@ -19,7 +19,7 @@ pub(crate) fn control_child_for_test(program: &Path) -> Result<Command> {
     let current = program.canonicalize()?;
     control_child_with_current(
         &current,
-        std::env::var_os(aida_core::launch_policy::GRANT_ENV).as_deref(),
+        crate::gate::seat_authority::current_grant_selector().as_deref(),
     )
 }
 
@@ -27,6 +27,7 @@ fn control_child_with_current(current: &Path, grant: Option<&std::ffi::OsStr>) -
     std::fs::metadata(current)
         .context("cannot access the running AIDA executable for a control child")?;
     let mut child = Command::new(current);
+    child.arg0("aida");
     for (key, value) in aida_core::launch_policy::control_env(grant) {
         match value {
             Some(value) => {
@@ -63,10 +64,7 @@ mod tests {
                 Some(&selector)
             );
         }
-        // Caller paths never select a different program or receive authority.
-        for path in ["/bin/true", "/missing/cached-aida"] {
-            assert_eq!(control_child(path).unwrap().get_program(), "/proc/self/exe");
-        }
+        assert_eq!(control_child().unwrap().get_program(), "/proc/self/exe");
     }
 
     #[test]
@@ -74,7 +72,7 @@ mod tests {
     fn story_2326_control_child_survives_running_image_replacement() {
         const CHILD: &str = "AIDA_TEST_CONTROL_REPLACEMENT";
         if std::env::var_os(CHILD).is_some() {
-            let live = std::env::current_exe().unwrap();
+            let live = std::fs::read_link("/proc/self/exe").unwrap();
             let previous = live.with_file_name("previous");
             std::fs::rename(&live, &previous).unwrap();
             std::fs::copy("/bin/false", &live).unwrap();
@@ -82,7 +80,7 @@ mod tests {
                 if deleted {
                     std::fs::remove_file(&previous).unwrap();
                 }
-                let out = control_child(&live).unwrap()
+                let out = control_child().unwrap()
                     .args(["--list", "--exact", "launch::control::tests::story_2326_control_child_pins_program_and_forwards_only_selector"])
                     .env_remove(CHILD).output().unwrap();
                 assert!(out.status.success(), "deleted={deleted}: {out:?}");

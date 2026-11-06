@@ -166,11 +166,11 @@ pub(crate) struct RealPhaseDriver {
     // trace:BUG-1460 | ai:codex
     pub(crate) ci_terminal_sha: Option<String>,
     pub(crate) ci_terminal_green: Option<bool>,
-    /// Cached aida binary path, resolved once at construction. Re-resolving
-    /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
-    /// replaced the running dev binary: `/proc/self/exe` then includes a
-    /// " (deleted)" suffix, and `Command::new("<path> (deleted)").spawn()`
-    /// fails with ENOENT. trace:BUG-217 | ai:claude
+    /// Executable injection for unit fixtures only. Production control
+    /// children execute the running image; legacy helpers resolve their
+    /// replacement path lazily through `aida_exe()`.
+    // trace:STORY-2326 | ai:codex
+    #[cfg(test)]
     pub(crate) aida_exe: std::path::PathBuf,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
@@ -669,6 +669,7 @@ impl RealPhaseDriver {
             ci_run_id: None,
             ci_terminal_sha: None,
             ci_terminal_green: None,
+            #[cfg(test)]
             aida_exe: resolve_aida_exe(),
             no_human,
             autonomy_mode,
@@ -709,7 +710,14 @@ impl RealPhaseDriver {
     }
 
     pub(crate) fn aida_exe(&self) -> std::path::PathBuf {
-        self.aida_exe.clone()
+        #[cfg(test)]
+        {
+            self.aida_exe.clone()
+        }
+        #[cfg(not(test))]
+        {
+            resolve_aida_exe()
+        }
     }
 
     // Unit fixtures supply their current image through the existing aida_exe
@@ -722,7 +730,7 @@ impl RealPhaseDriver {
         }
         #[cfg(not(test))]
         {
-            crate::launch::control_child(&self.aida_exe)
+            crate::launch::control_child()
         }
     }
 

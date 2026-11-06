@@ -3528,7 +3528,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             return;
         };
         let Some(story_id) =
-            open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe)
+            open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe())
         else {
             // Normally `/aida-pr` already filed the story. Re-run that
             // idempotent path as a repair before looking it up once more.
@@ -3541,7 +3541,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 );
             }
             let Some(story_id) =
-                open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe)
+                open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe())
             else {
                 eprintln!(
                     "  {} shelved {} with PR #{} but could not resolve its review story",
@@ -3562,7 +3562,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &self.project_root,
                 &story_id,
                 &note,
-                &self.aida_exe,
+                &self.aida_exe(),
             ) {
                 eprintln!(
                     "  {} shelved {} with PR #{} but reviewer handoff failed: {}; {} remains as a durable retry signal",
@@ -3586,7 +3586,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.project_root,
             &story_id,
             &note,
-            &self.aida_exe,
+            &self.aida_exe(),
         ) {
             eprintln!(
                 "  {} shelved {} with PR #{} but reviewer handoff failed: {}; {} remains as a durable retry signal",

@@ -415,7 +415,7 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
         body(lib, "fn run_zen_drive(", "fn zen_file_thought_as_draft("),
         &[
             "zen_drive::drive_args(",
-            "Command::new(&exe)",
+            "crate::launch::control_child()?",
             "cmd.args(&args)",
             // trace:BUG-1735 | ai:claude — see the note above.
             "let status = cmd",

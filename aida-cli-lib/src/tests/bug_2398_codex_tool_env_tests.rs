@@ -554,6 +554,16 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "launch::assign_seat, the seat writer every converted site calls",
         ),
     ),
+    // PR-C moves the shared advisor seat assignment here; intake/questions
+    // retain their coordinator finalization and revoke-on-return boundary.
+    // trace:STORY-2326 | ai:codex
+    (
+        "launch/grant.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "advisor seat builder only; intake/questions finalize via coordinator spawn",
+        ),
+    ),
     ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
@@ -700,23 +710,28 @@ fn launcher_calls(raw: &str) -> usize {
             })
             .count()
     };
-    ["assign_seat", "spawn_agent", "exec_agent"]
-        .iter()
-        .map(|&name| {
-            let aliases: usize = raw
-                .split(&format!("{name} as "))
-                .skip(1)
-                .map(|rest| {
-                    rest.chars()
-                        .take_while(|c| is_ident(*c))
-                        .collect::<String>()
-                })
-                .filter(|alias| !alias.is_empty())
-                .map(|alias| calls(alias.as_str()))
-                .sum();
-            calls(name) + aliases
-        })
-        .sum()
+    [
+        "assign_seat",
+        "spawn_agent",
+        "exec_agent",
+        "assign_advisor_child",
+    ]
+    .iter()
+    .map(|&name| {
+        let aliases: usize = raw
+            .split(&format!("{name} as "))
+            .skip(1)
+            .map(|rest| {
+                rest.chars()
+                    .take_while(|c| is_ident(*c))
+                    .collect::<String>()
+            })
+            .filter(|alias| !alias.is_empty())
+            .map(|alias| calls(alias.as_str()))
+            .sum();
+        calls(name) + aliases
+    })
+    .sum()
 }
 
 /// The LAUNCH_INVENTORY count of the production source `src`.
@@ -736,6 +751,10 @@ fn flagged_as_unlisted(rel: &str, src: &str) -> bool {
 // trace:STORY-2326 | ai:claude
 #[test]
 fn story_2326_inventories_count_launcher_callers() {
+    let advisor = "fn go() { crate::launch::assign_advisor_child(root, vendor, contained, cmd); }";
+    assert_eq!(launcher_calls(advisor), 1);
+    assert_eq!(launch_sites(advisor), 1);
+    assert_eq!(role_sites(advisor), 1);
     let exec = "fn go(cmd: &mut Command) { crate::launch::spawn::exec_agent(cmd); }";
     assert_eq!(launcher_calls(exec), 1);
     assert!(flagged_as_unlisted("fixture_exec.rs", exec));
@@ -880,10 +899,25 @@ fn bug_2398_final_spawn_boundary_ratchet() {
                     .skip(1)
                 {
                     let rest_of_fn = call.split("\n}\n").next().unwrap();
-                    assert!(
-                        rest_of_fn.contains("revoke_headless_child_grant("),
-                        "{rel}: a coordinator launch does not revoke its child grant"
-                    );
+                    if matches!(*rel, "autopilot_intake.rs" | "questions.rs") {
+                        // PR-C's scoped advisor grant owns revocation, including
+                        // assignment and spawn errors. Explicitly drop it before
+                        // propagating the coordinator result or exiting.
+                        // trace:STORY-2326 | ai:codex
+                        assert!(text.contains("crate::launch::assign_advisor_child("));
+                        let drop = rest_of_fn.find("drop(child_grant);").unwrap();
+                        let propagate = rest_of_fn.find("let status_code = status_code?;").unwrap();
+                        assert!(drop < propagate, "{rel}: result escapes grant cleanup");
+                        let grant = include_str!("../launch/grant.rs");
+                        assert!(grant.contains("impl Drop for AdvisorChildGrant"));
+                        assert!(grant
+                            .contains("crate::session::revoke_headless_child_grant(&self.0.id)"));
+                    } else {
+                        assert!(
+                            rest_of_fn.contains("revoke_headless_child_grant("),
+                            "{rel}: a coordinator launch does not revoke its child grant"
+                        );
+                    }
                 }
                 assert!(!text.contains("crate::launch::profile::finalize_codex("));
             }
@@ -1793,6 +1827,8 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ),
     // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
     ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
+    // Shared advisor builder only; callers finalize via coordinator spawn.
+    ("launch/grant.rs", 1, RoleRoute::SeatWriter),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
     ("questions.rs", 1, RoleRoute::LaunchInventory),
     (

@@ -1228,6 +1228,13 @@ pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 
+/// Raw selector transport for a same-image control child; carries no validation
+/// or authority. Preserve even blank/non-Unicode values for the child's gates.
+// trace:STORY-2326 | ai:codex
+pub(crate) fn current_grant_selector() -> Option<std::ffi::OsString> {
+    std::env::var_os(GRANT_ENV)
+}
+
 /// The raw grant handle this process exports, when it is set and non-blank,
 /// UNVALIDATED. Only for callers that compare the handle or look its record up
 /// themselves; every authority decision goes through [`grant_check`].
@@ -2329,7 +2336,7 @@ impl DetachedLaunchCapability {
 
 /// STORY-2254: mint the detached worker's OWN child grant and capture the
 /// one-use capability for it, in one gate-owned step. The parent is validated
-/// exactly as [`crate::launch::issue_launch_child`] validates it (delegation, roster,
+/// exactly as [`issue_child_for`] validates it (delegation, roster,
 /// inline-parent rule) and the grant is minted by the same core: empty
 /// delegable seats, expiry bounded by the parent, keyring key installed
 /// before the worker exists. `require_key` makes a keyring failure a refusal:
@@ -2347,12 +2354,7 @@ pub(crate) fn issue_detached_launch_child(
     let issuer = own_process_token().context(
         "cannot issue a detached launch grant: this launcher's start identity could not be read",
     )?;
-    let grant = crate::launch::issue_launch_child(
-        project_root,
-        requested_seat,
-        child_subject,
-        require_key,
-    )?;
+    let grant = issue_child_for(project_root, requested_seat, child_subject, require_key)?;
     if require_key && !has_key_binding(&grant) {
         let _ = revoke_by_id(&grant.id);
         return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
@@ -2534,6 +2536,10 @@ pub(crate) fn preflight_sandboxed_child_key(seat: &str) -> Result<()> {
     }
 }
 
+// Authority core for launch::issue_launch_child and gate-owned capability /
+// headless flows. Gate kernels call the core directly, never back up through
+// the launch facade; delegation and keyring validation remain identical.
+// trace:STORY-2326 | ai:codex
 pub(crate) fn issue_child_for(
     project_root: &Path,
     requested_seat: &str,
@@ -2771,7 +2777,7 @@ impl HeadlessChildGrant {
 
 /// BUG-2139: mint the authority for a fresh headless child in `seat`.
 /// [`preflight_headless_child`] decides; a delegated seat goes through
-/// [`crate::launch::issue_launch_child`], which re-validates, so a roster edit or a parent
+/// [`issue_child_for`], which re-validates, so a roster edit or a parent
 /// revoked between preflight and launch still fails closed, and a `contained`
 /// child whose key the keyring could not hold is refused before it spawns.
 // trace:BUG-2139 | ai:claude
@@ -2787,9 +2793,12 @@ pub(crate) fn issue_headless_child(
     let authority = preflight_headless_child(project_root, &seat)
         .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     match authority {
-        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(
-            crate::launch::issue_launch_child(project_root, &seat, child_subject, contained)?,
-        )),
+        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child_for(
+            project_root,
+            &seat,
+            child_subject,
+            contained,
+        )?)),
         HeadlessChildAuthority::Baseline { cause } => Ok(HeadlessChildGrant::Baseline { cause }),
     }
 }
@@ -2846,7 +2855,7 @@ pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
     bind_grant_token(id, &token)
 }
 
-/// TASK-2708: bind a launch child's grant (minted by [`crate::launch::issue_launch_child`])
+/// TASK-2708: bind a launch child's grant (minted by [`issue_child_for`])
 /// to the worker an AIDA containment wrapper started. The wrapper re-parents
 /// the vendor under bubblewrap, so the worker named in the containment
 /// receipt is no longer the launcher's direct descendant; this is the same
