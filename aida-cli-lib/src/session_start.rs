@@ -3342,6 +3342,10 @@ pub(crate) fn session_start_with_receipt(
         };
 
     let lease = SessionLease {
+        holder_record: active_pid.map(|pid| {
+            serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(pid))
+                .expect("holder serialization")
+        }),
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         id: id.clone(),
         scope: owns.to_string(),

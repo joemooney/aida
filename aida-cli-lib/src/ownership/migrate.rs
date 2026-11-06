@@ -312,6 +312,8 @@ pub(crate) struct Accounted {
 // trace:STORY-2325 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct MigrationPlan {
+    /// Pinned before collection; repair never releases work or changes tree/phase.
+    pub existing: Vec<Ownership>,
     pub leases: Vec<LeasePlan>,
     pub trains: Vec<Ownership>,
     pub accounted: Accounted,
@@ -391,6 +393,7 @@ pub(crate) fn plan(
         }
     }
     MigrationPlan {
+        existing: Vec::new(),
         leases: lease_plans,
         trains,
         accounted,
@@ -446,19 +449,47 @@ pub(crate) struct Applied {
 // trace:STORY-2325 | ai:claude
 pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Applied> {
     let records = plan.records();
-    let total = records.len();
-    let steps = records
+    let total = records
+        .iter()
+        .filter(|rec| !plan.existing.iter().any(|old| old.key == rec.key))
+        .count()
+        + plan.existing.len();
+    let mut steps: Vec<Step<'static>> = records
         .into_iter()
+        .filter(|rec| !plan.existing.iter().any(|old| old.key == rec.key))
         .map(|rec| Step {
             key: rec.key.clone(),
-            op: "migrate".to_string(),
+            op: "migrate".into(),
             expect: Expect::Any,
             transition: Box::new(move |cur| {
                 cur.is_none()
-                    .then(|| (rec, Some("one-time migration from v0 records".to_string())))
+                    .then(|| (rec, Some("one-time migration from v0 records".into())))
             }),
         })
         .collect();
+    for old in &plan.existing {
+        let mut repaired = old.clone();
+        if let Some(holder) = &mut repaired.holder {
+            // Do not attach today's process to yesterday's legacy PID. A
+            // refusal is retained for operator repair, never a release.
+            for witness in &mut holder.witnesses {
+                if matches!(witness.kind, super::types::WitnessKind::Process { .. })
+                    && witness.admission.is_none()
+                {
+                    witness.admission = Some(aida_core::proc_identity::HolderRecord::refused(
+                        aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+                            "legacy holder cannot be rebound; operator repair required".into(),
+                        ),
+                    ));
+                }
+            }
+        }
+        let changed = repaired != *old;
+        steps.push(Step {
+            key: old.key.clone(), op: "repair-holder".into(), expect: Expect::Generation(old.generation),
+            transition: Box::new(move |_| changed.then(|| (repaired, Some("legacy holder retained with admission refusal; phase and tree unchanged".into())))),
+        });
+    }
     let out = store.update_all(steps)?;
     let written = out.iter().filter(|c| c.is_some()).count();
     Ok(Applied {
@@ -606,10 +637,26 @@ fn file_names(dir: &Path) -> Vec<String> {
 /// Read every v0 record the migration covers and plan it.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let (existing, malformed) = OwnershipStore::at(store_dir(main)).list();
     let writer = WriterFacts::here();
-    let probe_src = aida_core::process_probe::ProbeSource::system();
-    let probe = |id: &aida_core::process_probe::ProcessIdentity| probe_src.probe(id);
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let probe = |id: &aida_core::process_probe::ProcessIdentity| {
+        use aida_core::{
+            proc_identity::{ProcIdentity, Verdict},
+            process_probe::Probe,
+        };
+        let Some(id) = ProcIdentity::from_record(id, writer.pid_ns) else {
+            return Probe::Unknown("insufficient identity".into());
+        };
+        match aida_core::proc_identity::observe(&id, true) {
+            Verdict::Alive => Probe::Alive,
+            Verdict::Dead(why) => Probe::Dead(format!("{why:?}")),
+            Verdict::ForeignUnknown(why) => Probe::Unknown(format!("{why:?}")),
+        }
+    };
     let host = HostFacts {
+        node_id: aida_core::proc_identity::local_node_id(),
         host: writer.host.clone(),
         boot: writer.boot.clone(),
         pid_ns: writer.pid_ns,
@@ -700,7 +747,12 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
             .status()
             .is_ok_and(|s| s.success())
     };
-    plan(&facts, &trains, accounted, gaps, &writer, &is_ancestor, now)
+    for (path, why) in malformed {
+        gaps.push(format!("{}: {why}", path.display()));
+    }
+    let mut result = plan(&facts, &trains, accounted, gaps, &writer, &is_ancestor, now);
+    result.existing = existing;
+    result
 }
 
 /// The store directory the migration writes into.
@@ -748,6 +800,7 @@ fn report_json(plan: &MigrationPlan, applied: Option<&Applied>) -> serde_json::V
         "leases": plan.leases.len(),
         "counts": plan.counts().into_iter().map(|(c, n)| (serde_json::to_value(c).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), n)).collect::<BTreeMap<_, _>>(),
         "records": plan.records().len(),
+        "holder_repair_candidates": plan.existing.iter().filter(|rec| rec.holder.as_ref().is_some_and(|h| h.witnesses.iter().any(|w| matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()))).map(|rec| serde_json::json!({"key": rec.key, "generation": rec.generation, "reason": "legacy holder cannot be rebound; operator repair required"})).collect::<Vec<_>>(),
         "trains": plan.trains.len(),
         "accounted": plan.accounted,
         "duplicates": plan.duplicates.iter().map(|(k, w)| serde_json::json!({"key": k, "input": w})).collect::<Vec<_>>(),
@@ -779,6 +832,15 @@ fn print_report(plan: &MigrationPlan, applied: Option<&Applied>) {
         plan.accounted.other_merge_leases.len()
     );
     println!("  records to write: {}", plan.records().len());
+    for rec in &plan.existing {
+        if rec.holder.as_ref().is_some_and(|h| {
+            h.witnesses.iter().any(|w| {
+                matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()
+            })
+        }) {
+            println!("  holder repair {:?} generation {}: legacy holder cannot be rebound; retaining phase/tree; operator repair required", rec.key, rec.generation);
+        }
+    }
     for gap in &plan.gaps {
         println!("  note: {gap}");
     }

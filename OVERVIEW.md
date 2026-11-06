@@ -1437,3 +1437,33 @@ The bounded committed-blob readers refuse malformed or unverifiable evidence.
 Watcher reservation synchronization and untrusted-node envelopes remain separate
 work. See [second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
+
+## Process identity and holder admission
+
+<!-- trace:STORY-2537 trace:BUG-2458 | ai:codex -->
+
+`aida_core::proc_identity` names a process by boot ID, PID namespace, numeric
+PID and raw field-22 start ticks. Its judge separates Alive, Dead and
+ForeignUnknown; wall time and consumer expiry do not participate. Direct
+observation verifies procfs coordinates and rejects masked views. A local
+machine identity in the holder envelope supplies node provenance independently
+of hostname. This is lifecycle evidence, not a grant or signal capability.
+
+Ownership and local lease readers require one selected active worker with
+cooperative non-subreaper capture evidence and a holder generation. The native
+foreground headless spawn performs an async-signal-safe pre-exec self check;
+its pipe receipt binds to the unreaped child before stamping the lease and
+ownership record. Self-stamping can also capture evidence. Arbitrary targets,
+init/namespace-init, known managers, subreapers and unavailable evidence refuse
+admission. Other launch surfaces retain Unknown until they provide this handoff;
+they cannot use creator/launcher metadata as a fallback. Foreign lease expiry
+keeps its existing consumer policy. Legacy ownership migration generation-pins
+repairs, preserves phase/tree/session, and records an operator-repair refusal
+rather than recapturing today's process at an old PID. Repeating repair is a
+no-op. Host migrate/compare evidence remains required before ownership cutover.
+
+Merge locks, review-watch, mail bindings and remaining legacy probes retain
+separate migration slices. The extended TASK-1750 ratchet inventories temporary
+consumer exceptions in `proc_identity_legacy_baseline.json` and prevents new
+private PID/start decisions. See the signed
+[process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).

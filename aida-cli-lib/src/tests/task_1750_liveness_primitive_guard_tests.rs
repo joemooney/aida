@@ -58,29 +58,97 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// Raw `kill(…, 0)` probes on code lines before the file's `#[cfg(test)] mod`.
-fn raw_probes(source: &str) -> Vec<(usize, String)> {
-    let lines: Vec<&str> = source.lines().collect();
-    let mut hits = Vec::new();
+fn production_source(source: &str) -> String {
+    let mut out = String::new();
+    let lines: Vec<_> = source.lines().collect();
     for (i, line) in lines.iter().enumerate() {
-        let code = line.trim_start();
-        if code.starts_with("#[cfg(test)]")
+        if line.trim() == "#[cfg(test)]"
             && lines
                 .get(i + 1)
-                .is_some_and(|next| next.trim_start().starts_with("mod "))
+                .is_some_and(|l| l.trim_start().starts_with("mod "))
         {
             break;
         }
-        if code.starts_with("//") {
+        if !line.trim_start().starts_with("//") {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+fn raw_probes(source: &str) -> Vec<(usize, String)> {
+    let source = production_source(source);
+    let pattern = regex::Regex::new(r"\bkill\s*\(\s*[^,;{}]+,\s*0\s*\)").unwrap();
+    pattern
+        .find_iter(&source)
+        .map(|hit| {
+            (
+                source[..hit.start()]
+                    .bytes()
+                    .filter(|b| *b == b'\n')
+                    .count()
+                    + 1,
+                hit.as_str().to_string(),
+            )
+        })
+        .collect()
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+// Enumerated temporary compatibility sites. These consumers retain their own
+// policy until slices 2-5; counts may fall, never rise. The primitive files
+// themselves are explicit exclusions. This inventory grants no owner authority.
+const IDENTITY_PATTERN: &str = r"\b(?:pid_is_alive|process_identity_is_alive|process_identity_matches_strict|process_provably_dead|process_start_identity(?:_exact)?|parse_proc_stat_starttime|parse_start_identity|pid_namespace|recorded_lease_owner)\s*\(|\.start_time\s*\(|\.probe\s*\(";
+
+#[test]
+fn proc_identity_legacy_decisions_do_not_expand() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let baseline: std::collections::BTreeMap<String, usize> =
+        serde_json::from_str(include_str!("fixtures/proc_identity_legacy_baseline.json")).unwrap();
+    let pattern = regex::Regex::new(IDENTITY_PATTERN).unwrap();
+    let mut files = Vec::new();
+    for krate in CRATES {
+        rust_files(&root.join(krate).join("src"), &mut files);
+    }
+    let mut offenders = Vec::new();
+    for file in files {
+        let rel = file.strip_prefix(root).unwrap().to_str().unwrap();
+        if [
+            "aida-core/src/proc_identity.rs",
+            "aida-core/src/process_probe.rs",
+            "aida-core/src/liveness.rs",
+            "aida-core/src/pid_observer.rs",
+        ]
+        .contains(&rel)
+        {
             continue;
         }
-        if let Some(at) = code.find("kill(") {
-            let args = &code[at..];
-            if args.contains(", 0)") || args.contains(",0)") {
-                hits.push((i + 1, code.to_string()));
-            }
+        let count = pattern
+            .find_iter(&production_source(&std::fs::read_to_string(&file).unwrap()))
+            .count();
+        if count > baseline.get(rel).copied().unwrap_or(0) {
+            offenders.push(format!("{rel}: {count} identity decisions"));
         }
     }
-    hits
+    assert!(offenders.is_empty(), "new private process decisions must use proc_identity; migrate an existing site to lower its baseline:\n{}", offenders.join("\n"));
+}
+
+#[test]
+fn proc_identity_ratchet_recognizes_alternate_syntax() {
+    assert_eq!(
+        raw_probes("unsafe { libc::kill \n ( pid ,\n0 ) };").len(),
+        1
+    );
+    let pattern = regex::Regex::new(IDENTITY_PATTERN).unwrap();
+    assert_eq!(
+        pattern
+            .find_iter(
+                "process_identity_is_alive \n (pid, start); p.start_time (); source.probe (id);"
+            )
+            .count(),
+        3
+    );
 }
 
 #[test]

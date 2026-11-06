@@ -40,6 +40,7 @@ fn live_pid() -> Pid {
 
 fn lease(id: &str, scope: &str, pid: &Pid, started_at: DateTime<Utc>) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),

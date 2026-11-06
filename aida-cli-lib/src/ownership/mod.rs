@@ -21,15 +21,10 @@
 //! on origin, an ancestry test, and `now`.
 //!
 //! Binding rules from the advisor signoff:
-//! - A1: witnesses are recorded from the host's view. [`process_witness`]
-//!   records no process witness when the writer runs in a pid namespace other
-//!   than the host's initial one (a sandboxed CLI call).
-//! - A2: a process witness whose liveness cannot be read here (another host,
-//!   another pid namespace, no start identity) abstains. The owner is Dead
-//!   only when at least one witness is Dead and none is Alive; an Alive
-//!   witness always wins.
-//! - A3: a heartbeat expires only after at least three intervals and after
-//!   the longest tool timeout ([`heartbeat_window`]).
+//! - Slice 1 (STORY-2537 / BUG-2458): one cooperative, generation-bound
+//!   process holder; boot/PID-namespace/PID/start ticks name that process.
+//!   Missing admission, invalid holders and incomplete/foreign views retain
+//!   Unknown. Creator metadata and heartbeat activity cannot mask worker death.
 //! - A7: [`Reclaim::Free`] means the work key may be acquired; it never
 //!   licenses touching the old holder's tree.
 //!

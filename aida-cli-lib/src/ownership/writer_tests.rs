@@ -14,7 +14,7 @@ use aida_core::process_probe::{ProcessIdentity, INITIAL_PID_NAMESPACE_INODE};
 use chrono::{DateTime, TimeZone, Utc};
 use std::path::Path;
 
-const BOOT: &str = "boot-1";
+const BOOT: &str = "11111111-1111-4111-8111-111111111111";
 
 fn now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 11, 3, 8, 0, 0).unwrap()
@@ -29,6 +29,27 @@ fn host_writer() -> WriterFacts {
         host: "host-a".to_string(),
         boot: Some(BOOT.to_string()),
         pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+    }
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+fn admitted_fixture() -> Witness {
+    let id = ProcessIdentity {
+        pid: 42,
+        start: format!("linux:{BOOT}:9"),
+    };
+    let identity =
+        aida_core::proc_identity::ProcIdentity::from_record(&id, Some(INITIAL_PID_NAMESPACE_INODE))
+            .unwrap();
+    let record = serde_json::from_value(serde_json::json!({"version": 1, "node_id": aida_core::proc_identity::local_node_id().unwrap(), "identity": identity, "generation": "test-worker", "refusal": null})).unwrap();
+    Witness {
+        admission: Some(record),
+        kind: WitnessKind::Process {
+            host: "host-a".into(),
+            id,
+            pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+        },
+        recorded_at: now(),
     }
 }
 
@@ -277,6 +298,7 @@ fn handoff_moves_spec_and_change_to_in_pr_in_one_write() {
     let r = store.load(&spec(1)).unwrap().unwrap();
     let probe = |_: &ProcessIdentity| aida_core::process_probe::Probe::Alive;
     let host = HostFacts {
+        node_id: aida_core::proc_identity::local_node_id(),
         host: "host-a".into(),
         boot: Some(BOOT.into()),
         pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
@@ -330,7 +352,10 @@ fn lease_start_identity_converts_only_from_the_exact_scheme() {
 #[test]
 fn a1_witnesses_are_recorded_from_the_host_view_only() {
     let w = host_writer().witness(42, Some("linux-starttime:9"), now());
-    assert!(w.is_some());
+    assert!(
+        w.is_none(),
+        "an arbitrary target has no cooperative handoff"
+    );
     // A sandboxed CLI call (another pid namespace) records no process witness.
     assert!(sandboxed_writer()
         .witness(42, Some("linux-starttime:9"), now())
@@ -350,7 +375,7 @@ fn a1_witnesses_are_recorded_from_the_host_view_only() {
         dual::holder_for_lease(&l, &host_writer(), now())
             .witnesses
             .len(),
-        1
+        0
     );
 }
 
@@ -627,9 +652,7 @@ fn a4_migration_never_records_alive_without_a_live_probe() {
     assert_eq!(p.class, Class::Unknown);
     assert!(p.records[0].holder.as_ref().unwrap().witnesses.is_empty());
     // With the probe's live witness it is Live, carrying exactly that witness.
-    let w = host_writer()
-        .witness(42, Some("linux-starttime:9"), now())
-        .unwrap();
+    let w = admitted_fixture();
     let p = classify(&LeaseFacts {
         live_witnesses: vec![w.clone()],
         ..f
@@ -721,9 +744,7 @@ fn migrate_prefers_a_live_lease_over_an_unknown_one_for_one_key() {
         "STORY-1",
         "creator_pid = 42\ncreator_pid_start_time = \"linux-starttime:9\"\n",
     );
-    let w = host_writer()
-        .witness(42, Some("linux-starttime:9"), now())
-        .unwrap();
+    let w = admitted_fixture();
     let live = LeaseFacts {
         live_witnesses: vec![w],
         ..facts(l, Some((spec(1), Phase::Leased)))
@@ -1018,4 +1039,103 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
         },
     );
     assert!(orphan_outcome(&train, &dead).is_none());
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn proc_identity_repair_is_pinned_and_preserves_tree() {
+    let (_d, store) = store();
+    let mut old_holder = holder("worker-session");
+    let mut legacy = admitted_fixture();
+    legacy.admission = None;
+    old_holder.witnesses.push(legacy);
+    old_holder.tree = Some(SeatTree {
+        path: "/kept-tree".into(),
+        kind: TreeKind::Worktree,
+        branch: Some("kept-branch".into()),
+    });
+    let key = spec(999);
+    store
+        .update(&key, "test", Expect::Absent, |cur| {
+            ops::acquire(
+                cur,
+                &key,
+                old_holder.clone(),
+                Phase::Reviewing {
+                    head: "kept-head".into(),
+                },
+            )
+        })
+        .unwrap();
+    let original = store.load(&key).unwrap().unwrap();
+    let mut plan = migrate::plan(
+        &[],
+        &[],
+        Default::default(),
+        vec![],
+        &host_writer(),
+        &|_, _| false,
+        now(),
+    );
+    plan.existing = vec![original.clone()];
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 1);
+    let repaired = store.load(&key).unwrap().unwrap();
+    assert_eq!(repaired.phase, original.phase);
+    assert_eq!(
+        repaired.holder.as_ref().unwrap().tree,
+        original.holder.as_ref().unwrap().tree
+    );
+    assert_eq!(repaired.holder.as_ref().unwrap().session, "worker-session");
+    assert!(repaired.holder.as_ref().unwrap().witnesses[0]
+        .admission
+        .as_ref()
+        .unwrap()
+        .validate()
+        .is_err());
+    plan.existing = vec![repaired.clone()];
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
+    store
+        .update(
+            &key,
+            "race",
+            Expect::Generation(repaired.generation),
+            |cur| ops::release(cur, "worker-session", "independent newer event"),
+        )
+        .unwrap();
+    assert!(migrate::apply(&store, &plan).is_err());
+    assert!(store.load(&key).unwrap().unwrap().holder.is_none());
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn proc_identity_lease_selects_worker_never_creator() {
+    let worker = admitted_fixture();
+    let raw = serde_json::to_string(worker.admission.as_ref().unwrap()).unwrap();
+    let l = lease("lane", "STORY-1", &format!(
+        "active_pid = 42\nactive_pid_start_time = 'linux-starttime:9'\ncreator_pid = 2013\ncreator_pid_start_time = 'linux-starttime:1'\npid_namespace = {INITIAL_PID_NAMESPACE_INODE}\nholder_record = {raw:?}\n"
+    ));
+    let holder = dual::holder_for_lease(&l, &host_writer(), now());
+    assert_eq!(holder.witnesses.len(), 1);
+    let probe = |id: &ProcessIdentity| {
+        assert_eq!(id.pid, 42, "creator/manager must never be probed as holder");
+        aida_core::process_probe::Probe::Dead("worker exited".into())
+    };
+    let facts = HostFacts {
+        node_id: aida_core::proc_identity::local_node_id(),
+        host: "host-a".into(),
+        boot: Some(BOOT.into()),
+        pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+        probe: &probe,
+    };
+    assert!(matches!(
+        judge_owner(&holder, &facts, now()),
+        OwnerVerdict::Dead { .. }
+    ));
+    let mut replaced = l.clone();
+    replaced.active_pid = Some(2013);
+    let refused = dual::holder_for_lease(&replaced, &host_writer(), now());
+    assert!(matches!(
+        judge_owner(&refused, &facts, now()),
+        OwnerVerdict::Unknown { .. }
+    ));
 }
