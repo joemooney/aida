@@ -17,12 +17,12 @@ description: |-
   5. cosmetic: in text mode, 'mailbox read' prints 'action: unknown' for every message, including fyi/handoff mail where dispositions cannot apply. Both 'mailbox read' and 'mailbox disposition' (non-JSON) print a raw serde_json receipt as the human line. Print 'action: n/a (not a request)' for non-requests and a readable summary (outcome, actor, reason, evidence, until, recorded time).
   6. cosmetic (process): AGENTS.md (+6) and OVERVIEW.md (+9, a paragraph added near the top) carry per-change notes for this slice. That goes against CLAUDE.md's rule to put per-change notes in the PR body or an aida comment, and to edit AGENTS.md/OVERVIEW.md only for a real architecture change, because each added paragraph conflicts with every open PR. docs/mailbox.md#explicit-responses-to-requests already documents the ledger. Drop both hunks, or shrink them to a single pointer if the advisor considers the action ledger an architecture change.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T03:42:57.952039382Z
-modified_at: 2026-11-06T06:18:31.881801228Z
+modified_at: 2026-11-06T06:18:33.630688902Z
 req_type: Task
 tags:
 - from-advisor:TASK-3074
@@ -43,6 +43,14 @@ history:
   author: joe
   timestamp: 2026-11-06T03:57:27.862071215Z
   changes: []
+- id: 01a1af82-491e-7ae1-9bbe-30c613f80aff
+  author: joe
+  timestamp: 2026-11-06T06:18:33.630686703Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8de632ba2d73afd0efc6dd88965a36b2e2d6f136
   branch: main
