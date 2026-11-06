@@ -30,6 +30,7 @@ pub struct ResolvedProtocol {
 }
 
 const DEFAULT_PROTOCOLS: &[(&str, &str)] = &[
+    // trace:STORY-1651 | ai:codex
     ("spike", "Purpose: answer a bounded question with evidence.\nDeliverable: write the evidence-grounded report at the docs/spikes/*.md path named by the spec.\nBefore done: the report answers the question, records evidence and uncertainty, and names the recommended next step.\nReviewer: an advisor reads the report before anything builds on it.\nHuman boundary: decisions, taste calls, and credentials stay with the operator."),
     ("bug", "Purpose: restore intended behavior and prevent recurrence.\nDeliverable: a focused fix plus a regression test.\nBefore done: reproduce or characterize the failure, make the test fail before the fix where practical, and run the relevant suite.\nReviewer: checks the root cause, regression coverage, and blast radius.\nHuman boundary: product-policy changes are decisions, not bug fixes."),
     ("story", "Purpose: deliver the accepted user-visible capability.\nDeliverable: implementation and verification for every acceptance criterion.\nBefore done: acceptance is traceable to code or tests and relevant checks pass.\nReviewer: checks behavior, scope, compatibility, and documentation.\nHuman boundary: unresolved product or architecture forks return to the operator/advisor."),

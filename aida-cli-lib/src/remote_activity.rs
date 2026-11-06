@@ -11,7 +11,7 @@
 //! `[AI:antigravity]`, …) on branches that have NO local session lease, and
 //! surfaces a read-only "Recent remote activity" section. It is lossy by
 //! design (post-hoc, no live-work visibility) — the honest limitations are
-//! documented in `docs/aida/multi-source-coordination.md`.
+//! documented in `docs/internal/aida/multi-source-coordination.md`.
 //!
 //! The inference itself ([`infer_remote_activity`]) is a pure function over
 //! parsed commits so it is fully unit-testable without touching git.

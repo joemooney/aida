@@ -181,7 +181,7 @@ history.
    `codex mcp list`, starts `aida mcp-serve`, and verifies AIDA tools/list from
    the Codex-facing configuration.
 2. Keep `AGENTS.md` as the universal Codex entry point, but avoid stuffing every
-   historical pitfall into it. Link to `docs/agents/session-communication.md`
+   historical pitfall into it. Link to `docs/advanced/session-communication.md`
    and Codex-specific setup docs for details.
 3. Update template docs whenever live docs change. The live
    `docs/agents/codex-mcp-setup.md` currently says 26 AIDA MCP tools; the

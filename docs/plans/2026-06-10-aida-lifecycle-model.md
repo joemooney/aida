@@ -398,4 +398,4 @@ path. Do NOT enact in this spike.
 - Prevents the bug-class of: BUG-492 (archived ∧ queued), BUG-493 (held-for-review ∧ PR-closed), BUG-482 (NeedsAttention self-re-approve).
 - Reads the substrate of: TASK-121 (per-spec `history:` arrays — source for the empirical diff).
 - Un-drifts: TASK-733 (the hand-drawn lifecycle diagram).
-- See also: `docs/lifecycle.md` (the current prose model), CLAUDE.md storage/lifecycle sections, `aida-core/templates/docs/aida/discipline/substrate-as-bouncer.md`.
+- See also: `docs/lifecycle.md` (the current prose model), CLAUDE.md storage/lifecycle sections, `aida-core/templates/.aida/discipline/substrate-as-bouncer.md`.

@@ -12,14 +12,14 @@ This index helps navigate the integration documentation between requirements-man
 
 1. **[INTEGRATION_v2.md](INTEGRATION_v2.md)** - Complete simplified integration guide
 2. **[SIMPLIFIED_INTEGRATION.md](SIMPLIFIED_INTEGRATION.md)** - Implementation details and rationale
-3. **[ai-provenance/INTEGRATION_v2.md](../ai-provenance/INTEGRATION_v2.md)** - User guide for ai-provenance
+3. **[ai-provenance/INTEGRATION_v2.md](INTEGRATION_v2.md)** - User guide for ai-provenance
 
 ### 📚 **REFERENCE** (Original Complex Approach)
 
 1. **[INTEGRATION.md](INTEGRATION.md)** - Original complex integration architecture
 2. **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** - Original 15-hour implementation plan (15 tasks)
 3. **[INTEGRATION_SUMMARY.md](INTEGRATION_SUMMARY.md)** - Original integration summary
-4. **[ai-provenance/INTEGRATION.md](../ai-provenance/INTEGRATION.md)** - Original ai-provenance user guide
+4. **[ai-provenance/INTEGRATION.md](INTEGRATION.md)** - Original ai-provenance user guide
 
 ## 📖 Document Descriptions
 
@@ -35,7 +35,7 @@ This index helps navigate the integration documentation between requirements-man
 |----------|---------|----------|--------|
 | [INTEGRATION_v2.md](INTEGRATION_v2.md) | Complete simplified architecture | Developers | ✅ **Current** |
 | [SIMPLIFIED_INTEGRATION.md](SIMPLIFIED_INTEGRATION.md) | Rationale and implementation | Developers | ✅ **Current** |
-| [ai-provenance/INTEGRATION_v2.md](../ai-provenance/INTEGRATION_v2.md) | User-facing integration guide | End users | ✅ **Current** |
+| [ai-provenance/INTEGRATION_v2.md](INTEGRATION_v2.md) | User-facing integration guide | End users | ✅ **Current** |
 
 ### Original Approach (Reference Only)
 
@@ -44,7 +44,7 @@ This index helps navigate the integration documentation between requirements-man
 | [INTEGRATION.md](INTEGRATION.md) | Complex export/import architecture | Reference | 📄 Superseded |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | 15-hour implementation plan | Reference | 📄 Superseded |
 | [INTEGRATION_SUMMARY.md](INTEGRATION_SUMMARY.md) | Original summary | Reference | 📄 Superseded |
-| [ai-provenance/INTEGRATION.md](../ai-provenance/INTEGRATION.md) | Original user guide | Reference | 📄 Superseded |
+| [ai-provenance/INTEGRATION.md](INTEGRATION.md) | Original user guide | Reference | 📄 Superseded |
 
 ## 🎯 Reading Path by Role
 
@@ -63,7 +63,7 @@ This index helps navigate the integration documentation between requirements-man
 
 ### For End Users
 
-1. Read [ai-provenance/INTEGRATION_v2.md](../ai-provenance/INTEGRATION_v2.md) - User guide
+1. Read [ai-provenance/INTEGRATION_v2.md](INTEGRATION_v2.md) - User guide
 2. Follow quick start
 3. Use workflow examples
 
@@ -145,7 +145,7 @@ requirements-manager (requirements.yaml) → ai-provenance reads directly
 ### ai-provenance Repository
 - **GitHub**: https://github.com/joemooney/ai-provenance
 - **Path**: `/home/joe/ai/ai-provenance/`
-- **Main docs**: [INTEGRATION_v2.md](../ai-provenance/INTEGRATION_v2.md)
+- **Main docs**: [INTEGRATION_v2.md](INTEGRATION_v2.md)
 
 ## 💡 Tips
 

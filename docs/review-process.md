@@ -279,6 +279,6 @@ sets a short-lived presence for the advisor code gate.
 ## Related
 
 - [`docs/lifecycle.md`](lifecycle.md) — the spec states and the Done→Completed merge transition this review gates.
-- [`docs/autonomous-drain.md`](autonomous-drain.md) — the `--auto-complete` / `--no-human` orchestrator in depth.
-- [`docs/architecture/autonomy-and-escalation.md`](architecture/autonomy-and-escalation.md) — the implementer → advisor → human escalation cascade.
+- [`docs/advanced/autonomous-drain.md`](advanced/autonomous-drain.md) — the `--auto-complete` / `--no-human` orchestrator in depth.
+- [`docs/internal/architecture/autonomy-and-escalation.md`](internal/architecture/autonomy-and-escalation.md) — the implementer → advisor → human escalation cascade.
 - `aida review <SPEC>` — the human/advisor review verb (STORY-553).

@@ -233,5 +233,5 @@ thing you want to write down is *understanding*, not a behaviour to implement.
   enum, the canonical source for the type set, display names, and prefixes.
 - [`lifecycle.md`](lifecycle.md) — how stateful types move Draft → … → Completed.
 - [`user-guide.md`](user-guide.md) — daily-use reference for the CLI and dashboard.
-- After `aida init`, `docs/aida/discipline/lifecycle-vocabulary.md` (scaffolded
+- After `aida init`, `.aida/discipline/lifecycle-vocabulary.md` (scaffolded
   into your project) — precise words for each lifecycle state.

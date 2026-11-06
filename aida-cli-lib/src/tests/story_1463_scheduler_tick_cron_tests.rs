@@ -166,7 +166,7 @@ fn build_tick_cron_line_matches_reference_shape() {
     // BUG-1600: `schedule tick` has no `--format`/`--json` projection — a
     // prior version of this line added `--format json`, which `aida`
     // rejects before dispatch on every single tick (see the audit in
-    // docs/cli-format-json-audit.md). The line must never reintroduce it.
+    // docs/internal/cli-format-json-audit.md). The line must never reintroduce it.
     assert!(
         !line.contains("--format"),
         "must not pass an unsupported --format to `schedule tick`: {line}"

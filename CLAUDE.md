@@ -3,7 +3,7 @@
 AIDA is an agent-collaboration substrate: a git-canonical requirements graph,
 typed coordination, isolated work sessions, and CLI/MCP surfaces. Start with
 `OVERVIEW.md`; the former comprehensive repository guide is preserved at
-`docs/agents/aida-repository-guide.md` and should be read only when its topic is
+`docs/internal/agents/aida-repository-guide.md` and should be read only when its topic is
 needed.
 
 ## Rules every session needs
@@ -67,9 +67,9 @@ and agent docs are links or generated mirrors. Edit the template master, then ru
 | Need | Read |
 |---|---|
 | Product and architecture | `OVERVIEW.md` |
-| Full repository/storage/CLI guide | `docs/agents/aida-repository-guide.md` |
+| Full repository/storage/CLI guide | `docs/internal/agents/aida-repository-guide.md` |
 | Worktree, review, and sync discipline | `.aida/discipline/README.md` |
-| Agent communication | `docs/agents/session-communication.md` |
+| Agent communication | `docs/advanced/session-communication.md` |
 | MCP/client setup | `docs/agents/aida-mcp-install-matrix.md` |
 | CLI reference | `docs/cli/` or `aida <command> --help` |
 | Call-graph navigation (what calls/uses a symbol) | `codegraph callers`/`callees`/`impact` when installed — it skips source files over 1 MiB (none currently are, but large modules approach it); confirm a "no callers" result with `rg` |
@@ -80,7 +80,7 @@ and agent docs are links or generated mirrors. Edit the template master, then ru
 Keep this file below the configured budget in
 `aida-core/templates/context-budget.toml`. Put specialized instructions in
 skills or topic docs and link them here. Connector configuration is documented
-in `docs/agents/context-economy.md`; this repository does not require claude.ai
+in `docs/internal/agents/context-economy.md`; this repository does not require claude.ai
 connectors for routine development.
 
 <!-- trace:TASK-1441 | ai:codex -->

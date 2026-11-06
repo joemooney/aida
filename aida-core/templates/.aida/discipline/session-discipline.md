@@ -131,7 +131,7 @@ The discriminator when classifying a file mid-refactor:
 
 Worked example: BUG-116 (2026-05-17) propagated the `▶ ⏵ 🚪` → `▶ ⇒ ⏸`
 glyph swap across skill templates. The implementer correctly left
-`docs/spikes/2026-05-16-claude-headless.md` untouched, noting it as a
+`docs/internal/spikes/2026-05-16-claude-headless.md` untouched, noting it as a
 *"dated historical observation record, not living guidance."* That
 phrasing is the rule.
 

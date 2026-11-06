@@ -5,7 +5,7 @@
 **Verdict**: **COMPOSE + EXTEND** — AIDA should leverage Claude Code's extensive hook lifecycle events (specifically `SessionStart`, `SessionEnd`, and `PreCompact`) to automate local git syncs, snapshot leases, and reload workspace-level rules.
 
 > **⚠ Verification caveat (master, 2026-06-05):** AIDA confirms only this hook
-> set in its own integration (`docs/agents/session-communication.md`):
+> set in its own integration (`docs/advanced/session-communication.md`):
 > `SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse`, `Stop`,
 > `PreCompact`, plus the return schema (`permissionDecision` allow/deny/ask/defer,
 > `permissionDecisionReason`, `continue:false`, `hookSpecificOutput`). The wider

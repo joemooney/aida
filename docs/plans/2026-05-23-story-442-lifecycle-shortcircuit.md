@@ -21,8 +21,8 @@ aida queue work --auto-complete --no-human=both runs implementer → CI → revi
 
 - aida-cli/src/auto_complete.rs (LifecycleSkip struct + from_tags + banner_summary + orchestrate signature widen + phase 3/6 skip-gates)
 - aida-cli/src/main.rs (resolve_lifecycle_skip helper + RealPhaseDriver field + finish_ci skip-wait + format_tag_chip lifecycle hoist)
-- aida-core/templates/docs/aida-discipline/machinery-glossary.md (lifecycle:* term + 4 tags + risk model + unconditional merge+pull guarantee)
-- aida-core/templates/docs/aida-discipline/lifecycle-vocabulary.md (one-sentence cross-ref)
+- aida-core/templates/.aida/discipline/machinery-glossary.md (lifecycle:* term + 4 tags + risk model + unconditional merge+pull guarantee)
+- aida-core/templates/.aida/discipline/lifecycle-vocabulary.md (one-sentence cross-ref)
 - CLAUDE.md (3-line bullet under AIDA-developer workflow)
 
 ## Reusable helpers

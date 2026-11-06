@@ -75,5 +75,5 @@ allowlist, not by this FS confinement.
 
 ## 7. Related
 
-- SPIKE-61 research: `docs/competitive-analysis/2026-06-13-sandbox-execution.md` (§5 slice 2, §7.7 userns caveat).
+- SPIKE-61 research: `docs/archive/competitive-analysis/2026-06-13-sandbox-execution.md` (§5 slice 2, §7.7 userns caveat).
 - Slice 1: STORY-605 (`[contained] allowed_hosts`).

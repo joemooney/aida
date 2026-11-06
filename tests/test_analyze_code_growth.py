@@ -68,7 +68,7 @@ class ClassifyTest(unittest.TestCase):
             "scripts/check.py": "tests_automation",
             ".github/workflows/ci.yml": "tests_automation",
             "Makefile": "tests_automation",
-            "docs/monitor-contract-fixtures/a.json": "tests_automation",
+            "docs/internal/monitor-contract-fixtures/a.json": "tests_automation",
         })
 
     def test_precedence_artifacts_beat_everything(self):
@@ -76,7 +76,7 @@ class ClassifyTest(unittest.TestCase):
             "Cargo.lock": "artifacts",
             "aida-web-react/package-lock.json": "artifacts",
             "aida-server/src/generated/api.rs": "artifacts",
-            "docs/presentation/vendor/lib.js": "artifacts",
+            "docs/internal/presentation/vendor/lib.js": "artifacts",
             "aida-store/objects/FR/000/FR-1.yaml": "artifacts",
             "requirements-manager/requirements.yaml": "artifacts",
             "default_requirements.yaml": "artifacts",
@@ -104,12 +104,12 @@ class ClassifyTest(unittest.TestCase):
         })
 
     def test_generated_analytics_exports_are_artifacts_but_readme_is_docs(self):
-        base = "docs/analytics/code-growth/"
+        base = "docs/internal/analytics/code-growth/"
         for n in ("code-growth.json", "code-growth.csv", "code-growth-embedded.csv", "delivery-cadence.csv",
                   "rust-test-markers.csv", "production-growth.png"):
             self.assertEqual(mod.classify(base + n), "artifacts", n)
         self.assertEqual(mod.classify(base + "README.md"), "docs")
-        self.assertNotEqual(mod.classify("docs/analytics/other/code-growth.csv"), "artifacts")
+        self.assertNotEqual(mod.classify("docs/internal/analytics/other/code-growth.csv"), "artifacts")
 
     def test_every_rule_target_is_a_declared_bucket(self):
         for bucket, _ in mod.RULE_DOCS:
@@ -370,8 +370,8 @@ class BackdatedAndGeneratedTest(unittest.TestCase):
         for i, when in enumerate(dates):
             files = {"aida-core/src/lib.rs": f"pub fn a{i}() {{}}\n",
                      "aida-server/src/generated/api.rs": "#[test]\nfn gen() {}\n" * (i + 1),
-                     "docs/analytics/code-growth/code-growth.csv": "a,b\n" * (i + 1),
-                     "docs/analytics/code-growth/README.md": f"# R{i}\n"}
+                     "docs/internal/analytics/code-growth/code-growth.csv": "a,b\n" * (i + 1),
+                     "docs/internal/analytics/code-growth/README.md": f"# R{i}\n"}
             for rel, text in files.items():
                 p = repo / rel
                 p.parent.mkdir(parents=True, exist_ok=True)

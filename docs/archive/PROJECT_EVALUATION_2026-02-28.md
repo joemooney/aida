@@ -55,10 +55,10 @@ The biggest strategic issue is **platform lock-in to Claude-specific workflows**
 This is currently the most important product architecture gap.
 
 Evidence:
-- Multi-project router exposes relatively narrow REST surface ([rest.rs](/home/joe/ai/aida/aida-server/src/rest.rs#L31)).
-- Legacy router includes far broader v2 endpoints (skills, docs, settings, queue, reload, etc.) ([rest.rs](/home/joe/ai/aida/aida-server/src/rest.rs#L63)).
-- Server startup mounts chat/evaluate/skill-runner only in single-project mode ([main.rs](/home/joe/ai/aida/aida-server/src/main.rs#L369), [main.rs](/home/joe/ai/aida/aida-server/src/main.rs#L372), [main.rs](/home/joe/ai/aida/aida-server/src/main.rs#L373)).
-- Multi-project mode uses a chat stub that explicitly says unsupported ([chat.rs](/home/joe/ai/aida/aida-server/src/chat.rs#L79)).
+- Multi-project router exposes relatively narrow REST surface ([rest.rs](../../aida-server/src/rest.rs#L31)).
+- Legacy router includes far broader v2 endpoints (skills, docs, settings, queue, reload, etc.) ([rest.rs](../../aida-server/src/rest.rs#L63)).
+- Server startup mounts chat/evaluate/skill-runner only in single-project mode ([main.rs](../../aida-server/src/main.rs#L369), [main.rs](../../aida-server/src/main.rs#L372), [main.rs](../../aida-server/src/main.rs#L373)).
+- Multi-project mode uses a chat stub that explicitly says unsupported ([chat.rs](../../aida-server/src/chat.rs#L79)).
 
 Impact:
 - Feature behavior depends on deployment mode.
@@ -66,9 +66,9 @@ Impact:
 
 ### 2) Hard Claude coupling across the stack
 Evidence:
-- Core AI client is Claude-centric and “Direct API” path is not implemented ([client.rs](/home/joe/ai/aida/aida-core/src/ai/client.rs#L228)).
-- Server chat/evaluate/skill-chat call Anthropic API directly ([chat.rs](/home/joe/ai/aida/aida-server/src/chat.rs#L191), [evaluate.rs](/home/joe/ai/aida/aida-server/src/evaluate.rs#L118)).
-- Scaffolding/templates are Claude-specific (`.claude/*`, `CLAUDE.md`, `ai:claude:*` conventions) ([mod.rs](/home/joe/ai/aida/aida-core/src/scaffolding/mod.rs#L4), [aida-implement.md](/home/joe/ai/aida/aida-core/templates/skills/aida-implement.md#L44)).
+- Core AI client is Claude-centric and “Direct API” path is not implemented ([client.rs](../../aida-core/src/ai/client.rs#L228)).
+- Server chat/evaluate/skill-chat call Anthropic API directly ([chat.rs](../../aida-server/src/chat.rs#L191), [evaluate.rs](../../aida-server/src/evaluate.rs#L118)).
+- Scaffolding/templates are Claude-specific (`.claude/*`, `CLAUDE.md`, `ai:claude:*` conventions) ([mod.rs](../../aida-core/src/scaffolding/mod.rs#L4), [aida-implement.md](../../aida-core/templates/skills/aida-implement.md#L44)).
 
 Impact:
 - Limits adoption where Codex/OpenAI is the default agent.
@@ -77,16 +77,16 @@ Impact:
 ### 3) Security posture is not production-ready yet
 Evidence:
 - No authentication/authorization layer is visible on REST endpoints.
-- CORS currently allows all origins (`allow_origin(Any)`) and `cors_origins` arg is not used ([main.rs](/home/joe/ai/aida/aida-server/src/main.rs#L162), [main.rs](/home/joe/ai/aida/aida-server/src/main.rs#L235)).
-- Admin API-key endpoints are mounted generally; only rebuild endpoint checks dev mode ([admin.rs](/home/joe/ai/aida/aida-server/src/admin.rs#L113), [admin.rs](/home/joe/ai/aida/aida-server/src/admin.rs#L216)).
-- Skill runner can execute workspace commands (`cargo clippy`) from HTTP-triggered routes ([skill_runner.rs](/home/joe/ai/aida/aida-server/src/skill_runner.rs#L155), [skill_runner.rs](/home/joe/ai/aida/aida-server/src/skill_runner.rs#L310)).
+- CORS currently allows all origins (`allow_origin(Any)`) and `cors_origins` arg is not used ([main.rs](../../aida-server/src/main.rs#L162), [main.rs](../../aida-server/src/main.rs#L235)).
+- Admin API-key endpoints are mounted generally; only rebuild endpoint checks dev mode ([admin.rs](../../aida-server/src/admin.rs#L113), [admin.rs](../../aida-server/src/admin.rs#L216)).
+- Skill runner can execute workspace commands (`cargo clippy`) from HTTP-triggered routes ([skill_runner.rs](../../aida-server/src/skill_runner.rs#L155), [skill_runner.rs](../../aida-server/src/skill_runner.rs#L310)).
 
 Impact:
 - Unsafe for exposed/shared environments without additional controls.
 
 ### 4) Some schema/feature drift is acknowledged but unresolved
 Evidence:
-- TODOs in DB layer for `weight`, `attachments`, and `gitlab_issues` persistence gaps ([sqlite_backend.rs](/home/joe/ai/aida/aida-core/src/db/sqlite_backend.rs#L461), [sqlite_backend.rs](/home/joe/ai/aida/aida-core/src/db/sqlite_backend.rs#L470), [postgres_backend.rs](/home/joe/ai/aida/aida-core/src/db/postgres_backend.rs#L380)).
+- TODOs in DB layer for `weight`, `attachments`, and `gitlab_issues` persistence gaps ([sqlite_backend.rs](../../aida-core/src/db/sqlite_backend.rs#L461), [sqlite_backend.rs](../../aida-core/src/db/sqlite_backend.rs#L470), [postgres_backend.rs](../../aida-core/src/db/postgres_backend.rs#L380)).
 
 Impact:
 - Potentially inconsistent behavior across storage backends/features.

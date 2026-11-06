@@ -4,7 +4,7 @@
 # Gate-vs-rule ablation runner, I4 = the COMPLEXITY / COGNITIVE-LOAD test.
 #
 # This is the DECISIVE test the I1-I3 program identified as its honest
-# precondition (see docs/research/ablations/2026-06-18-gate-vs-rule-i3.md, the
+# precondition (see docs/internal/research/ablations/2026-06-18-gate-vs-rule-i3.md, the
 # "decisive next test" section). I1 (output-shape), I2 (buried output-shape),
 # cross-vendor I2 (Codex), and I3 (procedural) ALL hit 100% rule-only compliance
 # with the gate idle. Four controlled cells, two vendors, deterministic grading
@@ -64,9 +64,9 @@
 # rule is written to BOTH CLAUDE.md (Claude's native project-doc) and AGENTS.md
 # (Codex's) so each vendor reads the invariant from the file it actually loads.
 #
-# Design doc:  docs/research/ablations/2026-06-17-gate-vs-rule.md
-# I4 stub:     docs/research/ablations/2026-06-18-gate-vs-rule-i4.md
-# I3 control:  docs/research/ablations/2026-06-18-gate-vs-rule-i3.md (load=low anchor)
+# Design doc:  docs/internal/research/ablations/2026-06-17-gate-vs-rule.md
+# I4 stub:     docs/internal/research/ablations/2026-06-18-gate-vs-rule-i4.md
+# I3 control:  docs/internal/research/ablations/2026-06-18-gate-vs-rule-i3.md (load=low anchor)
 #
 # Pre-registered interpretation (keyed on Arm-R landed-compliance):
 #   Arm-R landed-compliance < 95% AND gate-saves > 0
@@ -184,7 +184,7 @@ fi
 # The filename carries the vendor when it's non-default so a codex run doesn't
 # overwrite a claude CSV (and vice versa).
 if [ -z "$OUT" ]; then
-    RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
+    RESULTS_DIR="$REPO_ROOT/docs/internal/research/ablations/results"
     if [ "$VENDOR" = "claude" ]; then
         OUT="$RESULTS_DIR/gate-vs-rule-i4-$(date +%Y%m%d-%H%M%S).csv"
     else

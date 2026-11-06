@@ -116,7 +116,7 @@ The payoff is two whole bug classes *dissolved* (not patched): they exist only b
 
 - Extend `create_store_worktree` / `remove_store_worktree` patterns with a `--detach` add + a classified remove the pool can call (rather than the pool reshelling `git worktree` itself).
 
-### `aida-core/templates/docs/aida/discipline/` + `docs/session-lifecycle.md` — doctrine
+### `aida-core/templates/docs/aida/discipline/` + `docs/advanced/session-lifecycle.md` — doctrine
 
 - Update the TASK-0396 "Gotcha: cargo incremental cache" section: warm-pool dissolves it; `cargo clean` now runs as the `pre_destroy` hook on the one delete path.
 - Update the BUG-553 reset-before-each-spec rule: the acquire primitive base-resets, so the manual rule becomes a structural guarantee.
@@ -130,7 +130,7 @@ The payoff is two whole bug classes *dissolved* (not patched): they exist only b
 - `aida-cli/src/session.rs`
 - `aida-cli/src/main.rs`
 - `aida-core/src/git_ops.rs`
-- `docs/session-lifecycle.md`
+- `docs/advanced/session-lifecycle.md`
 - `aida-core/templates/docs/aida/discipline/` (machinery-glossary, session-discipline)
 
 ## Reusable helpers (do not reimplement)
@@ -210,5 +210,5 @@ test "$P2" = "$P1"                                          # same warm tree reu
 - STORY-714 (this), child of EPIC-56 (Apply AXI agentic-ergonomics lessons — treehouse lane).
 - TASK-0396 — cargo incremental-cache poison across worktree lifetimes (dissolved by return-not-delete + `pre_destroy` cargo-clean).
 - BUG-553 — branch-stacking on worktree reuse (dissolved by unconditional base-reset in `acquire`).
-- `docs/session-lifecycle.md` — the worktree lifecycle this reshapes.
+- `docs/advanced/session-lifecycle.md` — the worktree lifecycle this reshapes.
 - treehouse `internal/pool/`, `internal/git/git.go`, `internal/hooks/hooks.go` — the studied prior art.

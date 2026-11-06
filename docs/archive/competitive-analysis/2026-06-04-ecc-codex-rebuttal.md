@@ -3,7 +3,7 @@
 **Date:** 2026-06-04  
 **Reviewer:** Codex  
 **Anchor:** SPIKE-50  
-**Target:** `docs/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md`
+**Target:** `docs/internal/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md`
 
 ## Verdict Table
 
