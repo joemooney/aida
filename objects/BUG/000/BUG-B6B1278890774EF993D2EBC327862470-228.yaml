@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-228
 agreed_id: BUG-2462
 title: 'Shared-boundary harness: fixture has no team roster, so role enter refuses, and the refusal is mislabelled as managed-agent'
 description: 'Operator live run 2026-11-06 06:20 MST, from a plain terminal: python3 scripts/containment/conformance.py --vendor codex --boundary aida ... After fixture init (BUG-2460 fixed), ''aida role enter implementer --delegate-seat implementer'' failed: ''cannot check seat implementer for joe: the AIDA store at <fixture>/repository/.aida-store has no team roster (registry/team.toml is missing); an interactive human can create it with aida team allow-seat''. The harness then reported ''fixture-role-enter-refused: operator-context grant required; managed agents must not mint seat grants'', a hard-coded label (conformance.py ~:628) that hides the real cause. Fix: (1) after ''aida role scaffold'', provision the fixture roster through the production path: run ''aida team allow-seat <user> implementer'' on the operator TTY in the fixture repo, like role enter (stdin is the terminal; no hand-written team.toml); (2) derive the refusal reason from the role-enter diagnostic: missing roster -> fixture-roster-missing, managed-agent refusal -> fixture-role-enter-refused-managed, otherwise fixture-role-enter-refused with the diagnostic in report.json; (3) an offline test with the fake vendor covers the roster step and the reason mapping; (4) update docs/internal/testing/containment-conformance.md. Acceptance: an operator run from a plain terminal reaches seat-preflight. LIGHT gate: the harness python tests.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:21:25.514461963Z
-modified_at: 2026-11-06T13:29:00.668844112Z
+modified_at: 2026-11-06T14:39:38.843921740Z
 req_type: Bug
 tags:
 - conformance
@@ -53,6 +53,20 @@ history:
   timestamp: 2026-11-06T13:29:07.537445589Z
   session_id: 01a1b10811d7
   changes: []
+- id: 01a1b14d-0993-7ab1-8602-578887c27ca6
+  author: aida-auto-bump
+  timestamp: 2026-11-06T14:39:38.387908910Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b14d-0b5b-7b90-8bdd-0c9a3c0fe42e
+  timestamp: 2026-11-06T14:39:38.843916389Z
+  agent: aida
+  commit_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
+  summary: 'BUG-2462 AC1-4 verified: production ''aida team allow-seat'' roster step on inherited operator TTY (conformance.py:627-638), diagnostic-derived refusal mapping (role_enter_refusal), unit+offline fake-vendor tests green in CI gates at head (Containment conformance evidence tests; Shared-boundary production fixture refusal), docs updated. Operator live seat-preflight unverified (needs a human TTY). Bug protocol: touches test files - met. Remaining CI shards still running at record time.'
+  review_verdict: approved
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -61,3 +75,7 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T14:39:38.387903550Z
+  completion_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
