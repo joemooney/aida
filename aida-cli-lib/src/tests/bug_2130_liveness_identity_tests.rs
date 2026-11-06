@@ -325,10 +325,15 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
     );
     let me = child.0.id();
     assert!(me > 2, "child must have an ordinary process PID");
-    let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("child legacy start");
+    let legacy =
+        aida_core::liveness::process_start_identity_legacy(me).expect("child legacy start");
     let exact = aida_core::liveness::process_start_identity(me).expect("child exact start");
-    assert!(aida_core::liveness::process_identity_matches_strict(me, &legacy));
-    assert!(aida_core::liveness::process_identity_matches_strict(me, &exact));
+    assert!(aida_core::liveness::process_identity_matches_strict(
+        me, &legacy
+    ));
+    assert!(aida_core::liveness::process_identity_matches_strict(
+        me, &exact
+    ));
     assert!(crate::gate::review_authority::tokens_match(
         &format!("proc:{me}@{legacy}"),
         &format!("shell:{me}@{exact}"),
