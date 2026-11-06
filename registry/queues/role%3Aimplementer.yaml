@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
+  position: 41000
+  added_by: role:implementer
+  added_at: 2026-11-06T07:48:26.374539460Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a793-3db6-7060-b8e8-e06758605386
   position: 42000
   added_by: role:implementer
@@ -173,13 +179,6 @@
   added_by: role:implementer
   note: 'Address the latest review on #3342 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch agy2/task-2995-features-page (no new branch). LIGHT gate.'
   added_at: 2026-11-05T13:20:12.606225359Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
-  position: 110000
-  added_by: role:implementer
-  note: 'Address the latest review on #3411 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch story-b6b1278890774ef993d2ebc327862470-418 (no new branch). LIGHT gate.'
-  added_at: 2026-11-05T13:19:44.448936061Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ab80-1ae4-71c1-862a-a0e0c3115581
