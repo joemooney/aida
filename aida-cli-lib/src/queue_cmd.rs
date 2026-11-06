@@ -7595,7 +7595,7 @@ pub(crate) fn handle_queue_progress(
     // `--format json`): `queued` = Remaining, `in_progress` = Working now,
     // `done` = In flight (status Done — work finished on a branch, not yet
     // merged; distinct from `shipped`, which is Completed/Rejected on the
-    // default branch). Mirrors `docs/monitor-contract-fixtures/queue-progress.json`.
+    // default branch). Mirrors `docs/internal/monitor-contract-fixtures/queue-progress.json`.
     if json {
         let shipped = bucket_count("Shipped");
         let in_flight = bucket_count("In flight");

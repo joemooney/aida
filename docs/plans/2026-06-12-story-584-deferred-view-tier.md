@@ -94,4 +94,4 @@ aida list                      # nudges "(N deferred hidden — pass --all or --
 ## Related
 
 - STORY-441 (the archive view-flag this clones), the pickability gate (already honors `deferred:*`),
-  `docs/aida/discipline/machinery-glossary.md` lifecycle vocabulary.
+  `.aida/discipline/machinery-glossary.md` lifecycle vocabulary.

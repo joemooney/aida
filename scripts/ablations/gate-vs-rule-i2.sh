@@ -4,7 +4,7 @@
 # Gate-vs-rule ablation runner, I2 = a SEMANTIC, high-attention-distance invariant.
 #
 # This is the decisive follow-up to the I1 commit-format pilot
-# (scripts/gate-vs-rule.sh, result: docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md).
+# (scripts/gate-vs-rule.sh, result: docs/internal/research/ablations/2026-06-18-gate-vs-rule-pilot.md).
 # I1 tested the EASIEST case for a stated rule: the commit format IS the task,
 # stated immediately, at the point of action -- and Arm-R compliance hit 100%, the
 # gate did no work, P1 was weakened. The pilot's synthesis is the ATTENTION-DISTANCE
@@ -29,8 +29,8 @@
 # and AGENTS.md (Codex's native project-doc) so each vendor reads it from the file
 # it actually loads -- keeping the test fair and the attention-distance design intact.
 #
-# Design doc: docs/research/ablations/2026-06-17-gate-vs-rule.md
-# I2 stub:    docs/research/ablations/2026-06-18-gate-vs-rule-i2.md
+# Design doc: docs/internal/research/ablations/2026-06-17-gate-vs-rule.md
+# I2 stub:    docs/internal/research/ablations/2026-06-18-gate-vs-rule-i2.md
 # Pre-registered interpretation (design doc Sec.5, applied at higher attention-distance):
 #   Arm-R landed-compliance < 95% -> P1 HOLDS as attention-distance rises (gate-saves > 0).
 #   Arm-R >= 95%                  -> the conjecture is itself weakened (even a buried,
@@ -151,7 +151,7 @@ fi
 # The filename carries the vendor when it's non-default so a codex run doesn't
 # overwrite a claude CSV (and vice versa).
 if [ -z "$OUT" ]; then
-    RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
+    RESULTS_DIR="$REPO_ROOT/docs/internal/research/ablations/results"
     if [ "$VENDOR" = "claude" ]; then
         OUT="$RESULTS_DIR/gate-vs-rule-i2-$(date +%Y%m%d-%H%M%S).csv"
     else

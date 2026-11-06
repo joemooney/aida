@@ -111,7 +111,7 @@ cargo build -p aida-cli
 - Audit `AIDA_EXIT_SENTINEL` / `AIDA_REVIEW_VERDICT_FILE` for explicit
   provenance corroboration — both are UUID-scoped file paths, so a leak is
   low-risk (stale path, nothing watches it), but neither is corroborated.
-- Update `docs/autonomous-drain.md` zen-mode section to mention `aida zen
+- Update `docs/advanced/autonomous-drain.md` zen-mode section to mention `aida zen
   status` as the corroborated check.
 
 ## Related

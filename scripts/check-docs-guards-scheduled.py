@@ -41,6 +41,7 @@ CI_YAML = ROOT / ".github" / "workflows" / "ci.yml"
 # that exists to catch documentation drift -- that is the mechanism that
 # keeps this check from going stale the way the full_ci gates themselves did.
 DOCS_GUARDS = [
+    "Documentation audience coverage",  # trace:STORY-1651 | ai:codex
     "External-prose classifier inventory",
     "Doc-intent gate (surface changes mark doc-impact)",
     "CLI-manual drift-guard (every command documented)",

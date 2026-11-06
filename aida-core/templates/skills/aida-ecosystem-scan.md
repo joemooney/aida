@@ -19,7 +19,7 @@ Maintain AIDA's strategic and technical edge by systematically reviewing shifts 
 
 Execute this scan when:
 1. **Quarterly Interval**: A scheduled deep-dive landscape review is due.
-2. **Signal Trigger**: Any critical market event specified in [signals-to-watch.md](../../docs/competitive-analysis/signals-to-watch.md) fires (e.g. a terminal-agent tool hits 10k stars, Anthropic launches Agent Teams).
+2. **Signal Trigger**: Any critical market event specified in [signals-to-watch.md](../../docs/internal/competitive-analysis/signals-to-watch.md) fires (e.g. a terminal-agent tool hits 10k stars, Anthropic launches Agent Teams).
 3. **Release Hook Warning**: Promoted by `scripts/release.sh` during minor/major version bumps.
 
 ---

@@ -8,7 +8,7 @@ AIDA itself remains a normal CLI installed separately. The plugin does not vendo
 
 - Install the `aida` CLI and ensure `aida` is on `PATH`.
 - Run this from a repository initialized with AIDA, or initialize one with `aida init`.
-- Review `docs/security/marketplace-publication-checklist.md` before publishing modified versions of this package.
+- Review `docs/internal/security/marketplace-publication-checklist.md` before publishing modified versions of this package.
 
 ## Install Locally for Testing
 

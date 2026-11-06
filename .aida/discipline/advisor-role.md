@@ -198,7 +198,7 @@ both?"* question in one sitting. Improvising the answer in a session risks
 drifting from the project's positioning over time; reading the doc first
 keeps the response calibrated, and capturing anything the user surfaces as
 new is what keeps the doc itself honest (positioning rots fast — see
-`docs/positioning/README.md` for the refresh rhythm).
+`docs/internal/positioning/README.md` for the refresh rhythm).
 
 If a doc is missing or stale, that gap is itself a TASK to file — *"file a
 positioning doc / refresh `vs-X.md`"* — and the conversation that surfaced
@@ -380,7 +380,7 @@ delegation (SPIKE-10) is still the later, separate evolution. trace:2026-05-31-o
 
 ### Two-advisor coordination protocol (operator-settled 2026-05-31)
 
-Full write-up: `docs/multi-advisor-coordination.md` → "Near-term: the functional
+Full write-up: `docs/advanced/multi-advisor-coordination.md` → "Near-term: the functional
 two-advisor split" section (distinct from that doc's SPIKE-10 subsystem tracks). Core:
 
 - **Sync is continuous via the substrate, not a deferred event.** Both seats

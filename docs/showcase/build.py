@@ -72,7 +72,7 @@ def figure(graphic_path, fallback):
 # A line holding only `![label](showcase/assets/<name>.svg)` places that
 # diagram in the page body. The path is relative to docs/, so the Markdown
 # source also renders the image when read on the forge.
-FIGURE = re.compile(r'^!\[([^\]]+)\]\(showcase/assets/([a-z0-9-]+\.svg)\)$')
+FIGURE = re.compile(r'^!\[([^\]]+)\]\(([^)]+\.svg)\)$')
 
 
 def render(source, base='.'):
@@ -102,7 +102,10 @@ def render(source, base='.'):
         image = FIGURE.match(line)
         if image:
             flush(); close_list()
-            graphic_path = SITE / 'assets' / image[2]
+            # trace:STORY-1651 | ai:codex — moved guides resolve figures from their source directory.
+            graphic_path = (ROOT / 'docs' / base / image[2]).resolve()
+            if graphic_path.parent != (SITE / 'assets').resolve() or not re.fullmatch(r'[a-z0-9-]+\.svg', graphic_path.name):
+                raise ValueError('Figures must name showcase/assets/<name>.svg: ' + image[2])
             if not graphic_path.is_file():
                 raise ValueError('Missing figure asset: ' + image[2])
             output.append(figure(graphic_path, image[1]))

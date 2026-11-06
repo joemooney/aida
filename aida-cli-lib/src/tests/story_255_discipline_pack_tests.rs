@@ -124,6 +124,11 @@ fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
         .path()
         .join("docs/competitive-analysis/ecosystem-watch.md");
     assert!(dest.is_file(), "missing ecosystem-watch.md");
+    // trace:STORY-1651 | ai:codex — repo organization must not change adopter output.
+    assert!(!root
+        .path()
+        .join("docs/internal/competitive-analysis")
+        .exists());
     let body = std::fs::read_to_string(&dest).unwrap();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     assert!(

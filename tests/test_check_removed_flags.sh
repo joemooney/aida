@@ -60,4 +60,19 @@ if run_check; then
   exit 1
 fi
 
+# trace:STORY-1651 | ai:codex — moved recordings remain historical.
+rm "$TMP/docs/CHANGELOG.md"
+mkdir -p "$TMP/docs/internal/casts"
+printf 'aida graph --tree X\n' >"$TMP/docs/internal/casts/history.cast"
+if ! run_check; then
+  echo "FAIL: moved historical cast should be exempt" >&2
+  cat "$TMP/out" >&2
+  exit 1
+fi
+printf 'aida graph --tree X\n' >"$TMP/docs/internal/live-guide.md"
+if run_check; then
+  echo "FAIL: live internal docs should still be scanned" >&2
+  exit 1
+fi
+
 echo "check-removed-flags fixture tests passed"

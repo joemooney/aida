@@ -33,7 +33,7 @@ A hand-authored `workflow.js` that orchestrates AIDA's drain pipeline for ONE al
 
 ## Place it here
 
-`docs/architecture/spike-32-workflow-poc/spec-NN-drain.workflow.js` (create the directory). Commit to AIDA on a branch (or main, you choose). The branch / merge commit URL is your return signal.
+`docs/internal/architecture/spike-32-workflow-poc/spec-NN-drain.workflow.js` (create the directory). Commit to AIDA on a branch (or main, you choose). The branch / merge commit URL is your return signal.
 
 ## Probe the failure-routing question while you're at it
 
