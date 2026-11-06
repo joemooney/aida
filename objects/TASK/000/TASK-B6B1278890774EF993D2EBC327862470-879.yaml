@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-879
 agreed_id: TASK-3222
 title: 'STORY-2561 S1a: checked-in store-writer inventory and ratchet guard'
 description: 'Slice 1 of STORY-2561 (read its operator rulings). Build the host-owned synchronous typed service endpoint and its lifecycle: started before child tools, torn down with the child or lease, and refusing launch when it is unavailable. Add launch-bound identity (project, store, spec, role, verbs fixed by the host) and the request and response framing with request-identity retry semantics. Produce a checked-in inventory of every CLI and MCP store and cache writer (claim, edit, comment, queue done, findings, handoff, mailbox, etc.). No routing cutover yet: grants stay unchanged. Tests: malformed, oversized and path-bearing requests, wrong, expired, revoked or sibling identity, replay and endpoint replacement, and service absence. Post a sketch for advisor signoff before coding; BUG-2448''s generic host-IPC defect is a separate owner and must not be widened.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T16:22:51.150840172Z
+modified_at: 2026-11-06T16:25:52.239441274Z
 req_type: Task
 tags:
 - architecture
@@ -335,6 +335,12 @@ comments:
   created_at: 2026-11-06T16:22:51.150840172Z
   modified_at: 2026-11-06T16:22:51.150840172Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1ae-4b6f-78c2-b1ad-1f4e01aaa7af
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1a inventory+ratchet is wired and has the three mutants, but the guard is already stale at PR head (merge from main changed inventoried files), whole-file hashes make the fast gate fail on any edit to ~805 files, name-based wrapper propagation turns join/display/is_empty into writer sinks, CLI/MCP writers aren''t resolved per operation, and real hooks (aida-core/templates/hooks) are not scanned.. No triage reason was given.'
+  created_at: 2026-11-06T16:25:52.239439881Z
+  modified_at: 2026-11-06T16:25:52.239439881Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
@@ -449,6 +455,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b1ae-4b6f-78c2-b1ad-1f3361695468
+  author: joe
+  timestamp: 2026-11-06T16:25:52.239428310Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -458,11 +472,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: S1a inventory+ratchet is wired and has the three mutants, but the guard is already stale at PR head (merge from main changed inventoried files), whole-file hashes make the fast gate fail on any edit to ~805 files, name-based wrapper propagation turns join/display/is_empty into writer sinks, CLI/MCP writers aren't resolved per operation, and real hooks (aida-core/templates/hooks) are not scanned.
-  recovery_hint: address the review findings, move TASK-3222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T16:09:44.053925110Z
