@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-223",
+  "publishes": [
+    {
+      "at": "2026-11-06T03:03:30.733315272Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T18:05:20.141336741Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T19:40:41.509867892Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T23:42:25.758841353Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-223",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-B6B1278890774EF993D2EBC327862470-223",
+        "branch": "origin/bug-b6b1278890774ef993d2ebc327862470-223",
+        "first_seen": "2026-11-05T23:42:25.758791005+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T01:33:15.573116883Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T03:03:30.581888159Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-223",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "93dc9165bde3bd7b80a0ac39df763581a3aebbd9",
+        "pr": 3445,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
