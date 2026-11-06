@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T08:46:12.486898322Z
+modified_at: 2026-11-06T08:46:18.596290083Z
 req_type: Task
 tags:
 - architecture
@@ -372,6 +372,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 F1-F9 are all addressed and CI is green at df6bf0e7 (all 7 shards, including the required-live bwrap gate and the CI nested-userns probe). But the F4 fix turns every sendto/sendmsg in EVERY contained lane (Codex too, not only Claude) into a host-brokered call. Spurious EAGAIN on blocking sockets and EACCES on sends over 1 MiB break the AC(1) rule ''keep existing behavior''. The new send path also skips the socket-scope proof, and nested_userns is a vendor-name literal, not data in the vendor table.. No triage reason was given.'
   created_at: 2026-11-06T08:46:12.486892684Z
   modified_at: 2026-11-06T08:46:12.486892684Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b009-8d7c-7740-a178-4ded53a0e7b8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3449):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: df6bf0e76661
+    Recorded: 2026-11-06T08:43:07.243932070+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3449#issuecomment-6680871907
+    Findings:
+    1. MAJOR (shared-boundary behavior regression, AC1 keep-existing-behavior): contained_host.py:228 and :233 broker_send forces MSG_DONTWAIT on every brokered sendto/sendmsg. contained_lane.py now notifies on nr 44 and 46 for ALL lanes, and send(2) is sendto, which Rust std TcpStream::write, CPython sock.send/sendall and curl all use. So a BLOCKING socket whose send buffer is full now gets EAGAIN instead of blocking. CPython sendall on a blocking socket raises BlockingIOError, and C callers treat EAGAIN on a blocking fd as fatal. This hits every contained Codex lane, not only Claude. Fix: when the socket is blocking (fcntl O_NONBLOCK clear on the dup), do not report EAGAIN. Hand the send to a bounded worker (like connect_nested's slots and deadline) that waits for POLLOUT with a deadline, or loop poll/send off the broker loop. Add a live test: a blocking lane socket whose buffer fills, then drains, completes the send.
+    2. MINOR-MAJOR (stream semantics): contained_host.py:183 (read bound 1 MiB) and :195 (iovlen<=64) refuse oversized sends with EACCES. For a SOCK_STREAM socket a short write is legal and expected. CPython sock.sendall(b) on a blocking socket passes the whole remaining length to send(), so any >1 MiB sendall from a lane tool (requests or http.client uploads, pip) now fails with PermissionError. Fix: for stream sockets, clamp the copied length to the bound (and the iov list to the first N entries or bytes) and return the partial count. Keep EACCES or EMSGSIZE only for datagram or seqpacket, where truncation changes message boundaries. Add a test that sendall of about 4 MiB through a lane socketpair or the relay succeeds.
+    3. MINOR (strict tier, consistency with the F3 ruling): broker_send executes a NAMED sendto host-side on the pinned socket of whatever netns it belongs to. It never calls socket_scope, unlike broker_connect_contained (contained_host.py:293). A host-netns or foreign-netns datagram socket that reaches the lane (inherited, or SCM_RIGHTS-passed: the same class F3 called out) would get unbrokered host-network named sends. No such socket exists today, so this is defense in depth, but the F3 ruling says any foreign netns, including the host's, is refused. Fix: for a named send on a non-AF_UNIX socket, require socket_scope in {lane, nested} and refuse 'foreign' or a lookup error. Add a test that a host-netns UDP socket's named send is refused.
+    4. MINOR (AC1 'vendor additions use data not new containment code'): launch/contained.rs:915 sets "nested_userns": vendor.key == "claude", a vendor-name literal inside the shared prepare path. Make it a field on the CONTAINED_VENDORS row (contained.rs:358), so a future vendor that runs its own nested sandbox, such as agy under TASK-3048, opts in by data. Assert it through the row in task_2708_claude_prepare_fake_home.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T08:46:18.492132364Z
+  modified_at: 2026-11-06T08:46:18.492132364Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
