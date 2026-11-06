@@ -20,10 +20,18 @@ relationships:
   target_id: 01a1b116-55e2-7f91-9816-80eb780d2780
   created_at: 2026-11-06T13:40:18.664098672Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a1b115-35fa-7672-a301-b18facd2282a
+  created_at: 2026-11-06T13:40:23.414489897Z
 history:
 - id: 01a1b116-bd03-7212-9dcc-ff627405dfe2
   author: joe
   timestamp: 2026-11-06T13:40:19.843029309Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes: []
+- id: 01a1b116-cf98-70e2-822c-992e76a48666
+  author: joe
+  timestamp: 2026-11-06T13:40:24.600276594Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 execution_mode: guided
