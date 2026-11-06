@@ -17,6 +17,7 @@ pub(crate) mod contained;
 // trace:TASK-3048 | ai:codex
 pub(crate) mod agy;
 pub(crate) mod context;
+pub(crate) mod parent;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude
 #[allow(dead_code)]
 pub(crate) mod resources;

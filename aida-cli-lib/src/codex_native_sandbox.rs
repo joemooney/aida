@@ -84,6 +84,17 @@ pub(crate) fn codex_native_write_paths(
         return Ok(Vec::new());
     };
     let set = crate::session::contained_write_set(host_main, write_roots)?;
+    native_write_paths_from_set(&set, first, role)
+}
+
+/// [`codex_native_write_paths`] over an already-built write set whose first
+/// write root (or, for a preview, the root it previews from) is `first`.
+// trace:TASK-2712 trace:BUG-2439 | ai:claude
+fn native_write_paths_from_set(
+    set: &crate::session::ContainedWriteSet,
+    first: &Path,
+    role: Option<&str>,
+) -> Result<Vec<PathBuf>> {
     let mut paths = set.grant_paths.clone();
     // Only for a reviewer, and only beside a store grant: a launch that was
     // refused the store (an old git, an unmarkable store) stays without the
@@ -118,14 +129,45 @@ pub(crate) fn codex_native_sandbox_flags_for_roots(
     write_roots: &[PathBuf],
     role: Option<&str>,
 ) -> Result<Vec<String>> {
+    Ok(native_flags_for_paths(codex_native_write_paths(
+        host_main,
+        write_roots,
+        role,
+    )?))
+}
+
+/// The native posture plus one `--add-dir` per UTF-8 path.
+// trace:TASK-2712 trace:BUG-2439 | ai:claude
+fn native_flags_for_paths(paths: Vec<PathBuf>) -> Vec<String> {
     let mut flags: Vec<String> = CODEX_NATIVE_POSTURE.iter().map(|s| s.to_string()).collect();
-    for path in codex_native_write_paths(host_main, write_roots, role)? {
+    for path in paths {
         if let Some(path) = path.to_str() {
             flags.push("--add-dir".to_string());
             flags.push(path.to_string());
         }
     }
-    Ok(flags)
+    flags
+}
+
+/// BUG-2439: the flags [`codex_native_sandbox_flags_in`] will produce for a
+/// lane in `role` once it runs in a linked worktree of `project_root` that
+/// does not exist yet, resolved without writing anything
+/// ([`crate::session::contained_write_set_for_new_linked_worktree`]). For a
+/// dry-run preview; a launch always resolves from its own existing tree.
+// trace:BUG-2439 | ai:claude
+pub(crate) fn codex_native_sandbox_flags_for_new_linked_worktree(
+    host_main: Option<&Path>,
+    project_root: &Path,
+    role: Option<&str>,
+) -> Result<Vec<String>> {
+    let roots = crate::session::contained_session_write_roots_from(project_root);
+    let Some(first) = roots.first() else {
+        return Ok(native_flags_for_paths(Vec::new()));
+    };
+    let set = crate::session::contained_write_set_for_new_linked_worktree(host_main, project_root)?;
+    Ok(native_flags_for_paths(native_write_paths_from_set(
+        &set, first, role,
+    )?))
 }
 
 /// THE role-aware helper every native Codex spawn path uses:

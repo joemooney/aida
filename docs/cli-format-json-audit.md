@@ -140,6 +140,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida sandbox destroy` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida sandbox path` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mailbox disposition` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida mailbox wake-snapshot` | JSON honoured | mailbox wake-snapshot --recipient advisor |
 | `aida mailbox wake-run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox wake-service` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -153,7 +154,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida mailbox notice` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox hello` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida mailbox read` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mailbox read` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida mailbox retract` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox delete` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox archive` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -574,6 +575,12 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida trace coverage` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida trace check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review publish` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review authorship` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review nodes` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review nodes enroll` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review nodes revoke` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review nodes publisher` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review watch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review prompt` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review assemble` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -798,3 +805,5 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida relay-mail child-bind` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida relay-mail outbox` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida relay-mail end` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida condition` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida condition check` | JSON honoured | condition check manual:joe |
