@@ -1709,7 +1709,6 @@ import tempfile
 responses=[]
 def ioctl(fd,op,response):
     if op==SEND: responses.append((response.val,response.error))
-shipped_target_socket=target_socket
 def target_socket(pid,fd): return os.dup(fd)
 def notify(sock,buf,name=None,flags=socket.MSG_DONTWAIT):
     n=Notification();n.id=1;n.pid=os.getpid();n.data.nr=44
@@ -1838,32 +1837,100 @@ try:
     install_lane_filter();raise AssertionError('old kernel accepted filter')
 except RuntimeError as e: assert 'SECCOMP_WAIT_KILLABLE_RECV_UNAVAILABLE' in str(e),e
 LIBC=real_libc
-# Older kernels only duplicate a leader fd after proving shared file tables.
-real_pidfd_open=os.pidfd_open
-opened=[]
+print('send bounds namespace timeout queue cancellation and kernel gate ok')
+"#
+    );
+    let out = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &code])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Model Linux 5.19-6.8 pidfd errno behavior with an actual nonleader TID.
+/// Only a proven shared table permits substituting the leader's pidfd.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_target_socket_old_kernel_thread_file_tables() {
+    let code = format!(
+        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        r#"
+import tempfile
+leader=os.getpid()
+stop=threading.Event()
+worker=threading.Thread(target=stop.wait)
+worker.start()
+tid=worker.native_id
+assert tid!=leader
+opened=[];calls=[]
 def old_pidfd_open(pid,flags=0):
     opened.append((pid,flags))
     if flags: raise OSError(errno.EINVAL,'PIDFD_THREAD unavailable')
-    if len(opened)==2: raise OSError(errno.ENOENT,'nonleader')
+    if pid!=leader: raise OSError(errno.EINVAL,'plain pidfd_open requires a group leader')
     return os.open('/dev/null',os.O_RDONLY)
 class OldPidfdKernel:
-    shared=True
+    shared=0
     def syscall(self,nr,*args):
-        if nr==312: return 0 if self.shared else 1
+        calls.append((nr,args))
+        if nr==312:
+            assert args==(tid,leader,2,0,0),args  # KCMP_FILES
+            C.set_errno(errno.EPERM)
+            return self.shared
         assert nr==438,nr
         return os.dup(args[1])
+real_pidfd_open=os.pidfd_open;real_libc=LIBC
 old_kernel=OldPidfdKernel()
 os.pidfd_open=old_pidfd_open;LIBC=old_kernel
-with tempfile.TemporaryFile() as f:
-    fd=shipped_target_socket(os.getpid(),f.fileno());os.close(fd)
-    assert [flags for pid,flags in opened]==[128,0,0],opened
-    old_kernel.shared=False;opened.clear()
+try:
+    # The mock models the kernel's EINVAL for a plain nonleader open, even
+    # though the fixed path must never attempt that open.
     try:
-        shipped_target_socket(os.getpid(),f.fileno())
-        raise AssertionError('unproven thread file table admitted')
-    except RuntimeError as e: assert 'SOCKET_THREAD_FILE_TABLE_UNPROVEN' in str(e),e
-os.pidfd_open=real_pidfd_open;LIBC=real_libc
-print('send bounds namespace timeout queue cancellation and kernel gate ok')
+        old_pidfd_open(tid)
+        raise AssertionError('nonleader plain open succeeded')
+    except OSError as e: assert e.errno==errno.EINVAL,e
+    opened.clear()
+    with tempfile.TemporaryFile() as f:
+        # Leaders need no kcmp proof. The duplicate remains the requested fd.
+        fd=target_socket(leader,f.fileno())
+        try:
+            assert os.fstat(fd)==os.fstat(f.fileno())
+            assert not os.get_inheritable(fd)
+        finally: os.close(fd)
+        assert opened==[(leader,128),(leader,0)],opened
+        assert [nr for nr,args in calls]==[438],calls
+        # Nonleaders bypass plain pidfd_open(tid) and prove the table first.
+        opened.clear();calls.clear()
+        fd=target_socket(tid,f.fileno());os.close(fd)
+        assert opened==[(tid,128),(leader,0)],opened
+        assert [nr for nr,args in calls]==[312,438],calls
+        # A different table or an unreadable kcmp result must fail closed,
+        # before opening a leader pidfd or attempting pidfd_getfd.
+        for result in (1,-1):
+            old_kernel.shared=result;opened.clear();calls.clear()
+            try:
+                target_socket(tid,f.fileno())
+                raise AssertionError('unproven thread file table admitted')
+            except RuntimeError as e: assert 'SOCKET_THREAD_FILE_TABLE_UNPROVEN' in str(e),e
+            assert opened==[(tid,128)],opened
+            assert [nr for nr,args in calls]==[312],calls
+        # Permission errors on PIDFD_THREAD are not unsupported-kernel evidence.
+        def refused_pidfd_open(pid,flags=0):
+            raise OSError(errno.EPERM,'pidfd permission denied')
+        os.pidfd_open=refused_pidfd_open;calls.clear()
+        try:
+            target_socket(tid,f.fileno())
+            raise AssertionError('pidfd permission refusal bypassed')
+        except OSError as e: assert e.errno==errno.EPERM,e
+        assert not calls,calls
+finally:
+    os.pidfd_open=real_pidfd_open;LIBC=real_libc
+    stop.set();worker.join()
+print('old kernel leader/nonleader pidfd and shared file table proof ok')
 "#
     );
     let out = Command::new("/usr/bin/python3")

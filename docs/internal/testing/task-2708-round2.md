@@ -152,10 +152,13 @@ The mechanical bdcec264ee88 CI merge-resolution commit remains an ancestor.
 * F3: host send attempts use MSG_NOSIGNAL, then EPIPE explicitly delivers
   SIGPIPE with tgkill to the notification's host TID unless the original call
   requested MSG_NOSIGNAL. Delivery failure reports SEND_SIGPIPE_FAILED and EIO.
-  Nonleader fd duplication uses PIDFD_THREAD on Linux 6.9+; older kernels must
-  prove KCMP_FILES equality before using the leader's pidfd, otherwise refuse
-  with SOCKET_THREAD_FILE_TABLE_UNPROVEN. This preserves thread-directed signal
-  masks/handlers and default termination without granting foreign socket scope.
+  Nonleader fd duplication uses PIDFD_THREAD on Linux 6.9+. The round 4
+  implementation intended to prove KCMP_FILES equality before using the leader's
+  pidfd on older kernels, but its ENOENT/ESRCH fallback was unreachable: plain
+  pidfd_open(nonleader) returns EINVAL. Its synthetic test modeled the wrong
+  errno; round 4 did not establish Linux 5.19-6.8 nonleader compatibility. Round 5
+  below corrects both the code and evidence. Thread-directed SIGPIPE delivery
+  does not grant foreign socket scope.
 * F4: the round-specific AGENTS.md paragraph is removed. OVERVIEW.md retains
   only a short architecture-level sentence. Detailed evidence stays here and
   in the owning spec comment; the host launcher supplies the PR publication.
@@ -194,3 +197,67 @@ native seat leaves the six edited files uncommitted for host publication and
 records the result on TASK-2708. Store comment persistence queues its Git commit
 for the host. The existing merge hold remains; this seat performs no merge-hold
 clearance, review verdict, source commit/push, or queue completion.
+
+## Round 5 review
+
+<!-- trace:TASK-2708 | ai:codex -->
+
+This revision addresses the older-kernel fallback finding against PR #3449 at
+b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
+
+* F1: when PIDFD_THREAD returns EINVAL, target_socket reads the trapped TID's
+  Tgid first. Leaders use their own plain pidfd; nonleaders go directly through
+  kcmp(KCMP_FILES) and open only the proven leader's pidfd. A different table or
+  failed proof refuses with SOCKET_THREAD_FILE_TABLE_UNPROVEN. Other
+  PIDFD_THREAD errors still refuse without falling back. The new standalone
+  regression uses a real nonleader TID and a kernel shim returning EINVAL for
+  both unsupported PIDFD_THREAD and plain nonleader opens. It checks leader
+  handling, nonleader proof-before-duplication ordering, different/unreadable
+  file-table refusals and permission refusals. The shim's nonleader plain open
+  must never be invoked by the fixed path. This replaces the inaccurate
+  ENOENT-based test; local live tests on a newer kernel alone do not prove
+  Linux 5.19-6.8 compatibility.
+* F2: **advisor acceptance pending**. All contained vendors, including Codex,
+  require Linux 5.19+ for NEW_LISTENER | WAIT_KILLABLE_RECV. Once the broker
+  receives a notification, handled signals (including SIGINT, SIGALRM, handled
+  SIGTERM and Go SIGURG) are deferred until it responds. A blocking send without
+  SO_SNDTIMEO may wait indefinitely for peer progress, so a handled signal cannot
+  interrupt that wait as an ordinary send can. Fatal signals still terminate;
+  notification cancellation releases broker resources. SO_SNDTIMEO still
+  bounds configured socket waits. This is a keep-existing-behavior deviation
+  across every lane, retained to prevent the send-side-effect/restart race and
+  duplicate stream bytes. Restoring ordinary signal interruption requires a
+  reviewed alternative that preserves exactly-once sending; simply dropping
+  WAIT_KILLABLE_RECV would reintroduce the round 4 correctness defect. Neither
+  the prior instruction to add the flag nor the review's description of this as
+  an "accepted price" is recorded here as advisor signoff. A named F2 punt asks
+  the advisor to accept these two deviations on TASK-2708 or direct a redesign.
+  No acceptance is claimed by this implementer.
+
+
+### Round 5 validation and handoff
+
+Validated locally on 2026-11-06:
+
+* `AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test
+  -p aida-cli-lib --lib --profile agent task_2708_ -- --nocapture`: 34 passed,
+  no failures, ignored tests or live skips. The host kernel is 7.0.0-42-generic;
+  older-kernel behavior is covered by the explicit errno shim, not an actual
+  Linux 5.19-6.8 boot.
+* The same compiled binary's `task_2707_` filter with both required-live flags:
+  21 passed. Installed-Codex native composition remains separately opt-in and
+  was not exercised.
+* The standalone old-kernel regression passes with the edited broker and fails
+  against the previous HEAD broker with the modeled plain-nonleader EINVAL.
+  The direct snapshot/timeout/queue/cancellation regression also passes.
+* `make check-ci-fast`: all 38 fast gates passed, including feature-disabled
+  CLI checking, the TUI seam and formatting. Optional ref-refresh attempts
+  reported read-only Git metadata; their guards passed.
+* Python source compilation and `git diff --check` passed.
+
+F1 is fixed. F2 remains pending explicit advisor signoff for both deviations,
+with a named punt on TASK-2708; it is not disputed or declared accepted.
+The three changed files are contained_host.py, containment/tests/launch_tests.rs
+and this testing note. Edits remain uncommitted for the native-seat host handoff.
+The punt and existing supervised merge hold remain publication vetoes; this
+seat performs no commit/push, review recording, hold clearance or queue completion.

@@ -79,16 +79,15 @@ def target_socket(pid, target_fd):
     except OSError as error:
         if error.errno != errno.EINVAL:
             raise
-        try:
-            pidfd = os.pidfd_open(pid)
-        except OSError as error:
-            if error.errno not in (errno.ENOENT, errno.ESRCH):
-                raise
-            with open('/proc/%d/status' % pid) as status:
-                tgid = next(int(line.split()[1]) for line in status if line.startswith('Tgid:'))
+        # Without PIDFD_THREAD, plain pidfd_open(nonleader) also returns
+        # EINVAL (not ENOENT/ESRCH). Resolve Tgid BEFORE the plain open so
+        # nonleaders reach the shared-file-table proof on Linux 5.19-6.8.
+        with open('/proc/%d/status' % pid) as status:
+            tgid = next(int(line.split()[1]) for line in status if line.startswith('Tgid:'))
+        if pid != tgid:
             require(LIBC.syscall(312, pid, tgid, 2, 0, 0) == 0,
                     'SOCKET_THREAD_FILE_TABLE_UNPROVEN')  # KCMP_FILES
-            pidfd = os.pidfd_open(tgid)
+        pidfd = os.pidfd_open(tgid)
     try:
         fd = LIBC.syscall(438, pidfd, target_fd, 0)
         if fd < 0:
