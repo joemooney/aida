@@ -11,7 +11,7 @@
 # question deterministically. It does NOT (cannot) measure team-adoption — see the
 # honesty notes at the bottom and in the writeup.
 #
-# Design doc + results: docs/research/ablations/2026-06-19-ryo-friction-benchmark.md
+# Design doc + results: docs/internal/research/ablations/2026-06-19-ryo-friction-benchmark.md
 #
 # TWO ARMS, the SAME synthetic spec set, at three scales (50 / 200 / 500 specs):
 #
@@ -53,7 +53,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AIDA_BIN="${AIDA_ABLATION_AIDA:-aida}"
 
 SCALES="50 200 500"
-OUT="$REPO_ROOT/docs/research/ablations/results/2026-06-19-ryo-friction-benchmark.csv"
+OUT="$REPO_ROOT/docs/internal/research/ablations/results/2026-06-19-ryo-friction-benchmark.csv"
 WORK="${TMPDIR:-/tmp}/aida-ryo-bench-$$"
 KEEP=false
 

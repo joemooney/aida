@@ -104,7 +104,10 @@ fn bug_2394_queue_work_codex_preview_maps_plan_to_read_only() {
         bypass.contains("--dangerously-bypass-approvals-and-sandbox"),
         "{bypass}"
     );
-    assert!(!bypass.contains("read-only"), "{bypass}");
+    // The expanded pickup prompt can mention read-only Git metadata. Only
+    // the command flags determine the launch sandbox.
+    // trace:TASK-2879 | ai:codex
+    assert!(!bypass.contains("--sandbox read-only"), "{bypass}");
     // Claude keeps its own plan permission mode.
     let claude = deferred_interactive_launch_hint(
         HeadlessVendor::Claude,

@@ -32,7 +32,7 @@ adds the one thing the CLI deliberately does not: **the judgment.** No new
 approval path, no new queue path, no new merge path.
 
 The safety floor (drain lock, keystone exclusion, escalation mailbox) and the
-full runbook live in `docs/solo-mode.md` — read it before the first run.
+full runbook live in `docs/advanced/solo-mode.md` — read it before the first run.
 
 ## When to use
 
@@ -199,10 +199,10 @@ it:
 
 ## Related
 
-- `docs/solo-mode.md` — the runbook: the loop, the solo posture, the safety
+- `docs/advanced/solo-mode.md` — the runbook: the loop, the solo posture, the safety
   floor, the honest caveats. **Read it before the first run.**
 - `aida solo --help` — the typed command (`run` / `stop` / `status`, `--ttl`).
-- `docs/autonomous-drain.md` — the drain user guide.
-- `docs/architecture/autonomy-and-escalation.md` — the escalation cascade.
+- `docs/advanced/autonomous-drain.md` — the drain user guide.
+- `docs/internal/architecture/autonomy-and-escalation.md` — the escalation cascade.
 
 <!-- trace:STORY-668 trace:EPIC-43 | ai:claude -->

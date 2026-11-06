@@ -312,6 +312,11 @@ fn collect(
             Some(fresh.pr),
             ids.clone(),
         );
+        // trace:TASK-3111 trace:TASK-2843 | ai:codex
+        anyhow::ensure!(
+            ids.is_empty() || !covered.is_empty(),
+            "train source specs are uncovered by the branch/lease coverage filter"
+        );
         let ids = aliases(&live.project_root, &covered)?;
         let mut policy_specs =
             crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());

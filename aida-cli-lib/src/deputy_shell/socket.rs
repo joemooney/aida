@@ -37,7 +37,7 @@ pub(crate) use unix::{request, serve, Server};
 pub(crate) const MAX_ANCESTRY: usize = 64;
 
 /// The one documented way to let a sandboxed session reach the runner.
-pub(crate) const SANDBOX_OPT_IN: &str = "this session's sandbox blocks unix sockets, so it cannot reach the script deputy. Submit from an unsandboxed shell, or the operator may exempt the two commands that need the socket: add `aida deputy shell submit` and `aida deputy shell cancel` to the sandbox's `excludedCommands` (docs/deputies.md, \"Letting a sandboxed advisor submit\")";
+pub(crate) const SANDBOX_OPT_IN: &str = "this session's sandbox blocks unix sockets, so it cannot reach the script deputy. Submit from an unsandboxed shell, or the operator may exempt the two commands that need the socket: add `aida deputy shell submit` and `aida deputy shell cancel` to the sandbox's `excludedCommands` (docs/advanced/deputies.md, \"Letting a sandboxed advisor submit\")";
 
 /// One request on the socket.
 #[derive(Debug, Clone, Serialize, Deserialize)]

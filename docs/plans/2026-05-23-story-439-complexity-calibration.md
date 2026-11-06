@@ -33,7 +33,7 @@ Per-spec calibration record at `.aida/complexity-calibration/<SPEC>.yaml` (mirro
 - aida-cli/src/cli.rs (--complexity + --assist-est on QueueCommand::Work; --complexity on PrCommand::Ship; new AutonomyCommand + CalibrationSubcommand enums)
 - aida-cli/src/reviewer_summary.rs (VerdictFile: 2 new Option<String> fields + format_reviewer_summary lines)
 - aida-cli/src/pr_ship.rs (PrShipOptions.complexity + format_dry_run_plan line)
-- aida-core/templates/docs/aida-discipline/machinery-glossary.md (complexity + estimated-assistance entries)
+- aida-core/templates/.aida/discipline/machinery-glossary.md (complexity + estimated-assistance entries)
 - aida-core/templates/skills/{aida-pickup,aida-review,aida-pr}.md (calibration capture instruction)
 
 ## Reusable helpers

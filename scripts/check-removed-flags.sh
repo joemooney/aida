@@ -13,6 +13,8 @@ common_rg=(
   --glob '!target/**'
   --glob '!bench/agent-surface/results/**'
   --glob '!docs/casts/**'
+  # Historical recordings moved with contributor docs. trace:STORY-1651 | ai:codex
+  --glob '!docs/internal/casts/**'
   --glob '!scripts/check-removed-flags.sh'
   # Release history quotes flag spellings that were live when each entry
   # shipped; it is a dated record, not current usage. Anchored to the root

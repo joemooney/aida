@@ -65,4 +65,4 @@ Today: a headless phase that degenerates (echo/sleep filler after committing) ru
 ## Related
 - EPIC-28 (resilient drain / shelve-and-advance) — the primitive both reuse.
 - BUG-257/BUG-266 (the Inconclusive outcome) — TASK-136 extends it.
-- `docs/autonomous-drain.md` — update the shelving section once shipped.
+- `docs/advanced/autonomous-drain.md` — update the shelving section once shipped.

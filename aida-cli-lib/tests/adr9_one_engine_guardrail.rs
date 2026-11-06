@@ -11,7 +11,7 @@
 //!
 //! This test converts that invariant from prose (which failed at zen slice-1,
 //! PR #1231: implement+PR with zero review) into a CI gate. See
-//! docs/architecture/one-engine-invariant.md.
+//! docs/internal/architecture/one-engine-invariant.md.
 // trace:ADR-9 | ai:claude
 
 use std::fs;
@@ -218,7 +218,7 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
          genuine new in-process engine entry, add the file to \
          ENGINE_CALLER_ALLOWLIST with a comment. Do NOT reimplement the per-spec \
          lifecycle (burndown is the only sanctioned fleet-layer exception; see \
-         docs/architecture/one-engine-invariant.md). Offenders: {offenders:?}"
+         docs/internal/architecture/one-engine-invariant.md). Offenders: {offenders:?}"
     );
 }
 

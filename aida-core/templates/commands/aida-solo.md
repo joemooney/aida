@@ -20,6 +20,6 @@ Follow the workflow in `.claude/skills/aida-solo/SKILL.md`:
 
 Guardrails: never ship keystone unattended; destructive ops (branch/worktree delete, `aida doctor --heal` destructive tier) need sign-off (STORY-666 — gate by consequence); combined-main green between batches (BUG-496); supervise a cycle or two before trusting it.
 
-Delineate: `/aida-solo` = the WARM full-judgment end-to-end loop; `aida solo run` = the HEADLESS cold-boot engine; `/aida-drain-queue` = implement-only; `/aida-burndown` = fan-only. Runbook: `docs/solo-mode.md`.
+Delineate: `/aida-solo` = the WARM full-judgment end-to-end loop; `aida solo run` = the HEADLESS cold-boot engine; `/aida-drain-queue` = implement-only; `/aida-burndown` = fan-only. Runbook: `docs/advanced/solo-mode.md`.
 
 ARGUMENTS: $ARGUMENTS

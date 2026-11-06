@@ -83,7 +83,7 @@ When a session learns a durable lesson (a habit, a sequencing rule, or a topolog
 |---|---|---|
 | must hold, mechanically checkable | could a brand-new agent that read nothing still be stopped? | a **gate** (pre-commit, reviewer phase, `aida doctor` check) |
 | universal, aids-not-enforces | would any agent in this seat need it? | `aida-core/templates/.aida/discipline/*.md` → `make sync-templates` |
-| repo-specific fact | is it about *this* codebase's topology? | `docs/agents/aida-repository-guide.md` |
+| repo-specific fact | is it about *this* codebase's topology? | `docs/internal/agents/aida-repository-guide.md` |
 | genuinely one-agent | is it about Claude Code's own surface? | stays in the Claude memory pack |
 
 **Escape hatch**: A lesson that reveals a **product defect** is none of the above. It becomes a spec (e.g., BUG-1234), because asking every future seat to remember that a CLI misinforms them is the weakest available fix.

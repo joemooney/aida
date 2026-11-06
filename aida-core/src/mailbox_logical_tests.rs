@@ -927,3 +927,141 @@ fn story1843_unsafe_receipt_files_are_partial_in_both_scopes() {
         assert_eq!(s.caught_up(), None, "{link}");
     }
 }
+
+/// A bounded/failed anchor read is unknown, never a mass of unread mail.
+/// Switching worktrees must continue using the same durable receipts.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_receipt_anchor_failure_does_not_establish_unread() {
+    let r = repo();
+    put(&r.main, &message("seen", "t", "advisor", 1));
+    let common = r.main.join(".git");
+    let dir = RECEIPT_ANCHOR_PATH.iter().fold(common, |p, c| p.join(c));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ledger = ReceiptLedger {
+        schema: RECEIPT_LEDGER_SCHEMA,
+        key: "advisor".into(),
+        receipts: BTreeMap::from([("seen".into(), 2)]),
+        ..Default::default()
+    };
+    let path = dir.join(receipt_ledger_name("advisor"));
+    let bytes = serde_json::to_vec(&ledger).unwrap();
+    for (bad, expected) in [
+        (b"{broken".to_vec(), SourceErrorCode::CorruptReceipt),
+        (
+            vec![b' '; RECEIPT_LEDGER_CAP as usize + 1],
+            SourceErrorCode::OverBudget,
+        ),
+    ] {
+        std::fs::write(&path, bad).unwrap();
+        let failed = snap(&r.sib_a, Some(&r.store), Query::Inbox);
+        assert_eq!(failed.anchor_error, Some(expected));
+        assert_eq!(ids(&failed), ["seen"], "raw mail remains addressable");
+        assert_eq!(failed.inspection_unknown_ids, ["seen"]);
+        assert!(failed.unread_ids().is_empty());
+        assert!(!failed.complete());
+        assert!(!failed.ack_eligible());
+        assert_eq!(failed.caught_up(), None);
+        std::fs::write(&path, &bytes).unwrap();
+        for root in [&r.main, &r.sib_a, &r.pool0] {
+            let recovered = snap(root, Some(&r.store), Query::Inbox);
+            assert!(recovered.complete());
+            assert!(recovered.inspection_unknown_ids.is_empty());
+            assert!(recovered.unread_ids().is_empty());
+            assert_eq!(recovered.caught_up(), Some(true));
+        }
+    }
+}
+
+/// A source that failed its message read may still hold the only receipt.
+/// It cannot establish that another source's replica is unread.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_failed_local_source_leaves_receipt_state_unknown() {
+    let r = repo();
+    let audience =
+        ResolvedAudience::from_identity_policy(vec!["reader".into()], vec![], vec![]).unwrap();
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    put(&r.main, &message("seen", "t", "reader", 1));
+    receipt(&r.sib_a, "reader", "seen", 2);
+    let original = r.sib_a.join(".aida/mailbox");
+    let saved = r.sib_a.join("saved-mailbox");
+    std::fs::rename(&original, &saved).unwrap();
+    std::os::unix::fs::symlink(&saved, &original).unwrap();
+    let failed = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
+    assert!(!failed.complete());
+    assert_eq!(ids(&failed), ["seen"]);
+    assert_eq!(failed.inspection_unknown_ids, ["seen"]);
+    assert!(failed.unread_ids().is_empty());
+    std::fs::remove_file(&original).unwrap();
+    std::fs::rename(saved, original).unwrap();
+    let recovered = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
+    assert_eq!(recovered.caught_up(), Some(true));
+}
+
+/// Bad message rows do not erase readable receipts or hide new mail. A bad
+/// per-ID receipt still withholds only its affected message.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_corrupt_message_source_salvages_receipts() {
+    let r = repo();
+    let audience =
+        ResolvedAudience::from_identity_policy(vec!["reader".into()], vec![], vec![]).unwrap();
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    for id in ["seen", "new", "unknown"] {
+        put(&r.main, &message(id, "t", "reader", 1));
+    }
+    receipt(&r.sib_a, "reader", "seen", 2);
+    receipt(&r.sib_a, "reader", "unknown", 2);
+    std::fs::write(r.sib_a.join(".aida/mailbox/broken.json"), "{broken").unwrap();
+    std::fs::write(
+        r.sib_a
+            .join(".aida/mailbox/.read-receipts/reader/unknown.txt"),
+        "bad receipt",
+    )
+    .unwrap();
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
+    assert!(!snapshot.complete());
+    assert!(!snapshot.ack_eligible());
+    assert_eq!(snapshot.caught_up(), None);
+    assert_eq!(snapshot.unread_ids(), ["new"]);
+    assert_eq!(snapshot.inspection_unknown_ids, ["unknown"]);
+    assert_eq!(
+        status_of(&snapshot, &r.sib_a),
+        &SourceStatus::Error(SourceErrorCode::CorruptMessage),
+        "receipt salvage preserves the original source diagnostic"
+    );
+    assert!(matches!(
+        snapshot
+            .records
+            .iter()
+            .find(|r| r.message.id == "seen")
+            .unwrap()
+            .read,
+        ReadEvidence::Acknowledged { .. }
+    ));
+}
+
+/// Inventory failure is a coverage warning, not a failed receipt read for
+/// every message. Newly observed private mail remains visible; ACK refuses.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_inventory_gap_preserves_independently_readable_mail() {
+    let r = repo();
+    let audience =
+        ResolvedAudience::from_identity_policy(vec!["reader".into()], vec![], vec![]).unwrap();
+    put(&r.main, &message("new", "t", "reader", 1));
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_roots = 1;
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    assert_eq!(
+        snapshot.inventory_error,
+        Some(SourceErrorCode::InventoryOverBudget)
+    );
+    assert_eq!(snapshot.unread_ids(), ["new"]);
+    assert!(snapshot.inspection_unknown_ids.is_empty());
+    assert!(!snapshot.complete());
+    assert!(!snapshot.ack_eligible());
+    assert_eq!(snapshot.caught_up(), None);
+}

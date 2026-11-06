@@ -84,10 +84,15 @@ fn context_header(agent_type: &str, spec: Option<&str>) -> String {
 
 fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) -> String {
     match (seat, spec) {
+        // trace:TASK-2879 | ai:codex
         ("implementer", Some(spec)) => format!(
             "Implement {spec} per its acceptance criteria. Stay in single-spec scope for {spec}. \
              Standard cadence: inspect context, make bounded changes, run relevant tests, run \
-             cargo fmt --all --check, commit with trailer ({spec}) and trace:{spec}, {ship}"
+             cargo fmt --all --check and add trace:{spec}. In a native sandbox \
+             (AIDA_CONTAINMENT_POSTURE=native), leave tested edits uncommitted and exit with a \
+             handoff listing files, validation and blockers; the host commits after exit and \
+             publishes separately. Do not commit, push, open a PR or run queue done in that \
+             seat. Otherwise, commit with trailer ({spec}), {ship}"
         ),
         ("implementer", None) => "You are the implementer seat: you build one spec at a time, \
              bounded to its acceptance criteria. No spec was assigned at launch. Find work with \
@@ -156,5 +161,25 @@ fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) ->
              role guidance in the launch context and find work with `{}`.",
             seat_next_command(other)
         ),
+    }
+}
+
+#[cfg(test)]
+mod native_finish_tests {
+    // trace:TASK-2879 | ai:codex
+    #[test]
+    fn task_2879_native_role_prompt_defers_git_and_queue_to_host() {
+        let prompt = super::render_role_launch_prompt(
+            "codex",
+            Some("implementer"),
+            Some("TASK-2879"),
+            None,
+            "open a PR and stop",
+        );
+        assert!(prompt.contains("AIDA_CONTAINMENT_POSTURE=native"));
+        assert!(prompt.contains("leave tested edits uncommitted"));
+        assert!(prompt.contains("host commits after exit"));
+        assert!(prompt.contains("Do not commit, push, open a PR or run queue done"));
+        assert!(prompt.contains("Otherwise, commit with trailer (TASK-2879)"));
     }
 }

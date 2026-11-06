@@ -219,7 +219,7 @@ bite — everything else is convenience or already covered.
 - `docs/agents/cross-agent-onboarding.md` — MCP onboarding for non-Claude agents
 - `docs/agents/codex-mcp-setup.md` — working Codex MCP registration
 - `docs/agents/per-agent-config.md` — per-agent permission posture + `os_wrap`
-- `docs/agents/claude-bubblewrap-sandbox.md` — `os_wrap` outer OS boundary
+- `docs/internal/agents/claude-bubblewrap-sandbox.md` — `os_wrap` outer OS boundary
 - `aida-core/src/scaffolding/codex_md.rs` — `.codex/config.toml` + `AGENTS.md` scaffolding
 - `aida-cli/src/session.rs` — `spawn_claude_headless`, `claude_headless_args`, `os_wrap` helpers
 - `aida-cli/src/auto_complete.rs` — orchestrator drain phases

@@ -5,7 +5,7 @@
 //! ([`task_1800_audited_cases_replay_from_the_vendored_bundle`]).
 //!
 //! It replays the production collector (`ChangedItems`) and the full file on
-//! the 50 frozen endpoints of `docs/testing/task-1800-trace-exclusions.json`.
+//! the 50 frozen endpoints of `docs/internal/testing/task-1800-trace-exclusions.json`.
 //! It checks that both still reproduce the recorded digests and fallback
 //! sets (corpus/collector drift) and that the 18-case audit's blob hashes
 //! match. It fails when any (case, ID) pair the audit judged true-touch or
@@ -208,8 +208,11 @@ fn strings(v: &Value) -> BTreeSet<String> {
 #[ignore = "local corpus replay: make task-1800-replay"]
 fn task_1800_corpus_replay() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let frozen = load(repo, "docs/testing/task-1800-trace-exclusions.json");
-    let audit = load(repo, "docs/testing/task-1800-semantic-audit.json");
+    let frozen = load(
+        repo,
+        "docs/internal/testing/task-1800-trace-exclusions.json",
+    );
+    let audit = load(repo, "docs/internal/testing/task-1800-semantic-audit.json");
     let policy: Option<BTreeMap<String, Option<String>>> =
         std::env::var_os("AIDA_TASK1800_POLICY_CLASSES")
             .filter(|p| !p.is_empty())
@@ -428,8 +431,11 @@ fn audit_gate(
 #[test]
 fn task_1800_audited_cases_replay_from_the_vendored_bundle() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let frozen = load(repo, "docs/testing/task-1800-trace-exclusions.json");
-    let audit = load(repo, "docs/testing/task-1800-semantic-audit.json");
+    let frozen = load(
+        repo,
+        "docs/internal/testing/task-1800-trace-exclusions.json",
+    );
+    let audit = load(repo, "docs/internal/testing/task-1800-semantic-audit.json");
     let bundle = repo.join("tests/fixtures/task-1800-replay/audited-cases.bundle");
     let dir = tempfile::tempdir().unwrap();
     let run = |args: &[&str]| {
