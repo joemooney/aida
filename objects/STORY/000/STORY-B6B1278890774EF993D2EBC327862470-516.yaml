@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-06T21:46:59.695076886Z
+modified_at: 2026-11-06T21:47:02.980589236Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -187,6 +187,14 @@ history:
   timestamp: 2026-11-06T21:45:30.516546478Z
   session_id: 01a1b2d27389
   changes: []
+- id: 01a1b2d4-57c4-7243-85b8-cada1caceeab
+  author: joe
+  timestamp: 2026-11-06T21:47:02.980609026Z
+  session_id: 01a1b2d27389
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -196,3 +204,9 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+attention_reason:
+  category: design-fork
+  detail: Guided credential-boundary sketch is ready in docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md and posted in full to this story. The story explicitly requires sketch-first guided sign-off; none exists. Need approval of access-token-only delivery and proof that installed codex exec supports the existing-login handoff before removing refusal. Production code and credentials remain untouched; C0-C4 live evidence and BUG-2447/2448 disposition remain pending.
+  lean: Choose host-managed refresh with access-token-only delivery; refuse unsupported auth interfaces and insufficient token lifetime. Do not copy refresh tokens or silently switch launch surfaces.
+  raised_by: implementer
+  raised_at: 2026-11-06T21:47:02.980589236Z
