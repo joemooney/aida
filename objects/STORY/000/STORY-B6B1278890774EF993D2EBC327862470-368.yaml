@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T11:45:06.351951787Z
+modified_at: 2026-11-06T13:50:37.094530338Z
 req_type: Story
 relationships:
 - rel_type:
@@ -292,6 +292,12 @@ comments:
   created_at: 2026-11-06T11:45:06.351951787Z
   modified_at: 2026-11-06T11:45:06.351951787Z
   session_id: 01a1b09f6eb3
+- id: 01a1b120-2826-76c3-93e5-2cccea470648
+  author: joe
+  content: 'ADVISOR BRIEF (next lane): the typed-conditions slice landed in #3491. Implement the remaining TRIGGER-half slice: the hourly resurfacing job that evaluates typed conditions on deferred and parked specs and resurfaces them when a condition is met, registered as a due job. The derived-attention half waits for STORY-2324 (completing via #3499) and STORY-2325 (blocked on BUG-2458); do NOT start it. If the trigger half completes with this PR, still title it (Refs STORY-2402), because the story stays open for the derived half. LIGHT gate.'
+  created_at: 2026-11-06T13:50:37.094530338Z
+  modified_at: 2026-11-06T13:50:37.094530338Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
