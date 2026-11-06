@@ -1171,7 +1171,16 @@ fn post_exit_case(role: &str, code: i32, linger: bool) -> PostExitCase {
                 .unwrap()
                 .push((tree.to_path_buf(), spec.to_string(), clean));
             host_git(tree, &["add", "-A"]);
-            let message = crate::ship_from_seat::post_exit_message(spec, lane, clean);
+            let message = crate::ship_from_seat::post_exit_message(
+                Some(&aida_core::Requirement::new(
+                    "Native lane test".into(),
+                    String::new(),
+                )),
+                spec,
+                lane,
+                clean,
+            )
+            .unwrap();
             host_git(tree, &["commit", "-q", "--no-verify", "-m", &message]);
             crate::ship_from_seat::PostExitCommit::Committed(host_git(tree, &["rev-parse", "HEAD"]))
         },
