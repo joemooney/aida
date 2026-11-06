@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T06:33:42.530900600Z
+modified_at: 2026-11-06T07:36:11.350029609Z
 req_type: Story
 tags:
 - architecture
@@ -151,6 +151,15 @@ comments:
   created_at: 2026-11-06T06:26:21.403556164Z
   modified_at: 2026-11-06T06:26:21.403556164Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afc9-5b56-77f1-acb8-b97ab4bf3257
+  author: joe
+  content: |-
+    Slice 1 is implemented as uncommitted native-seat edits from origin/main 379c7c3c10e. Added aida_core::proc_identity (boot UUID, PID namespace, PID, raw start ticks; Alive/Dead/ForeignUnknown; malformed identity is Unknown), cooperative self/subreaper admission and an identity-bound pre-exec child receipt. Ownership and local lease readers select one admitted worker generation; creator/systemd and heartbeat witnesses cannot mask worker death. Legacy ownership repair is generation-pinned, preserves phase/tree/session and records a refusal instead of recapturing a legacy PID. Extended TASK-1750 raw-probe and identity-decision ratchets; architecture docs updated.
+
+    Validation: targeted core tests 2 passed; targeted ownership and extended ratchet tests 46 passed; clean make check-ci-fast 38 gates passed; formatting and git diff --check passed. The host still must run the advisor's post-merge own migrate / own show --compare acceptance; fixture evidence does not replace it. No cutover, broker/grant changes, commit, push, PR, queue done, ship or review record from this seat. Host publication subject must end (Refs STORY-2537) (BUG-2458). Full file list and handoff: /tmp/story-2537-slice1-handoff.md.
+  created_at: 2026-11-06T07:36:11.350029609Z
+  modified_at: 2026-11-06T07:36:11.350029609Z
+  session_id: 01a1af901efd
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
