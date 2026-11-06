@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T21:02:41.249170258Z
-modified_at: 2026-11-06T02:03:45.230184837Z
+modified_at: 2026-11-06T02:03:58.585415518Z
 req_type: Task
 tags:
 - from-implementer:TASK-2889
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1ae99-34f9-79e2-a6b4-ed7a7fdb04fd
+  author: joe
+  content: 'Advisor triage 2026-11-05 19:10 MST: APPROVED: qualify sample_lease with pid_namespace and build namespace-qualified process tokens in both fixtures (the same class as TASK-2886/2889). Test-only.'
+  created_at: 2026-11-06T02:03:58.585415518Z
+  modified_at: 2026-11-06T02:03:58.585415518Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1add3-42dc-7060-8755-c164ecf5d293
   author: joe
