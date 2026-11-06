@@ -121,6 +121,7 @@ impl Harness {
             spec: self.spec.clone(),
             lease_id: self.lease_id.clone(),
             grant_id: self.grant_id.clone(),
+            delegate_seats: Vec::new(),
             description: None,
             mail_wake: "unsupported".into(),
             context_path: None,
@@ -154,6 +155,11 @@ impl Harness {
 
 #[cfg(target_os = "linux")]
 fn harness(spec: &str) -> Harness {
+    harness_delegating(spec, "implementer", &[])
+}
+
+#[cfg(target_os = "linux")]
+fn harness_delegating(spec: &str, role: &str, selection: &[String]) -> Harness {
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     let root = project.path();
@@ -161,7 +167,12 @@ fn harness(spec: &str) -> Harness {
     env.set_key("AIDA_HOME", home.path());
     env.set_key("AIDA_USER", SUBJECT);
     env.unset_key("AIDA_SESSION_ID");
-    let parent = seat::test_support::mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    let parent_seats: &[&str] = if role == "advisor" {
+        &["advisor", "implementer", "reviewer"]
+    } else {
+        &["implementer"]
+    };
+    let parent = seat::test_support::mint_grant_for(root, SUBJECT, "advisor", parent_seats);
     env.set_key(GRANT_ENV, &parent);
     let worktree = root.join("wt");
     std::fs::create_dir_all(&worktree).unwrap();
@@ -173,7 +184,7 @@ fn harness(spec: &str) -> Harness {
         &LaunchReceipt::new(
             root,
             &attempt,
-            ScopeKey::new("implementer", spec),
+            ScopeKey::new(role, spec),
             me.clone(),
             AGENT,
             &worktree,
@@ -184,11 +195,12 @@ fn harness(spec: &str) -> Harness {
     .unwrap();
     let (grant, capability) = seat::issue_detached_launch_child(
         root,
-        "implementer",
+        role,
         AGENT,
         false,
         &attempt,
-        &format!("implementer:{spec}"),
+        &format!("{role}:{spec}"),
+        selection,
     )
     .unwrap();
     let lease_id = "a1b2c3d4e5f6".to_string();
@@ -197,7 +209,7 @@ fn harness(spec: &str) -> Harness {
     std::fs::write(
         sessions.join(format!("{lease_id}.toml")),
         format!(
-            "id = \"{lease_id}\"\nscope = \"{spec}\"\nslug = \"{}\"\nowner = \"test\"\nworktree_path = \"{}\"\nbranch = \"story-2254-fixture\"\nstarted_at = \"2026-11-02T00:00:00Z\"\nhostname = \"test\"\nrole = \"implementer\"\nchild_grant_id = \"{}\"\n",
+            "id = \"{lease_id}\"\nscope = \"{spec}\"\nslug = \"{}\"\nowner = \"test\"\nworktree_path = \"{}\"\nbranch = \"story-2254-fixture\"\nstarted_at = \"2026-11-02T00:00:00Z\"\nhostname = \"test\"\nrole = \"{role}\"\nchild_grant_id = \"{}\"\n",
             spec.to_ascii_lowercase(),
             worktree.display(),
             grant.id
@@ -409,6 +421,7 @@ fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
         successor.id(),
         &successor_start,
         agent_registry::SpawnedRow {
+            delegate_seats: Vec::new(),
             role: Some("implementer".into()),
             current_spec: Some("TASK-2254".into()),
             worktree_path: h.worktree.clone(),
@@ -532,6 +545,7 @@ fn story_2254_bg_transfer_before_drop_never_rolls_back() {
         false,
         &attempt,
         "implementer:TASK-2258",
+        &[],
     )
     .unwrap();
     drop(DispatcherGuard {
@@ -1259,4 +1273,65 @@ fn task_2712_bg_lane_unproven_exit_commits_nothing() {
     assert!(case.calls.is_empty(), "{:?}", case.calls);
     assert!(case.pending);
     assert_eq!(case.receipt.phase, Phase::RecoveryRequired);
+}
+
+// trace:BUG-2467 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn bug_2467_detached_registry_retains_requested_selection_for_resume() {
+    for selection in [Vec::new(), vec!["reviewer".to_string()]] {
+        let mut h = harness_delegating("BUG-2467", "advisor", &selection);
+        let effective = h.grant().delegable_seats;
+        assert_eq!(
+            effective,
+            if selection.is_empty() {
+                vec![
+                    "advisor".to_string(),
+                    "implementer".into(),
+                    "reviewer".into(),
+                ]
+            } else {
+                selection.clone()
+            }
+        );
+        let mut init = h.init(h.sleep_worker("1"));
+        init.role = "advisor".into();
+        init.delegate_seats = selection.clone();
+        // Exercise the actual supervisor wire format as well as registration.
+        let init = serde_json::from_slice(&serde_json::to_vec(&init).unwrap()).unwrap();
+        let mut run = start(&mut h, init, no_faults);
+        let (sup, worker) = run.spawned();
+        h.transfer(&sup, &worker);
+        run.ack();
+        assert!(matches!(run.recv(), Some(Control::Accepted { .. })));
+        run.join().unwrap();
+        let (_, row) = agent_registry::load_entries(h.root())
+            .into_iter()
+            .find(|(_, row)| row.pid == worker.pid)
+            .expect("supervisor retains the ended worker row");
+        assert_eq!(row.delegate_seats, selection);
+        assert!(row.ended_at.is_some());
+        // This is resume's delegation input: no selection inherits the NEW
+        // parent, while explicit narrowing still refuses a removed seat.
+        h.env.set_key("AIDA_USER", SUBJECT);
+        let less = seat::test_support::mint_grant_for(
+            h.root(),
+            SUBJECT,
+            "advisor",
+            &["advisor", "implementer"],
+        );
+        h.env.set_key(GRANT_ENV, &less);
+        let resumed = seat::issue_launch_child_with_delegation(
+            h.root(),
+            "advisor",
+            AGENT,
+            false,
+            &row.delegate_seats,
+        );
+        if selection.is_empty() {
+            assert_eq!(resumed.unwrap().delegable_seats, ["advisor", "implementer"]);
+        } else {
+            assert!(format!("{:#}", resumed.unwrap_err()).contains("does not delegate `reviewer`"));
+        }
+    }
 }
