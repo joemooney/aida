@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T11:36:58.690603803Z
+modified_at: 2026-11-06T11:54:56.786524354Z
 req_type: Task
 tags:
 - architecture
@@ -413,6 +413,15 @@ comments:
   created_at: 2026-11-06T11:35:52.477958585Z
   modified_at: 2026-11-06T11:35:52.477958585Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0b6-4192-7d81-bcad-6a0a44230fed
+  author: joe
+  content: |
+    Round 4 rework for PR #3449 at 9e1319e8b3fb addresses all four findings; no finding is disputed or deferred. F1 removes the imposed three-second send deadline and ENOBUFS saturation: 16 notification-aware workers poll in 50 ms steps, honor the pinned socket's SO_SNDTIMEO (EAGAIN), and queue excess notifications without payload/rights snapshots. Dead workers and queued callers release resources. F2 requires NEW_LISTENER|WAIT_KILLABLE_RECV with a named unsupported-kernel refusal. F3 delivers SIGPIPE to the caller TID on EPIPE unless MSG_NOSIGNAL was requested, with live handler/mask/default-disposition tests. Nonleader fd lookup uses PIDFD_THREAD or a proven shared-file-table fallback. F4 removes the round-specific AGENTS paragraph and reduces OVERVIEW to an architecture sentence; detailed evidence is in docs/internal/testing/task-2708-round2.md, Round 4.
+
+    Validation so far: all 38 make check-ci-fast gates passed; final synthetic broker timeout/queue/cancellation/kernel-refusal tests passed; direct real-filter live tests passed for a >3-second stall, 500 ms SO_SNDTIMEO, 20 blocking senders, exact byte delivery during a 1 ms signal storm, and SIGPIPE semantics (five signal-test repetitions). Python compilation, formatting and git diff --check passed. The required-live targeted Rust suite is still compiling; its final result will be recorded separately. The bdcec264 mechanical CI merge remains an ancestor. Native seat instructions require uncommitted edits for host publication; no commit/push, review verdict, merge-hold clearance or queue completion is performed here.
+  created_at: 2026-11-06T11:54:56.786524354Z
+  modified_at: 2026-11-06T11:54:56.786524354Z
+  session_id: 01a1b0a5c5ad
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
