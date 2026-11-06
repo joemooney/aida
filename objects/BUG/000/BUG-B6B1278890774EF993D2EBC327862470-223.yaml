@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-223
 agreed_id: BUG-2457
 title: A completed review leaves its aida-pr-N worktree, so the review watcher's next-head review of the same PR refuses 'branch pr-N is held by worktree'
 description: 'Observed 2026-11-05 on PR-3367 and PR-3426: after a review of head H1 completed (verdict posted), the reviewer worktree ~/ai/aida-worktrees/aida-pr-N stayed (clean, no process, no merge-hold marker). When the PR got a new head H2, review watch''s pickup refused: ''branch pr-N is held by worktree .../aida-pr-N before pickup setup'', recorded the attempt as exited-without-completing and did not relaunch, so the PR silently stopped getting reviews until the advisor removed the worktree and ran aida review watch --release PR-N. BUG-2428 covered launches that fail before the agent starts; this is the post-success path. Acceptance: (1) a reviewer pickup for PR-N reuses or resets an existing aida-pr-N worktree that is clean, has no live owning process/lease, and carries no merge-hold marker (copy any marker to primary first, per BUG-2176), then checks out the new head; (2) a dirty or live one still refuses with the existing message; (3) a regression test drives two consecutive reviews of different heads of the same PR through the pickup path.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:24:45.297488765Z
-modified_at: 2026-11-06T01:35:55.602954868Z
+modified_at: 2026-11-06T03:03:16.151101071Z
 req_type: Bug
 tags:
 - area:review
@@ -132,6 +132,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aecf-7d84-7fd1-9ce8-c178034ce3fc
+  author: aida-auto-bump
+  timestamp: 2026-11-06T03:03:16.100933035Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1aecf-7db7-72d0-a272-c1aa625e6acc
+  timestamp: 2026-11-06T03:03:16.151097244Z
+  agent: aida
+  commit_sha: 93dc9165bde3bd7b80a0ac39df763581a3aebbd9
+  summary: 'Code meets BUG-2457 acceptance (1)-(3): retire_idle_review_worktree only removes the default pr-N tree when it is clean, unleased, unlocked, holder-free and not the caller''s cwd; it adopts a PR hold to primary first and keeps unknown markers; otherwise the existing refusal applies. The two-head regression test drives handle_queue_work. Round-1 ratchet findings are addressed (host_git_command, local git_ok over test_git::git_command). CAVEAT: PR CI run 42145017475 was still QUEUED at review time, so the test passing is unverified. Ship must gate on all CI lanes green; merge-hold-gate red is the expected supervised hold.'
+  review_verdict: approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -140,3 +154,7 @@ filed_at:
   aida_build_sha: 70a5d68133a
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T03:03:16.100927462Z
+  completion_sha: 93dc9165bde3bd7b80a0ac39df763581a3aebbd9
