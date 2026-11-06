@@ -3628,6 +3628,11 @@ archived (retrospective, filed). Deferred rows are hidden from `aida list`, `aid
 history` by default; surface them with `--deferred` (only) or `--all` (union).
 
 Usage: aida defer [OPTIONS] <ID>
+       aida defer <COMMAND>
+
+Commands:
+  resurface  Evaluate parked specs and resurface met conditions; never lift operator holds
+  help       Print this message or the help of the given subcommand(s)
 
 Arguments:
   <ID>
@@ -3642,6 +3647,36 @@ Options:
       --reason <REASON>
           Why the work is being held. Required for a durable operator hold; legacy deferrals may
           omit it
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida defer resurface
+Evaluate parked specs and resurface met conditions; never lift operator holds
+
+Usage: aida defer resurface [OPTIONS]
+
+Options:
+      --dry-run
+          Report actions without changing specs or queues
+
+      --manual-age-days <MANUAL_AGE_DAYS>
+          Route manual conditions older than this many days to aida human
+          
+          [default: 14]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -34901,6 +34936,42 @@ Working on aida itself
         "name": "until",
         "takes_value": true,
         "help": "Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>, date:<YYYY-MM-DD>, query:<filters> count<op><n>, or manual:<who> (requires --reason). Free text is refused"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "defer",
+      "resurface"
+    ],
+    "about": "Evaluate parked specs and resurface met conditions; never lift operator holds",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report actions without changing specs or queues"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "manual-age-days",
+        "takes_value": true,
+        "help": "Route manual conditions older than this many days to aida human"
       }
     ],
     "hidden": false
