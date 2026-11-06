@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T06:21:00.268611871Z
+modified_at: 2026-11-06T06:24:36.853309734Z
 req_type: Story
 tags:
 - docs:impacted
@@ -388,6 +388,12 @@ comments:
   created_at: 2026-11-06T05:53:37.017727576Z
   modified_at: 2026-11-06T05:53:37.017727576Z
   session_id: 01a1af4bb0e5
+- id: 01a1af87-d3f5-7502-99d3-fe27d0307621
+  author: joe
+  content: 'Native CI follow-up at c689a571576: adding the admission gate marker, routing all hub/store remote calls through configure_remote_credentials after inherited Git config scrubbing, and moving the dispatcher fixture into a cfg(test) module so the launch ratchet excludes it. Investigating the sibling-publication race from CI. Validation runner refuses because lease 01a1af84b0b7 has no lane job runner; targeted Rust tests must be rerun by host/CI (untested=true). Status promotion also refused because Needs Attention requires advisor authority; leaving status unchanged.'
+  created_at: 2026-11-06T06:24:36.853309734Z
+  modified_at: 2026-11-06T06:24:36.853309734Z
+  session_id: 01a1af84b0b7
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
