@@ -10,6 +10,16 @@ feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
 modified_at: 2026-11-06T08:35:23.956488956Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
+  created_at: 2026-11-06T08:35:44.351394171Z
+history:
+- id: 01a1afff-e7d6-78a2-869f-d7e2e2c949d8
+  author: joe
+  timestamp: 2026-11-06T08:35:46.262278297Z
+  session_id: 01a1aff312e8
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a8e8311d546
