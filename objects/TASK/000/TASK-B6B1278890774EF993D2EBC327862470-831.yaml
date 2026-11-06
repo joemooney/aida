@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-831
 agreed_id: TASK-3111
 title: 'Nit sweep A: test hygiene findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2833 TASK-2839 TASK-2843 TASK-2845 TASK-2846 TASK-2847 TASK-2855 TASK-2866 TASK-2869'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-06T02:00:00.346938178Z
+modified_at: 2026-11-06T02:05:23.383567930Z
 req_type: Task
 tags:
 - from-advisor
@@ -113,6 +113,12 @@ comments:
   content: 'Round 2 completed in new commit 2f306eaa9e9 ([AI:codex] test(hygiene): handle host-restricted capability controls and independent title canary). Both changed Rust tests passed: the actual forced-live bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw test under AIDA_REQUIRE_BWRAP_LIVE=1 passed with no skip; the checked-out sensitive_patterns_cover_decoded_text_and_do_not_echo_it test compiled directly against built dependencies passed against the locally installed CLI. Direct live controls also passed, including the non-root shell launch. Seccomp-injected EPERM for positive unshare and initial mount reported exit 77; remount denial remained a failing exit 1; missing Python reported exit 77. Formatting and whitespace checks pass. Lib-0''s downloaded summary was 4689 passed / 1 failed, and the sole failure was this same positive-control unshare EPERM (not the train flake). Pushed to existing PR #3442; PR body records all four review findings, TASK-2869 scope, and validation limits. Remote push succeeded; sandbox denied only updating the local remote-tracking ref afterward. No ship, review record, merge-hold release or CI callback wait.'
   created_at: 2026-11-05T19:06:30.870497184Z
   modified_at: 2026-11-05T19:06:30.870497184Z
+- id: 01a1ae9a-8037-7753-8586-bf73f70ca67a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 9 batched findings are addressed and gates is now green, but lib-0 fails at 06f9eb7: main''s TASK-3112 rework-suffix stripping turns the new coverage-refusal test''s fixture into a covered member, so the train merges and the test''s unwrap_err panics.. No triage reason was given.'
+  created_at: 2026-11-06T02:05:23.383566536Z
+  modified_at: 2026-11-06T02:05:23.383566536Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
   author: joe
@@ -224,6 +230,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1ae9a-8037-7753-8586-bf6b1aa8fb16
+  author: joe
+  timestamp: 2026-11-06T02:05:23.383556475Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -236,11 +250,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T17:53:37.869990215Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 9 batched findings are addressed and gates is now green, but lib-0 fails at 06f9eb7: main''s TASK-3112 rework-suffix stripping turns the new coverage-refusal test''s fixture into a covered member, so the train merges and the test''s unwrap_err panics.'
-  recovery_hint: address the review findings, move TASK-3111 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T02:00:00.346938178Z
