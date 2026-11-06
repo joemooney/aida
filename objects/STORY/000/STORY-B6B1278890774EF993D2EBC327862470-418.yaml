@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T05:18:58.064228142Z
+modified_at: 2026-11-06T05:21:02.879512166Z
 req_type: Story
 tags:
 - docs:impacted
@@ -371,6 +371,12 @@ comments:
   created_at: 2026-11-06T05:04:59.459538924Z
   modified_at: 2026-11-06T05:04:59.459538924Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af4d-a19f-7300-98a5-f172acd22f31
+  author: joe
+  content: 'Slice 2 approach under the 2026-11-05 13:30 MST brief: reuse slice-1 sshsig and current node roster for signed reservation transitions on the explicitly trusted GitHub admission hub/ref. Add bounded exact-tip CAS, token confirmation before dispatch, fail-closed ambiguous outcomes and old-head exclusion, and checked publication history before local-directory fallback. Target two-clone races, unreachable-hub and mirror refusals, transition validation and watcher discovery tests; retain local capacity/process binding. Expected files: review_publication/admission module, review_watch integration, focused tests, config trust inventory, operator docs, AGENTS.md and OVERVIEW.md. The latest brief authorizes completing STORY-2492 directly and supersedes older split-spec requests. No new design fork.'
+  created_at: 2026-11-06T05:21:02.879512166Z
+  modified_at: 2026-11-06T05:21:02.879512166Z
+  session_id: 01a1af4bb0e5
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
