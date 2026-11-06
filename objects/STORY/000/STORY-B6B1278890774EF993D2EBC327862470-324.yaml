@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T08:51:19.852892261Z
+modified_at: 2026-11-06T08:52:30.535578079Z
 req_type: Story
 tags:
 - architecture
@@ -488,6 +488,12 @@ comments:
   created_at: 2026-11-06T06:25:21.142289335Z
   modified_at: 2026-11-06T06:25:21.142289335Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b00f-3ac7-7260-8fdf-51bdcd5441a4
+  author: joe
+  content: 'PR-B fresh-lane pickup stopped per binding 2026-11-05 23:30 MST advisor brief. HEAD equals origin/main at 6454b6e602ad7717c4f051b692c0e2d4d482a93a; git log origin/main --grep STORY-2326 confirms the foundation landed in #3288 and subsequent related changes in #3307/#3336. No recovery patch used. Required runner command: aida lane job run --wait 1 -- cargo test --profile agent -p aida-cli-lib --lib story_2326. Exit 1; exact stderr: error: "this session has no lane job runner (lease 01a1b00e1ec7 names no lane job runner). Only a headless implementer launched by `aida queue work <SPEC> --no-human` has one. Report the work as untested (untested=true)." help: aida queue work <SPEC> --no-human. untested=true. No source edits, tests executed, make check-ci-fast run, commits, pushes or PR. Stopping rather than improvising; host must supply the required lane runner before PR-B can proceed.'
+  created_at: 2026-11-06T08:52:30.535578079Z
+  modified_at: 2026-11-06T08:52:30.535578079Z
+  session_id: 01a1b00e1ec7
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
