@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T14:09:29.216773493Z
+modified_at: 2026-11-06T14:26:02.911180671Z
 req_type: Task
 tags:
 - architecture
@@ -609,6 +609,12 @@ comments:
   content: 'ADVISOR: stopped the 07:03 auto-rework lane. The round-9 verdict at 47307ed passed the code (ruling cited, tests, old kernel fails closed); its only gate is CI green at that exact head, which needs no implementer change. Its in-progress doc edit was discarded so the head and CI are not reset. Next step: the reviewer re-checks CI at 47307ed. If help-golden fails again with ''merge-base not found'', that is a CI infrastructure defect to file separately, not a finding on this PR.'
   created_at: 2026-11-06T14:09:29.216773493Z
   modified_at: 2026-11-06T14:09:29.216773493Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b140-981f-7743-abd4-bed5e8322c2e
+  author: joe
+  content: 'REWORK BRIEF (advisor, CI at 47307ed, run 42228832072, lib-1). All 7769 tests pass. The red is the Test time budget gate. Two UNCHANGED tests in aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs went from under 5.85s on main (f50fa16, run 42228468262; both are absent from its slowest-25 list) to 17.1s and 17.0s on this PR: contained_parent_refuses_every_widening_agents_toml_default_flag and contained_parent_refuses_every_widening_extra_flag. The PR does not touch that file, so a runtime path this PR changed makes each refusal about 3x slower; probably each widening flag now pays the shared-wrapper or broker setup before the refusal. Fix: find which step costs the time, and refuse BEFORE any wrapper, broker or Python setup when the flag set is already disqualifying (refusal should be cheap and fail-closed first). A budget entry in scripts/test-time-budget.toml is acceptable ONLY if you prove the cost is inherent; state the measured per-flag cost in the entry. Do not touch the accepted AC1 deviations or the ruling citations. LIGHT gate: cargo test -p aida-cli-lib --lib bug_2157_2158 plus make check-ci-fast. Then push; the head moves and gets a delta review.'
+  created_at: 2026-11-06T14:26:02.911180671Z
+  modified_at: 2026-11-06T14:26:02.911180671Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
