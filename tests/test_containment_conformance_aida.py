@@ -16,7 +16,11 @@ class AidaProductionBoundaryTests(unittest.TestCase):
         built = Path(__file__).resolve().parents[1] / "target/debug/aida"
         aida = str(built) if built.is_file() else c.shutil.which("aida")
         self.assertIsNotNone(aida, "production aida binary required (set PATH to a built binary)")
-        with tempfile.TemporaryDirectory() as directory:
+        # Production tmpfs hides /tmp and /run; exercise role refusal from
+        # an admitted output location. trace:TASK-3194 | ai:codex
+        fixture_home = Path.home() / ".aida"
+        fixture_home.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
             root = Path(directory)
             binaries = root / "bin"
             binaries.mkdir()

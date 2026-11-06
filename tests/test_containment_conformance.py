@@ -63,6 +63,117 @@ class PolicyRevisionTests(unittest.TestCase):
 
 # trace:TASK-3131 | ai:codex
 class AidaBoundaryTests(unittest.TestCase):
+    # trace:TASK-3194 | ai:codex
+    def test_hidden_output_refuses_before_any_setup_or_grant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            alias = Path(directory) / "alias"
+            alias.symlink_to("/run", target_is_directory=True)
+            for output in (Path(directory) / "output", Path("/run/probe"), alias / "probe"):
+                args = type("Args", (), {"vendor": "codex", "output": output})()
+                with mock.patch.object(c.shutil, "which") as which, mock.patch.object(
+                        c.subprocess, "run") as run:
+                    with self.assertRaisesRegex(ValueError, "output-hidden-by-production-tmpfs"):
+                        c.run_aida(args)
+                    which.assert_not_called()
+                    run.assert_not_called()
+                self.assertFalse(output.exists())
+
+    def test_absent_payload_manifest_is_a_named_refusal(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+                c.sys, "argv", [c.__file__, "--await-payload", str(Path(directory) / "missing")]), \
+                mock.patch.object(c.time, "monotonic", side_effect=[0, 31]), \
+                contextlib.redirect_stderr(io.StringIO()) as stderr:
+            with self.assertRaises(SystemExit) as exit:
+                c.main()
+        self.assertEqual(exit.exception.code, 2)
+        self.assertIn("fixture-payload-manifest-unavailable", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_outer_timeout_keeps_continuation_setup_and_budgets_setup_time(self):
+        fixture_home = Path.home() / ".aida"
+        fixture_home.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+            root = Path(directory) / "experiment"
+            args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 123})()
+            def fixture(argv, repo, env, report, stage):
+                if stage == "init":
+                    (repo / ".aida").mkdir()
+                    (repo / ".aida/config.toml").touch()
+                report["setup"].append({"stage": stage})
+                return "fixture"
+            def timeout(script, repo, env, seconds):
+                self.assertGreaterEqual(seconds, args.timeout + 150)
+                report = json.loads((root / "aida-state.json").read_text())["report"]
+                report["setup"].append({"stage": "continuation-only-evidence"})
+                c.write_json(root / "report.json", report)
+                raise ValueError("aida-boundary-continuation-timeout")
+            entered = c.subprocess.CompletedProcess([], 0,
+                stdout="#aida:eval:begin\ntrue\n#aida:eval:end\n")
+            with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                    mock.patch.object(c, "fixture_command", side_effect=fixture), \
+                    mock.patch.object(c.subprocess, "run", return_value=entered), \
+                    mock.patch.object(c, "launch_aida_continuation", side_effect=timeout):
+                with self.assertRaisesRegex(ValueError, "continuation-timeout"):
+                    c.run_aida(args)
+            report = json.loads((root / "report.json").read_text())
+            self.assertEqual(report["setup"][-1]["stage"], "continuation-only-evidence")
+            self.assertEqual(report["unsupported_reason"], "aida-boundary-continuation-timeout")
+
+    def test_outer_timeout_reaps_lane_closes_network_and_preserves_setup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repository"
+            repo.mkdir()
+            report = {"setup": [], "containment_receipt_sha256": None,
+                      "checks": {"C0": {"status": "unknown"}}}
+            c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 30})
+            # Run the real continuation, lane launcher and signal cleanup with
+            # offline setup/network substitutes. The lane forks a sleeper.
+            lane = "import os,time; child=os.fork(); print(os.getpid(),flush=True); time.sleep(30)"
+            code = f"""
+import importlib.util, pathlib, signal, sys
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+root = pathlib.Path({str(root)!r})
+def fixture(argv, cwd, env, report, stage):
+    report['setup'].append({{'stage': stage, 'exit_code': 0}})
+    return 'TASK-1' if stage == 'spec-add' else ''
+c.fixture_command = fixture
+class Network:
+    def __init__(self, root, nonce):
+        self.config = {{}}
+        self.receipts = list(range(8))
+    def close(self):
+        (root / 'network-closed').touch()
+c.Network = Network
+c.network_attempts = lambda *_: {{'control': {{'result': 'allowed'}}}}
+original = c.bounded_launch
+def launch(argv, workspace, env, output, seconds, **kwargs):
+    return original([sys.executable, '-c', {lane!r}], workspace, env, output, seconds, **kwargs)
+c.bounded_launch = launch
+signal.signal(signal.SIGTERM, c.continuation_terminated)
+try:
+    c.continue_aida(root)
+except ValueError as error:
+    sys.exit(str(error))
+"""
+            script = "exec " + c.shlex.join([c.sys.executable, "-c", code]) + "\n"
+            with self.assertRaisesRegex(ValueError, "continuation-timeout"):
+                c.launch_aida_continuation(script, repo, dict(os.environ), 1)
+            self.assertTrue((root / "network-closed").is_file())
+            saved = json.loads((root / "report.json").read_text())
+            self.assertEqual([r["stage"] for r in saved["setup"]],
+                             ["seat-preflight", "spec-add", "queue-add"])
+            self.assertIn("continuation-timeout", saved["unsupported_reason"])
+            pids = (root / "stdout.jsonl").read_text().splitlines()
+            self.assertEqual(len(pids), 2, "both lane parent and descendant must start")
+            for pid in pids:
+                stat = Path('/proc') / pid / 'stat'
+                if stat.exists():
+                    self.assertEqual(stat.read_text().rsplit(')', 1)[1].split()[0], 'Z')
+
+
     def test_missing_production_receipt_withdraws_passes_but_keeps_violations(self):
         report = {"containment_receipt_sha256": None,
                   "checks": {"C0": {"status": "pass", "terminal_status": "pass"},

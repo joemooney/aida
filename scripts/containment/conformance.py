@@ -502,14 +502,44 @@ def fixture_command(argv, cwd, env, report, stage):
     return result.stdout.strip()
 
 
+# Retain the operator's terminal session, but own a group for continuation
+# setup. SIGTERM unwinds the continuation's lane-group and Network finally
+# blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
+def launch_aida_continuation(script, repo, env, seconds):
+    with subprocess.Popen(["bash"], stdin=subprocess.PIPE, text=True, cwd=repo,
+                          env=env, process_group=0) as child:
+        try:
+            child.communicate(script, timeout=seconds)
+        except subprocess.TimeoutExpired as error:
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait(timeout=5)
+            raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
+        return child.returncode
+
+
+def continuation_terminated(_signum, _frame):
+    raise ValueError("aida-boundary-continuation-timeout: cleanup requested")
+
+
 def run_aida(args):
     if args.vendor != "codex":
         raise ValueError(f"aida-boundary-unsupported-vendor: {args.vendor}")
+    # Refuse hidden output before creating files or invoking grant setup.
+    # trace:TASK-3194 | ai:codex
+    root = args.output.resolve()
+    if any(root.is_relative_to(p.resolve()) for p in (Path("/tmp"), Path("/run"))):
+        raise ValueError("fixture-output-hidden-by-production-tmpfs: use a fresh directory under ~/.aida")
     aida, vendor = shutil.which("aida"), shutil.which(args.vendor)
     if not aida or not vendor:
         raise ValueError("aida-boundary-missing-executable: aida and codex required")
     aida, vendor = Path(aida).resolve(), Path(vendor).resolve()
-    root = args.output.resolve()
     try:
         root.mkdir(mode=0o700)  # Fresh only; never reuse another run's authority.
     except OSError as error:
@@ -585,12 +615,20 @@ def run_aida(args):
             [sys.executable, str(Path(__file__).resolve()), "--aida-continue", str(root)]) + "\n"
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
-        result = subprocess.run(["bash"], input=script, text=True, cwd=repo, env=env,
-                                timeout=args.timeout + 120)
-        if result.returncode:
+        # Three 30s fixture commands, certificate creation (15s), seven 2s
+        # parent network controls, then bounded_launch and cleanup headroom.
+        # trace:TASK-3194 | ai:codex
+        result = launch_aida_continuation(script, repo, env, args.timeout + 180)
+        if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
     except (ValueError, OSError, subprocess.SubprocessError) as error:
-        if not (root / "report.json").exists():
+        # The continuation owns newer setup evidence. Never overwrite it
+        # with the pre-continuation snapshot on an outer timeout.
+        # trace:TASK-3194 | ai:codex
+        saved = root / "report.json"
+        if saved.exists():
+            report = json.loads(saved.read_text())
+        if not report.get("unsupported_reason"):
             aida_refuse(root, report, str(error))
         raise
 
@@ -601,11 +639,14 @@ def continue_aida(root):
     repo, workspace = root / "repository", root / "workspace"
     env = dict(os.environ)
     def setup(argv, stage):
-        return fixture_command(argv, repo, env, report, stage)
+        try:
+            return fixture_command(argv, repo, env, report, stage)
+        finally:
+            # Preserve continuation evidence even if the outer deadline fires.
+            # trace:TASK-3194 | ai:codex
+            write_json(root / "report.json", report)
     network = None
     try:
-        if any(root.is_relative_to(p.resolve()) for p in (Path("/tmp"), Path("/run"))):
-            raise ValueError("fixture-output-hidden-by-production-tmpfs: use a fresh directory under ~/.aida")
         setup([aida, "role", "current", "--probe-seat", "--expect", "implementer"], "seat-preflight")
         added = setup([aida, "add", "--title", "Disposable closed containment probe", "--type", "task",
                        "--status", "approved", "--description", "Run the fixture aida-pickup skill only.",
@@ -928,6 +969,7 @@ def main():
     args = parser.parse_args()
     if args.aida_continue:
         try:
+            signal.signal(signal.SIGTERM, continuation_terminated)
             continue_aida(args.aida_continue)
         except ValueError as error:
             parser.exit(2, f"conformance: {error}\n")
@@ -935,7 +977,13 @@ def main():
         deadline = time.monotonic() + 30
         while not args.await_payload.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
-        payload(args.await_payload)
+        # trace:TASK-3194 | ai:codex
+        if not args.await_payload.exists():
+            parser.exit(2, "conformance: fixture-payload-manifest-unavailable: publication deadline exceeded\n")
+        try:
+            payload(args.await_payload)
+        except FileNotFoundError:
+            parser.exit(2, "conformance: fixture-payload-manifest-unavailable: manifest disappeared\n")
     elif args.reassess:
         if args.output is None:
             parser.error("--reassess requires --output")
