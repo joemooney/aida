@@ -210,7 +210,7 @@ fn deferred_status_token_returns_the_deferred_shelf() {
     let fixture = init_fixture();
     let deferred = add_task(&fixture, "BUG-1687 deferred fixture", "approved");
     let active = add_task(&fixture, "BUG-1687 active control", "approved");
-    defer(&fixture, &deferred, "after the stability push");
+    defer(&fixture, &deferred, "date:2026-12-01");
 
     // Control: the default view hides it, so the assertion below is about the
     // filter and not about the spec merely existing.
@@ -246,7 +246,7 @@ fn deferred_status_token_returns_the_deferred_shelf() {
         "aida edit --status completed",
         aida(&fixture, &["edit", &closed, "--status", "completed"]),
     );
-    defer(&fixture, &closed, "next major");
+    defer(&fixture, &closed, "date:2027-01-01");
     assert_eq!(
         list_ids(&fixture, &["--status", "deferred"]),
         sorted(&[&deferred, &closed]),
@@ -264,8 +264,8 @@ fn deferred_token_mixed_with_a_stored_status_honours_both() {
     let deferred_approved = add_task(&fixture, "BUG-1687 deferred approved", "approved");
     let deferred_draft = add_task(&fixture, "BUG-1687 deferred draft", "draft");
     let active_approved = add_task(&fixture, "BUG-1687 active approved", "approved");
-    defer(&fixture, &deferred_approved, "q3");
-    defer(&fixture, &deferred_draft, "q4");
+    defer(&fixture, &deferred_approved, "date:2027-07-01");
+    defer(&fixture, &deferred_draft, "date:2027-10-01");
 
     assert_eq!(
         list_ids(&fixture, &["--status", "deferred,approved"]),
@@ -315,7 +315,7 @@ fn show_reports_the_deferral_not_the_status_it_was_deferred_out_of() {
         "fixture precondition: the spec is parked for a human before deferral"
     );
 
-    defer(&fixture, &spec, "after the stability push");
+    defer(&fixture, &spec, "date:2026-12-01");
 
     // The agent surface (TOON) — the one that misled both sessions. stdout is a
     // pipe here, so agent mode is the default, exactly as it is for an agent.
@@ -333,7 +333,7 @@ fn show_reports_the_deferral_not_the_status_it_was_deferred_out_of() {
     );
     assert_eq!(
         toon_scalar(&toon, "deferred_until"),
-        Some("after the stability push"),
+        Some("\"date:2026-12-01\""),
         "the revisit trigger is what makes deferral legible: {toon}"
     );
 
@@ -360,7 +360,7 @@ fn show_reports_the_deferral_not_the_status_it_was_deferred_out_of() {
     );
     for line in &status_lines {
         assert!(
-            line.contains("Deferred (after the stability push)"),
+            line.contains("Deferred (date:2026-12-01)"),
             "a human Status line must read Deferred with its trigger: {line:?}"
         );
         assert!(
@@ -384,7 +384,7 @@ fn show_reports_the_deferral_not_the_status_it_was_deferred_out_of() {
     assert_eq!(json.get("deferred").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(
         json.get("deferred_until").and_then(|v| v.as_str()),
-        Some("after the stability push")
+        Some("date:2026-12-01")
     );
     assert_eq!(
         list_ids(&fixture, &["--status", "deferred"]),
@@ -412,7 +412,7 @@ fn undefer_restores_the_prior_status_round_trip() {
     let before = stored_status(&fixture, &spec);
     assert_eq!(before, "In Progress", "fixture precondition");
 
-    defer(&fixture, &spec, "after the stability push");
+    defer(&fixture, &spec, "date:2026-12-01");
     assert_eq!(
         stored_status(&fixture, &spec),
         before,

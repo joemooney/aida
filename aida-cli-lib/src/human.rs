@@ -1255,7 +1255,7 @@ pub(crate) fn handle_advisor_worklist(
             Ungroomed,
             "groom",
             "weigh against the graph (overlap / staleness / scope), then dispose: \
-             `aida edit <id> --status approved|rejected` · `aida defer <id> --until <trigger>` · or refine",
+             `aida edit <id> --status approved|rejected` · `aida defer <id> --until <condition>` · or refine",
         ),
         (
             Umbrella,
