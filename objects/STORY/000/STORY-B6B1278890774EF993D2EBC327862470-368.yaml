@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T15:56:20.407201200Z
+modified_at: 2026-11-06T15:57:42.439507500Z
 req_type: Story
 relationships:
 - rel_type:
@@ -323,6 +323,12 @@ comments:
   created_at: 2026-11-06T15:48:46.718543141Z
   modified_at: 2026-11-06T15:48:46.718543141Z
   session_id: 01a1b17b9aa7
+- id: 01a1b194-82a7-7fc1-81cd-13aaf071500c
+  author: joe
+  content: 'ADVISOR RULING (PR #3506, verdict at c0102658): keep the hourly job ENABLED, but a free-text or unparseable trigger is Unknown, not a failure. Such a spec stays parked exactly like the existing Unknown path, and the run reports ''N deferrals awaiting typed-condition migration'' as info. Exit non-zero only on a real evaluation or store error. That way the job is useful now for already-typed conditions and silent for the rest until S3''s migration lands; it must not fire CronJobFailed for unmigrated triggers. Test: a store with only free-text deferrals exits 0, changes nothing and reports the count. No other findings are open; then gate on green CI at the head.'
+  created_at: 2026-11-06T15:57:42.439507500Z
+  modified_at: 2026-11-06T15:57:42.439507500Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
