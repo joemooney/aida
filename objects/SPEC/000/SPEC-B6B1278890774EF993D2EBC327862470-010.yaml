@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-010
 agreed_id: TASK-2838
 title: AGY headless exits successfully after denied or uninitialized command tools
 description: 'Observed while executing STORY-2460''s sketch-only native sandbox experiment with agy 1.4.12. Run a0d7722d-d013-4ddf-91a2-2ec38ad0db30 exited 0 with result.status=SUCCESS, empty response and denied_actions=[command] after print-mode permission refusal. Run 80ae5463-0380-4f26-9d8b-e75388580679, with an exact session-local command allow rule, exited 0/status SUCCESS despite run_command TOOL_ERROR before payload execution: ~/.gemini/antigravity-cli/bin/agentapi was read-only under outer Codex lane. No test sentinels were created. These are not empirical native sandbox passes. Triage whether AIDA''s AGY adapter must classify denied_actions/tool errors/absent positive completion evidence instead of trusting process exit. Preserve explicit pending/failed outcome without interpreting every recoverable tool error as final failure. Full bounded-run evidence and limits are in SKETCH v1 on STORY-2460; transient artifacts /tmp/story2460-pdqj_i8_/. No production changes made.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-06T07:42:36.028719919Z
+modified_at: 2026-11-06T09:19:29.533722627Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -398,6 +398,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b027-edbd-78d0-b619-ef7798464d1d
+  author: aida-auto-bump
+  timestamp: 2026-11-06T09:19:29.213333536Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b027-eefd-7602-8064-03dec8a90d22
+  timestamp: 2026-11-06T09:19:29.533717422Z
+  agent: aida
+  commit_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
+  summary: 'Round 5 at fb00c75: every advisor-ruling criterion for TASK-2838 is met (stream-json argv before -p, bounded event=result/denied_actions/TOOL_ERROR reader, exit 65 incomplete, same-tool retry recovery, verdict-gated reviewer carve-outs, tee-disabled stderr diagnostics). The resolver-ratchet blocker is cleared and every CI job, including lib-0, is green. One non-blocking test-robustness finding is filed as a follow-up.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e422daaa1a4
@@ -409,6 +423,8 @@ implementation_info:
     cargo fmt --all -- --check; git diff HEAD --check: passed
   implemented_at: 2026-11-05T19:04:56.661188528Z
   implemented_by: joe
+  completed_at: 2026-11-06T09:19:29.213326404Z
+  completion_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
   reopened_at_sha: 158725d7dd93185c7140291f8869b81d2652504e
 interface_changes:
   cli:
