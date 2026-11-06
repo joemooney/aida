@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-886
 agreed_id: TASK-3232
 title: Admit AIDA repository size and GitLab templates to work CI relay inventory
 description: 'Follow-up from PR #3504 inventory rescope. Acceptance: bounded inventory validation for AIDA-sized (at least 48 MiB Rust sources) multi-SHA fixtures; deterministic committed local GitLab includes/template expansion and intended job selection, refusing remote includes and commit/path escapes; end-to-end native required-check consumption by AIDA PR/train gates. No deployment claimed by the static-only relay slice. See docs/plans/2026-11-05-story-2480-work-ci-relay.md, Round 2 inventory follow-up.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T20:39:17.768435831Z
+modified_at: 2026-11-06T20:41:39.766402804Z
 req_type: Task
 tags:
 - from-review
@@ -112,6 +112,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b298-7ab6-73f2-8f3c-8d18101743ec
+  author: aida-session-start
+  timestamp: 2026-11-06T20:41:39.766399129Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: f50fa16ae95
