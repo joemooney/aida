@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T10:19:40.033488520Z
+modified_at: 2026-11-06T10:29:36.602644075Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -48,6 +48,12 @@ comments:
   content: 'Round 2 rework: admission now snapshots publisher/roster/relevant verdict evidence under short store locks inside the bounded retry loop, compares relevant evidence before CAS, and ignores unrelated store-tip moves. Added passing Terminal tests for an unrelated store commit and roster-change retry; strengthened the two-node loser test to assert local Failed and later select Dispatch. Corrected the anchor comment and second-node guide to state the trusted-writer ancestor-continuity/replay limitation (the permitted finding-2 resolution), moved unrelated criterion traces to TASK-3196 and Docs coverage to the guide. Refreshed recovery-command help/audit inventories and fixed the gates Git-maintenance guard. Validation so far: 16 admission tests passed; help snapshot regenerated and verified without update mode; audit exactly matches generator output from the refreshed catalog; 8 Git maintenance ratchet tests, cargo fmt --all -- --check and git diff --check passed. CLI audit integration binary is still compiling. Native seat: six changed files remain uncommitted for the host launcher; no commit, push, queue completion, review record or merge-hold clearance performed.'
   created_at: 2026-11-06T10:19:40.033488520Z
   modified_at: 2026-11-06T10:19:40.033488520Z
+  session_id: 01a1b04506e7
+- id: 01a1b068-20da-7fd1-b387-14e8c2324b9e
+  author: joe
+  content: 'Final validation update: checked_in_audit_is_exhaustive_and_every_honoured_probe_parses passed against the freshly built CLI (1 passed, 0 failed). The audit regenerated from that binary also matches the checked-in file exactly. Together with the 16 passing admission tests, normal-mode help snapshot check, 8 passing Git maintenance ratchet tests, formatting and whitespace checks, all targeted validation is green. All four round-2 findings are addressed; finding 2 uses the explicitly permitted comment/guide correction, retaining the documented trusted-writer continuity limit. Six files remain uncommitted for native host publication. Suggested new-round subject: [AI:codex] fix(review): retry admission evidence races and restore CI contracts (TASK-3196). Existing PR merge hold remains unchanged.'
+  created_at: 2026-11-06T10:29:36.602644075Z
+  modified_at: 2026-11-06T10:29:36.602644075Z
   session_id: 01a1b04506e7
 history:
 - id: 01a1afff-e7d6-78a2-869f-d7e2e2c949d8
