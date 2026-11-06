@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T18:19:34.845863193Z
+modified_at: 2026-11-06T18:21:29.394212441Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -54,6 +54,12 @@ comments:
   created_at: 2026-11-06T18:13:48.035509829Z
   modified_at: 2026-11-06T18:13:48.035509829Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b218-25b2-7be3-9ded-149526e53720
+  author: joe
+  content: 'Round 2 approach: pass explicit delegate-seat selections through the detached Codex issuer; persist launch selections in registry rows and restore them on resume, revalidating against the current parent. Add detached-issuer and resumed-launch regressions for narrowed grants and refusal of widening. Refresh the intended CLI help golden snapshot. Investigate the gates fixture separately; retain the supervised merge hold. Expected files: seat_authority, agent_codex_background, agent_launch, agent_registry, their tests, CLI help golden and session docs. No design conflicts.'
+  created_at: 2026-11-06T18:21:29.394212441Z
+  modified_at: 2026-11-06T18:21:29.394212441Z
+  session_id: 01a1b21657b8
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
   author: aida-session-start
