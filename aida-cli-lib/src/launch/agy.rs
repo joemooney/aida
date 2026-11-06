@@ -1,52 +1,12 @@
 //! AGY adapter data for the shared AIDA boundary, pending all-tool proof.
 //! No separate enforcement engine and no native-containment credit.
 // trace:TASK-3048 | ai:codex
-use crate::session::ContainmentPosture;
 use anyhow::Result;
 use std::path::Path;
 
-/// AGY policy inputs for the common launcher, pending integrated admission.
-/// Existing vendor profiles cannot apply these raw-store and auth requirements.
-/// The incomplete auth inventory cannot become an egress allow list.
-#[allow(dead_code)] // Adapter stays unlaunchable until independently measured.
-pub(crate) struct Adapter {
-    pub posture: ContainmentPosture,
-    pub runtime_relative: &'static str,
-    pub credential_relative: &'static str,
-    pub observed_hosts: &'static [&'static str],
-    pub approved_auth_hosts: &'static [&'static str],
-    pub auth_inventory_complete: bool,
-    pub writable_classes: &'static [&'static str],
-    pub raw_git_writes: bool,
-    pub raw_store_writes: bool,
-    pub mediated_writes: &'static [&'static str],
-    pub disabled_unless_confined: &'static [&'static str],
-    pub observed_mode: &'static str,
-    pub argv_prefix: &'static [&'static str],
-}
-
-pub(crate) const AGY: Adapter = Adapter {
-    posture: ContainmentPosture::Aida,
-    runtime_relative: ".gemini/antigravity-cli",
-    credential_relative: "antigravity-oauth-token",
-    observed_hosts: &["daily-cloudcode-pa.googleapis.com"],
-    approved_auth_hosts: &[],
-    auth_inventory_complete: false,
-    writable_classes: &["workspace", "cargo-target", "scratch", "private-runtime"],
-    raw_git_writes: false,
-    raw_store_writes: false,
-    mediated_writes: &["aida-cli-host-boundary", "deputy", "host-commit"],
-    disabled_unless_confined: &["browser", "url", "mcp", "delegated-tools"],
-    // Host evidence: auto unavailable; the CLI continues in default mode.
-    // This mode has no all-tool conformance credit. trace:TASK-3048 | ai:codex
-    observed_mode: "default (auto unavailable)",
-    argv_prefix: &[
-        "--dangerously-skip-permissions",
-        "--output-format",
-        "stream-json",
-        "--disable-slash-commands",
-    ],
-};
+/// Admission is separate from the common wrapper's shipped runtime data.
+pub(crate) struct Adapter;
+pub(crate) const AGY: Adapter = Adapter;
 
 impl Adapter {
     /// No config value, synthetic receipt, or observed hostname can unlock this
@@ -72,22 +32,7 @@ impl Adapter {
     ) -> Result<Vec<String>> {
         // The signed outer-only posture permits this argv only with applied
         // evidence; it must never escape through a native/uncontained builder.
-        super::contained::require_outer_only_receipt("agy", receipt)?;
-        anyhow::ensure!(
-            crate::contained_boundary::root_rule_path(private_runtime).is_some(),
-            "AGY requires an exact absolute private runtime path"
-        );
-        let mut args: Vec<String> = self.argv_prefix.iter().map(|s| (*s).into()).collect();
-        args.extend([
-            "--settings".into(),
-            private_runtime
-                .join("settings.json")
-                .to_string_lossy()
-                .into(),
-            "-p".into(),
-            prompt.into(),
-        ]);
-        Ok(args)
+        super::contained::outer_only_argv("agy", private_runtime, prompt, receipt)
     }
 }
 
@@ -97,20 +42,10 @@ mod tests {
 
     #[test]
     fn agy_adapter_keeps_unmeasured_policy_closed() {
-        assert_eq!(AGY.posture, ContainmentPosture::Aida);
-        assert!(!AGY.auth_inventory_complete);
-        assert!(AGY.approved_auth_hosts.is_empty());
-        assert_eq!(AGY.observed_hosts, &["daily-cloudcode-pa.googleapis.com"]);
-        assert!(!AGY.raw_git_writes && !AGY.raw_store_writes);
-        assert_eq!(
-            AGY.writable_classes,
-            &["workspace", "cargo-target", "scratch", "private-runtime"]
-        );
-        assert_eq!(AGY.mediated_writes.len(), 3);
-        assert_eq!(
-            AGY.disabled_unless_confined,
-            &["browser", "url", "mcp", "delegated-tools"]
-        );
+        let policy = crate::containment::runtime_policy("agy").unwrap();
+        assert!(!policy.auth_inventory_complete);
+        assert_eq!(policy.auth_hosts, ["daily-cloudcode-pa.googleapis.com"]);
+        assert!(!policy.raw_git_writes && !policy.raw_store_writes);
         assert!(AGY
             .require_conformance()
             .unwrap_err()
@@ -127,14 +62,17 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("applied AIDA ContainmentReceipt"));
-        assert!(AGY.argv_prefix.contains(&"--dangerously-skip-permissions"));
-        assert!(!AGY
+        let policy = crate::containment::runtime_policy("agy").unwrap();
+        assert!(policy
             .argv_prefix
             .iter()
-            .any(|s| matches!(*s, "--mode" | "auto" | "--sandbox")));
-        assert_eq!(AGY.observed_mode, "default (auto unavailable)");
-        assert_eq!(AGY.runtime_relative, ".gemini/antigravity-cli");
-        assert_eq!(AGY.credential_relative, "antigravity-oauth-token");
+            .any(|s| s == "--dangerously-skip-permissions"));
+        assert!(!policy
+            .argv_prefix
+            .iter()
+            .any(|s| matches!(s.as_str(), "--mode" | "auto" | "--sandbox")));
+        assert_eq!(policy.relative, ".gemini/antigravity-cli");
+        assert_eq!(policy.credential, "antigravity-oauth-token");
         assert!(AGY.candidate_argv(Path::new("/"), prompt, None).is_err());
     }
 }

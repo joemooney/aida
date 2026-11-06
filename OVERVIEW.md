@@ -1457,6 +1457,15 @@ it cannot launch arbitrary programs or issue an applied-containment receipt.
 This diagnostic remains separate from ordinary launch receipts. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
 <!-- trace:TASK-2705 | ai:codex -->
 
+The common foreground wrapper also has a descriptor-driven private-runtime
+mechanism for outer-only vendors: fresh writable runtime state, a pinned
+read-only credential leaf, explicit trusted auth-host approval and read-only
+Git/store/cache authority. AGY's `vendors.toml` row selects that mechanism, but
+its incomplete refresh-host inventory and missing integrated all-tool evidence
+keep admission closed. See [AGY adapter preparation](docs/internal/testing/containment-conformance.md#agy-shared-boundary-adapter-preparation)
+for the remaining acceptance and model-free test limits.
+<!-- trace:TASK-3048 | ai:codex -->
+
 ### Foreground headless Codex boundary
 
 Trusted `[contained.vendors] codex = "aida"` routes fresh headless implementer
