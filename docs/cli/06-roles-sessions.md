@@ -171,6 +171,19 @@ does not authorize coexistence.
 
 **One line** — launch and track real agent processes (Claude / Codex / Antigravity) on a spec.
 
+AGY headless launches request `stream-json` so AIDA can distinguish process
+exit from execution evidence. Exit 0 with denied actions, an unresolved tool
+error, or missing/malformed terminal evidence reports `AGY outcome: incomplete`
+and returns 65. Explicit terminal failure and nonzero process exits remain
+failures. A later successful retry of the same tool clears its error; historical
+errors remain visible as diagnostics, including with headless tee disabled.
+The existing trusted PR/verdict handshake may establish phase completion despite
+incomplete execution evidence. A tool's `DONE` state or response prose does not
+establish phase completion. Direct/coordinator launches have no such handshake
+and fail closed. Quiet coordinators still print the final response; streaming
+coordinators retain JSONL output. This evidence grants no sandbox conformance.
+<!-- trace:TASK-2838 | ai:codex -->
+
 **Mental model.** `aida agent new <tool>` spawns a *one-shot* agent with project-correct cwd/env, a role, registry tracking, and a startup **context snapshot** — the supervised way to put an agent on work instead of opening a terminal and pasting a prompt. The critical framing in its own help: this lane *does its work, ships a PR, and exits* — it is **not** the orchestrated pipeline. It does not run CI, the reviewer phase, or the merge. For a supervised end-to-end drain (implementer → CI → reviewer → merge → pull), that's `aida queue work <SPEC> --auto-complete` ([Chapter 3](03-work-autonomy.md)), not this.
 
 **Reach for it when** — you want to *dispatch* a bounded agent run: `aida agent new claude --role implementer --spec <spec-id>` spins the worktree+lease and launches Claude already pointed at the work. `aida agent list` (aliases `ls` and `status`) to see what's running; `pause` / `resume` to mark an agent budget-exhausted/rate-limited so brief-time dispatch and `aida status` flag it (without stopping the process).
@@ -971,9 +984,11 @@ While a predicate remains continuously true, its request escalates after 30
 minutes without an authorized disposition. An `acted` or `declined` response
 closes the response obligation, but a stall persisting another 30 minutes after
 the response escalates with the actor, reason and evidence. `deferred` postpones
-the unresolved escalation until its deadline. An unresolved or deferral-deadline
-notice does not consume the later persistent-stall notice. Operator-direct initial
-delivery has no advisor request to disposition; its notice says the stall persists
+escalation until its deadline. Deferral expiry has a separate notice even if an
+unresolved notice was already sent before the deferral. A malformed deferral
+without a deadline is reported as unknown and uses 30 minutes after its receipt
+timestamp as a fixed fallback. Neither notice consumes the later persistent-stall
+notice. Operator-direct initial delivery has no advisor request to disposition; its notice says the stall persists
 with no advisor request. Only the latest authorized revision matching the
 exact request ID and fingerprint counts. Unknown observations, backwards clocks
 and gaps over 15 minutes restart escalation continuity without resending the
@@ -981,11 +996,12 @@ request. Known predicate recovery closes continuous episodes; age/event kinds
 retain their per-evidence delivery suppression as described above.
 
 Escalation uses the existing operator notifier with distinct episode-specific
-`_unresolved` and `_persistent` rules and a ten-second command timeout. Quiet hours
-queue it; operator opt-out is respected. Each escalation kind is sent or queued at
+`_unresolved`, `_deferral` and `_persistent` rules and a ten-second command timeout.
+Quiet hours queue it; operator opt-out is respected. Each escalation kind is sent or queued at
 most once per episode. Refusal retries on a later tick; uncertainty retains a
 reservation and reports unknown.
 Previews report due escalation without writes, notification calls or receipts.
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex -->
 
 This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Explicit recipient responses

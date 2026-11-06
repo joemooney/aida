@@ -9,6 +9,10 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
+Native `aida ship -m '<subject> (Refs ID)'` records a lease-bound publication
+declaration for the host; failed exits stay Refs and punt/hold vetoes apply first.
+<!-- trace:TASK-2902 | ai:codex -->
+
 `aida pr hold` preserves Git lookup diagnostics instead of calling every
 refusal a missing branch. Native-seat publication remains subject to the
 private-clone Git refusal; this fix grants no publication authority. See

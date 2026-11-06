@@ -24,8 +24,9 @@ seconds on CI's ubuntu-latest runner. With `--budget` the script fails when:
 - a budgeted row runs over its entry.
 An entry for a test whose binary ran but which did not run itself (renamed or
 removed) is a note; entries for binaries that did not run (another lane's, or
-the other aida-cli-lib half's) are not mentioned. Over-budget tests whose JUnit
-time spans overlap each other are a runner stall: a CI warning, not a failure.
+the other aida-cli-lib half's) are not mentioned. Explicitly budgeted tests
+at most twice their entry whose JUnit time spans overlap another eligible
+over-budget test are a runner stall: a CI warning.
 
 With `--changed-files FILE` (one repo-relative path per line: the PR's diff
 against its base) the limits are hard only for tests the PR touched: a test
@@ -222,16 +223,20 @@ def touched_tests(rows: list[Binary], changed: list[str], root: str = ".") -> se
 
 
 def span(row: Binary):
-    """(start, end) of a JUnit row, or None for a row without a timestamp."""
+    """(start, end) of a JUnit row, or None without a valid zoned timestamp."""
     try:
         start = datetime.datetime.fromisoformat(row.started)
-    except ValueError:
+    except (TypeError, ValueError):
+        return None
+    # A naive timestamp cannot establish overlap with nextest's zoned times.
+    # trace:TASK-2020 | ai:codex
+    if start.tzinfo is None:
         return None
     return start, start + datetime.timedelta(seconds=row.seconds)
 
 
-def stalled(over: list[Binary]) -> set[str]:
-    """Keys of over-budget rows that ran at the same time as another over-budget row.
+def stalled(over: list[Binary], budget: Budget) -> set[str]:
+    """Keys of eligible overruns that overlapped another eligible overrun.
 
     A runner stall (shared-runner I/O or CPU starvation) slows every test
     running through it at once: on PR-2785 run 39492854022 three unrelated
@@ -239,6 +244,11 @@ def stalled(over: list[Binary]) -> set[str]:
     test whenever it runs, so an over-budget test that overlaps no other
     over-budget test still fails the gate. trace:TASK-1988 | ai:claude
     """
+    # Only bounded, explicitly budgeted overruns supply stall evidence.
+    # Unbudgeted or extreme regressions must not waive themselves or peers.
+    # trace:TASK-2020 | ai:codex
+    over = [r for r in over if r.key in budget.entries
+            and r.seconds <= 2 * budget.entries[r.key]]
     spans = {r.key: span(r) for r in over}
     keys = set()
     for a in over:
@@ -257,9 +267,8 @@ def check(rows: list[Binary], budget: Budget,
     over its limit but within limit x untouched_factor is a note, not a
     violation. trace:BUG-2414 | ai:claude
     """
-    # Every over-limit row, tolerated untouched ones included, goes to
-    # stalled() first: a touched test overlapping a tolerated one is still a
-    # runner stall (TASK-1988). Only then is each classified.
+    # Eligible budgeted rows, including tolerated untouched ones, can supply
+    # overlap evidence before each row is classified. trace:TASK-2020 | ai:codex
     found: list[tuple[Binary, float, str]] = []
     notes: list[str] = []
     seen = set()
@@ -277,7 +286,7 @@ def check(rows: list[Binary], budget: Budget,
             message = (f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
                        "Find what slowed it down; raise the entry only with a reason in the PR.")
         found.append((r, limit, message))
-    stall = stalled([r for r, _, _ in found])
+    stall = stalled([r for r, _, _ in found], budget)
     violations: list[str] = []
     for r, limit, message in found:
         if r.key in stall:

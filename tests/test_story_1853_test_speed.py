@@ -143,7 +143,7 @@ class BudgetTest(unittest.TestCase):
     def test_overlapping_over_budget_tests_are_a_stall_and_a_lone_one_fails(self):
         def row(key, start, secs):
             return tt.Binary(key, 1, 0, 0, secs, f"2026-10-20T20:39:{start:02d}.000+00:00")
-        b = tt.Budget(10, {})
+        b = tt.Budget(10, {"x a": 11, "x b": 11, "x c": 11})
         # Run 39492854022: three tests that take 1-2 s went to 18 s together.
         rows = [row("x a", 10, 18.7), row("x b", 11, 17.7), row("x c", 11, 17.9), row("x fine", 12, 1.0)]
         v, notes = tt.check(rows, b)
@@ -155,6 +155,47 @@ class BudgetTest(unittest.TestCase):
         # A log row has no timestamp and never clusters.
         v, _ = tt.check([tt.Binary("doctests:x", 1, 0, 0, 12.0), tt.Binary("doctests:y", 1, 0, 0, 12.0)], b)
         self.assertEqual(len(v), 2)
+
+    # trace:TASK-2020 | ai:codex
+    def test_unbudgeted_overlaps_never_supply_stall_evidence(self):
+        rows = [tt.Binary(k, 1, 0, 0, 18, "2026-11-05T12:00:00+00:00")
+                for k in ("x a", "x b")]
+        for entries in ({}, {"x a": 15}):
+            with self.subTest(entries=entries):
+                violations, notes = tt.check(rows, tt.Budget(10, entries))
+                self.assertEqual(len(violations), 2)
+                self.assertFalse(any(n.startswith("runner stall") for n in notes))
+
+    def test_stall_waiver_stops_above_twice_the_explicit_entry(self):
+        budget = tt.Budget(10, {"x a": 15, "x b": 15})
+        for seconds, expected in ((30, 0), (30.001, 2)):
+            with self.subTest(seconds=seconds):
+                rows = [tt.Binary("x a", 1, 0, 0, seconds, "2026-11-05T12:00:00+00:00"),
+                        tt.Binary("x b", 1, 0, 0, 20, "2026-11-05T12:00:01+00:00")]
+                violations, _ = tt.check(rows, budget)
+                self.assertEqual(len(violations), expected)
+
+    def test_eligible_pair_does_not_hide_an_overlapping_extreme_regression(self):
+        rows = [tt.Binary(k, 1, 0, 0, seconds, "2026-11-05T12:00:00+00:00")
+                for k, seconds in (("x a", 20), ("x b", 20), ("x c", 31))]
+        violations, notes = tt.check(rows, tt.Budget(10, dict.fromkeys((r.key for r in rows), 15)))
+        self.assertEqual(len(violations), 1)
+        self.assertIn("x c:", violations[0])
+        self.assertEqual(sum(n.startswith("runner stall") for n in notes), 2)
+
+    def test_zoned_timestamps_compare_the_actual_instant(self):
+        rows = [tt.Binary("x a", 1, 0, 0, 20, "2026-11-05T12:00:00+00:00"),
+                tt.Binary("x b", 1, 0, 0, 20, "2026-11-05T05:00:01-07:00")]
+        self.assertEqual(tt.check(rows, tt.Budget(10, {"x a": 15, "x b": 15}))[0], [])
+
+    def test_invalid_or_naive_timestamps_supply_no_stall_evidence(self):
+        budget = tt.Budget(10, {"x a": 15, "x b": 15})
+        for start in (None, "invalid", "", "2026-11-05T12:00:00"):
+            with self.subTest(start=start):
+                a = tt.Binary("x a", 1, 0, 0, 20, start)
+                b = tt.Binary("x b", 1, 0, 0, 20, "2026-11-05T12:00:01+00:00")
+                self.assertIsNone(tt.span(a))
+                self.assertEqual(len(tt.check([a, b], budget)[0]), 2)
 
     def test_note_only_for_a_budgeted_test_whose_binary_ran(self):
         b = tt.Budget(10, {"bin-a gone": 20, "bin-b other_lane": 20, "aida-cli-lib other::half": 20})
@@ -230,22 +271,22 @@ class UntouchedToleranceTest(unittest.TestCase):
         self.assertEqual(len(tt.check([tt.Binary(self.UNRELATED, 1, 0, 0, 31.0)], b, touched=set())[0]), 1)
 
     def test_touched_test_overlapping_a_tolerated_untouched_one_is_still_a_stall(self):
-        # Review repro: touched A at 10.5 s and untouched B at 11.0 s with
+        # Explicitly budgeted overlap: touched A at 10.5 s and untouched B at 11.0 s with
         # overlapping JUnit spans. The base gate reports both as runner-stall
         # notes and exits 0; the tolerated B must still count for stall
         # detection, so A keeps its TASK-1988 exemption.
         def row(key, start, secs):
             return tt.Binary(key, 1, 0, 0, secs, f"2026-11-02T13:00:{start:02d}.000+00:00")
         rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 2, 11.0)]
-        base_v, base_notes = tt.check(rows, tt.Budget(10, {}))
+        base_v, base_notes = tt.check(rows, tt.Budget(10, {self.OWN: 10, self.UNRELATED: 10}))
         self.assertEqual(base_v, [])
         self.assertEqual(sum(n.startswith("runner stall") for n in base_notes), 2)
-        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        v, notes = tt.check(rows, tt.Budget(10, {self.OWN: 10, self.UNRELATED: 10}), touched={self.OWN})
         self.assertEqual(v, [])
         self.assertEqual(sum(n.startswith("runner stall") for n in notes), 2, notes)
         # Not overlapping: A is a lone touched regression, B stays tolerated.
         rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 30, 11.0)]
-        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        v, notes = tt.check(rows, tt.Budget(10, {self.OWN: 10, self.UNRELATED: 10}), touched={self.OWN})
         self.assertEqual(len(v), 1)
         self.assertIn("my_new_slow_test", v[0])
         self.assertTrue(any(n.startswith("untouched test over its limit") for n in notes), notes)
