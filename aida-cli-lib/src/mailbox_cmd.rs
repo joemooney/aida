@@ -213,6 +213,24 @@ pub(crate) fn handle_mailbox_command(
     let project_root = home.root();
 
     match cmd {
+        // trace:TASK-3074 | ai:codex
+        MailboxCommand::Disposition {
+            message_id,
+            outcome,
+            reason,
+            evidence,
+            until,
+            json,
+        } => crate::mailbox_action::record(
+            project_root,
+            store_root,
+            message_id,
+            *outcome,
+            reason,
+            evidence.as_deref(),
+            until.as_deref(),
+            *json,
+        ),
         // trace:TASK-2347 | ai:codex
         MailboxCommand::WakeSnapshot {
             local_root,
@@ -913,10 +931,23 @@ pub(crate) fn handle_mailbox_command(
         // STORY-1843: every verb taking a message ID resolves against the
         // same logical snapshot the inbox lists (ruling on PR #2952 F1).
         // trace:STORY-1843 | ai:claude
-        MailboxCommand::Read { message_id } => {
+        // trace:TASK-3074 | ai:codex
+        MailboxCommand::Read { message_id, json } => {
             let book = crate::mailbox_view::addressable(project_root, store_root);
             let msg = book.resolve(message_id)?;
-            print_mailbox_line(msg);
+            let action = crate::mailbox_action::inspect(project_root, store_root, msg);
+            if *json || crate::output_format_is_json() {
+                println!(
+                    "{}",
+                    serde_json::to_string(&crate::mailbox_action::read_json(msg, &action))?
+                );
+            } else {
+                print_mailbox_line(msg);
+                println!(
+                    "action: {}",
+                    crate::mailbox_action::read_summary(msg, &action)
+                );
+            }
             Ok(())
         }
         MailboxCommand::Retract { message_id } => {
@@ -1979,7 +2010,7 @@ mod tests {
             .unwrap();
         match cli.command.registered::<crate::mailbox_cmd::MailboxArgs>() {
             crate::mailbox_cmd::MailboxArgs {
-                inner: MailboxCommand::Read { message_id },
+                inner: MailboxCommand::Read { message_id, .. },
             } => {
                 assert_eq!(message_id, "0fa629d6")
             }
@@ -2002,6 +2033,7 @@ mod tests {
         handle_mailbox_command(
             &MailboxCommand::Read {
                 message_id: "abcd1234".into(),
+                json: false,
             },
             &store,
         )
@@ -2009,6 +2041,7 @@ mod tests {
         handle_mailbox_command(
             &MailboxCommand::Read {
                 message_id: "abcd1234".into(),
+                json: false,
             },
             &store,
         )
