@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T03:41:01.338566220Z
+modified_at: 2026-11-06T04:20:49.038768097Z
 req_type: Story
 tags:
 - docs:impacted
@@ -353,6 +353,12 @@ comments:
   created_at: 2026-11-06T03:39:47.333509460Z
   modified_at: 2026-11-06T03:39:47.333509460Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af16-7d0e-7b93-a7b2-6ab4da5a99ed
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
+  created_at: 2026-11-06T04:20:49.038765725Z
+  modified_at: 2026-11-06T04:20:49.038765725Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
@@ -597,6 +603,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1af16-7d0e-7b93-a7b2-6aa1b6066f30
+  author: joe
+  timestamp: 2026-11-06T04:20:49.038754640Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
