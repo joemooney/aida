@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T13:54:30.453824691Z
+modified_at: 2026-11-06T13:54:37.366950492Z
 req_type: Story
 relationships:
 - rel_type:
@@ -263,6 +263,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 3 (Refs STORY-2401, AC2): round-3 findings 1-3 fixed (pause knob, Known-only tip cache, merge-commit receipt; lib-1/cli-0 now green), but CI lib-0 ''Test time budget'' is still red while main is green, and the advisor''s F5 ruling (eject a settled pre-land refusal; don''t suspend the train) is not implemented. AC1 landed in #3427; AC3/AC4 are later slices.. No triage reason was given.'
   created_at: 2026-11-06T13:54:30.453823024Z
   modified_at: 2026-11-06T13:54:30.453823024Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b123-c1d1-7e23-a2ec-7cdbbc144d9a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fce726766cb5
+    Recorded: 2026-11-06T13:48:55.912596487+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3493#issuecomment-6686351019
+    Findings:
+    1. [major] CI red at fce726766cb (main 50ce509da3f green on the same shard): CI (lib-0) 'Run tests' passed but 'Test time budget' failed (run 42224787380, job 127915426021). Logs could not be read from the review sandbox (log blob host denied), so the over-budget test is unidentified. Likely cause: lib tests that spawn the aida binary built for lib unit tests get the non-test DEFAULT_PAUSE of 3s (forge_confirmation.rs:15-19; it is 0 only under cfg(test) inside the lib), or they hit observe_metadata_with_retry's real retry sleeps (forge.rs observe_metadata_with_retry). Fix: find the test in the uploaded timing artifact, set AIDA_FORGE_CONFIRM_PAUSE_MS=0 (and a zero retry delay) in the binary-spawning lib harness, and get lib-0 green.
+    2. [major] Advisor ruling F5 (STORY-2401 comment 2026-11-06 12:41 UTC, 'ALL accepted, in scope for THIS PR, none deferred') is unaddressed. It requires typing the gate's settled refusals as Known(Err), so a refused member is ejected (restoring BUG-2214) and the train is not suspended, plus a live-path test. LiveTrainForge::observe_gate (pr_train.rs ~2289-2297) still maps every gate Err to Transient. So in ForgeRails::land, a new hold, withdrawn approval, lapsed mandate or draft member suspends the whole train with every member retained. story_2401_live_preland_gate_refusal_suspends asserts the opposite of the ruling, and docs/plans/2026-11-06-story-2401-confirmed-negatives.md:112-121 records suspension as deliberate. Fix: give the live gate typed outcomes (settled refusal -> Known(Err), unavailable secondary read -> Transient), eject on Known(Err), and flip the live-path test to assert ejection with the hold intact.
+    3. [minor] Deterministic train CI failures can no longer eject. wait_train_ci's missing-required-check registration bound and its settle ceiling (pr_train.rs ~790-801) now return TrainCiUnavailable, which suspends, and bug2423_missing_required_check_timeout_ejects_members was flipped to story_2401_missing_required_check_timeout_suspends_members. A required check that never registers for these members (path filter, stale CI definition) re-trains the same members every run, spending CI, and never surfaces a reason on the member PRs. Add a bound (eject or route to the advisor after N consecutive suspensions for the same member set), or get an explicit advisor ruling that this waits for AC4's workflow-digest slice.
+    4. [minor] review_watch retryable_fetch has no cap. An attempt that failed on FetchUnavailable is excluded from the Skip guard and never consumes setup_retry (review_watch.rs select(), ~1319 and ~1338), so a persistent fetch failure (revoked credentials, removed remote) relaunches a reviewer dispatcher on every watch tick indefinitely, each relaunch costing three 30s-bounded fetches with pauses. Cap consecutive fetch-unavailable relaunches per head, or back off, and test the cap.
+    5. [minor] Prior finding 3 is only partly fixed. receipt() (forge_confirmation.rs:147-193) now accepts a 'Merge pull request #N from' subject, but a PR landed by GitHub rebase-merge whose head is absent locally is still Merged on the forge and Known(false) on Git. metadata_for therefore returns Pending('forge state conflicts with Git evidence') on every sweep and never grants credit or cleanup. Low impact (aida squash-merges), but either fetch refs/pull/N/head into the private confirm ref when the head object is missing, or file a follow-up.
+    6. [cosmetic] Partly unmet F2 (confirm only before an authorizing answer): phase_driver.rs:771 (publication retraction) and close_abandoned_train (pr_train.rs ~1745) call forge_confirmation::metadata(), whose actionable predicate is always true. A first read that authorizes nothing (not Open, so NoLongerOpen or a refusal) still pays the confirmation pause plus a base fetch. Use metadata_for with |m| m.state == Open.
+    7. [cosmetic] Historical commit d726665ca8f still has the non-descriptive bare-trailer subject 'chore(seat): work native Codex lane ... (STORY-2401)'. This is mitigated because the head is a merge commit and the squash takes the PR-title Refs subject; reword it only if the branch is rebuilt.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T13:54:33.041848161Z
+  modified_at: 2026-11-06T13:54:33.041848161Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
