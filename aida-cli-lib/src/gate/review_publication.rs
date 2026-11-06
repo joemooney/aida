@@ -32,6 +32,37 @@ use std::{
 };
 use uuid::Uuid;
 
+pub(crate) mod admission;
+
+/// Verified synced history is consulted even without any local verdict files.
+// trace:STORY-2492 | ai:codex
+pub(crate) fn watcher_history(root: &Path, change: &str) -> Result<Vec<(String, String)>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(Vec::new());
+    };
+    let key = ChangeKey::parse(change).context("invalid watcher change")?;
+    let heads: std::collections::BTreeSet<_> = load_receipts(root, &store, &tip, change)?
+        .into_iter()
+        .map(|(receipt, ..)| receipt.head)
+        .collect();
+    let mut history = Vec::new();
+    let started = std::time::Instant::now();
+    for head in heads {
+        ensure!(
+            started.elapsed() < Duration::from_secs(20),
+            "watcher history deadline exhausted"
+        );
+        if let Some((receipt, rel)) = select(root, key, &[], Some(&head))? {
+            history.push((body(&receipt)?, format!(".aida-store/{rel}")));
+        }
+    }
+    ensure!(
+        head(&store)? == tip,
+        "review history changed during watcher selection"
+    );
+    Ok(history)
+}
+
 const ROSTER: &str = "reviews/v1/nodes.json";
 const CHANGES: &str = "reviews/v1/changes";
 const SPEC_INDEX: &str = "reviews/v1/specs";

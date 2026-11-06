@@ -555,7 +555,10 @@ Configured host recorders publish immutable OpenSSH-signed review receipts to
 `reviews/v1/` in the shared store after local authority validation. Consumers use
 the current operator-enrolled node roster, exact PR head, canonical spec keys and
 portable author/reviewer sessions. Grants and human receipts stay local. Synced
-refusals override local approvals; watcher reservation sync remains deferred.
+refusals override local approvals. Distributed watchers sync publications before
+discovery and require signed exact-tip admission at the explicit trusted GitHub
+hub/ref before dispatch. GitLab is mirror-only; uncertain claims retain capacity
+and local --release cannot clear them.
 See [second-node setup](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
 

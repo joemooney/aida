@@ -936,3 +936,49 @@ fn roster_conflict_never_auto_merges_revocation_away() {
         "{error:#}"
     );
 }
+
+// trace:STORY-2492 | ai:codex
+#[test]
+fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let record = f.record("request-changes", "reviewer-session");
+        f.collect(&record).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert!(!f.a.join(".aida/review-verdicts").exists());
+    assert_eq!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &f.sha)
+            .unwrap()
+            .as_deref(),
+        Some("head already has a recorded review")
+    );
+    write(
+        &f.a,
+        ".aida/review-verdicts/PR-7.json",
+        serde_json::to_vec(&serde_json::json!({
+            "verdict":"approved", "reviewed_sha":f.sha, "recorded_by":"local cache"
+        }))
+        .unwrap(),
+    );
+    take_reports();
+    assert!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &f.sha)
+            .unwrap()
+            .is_some()
+    );
+    assert!(take_reports()
+        .iter()
+        .any(|report| report.contains("contradictory local watcher history")));
+    assert!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &"a".repeat(40))
+            .unwrap()
+            .is_none(),
+        "stale publications do not suppress a new head"
+    );
+}

@@ -143,6 +143,67 @@ name several heads and a reader that has no head of its own cannot resolve the
 branch, those publications are reported and ignored there; head-bound gates
 (merge, train) still apply the publication at their head.
 
-Watcher reservations remain machine-local in slice 1. Do not run competing
-watchers against the same PR heads yet; reservation synchronization is slice 2.
+## Run distributed watchers
+
+Configure the single authority in the reviewed default-branch configuration;
+a branch-local edit cannot redirect admission or credentials:
+
+```toml
+[review]
+admission_hub = "https://github.com/joemooney/aida.git"
+admission_ref = "refs/aida/review-admission"
+```
+
+Upgrade every watcher to the admission-aware binary and stop older watchers
+before enabling this configuration. Old binaries cannot participate in this
+protocol or read its extended local launch receipts. Every publishing node must
+use the same exact URL and ref. The watcher repository must match that GitHub
+authority; another project cannot share its PR-number admission keys. GitHub is the sole
+admission authority. GitLab and the hourly reconcile bridge distribute evidence
+and never admit. A GitLab MR or a GitLab admission URL refuses. There is no
+failover: `admission_hub_unreachable` names the configured authority and no
+reviewer starts. A configured publisher with missing admission settings refuses;
+a host with neither publisher nor admission settings retains local-only operation.
+
+Run `aida review watch --once` or the ordinary continuous watcher on each host.
+Each discovery pass first fast-forwards the clean canonical store through its
+existing evidence gate; divergence, dirty state and sync errors refuse that pass.
+The watcher then queries open forge changes and reads verified synced publications,
+even when there is no local verdict directory. The local two-review ceiling still
+applies. Before spawning a dispatcher it signs a Reserved transition and pushes
+with an explicit expected-tip lease to the configured ref. It requires a definite
+successful push and confirms the accepted transition. A losing CAS reloads and
+reconstructs against the winner, for at most three attempts, preserving other
+changes and tree entries. It never rebases a losing claim into an accepted one.
+
+The bounded version-1 `admission.json` table contains signed causal chains per
+change. Each transition binds the repository/forge, hub/ref, GitHub PR, exact head,
+unpredictable UUID token, owner node/session, transition ID and predecessor.
+Signatures use the enrolled node key and the slice-1 OpenSSH namespace. The
+process-bound dispatcher consumes Reserved → Running exactly once after its
+head/overlap preflight and before queue work. An observed worker exit permits
+Running → Terminal only when every recorded reviewer/worker has stopped and
+none is unrecorded. Proven preflight or dispatcher-spawn failure permits
+Reserved → Cancelled. Terminal heads are not automatically reviewed again;
+Cancelled admits a fresh token. An active older head fences newer heads.
+
+A failed or lost push response, crash, uncertain child spawn, unknown process
+identity, revoked signing node or failed terminal write retains capacity safely.
+Clock age, reboot and remote PIDs never release a distributed claim. Local
+`--release` refuses in distributed mode. Recovery requires stopping admission
+on all nodes, explicitly reconciling the owner and verifying that all of its
+children stopped, fencing old tokens, and migrating the admission state under
+operator control before restarting. There is no automatic recovery or process
+termination in the admission layer. Keep the roster stable until outstanding
+claims are reconciled; revoking an owner makes its chain unverifiable and requires
+this stopped-admission recovery.
+
+The custom GitHub ref uses client-side CAS, not GitHub ruleset enforcement.
+Only cooperating AIDA writers may update it: no bridge, mirror or operator may
+force-push, delete or rewind it during admission. A topology change uses the
+stopped-admission migration above. Each table is bounded to 1 MiB, 2000 changes
+and 2048 transitions per change; budget exhaustion refuses admission and requires
+operator maintenance with admission stopped. Grants and human receipts remain
+local; this protocol grants no remote role authority.
+
 Untrusted work-node envelopes are outside this workflow.

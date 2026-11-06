@@ -1219,6 +1219,7 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                     format!("PR-{id}"),
                     Entry {
                         attempts: vec![Attempt {
+                            admission_hub: None,
                             head: format!("{id:040x}"),
                             token: uuid::Uuid::new_v4().to_string(),
                             vendor: None,
