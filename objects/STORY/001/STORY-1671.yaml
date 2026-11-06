@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:00.283963835Z
-modified_at: 2026-11-04T02:44:26.700405281Z
+modified_at: 2026-11-06T00:15:17.018503471Z
 req_type: Story
 tags:
 - from:aida-host
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-11-04T02:41:56.903291162Z
   modified_at: 2026-11-04T02:41:56.903291162Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1ae35-b21a-7f92-bddc-c710da6989a7
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 1: the regeneration/north-star research line is KEPT DEFERRED (neither continued nor stopped).'
+  created_at: 2026-11-06T00:15:17.018503471Z
+  modified_at: 2026-11-06T00:15:17.018503471Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a154db-cd63-7121-a3f4-74ca17970965
   author: joe
