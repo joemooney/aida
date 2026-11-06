@@ -102,11 +102,12 @@ including the removed `Constant.kind` field; interpreter-specific `ast.dump`
 formatting is never hashed. Literal golden site keys for Rust and Python point
 to encoding drift before a whole-ledger comparison fails.
 
-This is a source-token ratchet, not a Rust compiler or whole-program taint
+Limits: this is a source-token ratchet, not a Rust compiler or whole-program taint
 analysis. It does not resolve cross-module reexports, macro expansion, dynamic
 Python imports, libc/FFI environment access, shell environment commands, or
-third-party home/environment helpers. Original direct Rust sources/reexport
-bindings and Python os references remain inventoried. Later migration slices
+third-party home/environment helpers. Extern-crate alias resolution is file-local;
+aliases reexported across modules are outside this scan's resolution. Original
+direct Rust sources/reexport bindings and Python os references remain inventoried. Later migration slices
 must audit these indirect consumers before claiming the final no-ambient-read
 contract; this initial ledger is not proof of that final contract.
 
@@ -116,12 +117,14 @@ compares against the PR or merge-group base ledger: entries may shrink or
 relocate identical operation/expression fingerprints; the ceiling may only shrink.
 The first introduction bootstraps only when that base has no ledger. A missing
 base commit or unreadable/malformed ledger fails. Locally use `--base REF` to
-exercise the same growth check. While the base still has no ledger, rescan
-immediately after every merge/update from main, include inherited sites in the
-bootstrap ledger and recompute `ceiling`, then rerun `--base origin/main` before
-requesting review. Once the base has a ledger, its growth check applies.
-After migrating a site, remove its entry (or reduce its multiplicity), recompute
-the ceiling, and rerun the guard. Never
+exercise the same growth check. After every merge/update from main and before
+every push, run `python3 scripts/check-exec-context.py --write-ledger --base origin/main`.
+This one command rescans tracked sources, writes sorted keys and multiplicities,
+and computes the ledger's `ceiling`. It bootstraps only when the base has no ledger;
+otherwise it checks the candidate against that base before writing and refuses
+growth, leaving the existing ledger untouched. Missing or malformed base evidence
+also refuses the write. Use the same command after migrating or relocating a site,
+then rerun the guard and fixtures before requesting review. Never
 regenerate the ledger to admit replacement/new ambient reads or mutations.
 
 ## Seam inventory and remaining acceptance

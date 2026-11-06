@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import subprocess
+import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
@@ -254,6 +255,80 @@ class ExecContextRatchetTests(unittest.TestCase):
         workflow = (GUARD.ROOT / ".github/workflows/ci.yml").read_text()
         base = next(line for line in workflow.splitlines() if "EXEC_CONTEXT_BASE:" in line)
         self.assertIn("github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before", base)
+
+    def test_write_ledger_bootstraps_and_refuses_growth_before_writing(self):
+        # trace:STORY-2538 | ai:codex
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write(name, content):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+                     "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", *args],
+                    cwd=root, check=True, capture_output=True,
+                )
+
+            def run(*args):
+                return subprocess.run(
+                    [sys.executable, str(root / "scripts/check-exec-context.py"), *args],
+                    cwd=root, capture_output=True, text=True,
+                )
+
+            git("init")
+            write("scripts/check-exec-context.py", Path(GUARD.__file__).read_text())
+            write("Cargo.toml", '[workspace]\nmembers = ["aida-core"]\n')
+            write("aida-core/src/exec_context.rs", 'fn capture() { std::env::vars_os(); }')
+            source = 'fn f() { std::env::var("Z"); std::env::var("A"); std::env::var("A"); }'
+            write("aida-core/src/legacy.rs", source)
+            git("add", ".")
+            git("commit", "-m", "base without ledger")
+            ledger_path = root / GUARD.LEDGER
+            self.assertFalse(ledger_path.exists())
+            result = run("--write-ledger", "--base", "HEAD")
+            self.assertEqual(0, result.returncode, result.stderr)
+            ledger = json.loads(ledger_path.read_text())
+            actual = GUARD.scan(root)
+            self.assertEqual(dict(actual), ledger["sites"])
+            self.assertEqual(3, ledger["ceiling"])
+            self.assertEqual([1, 2], sorted(ledger["sites"].values()))
+            self.assertEqual(json.dumps(ledger, indent=2, sort_keys=True) + "\n", ledger_path.read_text())
+            git("add", ".")
+            git("commit", "-m", "base with ledger")
+            original = ledger_path.read_bytes()
+
+            for changed in [
+                source.replace('var("Z")', 'var("NEW")'),  # Same count, changed expression.
+                source.replace('var("Z");', 'var("Z"); std::env::var("Z");'),
+            ]:
+                with self.subTest(changed=changed):
+                    write("aida-core/src/legacy.rs", changed)
+                    result = run("--base", "HEAD", "--write-ledger")
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("may only shrink or relocate", result.stderr)
+                    self.assertEqual(original, ledger_path.read_bytes())
+
+            write("aida-core/src/legacy.rs", source.replace("fn f()", "fn renamed()"))
+            result = run("--write-ledger", "--base", "HEAD")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertTrue(all(":renamed:" in key for key in json.loads(ledger_path.read_text())["sites"]))
+            write("aida-core/src/legacy.rs", "fn f() {}")
+            result = run("--write-ledger", "--base", "HEAD")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual({"version": 1, "owner": "STORY-2538", "scope": GUARD.SCOPE,
+                              "ceiling": 0, "sites": {}},
+                             json.loads(ledger_path.read_text()))
+            result = run("--base", "HEAD")
+            self.assertEqual(0, result.returncode, result.stderr)
+
+            before = ledger_path.read_bytes()
+            result = run("--write-ledger", "--base", "missing-ref")
+            self.assertNotEqual(0, result.returncode)
+            self.assertEqual(before, ledger_path.read_bytes())
 
     def test_python_harness_sources_include_aliases_and_mutation(self):
         for source in [

@@ -9,6 +9,7 @@ cannot hide it. See docs/internal/testing/exec-context-migration.md for limits.
 # trace:STORY-2538 | ai:codex
 from __future__ import annotations
 
+import argparse
 import ast
 import fnmatch
 from collections import Counter
@@ -22,6 +23,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER = Path("scripts/exec-context-legacy.json")
+SCOPE = "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D."
 OPS = {"var", "var_os", "vars", "vars_os", "set_var", "remove_var"}
 RAW = re.compile(r'(?:br|cr|r)(#*)"')
 QUOTED = re.compile(r'(?:b|c)?"')
@@ -340,18 +342,30 @@ def check_growth(ledger, previous):
 
 
 def main():
-    ledger = json.loads((ROOT / LEDGER).read_text())
-    check(scan(), ledger)
+    # trace:STORY-2538 | ai:codex
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", metavar="REF", help="refuse ledger growth relative to REF")
+    parser.add_argument("--write-ledger", action="store_true", help="regenerate the exact-site ledger")
+    args = parser.parse_args()
+    actual = Counter(scan())
+    if args.write_ledger:
+        ledger = {"version": 1, "owner": "STORY-2538", "scope": SCOPE,
+                  "ceiling": sum(actual.values()), "sites": dict(actual)}
+    else:
+        ledger = json.loads((ROOT / LEDGER).read_text())
+    check(actual, ledger)
     # CI supplies its PR base; local runs may explicitly use --base REF too.
     # The initial introduction has no old ledger, so only that case bootstraps.
-    if len(sys.argv) == 3 and sys.argv[1] == "--base":
-        base = subprocess.run(["git", "rev-parse", "--verify", sys.argv[2] + "^{commit}"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    if args.base:
+        base = subprocess.run(["git", "rev-parse", "--verify", args.base + "^{commit}"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
         files = subprocess.run(["git", "ls-tree", "--name-only", base, str(LEDGER)], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
         if str(LEDGER) in files:
             previous = subprocess.run(["git", "show", f"{base}:{LEDGER}"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
             check_growth(ledger, json.loads(previous))
-    elif len(sys.argv) != 1:
-        raise ValueError("usage: check-exec-context.py [--base REF]")
+    # Validate against the base before touching an existing ledger. The initial
+    # introduction can bootstrap even when no working-tree ledger exists.
+    if args.write_ledger:
+        (ROOT / LEDGER).write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n")
     print(f"ExecContext legacy ledger: {ledger['ceiling']} exact sites; zero additions")
 
 
