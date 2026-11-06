@@ -11,16 +11,24 @@ description: |
   - Regression test: a lease whose scope is an origin ID with a HOME-alias mapping produces a trailer that `ship --from-seat`'s trailer check resolves, and the host commit and push succeed end to end in the existing seat-publish fixture.
   - Audit the other display_spec_id call sites that write commit or PR text, and switch any that feed trailer resolution.
   LIGHT gate.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T03:06:54.662965941Z
-modified_at: 2026-11-06T03:06:54.662965941Z
+modified_at: 2026-11-06T03:43:25.369681009Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2475
 - vendor:codex
+history:
+- id: 01a1aef4-40b9-7820-ab7c-0fb8a051dd7c
+  author: aida-session-start
+  timestamp: 2026-11-06T03:43:25.369680083Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 93dc9165bde3bd7b80a0ac39df763581a3aebbd9
   branch: main
