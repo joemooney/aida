@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T19:19:57.333416215Z
+modified_at: 2026-11-06T19:27:58.501848465Z
 req_type: Bug
 comments:
 - id: 01a1b24d-ac95-76d2-b42d-ca99117a4cd9
@@ -21,6 +21,12 @@ comments:
   content: 'Implementation in progress: current continuous watcher already isolates ordinary per-change errors, but --once still aborts its pass. Updated the shared pass boundary to continue all changes in both modes, retain refusal reasons for aida awaiting, and preserve fail-fast behavior for unusable shared state. Added two-PR pickup-refusal and fatal-state regressions; targeted Rust validation is compiling.'
   created_at: 2026-11-06T19:19:57.333416215Z
   modified_at: 2026-11-06T19:19:57.333416215Z
+  session_id: 01a1b24ab322
+- id: 01a1b255-0425-7183-ad47-a689a76fe6b5
+  author: joe
+  content: 'Implemented and validated in the native implementer worktree. Shared per-change pass handling now continues after refusals in both continuous and --once mode, records a bounded reason for aida awaiting, and still stops for unusable shared state. Added a two-PR pickup-refusal regression checking same-tick admission plus a subsequent tick, and a corrupt-state fail-fast regression. Validation: cargo test -p aida-cli-lib --lib review_watch::tests passed all 50 tests; cargo fmt --all -- --check and git diff --check passed. Changed files: aida-cli-lib/src/review_watch.rs, aida-cli-lib/src/tests/task_1993_review_watch_tests.rs, docs/cli/06-roles-sessions.md. Edits left uncommitted for host publication; no blockers.'
+  created_at: 2026-11-06T19:27:58.501848465Z
+  modified_at: 2026-11-06T19:27:58.501848465Z
   session_id: 01a1b24ab322
 history:
 - id: 01a1b24a-bc58-7413-a436-59c9e08b551a
