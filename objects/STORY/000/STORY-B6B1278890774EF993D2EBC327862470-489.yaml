@@ -1,0 +1,36 @@
+id: 01a1b199-7033-7e50-b639-6f8c8ffc55b4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-489
+agreed_id: STORY-2566
+title: 'Review PR-3511: [AI:codex] chore(store): inventory writer surfaces and add review ratchet (Refs TASK-3222)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b18c`) for branch `task-b6b1278890774ef993d2ebc327862470-879`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3511>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-879` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3222
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3511` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T16:03:05.395317739Z
+modified_at: 2026-11-06T16:03:05.395317739Z
+req_type: Story
+filed_at:
+  code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f50fa16ae95
+  vendor: claude
+  session: 01a1b18c5848
