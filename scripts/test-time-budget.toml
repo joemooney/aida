@@ -32,6 +32,10 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# PR #3508 job 127977356781 measured 76.412s: two signed watcher rounds,
+# dispatcher/collector re-execs and real train landing. Max x2, rounded up to 5s.
+# trace:STORY-2492 | ai:codex
+"aida-cli-lib gate::review_publication::entry_tests::two_node_ship_watch_rework_and_train_entry_points" = 155
 # Signing and storing 2,100 independent shards proves both former global caps
 # (2,000 changes and 1 MiB) stay removed. PR #3479 job 127849628383 measured
 # 26.03s; keep that coverage with x2 headroom rounded up to 5s.

@@ -1484,6 +1484,23 @@ pub(crate) fn remote_missing_commits(
     is_clone: bool,
     lease_branch: &str,
 ) -> Result<u64> {
+    remote_missing_commits_with_review_head(main, seat, is_clone, lease_branch, None)
+}
+
+/// A freshly fetched forge head can cover a linked reviewer checkout too.
+/// Private clones retain their ordinary remote-only accounting.
+// trace:BUG-2469 | ai:codex
+pub(crate) fn remote_missing_commits_with_review_head(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+    review_head: Option<&str>,
+) -> Result<u64> {
+    anyhow::ensure!(
+        !is_clone || review_head.is_none(),
+        "review coverage requires a linked worktree"
+    );
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1596,6 +1613,9 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
             cmd.arg("HEAD");
         }
         cmd.args(["--not", "--remotes"]);
+        if let Some(head) = review_head {
+            cmd.arg(head);
+        }
         run_bounded(cmd, "", deadline).context("cannot count commits absent from remotes")?
     };
     output
