@@ -3,12 +3,12 @@ spec_id: TASK-1797
 agreed_id: TASK-1797
 title: 'Operator: add a GitHub tag ruleset protecting v* tags (contained-seat origin-side residual)'
 description: From the BUG-2169 signoff (O3). Contained seats can push to origin, and release.yml fires on v* tags. Add a repository tag ruleset that restricts creating, updating and deleting v* tags to the operator, or to the release workflow identity. Operator action in GitHub settings.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:21:29.287594158Z
-modified_at: 2026-11-06T06:11:14.137406840Z
+modified_at: 2026-11-06T06:11:15.499230419Z
 req_type: Task
 comments:
 - id: 01a1a472-7ac8-7060-adfd-8409de0300b4
@@ -40,6 +40,14 @@ history:
   timestamp: 2026-11-06T06:11:14.255048430Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1af7b-99ab-7dd3-8929-21ece6487c76
+  author: joe
+  timestamp: 2026-11-06T06:11:15.499227797Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: fc39d8f0bc76504a62b5733ebcc61ab9677f5121
   branch: main
@@ -48,3 +56,6 @@ filed_at:
   aida_build_sha: fc39d8f0bc
   vendor: claude
   session: b307b6fe-d611-428b-bc2a-5df6287d4592
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T06:11:15.499202521Z
