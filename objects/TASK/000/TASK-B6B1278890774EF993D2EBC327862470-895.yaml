@@ -12,12 +12,12 @@ description: |-
   Pushes to main and train/* branches are never cancelled (they key on ref, and cancel-in-progress is false off pull_request). Check that the merge-hold-gate check still reports on the latest head after a cancel. If label events re-trigger it, the group must not drop the newest run. Document the behavior in the CI section of docs/internal/agents/aida-repository-guide.md.
 
   Gate: make check-ci-fast (it includes the workflow lint gates). No cargo.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:13:23.889727922Z
-modified_at: 2026-11-06T20:40:27.734710909Z
+modified_at: 2026-11-06T23:27:21.235622973Z
 req_type: Task
 relationships:
 - rel_type:
@@ -100,6 +100,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b330-2c70-7d81-9d45-339a9889d8cd
+  author: aida-auto-bump
+  timestamp: 2026-11-06T23:27:21.200534119Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b330-2c93-7cd0-bebe-a464778683ac
+  timestamp: 2026-11-06T23:27:21.235619756Z
+  agent: aida
+  commit_sha: e3c49ffec8a2f0e134fa6cdf73532bb8028a0a2a
+  summary: Both workflows add concurrency grouped by workflow plus PR number, falling back to run_id; cancel-in-progress is on only for pull_request. Round-1 findings 1-2 fixed (non-PR runs are now ungrouped, comment and docs rewritten). merge-hold-gate already reported on this head; its failure is the expected supervised hold, not a defect. CI (gates) is still queued (39 runs in queue) at review time; ship must wait for green CI at this head.
+  review_verdict: approved
 filed_at:
   code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
   branch: main
@@ -108,3 +122,7 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T23:27:21.200528605Z
+  completion_sha: e3c49ffec8a2f0e134fa6cdf73532bb8028a0a2a
