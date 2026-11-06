@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T19:30:26.314184565Z
+modified_at: 2026-11-06T19:30:32.782429641Z
 req_type: Story
 relationships:
 - rel_type:
@@ -344,6 +344,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 4 (AC3, Refs STORY-2401): the intent journal, checkpoints and SIGKILL resume tests are solid, but recovery re-gates resumed members with the new invocation''s TTY-consent flag (authority widening), Known-red CI on resume wedges every later train, Done journals are never pruned, and the production recover_change path is untested. AC1/AC2 landed in earlier slices and are not regressed; AC4 is slice 5. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-06T19:30:26.314183092Z
   modified_at: 2026-11-06T19:30:26.314183092Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b257-5e4a-7302-931a-02adc280ab80
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3533):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 649d36756499
+    Recorded: 2026-11-06T19:26:51.017881326+00:00
+    Findings:
+    1. [major] Authority widening on recovery: pr_train.rs:3796 builds the recovery LiveTrainForge with named: prs_named_on_command_line(opts) (= !all_ready). The resumed train's members were not named on this command line, but land() and the Retire recovery re-gate them via observe_gate/typed_gate_member_with with that flag, so tty_consents(interactive_tty, named) (pr_train.rs:1477, 1587) returns true. A human who runs 'aida pr train 50' at a TTY therefore extends BUG-727 terminal consent to every member of an older --all-ready train being resumed, including supervised-spec members that needed a mandate cover (saved covers are correctly dropped by serde(skip), but TTY consent replaces them). Fix: the recovery ports must use named: false (the journal does not persist consent), or persist the original named set and grant TTY consent only to PRs that are both journaled-as-named and named again now. Add a test where a resumed member needs a mandate cover and the invocation is an interactive TTY naming a different PR: it must be refused.
+    2. [minor] Deterministic negatives wedge all train admission permanently: pr_train_journal.rs:281-286 bails 'recovered train CI no longer confirmed green; journal retained' on any non-Known(Green) CI read at Step::Gate/Merge. That includes a Known(Red) result, which is settled evidence, not unknown evidence. resume() runs before admission in every non-dry invocation, including the dispatch_flow single-PR fallback at dispatch_flow.rs:299, and nothing clears the entry, so every later 'aida pr train' fails until someone deletes .aida/train/<id>.json by hand. The same applies to recover_change's head/base mismatch (pr_train.rs ~2740) and to a single unparseable or invalid file in entries() (pr_train_journal.rs:129-146). Fix: route a confirmed Known(Red) through the existing confirm-and-self.retire path, as test() does at pr_train.rs ~3315-3334, and wait on Pending as test() does. Document in docs/cli/04-git-lifecycle.md how an operator inspects and discards a journal (ideally an explicit command) so unknown evidence stays a stop rather than a permanent outage.
+    3. [minor] Journal entries are never pruned: every train opened writes .aida/train/<uuid>-<n>.json (pr_train_journal.rs:46-52, 74-91), and Step::Done entries are only skipped (pr_train_journal.rs:200), never removed. The directory grows without bound. entries() reads, parses and validates every file on every non-dry startup, so one corrupt or truncated historical Done file blocks all train admission. Fix: remove (or move to an archive subdir that entries() does not read) an entry once it reaches Step::Done after its final fsync, and test that a completed train leaves no live entry.
+    4. [minor] The production recovery path is untested: every resume test uses FakeForge::recover_change (story_1690_train_tests.rs ~1212), which returns a canned change. LiveTrainForge::recover_change (pr_train.rs:2671-2760) is never exercised: the exact-branch 'gh pr list --state all' search, the two-empty-reads then reopen branch, the rows.len()!=1 ambiguity refusal, and the head/base/branch metadata mismatch refusal. The handler integration is also untested: resume before abandoned-train cleanup and admission, the candidate filter that drops recovered landed/ejected PRs, and the had_candidates || recovered guard (pr_train.rs ~3821-3829). Add fixture tests (RecordingForge plus a stubbed gh list) for at least the reopen, ambiguity and mismatch branches, and one for the candidate filter.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:30:32.650617880Z
+  modified_at: 2026-11-06T19:30:32.650617880Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
