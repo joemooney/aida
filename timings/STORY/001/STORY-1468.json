@@ -5,9 +5,80 @@
     {
       "at": "2026-11-05T20:32:31.775147401Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-11-06T10:44:11.391931610Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-04T01:41:24.335048952Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T12:47:18.162737690Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T16:25:12.472678027Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T18:14:10.390516735Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T18:49:16.911471653Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T19:12:27.014671390Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-11-05T19:13:21.204269473Z",
       "spec": "STORY-1468",
@@ -16,6 +87,92 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-05T21:55:43.323495438Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T23:42:25.694759332Z",
+      "spec": "STORY-1468",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1468",
+        "branch": "origin/story-1468",
+        "first_seen": "2026-11-05T23:42:25.694692361+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T01:18:25.837370413Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T06:19:21.835721084Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T08:22:27.706061288Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T08:32:17.253721068Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T10:40:25.964553490Z",
+      "spec": "STORY-1468",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3453
+      }
+    },
+    {
+      "ts": "2026-11-06T10:44:09.780285366Z",
+      "spec": "STORY-1468",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "066c1609bf8d8720e3460d2e2859c44c14ea9a48",
+        "pr": 3453,
+        "closed_by": "auto-bump"
       }
     }
   ]
