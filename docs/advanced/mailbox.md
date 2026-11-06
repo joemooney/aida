@@ -383,7 +383,8 @@ the message still prints with `action: null` and an `action_error` string.
 Text reads show `action: unavailable (<reason>)`, `unknown` for requests
 without a receipt, or `n/a (not a request)` for informational/handoff mail.
 Recorded dispositions show outcome, actor, reason, evidence, deadline and
-recorded time in text mode. Neither command advances read ACKs. A disposition closes only
-the response obligation; it does not establish that a pipeline stall cleared.
-Alarm correlation and unresolved/persistent escalation follow in a separate
-implementation slice.
+recorded time in text mode. Neither command advances read ACKs. An acted or declined
+disposition closes only the response obligation; it does not establish that a pipeline stall cleared.
+Pipeline alarms correlate this evidence by exact request ID and immutable
+fingerprint. See [stall escalation](../cli/06-roles-sessions.md#pipeline-stall-alarms)
+for unresolved and persistent deadlines, notification outcomes and legacy state.

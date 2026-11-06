@@ -286,6 +286,14 @@ lease and worktree; the unchanged contained launcher checks the committed policy
 seat preflight and host receipt before releasing Codex. No authority or lease
 files are fabricated. The host repository's policy is never edited.
 
+Fixture setup commands run with stdin connected to `/dev/null`, including
+`aida init`, so launching the harness from a terminal cannot leave setup waiting
+for interactive input. The separate `aida role enter` step deliberately inherits
+the operator's stdin and stderr for the production terminal-grant flow; its
+stdout remains a private captured eval block. The shell continuation receives
+that block through its own stdin pipe.
+<!-- trace:BUG-2460 | ai:codex -->
+
 `HOME` and `AIDA_HOME` are isolated together under the experiment directory;
 managed-agent identity is retained. The original `CODEX_HOME` location is
 preserved so the production authentication checks still apply; credentials
@@ -330,3 +338,7 @@ python3 -m unittest tests/test_containment_conformance_aida.py
 
 It uses `target/debug/aida` when present, otherwise `aida` on PATH, and fails
 if neither exists. CI runs it after building the workspace in the gates lane.
+The offline test gives the harness an idle PTY on stdin and verifies real
+fixture initialization reaches the expected managed-agent role refusal without
+executing the fake vendor. This test terminal grants no authority; managed-agent
+identity remains set throughout.
