@@ -320,6 +320,16 @@ leaves the owning spec's status unchanged by default unless `--final-slice`
 (`--complete-spec`) is passed to complete the spec on the final slice.
 <!-- trace:STORY-1663 | ai:antigravity -->
 
+When confirming a forge-reported merge without an ancestry or PR-subject
+receipt, AIDA can recover an absent pinned head through a private, 30-second
+fetch from origin. A matching full tree at the independently fetched base
+confirms a rebase landing. Unavailable objects or differing trees retain
+unconfirmed state; later base changes can therefore still require another
+landing receipt. The fetch leaves `FETCH_HEAD`, tracking refs and the checkout
+unchanged and removes its temporary ref. Native private-seat Git restrictions
+still apply.
+<!-- trace:BUG-2463 | ai:codex -->
+
 **Merge train (`aida pr train <N...>` / `--all-ready`).** Lands several
 approved PRs together so that two PRs that are each green cannot break main
 together. Every member passes ship's gates (approval at head or carried over a

@@ -720,6 +720,98 @@ fn confirmation_git(root: &std::path::Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().into()
 }
 
+// trace:BUG-2463 | ai:codex
+#[test]
+fn bug_2463_rebase_merge_recovers_absent_head_and_retains_uncertain_merges() {
+    use crate::forge_confirmation::metadata_for;
+    let tmp = tempfile::tempdir().unwrap();
+    let origin = tmp.path().join("origin");
+    let local = tmp.path().join("local");
+    std::fs::create_dir(&origin).unwrap();
+    let r = origin.as_path();
+    confirmation_git(r, &["init", "-b", "main"]);
+    confirmation_git(r, &["config", "user.name", "Confirmation"]);
+    confirmation_git(r, &["config", "user.email", "confirmation@example.com"]);
+    confirmation_git(r, &["config", "commit.gpgsign", "false"]);
+    confirmation_git(r, &["commit", "--allow-empty", "-m", "base"]);
+    confirmation_git(r, &["checkout", "-b", "topic"]);
+    std::fs::write(r.join("feature"), "landed\n").unwrap();
+    confirmation_git(r, &["add", "feature"]);
+    confirmation_git(r, &["commit", "-m", "feature without a PR receipt"]);
+    let head = confirmation_git(r, &["rev-parse", "HEAD"]);
+    confirmation_git(r, &["update-ref", "refs/pull/42/head", &head]);
+    confirmation_git(r, &["checkout", "main"]);
+    confirmation_git(r, &["commit", "--allow-empty", "-m", "base advanced"]);
+    confirmation_git(r, &["checkout", "topic"]);
+    confirmation_git(r, &["rebase", "main"]);
+    assert_ne!(confirmation_git(r, &["rev-parse", "HEAD"]), head);
+    confirmation_git(r, &["checkout", "main"]);
+    confirmation_git(r, &["merge", "--ff-only", "topic"]);
+    // No object sharing or PR refs: the original head really is absent.
+    confirmation_git(
+        tmp.path(),
+        &[
+            "clone",
+            "--no-local",
+            "--single-branch",
+            "--branch",
+            "main",
+            r.to_str().unwrap(),
+            local.to_str().unwrap(),
+        ],
+    );
+    let r = local.as_path();
+    let has_object = |head: &str| {
+        crate::test_git::git_command()
+            .current_dir(r)
+            .args(["cat-file", "-e", head])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    };
+    assert!(!has_object(&head));
+    let local_head = confirmation_git(r, &["rev-parse", "HEAD"]);
+    let tracking = confirmation_git(r, &["rev-parse", "origin/main"]);
+    std::fs::write(r.join(".git/FETCH_HEAD"), "sentinel\n").unwrap();
+    let confirm = |head: &str, state: &str| {
+        let forge = metadata_forge(state, head, 2);
+        metadata_for(r, &forge, 42, &mut crate::network_retry::NoopSink, |m| {
+            m.state == ChangeState::Merged
+        })
+    };
+    assert!(matches!(confirm(&head, "MERGED"), Observed::Known(m)
+        if m.state == ChangeState::Merged && m.head_sha == head));
+    assert!(has_object(&head));
+
+    // A recoverable head with a different tree does not establish landing.
+    confirmation_git(&origin, &["checkout", "-b", "unlanded"]);
+    std::fs::write(origin.join("unlanded"), "absent from main\n").unwrap();
+    confirmation_git(&origin, &["add", "unlanded"]);
+    confirmation_git(&origin, &["commit", "-m", "unlanded"]);
+    let unlanded = confirmation_git(&origin, &["rev-parse", "HEAD"]);
+    assert!(!has_object(&unlanded));
+    assert!(matches!(confirm(&unlanded, "OPEN"), Observed::Known(m)
+        if m.state == ChangeState::Open));
+    assert!(
+        !has_object(&unlanded),
+        "non-actionable reads must not fetch"
+    );
+    assert!(matches!(confirm(&unlanded, "MERGED"), Observed::Pending(_)));
+    assert!(has_object(&unlanded));
+    assert!(matches!(
+        confirm(&"a".repeat(40), "MERGED"),
+        Observed::Pending(_) | Observed::Transient(_)
+    ));
+    assert!(confirmation_git(r, &["for-each-ref", "refs/aida/confirm/"]).is_empty());
+    assert_eq!(confirmation_git(r, &["rev-parse", "HEAD"]), local_head);
+    assert_eq!(confirmation_git(r, &["rev-parse", "origin/main"]), tracking);
+    assert_eq!(
+        std::fs::read_to_string(r.join(".git/FETCH_HEAD")).unwrap(),
+        "sentinel\n"
+    );
+}
+
 #[test]
 fn story_2401_closed_train_receipt_and_absent_squash_head_real_git() {
     use crate::forge_confirmation::{metadata, on_base, train_landed, Sweep};

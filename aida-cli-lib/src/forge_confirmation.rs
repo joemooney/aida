@@ -144,6 +144,65 @@ fn base_tip(root: &Path, base: &str) -> Observed<String> {
     tip
 }
 
+/// Recover only the pinned object, without touching FETCH_HEAD, tracking refs
+/// or the checkout. The shared Git runner bounds the fetch to 30 seconds and
+/// retains the private-seat refusal. Never substitute a moving branch head.
+// trace:BUG-2463 | ai:codex
+pub(crate) fn rebase_landed(root: &Path, base: &str, head: &str) -> Observed<bool> {
+    base_tip(root, base).and_then(|tip| {
+        Observed::from_result((|| -> Result<bool> {
+            anyhow::ensure!(
+                matches!(head.len(), 40 | 64) && head.bytes().all(|b| b.is_ascii_hexdigit()),
+                "invalid pinned head"
+            );
+            if !git(
+                root,
+                &["cat-file", "-e", &format!("{head}^{{commit}}")],
+                false,
+            )?
+            .status
+            .success()
+            {
+                let private = format!("refs/aida/confirm/{}", uuid::Uuid::new_v4());
+                let spec = format!("+{head}:{private}");
+                let result = (|| -> Result<()> {
+                    let fetched = git(
+                        root,
+                        &[
+                            "fetch",
+                            "--no-tags",
+                            "--no-write-fetch-head",
+                            "origin",
+                            &spec,
+                        ],
+                        true,
+                    )?;
+                    anyhow::ensure!(
+                        fetched.status.success(),
+                        "confirmation pinned head fetch failed"
+                    );
+                    anyhow::ensure!(
+                        stdout(
+                            root,
+                            &["rev-parse", "--verify", &format!("{private}^{{commit}}")]
+                        )?
+                        .eq_ignore_ascii_case(head),
+                        "confirmation fetched head differs from pinned head"
+                    );
+                    Ok(())
+                })();
+                let _ = git(root, &["update-ref", "-d", &private], false);
+                result?;
+            }
+            // Rebase rewrites commit identity. Require the same full tree as
+            // the independently fetched base; a successful fetch alone is not
+            // evidence of landing. Divergent trees remain unconfirmed.
+            Ok(stdout(root, &["rev-parse", &format!("{head}^{{tree}}")])?
+                == stdout(root, &["rev-parse", &format!("{tip}^{{tree}}")])?)
+        })())
+    })
+}
+
 fn receipt(root: &Path, tip: &str, head: &str, pr: u64, train_only: bool) -> Result<bool> {
     let suffix = format!(r"\((#|!){pr}\)$");
     // A GitHub merge commit names the PR in its subject instead of a squash
