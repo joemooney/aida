@@ -1,0 +1,30 @@
+id: 01a1b331-4707-7bf0-8397-a9492fe3d35d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-905
+title: 'minor (non-blocking): submit_with_runner_status (deputy_shell_cmd.rs:336) only …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-897, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): submit_with_runner_status (deputy_shell_cmd.rs:336) only special-cases RunnerStatus::Legacy; for RunnerStatus::Unknown (e.g. a sandboxed seat that cannot see host processes) it still bails 'no script deputy is running', while list reports 'runner: UNKNOWN'. Consider echoing the Unknown reason in the refusal.
+
+  PR: #3541
+  Reviewed sha: 52403ed86754695653f7bb31bff73476b6527814
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T23:28:33.543848762Z
+modified_at: 2026-11-06T23:28:33.543848762Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-897
+- finding-hash:e60f2597
+- from-review:PR-3541
+- kind:carried-forward
+filed_at:
+  code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c4c0461a21f
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
