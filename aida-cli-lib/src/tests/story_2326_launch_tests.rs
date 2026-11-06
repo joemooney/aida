@@ -1273,26 +1273,102 @@ fn story_2326_pr_b_session_and_phase_refuse_weaker_parent() {
     }
 }
 
+// trace:STORY-2326 | ai:codex
 #[test]
-fn story_2326_pr_b_compete_refuses_template_posture_flag() {
+fn story_2326_pr_b_compete_builds_real_templates_without_scanning_prompts() {
+    use crate::compete::{self, JudgeVendor};
+
     let tmp = tempfile::tempdir().unwrap();
-    for flag in [
-        "--full-auto",
-        "--settings=host.json",
-        "--sandbox=danger-full-access",
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
+    )
+    .unwrap();
+    // Native Codex policy must be committed on the trusted default branch.
+    for args in [
+        vec!["init", "-q", "-b", "main"],
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "trusted native policy"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+        vec![
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
     ] {
-        let err = crate::compete_cmd::build_compete_arm_command(
-            tmp.path(),
-            tmp.path(),
-            "codex",
-            &[flag.into()],
-            "codex",
-        )
-        .unwrap_err();
-        assert!(
-            err.downcast_ref::<aida_core::launch_policy::PostureFlag>()
-                .is_some(),
-            "{err:#}"
-        );
+        let output = crate::test_git::git_command()
+            .current_dir(root)
+            .args(&args)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{args:?}: {output:?}");
+    }
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "implementer",
+        &[],
+        &[("AIDA_CONTAINED", Some("0")), ("AIDA_OS_WRAP", Some("0"))],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(root);
+    for contained in [false, true] {
+        ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
+        for (vendor, judge_vendor) in [
+            ("claude", JudgeVendor::Claude),
+            ("codex", JudgeVendor::Codex),
+        ] {
+            for prompt in [
+                "ordinary brief",
+                "--dangerously-example brief",
+                "--permission-mode",
+                "--sandbox",
+            ] {
+                let adapter = compete::vendor_adapter(vendor).unwrap();
+                let argv = compete::headless_argv(&adapter, prompt).unwrap();
+                let arm = crate::compete_cmd::build_compete_arm_command(
+                    root, root, vendor, &argv, vendor,
+                )
+                .unwrap();
+                let (bin, argv) = compete::judge_command(judge_vendor, None, prompt);
+                let judge = crate::compete_cmd::build_compete_judge_command(
+                    root,
+                    &bin,
+                    &argv,
+                    judge_vendor,
+                )
+                .unwrap();
+                for (kind, cmd) in [("arm", arm), ("judge", judge)] {
+                    let args: Vec<_> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
+                    assert_eq!(
+                        args.last().copied(),
+                        Some(prompt),
+                        "{vendor} {kind}, contained={contained}"
+                    );
+                    let flags = &args[..args.len() - 1];
+                    if prompt.starts_with('-') {
+                        assert_eq!(flags.last().copied(), Some("--"));
+                    }
+                    if contained {
+                        assert!(!flags.iter().any(|a| matches!(
+                            *a,
+                            "bypassPermissions" | "--dangerously-bypass-approvals-and-sandbox"
+                        )));
+                        if vendor == "claude" {
+                            assert!(flags
+                                .windows(2)
+                                .any(|a| a == ["--permission-mode", "dontAsk"]));
+                        }
+                    }
+                    if vendor == "codex" && kind == "judge" {
+                        assert!(flags.windows(2).any(|a| a == ["--sandbox", "read-only"]));
+                    }
+                }
+            }
+        }
     }
 }

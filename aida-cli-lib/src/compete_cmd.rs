@@ -1114,10 +1114,12 @@ pub(crate) fn build_compete_arm_command(
 ) -> Result<std::process::Command> {
     // trace:BUG-2172 | ai:codex
     // trace:BUG-2393 | ai:claude
-    // Template argv is operator supplied. Validate before adding trusted posture
-    // flags or wrappers; prompt strings are passed separately by the caller.
+    // argv comes from AIDA's built-in headless_argv / judge_command templates,
+    // including trusted posture flags and a final prompt positional. There is
+    // no operator-configurable flag tail here (the judge override is a binary
+    // path). compete_arm_argv replaces template posture when contained and
+    // excludes the trailing prompt from flag parsing, even if it looks like a flag.
     // trace:STORY-2326 | ai:codex
-    aida_core::launch_policy::refuse_posture_flags(argv)?;
     let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
     // Resolve the host main once, here at the entry point; the argv builder
@@ -1267,20 +1269,30 @@ fn compete_arm_argv(
     // tool list the template's `-p` ends.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let claude = vendor == "claude";
+    // The final positional is data. Delimit flag-shaped prompts for both the
+    // vendor CLI and Codex's downstream sandbox/config preflight parser.
+    // trace:STORY-2326 | ai:codex
+    let split = argv.len().saturating_sub(1);
+    let append_prompt = |args: &mut Vec<String>| {
+        if argv.last().is_some_and(|prompt| prompt.starts_with('-')) {
+            args.push("--".into());
+        }
+        args.extend_from_slice(&argv[split..]);
+    };
     if !contained {
         let mut args = if claude {
             session::headless_claude_posture(Vec::new())?
         } else {
             Vec::new()
         };
-        args.extend_from_slice(argv);
+        args.extend_from_slice(&argv[..split]);
+        append_prompt(&mut args);
         return Ok(args);
     }
     let parsed = session::HeadlessVendor::parse(vendor)
         .ok_or_else(|| anyhow::anyhow!("[contained] unknown compete vendor `{vendor}`"))?;
     session::require_vendor_containment(parsed, true, "compete child")?;
     // Generated argv ends with the prompt. Never parse flags inside it.
-    let split = argv.len().saturating_sub(1);
     let (template, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
     // Codex uses its native sandbox, never Claude's permission/settings flags.
     // Global approval flags and the native write-set grants precede `exec`.
@@ -1326,7 +1338,7 @@ fn compete_arm_argv(
     if claude {
         args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
     }
-    args.extend_from_slice(&argv[split..]);
+    append_prompt(&mut args);
     Ok(args)
 }
 
