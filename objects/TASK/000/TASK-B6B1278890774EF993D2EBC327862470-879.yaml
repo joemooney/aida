@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-879
 agreed_id: TASK-3222
 title: 'STORY-2561 S1: store mutation service transport, launch-bound identity, and store-writer inventory'
 description: 'Slice 1 of STORY-2561 (read its operator rulings). Build the host-owned synchronous typed service endpoint and its lifecycle: started before child tools, torn down with the child or lease, and refusing launch when it is unavailable. Add launch-bound identity (project, store, spec, role, verbs fixed by the host) and the request and response framing with request-identity retry semantics. Produce a checked-in inventory of every CLI and MCP store and cache writer (claim, edit, comment, queue done, findings, handoff, mailbox, etc.). No routing cutover yet: grants stay unchanged. Tests: malformed, oversized and path-bearing requests, wrong, expired, revoked or sibling identity, replay and endpoint replacement, and service absence. Post a sketch for advisor signoff before coding; BUG-2448''s generic host-IPC defect is a separate owner and must not be widened.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T13:49:59.373557953Z
+modified_at: 2026-11-06T13:50:44.196851217Z
 req_type: Task
 tags:
 - architecture
@@ -137,6 +137,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b120-43e4-79e1-8765-d61d43a98202
+  author: joe
+  timestamp: 2026-11-06T13:50:44.196869172Z
+  session_id: 01a1b11c309e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -146,3 +154,9 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: Sketch v1 posted on TASK-3222 per binding sketch-only advisor brief. Await independent advisor signoff on an exact per-launch broker-injected SEQPACKET transport with kernel per-message lane identity, versus an equally isolated shared-boundary alternative; confirm S1 read-only probe/status verbs and S2 mutation schema plus crash-atomic dedupe gates. Operator Q1/Q2/Q3 remain binding and are not reopened. No production changes, Cargo, PR or conformance claim.
+  lean: Use the exact per-lane broker capability; deny sibling/foreign/replayed channels and refuse service-required launch when protection or readiness is absent. Keep current grants until S2 and preserve native compatibility.
+  raised_by: implementer
+  raised_at: 2026-11-06T13:50:44.196851217Z
