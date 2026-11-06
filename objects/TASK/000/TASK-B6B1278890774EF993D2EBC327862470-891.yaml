@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:36:06.123047121Z
-modified_at: 2026-11-06T21:03:52.120621957Z
+modified_at: 2026-11-06T21:08:45.341303889Z
 req_type: Task
 tags:
 - carried-from:BUG-2465
@@ -46,6 +46,12 @@ comments:
   content: 'Native implementer edits ready: conformance.py outer budget is timeout+330 (four 30s setup calls + inner timeout+180 + 30s cleanup/reporting); outer TERM grace 25s exceeds nested TERM 10s + KILL reap 5s. Added a real nested TERM-ignoring process-group regression, named closed-stdin refusal before spawn, and advisor-only removal of unused child delegation. Updated conformance guide. Targeted Python suite: 43 tests passed including production fixture refusal. git diff --check passed. make check-ci-fast was attempted but its first Cargo check remained queued; interrupted and running remaining fast gates separately with both Cargo-check gates omitted, so full check is not claimed. BUG-2470/#3532 commit ce5175ca205 is visible on origin/train/20261106-204251-1 but not in this checkout; preserve the advisor land-after dependency. Edits remain uncommitted for host publication; no queue completion or publication run from this seat.'
   created_at: 2026-11-06T21:03:52.120621957Z
   modified_at: 2026-11-06T21:03:52.120621957Z
+  session_id: 01a1b2a859b5
+- id: 01a1b2b1-489d-7ee2-8421-c52eb2670b70
+  author: joe
+  content: 'Final validation: all 36 remaining fast-tier gates passed in the diagnostic run omitting Check aida-cli without default features and TUI seam guard (Cargo build-slot wait). This included 42 conformance evidence tests, docs coverage/link checks, and cargo fmt --all -- --check. Initial targeted suite included the production fixture and passed 43 tests. Full make check-ci-fast remains incomplete; stock ratchets also could not refresh Git refs under the native read-only Git boundary and used existing local refs. No implementation blockers; host must preserve land-after BUG-2470/#3532 sequencing. Three changed files: scripts/containment/conformance.py, tests/test_containment_conformance.py, docs/internal/testing/containment-conformance.md. Edits left uncommitted; TASK-2941 remains in progress pending host publication/completion.'
+  created_at: 2026-11-06T21:08:45.341303889Z
+  modified_at: 2026-11-06T21:08:45.341303889Z
   session_id: 01a1b2a859b5
 history:
 - id: 01a1b24d-334f-7892-81bd-9100adf7b22b
