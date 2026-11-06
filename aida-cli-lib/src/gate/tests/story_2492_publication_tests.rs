@@ -63,6 +63,14 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::new_with_forge(false)
+    }
+    fn new_with_forge(forge: bool) -> Self {
+        let config = if forge {
+            "[deployment]\nstore_path = '.aida-store'\n[review]\nadmission_hub = 'https://github.com/fixture/review.git'\nadmission_ref = 'refs/aida/review-admission'\n"
+        } else {
+            "[deployment]\nstore_path = '.aida-store'\n"
+        };
         let temp = tempfile::tempdir().unwrap();
         let _env = env(&temp.path().join("bootstrap-home"));
         let a = temp.path().join("a");
@@ -71,6 +79,10 @@ impl Fixture {
         git_ok(&a, &["init", "-q", "-b", "main"]);
         write(&a, ".gitignore", ".aida/\n.aida-store/\n");
         write(&a, "code", "initial change\n");
+        if forge {
+            write(&a, ".aida/config.toml", config);
+            git_ok(&a, &["add", "-f", ".aida/config.toml"]);
+        }
         git_ok(&a, &["add", "."]);
         git_ok(&a, &["commit", "-qm", "change"]);
         let sha = head(&a).unwrap();
@@ -91,11 +103,23 @@ impl Fixture {
             &["clone", codehub.to_str().unwrap(), b.to_str().unwrap()],
         );
         for root in [&a, &b] {
-            write(
-                root,
-                ".aida/config.toml",
-                "[deployment]\nstore_path = '.aida-store'\n",
-            );
+            write(root, ".aida/config.toml", config);
+        }
+        if forge {
+            // Explicitly known empty local author history on the reviewer node;
+            // unreadable evidence remains a refusal in the production gate.
+            write(&b, ".aida/review-authorship.jsonl", "");
+            for root in [&a, &b] {
+                git_ok(
+                    root,
+                    &[
+                        "remote",
+                        "set-url",
+                        "origin",
+                        "https://github.com/fixture/review.git",
+                    ],
+                );
+            }
         }
         let store_a = a.join(".aida-store");
         std::fs::create_dir_all(&store_a).unwrap();
@@ -106,27 +130,63 @@ impl Fixture {
             &["config", "user.email", "fixture@example.invalid"],
         );
         let mut spec = aida_core::Requirement::new("review fixture".into(), "fixture".into());
-        spec.spec_id = Some("STORY-nodea-1".into());
+        spec.spec_id = Some(
+            if forge {
+                "STORY-NODEA-1"
+            } else {
+                "STORY-nodea-1"
+            }
+            .into(),
+        );
         spec.agreed_id = Some("STORY-1".into());
+        if forge {
+            spec.execution_mode = Some(aida_core::ExecutionMode::Drain);
+        }
         let mut finding = aida_core::Requirement::new("blocking finding".into(), "fixture".into());
-        finding.spec_id = Some("TASK-nodeb-2".into());
+        finding.spec_id = Some(
+            if forge {
+                "TASK-NODEB-2"
+            } else {
+                "TASK-nodeb-2"
+            }
+            .into(),
+        );
         finding.agreed_id = Some("TASK-42".into());
         write(
             &store_a,
-            "objects/STORY/000/STORY-nodea-1.yaml",
+            if forge {
+                "objects/STORY/000/STORY-NODEA-1.yaml"
+            } else {
+                "objects/STORY/000/STORY-nodea-1.yaml"
+            },
             serde_yaml::to_string(&spec).unwrap(),
         );
         write(
             &store_a,
-            "objects/TASK/000/TASK-nodeb-2.yaml",
+            if forge {
+                "objects/TASK/000/TASK-NODEB-2.yaml"
+            } else {
+                "objects/TASK/000/TASK-nodeb-2.yaml"
+            },
             serde_yaml::to_string(&finding).unwrap(),
         );
         let mut spec2 = aida_core::Requirement::new("second spec".into(), "fixture".into());
-        spec2.spec_id = Some("STORY-nodea-3".into());
+        spec2.spec_id = Some(
+            if forge {
+                "STORY-NODEA-3"
+            } else {
+                "STORY-nodea-3"
+            }
+            .into(),
+        );
         spec2.agreed_id = Some("STORY-2".into());
         write(
             &store_a,
-            "objects/STORY/000/STORY-nodea-3.yaml",
+            if forge {
+                "objects/STORY/000/STORY-NODEA-3.yaml"
+            } else {
+                "objects/STORY/000/STORY-nodea-3.yaml"
+            },
             serde_yaml::to_string(&spec2).unwrap(),
         );
         let author_key = key(temp.path(), "nodea");
@@ -148,6 +208,15 @@ impl Fixture {
             );
         }
         write(&store_a, ROSTER, serde_json::to_vec(&roster).unwrap());
+        if forge {
+            aida_core::team::write_member_seats(
+                &store_a,
+                crate::test_env::HERMETIC_TEST_USER,
+                None,
+                |_| Some(vec!["advisor".into(), "reviewer".into()]),
+            )
+            .unwrap();
+        }
         git_ok(&store_a, &["add", "."]);
         git_ok(&store_a, &["commit", "-qm", "canonical store"]);
         let hub = temp.path().join("store.git");
@@ -305,6 +374,8 @@ fn kind_of(v: Option<rv::CurrentVerdict>) -> Option<rv::VerdictKind> {
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.acafc49c | ai:codex
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac4d8743 | ai:codex
+// trace:STORY-2492.acafc49c | ai:codex
+// trace:STORY-2492.ac4d8743 | ai:codex
 #[test]
 fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
     if !available() {
@@ -765,6 +836,7 @@ fn opening_from_a_non_head_checkout_binds_the_branch_tip() {
 
 /// AC3: the disagreement report is produced for the same head only.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac596603 | ai:codex
+// trace:STORY-2492.ac596603 | ai:codex
 #[test]
 fn disagreement_is_reported_for_the_same_head_only() {
     let parse = |kind: &str, sha: &str| {
@@ -943,6 +1015,7 @@ fn roster_conflict_never_auto_merges_revocation_away() {
 
 // trace:STORY-2492 | ai:codex
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:STORY-2492.ac8cff0f | ai:codex
 #[test]
 fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
     if !available() {
@@ -987,3 +1060,6 @@ fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
         "stale publications do not suppress a new head"
     );
 }
+
+#[path = "story_2492_entry_tests.rs"]
+mod entry_tests;
