@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T16:44:59.663658226Z
+modified_at: 2026-11-06T16:52:55.222115298Z
 req_type: Task
 tags:
 - area:containment
@@ -172,6 +172,12 @@ comments:
   created_at: 2026-11-06T16:04:34.171737115Z
   modified_at: 2026-11-06T16:04:34.171737115Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1c7-0f36-7f02-9037-43c3d9cd3fac
+  author: joe
+  content: 'Current native-seat preparation under the signed outer-only ruling: vendors.toml now records agy native_layer=none; missing native_layer stays required for Claude/Codex/OpenCode. A common descriptor/receipt gate requires a host-accepted receipt before candidate AGY argv can return --dangerously-skip-permissions; missing/deserialized receipts refuse. Candidate argv omits --sandbox and unavailable --mode auto. Production AGY admission remains closed; no new enforcement arm, vendor launch or applied credit. Added descriptor, receipt refusal and real-wrapper candidate-argv regressions (the latter tests argv only, not AGY conformance). Native harness remains bypass-free, preserves per-check unsupported_tool diagnostics, and now records the selected outer-only posture. Shared-boundary harness refuses AGY by name with remaining auth, mediated-write and conformance gates. Documentation updated. Validation: 36 offline conformance tests PASS; fmt/diff checks PASS; targeted Rust tests untested=true because lease 01a1b1bfc08b has no lane job runner. Fast checks are still compiling; final result will follow. Recorded non-completing publication declaration: [AI:codex] fix(containment): gate outer-only agy adapter argv; Refs STORY-2460 (Refs TASK-3048). No completion claim, commit/push/PR/queue-done or host measurement attempted.'
+  created_at: 2026-11-06T16:52:55.222115298Z
+  modified_at: 2026-11-06T16:52:55.222115298Z
+  session_id: 01a1b1bfc08b
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
