@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-06T03:46:01.742723285Z
+modified_at: 2026-11-06T03:46:32.417387487Z
 req_type: Story
 tags:
 - docs
@@ -230,6 +230,12 @@ comments:
   content: 'Round 4 implementer approach: Acceptance criteria as tests: run tests/test_doc_audiences.py for placement and book audiences, inventory.py --check for coverage, check-doc-links.py and check-doc-paths.py for AC3, and tests/test_docs_landing_smoke.py for AC5. A new-head green CI gates run remains host-side validation after publication. Expected files: docs/cli/06-roles-sessions.md, docs/archive/2026-10-cleanup/inventory.py, docs/advanced/README.md. Explicitly classify the second-review-node operator workflow as advanced, preserving its current path as allowed by finding 3. Ambiguities/conflicts: None. Native seat leaves edits uncommitted; expected supervised merge hold remains for human/advisor clearance.'
   created_at: 2026-11-06T03:46:01.742723285Z
   modified_at: 2026-11-06T03:46:01.742723285Z
+  session_id: 01a1aef5914c
+- id: 01a1aef7-1b61-7642-85f4-ca3ab5e05b3a
+  author: joe
+  content: 'Round 4 validation: corrected the mailbox disposition link and confirmed its heading exists. Explicitly classified docs/agents/second-review-node.md as advanced and linked it from docs/advanced/README.md. Passed: 10 doc audience tests; inventory coverage (949 tracked docs); local link check (1444 paths, zero missing); tracked doc path check (zero invalid); landing smoke (init/add/list/show); git diff --check. Three edited files remain uncommitted for the native host launcher. Finding 2 still requires CI gates at the new published head; finding 4 still requires human/advisor merge-hold clearance. No commit, push, queue completion, ship or review record attempted.'
+  created_at: 2026-11-06T03:46:32.417387487Z
+  modified_at: 2026-11-06T03:46:32.417387487Z
   session_id: 01a1aef5914c
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
