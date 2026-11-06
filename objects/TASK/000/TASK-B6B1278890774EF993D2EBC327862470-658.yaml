@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T12:15:03.440522034Z
+modified_at: 2026-11-06T12:19:03.234673555Z
 req_type: Task
 tags:
 - architecture
@@ -449,6 +449,14 @@ comments:
   created_at: 2026-11-06T12:13:41.401684933Z
   modified_at: 2026-11-06T12:13:41.401684933Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0cc-53c2-7900-8112-2a8c9423252b
+  author: mcp
+  content: |-
+    Round 5 F1 root cause confirmed: unsupported PIDFD_THREAD and plain pidfd_open(nonleader) both return EINVAL on Linux 5.19-6.8, so the old ENOENT/ESRCH branch was unreachable. The fix reads Tgid after unsupported PIDFD_THREAD, skips plain nonleader opens, and requires successful KCMP_FILES equality before duplicating through the leader pidfd. A standalone regression uses a real nonleader TID plus the correct EINVAL shim; it passes against the edit and fails against branch HEAD with EINVAL. Different/unreadable file tables and permission refusals fail closed. Historical round 4 testing claims are corrected in docs/internal/testing/task-2708-round2.md.
+
+    Round 5 F2 remains a manual advisor acceptance decision, not a disputed finding: every contained vendor now has a Linux 5.19+ floor and defers handled signals after broker RECV. An indefinite blocking send with no SO_SNDTIMEO cannot be interrupted by SIGINT/KeyboardInterrupt, SIGALRM, handled SIGTERM or Go SIGURG until a broker response; fatal signals still terminate and configured SO_SNDTIMEO still bounds socket waits. WAIT_KILLABLE_RECV is retained to prevent the previously found post-send signal/restart duplicate-byte race. I cannot record advisor signoff on the advisor's behalf. These two deviations are explicitly documented as acceptance pending; a named F2 punt will request acceptance on this spec or an alternative exactly-once design after final validation. Required-live Rust tests and make check-ci-fast are compiling now. Native-seat source edits remain uncommitted; mechanical bdcec264ee88 remains in history; no publication or merge-hold clearance is attempted.
+  created_at: 2026-11-06T12:19:03.234654100Z
+  modified_at: 2026-11-06T12:19:03.234654100Z
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
