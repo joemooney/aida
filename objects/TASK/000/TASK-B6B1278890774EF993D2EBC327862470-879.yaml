@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T16:25:52.239441274Z
+modified_at: 2026-11-06T16:25:59.908427087Z
 req_type: Task
 tags:
 - architecture
@@ -340,6 +340,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1a inventory+ratchet is wired and has the three mutants, but the guard is already stale at PR head (merge from main changed inventoried files), whole-file hashes make the fast gate fail on any edit to ~805 files, name-based wrapper propagation turns join/display/is_empty into writer sinks, CLI/MCP writers aren''t resolved per operation, and real hooks (aida-core/templates/hooks) are not scanned.. No triage reason was given.'
   created_at: 2026-11-06T16:25:52.239439881Z
   modified_at: 2026-11-06T16:25:52.239439881Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1ae-68fd-7d10-852e-91feee230174
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 858e72278061
+    Recorded: 2026-11-06T16:09:43.928252431+00:00
+    Findings:
+    1. BLOCKER (stale at head): merge 858e722 pulled #3449 into inventoried files (aida-cli-lib/src/containment/contained_host.py, contained_lane.py, agent_launch.rs, launch/contained.rs, lib_part2.rs, session.rs) but scripts/store-writers.toml still pins source_revision 5518bd9. contained_host.py now hashes 7bf34b4d... vs recorded f49b70f2...; contained_lane.py 75e1b8a3... vs 1c695856.... python3 scripts/check-store-writers.py will report 'writer evidence changed (source_sha256)', turning the Gates shard and make check-ci-fast red. Re-audit and refresh at the new head.
+    2. DESIGN (ratchet over-broad): check() compares a whole-file source_sha256 for every one of 805 files, nearly all production Rust/Python/shell. Any edit to those files fails the fast gate, including comments and whitespace (the doc says so). The fix requires hand-copying the hash from --candidates JSON, and there is no reviewed refresh path. Every concurrent PR will conflict on the 13.7k-line TOML, and the first finding shows this already happening. The approved sketch asked for a ratchet that fails on unclassified new sinks or surfaces, not on any byte change. The doc's rule 'never update only a digest' cannot hold when an unrelated edit forces exactly that. Pin sink-level evidence instead (for example, per-function sink call signatures with their destination arguments), or provide an explicit reviewed refresh that diffs only sink and caller changes.
+    3. PRECISION (wrapper propagation collapses): discover() learns wrapper names by bare identifier. Its 'common' exclusion list is small, so any function named join, display, is_empty, format, all, any, next, parent or label that anywhere contains a seed becomes a 'writer wrapper', and every call to it counts as a sink. See the advisor.rs and advisor_cmd_root.rs sink lists at scripts/store-writers.toml:33,51. The result is 805 'writer' rows, almost every source file, with noise sink fields that cannot tell real writers apart. The exclusion list also has the opposite effect: it drops real wrapper names (add, update, commit, push, insert, delete, write) from propagation, so a new file calling a wrapper named add or commit passes the wrapper-caller ratchet unless it also hits a direct seed. Resolve wrapper identity by path::symbol (or at least qualified receiver), and test both the false-positive and false-negative cases.
+    4. ACCEPTANCE (CLI/MCP writers not resolved per operation): the spec asks for an inventory of every CLI and MCP store/cache writer (claim, edit, comment, queue done, findings, handoff, mailbox). Amendment 3 asks that every row carry a sink, lock, gate and disposition. Instead the inventory has one row per file: mcp.rs is a single row for all tools, and its own blocker B06 says 'split each MCP tool'. 797/805 rows are disposition=blocked with boilerplate lock/gate 'unresolved per destination/surface' and artifacts=[unresolved], and 713 rows have surface 'adjacent/internal'. The sketch-approved record fields proposed_operation and evidence_tests are missing. At minimum, give each named CLI command and MCP tool writer its own row with a concrete sink, lock, gate and disposition, so S2 (TASK-3223) gets usable input rather than redoing the audit.
+    5. COVERAGE (hooks not scanned): SCRIPT_ROOTS = ('scripts','hooks','.githooks'), but neither hooks/ nor .githooks/ exists in the repo. The real hooks are aida-core/templates/hooks/*.sh, and they write to the store, e.g. aida-track-commits.sh:67 runs 'aida edit --status in-progress' and :80 runs 'aida comment add'. These hook-surface writers are not discovered or inventoried, and docs/internal/security/store-mutation-writers.md ('plus scripts, hooks and .githooks') wrongly says they are covered. Add aida-core/templates/hooks (and any other template-executed scripts) to discovery, add a mutant test for it, and correct the doc.
+    6. UNVERIFIED: the implementer handoff says make check-ci-fast was NOT RUN, and PR CI at 858e722 was still queued or pending at review time. After the fixes, confirm the Gates shard is green at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T16:25:59.805224665Z
+  modified_at: 2026-11-06T16:25:59.805224665Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
