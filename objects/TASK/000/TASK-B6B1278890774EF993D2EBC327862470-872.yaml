@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T09:19:48.445221673Z
-modified_at: 2026-11-06T09:38:38.447141738Z
+modified_at: 2026-11-06T09:50:14.523458419Z
 req_type: Task
 tags:
 - carried-from:TASK-2838
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-11-06T09:21:16.293148116Z
   modified_at: 2026-11-06T09:21:16.293148116Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b044-15fb-74d0-93f6-2e4e4dfbe29d
+  author: joe
+  content: 'Implemented the diagnostic-test re-exec fix: use aida_bin::current_executable_path().expect("test executable") instead of resolve_aida_exe(), with a trace comment explaining the AIDA_BIN distinction. Validation passed: all 7 agy_outcome::tests via cargo test -p aida-cli-lib --lib agy_outcome::tests:: -- --nocapture; exact diagnostic test with AIDA_BIN=/bin/false (1 passed); cargo fmt --all -- --check; git diff --check. Only aida-cli-lib/src/tests/task_2838_agy_outcome_tests.rs changed. Native-seat edits remain uncommitted for host publication; no blockers. Spec remains In Progress pending host publication and queue completion.'
+  created_at: 2026-11-06T09:50:14.523458419Z
+  modified_at: 2026-11-06T09:50:14.523458419Z
+  session_id: 01a1b0390333
 history:
 - id: 01a1b029-9eaa-7891-83a7-bf833e67ee7b
   author: joe
