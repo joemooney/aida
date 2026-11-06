@@ -1,0 +1,29 @@
+id: 01a1afb1-6a2b-7323-8940-e7de80831eda
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-866
+title: '[minor, non-blocking] aida-cli-lib/src/launch/contained.rs:838-847: uncondition…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3131, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking] aida-cli-lib/src/launch/contained.rs:838-847: unconditional eprintln of 'aida-contained-receipt sha256=.. policy_sha=..' on every accepted contained launch (interactive stderr noise); no Rust test pins the format the harness regex depends on, so a wording change silently turns live runs into fixture-production-launch-not-accepted.
+
+  PR: #3475
+  Reviewed sha: d5be5ad2aff3bc38b337669f29bf5fc0899fa7c3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T07:10:02.283517228Z
+modified_at: 2026-11-06T07:10:02.283517228Z
+req_type: Task
+tags:
+- carried-from:TASK-3131
+- finding-hash:26643d8d
+- from-review:PR-3475
+- kind:carried-forward
+filed_at:
+  code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 379c7c3c10e
+  vendor: claude
