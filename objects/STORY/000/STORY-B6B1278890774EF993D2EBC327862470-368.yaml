@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T10:33:40.471704043Z
+modified_at: 2026-11-06T11:01:29.296944590Z
 req_type: Story
 relationships:
 - rel_type:
@@ -250,6 +250,12 @@ comments:
   created_at: 2026-11-06T10:16:11.510889264Z
   modified_at: 2026-11-06T10:16:11.510889264Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b085-5050-7951-9ff0-588456c0c47a
+  author: joe
+  content: 'PR #3491 round 4: migrated the six failing CLI fixtures to typed date/manual conditions, including the quoted TOON trigger expectation and the reasoned operator hold assertion. Question parking now preserves an existing trigger for empty/whitespace consequences, defaults to manual only when no trigger exists, and skips empty comments; added both regression cases. Updated all named guidance/template masters plus AGENTS.md and OVERVIEW.md. Validation: cargo test -p aida-cli-lib --profile agent --lib apply_token_bare_defer passed 3 tests; make check-ci-fast passed all 38 gates; rustfmt and git diff --check passed. make sync-templates updated .claude links but failed when writing the read-only .agents mirror: host must rerun sync before committing. CLI integration fixtures were migrated but not rerun under the requested LIGHT gate. Native publication declaration recorded as [AI:codex] fix(defer): address round-four trigger regressions and guidance (Refs STORY-2402). Edits remain uncommitted for the host; merge hold was not cleared.'
+  created_at: 2026-11-06T11:01:29.296944590Z
+  modified_at: 2026-11-06T11:01:29.296944590Z
+  session_id: 01a1b06bd0a3
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
