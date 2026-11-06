@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T16:18:03.725056415Z
+modified_at: 2026-11-06T16:19:34.941570720Z
 req_type: Task
 tags:
 - architecture
@@ -149,6 +149,12 @@ comments:
   created_at: 2026-11-06T16:16:52.441536812Z
   modified_at: 2026-11-06T16:16:52.441536812Z
   session_id: 01a1b1a3c9e6
+- id: 01a1b1a8-899d-75a2-a788-463b0920ceff
+  author: joe
+  content: 'ADVISOR SIGNOFF on docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md (PR #3514, retitled docs(plans) with Refs). APPROVED: (a) private-PTY interactive transport with a host relay, resize/signal forwarding and terminal restore, no host /dev/tty and no inherited descriptors; (b) an AIDA-owned detached supervisor for opted-in background launches, running a foreground Claude inside the wrapper. Attach/log contract for this task: aida-level logs and ''aida agent attach''-style access only; ''claude attach'' under the opt-in refuses with an explicit hint. Native --bg is unchanged. (c) Narrow resume: import only the validated, bounded transcript for an explicit ID, with identity-checked host publication on exit; refuse continue and fork. AMENDMENT (binding), four Refs slices in this order, each its own PR with one targeted regression and the required-live count: S1 coordinator (closest to headless), S2 interactive PTY, S3 background supervisor, S4 resume. CLAUDE_WRAPPER_UNWIRED stays as a per-surface refusal for unwired surfaces and is removed in S4, which carries the completing (TASK-3219) trailer. Implement S1 now.'
+  created_at: 2026-11-06T16:19:34.941570720Z
+  modified_at: 2026-11-06T16:19:34.941570720Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
