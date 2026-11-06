@@ -1,0 +1,29 @@
+id: 01a1b2c7-f9a2-72c1-83c1-d574f37df075
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-901
+title: 'Non-blocking (minor): fixture_policy re-renders every top-level table as a sing…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2470, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): fixture_policy re-renders every top-level table as a single-line inline table. toml (serde) readers are unaffected, but AIDA's toml_edit writers treat inline tables as non-tables: config_edit::table_mut / user_alias::table_mut / config_cmd::ensure_root_table silently replace the section with an empty table (dropping keys), and node_hub::declare errors '[store] is not a table'. None run in the current fixture flow (checked: role enter/allow-seat/backfill paths), but a future harness step that writes project config via config_edit would silently lose fixture policy. Consider emitting [table] headers for dict values (scripts/containment/conformance.py:575-600).
+
+  PR: #3532
+  Reviewed sha: 67cda1b32cf4df797439f2145e1bf1977d00177a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T21:33:32.450870157Z
+modified_at: 2026-11-06T21:33:32.450870157Z
+req_type: Task
+tags:
+- carried-from:BUG-2470
+- finding-hash:54f1f969
+- from-review:PR-3532
+- kind:carried-forward
+filed_at:
+  code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
