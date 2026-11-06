@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T23:56:09.929666631Z
+modified_at: 2026-11-06T23:56:16.112185409Z
 req_type: Task
 tags:
 - area:containment
@@ -234,6 +234,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs-only S2 slice is directionally right, but the new LaunchContext guard looks up vendor ''antigravity'' (LaunchVendor::Agy.as_str()) in a descriptor keyed ''agy'', so every agy launch context refuses with ''unsupported vendor capability'' and the new task_3048 test cannot pass; the bypass guard also misses Go single-dash flags. CI at head still queued (unverified).. No triage reason was given.'
   created_at: 2026-11-06T23:56:09.929665063Z
   modified_at: 2026-11-06T23:56:09.929665063Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b34a-a50a-7442-82ed-f1aa6ff6734a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3545):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 86a7eba8d0fe
+    Recorded: 2026-11-06T23:52:05.390494864+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3545#issuecomment-6698973608
+    Findings:
+    1. BLOCKING aida-cli-lib/src/launch/context.rs:162: refuse_unreceipted_bypass(req.vendor.as_str(), ..) passes aida_core LaunchVendor::Agy.as_str() == "antigravity" (aida-core/src/launch_policy.rs:122), but vendors.toml has only [vendor.agy]; containment::native_layer("antigravity") errors 'unsupported vendor capability: antigravity', mapped to LaunchRefusal::OuterOnlyPermission. Result: EVERY agy LaunchContext::resolve refuses, including native no-bypass launches (agent new agy, compete_cmd.rs:1153, dispatch.rs:2623), contradicting the doc claim 'Native diagnostic runs without bypass remain available'; and launch/agy.rs task_3048_legacy_bypass_refuses_before_command_construction asserts the message contains 'agy permission bypass requires an applied AIDA ContainmentReceipt' and will fail (message names the lookup error instead). Fix: map LaunchVendor to the descriptor key (Agy => "agy") at this call site or in containment lookup, and add a positive test that an agy LaunchRequest WITHOUT bypass resolves Ok for each LaunchKind.
+    2. BLOCKING (authority gate fail-open) aida-cli-lib/src/containment/mod.rs refuse_unreceipted_bypass: only refuses names starting with '--dangerously-'. agy parses Go stdlib flags (session.rs:4290 comment, BUG-1686), where one and two dashes are equivalent, so '-dangerously-skip-permissions' (or '-dangerously-skip-permissions=true') supplied via agents.toml default_flags or --extra-flag passes the guard and reaches agy as the bypass. Normalize a leading '-'/'--' before comparing (for both the bypass check and prompt_options matching, e.g. '-prompt'/'-print'), and add refusal tests for the single-dash spellings.
+    3. MINOR aida-cli-lib/src/launch/contained.rs (~line 857): the nested runtime mountpoint is created inside the single shared 'empty' mask dir, which is bound over every masked vendor dir, so an agy launch shows a stray antigravity-cli/ under ~/.codex, ~/.claude etc. Harmless but confusing; use a dedicated empty view for the runtime parent.
+    4. NOTE (operational, not a code defect) session.rs preflight_launch_vendor now refuses all headless Agy launches and agent new agy --bypass-sandbox refuses, per the signed outer-only ruling. Any operator agy lane scripts stop working until admission opens (TASK-3049); advisor should confirm this is intended now rather than after the wrapper path is wired.
+    5. UNVERIFIED: CI run 42313509517 at 86a7eba8d0f was still queued at review time; the new/updated Rust tests (task_3048_*, session agy expect_err regressions, bug_1686 refusal tests) have never executed per the implementer's own handoff (untested=true). Re-review must cite green CI at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T23:56:16.010198653Z
+  modified_at: 2026-11-06T23:56:16.010198653Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
