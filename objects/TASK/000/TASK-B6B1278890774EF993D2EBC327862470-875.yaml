@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T10:01:36.398798202Z
-modified_at: 2026-11-06T10:01:36.398798202Z
+modified_at: 2026-11-06T12:41:58.855579619Z
 req_type: Task
 tags:
 - carried-from:TASK-2927
 - finding-hash:103c341a
 - from-review:PR-3486
 - kind:carried-forward
+comments:
+- id: 01a1b0e1-5147-7803-b260-c0f3d5354a34
+  author: joe
+  content: 'Advisor 2026-11-06 05:50: accepted as intended. A receipt that later becomes unavailable or superseded is a distinct condition from a lapsed deferral, so one additional _unresolved notice per episode is correct. Rejecting the draft.'
+  created_at: 2026-11-06T12:41:58.855579619Z
+  modified_at: 2026-11-06T12:41:58.855579619Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1b075-2f14-7641-b0f9-d5ad578069ef
   author: joe
