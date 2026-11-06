@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T19:46:12.226529567Z
+modified_at: 2026-11-06T19:46:16.177042346Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The per-PR isolation is right and both criteria have tests, but persisting the refusal reason tags any record_skip failure (including lock contention past the 5s deadline) as GlobalState, which adds a new way for one PR to stop the whole watch, contrary to AC1. CI was still queued at review time.. No triage reason was given.'
   created_at: 2026-11-06T19:46:12.226528302Z
   modified_at: 2026-11-06T19:46:12.226528302Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b265-c2ce-73a3-aa75-4d9f41d33c52
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2471):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bb799648260b
+    Recorded: 2026-11-06T19:33:54.119138190+00:00
+    Findings:
+    1. aida-cli-lib/src/review_watch.rs:2251 (watch_changes): retry_busy(|| record_skip(...)).context(GlobalState)? labels every failure to write the per-PR diagnostic as whole-watcher state failure. That includes the admission/per-change lock still being busy after CLAIM_DEADLINE (5s). A WouldBlock error is not 'state unusable', and the rest of run() treats busy as non-fatal ('watcher admission is busy'). One PR's refusal plus a briefly contended lock therefore still exits the whole watch, which AC1 forbids ('Only a watch-level failure (grant invalid, state file unusable) exits nonzero'). Fix: do not add .context(GlobalState). Log a busy failure and continue. Propagate only when the record_skip error already carries GlobalState (store.load() tags real state corruption itself), e.g. Err(e) if stops_watcher(&e) => return Err(e), Err(e) => eprintln!(...).
+    2. aida-cli-lib/src/tests/task_1993_review_watch_tests.rs (bug2471_*): no test covers the diagnostic write failing for a non-state reason (e.g. the change lock held past the deadline while recording the skip). Add a regression proving that a busy or otherwise per-change record_skip failure does not stop the pass, and that the other changes in the pass are still visited.
+    3. aida-cli-lib/src/review_watch.rs:2243-2246: watch_changes checks stops_watcher before is_busy, the reverse of the superseding loop at :2195-2196 and of the previous per-change loop. Once the first finding is fixed, use the same order (busy first) so a busy error wrapped by a state-tagged context is never fatal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:46:15.886806321Z
+  modified_at: 2026-11-06T19:46:15.886806321Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b24a-bc58-7413-a436-59c9e08b551a
