@@ -1,0 +1,29 @@
+id: 01a1b292-fa1b-7742-a790-12bd2d3ae262
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-898
+title: 'cosmetic (non-blocking): the observer gate runs first, so any non-initial PID n…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2468, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): the observer gate runs first, so any non-initial PID namespace (even a non-isolated container where the operator runs a native runner) now reports UNKNOWN 'cannot see host processes from this sandbox' where it previously reported a live native runner. Unlikely on this single-host setup; worth a comment or a stamped-namespace check later.
+
+  PR: #3530
+  Reviewed sha: d0030668f326367acc868fa54a530172ced0f9f3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T20:35:39.163763957Z
+modified_at: 2026-11-06T20:35:39.163763957Z
+req_type: Task
+tags:
+- carried-from:BUG-2468
+- finding-hash:e52daae3
+- from-review:PR-3530
+- kind:carried-forward
+filed_at:
+  code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
