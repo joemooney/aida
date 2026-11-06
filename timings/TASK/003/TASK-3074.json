@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3074",
+  "publishes": [
+    {
+      "at": "2026-11-06T07:55:12.139743665Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T18:42:57.039021139Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T21:40:40.342154937Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T22:41:25.383772481Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T23:42:25.242795232Z",
+      "spec": "TASK-3074",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-3074",
+        "branch": "origin/task-3074-r1329",
+        "first_seen": "2026-11-05T23:42:25.242713442+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T03:41:44.985496646Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T04:23:10.008500099Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T06:34:11.201212617Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T07:54:47.844958752Z",
+      "spec": "TASK-3074",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3478
+      }
+    },
+    {
+      "ts": "2026-11-06T07:55:11.827486797Z",
+      "spec": "TASK-3074",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "621d9e53f2100820eaf42861e6008b8f040422d8",
+        "pr": 3478,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
