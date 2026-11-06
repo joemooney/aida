@@ -1,0 +1,25 @@
+id: 01a1b243-e078-7d80-bb0c-703a868b5af4
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-237
+agreed_id: BUG-2471
+title: 'aida review watch exits the whole loop when one PR''s review is refused (''error: PR-N: review watch refused''), so every other PR stops getting reviews'
+description: |-
+  Seen 2026-11-06 11:09:50 MST. A PR-3508 pickup failed ('branch pr-3508 is held by worktree', see BUG-2469). Review watch logged 'error: "PR-3508: review watch refused"' and the process exited. Nothing reviewed any PR for about 28 minutes, until the advisor noticed and wrapped the watch in a respawn loop (advisor-scripts/review-watch-loop.sh).
+
+  Acceptance:
+  1. A per-PR refusal or setup failure is recorded against that PR (as 'exited without completing' already is) and the watch continues with the other PRs. Only a watch-level failure (grant invalid, state file unusable) exits nonzero.
+  2. A test drives two PRs, one refusing at pickup, and asserts the other is admitted in the same tick and the watch keeps running.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T19:09:15.256349997Z
+modified_at: 2026-11-06T19:09:15.256349997Z
+req_type: Bug
+filed_at:
+  code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
