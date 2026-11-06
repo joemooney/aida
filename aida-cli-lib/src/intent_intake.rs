@@ -17,7 +17,7 @@ const BRANCH: &str = "refs/heads/aida-intent";
 const INCOMING: &str = "refs/intake/incoming";
 const PROFILE: &str = "profile.json";
 const REPO_CONFIG: &[u8] = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n";
-// Bound cold/fingerprint-invalidated inventory work independently of retained history.
+// Bound inventory work on cold, fingerprint-invalidated and incremental passes.
 // trace:STORY-2480 | ai:codex
 const CI_HISTORY_REVALIDATION_ATTEMPTS: usize = 32;
 
@@ -565,22 +565,22 @@ impl Intake {
                     if r.path() != path {
                         bail!("Noncanonical CI result path");
                     }
-                    // Cold history validates only the newest retained attempts.
-                    // Warm history validates new bytes; older unverified files
-                    // remain audit data until an exact reader requests them.
-                    let selected = if checkpoint.is_none() {
-                        snapshot
-                            .as_ref()
-                            .unwrap()
-                            .requests
-                            .keys()
-                            .rev()
-                            .take(CI_HISTORY_REVALIDATION_ATTEMPTS)
-                            .any(|attempt| *attempt == n)
-                    } else {
-                        checkpoint.as_deref() != Some(fields[0])
-                            && previous.get(path) != Some(&bytes)
-                    };
+                    // Bound both cold and warm passes to the newest retained
+                    // attempts. Excess new results remain audit data until an
+                    // exact reader requests them; cached proof remains valid.
+                    // trace:STORY-2480 | ai:codex
+                    let recent = snapshot
+                        .as_ref()
+                        .unwrap()
+                        .requests
+                        .keys()
+                        .rev()
+                        .take(CI_HISTORY_REVALIDATION_ATTEMPTS)
+                        .any(|attempt| *attempt == n);
+                    let selected = recent
+                        && (checkpoint.is_none()
+                            || (checkpoint.as_deref() != Some(fields[0])
+                                && previous.get(path) != Some(&bytes)));
                     drop(snapshot);
                     if selected && !self.ci_verified(path) {
                         self.ci_validate(path, &bytes)?;

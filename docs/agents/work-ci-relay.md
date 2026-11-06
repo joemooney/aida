@@ -188,9 +188,22 @@ still requires retained admission, strict schema, digest and canonical path;
 every intermediate tree retains the immutable-history checks. Older results
 are reported as `unverified-history`: readable audit data without receipt
 authority, excluded from native status publication. A fresh checkpoint preserves
-that distinction, so the next pass validates only newly introduced receipts.
+that distinction. Incremental passes apply the same newest-32 retained-attempt
+cap to newly introduced receipts; excess new results stay `unverified-history`.
+Previously verified results retain their proof while the validator is unchanged.
 One live ref listing still checks every retained admission, including cached
 files. Failed validation cannot advance the accepted checkpoint.
+
+Retention currently has hard admission limits: at most 4096 retained
+`refs/aida/ci/*` refs and 4096 intake commits, plus 8192 files and 32 MiB per
+intake tree. Each result normally adds an intake commit, and observation and
+processing commits share that history budget. Exceeding either 4096 limit
+refuses the entire intake channel, including observations. The newest-32
+inventory bound does not remove these limits. There is no automatic pruning or
+compaction recovery in this slice; retained attempt refs must never be rewritten
+or deleted. Operators must plan bounded retention/compaction or paged admission
+before reaching these limits. Deleting the local checkpoint cannot recover a
+retention-cap refusal.
 
 Use `aida intent ci read --json` to audit results with their verification state.
 An exact `aida intent ci read --attempt 1 --sha <full-sha> --json` revalidates an

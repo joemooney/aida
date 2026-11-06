@@ -9318,7 +9318,7 @@ Usage: aida internal codex-bg-supervise [OPTIONS] --attempt <ATTEMPT>
 
 Options:
       --attempt <ATTEMPT>
-          Exact retained attempt to revalidate; requires --sha.
+          
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =

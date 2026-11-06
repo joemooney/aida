@@ -342,9 +342,19 @@ class WorkCiTests(unittest.TestCase):
 
     # trace:STORY-2480 | ai:codex
     def test_cold_history_bounds_inventory_and_exact_old_read(self):
+        self.check_history_bounds(warm=False)
+
+    # trace:STORY-2480 | ai:codex
+    def test_warm_history_bounds_new_inventory_and_exact_old_read(self):
+        self.check_history_bounds(warm=True)
+
+    def check_history_bounds(self, warm):
         f = self.f
         f.poll()
         original = f.receipt()
+        fresh = f.clone("bounded-history", "home")
+        if warm:
+            f.cli(fresh, "pull")
         shas = {1: f.sha}
         values = []
         for n in range(2, 36):
@@ -360,7 +370,6 @@ class WorkCiTests(unittest.TestCase):
               *[f"{sha}:refs/aida/ci/{n}" for n, sha in shas.items() if n > 1], principal="request")
         for value in values:
             f.inject(value)
-        fresh = f.clone("cold-history", "home")
         shim = f.root / "shim"
         shim.mkdir()
         log = f.root / "fetches"
@@ -376,19 +385,24 @@ class WorkCiTests(unittest.TestCase):
         start = time.monotonic()
         pulled = f.cli(fresh, "pull")
         self.assertLess(time.monotonic() - start, 30)
-        self.assertIn("3 unverified-history", pulled.stderr)
+        unverified = 2 if warm else 3
+        self.assertIn(f"{unverified} unverified-history", pulled.stderr)
         self.assertEqual(set(source_fetches()), set(shas[n] for n in range(4, 36)))
         self.assertEqual(len(source_fetches()), 32)
         checkpoint = f.private(fresh) / "validated-tip"
         self.assertTrue(checkpoint.exists())
+        state = json.loads(checkpoint.read_text())
+        tip = f.git(f.private(fresh) / "worktree", "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(state["tip"], tip)
+        self.assertEqual(state["verified_ci"].count("1"), 35 - unverified)
         log.write_text("")
         rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
-        self.assertEqual(sum(row["verification"] == "unverified-history" for row in rows), 3)
+        self.assertEqual(sum(row["verification"] == "unverified-history" for row in rows), unverified)
         self.assertFalse(source_fetches())
         # Even when all recent statuses are already handled, processing must
         # never promote old audit bytes into receipt authority implicitly.
-        for value in values:
-            if value["attempt"] >= 4:
+        for value in [original, *values]:
+            if value["attempt"] >= 4 or (warm and value["attempt"] == 1):
                 marker = f.private(fresh) / f"ci-status-{value['attempt']}.json"
                 marker.write_text(value["digest"])
                 marker.chmod(0o600)
@@ -396,11 +410,12 @@ class WorkCiTests(unittest.TestCase):
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
         # Exact read revalidates only this old identity and persists its proof.
-        rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", "1", "--sha", shas[1], "--json").stdout)
+        old_attempt = 3 if warm else 1
+        rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
         self.assertEqual([row["verification"] for row in rows], ["verified"])
-        self.assertEqual(source_fetches(), [shas[1]])
+        self.assertEqual(source_fetches(), [shas[old_attempt]])
         log.write_text("")
-        f.cli(fresh, "ci", "read", "--attempt", "1", "--sha", shas[1])
+        f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt])
         self.assertFalse(source_fetches())
         # A validator fingerprint change invalidates all old proof, but uses
         # exactly the same bounded path and creates a fresh incremental checkpoint.
