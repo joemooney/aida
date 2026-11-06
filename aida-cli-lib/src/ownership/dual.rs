@@ -104,7 +104,14 @@ impl WriterFacts {
         now: DateTime<Utc>,
     ) -> Option<Witness> {
         let id = identity_from_record(pid, start?, self.boot.as_deref()?)?;
-        super::process_witness(self.pid_ns, &self.host, id, now)
+        let record = aida_core::proc_identity::HolderRecord::capture(pid);
+        let identity = record.validate().ok()?;
+        if identity.legacy() != id {
+            return None;
+        }
+        let mut witness = super::process_witness(self.pid_ns, &self.host, id, now)?;
+        witness.admission = Some(record);
+        Some(witness)
     }
 }
 
@@ -174,7 +181,7 @@ pub(crate) fn key_for_lease(
 // trace:STORY-2325 | ai:claude
 pub(crate) fn holder_for_lease(
     lease: &crate::SessionLease,
-    writer: &WriterFacts,
+    _writer: &WriterFacts,
     now: DateTime<Utc>,
 ) -> Holder {
     let role = if lease.review_verb {
@@ -206,17 +213,25 @@ pub(crate) fn holder_for_lease(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| lease.slug.clone());
-    let mut witnesses = Vec::new();
-    for (pid, start) in [
-        (lease.active_pid, lease.active_pid_start_time.as_deref()),
-        (lease.creator_pid, lease.creator_pid_start_time.as_deref()),
-    ] {
-        if let Some(w) = pid.and_then(|pid| writer.witness(pid, start, now)) {
-            if !witnesses.contains(&w) {
-                witnesses.push(w);
-            }
-        }
-    }
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let witnesses = crate::leases::lease_holder_record(lease)
+        .map(|record| super::types::Witness {
+            kind: super::types::WitnessKind::Process {
+                host: lease.hostname.clone(),
+                id: record
+                    .identity()
+                    .map(|id| id.legacy())
+                    .unwrap_or(ProcessIdentity {
+                        pid: lease.active_pid.unwrap_or(0),
+                        start: String::new(),
+                    }),
+                pid_ns: record.identity().map(|id| id.pidns_inode),
+            },
+            admission: Some(record),
+            recorded_at: now,
+        })
+        .into_iter()
+        .collect();
     Holder {
         seat,
         role,

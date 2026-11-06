@@ -1059,6 +1059,7 @@ fn spawn_helper(
         new_session,
         &[],
     )
+    .map(|(child, _)| child)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1071,7 +1072,7 @@ fn spawn_helper_with(
     control: &std::os::unix::net::UnixStream,
     new_session: bool,
     extra_env: &[(String, String)],
-) -> Result<std::process::Child> {
+) -> Result<(std::process::Child, aida_core::proc_identity::HolderRecord)> {
     use std::os::fd::AsRawFd;
     use std::os::unix::process::CommandExt;
     let (ceiling_key, ceiling_value) = crate::burndown_run::bg_wait_ceiling_env(Some(project_root));
@@ -1094,9 +1095,14 @@ fn spawn_helper_with(
         command.process_group(0);
     }
     install_control_fd(&mut command, control.as_raw_fd(), new_session);
-    command
+    // The barrier exec preserves this child identity through worker exec.
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let capture = aida_core::proc_identity::prepare_command(&mut command)?;
+    let mut child = command
         .spawn()
-        .with_context(|| format!("starting {}", aida.display()))
+        .with_context(|| format!("starting {}", aida.display()))?;
+    let holder = capture.finish(&mut child);
+    Ok((child, holder))
 }
 
 /// The worker's final command: explicit environment only (ambient
@@ -1309,7 +1315,7 @@ pub(crate) fn supervise_attempt(
     // The gated worker: an exec barrier in its own process group.
     let (mut barrier_ctl, theirs) = std::os::unix::net::UnixStream::pair()?;
     let barrier_args: Vec<&str> = env.barrier_args.iter().map(String::as_str).collect();
-    let mut child = spawn_helper_with(
+    let (mut child, holder) = spawn_helper_with(
         &env.barrier_program,
         &barrier_args,
         &init.project_root,
@@ -1453,12 +1459,16 @@ pub(crate) fn supervise_attempt(
         ));
     }
     if let Err(e) = step(Step::BeforeLease).and_then(|_| {
-        session::stamp_lease_detached_worker_at(
+        holder
+            .validate()
+            .map_err(|reason| anyhow::anyhow!("worker holder refused: {reason:?}"))?;
+        session::stamp_lease_detached_worker_with_holder_at(
             &root,
             &init.lease_id,
             &init.grant_id,
             worker.pid,
             &worker.start,
+            &holder,
         )
     }) {
         return Err(refuse(

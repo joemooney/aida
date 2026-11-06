@@ -5552,6 +5552,7 @@ fn entry_scope_session_match_decision_table() {
         added_by_machine: None,
     };
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abcdef123456".into(),
@@ -6004,6 +6005,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
     std::fs::create_dir_all(&leases).unwrap();
 
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abcdef123456".into(),

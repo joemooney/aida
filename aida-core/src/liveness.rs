@@ -1356,7 +1356,8 @@ fn pid_is_alive_impl(pid: u32) -> bool {
 // trace:TASK-55 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeaseState {
-    /// The owner PID is outside this observer's namespace.
+    /// The owner cannot be established (foreign view, insufficient identity,
+    /// or refused holder admission).
     // trace:BUG-2425 | ai:codex
     Unknown,
     /// Live claude found inside the worktree — actively working.
@@ -1614,6 +1615,9 @@ pub fn classify_stale_lease_recovery(
 // trace:BUG-677 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionLeaseLite {
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[serde(default)]
+    pub holder_record: Option<String>,
     /// Namespace in which the recorded PIDs are meaningful.
     // trace:BUG-2425 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1756,7 +1760,6 @@ pub fn lease_state_for(
             !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
         })
     };
-    let age_hours = now.signed_duration_since(l.started_at).num_hours();
     // A foreign lease ages from its heartbeat, not started_at, so a live
     // long-running foreign session is not Stale. trace:BUG-2425 | ai:claude
     if !crate::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
@@ -1768,6 +1771,28 @@ pub fn lease_state_for(
             now.signed_duration_since(l.heartbeat()).num_hours(),
         );
     }
+    // Only an admitted holder replaces legacy reader policy. Foreign expiry
+    // above remains independent of admission. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if let Some(raw) = l.holder_record.as_deref() {
+        let admitted = serde_json::from_str::<crate::proc_identity::HolderRecord>(raw)
+            .map(|record| record.refusal().is_none())
+            .unwrap_or(true);
+        if admitted {
+            let verdict = crate::proc_identity::recorded_holder(
+                raw,
+                l.active_pid,
+                l.active_pid_start_time.as_deref(),
+                l.pid_namespace,
+            )
+            .and_then(|record| record.observe());
+            return match verdict {
+                Ok(crate::proc_identity::Verdict::Alive) => LeaseState::Live,
+                Ok(crate::proc_identity::Verdict::Dead(_)) => LeaseState::Stale,
+                _ => LeaseState::Unknown,
+            };
+        }
+    }
+    let age_hours = now.signed_duration_since(l.started_at).num_hours();
     if l.review_verb || l.claim_verb {
         let alive = l
             .creator_pid
@@ -2775,6 +2800,7 @@ mod tests {
 
     fn lease(scope: &str, worktree: &str) -> SessionLeaseLite {
         SessionLeaseLite {
+            holder_record: None,
             pid_namespace: crate::pid_observer::current_pid_namespace(),
             scope: scope.to_string(),
             worktree_path: PathBuf::from(worktree),
@@ -2809,6 +2835,34 @@ mod tests {
             lease_state_for(&l, &[], chrono::Utc::now()),
             LeaseState::Stale
         );
+    }
+
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[test]
+    fn refused_holder_preserves_legacy_policy_and_foreign_backstop() {
+        use crate::proc_identity::{HolderRecord, HolderRefusal};
+        let now = chrono::Utc::now();
+        let mut l = lease("BUG-2458", ".");
+        l.active_pid = Some(std::process::id());
+        l.holder_record = Some(
+            serde_json::to_string(&HolderRecord::refused(HolderRefusal::EvidenceUnavailable(
+                "no cooperative handoff".into(),
+            )))
+            .unwrap(),
+        );
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Live);
+        l.active_pid = Some(0);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        l.pid_namespace = l.pid_namespace.map(|ns| ns ^ 1);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Unknown);
+        l.started_at = now - chrono::Duration::hours(25);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        // Malformed admission is unknown locally, but cannot suppress the
+        // separate foreign-namespace expiry policy either.
+        l.holder_record = Some("broken".into());
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        l.pid_namespace = crate::pid_observer::current_pid_namespace();
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Unknown);
     }
 
     #[test]

@@ -848,7 +848,12 @@ pub(crate) fn acquire_review_lease_with_mode(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
+    let current_start = process_probe::process_start_identity(std::process::id());
     let lease = SessionLease {
+        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        holder_record: Some(serde_json::to_string(
+            &aida_core::proc_identity::HolderRecord::capture(std::process::id()),
+        )?),
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.clone(),
@@ -861,12 +866,12 @@ pub(crate) fn acquire_review_lease_with_mode(
         hostname: hostname(),
         role: Some("reviewer".to_string()),
         creator_pid: Some(std::process::id()),
-        creator_pid_start_time: process_probe::process_start_identity(std::process::id()),
-        active_pid: None,
-        active_pid_start_time: None,
+        creator_pid_start_time: current_start.clone(),
+        active_pid: Some(std::process::id()),
+        active_pid_start_time: current_start,
         // trace:BUG-2419 | ai:claude
         creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
-        active_pid_ns: None,
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
