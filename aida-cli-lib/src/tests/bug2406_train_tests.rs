@@ -385,15 +385,16 @@ fn bug2441_unresolved_member_refuses((branch, title, cause): (&str, &str, &str))
     assert!(calls(f.root()).is_empty());
 }
 
-// The branch and lease claim STORY-2220, while the title Refs BUG-2400:
-// all resolved gate IDs are filtered out, as in PR #3351.
+// The lease claims STORY-2220, while only the title resolves to BUG-2400:
+// even after rework-suffix stripping the branch base must stay unresolved,
+// so all resolved gate IDs are filtered out, as in PR #3351.
 // trace:TASK-3111 trace:TASK-2843 trace:TASK-2845 | ai:codex
 #[test]
 fn bug2441_resolved_but_uncovered_member_names_coverage_refusal() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    let branch = "story-b6b1278890774ef993d2ebc327862470-123-2";
+    let branch = "story-b6b1278890774ef993d2ebc327862470-999999-2";
     let f = Fixture::with_member_metadata(true, Some(branch), Some("fix: rework (Refs BUG-2400)"));
     let dir = crate::leases::leases_dir(f.root());
     fs::create_dir_all(&dir).unwrap();
