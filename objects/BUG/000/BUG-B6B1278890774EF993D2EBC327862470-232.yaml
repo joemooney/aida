@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-06T17:54:34.557105753Z
+modified_at: 2026-11-06T18:03:00.679654480Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -32,6 +32,32 @@ comments:
     Implementation in progress: show skips opening the ID allocator; advisory hint operations use nonblocking flock in fast-fail mode and serve Deferred on contention; optional show linkage uses a shared 1.2-second deadline with existing partial/unknown labels; open.backend/open.location/open.cache sub-spans retain aggregate timing semantics. Added held-lock regression coverage and documentation. Build and targeted validation pending. Acceptance 3 requires the post-deployment 24-hour performance window at the unchanged 2000 ms / 10% / 5000 ms thresholds; this seat cannot attest that future window.
   created_at: 2026-11-06T17:54:34.557105753Z
   modified_at: 2026-11-06T17:54:34.557105753Z
+  session_id: 01a1b1f46d3d
+- id: 01a1b207-3ac7-7771-a2e9-82c0f355a7e2
+  author: joe
+  content: |
+    Native implementer handoff: implementation is uncommitted; no commit, push, PR, queue completion, pr ship, or review record was performed. Native publication declaration recorded: [AI:codex] fix(show): avoid allocation and refresh hint lock waits (Refs BUG-2466).
+
+    Changed files:
+    - aida-cli-lib/src/git_backend_cmd.rs: skip ID dispenser for show, including fallback; open.backend/open.location/open.cache timing sub-spans.
+    - aida-core/src/db/refresh_request.rs: nonblocking advisory request locks; watchdog-protected contention test plus ordinary update recovery.
+    - aida-cli-lib/src/trace.rs: shared show linkage deadline 1.2 seconds; existing partial/unknown evidence retained.
+    - aida-cli-lib/src/tests/bug_1993_show_deadline_tests.rs: existing slow-probe test uses production show deadline.
+    - aida-cli/tests/bug_1993_show_phase_timings.rs: asserts new sub-spans preserve aggregate timing semantics.
+    - tests/test_show_latency.py: request/dispenser lock regressions, fixture-worker synchronization, slow Git subprocess check.
+    - docs/cli/02-specs.md: bounded read behavior and timing diagnostics.
+
+    Validation PASS:
+    - cargo build --offline --profile agent -p aida-cli -j 2.
+    - python3 tests/test_show_latency.py against the newly built binary: refresh-flock/request-lock cases approximately 0.15-0.37 seconds, dispenser-lock case successful, SQLite-writer fallback 0.33 seconds, delayed 3-second Git log returns in 1.40 seconds with incomplete linkage and shipped unknown; strict refresh recovery works.
+    - cargo test --offline --profile agent -p aida-core --lib db::refresh_request::tests:: -j 2: 8 passed.
+    - cargo test --offline --profile agent -p aida-cli --test bug_1993_show_phase_timings -j 2: 6 passed.
+    - cargo fmt --all -- --check; git diff --check; Python syntax check.
+    Baseline: each new request/dispenser lock regression independently times out after 6 seconds against the host binary. Live modified-binary smoke probes: 3.70, 0.52, 0.47 seconds, all exit 0; the first reports open.cache=1590ms and linkage=1375ms, then warm open.cache=37-43ms.
+
+    Remaining acceptance/blocker: acceptance 3 requires observing the 24-hour post-deployment performance window at unchanged 2000ms / 10% / 5000ms thresholds. That future result cannot be established in this seat. Keep the spec In Progress and preserve Refs publication until the production guard passes. The changed library unit deadline test was not separately compiled/run; the binary slow-Git test exercises the production deadline directly. No design fork or punt/hold was introduced.
+  created_at: 2026-11-06T18:03:00.679654480Z
+  modified_at: 2026-11-06T18:03:00.679654480Z
   session_id: 01a1b1f46d3d
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
