@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T13:38:39.738282124Z
-modified_at: 2026-11-06T13:40:59.086930805Z
+modified_at: 2026-11-06T13:41:06.580460056Z
 req_type: Story
 tags:
 - architecture
@@ -38,6 +38,13 @@ relationships:
   target_id: 01a1a957-4952-7c90-b4d6-3be4093e1638
   created_at: 2026-11-06T13:40:59.086926739Z
   created_by: joe
+comments:
+- id: 01a1b117-7394-7550-8351-8a79c4687905
+  author: joe
+  content: 'OPERATOR DESIGN SESSION (2026-11-06 06:40 MST, joe present; advisor recorded). BUG-2446 sketch v1 questions ruled: Q1 synchronous typed host mediation (no spool); Q2 enforce raw-store denial in AIDA''s shared bwrap boundary, Codex-native compatibility exception unchanged; Q3 the sketch''s 3 slices. Scope: own keystone STORY-2561 (slices TASK-3222 -> 3223 -> 3224), NOT a gate on STORY-2238/EPIC-612 or STORY-2460. BUG-2446 is re-parented under STORY-2561 and closes on S3 evidence. Current grants stay until S2 cuts over.'
+  created_at: 2026-11-06T13:41:06.580460056Z
+  modified_at: 2026-11-06T13:41:06.580460056Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-27af-7161-ad16-5c0a947ceb00
   author: joe
