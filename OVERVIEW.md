@@ -672,9 +672,29 @@ Prose consequences retain their text as a comment and use a manual resolver.
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
 ratchet freezes remaining raw GitHub reads outside that boundary and catches
 calls/imports of the legacy train pass-through helpers outside `pr_train.rs`.
-This first slice retains legacy `Result` readers; confirmed-negative destructive
-transitions, train journaling and workflow-digest evidence remain later slices
-of the approved story.
+Destructive lifecycle consumers use `forge_confirmation`: two identical metadata
+reads, three seconds apart (at most three reads), plus a fresh invocation-private
+base fetch. Ancestry, equal tip trees or a PR merge-subject receipt on that base
+supply independent Git evidence. Failed fetches, changed snapshots and conflicts
+between Git and forge state retain the change, queue entry and spec status.
+GitHub confirmation metadata reads are bounded to 15 seconds and reject partial
+or unknown states. Publication retraction also preserves its ownership check.
+
+Train retirement/abort share the same confirmed-negative gate, pinned to the
+tested head and base. A confirmed landing takes the member-landing path; unknown
+evidence suspends without ejection or closure. Red CI is re-read before retiring.
+Unavailable CI reads suspend; required-check registration (including missing
+aggregates) and explicit settlement timeouts fail deterministically. Typed
+member-gate errors distinguish settled policy refusals from unavailable evidence: confirmed
+refusals and deterministic CI failures eject members and retire the train only
+after negative landing confirmation, while unavailable reads suspend.
+Abandoned-train cleanup rechecks the body owner, stops new admission on unknown
+evidence and preserves the branch when closure fails. Review-watch fetches retry three times with three-second backoff;
+a failed pre-review fetch carries a process-bound retry marker through the
+queue-work receipt, without spending the ordinary setup retry or a review round.
+Review queue cleanup and stranded review-story completion require the stable
+metadata/Git confirmation too. Train journaling and workflow-digest evidence
+remain later slices of the approved story.
 <!-- trace:STORY-2401 | ai:codex -->
 
 ### Autonomy & escalation

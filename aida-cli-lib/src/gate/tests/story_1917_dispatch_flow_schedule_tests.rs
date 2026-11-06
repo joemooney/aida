@@ -1142,6 +1142,19 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
         fn retire(&mut self, _change: &crate::forge::ChangeRef, _why: &str) {
             self.retired = true;
         }
+        // Retirement needs a confirmed negative; this fake knows whether it
+        // merged. trace:STORY-2401 | ai:claude
+        fn confirm_not_landed(
+            &mut self,
+            _change: &crate::forge::ChangeRef,
+            _train: &crate::pr_train::Built,
+        ) -> crate::forge_observed::Confirmed {
+            if self.merged {
+                crate::forge_observed::Confirmed::Positive
+            } else {
+                crate::forge_observed::Confirmed::Negative
+            }
+        }
         fn merge(&mut self, _change: &crate::forge::ChangeRef, _tip: &str) -> anyhow::Result<()> {
             self.ctx.reverify_now(true)?;
             self.merged = true;
@@ -1627,6 +1640,7 @@ impl crate::forge::Forge for NetForge {
 /// after its own check and before the next native checkpoint.
 struct NativePorts<'a> {
     live: crate::pr_train::LiveTrainForge<'a>,
+    net: &'a NetForge,
     member: crate::pr_train::Member,
     fetches: usize,
     after_fetch: Option<(usize, Box<dyn FnMut()>)>,
@@ -1711,6 +1725,19 @@ impl crate::pr_train::TrainForge for NativePorts<'_> {
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
         self.live.retire(change, why)
     }
+    // The stubbed train tip never reaches origin, so it has not landed
+    // unless the forge recorded a merge. trace:STORY-2401 | ai:claude
+    fn confirm_not_landed(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _train: &crate::pr_train::Built,
+    ) -> crate::forge_observed::Confirmed {
+        if self.net.merges.get() > 0 {
+            crate::forge_observed::Confirmed::Positive
+        } else {
+            crate::forge_observed::Confirmed::Negative
+        }
+    }
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> anyhow::Result<()> {
         self.live.merge(change, tip)
     }
@@ -1746,6 +1773,7 @@ fn live_ports<'a>(
     member: crate::pr_train::Member,
 ) -> NativePorts<'a> {
     NativePorts {
+        net: forge,
         live: crate::pr_train::LiveTrainForge {
             project_root: f.root.clone(),
             main_worktree: f.root.clone(),
