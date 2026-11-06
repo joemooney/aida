@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T16:39:48.510421201Z
+modified_at: 2026-11-06T21:33:03.861269998Z
 req_type: Story
 tags:
 - docs:impacted
@@ -821,6 +821,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b2c7-89bd-7cc0-8815-58d1174174e0
+  author: aida-auto-bump
+  timestamp: 2026-11-06T21:33:03.805531425Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b2c7-89f5-7511-b87d-a32616462e6e
+  timestamp: 2026-11-06T21:33:03.861265167Z
+  agent: aida
+  commit_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
+  summary: 'All 6 STORY-2492 ACs verified: new two-clone/bare-hub e2e (ship->watch request-changes->A sees verdict+finding origin, train refuses->rework->B approves->train lands exact head) closes ac540936; docs guide updated; train source proof now reads exact-head signed publication (fail-closed on refusal). All code CI jobs green; only merge-hold-gate (supervised human hold) fails.'
+  review_verdict: approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -829,3 +843,7 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T21:33:03.805522406Z
+  completion_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
