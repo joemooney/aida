@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1651",
+  "publishes": [
+    {
+      "at": "2026-11-06T04:25:04.880841583Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T20:35:14.298559050Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:41:33.582111489Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T12:23:07.592134263Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T13:19:49.868683027Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T13:31:08.184927121Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T14:57:26.694494440Z",
+      "spec": "STORY-1651",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1651",
+        "branch": "origin/story-1651",
+        "first_seen": "2026-11-05T14:57:26.694304526+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-05T17:36:09.934943575Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T18:11:32.752165424Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T02:12:37.807768378Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T03:39:43.292864871Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T03:44:54.269416676Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T04:24:37.837285655Z",
+      "spec": "STORY-1651",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3424
+      }
+    },
+    {
+      "ts": "2026-11-06T04:25:04.688336334Z",
+      "spec": "STORY-1651",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a79a05328a04b2cac9d8fa43034db05291c0fc0e",
+        "pr": 3424,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
