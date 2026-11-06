@@ -955,30 +955,51 @@ Schedule ticks more frequently than that gap; `watch --execute` rejects `--inter
 A preview never advances an observation timer.
 
 Execute ticks serialize through the permanent main-worktree
-`.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
+`.aida/pipeline-stalls.lock` sidecar and atomically replace the
 versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
 reported as unknown by watch; its objective/redrive reporting continues.
 The digest names draft/hold/review/CI/conflict blockers and only applicable
 unblocking commands; ship-ready PRs get a ship command. At delivery time, up to
 four failed job logs are read with five-second timeouts and 1 MiB caps for failing tests
 and panic lines. Missing logs or exhausted budgets are labeled unavailable.
-One bounded actionable digest covers due kinds through the existing supervisor
-nudge path: urgent mailbox
+One bounded actionable digest covers due kinds: an urgent mailbox
 `kind=request` to the live advisor, or the configured operator notification
-fallback. A delivery reservation is persisted before sending. Known delivery
-failure retains the episode for retry; a crash or failed post-send write leaves
-an unresolved reservation, reported as unknown and suppressed until the
-continuous predicate resets, an age/event identity changes, or the operator
-inspects the inbox and resets the state. An accepted continuous kind stays quiet
-until its predicate resets; an accepted age/event kind stays quiet until its
-evidence identity changes. One kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
-sent/queued after quiet hours; it does not prove read or action. This slice
-does not implement repeated unresolved escalation.
+fallback. Version 2 alarm state retains an episode UUID, exact persisted request
+ID and immutable fingerprint. Delivery results distinguish mailbox persistence,
+operator sent, operator queued, refusal and uncertainty. JSON `accepted` means
+mailbox persistence or operator sent; queued is reported separately under
+`deliveries`. Neither persistence nor transport acceptance proves read or action.
+
+A delivery reservation is persisted before sending. Known refusal is retryable;
+a crash, ambiguous failure or failed post-send write retains its reservation
+and suppresses duplicate advisor copies. A v1 episode without a request ID is
+reported as **action unknown** and closed on the next evaluation; no recovery
+command exists. A later evaluation may start a fresh episode. Invalid or unsupported
+state errors name the state file: inspect it, then remove it to reset tracking.
+
+While a predicate remains continuously true, its request escalates after 30
+minutes without an authorized disposition. An `acted` or `declined` response
+closes the response obligation, but a stall persisting another 30 minutes after
+the response escalates with the actor, reason and evidence. `deferred` postpones
+the unresolved escalation until its deadline. An unresolved or deferral-deadline
+notice does not consume the later persistent-stall notice. Operator-direct initial
+delivery has no advisor request to disposition; its notice says the stall persists
+with no advisor request. Only the latest authorized revision matching the
+exact request ID and fingerprint counts. Unknown observations, backwards clocks
+and gaps over 15 minutes restart escalation continuity without resending the
+request. Known predicate recovery closes continuous episodes; age/event kinds
+retain their per-evidence delivery suppression as described above.
+
+Escalation uses the existing operator notifier with distinct episode-specific
+`_unresolved` and `_persistent` rules and a ten-second command timeout. Quiet hours
+queue it; operator opt-out is respected. Each escalation kind is sent or queued at
+most once per episode. Refusal retries on a later tick; uncertainty retains a
+reservation and reports unknown.
+Previews report due escalation without writes, notification calls or receipts.
 
 This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Explicit recipient responses
 use [`aida mailbox disposition`](../advanced/mailbox.md#explicit-responses-to-requests),
-independently of read ACKs. Correlating those responses with alarm episodes and
-unresolved escalation remains follow-up work, along with Claude/Antigravity
-wake; reading or accepting a wake is not action.
+independently of read ACKs. Reading, replying or accepting a wake is not action.
+Claude/Antigravity wake delivery remains separate work.
 <!-- trace:TASK-3074 | ai:codex -->

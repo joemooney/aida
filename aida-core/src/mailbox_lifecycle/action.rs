@@ -173,6 +173,21 @@ pub fn latest(common: &Path, message: &Message) -> Result<Option<ActionReceipt>>
         }))
 }
 
+/// Read authorized action evidence for an already persisted exact request identity.
+/// Alarm correlation never uses subject text, read ACKs, or wake acceptance.
+// trace:TASK-3074 | ai:codex
+pub fn latest_for_identity(
+    common: &Path,
+    id: &str,
+    fingerprint: &str,
+) -> Result<Option<ActionReceipt>> {
+    Ok(read_ledger(&common.join("aida/mail-lifecycle"))?
+        .revisions
+        .into_iter()
+        .rev()
+        .find(|r| r.message_id == id && r.fingerprint == fingerprint))
+}
+
 // Withdrawal physically clears body, and logical views also redact subject.
 // Bind that exact tombstone projection while retaining the full original hash.
 fn withdrawn_fingerprint(message: &Message) -> Result<String> {

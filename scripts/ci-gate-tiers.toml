@@ -59,6 +59,8 @@
 "STORY-1853 test-speed tooling tests" = "fast"
 # Pure Python with git/openssl fixtures, ~3s. trace:TASK-3046 | ai:claude
 "Containment conformance evidence tests" = "fast"
+# trace:TASK-3131 | ai:codex — real production CLI setup needs a built binary.
+"Shared-boundary production fixture refusal" = "full"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
