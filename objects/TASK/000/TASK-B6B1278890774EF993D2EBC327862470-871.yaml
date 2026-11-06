@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-871
 agreed_id: TASK-3196
 title: Harden distributed review admission storage, recovery and watcher failures
 description: 'Scope: PR #3479 round-4 findings 1-6 and 8-10: shard admission per PR beyond global table budgets; direct-human expected-tip signed stopped-admission re-anchor including revoked owners; opt-in hub configuration; continuous sync refusal handling; local error cleanup; peer hold caching; bounded network outside store writer lock; liveness tests and criterion traces. Finding 7 alternative: this task is the completion trailer for the hardening PR. STORY-2492 stays In Progress until AC5 has a real two-clone ship/watch/train entry-point test; the existing approval-decision test does not satisfy AC5.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T09:21:32.195953981Z
+modified_at: 2026-11-06T09:21:35.221011806Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -39,6 +39,14 @@ history:
   session_id: 01a1b0166d7f
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b029-d9f4-74f3-97bd-c1d2fcf5d675
+  author: joe
+  timestamp: 2026-11-06T09:21:35.221008289Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a8e8311d546
