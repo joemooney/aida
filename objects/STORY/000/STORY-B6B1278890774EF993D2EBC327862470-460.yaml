@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T15:26:43.213947033Z
+modified_at: 2026-11-06T16:07:50.898306186Z
 req_type: Story
 tags:
 - architecture
@@ -209,6 +209,12 @@ comments:
   content: 'Round 3 follow-up: fetched job 127928615343 using a temporary gh cache. Its 110 unique panic tests cluster in leases/reap/takeover/liveness plus six headless cases. The headless rework cases additionally failed because the new stamp resolved the launcher cwd instead of the explicit launch project; stamp root now follows host_main or child cwd. Legacy ownership heartbeats remain policy evidence, but unadmitted legacy process witnesses remain Unknown (no subreaper admission). Migration now preserves existing rows verbatim under generation checks instead of installing refusal markers. Fast fixtures passed through the final formatting gate; fixed formatting of the lib_part6-included lease tests directly and rerunning. Native publication declaration with the required (Refs STORY-2537) (BUG-2458) subject was refused: publication declaration must name exactly one lease spec. No commit/push attempted; host must create this round new commit and use the required PR-title subject for squash.'
   created_at: 2026-11-06T15:26:43.213947033Z
   modified_at: 2026-11-06T15:26:43.213947033Z
+  session_id: 01a1b1643ab6
+- id: 01a1b19d-cb72-7523-9bb4-7a89ea327ba0
+  author: joe
+  content: 'Round 3 final evidence for PR #3483: make check-ci-fast passes all 38 gates on the final production edits. Cargo core ProcIdentity matrix/cooperative tests pass (2). Final library binary passes ProcIdentity tests including real setsid/reparented detached stamp and Dead after exit (5), ownership suite including legacy heartbeat policy and generation-pinned migration preservation (43), stale lease recovery (28), review-watch bug2442 cases (4), and rework-round cases including both lib-0 missing-root regressions (5). The std-only launch-ratchet module was compiled directly with rustc --test against this checkout and both tests pass (2): exact ledger and ceiling include the single shared non-vendor pre_exec receipt hook. Recovery fixtures use AIDA_TRUST_PID_NAMESPACE=1 only for their private temporary trees. Host-initial-namespace/reentry and scrubbed clone-cleanup tests need host CI; no tests were changed to waive those assertions. Legacy lease TTL/advisory/worktree policies and foreign backstop remain; unadmitted ownership processes remain Unknown and legacy heartbeats retain their policy. No ownership cutover or host migrate/compare acceptance is claimed. All edits are uncommitted per native-seat rules. Recorded Refs-only native publication declaration; host must create a NEW round-3 commit and squash using the PR title ending (Refs STORY-2537) (BUG-2458), keeping STORY-2537 open.'
+  created_at: 2026-11-06T16:07:50.898306186Z
+  modified_at: 2026-11-06T16:07:50.898306186Z
   session_id: 01a1b1643ab6
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
