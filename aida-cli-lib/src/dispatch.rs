@@ -2580,8 +2580,8 @@ pub(crate) fn prepare_lane_worktree(
 }
 
 /// Build the scrubbed `Command` that launches an implementer worker in `wt_path`
-/// with the session grant and purpose environment variables cleared and
-/// `AIDA_SESSION_ROLE="implementer"`.
+/// with grant and purpose cleared. Claude background handoffs carry no seat
+/// keys; their SessionStart hook recovers identity from the worktree lease.
 // trace:STORY-1917 | ai:agy
 pub(crate) fn build_implementer_launch_command(
     agent_bin: &Path,
@@ -2591,35 +2591,73 @@ pub(crate) fn build_implementer_launch_command(
     prompt_text: &str,
     name: &str,
     vendor: DispatchVendor,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new(agent_bin);
-    cmd.current_dir(wt_path);
-    match vendor {
-        DispatchVendor::Claude => {
-            cmd.args(["--bg", "-n", name, prompt_text]);
-        }
+) -> anyhow::Result<std::process::Command> {
+    let (launch_vendor, kind, args) = match vendor {
+        DispatchVendor::Claude => (
+            aida_core::launch_policy::LaunchVendor::Claude,
+            aida_core::launch_policy::LaunchKind::Background,
+            vec!["--bg".into(), "-n".into(), name.into(), prompt_text.into()],
+        ),
         // A Codex lane never runs a foreground `codex exec` here: it goes
         // through the detached launch ([`build_codex_lane_command`]).
         // trace:BUG-2390 | ai:claude
         DispatchVendor::Codex => {
             unreachable!("Codex lanes launch through `aida agent new codex --bg`")
         }
-        DispatchVendor::Agy => {
-            cmd.args(["--prompt", prompt_text]);
-        }
-    }
+        DispatchVendor::Agy => (
+            aida_core::launch_policy::LaunchVendor::Agy,
+            aida_core::launch_policy::LaunchKind::Fresh,
+            vec!["--prompt".into(), prompt_text.into()],
+        ),
+    };
+    // Resolve posture before building the vendor process. Codex remains an
+    // AIDA control child below. trace:STORY-2326 | ai:codex
+    let contained = crate::session::drain_contained(main_worktree)?;
+    let posture =
+        crate::session::containment_posture_in(main_worktree, launch_vendor.as_str(), contained)?;
+    // This legacy dispatcher has no AIDA supervisor/receipt path.
+    anyhow::ensure!(
+        posture == crate::session::ContainmentPosture::None,
+        "this dispatch vendor requires the supervised agent launcher"
+    );
+    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+        vendor: launch_vendor,
+        kind,
+        program: agent_bin.as_os_str().to_owned(),
+        // Switches above are launcher-owned. The name is a -n operand;
+        // the prompt is positional data, so neither is a flag tail.
+        args,
+        tail: Vec::new(),
+        posture,
+        cwd: wt_path.to_path_buf(),
+        set_cwd: true,
+        host_main: Some(main_worktree.to_path_buf()),
+    })?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // Critical Boundary B requirement: implementer lanes never inherit or hold
     // any session grant, purpose, or dispatch worker claim token.
-    cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
-        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
-        .env("AIDA_SESSION_PURPOSE", "")
+    crate::launch::assign_seat(
+        &mut cmd,
+        kind,
+        if kind == aida_core::launch_policy::LaunchKind::Background {
+            crate::launch::SeatDecision::Lane {
+                role: None,
+                grant: None,
+            }
+        } else {
+            crate::launch::SeatDecision::Child {
+                role: "implementer",
+                grant: "",
+            }
+        },
+    )?;
+    cmd.env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
         .env_remove(DISPATCH_CLAIM_TOKEN_ENV)
-        .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_SESSION_SCOPE", spec)
         .env("AIDA_PROJECT_ROOT", main_worktree)
         .env("AIDA_AGENT_NAME", name)
         .env("AIDA_USER", name);
-    cmd
+    Ok(cmd)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2869,7 +2907,7 @@ fn launch_implementer_lane(
 ) -> RunnerOutcome {
     let agent_bin = resolve_vendor_bin(vendor);
 
-    let mut cmd = build_implementer_launch_command(
+    let cmd = build_implementer_launch_command(
         &agent_bin,
         main_worktree,
         wt_path,
@@ -2879,7 +2917,7 @@ fn launch_implementer_lane(
         vendor,
     );
 
-    match cmd.output() {
+    match cmd.and_then(|mut cmd| Ok(cmd.output()?)) {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let stderr = String::from_utf8_lossy(&out.stderr);
