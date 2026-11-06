@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T20:28:55.507363651Z
+modified_at: 2026-11-06T20:29:30.018071870Z
 req_type: Task
 tags:
 - architecture
@@ -416,6 +416,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-06T20:28:55.387004028Z
   modified_at: 2026-11-06T20:28:55.387004028Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b28d-5822-7a03-b9d5-a49f79712819
+  author: joe
+  content: 'ADVISOR RULING 13:30 (#3511, round 6; ruled once per the 2026-10-28 order). The writer inventory is a best-effort static ratchet. The enforcement boundary is S2 (TASK-3223: raw store writes are denied in the shared boundary), so completeness here is not a merge gate. F1: needs green exact-head CI (the runner backlog is being cleared). F2 MAJOR, FIX: argv_writer finds the subcommand after global flags (aida --quiet edit, git -C <dir> commit) and accepts a variable aida binary ("$AIDA_BIN", $AIDA). Add mutant fixtures for each reproduced miss, including multi-clone-harness.sh:429-433. F3 MINOR, ACCEPT AS A DOCUMENTED LIMIT: cover only the shell=True/os.system string form via shlex, and list the remaining forms (imported run aliases, non-literal argv, symlink/copytree) under Limits in store-mutation-writers.md. F4 MINOR, ACCEPT: list the test-name skip and the extensionless hooks under Limits, and correct the doc lines 118-120 so they do not claim hooks are scanned. No further non-blocking findings will be raised on this PR. Next round: F2 plus the doc only.'
+  created_at: 2026-11-06T20:29:30.018071870Z
+  modified_at: 2026-11-06T20:29:30.018071870Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
