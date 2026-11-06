@@ -408,6 +408,16 @@ while True:
             self.assertNotEqual(result.returncode, 0, fault + result.stdout + result.stderr)
             self.assertNotIn('live-store-channel-ok', result.stdout, fault)
 
+    def test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive(self):
+        result = subprocess.run([sys.executable, '-m', 'tests.test_store_mutation',
+                                 '--live-helper', 'slow_authority'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+        if result.returncode == 77 and os.environ.get('AIDA_REQUIRE_STORE_MUTATION_LIVE') != '1':
+            self.skipTest(result.stderr.strip())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('post-exec-authority-delay-ok', result.stdout)
+        self.assertIn('live-store-channel-ok', result.stdout)
+
     def broker_connect(self, path, kind=socket.SOCK_SEQPACKET, service=True, pid=None):
         # Exercise the actual broker branch with kernel notifications replaced
         # at the ioctl boundary. sockaddr is read from real process memory;
@@ -558,6 +568,7 @@ def live_helper(fault='none'):
     fixture = tempfile.TemporaryDirectory()
     # /tmp is masked inside the lane; no fixture filesystem mount is needed.
     vendor = """import os,socket,json,uuid
+print('vendor-exec-ready',flush=True)
 endpoint=os.environ['AIDA_STORE_MUTATION_ENDPOINT']
 s=socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET)
 s.settimeout(5)
@@ -594,21 +605,38 @@ print('live-store-channel-ok',flush=True)
     env = dict(os.environ, AIDA_STORE_MUTATION_ENDPOINT=endpoint)
     process = subprocess.Popen(['/usr/bin/python3', '-I', '-S', '-c', host_source, lane_source,
                                 json.dumps(cfg), str(receipt_w), str(acceptance_r)],
-                               env=env, pass_fds=(helper_auth.fileno(), receipt_w, acceptance_r))
+                               env=env, stdout=subprocess.PIPE,
+                               pass_fds=(helper_auth.fileno(), receipt_w, acceptance_r))
     helper_auth.close()
     os.close(receipt_w)
     os.close(acceptance_r)
     receipt = b''
     end = time.monotonic() + 20
     accepted = False
+    executed = False
+    delayed = False
+    output = b''
+    stdout_open = True
     try:
         while process.poll() is None:
             if time.monotonic() >= end:
                 raise RuntimeError('live channel fixture deadline')
-            ready, _, _ = select.select([authority] + ([] if accepted else [receipt_r]), [], [], .05)
+            ready, _, _ = select.select([authority] + ([] if accepted else [receipt_r]) +
+                                       ([process.stdout] if stdout_open else []), [], [], .05)
+            if process.stdout in ready:
+                chunk = os.read(process.stdout.fileno(), 8192)
+                output += chunk
+                stdout_open = bool(chunk)
+                executed = b'vendor-exec-ready\n' in output
             if authority in ready:
                 if authority.recv(1) != b'?':
                     break
+                if fault == 'slow_authority' and executed and not delayed:
+                    # Delay a real post-exec check beyond the old 1s timeout,
+                    # while remaining well inside the approved 5s I/O bound.
+                    assert accepted
+                    time.sleep(1.25)
+                    delayed = True
                 authority.sendall(b'R' if fault == 'revoked' and accepted else b'Y')
             if receipt_r in ready:
                 chunk = os.read(receipt_r, 8192)
@@ -620,12 +648,20 @@ print('live-store-channel-ok',flush=True)
                     assert obj['mutation_epoch'] == epoch and obj['mutation_ready'], obj
                     os.write(acceptance_w, b'R')
                     accepted = True
-        return process.wait(timeout=3)
+        status = process.wait(timeout=3)
+        output += process.stdout.read()
+        sys.stdout.buffer.write(output)
+        sys.stdout.flush()
+        if fault == 'slow_authority':
+            assert delayed, 'fixture never delayed a post-exec authority check'
+            print('post-exec-authority-delay-ok', flush=True)
+        return status
     finally:
         if process.poll() is None:
             process.kill()
             process.wait(timeout=3)
         authority.close()
+        process.stdout.close()
         for fd in (receipt_r, acceptance_w):
             os.close(fd)
         fixture.cleanup()
@@ -634,6 +670,6 @@ print('live-store-channel-ok',flush=True)
 if __name__ == '__main__':
     if len(sys.argv) in (2, 3) and sys.argv[1] == '--live-helper':
         fault = sys.argv[2] if len(sys.argv) == 3 else 'none'
-        assert fault in ('none', 'absent', 'wrong_epoch', 'empty_grant', 'revoked')
+        assert fault in ('none', 'absent', 'wrong_epoch', 'empty_grant', 'revoked', 'slow_authority')
         sys.exit(live_helper(fault))
     unittest.main()

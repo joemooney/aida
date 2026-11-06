@@ -2042,7 +2042,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     contained: bool,
 ) -> Result<(std::process::ExitStatus, String)> {
     spawn_vendor_headless_forking(
-        host_main, vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
+        host_main, vendor, seat, prompt, session_id, log_path, tee_opts, contained, None, None,
     )
 }
 
@@ -2071,6 +2071,7 @@ pub(crate) fn spawn_codex_headless_fork(
         tee_opts,
         contained,
         Some(thread),
+        None,
     )
     .map(|(status, _)| status)
 }
@@ -2086,6 +2087,7 @@ fn spawn_vendor_headless_forking(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
     fork_thread: Option<&str>,
+    customize: Option<&dyn Fn(&mut std::process::Command)>,
 ) -> Result<(std::process::ExitStatus, String)> {
     use std::process::Stdio;
     // trace:BUG-2172 | ai:codex
@@ -2157,6 +2159,13 @@ fn spawn_vendor_headless_forking(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // Match the command customization boundary of run_vendor_headless_child.
+    // trace:TASK-3225 | ai:codex
+    if let Some(customize) = customize {
+        customize(&mut cmd);
+    }
+    // trace:TASK-3225 | ai:codex — refuse before issuing a grant or spawning natively.
+    crate::containment::launch::require_store_service_surface(&cmd, wrapper)?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
         &headless_worktree_root(),
@@ -14515,6 +14524,63 @@ mod tests {
             std::fs::read_to_string(&resume_log).unwrap().trim(),
             "HV=claude 9.9.9"
         );
+    }
+
+    // trace:TASK-3225 | ai:codex
+    #[test]
+    fn task_3225_forking_session_refuses_required_service_before_native_spawn() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let marker = root.path().join("vendor-ran");
+        let vendor = root.path().join("fake-vendor");
+        crate::test_exec::write_executable(
+            &vendor,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_CONTAINED", None),
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_AGENT_CMD", vendor.to_str()),
+            ],
+        );
+        std::env::set_current_dir(root.path()).unwrap();
+        let tee = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+        for fork in [None, Some("existing-thread")] {
+            let result = spawn_vendor_headless_forking(
+                None,
+                HeadlessVendor::Codex,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &root.path().join("spawn.log"),
+                &tee,
+                false,
+                fork,
+                Some(&|cmd| {
+                    cmd.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+                }),
+            );
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("required store service is unavailable"),
+                "fresh and forked session launches must refuse before native execution"
+            );
+            assert!(
+                !marker.exists(),
+                "vendor must not run on a required-service refusal"
+            );
+        }
     }
 
     /// TASK-2066: every seat's child is labelled from its own vendor and

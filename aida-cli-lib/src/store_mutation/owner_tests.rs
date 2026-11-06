@@ -259,6 +259,9 @@ fn task_3225_owner_revalidates_real_grant_roster_and_parent() {
     }
 }
 
+// Keep the fixture config write visibly test-only to the config trust scanner.
+// trace:TASK-3225 | ai:codex
+#[cfg(test)]
 #[test]
 fn task_3225_owner_revalidates_every_lease_and_root_identity() {
     let home = tempfile::tempdir().unwrap();

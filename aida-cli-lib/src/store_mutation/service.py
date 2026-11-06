@@ -81,7 +81,9 @@ class MutationAuthority:
     def __init__(self, channel):
         self.channel = channel
         self.failed = False
-        channel.settimeout(1)
+        # The approved admission/I/O bound also allows transient host disk stalls.
+        # trace:TASK-3225 | ai:codex
+        channel.settimeout(5)
 
     def __call__(self):
         if self.failed:
