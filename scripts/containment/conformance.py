@@ -530,8 +530,18 @@ def role_enter_refusal(diagnostic):
 # setup. SIGTERM unwinds the continuation's lane-group and Network finally
 # blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
 def launch_aida_continuation(script, repo, env, seconds):
-    with subprocess.Popen(["bash"], stdin=subprocess.PIPE, text=True, cwd=repo,
-                          env=env, process_group=0) as child:
+    # Transport secret eval output only through a pipe, then restore the
+    # inherited terminal stdin for the later production role-entry call.
+    # trace:BUG-2465 | ai:codex
+    terminal = os.dup(0)
+    try:
+        child = subprocess.Popen(["bash", "-c", 'eval "$(cat)"'], stdin=subprocess.PIPE,
+                                 text=True, cwd=repo, env=env, process_group=0,
+                                 pass_fds=(terminal,))
+    finally:
+        os.close(terminal)
+    script = f"exec 0<&{terminal}\nexec {terminal}<&-\n" + script
+    with child:
         try:
             child.communicate(script, timeout=seconds)
         except BaseException as error:
@@ -635,39 +645,26 @@ def run_aida(args):
         # Match the CLI's current_user_id environment precedence.
         # trace:BUG-2462 | ai:codex
         user = next((env[key] for key in ("AIDA_USER", "USER", "USERNAME") if key in env), "default")
-        argv = [str(aida), "team", "allow-seat", user, "implementer"]
-        roster = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
-        report["setup"].append({"stage": "roster-allow-seat", "argv": argv,
-                                "exit_code": roster.returncode, "stdout": roster.stdout})
-        if roster.returncode:
-            print(roster.stdout, file=sys.stderr, end="")
-            aida_refuse(root, report, "fixture-roster-allow-seat-refused")
-        # stdout contains a key-adoption heredoc on success. Never put it in
-        # a report, file, argv or environment. stderr retains the operator TTY.
-        argv = [str(aida), "role", "enter", "implementer", "--delegate-seat", "implementer", "--no-resume", "--no-title"]
-        entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
-        report["setup"].append({"stage": "role-enter", "argv": argv, "exit_code": entered.returncode})
-        if entered.returncode:
-            # A refused role enter can render its diagnostic on stdout.
-            # Do not lose it, and never evaluate failed command output.
-            print(entered.stdout, file=sys.stderr, end="")
-            report["setup"][-1]["diagnostic"] = entered.stdout
-            aida_refuse(root, report, role_enter_refusal(entered.stdout))
-        lines = entered.stdout.splitlines()
-        if lines.count("#aida:eval:begin") != 1 or lines.count("#aida:eval:end") != 1:
-            aida_refuse(root, report, "fixture-role-enter-invalid-eval-block")
-        start, end = lines.index("#aida:eval:begin"), lines.index("#aida:eval:end")
-        if end <= start:
-            aida_refuse(root, report, "fixture-role-enter-invalid-eval-block")
+        # Approval/dispatch and execution use separate fixture seats.
+        # trace:BUG-2465 | ai:codex
+        for seat in ("advisor", "implementer"):
+            argv = [str(aida), "team", "allow-seat", user, seat]
+            roster = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
+            report["setup"].append({"stage": "roster-allow-seat", "argv": argv,
+                                    "exit_code": roster.returncode, "stdout": roster.stdout})
+            if roster.returncode:
+                print(roster.stdout, file=sys.stderr, end="")
+                aida_refuse(root, report, "fixture-roster-allow-seat-refused")
+        block = fixture_role_enter(aida, repo, env, root, report, "advisor")
         write_json(root / "aida-state.json", {"report": report, "aida": str(aida), "timeout": args.timeout})
-        script = "\n".join(lines[start + 1:end]) + "\nexec " + shlex.join(
-            [sys.executable, str(Path(__file__).resolve()), "--aida-continue", str(root)]) + "\n"
+        script = continuation_script(block, root, "--aida-setup")
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
-        # Three 30s fixture commands, certificate creation (15s), seven 2s
+        # Both seat preflights, approval/queue setup, the implementer role
+        # entry (30s each), certificate creation (15s), seven 2s
         # parent network controls, then bounded_launch and cleanup headroom.
         # trace:TASK-3194 | ai:codex
-        result = launch_aida_continuation(script, repo, env, args.timeout + 180)
+        result = launch_aida_continuation(script, repo, env, args.timeout + 270)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
     except (ValueError, OSError, subprocess.SubprocessError) as error:
@@ -682,29 +679,81 @@ def run_aida(args):
         raise
 
 
-def continue_aida(root):
+# Successful role output includes a secret key-adoption heredoc. Keep it only
+# in memory; failed output is displayable diagnostic evidence.
+# trace:BUG-2465 | ai:codex
+def fixture_role_enter(aida, repo, env, root, report, seat):
+    argv = [str(aida), "role", "enter", seat, "--delegate-seat", "implementer", "--no-resume", "--no-title"]
+    entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
+    report["setup"].append({"stage": "role-enter", "argv": argv, "exit_code": entered.returncode})
+    if entered.returncode:
+        print(entered.stdout, file=sys.stderr, end="")
+        report["setup"][-1]["diagnostic"] = entered.stdout
+        aida_refuse(root, report, role_enter_refusal(entered.stdout))
+    lines = entered.stdout.splitlines()
+    if lines.count("#aida:eval:begin") != 1 or lines.count("#aida:eval:end") != 1:
+        aida_refuse(root, report, "fixture-role-enter-invalid-eval-block")
+    start, end = lines.index("#aida:eval:begin"), lines.index("#aida:eval:end")
+    if end <= start:
+        aida_refuse(root, report, "fixture-role-enter-invalid-eval-block")
+    return "\n".join(lines[start + 1:end])
+
+
+def continuation_script(block, root, mode):
+    return "set -e\n" + block + "\nexec " + shlex.join(
+        [sys.executable, str(Path(__file__).resolve()), mode, str(root)]) + "\n"
+
+
+# trace:BUG-2465 | ai:codex
+def setup_aida(root):
     state = json.loads((root / "aida-state.json").read_text())
     report, aida = state["report"], state["aida"]
-    repo, workspace = root / "repository", root / "workspace"
-    env = dict(os.environ)
+    repo, env = root / "repository", dict(os.environ)
     def setup(argv, stage):
         try:
             return fixture_command(argv, repo, env, report, stage)
         finally:
-            # Preserve continuation evidence even if the outer deadline fires.
-            # trace:TASK-3194 | ai:codex
             write_json(root / "report.json", report)
-    network = None
     try:
-        setup([aida, "role", "current", "--probe-seat", "--expect", "implementer"], "seat-preflight")
+        setup([aida, "role", "current", "--probe-seat", "--expect", "advisor"], "setup-seat-preflight")
         added = setup([aida, "add", "--title", "Disposable closed containment probe", "--type", "task",
                        "--status", "approved", "--description", "Run the fixture aida-pickup skill only.",
                        "--canonical-ids"], "spec-add")
         ids = set(re.findall(r"\bTASK-(?:[a-f0-9]{32}-)?\d+\b", added))
         if len(ids) != 1:
             raise ValueError("fixture-spec-id-ambiguous")
-        spec = ids.pop()
-        setup([aida, "queue", "add", spec, "--for", "implementer"], "queue-add")
+        state["spec"] = ids.pop()
+        setup([aida, "queue", "add", state["spec"], "--for", "implementer"], "queue-add")
+        block = fixture_role_enter(aida, repo, env, root, report, "implementer")
+        write_json(root / "report.json", report)
+        write_json(root / "aida-state.json", state)
+        # The nested supervisor keeps terminal binding and unwinds its lane
+        # group if the outer supervisor requests cleanup.
+        result = launch_aida_continuation(continuation_script(block, root, "--aida-continue"),
+                                          repo, env, state["timeout"] + 180)
+        if result:
+            raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        # The launch continuation owns newer evidence after the seat switch.
+        saved = root / "report.json"
+        if saved.exists():
+            report = json.loads(saved.read_text())
+        if not report.get("unsupported_reason"):
+            aida_refuse(root, report, str(error))
+        raise
+
+
+# trace:BUG-2465 | ai:codex
+def continue_aida(root):
+    state = json.loads((root / "aida-state.json").read_text())
+    report, aida, spec = state["report"], state["aida"], state["spec"]
+    repo, workspace = root / "repository", root / "workspace"
+    env = dict(os.environ)
+    network = None
+    try:
+        fixture_command([aida, "role", "current", "--probe-seat", "--expect", "implementer"],
+                        repo, env, report, "seat-preflight")
+        write_json(root / "report.json", report)
         (root / "outside").mkdir()
         nonce = uuid.uuid4().hex
         network = Network(root, nonce)
@@ -1009,6 +1058,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vendor", choices=("agy", "codex", "claude"))
     parser.add_argument("--boundary", choices=("native", "aida"), default="native")
+    parser.add_argument("--aida-setup", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--aida-continue", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--await-payload", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--output", type=Path)
@@ -1016,10 +1066,13 @@ def main():
     parser.add_argument("--reassess", type=Path, help="reassess historical evidence without vendor execution")
     parser.add_argument("--payload", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.aida_continue:
+    if args.aida_continue or args.aida_setup:
         try:
             signal.signal(signal.SIGTERM, continuation_terminated)
-            continue_aida(args.aida_continue)
+            if args.aida_setup:
+                setup_aida(args.aida_setup)
+            else:
+                continue_aida(args.aida_continue)
         except ValueError as error:
             parser.exit(2, f"conformance: {error}\n")
     elif args.await_payload:
