@@ -26,7 +26,7 @@ description: |
   - The hub refuses any push by the work credential except to `aida-intent` (test with a deliberate refused push).
   - A home validator turns valid receipts into commit statuses; trains can treat them as a required check.
   - An end-to-end test with two local bare repos plus a fake pipeline API: push → mirror → pass/fail → receipt → home status. Cover a tampered receipt and an unknown field.
-  - Idempotent: re-polling never duplicates pushes or receipts. Retries are bounded and never force-push.
+  - AC6: Re-polling never duplicates pushes or receipts. Retries are bounded and never force-push.
 
   ## Open questions for the operator
   - Trigger: mirror every main push, or only explicitly requested refs (`ci/*`)? Recommendation: explicit refs, which saves work CI minutes and limits what is mirrored.
@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T14:53:40.922012431Z
+modified_at: 2026-11-06T15:00:12.263463934Z
 req_type: Story
 relationships:
 - rel_type:
@@ -146,6 +146,12 @@ comments:
   created_at: 2026-11-06T14:53:40.922012431Z
   modified_at: 2026-11-06T14:53:40.922012431Z
   session_id: 01a1b159080c
+- id: 01a1b15f-dd67-7f80-8a46-6d4374ff434c
+  author: joe
+  content: 'Round 2 finding 3 scope: this static protocol slice explicitly does NOT admit AIDA itself (about 48 MiB Rust sources versus 16 MiB cap; GitLab templates/includes/rules unsupported). Requested follow-up filing attempted with aida add --type task --parent STORY-2480, but allocation refused read-only clone-common Git metadata, no object written. Host must file: Admit AIDA repository size and GitLab templates to work CI relay inventory. Acceptance: bounded AIDA-sized multi-SHA inventory; deterministic committed local template/include expansion with remote/escape refusal; intended AIDA jobs and native PR/train gate end-to-end. Exact proposed description retained in docs/plans/2026-11-05-story-2480-work-ci-relay.md round-2 follow-up section. No runner deployment or completion claimed.'
+  created_at: 2026-11-06T15:00:12.263463934Z
+  modified_at: 2026-11-06T15:00:12.263463934Z
+  session_id: 01a1b159080c
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
@@ -247,6 +253,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b15d-2001-7a73-b4d0-11ef4ee1df9e
+  author: joe
+  timestamp: 2026-11-06T14:57:12.705175572Z
+  session_id: 01a1b159080c
+  changes: []
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
