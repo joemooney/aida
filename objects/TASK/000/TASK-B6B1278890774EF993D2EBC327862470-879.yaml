@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-879
 agreed_id: TASK-3222
 title: 'STORY-2561 S1: store mutation service transport, launch-bound identity, and store-writer inventory'
 description: 'Slice 1 of STORY-2561 (read its operator rulings). Build the host-owned synchronous typed service endpoint and its lifecycle: started before child tools, torn down with the child or lease, and refusing launch when it is unavailable. Add launch-bound identity (project, store, spec, role, verbs fixed by the host) and the request and response framing with request-identity retry semantics. Produce a checked-in inventory of every CLI and MCP store and cache writer (claim, edit, comment, queue done, findings, handoff, mailbox, etc.). No routing cutover yet: grants stay unchanged. Tests: malformed, oversized and path-bearing requests, wrong, expired, revoked or sibling identity, replay and endpoint replacement, and service absence. Post a sketch for advisor signoff before coding; BUG-2448''s generic host-IPC defect is a separate owner and must not be widened.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T13:40:02.169845010Z
+modified_at: 2026-11-06T13:41:14.801418647Z
 req_type: Task
 tags:
 - architecture
@@ -34,6 +34,14 @@ history:
   timestamp: 2026-11-06T13:40:03.353693333Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
+- id: 01a1b117-93b1-7213-ba84-61ae93bbe073
+  author: joe
+  timestamp: 2026-11-06T13:41:14.801415999Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
