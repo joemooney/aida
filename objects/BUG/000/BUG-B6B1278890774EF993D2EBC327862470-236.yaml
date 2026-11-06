@@ -10,12 +10,12 @@ description: |-
   Fix: merge the fixture policy into the existing tables instead of appending. Either parse with tomllib and rewrite, or append keys under the existing headers: allowed_hosts must be exactly the fixture list, replacing init's list, because C3 tests that a non-listed host is denied. Also set [agents] contained/vendor and [contained.vendors] codex. Add a harness unit test that runs setup against a freshly init'd fixture and parses the config with tomllib. Afterwards the advisor re-runs C3/C4 for BUG-2447/BUG-2448.
 
   Gate: python unit tests for scripts/containment plus make check-ci-fast; no cargo needed.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:50:22.010183066Z
-modified_at: 2026-11-06T19:13:00.196910971Z
+modified_at: 2026-11-06T21:33:00.785711497Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -48,6 +48,20 @@ history:
   timestamp: 2026-11-06T19:13:01.380145488Z
   session_id: 01a1b23e4725
   changes: []
+- id: 01a1b2c7-7dc8-7e20-8556-0e43892d192a
+  author: aida-auto-bump
+  timestamp: 2026-11-06T21:33:00.744716529Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b2c7-7df1-7fe3-a8dc-d59e9fdc0fc4
+  timestamp: 2026-11-06T21:33:00.785706324Z
+  agent: aida
+  commit_sha: 1a296a42367453ab0f2c8e9c9d9c116477979073
+  summary: 'BUG-2470 acceptance met: fixture_policy parses init''s config with tomllib, merges agents/contained/contained.vendors, replaces allowed_hosts with exactly the fixture list, validates and rewrites; unit test covers existing-table merge + idempotence, fresh-init test parses committed policy. PR CI (run 42277602182) was still QUEUED (no runner) at review time — ship must gate on it green.'
+  review_verdict: approved
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
@@ -56,3 +70,7 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T21:33:00.744707222Z
+  completion_sha: 1a296a42367453ab0f2c8e9c9d9c116477979073
