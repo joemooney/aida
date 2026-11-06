@@ -9,6 +9,11 @@ service, permission exception, merge, grant issuance, or process termination.
 The [script inventory](../internal/agents/advisor-script-inventory.md) records
 the inspected host snapshot and every proposed disposition.
 
+Revision basis: the binding 2026-11-06 19:09 UTC advisor ruling accepts all four
+findings on PR #3526. This revision extends shipped dispatch, reuses branch-update
+mechanics, retires the superseded stall wrapper and includes review-watch's
+respawn wrapper. Runtime implementation still waits for signoff.
+
 ## Contract and dependencies
 
 A Claude advisor launched with `aida agent new claude --role advisor
@@ -24,13 +29,25 @@ that the fix has landed. Verify the landed implementation and grandchild tests
 before enabling these services. BUG-2468 covers legacy deputy runner compatibility and honest unknown results
 when host processes are invisible. Reuse that work; the authenticated host
 observation proposed here is additional scope, not a claimed BUG-2468 feature.
-Coordinate with STORY-2476's pipeline alarm instead of duplicating its checks.
+STORY-2476's pipeline stall alarm is Completed; retire `stall-check.sh` as
+superseded without duplicating its checks.
 
 Existing surfaces to reuse:
 
 - `advisor_cmd_root_args.rs` / `advisor_cmd_root.rs`: advisor command routing.
 - `deputy_shell/{socket,attribution,runner}.rs`: peer attribution, live submitter
   validation, grant refresh, audit and host execution.
+- `dispatch.rs`, `dispatch_args.rs`, `dispatch_flow.rs` and
+  `gate/dispatch_auth.rs` (STORY-1917, PR #3206): shipped typed, mandate-authorized,
+  deduplicated `aida dispatch request impl|take|flow|review|train`,
+  `list/show/cancel/tick` and host executor `aida dispatch serve`. Reuse its
+  request/result records, claim lock, recovery ledger and execution revalidation.
+- `pr_rebase.rs` / `rebase_cmd.rs`: `aida pr rebase` metadata, temporary-worktree
+  and conflict-reporting mechanics; its rebase and force-push-with-lease remain
+  a separate operation from the proposed local merge.
+- `review_watch_update.rs`: server-side `gh pr update-branch` and typed
+  `UpdateFailure::refused`; `forge.rs::github_update_branch_argv`: expected-head
+  pinning; dispatch flow already runs the server-side branch update.
 - `gate/seat_authority.rs`: grant validity and delegation checks.
 - `review_watch*.rs`: persisted admissions, exact-head receipts and reservations.
 - `aida-core/src/liveness.rs`, `leases.rs`, `status_cmd.rs`: common liveness
@@ -40,16 +57,18 @@ Existing surfaces to reuse:
 
 ## Proposed command surface
 
-These spellings are a proposal, not currently supported CLI instructions.
+Existing dispatch commands below remain the command family. Slot and condition
+options, resume intent, loop binding and host-merge are proposed extensions;
+this table does not claim those extensions are shipped.
 
 | Command | Effect |
 | --- | --- |
 | `aida advisor loops status [--json]` | Report desired/running state, binding generation, authority health, pending jobs and last failures. |
 | `aida advisor loops rebind` | Bind enabled services to the authenticated current advisor generation; idempotent for the same binding. |
-| `aida advisor dispatch add SPEC --vendor V` | Persist a canonical queue request with a stable idempotency key. |
-| `aida advisor dispatch status [--json]` | Report queued, reserved, launched, blocked and failed requests with receipts. |
-| `aida advisor dispatch run --slots N` | Enable bounded dispatch under host supervision; trusted policy caps N. |
-| `aida pr update-branch N [--json]` | Submit a host merge and return a job id; status includes any conflict report. |
+| `aida dispatch request impl\|take\|flow\|review\|train ...` | Extend existing typed requests with queue/dependency conditions and explicit resume intent; retain per-request `--vendor` where supported. |
+| `aida dispatch list/show/cancel/tick` | Reuse request inspection, cancellation and scheduling; expose blocked conditions, capacity and receipts through existing records. |
+| `aida dispatch serve [--slots N]` | Supervise the existing grant-bound host executor; proposed slot cap is bounded by trusted policy. |
+| `aida pr host-merge N [--json]` | Proposed local-merge fallback after server-side update refusal; return a job id and any conflict report. |
 | `aida advisor ops log JOB [--tail N]` | Read a bounded, authorized result/transcript through the host service. |
 
 Service enablement, maximum slots, vendors and project roots are installed by
@@ -59,24 +78,28 @@ only previously enabled services. An operator pause persists across rotations.
 
 ## Host supervisor and grant rotation
 
-Extend the existing operator-started script deputy with a closed AIDA service
-supervisor. Retain its TTY-only startup and current grant/mandate restrictions.
-Service requests select fixed operations, never arbitrary argv, script bodies,
-executable paths or environment overrides. Existing generic script submission
-continues to have its existing separate contract.
+Supervise the existing service controllers and `aida dispatch serve` through
+fixed host operations in the operator-started deputy. Retain its TTY-only startup
+and current grant/mandate restrictions. Service requests select fixed operations,
+never arbitrary argv, script bodies, executable paths or environment overrides.
+Existing generic script submission retains its separate contract.
 
-The host keeps a versioned, private per-project service ledger, protected by a
-permanent lock and atomic replacement. Proposed service state includes service
-kind, project identity, desired state, advisor handle, session generation,
-validated binding reference, worker process identity, admission generation,
-last tick and job receipts. Grant secrets never appear in status or logs.
-Unknown schema, unsafe files, ambiguous identity and lock timeout refuse writes.
+Do not introduce a new supervisor ledger or a parallel advisor dispatch queue.
+Extend existing dispatch request/result/claim/recovery records under
+`.aida/dispatch/` and their permanent claim lock with the bounded slot accounting
+and binding-generation evidence they need. Keep review reservations in the
+existing review-watch runtime state, and train evidence in its existing owner.
+Loop status projects these service-owned records; it is not another source of
+admission authority. Persist desired state, validated binding generation and
+worker identity with each owning service's existing state. Grant secrets never
+appear in status or logs. Unknown schema, unsafe files, ambiguous identity and
+lock timeout refuse writes.
 
 The advisor launcher/rotate relay sends an authenticated rebind after the new
 generation's grant is established. The host validates peer attribution, project,
 seat, roster, parent chain, expiry and allowed delegations at acceptance and
-again at each work admission. It compares generations under the supervisor lock;
-a delayed old session cannot replace a newer binding. A bare advisor
+again at each work admission. It compares generations under each service owner's
+existing lock; a delayed old session cannot replace a newer binding. A bare advisor
 registration UUID is informational and cannot authorize a rebind.
 
 Do not edit another process's environment or discover grants by scanning
@@ -96,8 +119,21 @@ permits minting grants from an expired/revoked parent. Deputy grant refresh is
 separate from advisor grant refresh. Loss of deputy authority/mandate stops
 admission under the existing policy; recovery may require the operator.
 
-Supervised services are review-watch, auto-rework, auto-train and dispatch.
-Persist exact PR-head deduplication and train ejection evidence across restarts.
+AC2's supervised services are review-watch, auto-rework, auto-train and
+`aida dispatch serve`. Serve inherits its launching advisor terminal's grant;
+it must participate in the same authenticated rotation/rebind, rather than
+continuing with an expired launch binding. Rebinding serve does not rewrite
+pending requests' requester grants or bypass `DispatchExecutionContext`
+revalidation; requests whose original authority is invalid remain refused until
+an authorized fresh request is admitted through ordinary dispatch.
+
+Replace both `launch-review-watch.sh` and `review-watch-loop.sh`. Today one PR
+refusal can exit `aida review watch`; the supervised service must record that
+per-PR refusal and continue servicing other PRs with bounded retry/backoff. If
+the controller exits, reconcile reservations before supervised restart. Authority
+loss still blocks admission; neither a restart nor a per-PR refusal clears
+ambiguous review capacity. Persist exact PR-head deduplication and train ejection
+evidence across restarts.
 Each tick uses typed forge observations: failed/partial reads remain unknown,
 never an empty ready set or proof of success. Rework checks current verdict/CI
 and canonical spec ownership; train uses ordinary readiness and hold gates.
@@ -105,8 +141,16 @@ Do not port shell title regexes or string-parsed CI decisions as authority.
 
 ## Dispatch and publication
 
-Under one host lock, reserve capacity before launching. Count durable dispatch
-reservations and verified live implementer leases, including lanes launched
+Extend STORY-1917's dispatch scheduler and host executor, rather than adding
+`aida advisor dispatch`. Reuse mandate/human-gate checks, typed verbs, request
+idempotency, claim recovery and `DispatchExecutionContext` revalidation. Existing
+per-request vendor selection for impl/take/review/flow remains the typed input;
+add explicit resume intent and queue/dependency conditions to those records,
+without importing arbitrary launch-script options. Inspect these additions via
+existing list/show results, preserving existing status vocabulary.
+
+Under the existing dispatch claim lock, reserve capacity before launching. Count
+durable dispatch reservations and verified live implementer leases, including lanes launched
 elsewhere; deduplicate the same child across those sources. Enforce the
 configured cap plus existing global queue/seat admission limits. Unknown
 liveness and an accepted job with no resolved launch receipt retain capacity.
@@ -120,8 +164,11 @@ fallbacks. A blocked request stays visible with canonical recovery guidance.
 Store run-specific logs and launch/publication receipts; no log truncation or
 matching a generic `launching` line establishes success.
 
-Dependency waiters become queue conditions. Native lane exit flows through the
-existing host publication path, preserving punt/hold vetoes, failed-exit Refs,
+Dependency waiters become persisted queue conditions evaluated at admission;
+unknown dependencies stay blocked. Explicit resume intent must name the existing
+lane/session and pass ordinary resume ownership/lease gates; it cannot implicitly
+force-claim, end a lease or create a second worker. Native lane exit flows through
+the existing host publication path, preserving punt/hold vetoes, failed-exit Refs,
 and declared partial subjects. The dispatch controller cannot infer completion
 from a PR title or publish work held back by its author. `push-held.sh` is retired
 without reproducing its override. Queue completion follows successful host
@@ -129,10 +176,31 @@ publication under the existing contract.
 
 ## Host merge and conflicts
 
+Keep `update-branch` as the existing GitHub server-side merge in review-watch
+and dispatch flow. Reuse `review_watch_update.rs` and its typed refusal, plus
+`forge.rs::github_update_branch_argv` for expected-head pinning; retain ordinary
+`aida dispatch request flow` orchestration. `aida pr rebase` already provides a
+temporary-worktree rebase and force-push-with-lease. Reuse its metadata,
+worktree and conflict-reporting helpers where applicable, without changing its
+history-rewriting semantics.
+
+The only new branch mutation is `aida pr host-merge`: a LOCAL merge and conflict
+report when GitHub's server-side update refuses, covering BUG-2456's Codex seats
+with read-only `.git`. It runs on the authorized host; it grants no Git write
+access to the seat. A transient/unknown forge result is not a refusal and must
+not silently trigger this fallback. No new `aida pr update-branch` command is
+introduced, and local merge never adopts rebase's force-push behavior.
+
 A fixed host operation resolves the PR through the configured forge, verifies
 same-repository branch ownership and pins both the PR head and default-branch
 tip. Serialize against other branch writers and refuse active author/merge
-ownership conflicts. Fetch explicit refs into job-private refs; create a unique
+ownership conflicts. Carry forward the `host-merge.sh` guard added for
+STORY-2537 on 2026-11-06: inspect seats/worktrees on the target branch and refuse
+if any seat holds commits not present on the remote. Bring those commits onto
+the PR through ordinary publication before retrying; merging onto the stale
+remote head would strand the lane's work. Unreadable seat/ref evidence refuses.
+Recheck this guard at the push boundary under branch-writer serialization.
+Fetch explicit refs into job-private refs; create a unique
 scratch worktree with recorded identity. Never reuse `/tmp/hmN` or forcibly
 remove another job's worktree.
 
@@ -185,15 +253,21 @@ existing deputy authorization; no new credential or remote-mutation authority.
    and BUG-2468 integration before dependent runtime work.
 2. Implement authenticated host liveness and bounded read transport; test healthy
    and unavailable hosts from a real nested PID namespace.
-3. Implement supervisor ledger and rotation handshake; test concurrent rebinds,
-   stale successors, revocation, narrowed delegations, corrupt state, crashes
+3. Extend service-owned state and rotation handshake, including dispatch serve;
+   test concurrent rebinds, stale successors, revocation, narrowed delegations, corrupt state, crashes
    between reservation/spawn/receipt and recovery with active reviews.
-4. Implement dispatch and publication integration; test competing fillers,
-   pre-existing lanes, blocked dependencies, ambiguous spawn and punt/hold vetoes.
-5. Implement branch update; test clean/no-op/conflicting merges, moved heads,
-   failed pushes, dirty recovery, stale grant and author ownership conflicts.
+4. Extend existing dispatch and publication integration; test competing fillers,
+   pre-existing lanes, blocked/unknown dependencies, per-request vendor and resume
+   admission, ambiguous spawn and punt/hold vetoes. Assert existing mandate,
+   requester and serve-grant checks survive rotation.
+5. Implement local host-merge fallback; test server-update success versus refusal
+   versus unknown, clean/no-op/conflicting local merges, moved heads, failed
+   pushes, dirty recovery, stale grant, author ownership conflicts and seats with
+   unpushed commits (including a seat advancing before push).
 6. Move rework/train decisions into typed ticks with exact-head deduplication;
-   keep ordinary hold/ship gates, including mandatory human-clear cases.
+   keep ordinary hold/ship gates, including mandatory human-clear cases. Test
+   that a single PR refusal leaves supervised review-watch serving other PRs,
+   with bounded retries and preserved reservations across controller restarts.
 7. Run the operator-authorized evidence session using `--permission-mode auto`.
    Record build/config identity, narrow exemptions, launch command, grant rotation,
    service receipts, dispatch id, conflict report/resolution, reviewed new head,

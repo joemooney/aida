@@ -16,6 +16,14 @@ does not copy scripts, environment contents, credentials or transcripts into the
 repository. Recheck hashes and enumerate added files before migration; the host
 directory can change while lanes run. No automatic deletion is authorized.
 
+Round-2 addendum (2026-11-06): the original 11:16 snapshot below is retained.
+Two later arrivals inspected for this revision are listed separately with their
+hashes. `host-merge.sh` also changed: its inspected revision now hashes to
+`2f7a59480318d000cbfdd948fa61640209ef27ad2127445cf5f099f27e32e7a2`
+and includes the STORY-2537 unpushed-seat guard. Its original snapshot hash stays
+in the table for historical comparison. This is not a fresh exhaustive snapshot
+of the changing host directory.
+
 ## Disposition rules
 
 - **keep**: explicit existing diagnostic/operator jobs remain under the current
@@ -42,11 +50,18 @@ remain historical, individually authorized acts; they grant no future blanket
 human-clear authority. `auto-rework.sh` uses typed verdict/CI facts and dispatch;
 `auto-publish.sh` uses the existing native publication lifecycle.
 
-`host-merge.sh` becomes the deputy branch-update job. `push-held.sh` is retired
-without an equivalent automatic override. `sweep.sh`, `end-finished.sh`,
+`launch-review-watch.sh` and the later `review-watch-loop.sh` move to the
+supervised review-watch service (AC2). A single PR refusal currently exits the
+watcher; the service must keep running across per-PR refusals, with bounded
+retry/backoff and reservation-preserving restart.
+
+`host-merge.sh` becomes the proposed `aida pr host-merge` local fallback after
+GitHub's server-side update refuses. Reuse existing rebase/update helpers and
+preserve its STORY-2537 guard refusing seats with unpushed commits.
+`push-held.sh` is retired without an equivalent automatic override. `sweep.sh`, `end-finished.sh`,
 `seat-safe-to-end.sh` and `unblock-reviews.sh` must use canonical hygiene and
 review admission rules rather than inferred process death or log matching.
-`stall-check.sh` migrates with STORY-2476.
+`stall-check.sh` retires as superseded by Completed STORY-2476 (pipeline stall alarm).
 
 External dependencies include `~/bin/aida-deputy-shell` (named runners 2 and 3),
 ordinary AIDA commands, `gh`, host Git, local session records, headless logs,
@@ -60,7 +75,18 @@ script-deputy boundary were inspected alongside the scripts.
 
 ## Per-file snapshot
 
-267 files; keep: 9, move-to-aida: 19, move-to-deputy: 1, retire: 238.
+Original snapshot: 267 files; revised dispositions: keep: 9, move-to-aida: 18,
+move-to-deputy: 1, retire: 239. Including the two addendum files: 269 files;
+keep: 9, move-to-aida: 19, move-to-deputy: 1, retire: 240.
+
+### Later arrivals
+
+| Script | SHA-256 | Disposition | Replacement / rationale |
+| --- | --- | --- | --- |
+| `launch-BUG-2469.sh` | `a8eb0c5899d507b681c6592dda5d1b8cfda7a87cc9c5cd4af8f0a85e4fbbcebd` | retire | Generated launch artifact; replace with typed dispatch request/receipt. |
+| `review-watch-loop.sh` | `042707e6e70a7849258704f38ea8ed7dc9bd98245183de76c63dfba2ff0c6cc0` | move-to-aida | AC2 supervised review-watch survives per-PR refusals with bounded retries and preserved reservations. |
+
+### Original snapshot with revised dispositions
 
 | Script | SHA-256 | Disposition | Replacement / rationale |
 | --- | --- | --- | --- |
@@ -116,7 +142,7 @@ script-deputy boundary were inspected alongside the scripts.
 | `fill-slots.sh` | `efc39fb4dd2c2ba2b49dedc061a0ecf1ec66ab156b19765d5f6842e5ab4cb982` | move-to-aida | Replace with durable capped dispatch; retire wrapper after migration. |
 | `fill-slots2.sh` | `2394b6cbaafd35ac8f44c50b8fd83766c88e0d89e65126380b51e270deea8661` | move-to-aida | Replace with durable capped dispatch; retire wrapper after migration. |
 | `fill-slots3.sh` | `391a1c3c70106cb9ff17cbae9c7527752d3c17ccc05697f6ab1523b8e27950d4` | move-to-aida | Replace with durable capped dispatch; retire wrapper after migration. |
-| `host-merge.sh` | `f408800d4374b59acd683c925bfe5e1f6e16e0c3d35b7ef5b920e6995499731c` | move-to-deputy | Fixed PR branch-update operation with conflict receipts. |
+| `host-merge.sh` | `f408800d4374b59acd683c925bfe5e1f6e16e0c3d35b7ef5b920e6995499731c` | move-to-deputy | Local host-merge fallback; reuse update helpers, retain unpushed-seat guard and conflict receipts. |
 | `launch-BUG-2194.sh` | `db2c2618b09d1935965348e817a5f76f2ac83226a4b6fbb16df00804513d1ba0` | retire | Generated launch artifact; replace with typed dispatch receipt. |
 | `launch-BUG-2390.sh` | `6f0e55c095af8c526f49f8ffb6f880dac6705a0b9c870ec40a1de34703548e5f` | retire | Generated launch artifact; replace with typed dispatch receipt. |
 | `launch-BUG-2425.sh` | `b0a274d7a3eb59a6f9b20831b7f05254a6327df868ad3c95fb136ff5ae5702d5` | retire | Generated launch artifact; replace with typed dispatch receipt. |
@@ -250,7 +276,7 @@ script-deputy boundary were inspected alongside the scripts.
 | `ship-3351.job.sh` | `98bd52b5b3c23262463f4eb6c6e7c2d870a49d0933e840ac86c2a6a15845ff4f` | keep | Explicit operator ship job; ordinary human-only gates remain. |
 | `ship-3485.job.sh` | `290c604bfc0f99375b265426187f61fc5416fd8aa9b2556b320d6a43330d3067` | keep | Explicit operator ship job; ordinary human-only gates remain. |
 | `ship-chain2.sh` | `e1f42809438bf8d26d4490f3bf8047439bf516c5118215d477166a4b11163d6c` | move-to-aida | Typed train/ship lifecycle; retain all ordinary clearance gates. |
-| `stall-check.sh` | `8f2d8da6b18338629b1a4a3004c4232378fa28d2ef7b5d150088132fd3274231` | move-to-aida | Coordinate with STORY-2476 pipeline alarm. |
+| `stall-check.sh` | `8f2d8da6b18338629b1a4a3004c4232378fa28d2ef7b5d150088132fd3274231` | retire | Superseded by Completed STORY-2476 pipeline stall alarm. |
 | `sweep.sh` | `a3995067da403ff43c58682008b96ae8b43390206519b44a3dc244a9ab48fd8e` | move-to-aida | Canonical hygiene and review recovery; no automatic claim release. |
 | `train-001826.job.sh` | `280d32bbccbc4df9811375ed7e933c4481a290770cbae30f1bd91dea2f315103` | retire | Generated train job; retain audit evidence, use supervised train. |
 | `train-002146.job.sh` | `15bf003794322e67def8d6d7011ca2a8325f424517cf9459e4b09f4010c003a9` | retire | Generated train job; retain audit evidence, use supervised train. |
