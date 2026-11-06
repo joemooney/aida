@@ -17,6 +17,26 @@ pub(crate) fn issue_launch_child(
     seat_authority::issue_child_for(authority_root, requested_seat, child_subject, sandboxed)
 }
 
+/// [`issue_launch_child`] for a delegator child (advisor or integrator):
+/// the child inherits, or explicitly narrows, the validated parent's
+/// delegable seats; worker seats never delegate (BUG-2467).
+// trace:BUG-2467 STORY-2326 | ai:claude
+pub(crate) fn issue_launch_child_with_delegation(
+    authority_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+    sandboxed: bool,
+    seats: &[String],
+) -> Result<SeatGrant> {
+    seat_authority::issue_launch_child_with_delegation(
+        authority_root,
+        requested_seat,
+        child_subject,
+        sandboxed,
+        seats,
+    )
+}
+
 /// Intake and clarify own this grant until their synchronous child has exited.
 /// Drop also covers seat-assignment and spawn failures after minting.
 // trace:STORY-2326 | ai:codex

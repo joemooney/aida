@@ -291,6 +291,7 @@ fn background_handoff_env_has_no_seat_keys() {
         resumed_from: None,
     };
     let config = crate::agent_launch::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -534,6 +535,7 @@ fn boundary_calls<T>(f: impl FnOnce() -> T) -> (T, usize) {
 
 fn agent_new_config(contained: bool) -> crate::agent_launch::AgentLaunchConfig {
     crate::agent_launch::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),

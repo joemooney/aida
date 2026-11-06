@@ -70,6 +70,7 @@ fn fixture(body: &str) -> Fixture {
 
 fn codex_config() -> AgentLaunchConfig {
     AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],

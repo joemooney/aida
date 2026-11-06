@@ -346,12 +346,13 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             command,
             role,
             spec,
+            delegate_seats,
         } => {
             let mut resolved;
             let command = if let Some(command) = command {
                 anyhow::ensure!(
-                    role.is_none() && spec.is_none(),
-                    "place --role and --spec after the explicit vendor subcommand"
+                    role.is_none() && spec.is_none() && delegate_seats.is_empty(),
+                    "place --role, --spec and --delegate-seat after the explicit vendor subcommand"
                 );
                 command
             } else {
@@ -361,7 +362,7 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
                     Some(vendor) => agent_new_command_for_type(&vendor).ok_or_else(|| {
                         anyhow::anyhow!("unsupported interactive vendor `{vendor}`")
                     })?,
-                    None if role.is_some() || spec.is_some() => {
+                    None if role.is_some() || spec.is_some() || !delegate_seats.is_empty() => {
                         agent_new_command_for_type("claude").unwrap()
                     }
                     None => match pick_agent_type_interactively()? {
@@ -371,16 +372,26 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
                 };
                 match &mut resolved {
                     AgentNewCommand::Claude {
-                        role: r, spec: s, ..
+                        role: r,
+                        spec: s,
+                        delegate_seats: d,
+                        ..
                     }
                     | AgentNewCommand::Codex {
-                        role: r, spec: s, ..
+                        role: r,
+                        spec: s,
+                        delegate_seats: d,
+                        ..
                     }
                     | AgentNewCommand::Antigravity {
-                        role: r, spec: s, ..
+                        role: r,
+                        spec: s,
+                        delegate_seats: d,
+                        ..
                     } => {
                         *r = role.clone();
                         *s = spec.clone();
+                        *d = delegate_seats.clone();
                     }
                 }
                 &resolved
@@ -1050,6 +1061,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             name: None,
             description: None,
             grant_inline: Default::default(),
+            delegate_seats: Vec::new(),
             bg: false,
             rotate: false,
         }),
@@ -1078,6 +1090,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             name: None,
             description: None,
             grant_inline: Default::default(),
+            delegate_seats: Vec::new(),
             no_mail_wake: false,
             rotate: false,
             bg: false,
@@ -1109,6 +1122,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             name: None,
             description: None,
             grant_inline: Default::default(),
+            delegate_seats: Vec::new(),
         }),
         _ => None,
     }
@@ -1214,6 +1228,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             description,
             rotate,
             grant_inline: _,
+            delegate_seats,
         } => agent_new_claude(
             role.clone(),
             spec.clone(),
@@ -1237,7 +1252,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 !*no_duplicate_check,
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
-                .rotating(*rotate),
+                .rotating(*rotate)
+                .delegating(delegate_seats.clone()),
             name.clone(),
             description.clone(),
             *bg,
@@ -1269,6 +1285,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_mail_wake,
             rotate,
             grant_inline: _,
+            delegate_seats,
             bg: true,
             spec_positional,
             branch,
@@ -1301,7 +1318,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                     extra_flags.clone(),
                     model.clone(),
                 )
-                .rotating(*rotate),
+                .rotating(*rotate)
+                .delegating(delegate_seats.clone()),
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
@@ -1336,6 +1354,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_mail_wake,
             rotate,
             grant_inline: _,
+            delegate_seats,
             bg: false,
             spec_positional: _,
             branch: _,
@@ -1363,7 +1382,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             ),
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
-                .rotating(*rotate),
+                .rotating(*rotate)
+                .delegating(delegate_seats.clone()),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -1392,6 +1412,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             name,
             description,
             grant_inline: _,
+            delegate_seats,
         } => agent_new_antigravity(
             role.clone(),
             spec.clone(),
@@ -1413,7 +1434,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None)
+                .delegating(delegate_seats.clone()),
             name.clone(),
             description.clone(),
         ),
@@ -1508,12 +1530,15 @@ pub(crate) fn agent_resume_ended(
     // --resume`, the TTY picker, the `--bg` path) funnels through here, so a
     // contained parent is enforced HERE — before the session/binary checks
     // and any side effect. trace:BUG-2151 | ai:claude
-    let config = agent_resume_launch_config(
+    let mut config = agent_resume_launch_config(
         &entry.agent_type,
         &entry.worktree_path,
         native_session_id,
         resume_prompt,
     )?;
+    // trace:BUG-2467 | ai:codex — resume preserves explicit narrowing. The
+    // issuer still validates this selection against the current parent grant.
+    config.delegate_seats = entry.delegate_seats.clone();
     verify_agent_native_session_available(
         &entry.agent_type,
         &entry.worktree_path,
@@ -1593,6 +1618,7 @@ pub(crate) fn agent_resume_launch_config(
         other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
     };
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type,
         binary,
         default_args: Vec::new(),
@@ -1691,6 +1717,8 @@ pub(crate) struct AgentLaunchConfig {
     pub(crate) default_args: Vec<String>,
     pub(crate) prompt_style: AgentPromptStyle,
     pub(crate) contained: bool,
+    // trace:BUG-2467 | ai:codex
+    pub(crate) delegate_seats: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1809,6 +1837,7 @@ pub(crate) struct AgentDefaultFlagOptions {
     /// `--rotate`: supervise the child across context rotations.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
+    pub(crate) delegate_seats: Vec<String>,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1822,7 +1851,14 @@ impl AgentDefaultFlagOptions {
             extra_flags,
             model_override,
             rotate: false,
+            delegate_seats: Vec::new(),
         }
+    }
+
+    // trace:BUG-2467 | ai:codex
+    pub(crate) fn delegating(mut self, seats: Vec<String>) -> Self {
+        self.delegate_seats = seats;
+        self
     }
 
     /// Set `--rotate`.
@@ -2666,6 +2702,7 @@ pub(crate) fn agent_new_claude(
         default_args.push("--bg".to_string());
     }
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args,
@@ -2778,6 +2815,7 @@ pub(crate) fn agent_new_codex_wake(
     // TASK-1781: a contained parent refuses codex before the role picker.
     // trace:TASK-1952 | trace:TASK-1781 | ai:claude
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -2805,6 +2843,7 @@ pub(crate) fn agent_new_codex_wake(
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args,
@@ -2857,6 +2896,7 @@ pub(crate) fn agent_new_antigravity(
     // TASK-1781: a contained parent refuses agy before the role picker.
     // trace:TASK-1952 | trace:TASK-1781 | ai:claude
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),
@@ -2879,6 +2919,7 @@ pub(crate) fn agent_new_antigravity(
         default_args.push("--dangerously-skip-permissions".to_string());
     }
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args,
@@ -3096,6 +3137,11 @@ pub(crate) fn agent_new_with_config_wake(
         })
         .or_else(|| spec.as_deref().map(agent_new_scope_role));
     preflight_agent_new_delegation(&project_root, expected_role)?;
+    crate::gate::seat_authority::validate_launch_delegable_seats(
+        &project_root,
+        expected_role,
+        &config.delegate_seats,
+    )?;
 
     // Refuse a scope conflict before the bypass consent and resume prompts:
     // a human must never answer them for a launch that cannot proceed.
@@ -3430,6 +3476,11 @@ pub(crate) fn agent_new_bg_dispatch(
         })
         .or_else(|| spec.as_deref().map(agent_new_scope_role));
     preflight_agent_new_delegation(&project_root, expected_role)?;
+    crate::gate::seat_authority::validate_launch_delegable_seats(
+        &project_root,
+        expected_role,
+        &config.delegate_seats,
+    )?;
 
     // Same ordering as the foreground path: refuse a scope conflict before
     // the bypass consent gate. trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
@@ -7298,11 +7349,12 @@ pub(crate) fn run_agent_generation(
     if let Some(role) = &plan.role {
         // A contained role launch is sandboxed the same way a contained
         // reviewer is. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-        let grant = crate::launch::issue_launch_child(
+        let grant = crate::launch::issue_launch_child_with_delegation(
             &plan.project_root,
             &canonical_role_name(role),
             &plan.name,
             is_contained_launch(config),
+            &config.delegate_seats,
         )?;
         crate::launch::assign_seat(
             &mut command,
@@ -7398,18 +7450,21 @@ pub(crate) fn run_agent_generation(
         child_pid,
         deferred_warnings,
         || {
-            agent_registry::register_spawned_agent(
+            agent_registry::register_spawned_agent_with_row(
                 &plan.project_root,
                 config.agent_type,
                 child_pid,
-                plan.role.clone(),
-                plan.current_spec.clone(),
-                plan.launch_cwd.clone(),
-                Some(&binary),
-                Some(plan.name.clone()),
-                plan.native_session_id.clone(),
-                plan.resumed_from.clone(),
-                description,
+                agent_registry::SpawnedRow {
+                    role: plan.role.clone(),
+                    current_spec: plan.current_spec.clone(),
+                    worktree_path: plan.launch_cwd.clone(),
+                    binary: Some(&binary),
+                    name: Some(plan.name.clone()),
+                    native_session_id: plan.native_session_id.clone(),
+                    resumed_from: plan.resumed_from.clone(),
+                    description,
+                    delegate_seats: config.delegate_seats.clone(),
+                },
             )
             .map(|entry| {
                 // Stamp the launch's mail wake; a thread the child's
@@ -7732,6 +7787,7 @@ mod task_1806_launch_mandate_tests {
         let _env =
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "antigravity",
             binary: "agy",
             default_args: Vec::new(),
@@ -7797,6 +7853,7 @@ mod task_1806_launch_mandate_tests {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         };
         agent_registry::write_entry(&project, &stale).unwrap();
@@ -7914,3 +7971,8 @@ mod story_2215_inline_grant_env_tests;
 #[cfg(test)]
 #[path = "tests/bug_2385_vendor_routing_tests.rs"]
 mod bug_2385_vendor_routing_tests;
+
+// trace:BUG-2467 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2467_delegator_launch_tests.rs"]
+mod bug_2467_delegator_launch_tests;

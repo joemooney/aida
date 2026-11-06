@@ -189,6 +189,14 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
 }
 
 // trace:BUG-2469 | ai:codex
+// trace:BUG-2469.acec8dd7 | ai:codex
+// trace:BUG-2469.ac5829b2 | ai:codex
+// trace:BUG-2469.ac77bc7f | ai:codex
+// Canonical spellings also serve criteria reports after ID promotion.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-235.acec8dd7 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-235.ac5829b2 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-235.ac77bc7f | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-900 | ai:codex
 #[test]
 fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_heads() {
     let fx = fixture();
@@ -227,6 +235,16 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     let lease_file = crate::lease_path(&fx.main, &lease.id);
     let save =
         |l: &crate::SessionLease| std::fs::write(&lease_file, toml::to_string(l).unwrap()).unwrap();
+    let assert_retained_refusal = |reason: &str| {
+        let before = std::fs::read(&lease_file).unwrap();
+        let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+        let err = queue_work(&storage).unwrap_err().to_string();
+        assert!(err.contains("held by worktree"), "{err}");
+        assert!(err.contains("was not reclaimed"), "{err}");
+        assert!(err.contains(reason), "{err}");
+        assert_eq!(std::fs::read(&lease_file).unwrap(), before);
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    };
     save(&lease);
     assert!(lease.review_verb && !lease.claim_verb);
     assert!(
@@ -301,23 +319,23 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
             "origin/main:refs/pull/2457/head",
         ],
     );
-    assert!(queue_work(&storage).is_err());
+    assert_retained_refusal("recorded review head is not covered");
     assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
     git_ok(&fx.main, &["push", "-q", "origin", ":refs/pull/2457/head"]);
-    assert!(queue_work(&storage).is_err());
+    assert_retained_refusal("cannot fetch review head");
     git_ok(
         &fx.main,
         &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
     );
     lease.pr_head_sha = None;
     save(&lease);
-    assert!(queue_work(&storage).is_err());
+    assert_retained_refusal("review lease has no recorded head");
     lease.pr_head_sha = Some(first_head);
     save(&lease);
     std::fs::write(tree.join("local"), "unpublished review fix").unwrap();
     git_ok(&tree, &["add", "local"]);
     git_ok(&tree, &["commit", "-qm", "review local commit"]);
-    assert!(queue_work(&storage).is_err());
+    assert_retained_refusal("review checkout has unpublished commits");
     assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
     git_ok(
         &tree,

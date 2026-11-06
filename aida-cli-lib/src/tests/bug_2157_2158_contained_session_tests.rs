@@ -244,6 +244,7 @@ fn claude_launch(root: &std::path::Path, extra_flags: Vec<String>) -> anyhow::Re
         crate::agent_config::load_agents_contained(root)
     })?;
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: posture.default_args,
