@@ -33,12 +33,12 @@ description: |
   - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
 
   Depends on: observation-envelope story (shared aida-intent branch + validator).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T03:43:25.432447444Z
+modified_at: 2026-11-06T03:43:38.977745944Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -94,6 +94,12 @@ comments:
   content: 'ADVISOR RULING 2026-11-05 20:50 MST: request-admission fork: the recommended IMMUTABLE RETAINED ci/<attempt> refs are APPROVED; the separate home-authored registry is REJECTED (a second state store). Home assigns the attempt number, pushes the exact SHA to refs/aida/ci/<attempt> on the work GitLab, never rewrites or deletes an attempt ref, and reads results back keyed by (attempt, SHA). Retention: keep the attempt refs (cheap); pruning is out of scope. Proceed to implementation on story-2480-r1832, including the addendum doc commit 494b4ab. LIGHT gate, STRICT review.'
   created_at: 2026-11-06T03:43:25.432447444Z
   modified_at: 2026-11-06T03:43:25.432447444Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aef4-75e1-7020-95ef-fb9956cf3855
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: TASK-3096 has merged and the receipt schema is approved. A distinct request-admission contract remains undefined: the receipt requires a home-assigned attempt, but ci/* refs have no agreed attempt encoding, immutability, retention, or durable SHA-to-attempt registry. The shared intake revalidates historical files, so validating against currently live request refs either rejects all history after a ref is moved/deleted or accepts a work-selected attempt without home admission. Choose permanently retained immutable request refs encoding the home-assigned attempt, or approve a durable home-authored request registry and its transport/authority boundary. See docs/plans/2026-11-05-story-2480-work-ci-relay.md, Request admission addendum. No relay, receipt publication, status mutation, or completion is claimed.. No triage reason was given.'
+  created_at: 2026-11-06T03:43:38.977744648Z
+  modified_at: 2026-11-06T03:43:38.977744648Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
@@ -152,6 +158,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aef4-75e1-7020-95ef-fb8f0448b502
+  author: joe
+  timestamp: 2026-11-06T03:43:38.977734243Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -160,9 +174,3 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: design-fork
-  detail: 'TASK-3096 has merged and the receipt schema is approved. A distinct request-admission contract remains undefined: the receipt requires a home-assigned attempt, but ci/* refs have no agreed attempt encoding, immutability, retention, or durable SHA-to-attempt registry. The shared intake revalidates historical files, so validating against currently live request refs either rejects all history after a ref is moved/deleted or accepts a work-selected attempt without home admission. Choose permanently retained immutable request refs encoding the home-assigned attempt, or approve a durable home-authored request registry and its transport/authority boundary. See docs/plans/2026-11-05-story-2480-work-ci-relay.md, Request admission addendum. No relay, receipt publication, status mutation, or completion is claimed.'
-  lean: Prefer immutable refs/heads/ci/<attempt> with a globally unique positive u32 home-assigned attempt, an exact immutable commit binding, and mandatory retention for the lifetime of intake history; do not treat generic ci/* branch names as admitted attempts.
-  raised_by: implementer
-  raised_at: 2026-11-06T01:39:02.035706378Z
