@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T16:10:56.215360996Z
+modified_at: 2026-11-06T16:11:01.580904187Z
 req_type: Story
 relationships:
 - rel_type:
@@ -334,6 +334,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S4 resurfacing logic is sound and unit-tested (met->undefer with CAS + audit comment, met holds and >14d manual -> human queue idempotently, Unknown stays parked, dry-run inert), but it enables the hourly job in live config while all 55 active deferrals still carry free-text triggers (S3 migration has not landed), so every hourly run exits non-zero and fires the advisor CronJobFailed route. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-06T16:10:56.215359442Z
   modified_at: 2026-11-06T16:10:56.215359442Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1a0-b3c9-7843-92c5-4f37443bb53f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3506):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c01026583a34
+    Recorded: 2026-11-06T15:56:19.563686221+00:00
+    Findings:
+    1. BLOCKING - hourly job guaranteed to fail on every run: .aida/config.toml:293-306 enables defer-resurface (every=1h) plus a CronJobFailed:defer-resurface advisor route, but S3 (the one-time free-text -> typed rewrite) has not merged. In the canonical store all 55 active, non-archived deferred specs have free-text deferred_until (e.g. TASK-893 'Codex ships command-backed status lines', TASK-1214, TASK-2021). defer_resurface.rs:29 raw.parse()? turns each into a sweep error, and :176 ensure! exits non-zero, so the job fails every hour and pages the advisor with ~55 parse errors while resurfacing nothing. The signed-off slice order put S3 before S4. Fix (pick one and say which in the PR body): (a) ship the job with enabled = false (route too) and enable it in S3 after the migration, or (b) classify unparseable legacy triggers as Keep with a 'legacy trigger awaiting migration' line and a summary count (not an error) until S3 lands, keeping malformed-typed (e.g. spec:<missing-id>) as errors. Add a test for the chosen behaviour and update docs/cli/02-specs.md:346-350 to match.
+    2. Minor (efficiency): defer_resurface.rs:124 uses whole-store backend.update_atomically (loads and diffs every object under the lock) once per met row. The backend already offers per-spec compare-and-swap, update_spec_atomically (cached_git_backend.rs:1889, BUG-1612), which fits clear_if_unchanged exactly and avoids O(store) work per resurfaced spec.
+    3. Minor (test coverage): run() (defer_resurface.rs:80-99) compares a snapshot from condition_cmd::read_store (raw object reads) against backend.get_requirement / update_atomically's load() via serde_yaml equality (:68, :148). The tests call sweep() with rows returned by backend.add_requirement, so the production snapshot-vs-backend comparison is never exercised; any representation difference would silently turn every row into 'changed during evaluation' with green tests. Add one test that drives run() (or read_store + sweep) against the fixture store and asserts a met row is actually undeferred.
+    4. Non-blocking: a met operator hold (Action::Human) stays deferred forever, and the only dedupe is an existing role:human queue row (:139-145). If the human removes the queue row without lifting the hold, the next hourly run re-adds it. If that nag is intended, document it in docs/cli/02-specs.md; otherwise record the routing (e.g. an audit comment or marker) and skip re-routing for an unchanged row.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T16:11:01.449857592Z
+  modified_at: 2026-11-06T16:11:01.449857592Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
