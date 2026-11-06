@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:52:13.853812178Z
-modified_at: 2026-11-06T18:06:06.019596535Z
+modified_at: 2026-11-06T18:24:18.979255839Z
 req_type: Task
 tags:
 - carried-from:BUG-2464
@@ -33,6 +33,11 @@ comments:
   created_at: 2026-11-06T17:24:51.851749038Z
   modified_at: 2026-11-06T17:24:51.851749038Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b21a-bc23-7952-a541-ac17838f8cbe
+  author: mcp
+  content: 'Implemented the binding 2026-11-06 advisor ruling, including folded TASK-2937. SeatState::unshipped retains the moved && pushed_since==Some(false) fallback when head_has_unpushed is None; known false still suppresses unpushed work. Host-recorded clone reads skip the second reachability probe when facts is None. Added a unit regression covering fallback boundaries and stale rework-PR settlement/reporting as no-pr reason=unpushed-commits; updated the existing unknown-probe assertion. Changed files: aida-cli-lib/src/headless_background.rs and aida-cli-lib/src/tests/bug_044_headless_background_tests.rs. Validation: AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --profile agent --lib headless_background -- --nocapture (27 passed); AIDA_CARGO_NO_SLOT=1 make check-ci-fast (38 gates passed); cargo fmt --all -- --check and git diff --check passed. Initial Cargo wrapper slot waits were stopped and retried with its documented no-slot option. Native implementer handoff: edits remain uncommitted; host publication and subsequent queue completion remain required. No implementation blockers.'
+  created_at: 2026-11-06T18:24:18.979239463Z
+  modified_at: 2026-11-06T18:24:18.979239463Z
 history:
 - id: 01a1b1de-81d1-7d93-9528-12065eae7989
   author: joe
