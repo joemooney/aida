@@ -177,6 +177,22 @@ does not authorize coexistence.
 
 **Bare `aida` is a shortcut.** Typing `aida` with no arguments at an interactive terminal inside an initialized AIDA project (one with `.aida/config.toml`, a legacy `requirements.db`, or a `.aida-store` worktree) opens the same agent picker as `aida agent new`. When output goes to an agent or a pipe, bare `aida` prints the `aida status` snapshot instead; outside a project, or when stdin is not a terminal, it shows the getting-started menu. `aida status`, `aida help`, and `aida agent new` themselves are unchanged. <!-- trace:TASK-1472 | ai:claude -->
 
+**Native Codex finish.** Git metadata is read-only in a native seat. The
+implementer leaves tested edits uncommitted and exits with a handoff listing
+changed files, test results and blockers. For standalone `queue work`, the host
+publication step runs after the child and test runner exit, while the seat lease
+still exists. It commits pending work, merges an updated remote PR head inside
+the Git sandbox, and pushes and opens the PR. Conflicts abort the merge and
+refuse publication; a concurrent remote update can still make the ordinary
+non-force push refuse. A Refs PR retains non-completing commit trailers; unknown
+title evidence also uses Refs. Punts and manual holds veto publication. Native
+`queue done` reports the branch recorded in the seat lease and defers completion
+to the host before committed-only checks. The host must publish before running
+queue completion. Operator recovery, after the lane exits, remains
+`aida ship <SPEC> --from-seat <clone> --commit-pending '<message> (Refs <SPEC>)'`;
+the live-owner check still refuses a competing process.
+<!-- trace:TASK-2879 | ai:codex -->
+
 **Don't reach for it when** — you want the full lifecycle driven for you (CI, review, merge) — that's `aida queue work --auto-complete`, not `agent new`. And `pause` does **not** stop a process — it's a *status marker* for dispatch logic; use `aida agent stop` to actually terminate one.
 
 **Cwd and failed setup.** An explicit `--cwd` is used for the child and the

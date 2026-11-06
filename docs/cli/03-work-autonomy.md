@@ -160,14 +160,20 @@ On Linux, compete arms and judges receive a parent-death signal so the vendor
 process terminates even when compete is killed with SIGKILL.
 <!-- trace:BUG-2439 | ai:codex -->
 
-The child must stop once its PR is open. Inside it, `aida pr ship` and
-`aida review record` refuse (the child carries
+A native Codex child leaves tested edits uncommitted and exits with a
+handoff; the host commits and publishes after exit. Native `queue done`
+defers to the host before inspecting committed-only branch/test evidence.
+The host merges any newer remote PR head before pushing, aborts on conflicts,
+and retains Refs trailers for a Refs PR. The live-owner check still applies.
+Other children must stop once their PR is open. Inside every standalone child,
+`aida pr ship` and `aida review record` refuse (the child carries
 `AIDA_STANDALONE_IMPLEMENTER`). At most three standalone implementers run at
 once per project; set `[queue] standalone_implementer_cap` in
 `.aida/config.toml` to change the cap. A launch past the cap exits 34
 without creating a lease, worktree, queue row or status change. Do not `aida claim` the
 spec yourself before launching: the pickup refuses a spec whose lease is held.
 <!-- trace:STORY-1662 | ai:claude -->
+<!-- trace:TASK-2879 | ai:codex -->
 
 **An interactive `claude --bg` lane takes its identity from its worktree
 lease.** A `claude --bg` session runs under the long-lived claude daemon, so

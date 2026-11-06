@@ -22,6 +22,20 @@ say “still working,” “continuing,” or equivalent about yourself. Delegat
 work is not your own active work. See `.aida/discipline/advisor-role.md`.
 <!-- trace:TASK-1557 | ai:codex -->
 
+## Native sandbox finish override
+
+When `AIDA_CONTAINMENT_POSTURE=native`, Git metadata is read-only. This
+supersedes the commit/push/PR/queue-done exit gates below: implement and run
+targeted tests, leave the edits uncommitted, then end with a handoff naming
+changed files, validation results and blockers. Do not run `aida queue done`
+from the seat. After the child process exits, the host launcher commits and
+publishes; the host must finish queue completion after publication. An existing
+Refs PR keeps non-completing commit trailers. Publication refuses while another
+live process owns the seat; do not ask a deputy to bypass that refusal. A punt
+or manual hold remains a publication veto. Other postures keep the ordinary
+shipping workflow below.
+<!-- trace:TASK-2879 | ai:codex -->
+
 ## Purpose
 
 Drive the implementer / reviewer / triage / architect loop where the active
