@@ -14,8 +14,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:36:18.589883017Z
-modified_at: 2026-11-06T19:51:03.840933049Z
+modified_at: 2026-11-06T20:06:44.009154164Z
 req_type: Bug
+comments:
+- id: 01a1b278-8029-7900-83c6-969e1d240cc8
+  author: joe
+  content: 'Implemented in native seat, left uncommitted for host publication: review watch filters head branches using pr_train::BRANCH_PREFIX before probes, stale-author updates, or admission; logs train PR: not reviewed once per change per watcher run. Shared auto-queue handler refuses train branches before forge/store/queue access, including session-end backup. Updated CLI docs and regression coverage for GitHub/GitLab repeated polling and both auto-queue origins. Validation: cargo test -p aida-cli-lib --lib bug2472 -- --nocapture (2 passed); built test executable review_watch::tests:: (49 passed), review_gates::bug776_auto_queue_gate_tests:: (9 passed); cargo fmt --all -- --check and git diff --check passed. No blockers. No commit, push, PR, or queue completion performed in this seat.'
+  created_at: 2026-11-06T20:06:44.009154164Z
+  modified_at: 2026-11-06T20:06:44.009154164Z
+  session_id: 01a1b2699522
 history:
 - id: 01a1b269-9d4a-7d51-a0a9-acfb2ce6265f
   author: aida-session-start
