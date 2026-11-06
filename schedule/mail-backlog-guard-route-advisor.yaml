@@ -5,10 +5,10 @@ last_by:
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-watch, 5h41m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 3h26m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 2h01m old: PR-3522 behind `main` with overlap; update-branch conflicts'
+note: 'advisor: unread [request] from review-watch, 6h55m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 4h40m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 3h16m old: PR-3522 behind `main` with overlap; update-branch conflicts'
 due_since: 2026-11-06T19:39:55.719072645Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-06T19:39:55Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-06T20:54:20Z
   job: mail-backlog
-  error: 'advisor: unread [request] from review-watch, 5h41m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 3h26m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 2h01m old: PR-3522 behind `main` with overlap; update-branch conflicts'
+  error: 'advisor: unread [request] from review-watch, 6h55m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 4h40m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 3h16m old: PR-3522 behind `main` with overlap; update-branch conflicts'
