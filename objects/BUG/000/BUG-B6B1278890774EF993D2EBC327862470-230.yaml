@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T15:11:02.348332640Z
-modified_at: 2026-11-06T15:11:33.804334139Z
+modified_at: 2026-11-06T15:11:39.164432973Z
 req_type: Bug
 tags:
 - area:lanes
 - kind:bug-spotted
+comments:
+- id: 01a1b16a-589c-7912-99f1-00533a2d1857
+  author: joe
+  content: 'ADVISOR: approved, heft small. LIGHT gate: cargo test -p aida-cli-lib --lib headless_background plus make check-ci-fast. Title (BUG-2464).'
+  created_at: 2026-11-06T15:11:39.164432973Z
+  modified_at: 2026-11-06T15:11:39.164432973Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b16a-43ac-7732-831f-a6050dd4f64f
   author: joe
