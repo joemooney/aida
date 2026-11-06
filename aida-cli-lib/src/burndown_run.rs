@@ -2165,7 +2165,7 @@ pub(crate) fn run_burndown_verbose(
             vendor,
             &mut command,
             &project_root,
-            Some(std::process::Stdio::from(log)),
+            Some(log),
             handle_guard,
         )
         .with_context(|| format!("failed to launch {} headless coordinator", vendor.program()))

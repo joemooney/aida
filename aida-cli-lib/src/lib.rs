@@ -451,6 +451,8 @@ mod goal_cmd;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude — resume a lane parked on its own background run.
 mod headless_background;
 mod headless_linger;
+// trace:TASK-2838 | ai:codex
+mod agy_outcome;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;
@@ -570,6 +572,7 @@ pub(crate) use aida_core::liveness::{
     classify_lease_state, classify_spec_liveness, classify_stale_lease_recovery, LeaseState,
     SpecLiveness, StaleLeaseRecovery,
 };
+mod native_publication;
 mod prompts;
 mod ship;
 mod ship_from_seat;

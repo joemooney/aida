@@ -134,7 +134,11 @@ subject remains usable, but the generic rework subject refuses publication.
 <!-- trace:TASK-2891 | ai:codex -->
 
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
-inside its sandbox, and `aida ship` there refuses with the way out. The seat
+inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): partial work (Refs <spec-id>)'`
+records a publication declaration without committing or publishing. Supply the
+complete subject and exactly one live non-epic lease spec; `(ID)` declares
+completion and `(Refs ID)` declares a partial slice. `--dry-run` validates without
+recording. A missing message retains the native publication refusal. The seat
 leaves its edits uncommitted. When an implementer lane's Codex process exits,
 the launcher commits that pending work in the seat clone. An operator can also
 commit and publish it with
@@ -147,6 +151,20 @@ this checkout did not record, an ended lease, a lease another live process
 still holds, or a symlinked or replaced clone path. If the commit fails after
 staging, the index is put back as it was.
 <!-- trace:TASK-2712 | ai:claude -->
+
+The declaration lives at the seat's `.aida/native-publication.json`, bound to
+its host-recorded lease/spec and a fresh launch token. Standalone, drain/resume,
+foreground and background launches clear prior declarations. Supervised rotation
+retains the same token and declaration after generation one. Lease release removes
+the host binding. The host validates scope and declaration before any commit or
+forge probe; stale, mismatched or invalid declarations refuse. Clean exits retain
+the declared subject, but completing trailers downgrade to Refs when the existing
+PR title is Refs or the forge lookup cannot establish completion eligibility.
+This guard also applies with no declaration. Failed exits always use Refs. Punt
+and hold signals veto publication before declaration validation and report that
+pending work remains uncommitted. Post-exit trailers use the store's canonical
+display ID, never a friendly node alias.
+<!-- trace:TASK-2902 | ai:codex -->
 
 ---
 

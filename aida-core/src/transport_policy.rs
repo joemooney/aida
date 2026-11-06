@@ -342,6 +342,38 @@ mod tests {
         root
     }
 
+    // trace:STORY-1468 | ai:codex
+    #[test]
+    fn origin_prompt_work_capture_refuses_before_mutation() {
+        let root = enrolled();
+        let prompt =
+            crate::origin_prompt::OriginPrompt::reviewed("Reviewed request".into(), false).unwrap();
+        let row = crate::Requirement::new("Title".into(), "Derived".into());
+        let storage = crate::Storage::new(root.path());
+        assert!(storage
+            .add_with_origin_prompt(row.clone(), &prompt)
+            .unwrap_err()
+            .to_string()
+            .contains("WORK"));
+        // Existing initialized stores reach the backend entry directly as well.
+        std::fs::create_dir(root.path().join("objects")).unwrap();
+        std::fs::write(root.path().join("metadata.yaml"), "").unwrap();
+        let backend = crate::GitBackend::new(root.path()).unwrap();
+        assert!(backend
+            .add_requirement_with_origin_prompt(row, Some(&prompt))
+            .unwrap_err()
+            .to_string()
+            .contains("WORK"));
+        assert!(!root.path().join("provenance").exists());
+        assert!(!root.path().join("oplog.yaml").exists());
+        assert_eq!(
+            std::fs::read_dir(root.path().join("objects"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
     #[test]
     fn admission_must_precede_store_and_counter_but_nested_reuse_is_safe() {
         let root = enrolled();

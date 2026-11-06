@@ -4823,6 +4823,8 @@ pub(crate) fn remove_session_lease_record_only(
         Err(_) => false,
     };
     if removed {
+        // trace:TASK-2902 | ai:codex
+        crate::native_publication::release(project_root, lease_id);
         // trace:STORY-2325 | ai:claude
         crate::ownership::dual::lease_released(project_root, lease_id, "lease record removed");
     }

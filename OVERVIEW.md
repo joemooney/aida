@@ -8,7 +8,7 @@ Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
-global cap of two, and the two-round limit. PID/start/boot receipts precede queue
+local cap of two, and the two-round limit. PID/start/boot receipts precede queue
 work; capacity is released only by a terminal receipt or proof that the
 dispatcher's exact process is gone. Stale overlap notices name the change's
 base branch and publish idempotently to the exact forge author's local mailbox.
@@ -611,6 +611,11 @@ evidence.
 
 The condition checker also reads PR merge states through this boundary, with a
 15-second timeout; failed reads and malformed states evaluate to Unknown.
+
+Question parking preserves the existing trigger and shelf timestamp when the
+consequence is empty or whitespace. With no existing trigger, an empty
+consequence defaults to `manual:<resolver>` without adding an empty comment.
+Prose consequences retain their text as a comment and use a manual resolver.
 <!-- trace:STORY-2402 | ai:codex -->
 
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
@@ -1321,6 +1326,16 @@ Claude, agy or unknown tools refuses. Native policy overrides
 conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
+Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
+publication declaration for the host after exit. A fresh launch token prevents
+reuse across attempts and survives supervised rotations within an attempt;
+lease release removes the host binding. The declaration stays inside the seat's
+existing write boundary. The host refuses invalid, epic, multi-spec or mismatched
+lease scopes before commit or forge probes. Existing Refs PRs or inconclusive
+forge evidence downgrade declared completion to Refs; failed exits always use
+Refs. Punt/hold vetoes take precedence. See the
+[native publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
+<!-- trace:TASK-2902 | ai:codex -->
 Permission reports, doctor, launch output and statusline distinguish the posture;
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 
@@ -1434,9 +1449,28 @@ removes a roster entry and affects future credit without undoing merges.
 Publications use node-qualified UUID identity and signed per-node supersession;
 an independent concurrent refusal cannot be overwritten by another node's approval.
 The bounded committed-blob readers refuse malformed or unverifiable evidence.
-Watcher reservation synchronization and untrusted-node envelopes remain separate
-work. See [second-node operation](docs/agents/second-review-node.md).
+Distributed watchers synchronize publications before forge discovery, including
+on hosts without a local verdict directory. The trusted `[review] admission_hub`
+and `admission_ref` select the single GitHub authority; GitLab and bridges only
+mirror. Signed Reserved → Running → Terminal transitions and pre-spawn
+Reserved → Cancelled use explicit expected-tip CAS and confirmed unpredictable
+tokens. Active older heads fence newer ones; uncertain pushes/processes retain
+claims without time/PID expiry or failover. Local capacity/process receipts stay
+in force. Admission state is sharded into bounded per-PR blobs; historical
+closed PRs cannot exhaust a global table budget. The direct-human
+`review nodes admission-reconcile` command requires stopped reviewers and an
+inspected exact hub tip, signs a recovery anchor, and fences abandoned or revoked
+owner tokens without deleting Git history. Local release is allowed only after
+remote claims are inactive. Hub configuration ships disabled until operators
+enroll and upgrade every watcher. Admission snapshots config, roster and verdict
+evidence under short store locks around hub I/O, retrying changed evidence;
+unrelated store commits do not block lifecycle transitions. Readers validate
+anchor signatures and scope but rely on trusted writers to preserve chains;
+they do not detect shard truncation or replay against Git ancestors.
+Untrusted-node envelopes remain separate work. See
+[second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:TASK-3196 | ai:codex -->
 
 ## Process identity and holder admission
 

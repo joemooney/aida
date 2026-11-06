@@ -664,9 +664,8 @@ impl std::str::FromStr for ExecutionMode {
 /// absolute path, or email is ever recorded. The branch NAME is recorded
 /// verbatim — it is a code fact that travels with the commits anyway.
 ///
-/// Forward-compatible: unknown keys are ignored on read, so later fields (the
-/// originating prompt, STORY-1468) can be added here without breaking older
-/// binaries.
+/// Forward-compatible: unknown keys are ignored on read. Originating prompts
+/// are separate opt-in artifacts, never fields of this public projection.
 // trace:CR-8 | ai:claude
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct FilingProvenance {
@@ -696,8 +695,7 @@ pub struct FilingProvenance {
     // trace:STORY-1674 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness_version: Option<String>,
-    // Reserved: STORY-1468 (deferred) adds the originating prompt here as
-    // another optional, serde-default field.
+    // trace:STORY-1468 | ai:codex — prompt content lives outside Requirement.
 }
 
 impl FilingProvenance {
@@ -4386,8 +4384,8 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_at: Option<DateTime<Utc>>,
 
-    /// The revisit trigger — the free-text condition that brings a deferred
-    /// spec back (e.g. "when a slice verb ships", "if the shelf grows"). This
+    /// The typed revisit condition that brings a deferred spec back
+    /// (e.g. "date:2026-12-01", "spec:STORY-12=completed"). Legacy prose remains readable. This
     /// is the one thing that distinguishes deferred (prospective/primed) from
     /// archived (retrospective/filed). Set via `aida defer --until "<cond>"`.
     /// trace:STORY-584 | ai:claude

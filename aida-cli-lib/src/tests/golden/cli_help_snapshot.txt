@@ -675,6 +675,16 @@ Options:
           (comma-separated, e.g. `--gates well-formed`). Advisory: findings are printed, the spec is
           filed regardless. Without this flag `aida add` is unchanged. See `aida gate list`
 
+      --origin-prompt-file <FILE>
+          Capture a reviewed UTF-8 prompt (64 KiB max) as a separate Git artifact. OFF by default.
+          Review and redact secrets before submission
+
+      --no-origin-prompt
+          Explicitly opt out of originating prompt capture (also the default)
+
+      --origin-prompt-redacted
+          Mark the reviewed prompt as caller-redacted; only reviewed text is stored
+
       --sanitized
           Sanitized intake for a clone with an enabled WORK transport profile: files one generic
           draft (bug by default) with no owner, tags or session context. The complete write is
@@ -1108,6 +1118,9 @@ Options:
           emphasis, lists and tables for the terminal. Rendering only happens in human output at an
           interactive terminal; piped, TOON and JSON output are always raw. `AIDA_MARKDOWN=raw` sets
           this for every invocation
+
+      --origin-prompt
+          Explicitly retrieve the separate originating prompt artifact as historical input
 
   -h, --help
           Print help (see a summary with '-h')
@@ -3608,11 +3621,11 @@ Defer a spec — park it as primed/conditional work, hidden from the default ope
 filed away the way archive is.
 
 Defer is a view-level flag distinct from status (it does not touch the lifecycle state machine). Use
-`--reason` to record why this is an operator hold and `--until` to record the revisit trigger — the
-free-text condition that brings the spec back (e.g. `--until "when a slice verb ships"`). That
-trigger is the one thing distinguishing deferred (prospective, primed) from archived (retrospective,
-filed). Deferred rows are hidden from `aida list`, `aida search`, and `aida history` by default;
-surface them with `--deferred` (only) or `--all` (union).
+`--reason` to record why this is an operator hold and `--until` to record the revisit trigger — a
+typed condition such as `date:2026-12-01` or `pr:123=merged`. Use `manual:<who>` with `--reason` for
+a human decision. That trigger is the one thing distinguishing deferred (prospective, primed) from
+archived (retrospective, filed). Deferred rows are hidden from `aida list`, `aida search`, and `aida
+history` by default; surface them with `--deferred` (only) or `--all` (union).
 
 Usage: aida defer [OPTIONS] <ID>
 
@@ -3622,9 +3635,9 @@ Arguments:
 
 Options:
       --until <CONDITION>
-          The revisit trigger — the condition that brings this spec back (free text). Stored
-          alongside the spec and shown in the deferred view so you can scan what is primed and what
-          returns each item
+          Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>,
+          date:<YYYY-MM-DD>, query:<filters> count<op><n>, or manual:<who> (requires --reason). Free
+          text is refused
 
       --reason <REASON>
           Why the work is being held. Required for a durable operator hold; legacy deferrals may
@@ -15591,7 +15604,8 @@ Options:
   -m, --message <MSG>
           Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is
           appended automatically. When omitted, a conventional default is used. Ignored when the
-          worktree is clean
+          worktree is clean. In a native seat, records a lease-bound host publication declaration
+          instead; supply the complete subject including `(ID)` or `(Refs ID)`
 
       --no-merge
           Stop after opening the PR — do not watch CI or merge. The PR is left open for a human to
@@ -21124,12 +21138,48 @@ Manage explicitly trusted review publishers (operator only)
 Usage: aida review nodes [OPTIONS] <COMMAND>
 
 Commands:
-  enroll     Enroll a node's public ed25519 key in the shared roster
-  revoke     Remove a node; all of its publications immediately lose credit after sync
-  publisher  Configure this host recorder's node and private key path. Keys stay local
-  help       Print this message or the help of the given subcommand(s)
+  admission-reconcile  Re-anchor one admission chain after stopping all watchers and reviewers
+  enroll               Enroll a node's public ed25519 key in the shared roster
+  revoke               Remove a node; all of its publications immediately lose credit after sync
+  publisher            Configure this host recorder's node and private key path. Keys stay local
+  help                 Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes admission-reconcile
+Re-anchor one admission chain after stopping all watchers and reviewers
+
+Usage: aida review nodes admission-reconcile [OPTIONS] --expected-tip <EXPECTED_TIP> --reason <REASON> <CHANGE>
+
+Arguments:
+  <CHANGE>
+          GitHub change key, for example PR-123
+
+Options:
+      --expected-tip <EXPECTED_TIP>
+          Exact hub tip inspected by the operator (no automatic retries)
+
+      --reason <REASON>
+          Durable explanation of the stopped-admission recovery
+
+      --all-reviewers-stopped
+          Attest that all watchers and all reviewers for this change are stopped
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -31673,6 +31723,21 @@ Working on aida itself
         "help": "Force this spec to NOT be human-only even when its type would default to it (use on a Spike that is genuinely heads-down implementation)"
       },
       {
+        "name": "no-origin-prompt",
+        "takes_value": false,
+        "help": "Explicitly opt out of originating prompt capture (also the default)"
+      },
+      {
+        "name": "origin-prompt-file",
+        "takes_value": true,
+        "help": "Capture a reviewed UTF-8 prompt (64 KiB max) as a separate Git artifact. OFF by default. Review and redact secrets before submission"
+      },
+      {
+        "name": "origin-prompt-redacted",
+        "takes_value": false,
+        "help": "Mark the reviewed prompt as caller-redacted; only reviewed text is stored"
+      },
+      {
         "name": "owner",
         "takes_value": true,
         "help": "Owner of the requirement (defaults to AIDA_AUTHOR env var or system user)"
@@ -32067,6 +32132,11 @@ Working on aida itself
         "name": "no-git",
         "takes_value": false,
         "help": "Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only contexts that only need the requirement fields"
+      },
+      {
+        "name": "origin-prompt",
+        "takes_value": false,
+        "help": "Explicitly retrieve the separate originating prompt artifact as historical input"
       },
       {
         "name": "raw",
@@ -34637,7 +34707,7 @@ Working on aida itself
       {
         "name": "until",
         "takes_value": true,
-        "help": "The revisit trigger — the condition that brings this spec back (free text). Stored alongside the spec and shown in the deferred view so you can scan what is primed and what returns each item"
+        "help": "Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>, date:<YYYY-MM-DD>, query:<filters> count<op><n>, or manual:<who> (requires --reason). Free text is refused"
       }
     ],
     "hidden": false
@@ -46806,7 +46876,7 @@ Working on aida itself
       {
         "name": "message",
         "takes_value": true,
-        "help": "Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is appended automatically. When omitted, a conventional default is used. Ignored when the worktree is clean"
+        "help": "Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is appended automatically. When omitted, a conventional default is used. Ignored when the worktree is clean. In a native seat, records a lease-bound host publication declaration instead; supply the complete subject including `(ID)` or `(Refs ID)`"
       },
       {
         "name": "no-merge",
@@ -52476,6 +52546,48 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes",
+      "admission-reconcile"
+    ],
+    "about": "Re-anchor one admission chain after stopping all watchers and reviewers",
+    "flags": [
+      {
+        "name": "all-reviewers-stopped",
+        "takes_value": false,
+        "help": "Attest that all watchers and all reviewers for this change are stopped"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "expected-tip",
+        "takes_value": true,
+        "help": "Exact hub tip inspected by the operator (no automatic retries)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Durable explanation of the stopped-admission recovery"
       }
     ],
     "hidden": false

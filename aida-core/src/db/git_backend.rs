@@ -692,6 +692,142 @@ impl GitBackend {
         })
     }
 
+    // trace:STORY-1468 | ai:codex
+    pub fn add_requirement_with_origin_prompt(
+        &self,
+        requirement: Requirement,
+        prompt: Option<&crate::origin_prompt::OriginPrompt>,
+    ) -> Result<Requirement> {
+        if let Some(prompt) = prompt {
+            prompt.validate()?;
+            #[cfg(all(unix, feature = "native"))]
+            crate::transport_policy::refuse_unsupported(&self.root)?;
+        }
+        #[cfg(all(unix, feature = "native"))]
+        {
+            let admission = crate::transport_policy::Admission::enter(&self.root)?;
+            if admission.enabled() {
+                let id = requirement.id;
+                let (store, _) = self.work_update(&admission, None, |store| {
+                    Self::work_add_to_store(store, requirement)
+                })?;
+                return store
+                    .requirements
+                    .into_iter()
+                    .find(|row| row.id == id)
+                    .context("Admitted WORK requirement was not found after commit");
+            }
+        }
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.lock_store()?;
+        let mut req = requirement;
+        if req.spec_id.is_some() || req.agreed_id.is_some() {
+            self.admit_allocations(std::slice::from_ref(&req))?;
+            if req.spec_id.is_some() {
+                // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+                self.admit_numeric_identity(&req, &self.agreed_id_index()?, &[])?;
+            }
+        }
+        // CR-8: stamp filing provenance at creation (write-once; a caller that
+        // already stamped keeps its stamp). trace:CR-8 | ai:claude
+        crate::provenance::stamp_if_absent(&mut req);
+        crate::provenance::stamp_write(
+            &mut req,
+            None,
+            &crate::provenance::WriteContext::capture(),
+        )?;
+
+        let mut new_metadata = None;
+        if req.spec_id.is_none() {
+            // Load metadata to get counters, assign ID, save metadata back
+            let meta = self.load_metadata()?;
+            let mut temp_store = self.assemble_store(meta, Vec::new());
+            // TASK-856: derive the type prefix from the store's id_config the
+            // same way the full-store add path does (the CLI add handler used
+            // to pass `store.get_type_prefix(req_type)` into update_atomically).
+            // Without it a single-row add fell back to the generic "REQ"/"GEN"
+            // prefix instead of the type-correct one (TASK-N, BUG-N, …). The
+            // requirement's own `prefix_override`, when set, still wins inside
+            // add_requirement_with_id. trace:TASK-856 | ai:claude
+            let type_prefix = temp_store.get_type_prefix(&req.req_type);
+            // Generate ID using the store's configured strategy
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — mint
+            // through the shared seam: a number already used under any
+            // padding is skipped, never handed out as a padded twin.
+            let minted = crate::id_identity::allocate_id(
+                || {
+                    temp_store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+                    Ok(temp_store
+                        .requirements
+                        .last()
+                        .and_then(|r| r.spec_id.clone())
+                        .unwrap_or_default())
+                },
+                &|id| self.id_holder(id),
+                req.id,
+            )?;
+            req.spec_id = Some(minted);
+            // Persist the updated counters back to metadata
+            let updated_meta = Self::extract_metadata(&temp_store);
+            new_metadata = Some(updated_meta);
+        }
+
+        // trace:STORY-1675 | ai:codex
+        let mut planned = vec![req.clone()];
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
+        req = planned.iter().find(|r| r.id == req.id).unwrap().clone();
+        let mut paths = Vec::new();
+        if let Some(meta) = new_metadata {
+            self.save_metadata(&meta)?;
+            paths.push("metadata.yaml".to_string());
+        } else if self.metadata_path.exists() {
+            paths.push("metadata.yaml".to_string());
+        }
+        for row in planned.iter().filter(|r| r.id != req.id) {
+            if let Some(sid) = self.stage_requirement_update(row)? {
+                paths.push(object_store::relative_object_path(sid)?);
+            }
+        }
+
+        // Write the private artifact first, under the same store writer lock.
+        // If object persistence fails, remove only the artifact we just created.
+        let artifact = prompt
+            .map(|p| p.write_new(&self.root, req.id))
+            .transpose()?;
+        if let Err(error) = object_store::write_object(&self.objects_root, &req) {
+            if let Some(ref path) = artifact {
+                let _ = std::fs::remove_file(self.root.join(path));
+            }
+            return Err(error);
+        }
+        if let Some(path) = artifact {
+            paths.push(path);
+        }
+        // Record create operation
+        self.record_op(
+            req.id,
+            crate::oplog::OpKind::Create {
+                title: req.title.clone(),
+                description: req.description.clone(),
+                req_type: format!("{:?}", req.req_type),
+                status: req.effective_status(),
+                priority: req.effective_priority(),
+            },
+        );
+
+        let spec_id = req.spec_id.as_deref().unwrap_or("unknown");
+        // Targeted stage: only the new YAML + metadata.yaml (counters bumped).
+        // trace:BUG-1-040 | ai:claude
+        if let Ok(rel) = object_store::relative_object_path(spec_id) {
+            self.auto_commit_paths(&format!("add {} — {}", spec_id, req.title), &{
+                paths.push(rel);
+                paths.iter().map(String::as_str).collect::<Vec<_>>()
+            });
+        }
+        Ok(req)
+    }
+
     /// Set the dispenser for ID generation (distributed mode).
     pub fn with_dispenser(mut self, dispenser: DispenserHandle) -> Self {
         self.dispenser = Some(dispenser);
@@ -956,6 +1092,20 @@ impl GitBackend {
             } else {
                 std::collections::HashSet::new()
             };
+
+            // Deferred creates must publish their separate provenance with the object.
+            // trace:STORY-1468 | ai:codex
+            for op in log.operations.iter().filter(|op| {
+                !committed_ids.contains(&op.id)
+                    && matches!(op.kind, crate::oplog::OpKind::Create { .. })
+            }) {
+                let artifact = crate::origin_prompt::OriginPrompt::relative_path(op.target_id);
+                // Catch-up preserves existing bytes; validation belongs to intake/read.
+                // A damaged deferred artifact must not block unrelated writes.
+                if self.root.join(&artifact).is_file() {
+                    crate::git_ops::add(&self.root, &[&artifact])?;
+                }
+            }
 
             let mut uncommitted_targets: std::collections::HashSet<uuid::Uuid> = log
                 .operations
@@ -2960,116 +3110,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
-        #[cfg(all(unix, feature = "native"))]
-        {
-            let admission = crate::transport_policy::Admission::enter(&self.root)?;
-            if admission.enabled() {
-                let id = requirement.id;
-                let (store, _) = self.work_update(&admission, None, |store| {
-                    Self::work_add_to_store(store, requirement)
-                })?;
-                return store
-                    .requirements
-                    .into_iter()
-                    .find(|row| row.id == id)
-                    .context("Admitted WORK requirement was not found after commit");
-            }
-        }
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
-        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
-        let _lock = self.lock_store()?;
-        let mut req = requirement;
-        if req.spec_id.is_some() || req.agreed_id.is_some() {
-            self.admit_allocations(std::slice::from_ref(&req))?;
-            if req.spec_id.is_some() {
-                // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
-                self.admit_numeric_identity(&req, &self.agreed_id_index()?, &[])?;
-            }
-        }
-        // CR-8: stamp filing provenance at creation (write-once; a caller that
-        // already stamped keeps its stamp). trace:CR-8 | ai:claude
-        crate::provenance::stamp_if_absent(&mut req);
-        crate::provenance::stamp_write(
-            &mut req,
-            None,
-            &crate::provenance::WriteContext::capture(),
-        )?;
-
-        let mut new_metadata = None;
-        if req.spec_id.is_none() {
-            // Load metadata to get counters, assign ID, save metadata back
-            let meta = self.load_metadata()?;
-            let mut temp_store = self.assemble_store(meta, Vec::new());
-            // TASK-856: derive the type prefix from the store's id_config the
-            // same way the full-store add path does (the CLI add handler used
-            // to pass `store.get_type_prefix(req_type)` into update_atomically).
-            // Without it a single-row add fell back to the generic "REQ"/"GEN"
-            // prefix instead of the type-correct one (TASK-N, BUG-N, …). The
-            // requirement's own `prefix_override`, when set, still wins inside
-            // add_requirement_with_id. trace:TASK-856 | ai:claude
-            let type_prefix = temp_store.get_type_prefix(&req.req_type);
-            // Generate ID using the store's configured strategy
-            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — mint
-            // through the shared seam: a number already used under any
-            // padding is skipped, never handed out as a padded twin.
-            let minted = crate::id_identity::allocate_id(
-                || {
-                    temp_store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
-                    Ok(temp_store
-                        .requirements
-                        .last()
-                        .and_then(|r| r.spec_id.clone())
-                        .unwrap_or_default())
-                },
-                &|id| self.id_holder(id),
-                req.id,
-            )?;
-            req.spec_id = Some(minted);
-            // Persist the updated counters back to metadata
-            let updated_meta = Self::extract_metadata(&temp_store);
-            new_metadata = Some(updated_meta);
-        }
-
-        // trace:STORY-1675 | ai:codex
-        let mut planned = vec![req.clone()];
-        self.prepare_hypothesis_updates(&mut planned, &[])?;
-        req = planned.iter().find(|r| r.id == req.id).unwrap().clone();
-        let mut paths = Vec::new();
-        if let Some(meta) = new_metadata {
-            self.save_metadata(&meta)?;
-            paths.push("metadata.yaml".to_string());
-        } else if self.metadata_path.exists() {
-            paths.push("metadata.yaml".to_string());
-        }
-        for row in planned.iter().filter(|r| r.id != req.id) {
-            if let Some(sid) = self.stage_requirement_update(row)? {
-                paths.push(object_store::relative_object_path(sid)?);
-            }
-        }
-
-        // Record create operation
-        self.record_op(
-            req.id,
-            crate::oplog::OpKind::Create {
-                title: req.title.clone(),
-                description: req.description.clone(),
-                req_type: format!("{:?}", req.req_type),
-                status: req.effective_status(),
-                priority: req.effective_priority(),
-            },
-        );
-
-        object_store::write_object(&self.objects_root, &req)?;
-        let spec_id = req.spec_id.as_deref().unwrap_or("unknown");
-        // Targeted stage: only the new YAML + metadata.yaml (counters bumped).
-        // trace:BUG-1-040 | ai:claude
-        if let Ok(rel) = object_store::relative_object_path(spec_id) {
-            self.auto_commit_paths(&format!("add {} — {}", spec_id, req.title), &{
-                paths.push(rel);
-                paths.iter().map(String::as_str).collect::<Vec<_>>()
-            });
-        }
-        Ok(req)
+        self.add_requirement_with_origin_prompt(requirement, None)
     }
 
     fn exists(&self) -> bool {

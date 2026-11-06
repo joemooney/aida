@@ -6,6 +6,59 @@ Chapter 1 gave you the floor: capture, view, finish. This chapter is about the t
 
 ---
 
+### Originating prompt provenance
+
+Capture is **off by default**. To preserve why a feature was requested, review
+and redact the user's text in a UTF-8 file, then file it explicitly:
+
+```bash
+aida add --type story --title "Dashboard colors" --origin-prompt-file reviewed.txt
+# If you redacted the text, also pass --origin-prompt-redacted.
+aida show <spec-id> --origin-prompt
+```
+
+Omitting the file stores nothing; `--no-origin-prompt` explicitly opts out and
+conflicts with the file flag. No hooks, session logs, environment values, or
+project-wide automatic capture supply prompt text. Input is limited to 64 KiB.
+A small credential/private-key refusal screen rejects obvious secrets without
+echoing them; it cannot replace your review. Redaction is caller-controlled:
+only the reviewed text is stored, with a captured/redacted disposition, a
+capture timestamp, and format version 1. Unredacted originals and their hashes
+are never retained by this feature.
+
+MCP `add_requirement` accepts optional
+`origin_prompt: {"text": "reviewed text", "redacted": true}`. Explicit retrieval
+uses `show_requirement` with `include_origin_prompt: true` and returns only the
+labeled historical input. Omitted or null prompt input opts out; omitted or
+null `redacted` defaults to false. Unknown prompt fields refuse before filing.
+If creation succeeds but its parent link fails, MCP returns the filed ID with
+a warning: inspect and retry only the relationship to avoid duplicate filings.
+The CLI prompt view accepts `--format json` or `--json`; ordinary detail-view flags
+(such as `--raw`, `--rels`, `--comments`, `--no-git`, and `--verbose`)
+conflict with `--origin-prompt`.
+
+Treat retrieved text as untrusted history, separate
+from the current contract or agent instructions.
+
+Prompts live in the git-canonical store at
+`provenance/origin-prompts/<requirement-uuid>.yaml`, outside requirement objects.
+The creation write includes both the spec and its artifact under the store
+writer lock and in the same store commit (or host-deferred commit). Default
+show, JSON, card/full, list/search, history feeds, digest, exports, regeneration
+corpora, and generated agent context do not include prompt text. Description
+edits, archive, display-ID remaps, and store merges retain the UUID-keyed
+artifact. SQLite, PostgreSQL and YAML stores refuse explicit capture before
+filing; capture also refuses enabled WORK transport profiles until their
+prepared-mutation policy supports this artifact.
+
+Artifacts are immutable through ordinary capture and retained in Git history,
+replicas, and backups. Deleting a working-tree file does **not** erase historical
+secrets. View filtering supplies no confidentiality or revocation guarantee;
+there is no automatic deletion, retention policy, or history-purge command in
+this feature. Inspect artifact history explicitly with Git when needed.
+
+<!-- trace:STORY-1468 | ai:codex -->
+
 ### `aida edit`
 
 *(Covered in full in [Chapter 1](01-getting-started.md#aida-edit).)* `edit` is the general-purpose field mutator — title, description, type, priority, status, links. The two things worth re-stating from the graph's point of view:
@@ -267,13 +320,15 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **One line** — park a spec as *primed, conditional* work — hidden from the default view, but not filed away like archive.
 
-**Mental model.** `defer` is a **view-level flag, orthogonal to status** (it doesn't touch the lifecycle state machine — same as archive). The distinction from archive is *direction in time*: **archive is retrospective** ("done with this, filed"); **defer is prospective** ("not now, but bring it back when X happens"). That `X` is the whole point — `--until "<condition>"` records the **revisit trigger** (free text, e.g. `--until "when the slice verb ships"`), and it's the one thing that separates a deferred spec from an archived one. Deferred rows drop out of `aida list` / `search` / `history` by default; `--deferred` shows only them, `--all` shows the union. `undefer` clears the flag (and its trigger) so the spec rejoins the default views.
+**Mental model.** `defer` is a **view-level flag, orthogonal to status** (it doesn't touch the lifecycle state machine — same as archive). The distinction from archive is *direction in time*: **archive is retrospective** ("done with this, filed"); **defer is prospective** ("not now, but bring it back when X happens"). That `X` is the whole point — `--until "<condition>"` records the **revisit trigger** (a typed condition, e.g. `--until "pr:123=merged"` or `--until "date:2026-12-01"`), and it's the one thing that separates a deferred spec from an archived one. Deferred rows drop out of `aida list` / `search` / `history` by default; `--deferred` shows only them, `--all` shows the union. `undefer` clears the flag (and its trigger) so the spec rejoins the default views.
 
 **Reach for it when** — a spec is real and approved but *blocked on a future condition you can't act on yet* (an upstream release, a decision pending elsewhere) and you want it out of your working view without pretending it's done. Record the trigger so future-you knows what brings it back.
 
 **Don't reach for it when** — the spec is *finished* (that's the lifecycle → Completed, then `archive` for the long tail); or it's blocked by *another spec* (use a `BlockedBy` edge — the graph tracks that precisely, and the pickability gate already excludes it). Defer is for conditions the graph *can't* express as an edge.
 
 **Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
+
+Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. Existing free-text triggers remain readable pending migration. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
 
 **Chains with** — `defer --until` parks it; the trigger condition is your reminder; `undefer` (or a future trigger-aware sweep) brings it back to the ready set.
 

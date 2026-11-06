@@ -1,6 +1,6 @@
 # A second trusted review node
 
-<!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:STORY-2492 trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex -->
 
 This workflow lets one Linux host implement a PR and another review it. Both
 hosts must use the same code-origin URL spelling, share the git-canonical AIDA
@@ -143,6 +143,118 @@ name several heads and a reader that has no head of its own cannot resolve the
 branch, those publications are reported and ignored there; head-bound gates
 (merge, train) still apply the publication at their head.
 
-Watcher reservations remain machine-local in slice 1. Do not run competing
-watchers against the same PR heads yet; reservation synchronization is slice 2.
+## Run distributed watchers
+
+Configure the single authority in the reviewed default-branch configuration;
+a branch-local edit cannot redirect admission or credentials:
+
+```toml
+[review]
+admission_hub = "https://github.com/joemooney/aida.git"
+admission_ref = "refs/aida/review-admission"
+```
+
+The repository ships with these settings disabled. Enroll and configure every
+watcher host first, upgrade every watcher to the admission-aware binary, and stop
+older watchers before enabling this configuration in a separate reviewed change.
+A host without an enrolled publisher refuses dispatch when the hub is enabled;
+it never silently falls back to local-only admission. Old binaries cannot participate in this
+protocol or read its extended local launch receipts. Every publishing node must
+use the same exact URL and ref. The watcher repository must match that GitHub
+authority; another project cannot share its PR-number admission keys. GitHub is the sole
+admission authority. GitLab and the hourly reconcile bridge distribute evidence
+and never admit. A GitLab MR or a GitLab admission URL refuses. There is no
+failover: `admission_hub_unreachable` names the configured authority and no
+reviewer starts. A configured publisher with missing admission settings refuses;
+a host with neither publisher nor admission settings retains local-only operation.
+
+Run `aida review watch --once` or the ordinary continuous watcher on each host.
+Each discovery pass first fast-forwards the clean canonical store through its
+existing evidence gate; divergence, dirty state and sync errors refuse that pass.
+The watcher then queries open forge changes and reads verified synced publications,
+even when there is no local verdict directory. The local two-review ceiling still
+applies. Before spawning a dispatcher it signs a Reserved transition and pushes
+with an explicit expected-tip lease to the configured ref. It requires a definite
+successful push and confirms the accepted transition. Unrelated store commits
+do not refuse transitions: short store locks refresh publisher, roster and
+relevant verdict evidence before publication; changed evidence rebuilds within
+the same retry budget. Network I/O holds no store lock. A losing CAS reloads and
+reconstructs against the winner, for at most three attempts, preserving other
+changes and tree entries. It never rebases a losing claim into an accepted one.
+
+Each bounded version-1 `changes/PR-N.json` blob contains one signed causal chain.
+There is no global change-count or aggregate-blob budget. Legacy `admission.json`
+is read only as a fallback for changes without a shard; the first write migrates
+that change into its own blob and retains the old table as historical evidence.
+Upgrade all admission writers together: old writers cannot see the shards. Each transition binds the repository/forge, hub/ref, GitHub PR, exact head,
+unpredictable UUID token, owner node/session, transition ID and predecessor.
+Signatures use the enrolled node key and the slice-1 OpenSSH namespace. The
+process-bound dispatcher consumes Reserved → Running exactly once after its
+head/overlap preflight and before queue work. An observed worker exit permits
+Running → Terminal only when every recorded reviewer/worker has stopped and
+none is unrecorded. Proven preflight or dispatcher-spawn failure permits
+Reserved → Cancelled. Terminal heads are not automatically reviewed again;
+Cancelled admits a fresh token. An active older head fences newer heads.
+
+A failed or lost push response, crash, uncertain child spawn, unknown process
+identity, revoked signing node or failed terminal write retains capacity safely.
+Clock age, reboot and remote PIDs never release a distributed claim. Local
+`--release` refuses while the hub has an active claim or an unverifiable chain.
+
+### Recover a stopped or revoked claim
+
+Stop admission watchers on **every node**. Independently verify that every
+reviewer and queue-work child for the affected PR has stopped, including children
+on rebooted or disconnected hosts. Recovery does not terminate processes or
+infer safety from age. Inspect the hub tip and the affected chain:
+
+```bash
+git ls-remote https://github.com/joemooney/aida.git refs/aida/review-admission
+```
+
+From a direct human terminal on a still-enrolled publisher, use the exact SHA
+just inspected (replace `HUB_SHA` and the PR number):
+
+```bash
+aida review nodes admission-reconcile PR-123 --expected-tip HUB_SHA \
+  --all-reviewers-stopped --reason "owner rebooted; all reviewers verified stopped"
+```
+
+This command signs an immutable recovery attestation under `recoveries/<uuid>.json`
+and CAS-pushes a new empty anchor for that PR only. It does not require the old
+owner's signature to remain valid, so it can recover revoked owners too. The old
+chain remains reachable in Git history. Old tokens cannot transition into the
+new anchor. A moved tip, missing stopped-process attestation, unenrolled recovery
+publisher or uncertain push refuses; inspect the hub again before retrying.
+The command never retries a raced recovery against a different tip.
+
+Consumers verify the current shard's signed chain and the recovery anchor's
+signature and scope. They do not compare the shard with ancestor commits or
+check `predecessor_tip` against Git history. Preserving or resetting chains
+therefore relies on trusted writers: a buggy trusted writer could truncate a
+shard or replay an old signed anchor without detection by these readers.
+<!-- trace:TASK-3196 | ai:codex -->
+
+On each node, run `aida review watch --release PR-123` to clear stopped local
+attempts. This now checks that the hub no longer has an active claim, and still
+refuses a locally live process. Restart admission only after all nodes finish
+cleanup. A fresh review uses a new token; ordinary synced verdict checks still
+prevent double-review of a completed head. The same operation can compact a
+closed PR's Terminal/Cancelled chain or an unusually long open PR's chain, after
+the same stopped-admission checks. Revocation does not require retaining a node
+in the roster: re-anchor its affected chains from an enrolled operator host.
+
+A losing node caches a remote hold without using a local reviewer slot; it skips
+repeated hub probes for that head until a head change or explicit recovery.
+Admission update network commands have ten-second per-command deadlines and run
+outside the canonical store writer lock. Only the local evidence snapshot is
+read under that lock.
+
+The custom GitHub ref uses client-side CAS, not GitHub ruleset enforcement.
+Only cooperating AIDA writers may update it: no bridge, mirror or operator may
+force-push, delete or rewind it during admission. Every shard is bounded to
+1 MiB and 2048 transitions; exhaustion affects only its own PR and can be
+recovered with the stopped-admission command above. Grants and human receipts
+remain local; this protocol grants no remote role authority.
+
 Untrusted work-node envelopes are outside this workflow.

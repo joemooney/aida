@@ -8606,6 +8606,8 @@ pub(crate) struct ShipArgs {
     /// Commit subject to use when committing uncommitted work. The
     /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
     /// conventional default is used. Ignored when the worktree is clean.
+    /// In a native seat, records a lease-bound host publication declaration
+    /// instead; supply the complete subject including `(ID)` or `(Refs ID)`.
     // trace:BUG-1294 | ai:claude
     #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
     pub message: Option<String>,
@@ -8694,6 +8696,21 @@ fn run_ship(
             // trace:TASK-2712 | ai:claude
             commit_pending: commit_pending.clone(),
         });
+    }
+    // trace:TASK-2902 | ai:codex
+    if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
+        if let Some(subject) = message {
+            anyhow::ensure!(
+                !*no_trailer_check,
+                "native declarations require trailer validation"
+            );
+            return crate::native_publication::declare(
+                &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+                spec.as_deref(),
+                subject,
+                *dry_run,
+            );
+        }
     }
     // TASK-2712: a native Codex lane's git directory is read-only, a seat
     // clone's included; say so, with the host-commit recovery, before any
