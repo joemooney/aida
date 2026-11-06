@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:31:16.919775097Z
+modified_at: 2026-11-06T15:31:20.709046768Z
 req_type: Story
 relationships:
 - rel_type:
@@ -175,6 +175,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 fixes most findings (umask CI repro, JUnit canonicalisation, cancellation receipts, round-robin cursor, criterion traces, --json, train/PR readers), but history revalidation is still unbounded on any checkpoint miss: a fresh clone, a new enrollment or any edit to the four validator source files refetches and re-inventories every historical CI SHA under one 30s deadline. CI at the head is still pending.. No triage reason was given.'
   created_at: 2026-11-06T15:31:16.919773469Z
   modified_at: 2026-11-06T15:31:16.919773469Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b17c-5ee0-7d10-a651-a3abba276774
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3504):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b90e12db7169
+    Recorded: 2026-11-06T15:21:00.154795056+00:00
+    Findings:
+    1. MAJOR (blocking; round-1 finding 2 only partly fixed): the validated-tip checkpoint is keyed by validator_prefix() (intent_intake.rs:163-170), a SHA-256 of intent_intake.rs, observation_envelope.rs, ci_receipt.rs and ci_relay.rs. When there is no matching checkpoint, history() (intent_intake.rs:540-544) runs ci_validate on every historical ci-results file. Each distinct SHA then costs a home_remote fetch plus a full source inventory inside Snapshot's single 30s deadline (ci_relay.rs:471-482). There is no matching checkpoint on a fresh clone, a re-enrolled work machine, or after any AIDA build that edits those four files. Results are immutable and kept forever, so once enough distinct SHAs exist those clones fail permanently on pull/sync/publish/process (observations included), with no recovery. test_several_shas_reuse_accepted_history_without_source_fetches only covers a warm checkpoint from the same binary. Suggested fix: in history(), check only retained admission and strict schema/digest/canonical path for CI files, with no source fetch. Keep inventory validation in process() before publishing, which already runs at ci_relay.rs:1017. Add a test: several SHAs, then delete validated-tip or use a fresh home clone, and assert pull succeeds with no source-SHA fetches.
+    2. MINOR: the round-1 finding-3 rescope still has no follow-up spec. 'Admit AIDA repository size and GitLab templates to work CI relay inventory' exists only in docs/plans/2026-11-05-story-2480-work-ci-relay.md:223-240. This review files it as a from-review draft task; the advisor should promote it.
+    3. MINOR: CI at b90e12db7 was still pending when this verdict was recorded (cli-1 and lib-1 queued; contracts, which runs the relay e2e, in progress). The acadec5a e2e has not yet been shown green in CI at any head. Confirm 'Run restricted work CI relay contract' passes before re-review.
+    4. COSMETIC: format!() with no arguments at ci_relay.rs:864, 1075 and 1142 (clippy::useless_format; CI only warns on it). Pass a plain .to_string() or make output() take &str.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T15:31:20.416055849Z
+  modified_at: 2026-11-06T15:31:20.416055849Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
