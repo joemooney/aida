@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-06T07:41:14.749457497Z
+modified_at: 2026-11-06T07:41:17.156309221Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -145,6 +145,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 at d609195a9e3a: every advisor-ruling criterion for TASK-2838 is met by inspection and targeted tests, and the new MAX_TOOLS same-tool update is correct and pinned. CI (lib-0) fails at this head and also failed at the two prior PR heads, while main 379c7c3 passes lib-0, so the merge is blocked.. No triage reason was given.'
   created_at: 2026-11-06T07:41:14.749455887Z
   modified_at: 2026-11-06T07:41:14.749455887Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afce-0567-7553-8c55-5e109dfe7c6f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2838):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d609195a9e3a
+    Recorded: 2026-11-06T06:50:31.966022133+00:00
+    Findings:
+    1. BLOCKER (CI): CI (lib-0) failed in step 'Run tests' at d609195a9e3a (run 42175293879, job 127752247612). It also failed at the previously approved head 9a95ace15c9 (run 42145892892, job 127657151791) and at merge 89d76774398. main 379c7c3c10e passes lib-0, so the failure follows this PR across three consecutive heads; it is not a one-off flake. The round-3 approval was recorded while that run was still queued, so it never gated on this red shard. The reviewer sandbox cannot fetch job logs or artifacts (blob host denied), so the failing test is unnamed here. Fetch the lib-0 log, name and fix the failing test (likely a test that launches a fake AGY child expecting exit 0 without emitting an event=result line, or one that asserts the old AGY argv), and push. If you claim it is unrelated, show a green lib-0 rerun at the same SHA.
+    2. MINOR (scope note, no change required unless it is what lib-0 hits): agy_headless_args_with_effort now adds --output-format stream-json to every caller, including the advisor-tier AGY launch (session.rs:7775 via phase_driver.rs:2204), whose exit status is not reclassified through agy_outcome. This is acceptable because the punt response file is that phase's completion check. Confirm no advisor-tier or punt test or consumer parses AGY plain-text stdout.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T07:41:17.031405989Z
+  modified_at: 2026-11-06T07:41:17.031405989Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
