@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
@@ -17,10 +17,32 @@ const BRANCH: &str = "refs/heads/aida-intent";
 const INCOMING: &str = "refs/intake/incoming";
 const PROFILE: &str = "profile.json";
 const REPO_CONFIG: &[u8] = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n";
+// Bound inventory work on cold, fingerprint-invalidated and incremental passes.
+// trace:STORY-2480 | ai:codex
+const CI_HISTORY_REVALIDATION_ATTEMPTS: usize = 32;
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Checkpoint {
+    validator: String,
+    tip: String,
+    // One bit per lexically sorted CI path at tip; <=8192 bytes, well below
+    // Private's 64-KiB cap even when every retained result has been verified.
+    verified_ci: String,
+}
+
 const CAP: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum IntakeCommand {
+    /// Configure or run the restricted work CI return channel.
+    Ci {
+        /// Emit a JSON result object.
+        #[clap(long = "json", global = true)]
+        ci_json: bool,
+        #[clap(subcommand)]
+        command: crate::ci_relay::CiCommand,
+    },
     /// Enroll an independent pinned URL and reviewed deny patterns; no store required.
     Enroll {
         /// Explicit absolute local path, HTTPS URL, or SSH URL.
@@ -132,7 +154,7 @@ fn digest(value: &str) -> bool {
 }
 
 // trace:TASK-3096 | ai:codex
-fn validate_remote(remote: &str) -> Result<()> {
+pub(super) fn validate_remote(remote: &str) -> Result<()> {
     if remote.is_empty()
         || remote.starts_with('-')
         || remote.chars().any(char::is_control)
@@ -157,6 +179,8 @@ fn validator_prefix() -> String {
     let mut validator = Sha256::new();
     validator.update(include_bytes!("intent_intake.rs"));
     validator.update(include_bytes!("observation_envelope.rs"));
+    validator.update(include_bytes!("ci_receipt.rs"));
+    validator.update(include_bytes!("ci_relay.rs"));
     format!("v1:{:x}:", validator.finalize())
 }
 
@@ -203,7 +227,7 @@ fn git_result(root: &Path, args: &[&str], input: &[u8], cap: usize) -> Result<(b
     Ok((status.success(), bytes))
 }
 
-fn git(root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn git(root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
     // trace:TASK-3096 | ai:codex
     let mut cmd = git_command(root);
     cmd.args(args);
@@ -223,9 +247,11 @@ fn text(bytes: Vec<u8>) -> Result<String> {
     Ok(String::from_utf8(bytes)?.trim().to_string())
 }
 
-struct Intake {
-    private: Private,
-    worktree: PathBuf,
+pub(super) struct Intake {
+    pub private: Private,
+    pub worktree: PathBuf,
+    ci_snapshot: RefCell<Option<crate::ci_relay::Snapshot>>,
+    verified_ci: RefCell<BTreeSet<String>>,
     profile: Profile,
     _lock: fs::File,
     blobs: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -336,10 +362,37 @@ impl Intake {
         Ok(Self {
             private,
             worktree,
+            ci_snapshot: RefCell::new(None),
+            verified_ci: RefCell::new(BTreeSet::new()),
             profile,
             _lock: lock,
             blobs: RefCell::new(BTreeMap::new()),
         })
+    }
+
+    pub(super) fn profile_remote(&self) -> String {
+        self.profile.remote.clone()
+    }
+
+    fn ci_admit(&self, path: &str) -> Result<()> {
+        if self.ci_snapshot.borrow().is_none() {
+            *self.ci_snapshot.borrow_mut() = Some(crate::ci_relay::Snapshot::load(self)?);
+        }
+        self.ci_snapshot.borrow().as_ref().unwrap().admit(path)?;
+        Ok(())
+    }
+
+    pub(super) fn ci_validate(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        if self.ci_snapshot.borrow().is_none() {
+            *self.ci_snapshot.borrow_mut() = Some(crate::ci_relay::Snapshot::load(self)?);
+        }
+        self.ci_snapshot
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .validate(path, bytes)?;
+        self.verified_ci.borrow_mut().insert(path.to_owned());
+        Ok(())
     }
 
     fn tip(&self) -> Result<Option<String>> {
@@ -380,24 +433,33 @@ impl Intake {
             &["rev-list", "--reverse", "--topo-order", "--parents", tip],
             &[],
         )?)?;
-        // Owner-only checkpoint pins a previously validated immutable Git object.
-        // Rewritten/unrelated history cannot reuse it; it falls back to full validation.
-        // Only new commits need intermediate-tree checks. Re-read the checkpoint
-        // tree and validate every live file against the current policy as well.
-        // Bind proof to the compiled validators, including dirty source changes:
-        // future validation rules must never inherit an older validator's proof.
-        let validator = validator_prefix();
+        // A checkpoint preserves the exact subset with inventory authority. A
+        // validator change (including dirty sources) takes the same bounded cold path.
         let checkpoint = self
             .private
             .read("validated-tip")?
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .and_then(|value| value.strip_prefix(&validator).map(str::to_owned))
-            .filter(|tip| tip.len() == 40 && tip.bytes().all(|b| b.is_ascii_hexdigit()));
-        let checkpoint = checkpoint.filter(|tip| {
-            commits
-                .lines()
-                .any(|line| line.split_whitespace().next() == Some(tip.as_str()))
-        });
+            .and_then(|bytes| serde_json::from_slice::<Checkpoint>(&bytes).ok())
+            .filter(|c| {
+                c.validator == validator_prefix()
+                    && c.verified_ci.len() <= 8192
+                    && c.verified_ci.bytes().all(|b| matches!(b, b'0' | b'1'))
+                    && commits
+                        .lines()
+                        .any(|line| line.split_whitespace().next() == Some(c.tip.as_str()))
+            });
+        self.verified_ci.borrow_mut().clear();
+        if let Some(c) = &checkpoint {
+            let paths = self.ci_paths(&c.tip)?;
+            if paths.len() != c.verified_ci.len() {
+                bail!("Invalid CI checkpoint verification set");
+            }
+            *self.verified_ci.borrow_mut() = paths
+                .into_iter()
+                .zip(c.verified_ci.bytes())
+                .filter_map(|(path, bit)| (bit == b'1').then_some(path))
+                .collect();
+        }
+        let checkpoint = checkpoint.map(|c| c.tip);
         let mut reached = checkpoint.is_none();
         let deadline = Instant::now() + Duration::from_secs(30);
         let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
@@ -456,7 +518,10 @@ impl Intake {
                 if parts.len() == 3
                     && parts[0] == "040000"
                     && parts[1] == "tree"
-                    && matches!(path, "observations" | "receipts")
+                    && (matches!(path, "observations" | "receipts" | "ci-results")
+                        || path
+                            .strip_prefix("ci-results/")
+                            .is_some_and(crate::ci_receipt::oid))
                 {
                     continue;
                 }
@@ -467,7 +532,9 @@ impl Intake {
                 let checksum = name
                     .strip_suffix(".json")
                     .context("Unexpected intake filename")?;
-                if !digest(checksum) || !matches!(folder, "observations" | "receipts") {
+                if folder != "ci-results"
+                    && (!digest(checksum) || !matches!(folder, "observations" | "receipts"))
+                {
                     bail!("Unexpected intake path");
                 }
                 if Instant::now() >= deadline {
@@ -488,7 +555,37 @@ impl Intake {
                 if total > 32 * 1024 * 1024 {
                     bail!("Intake tree exceeds 32 MiB");
                 }
-                if folder == "observations" {
+                if folder == "ci-results" {
+                    // Retained refs remain live authority. One remote ref
+                    // snapshot checks all identities without fetching sources.
+                    self.ci_admit(path)?;
+                    let snapshot = self.ci_snapshot.borrow();
+                    let (sha, n) = snapshot.as_ref().unwrap().admit(path)?;
+                    let r = crate::ci_receipt::Receipt::parse_history(&bytes, sha, n)?;
+                    if r.path() != path {
+                        bail!("Noncanonical CI result path");
+                    }
+                    // Bound both cold and warm passes to the newest retained
+                    // attempts. Excess new results remain audit data until an
+                    // exact reader requests them; cached proof remains valid.
+                    // trace:STORY-2480 | ai:codex
+                    let recent = snapshot
+                        .as_ref()
+                        .unwrap()
+                        .requests
+                        .keys()
+                        .rev()
+                        .take(CI_HISTORY_REVALIDATION_ATTEMPTS)
+                        .any(|attempt| *attempt == n);
+                    let selected = recent
+                        && (checkpoint.is_none()
+                            || (checkpoint.as_deref() != Some(fields[0])
+                                && previous.get(path) != Some(&bytes)));
+                    drop(snapshot);
+                    if selected && !self.ci_verified(path) {
+                        self.ci_validate(path, &bytes)?;
+                    }
+                } else if folder == "observations" {
                     let value = envelope::parse(&bytes, &self.profile.deny_patterns)?;
                     if value.checksum != checksum {
                         bail!("Intake digest filename mismatch");
@@ -533,19 +630,64 @@ impl Intake {
             previous = current;
             parent = Some(fields[0]);
         }
+        let unverified = previous
+            .keys()
+            .filter(|p| p.starts_with("ci-results/") && !self.ci_verified(p))
+            .count();
+        if unverified > 0 {
+            eprintln!("CI intake: {unverified} unverified-history results (audit only; exact attempt/SHA read required)");
+        }
         Ok(previous)
+    }
+
+    fn ci_paths(&self, tip: &str) -> Result<Vec<String>> {
+        let tree = git(
+            &self.worktree,
+            &["ls-tree", "-rz", "--name-only", "--full-tree", tip],
+            &[],
+        )?;
+        let mut paths: Vec<_> = tree
+            .split(|b| *b == 0)
+            .filter(|p| p.starts_with(b"ci-results/"))
+            .map(|p| String::from_utf8(p.to_vec()))
+            .collect::<std::result::Result<_, _>>()?;
+        paths.sort();
+        Ok(paths)
     }
 
     // Candidate/quarantine validation never replaces proof of an accepted tip.
     // trace:TASK-3096 | ai:codex
     fn checkpoint(&self, tip: &str) -> Result<()> {
+        let verified_ci = self
+            .ci_paths(tip)?
+            .iter()
+            .map(|path| if self.ci_verified(path) { '1' } else { '0' })
+            .collect();
         self.private.write(
             "validated-tip",
-            format!("{}{tip}", validator_prefix()).as_bytes(),
+            &serde_json::to_vec(&Checkpoint {
+                validator: validator_prefix(),
+                tip: tip.to_owned(),
+                verified_ci,
+            })?,
         )
     }
 
-    fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
+    pub(super) fn ci_verified(&self, path: &str) -> bool {
+        self.verified_ci.borrow().contains(path)
+    }
+
+    pub(super) fn verify_ci_read(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        if !self.ci_verified(path) {
+            self.ci_validate(path, bytes)?;
+            if let Some(tip) = self.tip()? {
+                self.checkpoint(&tip)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         match self.tip()? {
             Some(tip) => {
                 let files = self.history(&tip)?;
@@ -563,7 +705,7 @@ impl Intake {
     /// A refused push (another writer won the race) re-synchronizes and builds a
     /// fresh commit on the new tip: accepted commits are never rewritten.
     // trace:TASK-3096 | ai:claude
-    fn append(&self, path: &str, bytes: &[u8]) -> Result<()> {
+    pub(super) fn append(&self, path: &str, bytes: &[u8]) -> Result<()> {
         for _ in 0..4 {
             self.sync()?;
             let tip = self.tip()?;
@@ -707,7 +849,7 @@ impl Intake {
     /// Fetch into quarantine, validate all incoming history, then accept only a
     /// fast-forward. Returns `false` when the remote has no intake branch yet.
     // trace:TASK-3096 | ai:claude
-    fn sync(&self) -> Result<bool> {
+    pub(super) fn sync(&self) -> Result<bool> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
         if self.remote_tip()?.is_none() {
@@ -1096,6 +1238,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
     let intake = Intake::open(command)?;
     let json = json_format
         || match command {
+            IntakeCommand::Ci { ci_json, .. } => *ci_json,
             IntakeCommand::Enroll { json, .. }
             | IntakeCommand::Publish { json, .. }
             | IntakeCommand::Pull { json }
@@ -1103,6 +1246,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             | IntakeCommand::Process { json, .. } => *json,
         };
     match command {
+        IntakeCommand::Ci { command, .. } => crate::ci_relay::run(&intake, command, json)?,
         IntakeCommand::Enroll { .. } => {
             if json {
                 println!(

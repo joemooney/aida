@@ -964,6 +964,7 @@ fn intake_human_and_json_renderings_are_distinct() {
     );
 }
 
+// trace:STORY-2480 | ai:codex
 #[test]
 fn validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits() {
     let temp = tempfile::tempdir().unwrap();
@@ -980,7 +981,7 @@ fn validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits() {
     let old = git(&receiver.intake(), &["rev-parse", "HEAD"]);
     let checkpoint = receiver.root.join(".git/aida-intake/validated-tip");
     let cached = fs::read_to_string(&checkpoint).unwrap();
-    assert!(cached.ends_with(&format!(":{old}")));
+    assert_eq!(serde_json::from_str::<Value>(&cached).unwrap()["tip"], old);
     // Removing an old object proves a second command uses the validated prefix.
     // The tip's live blobs still get validated, so a missing live blob refuses.
     let root_commit = git(&receiver.intake(), &["rev-list", "--max-parents=0", "HEAD"]);
@@ -1001,8 +1002,10 @@ fn validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits() {
     good(&receiver.run(&["intent", "pull"]));
     let old = git(&receiver.intake(), &["rev-parse", "HEAD"]);
     let cached = fs::read_to_string(&checkpoint).unwrap();
-    assert!(cached.ends_with(&format!(":{old}")));
-    fs::write(&checkpoint, format!("v0:stale:{old}")).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&cached).unwrap()["tip"], old);
+    let mut stale: Value = serde_json::from_str(&cached).unwrap();
+    stale["validator"] = Value::String("stale-validator".to_owned());
+    fs::write(&checkpoint, serde_json::to_vec(&stale).unwrap()).unwrap();
     bad(
         &receiver.run(&["intent", "list", "--json"]),
         "Git operation refused",
