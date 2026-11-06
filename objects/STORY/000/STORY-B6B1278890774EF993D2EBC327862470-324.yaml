@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T19:32:37.498306843Z
+modified_at: 2026-11-06T19:32:45.932925049Z
 req_type: Story
 tags:
 - architecture
@@ -651,6 +651,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-C scope (profile-owned Codex finalization, one launch grant issuer, selector-only control children, queue exec seats, ratchet 157->133) is implemented, but the control-child pin to the current executable by exact path refuses every orchestrator, zen, aida do and TUI control child after a dev-build promote or an AIDA_BIN/profile redirect; CI has not run green at head yet.. No triage reason was given.'
   created_at: 2026-11-06T19:32:37.498303104Z
   modified_at: 2026-11-06T19:32:37.498303104Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b259-6684-71a3-9d4d-32fbea6d7712
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3531):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3ad20e7501e4
+    Recorded: 2026-11-06T19:28:10.292314326+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3531#issuecomment-6693534452
+    Findings:
+    1. MAJOR liveness (Probe 5 fail-closed regression): launch/control.rs:31-41 control_child_with_current and aida-tui/src/redesign/mod.rs apply_control_env refuse unless canonicalize(program) == canonicalize(/proc/self/exe), but callers pass a separately resolved, cached path: RealPhaseDriver.aida_exe = resolve_aida_exe() (phase_driver.rs:672, OnceLock in kernel.rs:662), zen_drive_root resolve_aida_exe(), TUI crate::app::aida_exe() (OnceLock, aida-tui/src/exe_path.rs:9). aida dev build promote/rollback rotates live/aida into live/prev/ by rename (dev_build.rs:1216). A long-running drain or TUI then has /proc/self/exe -> live/prev/aida while its cached path canonicalizes to the new live/aida, so every phase-1 implementer, phase-3 reviewer and agent gate (phase_driver_trait.rs:347, :2066; orchestrator_leases.rs:1536), zen drive step (zen_drive_root.rs:337, :518, :963) and TUI gesture (approve/reject/queue/archive/drive) fails with 'control inheritance requires the canonical current AIDA executable'. After a second promote the old image is unlinked and canonicalize(/proc/self/exe) itself errors on the '(deleted)' target. The same refusal fires when an honored AIDA_BIN override (aida_bin.rs:76) or AIDA_BUILD_PROFILE resolves to a different build. Before this PR these children ran (BUG-766 intent). Fix: build the control child from the running image itself (Command::new(std::env::current_exe()/"/proc/self/exe")) and ignore or just log the caller's path, or compare file identity in a way that survives rename; add a regression test for a renamed or replaced image.
+    2. MINOR: phase_driver.rs:1393 auto-punt calls crate::launch::control_child(self.aida_exe()) directly, not self.control_child(), so it bypasses the cfg(test) fixture seam the other phase sites use. Its '.ok()?' also drops a control-child refusal silently: a design-fork auto-punt can disappear with no log line or PhaseFailure, and that happens in exactly the condition the MAJOR finding creates. Route it through self.control_child() and log the error before returning None.
+    3. MINOR test coverage (Probe 5, refusal paths): (a) autopilot_intake.rs:1014 and questions.rs:1661 now mint through issue_launch_child with session::sandboxed_child_grant(vendor, contained)?, which is a new keyring-required refusal for contained intake/clarify, but no test proves that refusal or that the grant is revoked afterwards. (b) The 12 TUI gestures turn an apply_control_env refusal into a bare false or generic failure (approve_spec, reject_spec, archive_spec, queue_for_*, spawn_drive), so the operator sees 'failed' with no reason. Nothing covers the refusal UX, and the accept_spec note path returns true on refusal without a message. Add a refusal-path test for each and surface the reason in the TUI status.
+    4. CI not verified: at 3ad20e7501e4 all 7 CI shards were queued or in progress when this was recorded (run 42275687660; runners backlogged, lib-1 started 19:21Z). No green PR CI evidence exists at the reviewed head, and the implementer's LIGHT-gate logs (/tmp/prc-*.log) are seat-local and cannot be inspected. The re-review must cite a green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:32:45.828664010Z
+  modified_at: 2026-11-06T19:32:45.828664010Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
