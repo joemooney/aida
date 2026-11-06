@@ -1,7 +1,7 @@
 # Work CI relay and restricted result intake
 
-Status: original sketch approved by advisor on 2026-11-05; request-admission
-addendum below awaits a decision. Runtime implementation remains incomplete.
+Status: sketch and request-admission fork approved by advisor on 2026-11-05.
+The binding ruling below supersedes the earlier proposed ref spelling.
 Owner: STORY-2480. trace:STORY-2480 | ai:codex
 
 ## Existing decisions and implementation gap
@@ -201,3 +201,21 @@ and recovery without any work-side local state.
 No runtime implementation, service deployment, PR, CI result, or completion is
 claimed by this addendum. STORY-2480 is punted as a design fork for this specific
 request-admission choice, not for the previously approved schema or prerequisite.
+
+
+## Binding request-admission ruling (2026-11-05 20:50 MST)
+
+The advisor approved immutable retained attempts and rejected a separate
+home-authored request registry. Home assigns the attempt and pushes its exact
+SHA to `refs/aida/ci/<attempt>` on work GitLab; it never rewrites or deletes an
+attempt ref. Results are keyed by `(attempt, SHA)`; pruning is out of scope.
+This ruling supersedes the addendum's proposed `refs/heads/ci/<attempt>`
+admission spelling. The implementation retains the same custom refs on the home
+hub so a fresh home clone can independently recover admission. Work's ordinary
+`refs/heads/ci/<attempt>` is only the exact-SHA GitLab pipeline trigger.
+
+Implementation uses the existing intake transport and shared lock, a strict
+CI codec, pinned static inventory, a bounded work timer, and home-only native
+status publication. See [operation, support limits and recovery](../agents/work-ci-relay.md).
+Runtime rollout requires server-enforced per-credential ref restrictions; no
+production credential or runner is enrolled by the implementation session.

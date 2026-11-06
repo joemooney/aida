@@ -21,6 +21,11 @@ const CAP: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum IntakeCommand {
+    /// Configure or run the restricted work CI return channel.
+    Ci {
+        #[clap(subcommand)]
+        command: crate::ci_relay::CiCommand,
+    },
     /// Enroll an independent pinned URL and reviewed deny patterns; no store required.
     Enroll {
         /// Explicit absolute local path, HTTPS URL, or SSH URL.
@@ -132,7 +137,7 @@ fn digest(value: &str) -> bool {
 }
 
 // trace:TASK-3096 | ai:codex
-fn validate_remote(remote: &str) -> Result<()> {
+pub(super) fn validate_remote(remote: &str) -> Result<()> {
     if remote.is_empty()
         || remote.starts_with('-')
         || remote.chars().any(char::is_control)
@@ -157,6 +162,8 @@ fn validator_prefix() -> String {
     let mut validator = Sha256::new();
     validator.update(include_bytes!("intent_intake.rs"));
     validator.update(include_bytes!("observation_envelope.rs"));
+    validator.update(include_bytes!("ci_receipt.rs"));
+    validator.update(include_bytes!("ci_relay.rs"));
     format!("v1:{:x}:", validator.finalize())
 }
 
@@ -203,7 +210,7 @@ fn git_result(root: &Path, args: &[&str], input: &[u8], cap: usize) -> Result<(b
     Ok((status.success(), bytes))
 }
 
-fn git(root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn git(root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
     // trace:TASK-3096 | ai:codex
     let mut cmd = git_command(root);
     cmd.args(args);
@@ -223,9 +230,10 @@ fn text(bytes: Vec<u8>) -> Result<String> {
     Ok(String::from_utf8(bytes)?.trim().to_string())
 }
 
-struct Intake {
-    private: Private,
-    worktree: PathBuf,
+pub(super) struct Intake {
+    pub private: Private,
+    pub worktree: PathBuf,
+    ci_snapshot: RefCell<Option<crate::ci_relay::Snapshot>>,
     profile: Profile,
     _lock: fs::File,
     blobs: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -336,10 +344,27 @@ impl Intake {
         Ok(Self {
             private,
             worktree,
+            ci_snapshot: RefCell::new(None),
             profile,
             _lock: lock,
             blobs: RefCell::new(BTreeMap::new()),
         })
+    }
+
+    pub(super) fn profile_remote(&self) -> String {
+        self.profile.remote.clone()
+    }
+
+    pub(super) fn ci_validate(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        if self.ci_snapshot.borrow().is_none() {
+            *self.ci_snapshot.borrow_mut() = Some(crate::ci_relay::Snapshot::load(self)?);
+        }
+        self.ci_snapshot
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .validate(path, bytes)?;
+        Ok(())
     }
 
     fn tip(&self) -> Result<Option<String>> {
@@ -456,7 +481,10 @@ impl Intake {
                 if parts.len() == 3
                     && parts[0] == "040000"
                     && parts[1] == "tree"
-                    && matches!(path, "observations" | "receipts")
+                    && (matches!(path, "observations" | "receipts" | "ci-results")
+                        || path
+                            .strip_prefix("ci-results/")
+                            .is_some_and(crate::ci_receipt::oid))
                 {
                     continue;
                 }
@@ -467,7 +495,9 @@ impl Intake {
                 let checksum = name
                     .strip_suffix(".json")
                     .context("Unexpected intake filename")?;
-                if !digest(checksum) || !matches!(folder, "observations" | "receipts") {
+                if folder != "ci-results"
+                    && (!digest(checksum) || !matches!(folder, "observations" | "receipts"))
+                {
                     bail!("Unexpected intake path");
                 }
                 if Instant::now() >= deadline {
@@ -488,7 +518,9 @@ impl Intake {
                 if total > 32 * 1024 * 1024 {
                     bail!("Intake tree exceeds 32 MiB");
                 }
-                if folder == "observations" {
+                if folder == "ci-results" {
+                    self.ci_validate(path, &bytes)?;
+                } else if folder == "observations" {
                     let value = envelope::parse(&bytes, &self.profile.deny_patterns)?;
                     if value.checksum != checksum {
                         bail!("Intake digest filename mismatch");
@@ -545,7 +577,7 @@ impl Intake {
         )
     }
 
-    fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
+    pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         match self.tip()? {
             Some(tip) => {
                 let files = self.history(&tip)?;
@@ -563,7 +595,7 @@ impl Intake {
     /// A refused push (another writer won the race) re-synchronizes and builds a
     /// fresh commit on the new tip: accepted commits are never rewritten.
     // trace:TASK-3096 | ai:claude
-    fn append(&self, path: &str, bytes: &[u8]) -> Result<()> {
+    pub(super) fn append(&self, path: &str, bytes: &[u8]) -> Result<()> {
         for _ in 0..4 {
             self.sync()?;
             let tip = self.tip()?;
@@ -707,7 +739,7 @@ impl Intake {
     /// Fetch into quarantine, validate all incoming history, then accept only a
     /// fast-forward. Returns `false` when the remote has no intake branch yet.
     // trace:TASK-3096 | ai:claude
-    fn sync(&self) -> Result<bool> {
+    pub(super) fn sync(&self) -> Result<bool> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
         if self.remote_tip()?.is_none() {
@@ -1096,6 +1128,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
     let intake = Intake::open(command)?;
     let json = json_format
         || match command {
+            IntakeCommand::Ci { .. } => false,
             IntakeCommand::Enroll { json, .. }
             | IntakeCommand::Publish { json, .. }
             | IntakeCommand::Pull { json }
@@ -1103,6 +1136,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             | IntakeCommand::Process { json, .. } => *json,
         };
     match command {
+        IntakeCommand::Ci { command } => crate::ci_relay::run(&intake, command)?,
         IntakeCommand::Enroll { .. } => {
             if json {
                 println!(

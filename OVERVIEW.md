@@ -1437,3 +1437,17 @@ The bounded committed-blob readers refuse malformed or unverifiable evidence.
 Watcher reservation synchronization and untrusted-node envelopes remain separate
 work. See [second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
+
+
+### Restricted work CI relay
+
+<!-- trace:STORY-2480 | ai:codex -->
+
+`aida intent ci` extends the independent intake transport with immutable CI
+results. Home assigns retained `refs/aida/ci/<attempt>` commit refs; a work timer
+verifies exact home/work bindings and mirrors only the admitted SHA to a GitLab
+execution branch. Both sides validate the closed result schema against static
+job and Rust test inventory at that home commit. Home alone publishes the stable
+`aida/work-ci` native status. Server-side credential restrictions are mandatory;
+local refspecs cannot enforce them. Retry journals preserve original deadlines
+and uncertain writes refuse automatic replay. See [setup and limits](docs/agents/work-ci-relay.md).
