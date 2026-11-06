@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T07:03:03.270192535Z
+modified_at: 2026-11-06T07:03:09.121413064Z
 req_type: Task
 tags:
 - architecture
@@ -316,6 +316,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC(1) slice is well-structured (vendor rows, Claude argv/settings finisher, fail-closed selection, receipt credit) but the PR''s own required-live test task_2708_live_lane_socket_connected_from_nested_netns_is_still_brokered fails in CI (lib-1, gates) at this head, and the broker''s nested-netns pass-through plus Claude-lane credential handling have gaps.. No triage reason was given.'
   created_at: 2026-11-06T07:03:03.270188113Z
   modified_at: 2026-11-06T07:03:03.270188113Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afab-1ba8-71a2-ad47-8666314d2c3e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3449):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bdcec264ee88
+    Recorded: 2026-11-06T06:42:56.769258364+00:00
+    Findings:
+    1. BLOCKER: task_2708_live_lane_socket_connected_from_nested_netns_is_still_brokered fails at bdcec264 in CI (lib-1 job 127746720835 and the required-live gates job 127746720805): panic at containment/tests/launch_tests.rs:122 'assertion failed: run.child.wait().unwrap().success()'. The lane script exits non-zero (candidates: nested unshare(CLONE_NEWUSER|CLONE_NEWNET) refused inside the bwrap lane on the runner, SIOCGSKNS/pidfd_getfd failing host-side, or the nested lo bring-up). Root-cause it and make it pass under AIDA_REQUIRE_BWRAP_LIVE=1. If nested userns is environment-dependent, probe it explicitly rather than skip, since Claude's own sandbox (failIfUnavailable=true) needs nested userns inside the lane too.
+    2. launch_tests.rs:122 run_script asserts the child succeeded BEFORE reading its output, so every live-test failure (including the one above) throws away the lane script's traceback and CI shows no cause. Read the output first and put it in the assertion message.
+    3. contained_host.py broker_connect_contained: nested = socket_netns(dup) != lane_net treats ANY netns other than the lane's as nested, and connect_nested then connects that socket host-side with an arbitrary address. A socket in the HOST netns that ends up in the lane gets an unbrokered host connect. Today that covers the relay sockets the broker itself installs (only EISCONN saves those) and any future inherited or SCM_RIGHTS-passed host socket. This is fail-open by construction. Verify that the socket's netns is a real descendant of the lane (NS_GET_USERNS/NS_GET_PARENT owner chain up to the lane userns) and refuse otherwise. Add a test that a host-netns or relay-installed socket re-connect is refused.
+    4. contained_lane.py:76 socketpair(AF_UNIX, any type) now allows SOCK_DGRAM. A unix datagram socket from socketpair can still sendto()/sendmsg() to a pathname address, which is the same bypass the docstring gives for keeping socket(AF_UNIX, SOCK_DGRAM) denied. sendto/sendmsg are only checked for MSG_FASTOPEN. The /run and /tmp tmpfs reduce the reachable targets but do not remove them. Either deny sendto/sendmsg with a non-null msg_name on unix sockets, or record the accepted residual risk on the spec. Add a live test that a socketpair dgram sendto a host datagram path fails.
+    5. launch/contained.rs host_vendor_state_masks masks ~/.claude and a relocated CLAUDE_CONFIG_DIR, but not the host ~/.claude.json (and its .backup). That file holds Claude account metadata, project trust and MCP server configs, which may contain env secrets. It stays readable through the read-only HOME in a contained Claude lane. Mask it (and test it) so that C7 'host Claude state masked' actually holds.
+    6. ContainedChild::vendor_exit (contained.rs ~:1209) re-reads the HOST credentials path, not the leaf bound into the lane. If the host refreshes the token mid-lane (Claude writes a new inode via rename), the lane's read-only bound token can expire while vendor_exit sees a fresh expiry, so the failure is reported generically instead of as CLAUDE_EXPIRED_IN_LANE. Separately, unwrap_or(true) labels an unreadable credentials file as expired. Capture the bound token's expiresAt at prepare time and judge against that.
+    7. No test drives PreparedLaunch::prepare for a Claude child. Untested: the read-only credentials bind (a write inside the lane must fail), the ~/.claude mask, the CLAUDE_CONFIG_DIR/TMPDIR/CLAUDE_CODE_TMPDIR rows pointing into the lane state, DISABLE_AUTOUPDATER, and refusal on a symlinked, multi-link or foreign-owned credentials leaf through prepare rather than only open_credentials_leaf. AC(1) 'no weakened floors' needs the refusal paths proven, not only the happy-path unit pieces. Add a synthetic fake-HOME prepare test, plus a live one where bwrap is available.
+    8. contained_host.py connect_nested starts an unbounded daemon thread for every nested-netns connect and runs a blocking host-side connect with no timeout. A lane can exhaust helper threads/fds or wedge them. Bound the concurrency and put a timeout on the connect (or make it non-blocking and mirror EINPROGRESS).
+    9. refresh_host_claude_credentials assumes 'claude auth status' renews an expiring OAuth token. Neither the PR nor a test shows that it does. If it does not, every launch inside the refresh window refuses after a wasted 30s budget. Cite the evidence that it renews, or use a documented refresh path, and record it on the spec.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T07:03:08.968690389Z
+  modified_at: 2026-11-06T07:03:08.968690389Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
