@@ -549,7 +549,7 @@ mod tests {
         let mut sends = 0;
         let mut send = |_: &str| {
             sends += 1;
-            Ok(true)
+            Ok(super::SendResult::Sent)
         };
         for (minute, ci, expected) in [(1, "fail", true), (2, "pending", false), (3, "fail", true)]
         {
@@ -627,7 +627,7 @@ mod tests {
                     30,
                     &mut |_| {
                         sends += 1;
-                        Ok(true)
+                        Ok(super::SendResult::Sent)
                     },
                     &mut |path, bytes| {
                         writes += 1;
@@ -661,7 +661,7 @@ mod tests {
             };
             let report = tick(t.path(), &s, 5 * MIN, true, 30, &mut |_| {
                 sends += 1;
-                Ok(true)
+                Ok(super::SendResult::Sent)
             })
             .unwrap();
             assert_eq!(report.accepted, ["empty-rework-exit"]);
@@ -701,7 +701,10 @@ mod tests {
                         empty_rework_members: Some(members),
                         ..Default::default()
                     };
-                    tick(t.path(), &s, (round + 1) * MIN, true, 30, &mut |_| Ok(true)).unwrap();
+                    tick(t.path(), &s, (round + 1) * MIN, true, 30, &mut |_| {
+                        Ok(super::SendResult::Sent)
+                    })
+                    .unwrap();
                     let state: State = serde_json::from_slice(
                         &std::fs::read(t.path().join(".aida/pipeline-stalls.json")).unwrap(),
                     )
@@ -760,7 +763,7 @@ mod tests {
 
     // trace:TASK-3075 | ai:codex
     #[test]
-    fn empty_exit_migrates_aggregate_acceptance_and_reservations() {
+    fn empty_exit_closes_legacy_aggregate_without_inventing_action() {
         for pending in [false, true] {
             let t = tempfile::tempdir().unwrap();
             std::fs::create_dir(t.path().join(".aida")).unwrap();
@@ -768,23 +771,28 @@ mod tests {
                 "empty-rework-exit":{"first_ms":MIN,"observed_ms":MIN,
                     "accepted":!pending,"delivery_pending":pending,"identity":"A,B"}
             }});
-            std::fs::write(
-                t.path().join(".aida/pipeline-stalls.json"),
-                serde_json::to_vec(&state).unwrap(),
-            )
+            let path = t.path().join(".aida/pipeline-stalls.json");
+            std::fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
+            let s = Snapshot {
+                extra: vec![Alarm::new("empty-rework-exit", Some(true), "A,B".into())],
+                ..Default::default()
+            };
+            let report = tick(t.path(), &s, 2 * MIN, true, 30, &mut |_| {
+                panic!("legacy closure sends no mail")
+            })
             .unwrap();
-            for identity in ["A", "A,B", "B", "A,B"] {
-                let s = Snapshot {
-                    extra: vec![Alarm::new("empty-rework-exit", Some(true), identity.into())],
-                    ..Default::default()
-                };
-                assert!(tick(t.path(), &s, 2 * MIN, true, 30, &mut |_| panic!(
-                    "legacy delivered heads must remain suppressed"
-                ))
-                .unwrap()
-                .due
-                .is_empty());
-            }
+            assert!(report.due.is_empty());
+            assert_eq!(
+                report
+                    .unknown
+                    .iter()
+                    .filter(|s| s.contains("action unknown; legacy episode closed"))
+                    .count(),
+                2
+            );
+            let state: State = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            assert!(state.episodes.is_empty());
+            assert_eq!(state.version, 2);
         }
     }
 
@@ -798,7 +806,7 @@ mod tests {
                 extra: vec![Alarm::new(kind, Some(true), "evidence1".into())],
                 ..Default::default()
             };
-            let mut send = |_: &str| Ok(true);
+            let mut send = |_: &str| Ok(super::SendResult::Sent);
             assert_eq!(
                 tick(t.path(), &s, MIN, true, 30, &mut send)
                     .unwrap()
@@ -896,11 +904,8 @@ mod tests {
             // leaves that kind unknown, while other due kinds still fall back.
             let mut send = |body: &str| {
                 let outcome = crate::supervise_cmd::deliver_pipeline_alarm(root, body)?;
-                assert_eq!(
-                    outcome.as_deref(),
-                    Some("pipeline alarm delivered to operator")
-                );
-                Ok(outcome.is_some())
+                assert_eq!(outcome, super::SendResult::Sent);
+                Ok(outcome)
             };
             let first = tick(root, &s, MIN, true, 30, &mut send).unwrap();
             if kind == "under-cap" {
@@ -943,7 +948,7 @@ mod tests {
         let mut sent = 0;
         let mut send = |_: &str| {
             sent += 1;
-            Ok(true)
+            Ok(super::SendResult::Sent)
         };
         let first = tick(t.path(), &s, MIN, true, 30, &mut send).unwrap();
         assert_eq!(
