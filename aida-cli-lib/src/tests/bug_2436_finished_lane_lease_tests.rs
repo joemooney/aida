@@ -13,6 +13,7 @@ fn seat(origin: OriginHead, uncommitted: Option<usize>) -> SeatState {
         head: Some(HEAD.to_string()),
         origin,
         uncommitted,
+        head_has_unpushed: Some(true),
     }
 }
 
@@ -74,6 +75,7 @@ fn a_lane_with_anything_left_in_its_seat_keeps_its_lease() {
         head: None,
         origin: OriginHead::Unknown,
         uncommitted: Some(0),
+        head_has_unpushed: Some(true),
     };
     assert!(!finished_lease_ends(&pr_opened(), &no_head), "no HEAD");
 }

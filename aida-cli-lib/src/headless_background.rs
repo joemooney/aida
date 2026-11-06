@@ -410,6 +410,16 @@ pub(crate) fn seat_head(worktree: &Path) -> Option<String> {
     (out.status.success() && !sha.is_empty()).then_some(sha)
 }
 
+/// Whether HEAD contains commits absent from every remote-tracking ref.
+/// A failed read stays unknown; moving HEAD alone is not evidence of local work.
+// trace:BUG-2464 | ai:codex
+pub(crate) fn head_has_unpushed_commits(worktree: &Path) -> Option<bool> {
+    let mut cmd = aida_core::git_ops::host_git_command(worktree);
+    cmd.args(["rev-list", "--max-count=1", "HEAD", "--not", "--remotes"]);
+    let out = crate::command_output_with_timeout(cmd, Duration::from_secs(5))?;
+    out.status.success().then(|| !out.stdout.is_empty())
+}
+
 /// Where `origin`'s copy of a branch is, as `git ls-remote` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OriginHead {
@@ -457,6 +467,8 @@ pub(crate) struct SeatState {
     pub(crate) head: Option<String>,
     pub(crate) origin: OriginHead,
     pub(crate) uncommitted: Option<usize>,
+    /// HEAD reaches a commit absent from all remote refs; None means unreadable.
+    pub(crate) head_has_unpushed: Option<bool>,
 }
 
 /// Work a run left in its seat without shipping it.
@@ -464,8 +476,8 @@ pub(crate) struct SeatState {
 pub(crate) enum Unshipped {
     /// The tree has this many uncommitted paths.
     UncommittedWork(usize),
-    /// The tree is clean, but `HEAD` moved past the launch head and `origin`
-    /// does not have it.
+    /// The tree is clean, but `HEAD` moved past the launch head and contains
+    /// commits absent from every remote-tracking ref.
     UnpushedCommits,
 }
 
@@ -487,12 +499,16 @@ impl SeatState {
                 head: facts.as_ref().and_then(|f| f.head.clone()),
                 origin: origin_head(&seat.main, branch),
                 uncommitted: facts.as_ref().map(|f| f.dirty.len()),
+                head_has_unpushed: crate::seat_clone::head_has_unpushed_commits(
+                    &seat.main, &seat.root,
+                ),
             };
         }
         Self {
             head: seat_head(worktree),
             origin: origin_head(worktree, branch),
             uncommitted: uncommitted_paths(worktree),
+            head_has_unpushed: head_has_unpushed_commits(worktree),
         }
     }
 
@@ -517,7 +533,7 @@ impl SeatState {
     /// The work this run left unshipped, if any. A pushed run has none (a
     /// stray path beside a push is not a stall); otherwise a dirty tree is
     /// [`Unshipped::UncommittedWork`], and a clean tree whose `HEAD` moved
-    /// past `launch_head` without reaching `origin` is
+    /// past `launch_head` with commits absent from all remote refs is
     /// [`Unshipped::UnpushedCommits`].
     pub(crate) fn unshipped(&self, launch_head: Option<&str>) -> Option<Unshipped> {
         if self.pushed_since(launch_head) == Some(true) {
@@ -527,8 +543,11 @@ impl SeatState {
             return Some(Unshipped::UncommittedWork(n));
         }
         let moved = self.head.as_deref().is_some_and(|h| launch_head != Some(h));
-        (moved && self.pushed_since(launch_head) == Some(false))
-            .then_some(Unshipped::UnpushedCommits)
+        // trace:BUG-2464 | ai:codex
+        (moved
+            && self.pushed_since(launch_head) == Some(false)
+            && self.head_has_unpushed == Some(true))
+        .then_some(Unshipped::UnpushedCommits)
     }
 }
 
