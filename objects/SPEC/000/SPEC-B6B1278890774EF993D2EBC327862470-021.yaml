@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T02:07:53.439915204Z
+modified_at: 2026-11-06T03:43:35.625038804Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-11-06T02:07:51.222061687Z
   modified_at: 2026-11-06T02:07:51.222061687Z
   session_id: 01a1ae9bac50
+- id: 01a1aef4-68c9-7a82-ba01-0a4231fca1c8
+  author: joe
+  content: 'ADVISOR RULING 2026-11-05 20:50 MST: sketch APPROVED. Authoring surface: EXTEND the native-seat ''aida ship -m <subject>''. Inside a native seat it records the lane-scoped publication declaration instead of publishing; no new command. All other points stand as proposed: binding to the lease/spec, clearing beside punt/hold, the exact single non-epic spec resolution (absorbs TASK-2907), failed exits always Refs, punt/hold vetoes first, and the regression list. Coordinate with BUG-2459 (the post-exit trailer must use the canonical display ID). If BUG-2459 lands first, rebase on it. LIGHT gate.'
+  created_at: 2026-11-06T03:43:35.625038804Z
+  modified_at: 2026-11-06T03:43:35.625038804Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
