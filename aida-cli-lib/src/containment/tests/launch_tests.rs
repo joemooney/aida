@@ -753,3 +753,31 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
         "informational"
     );
 }
+
+// trace:TASK-3194 | ai:codex
+#[test]
+fn task_3194_receipt_diagnostic_pins_harness_line() {
+    let policy_sha = "0123456789abcdef0123456789abcdef01234567";
+    let receipt = ContainmentReceipt {
+        accepted: true,
+        version: 1,
+        posture: "aida".into(),
+        worker_pid: 123,
+        worker_start: "456".into(),
+        wrapper_pid: 789,
+        namespaces: BTreeMap::new(),
+        uid_map_identity: true,
+        seat_preflight: true,
+        broker: "seccomp_notify_addfd".into(),
+        relay_port: 8080,
+        policy_sha: policy_sha.into(),
+        keyring: "isolated_child_only".into(),
+    };
+    assert_eq!(
+        receipt_diagnostic(&receipt, policy_sha).unwrap(),
+        concat!(
+            "aida-contained-receipt sha256=704bc726e2b131fd6bb4583cc081f5d36cbe9300e0b1623862c4b28517473237",
+            " policy_sha=0123456789abcdef0123456789abcdef01234567"
+        )
+    );
+}
