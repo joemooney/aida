@@ -1114,6 +1114,12 @@ pub(crate) fn build_compete_arm_command(
 ) -> Result<std::process::Command> {
     // trace:BUG-2172 | ai:codex
     // trace:BUG-2393 | ai:claude
+    // argv comes from AIDA's built-in headless_argv / judge_command templates,
+    // including trusted posture flags and a final prompt positional. There is
+    // no operator-configurable flag tail here (the judge override is a binary
+    // path). compete_arm_argv replaces template posture when contained and
+    // excludes the trailing prompt from flag parsing, even if it looks like a flag.
+    // trace:STORY-2326 | ai:codex
     let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
     // Resolve the host main once, here at the entry point; the argv builder
@@ -1134,21 +1140,32 @@ pub(crate) fn build_compete_arm_command(
     } else {
         (command.to_string(), args)
     };
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if actually_contained {
-        session::prepare_contained_mailbox_for_launch(host_main, worktree_dir)?;
-    }
-    let mut cmd = std::process::Command::new(program);
-    cmd.args(args).current_dir(worktree_dir);
+    // trace:STORY-2326 | ai:codex
+    let vendor_profile = aida_core::launch_policy::LaunchVendor::parse(vendor)?;
+    let posture = session::containment_posture_in(project_root, vendor, contained)?;
+    // Compete has no receipt-owning Codex AIDA boundary. Refuse before
+    // spawn_agent could prepare a mailbox or set any containment marker.
+    anyhow::ensure!(
+        vendor_profile != aida_core::launch_policy::LaunchVendor::Codex
+            || posture != session::ContainmentPosture::Aida,
+        crate::codex_tool_env::UNWIRED_AIDA_POSTURE
+    );
+    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+        vendor: vendor_profile,
+        kind: aida_core::launch_policy::LaunchKind::Fresh,
+        program: program.into(),
+        args,
+        tail: Vec::new(),
+        posture,
+        cwd: worktree_dir.to_path_buf(),
+        set_cwd: true,
+        host_main: host_main.map(std::path::Path::to_path_buf),
+    })?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // BUG-050: belt and braces alongside the `--settings` env.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     if vendor == "claude" {
         cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
-    }
-    if actually_contained {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
     }
     if vendor == "codex" {
         // Compete arms and judges do not receive a delegated seat.
@@ -1202,10 +1219,23 @@ fn compete_preview_argv(
         ])
     })?;
     if vendor == "codex" {
+        // Match spawn_agent's explicit stamp in the operational command.
+        // trace:STORY-2326 | ai:codex
+        let posture = session::containment_posture_in(project_root, vendor, contained)?;
+        anyhow::ensure!(
+            posture != session::ContainmentPosture::Aida,
+            crate::codex_tool_env::UNWIRED_AIDA_POSTURE
+        );
         let pairs = [
             (
                 std::ffi::OsStr::new("AIDA_AGENT_TYPE"),
                 Some(std::ffi::OsStr::new("codex")),
+            ),
+            (
+                std::ffi::OsStr::new("AIDA_CONTAINMENT_POSTURE"),
+                Some(std::ffi::OsStr::new(crate::launch::spawn::posture_value(
+                    posture,
+                ))),
             ),
             (
                 std::ffi::OsStr::new("AIDA_PROJECT_ROOT"),
@@ -1239,20 +1269,30 @@ fn compete_arm_argv(
     // tool list the template's `-p` ends.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let claude = vendor == "claude";
+    // The final positional is data. Delimit flag-shaped prompts for both the
+    // vendor CLI and Codex's downstream sandbox/config preflight parser.
+    // trace:STORY-2326 | ai:codex
+    let split = argv.len().saturating_sub(1);
+    let append_prompt = |args: &mut Vec<String>| {
+        if argv.last().is_some_and(|prompt| prompt.starts_with('-')) {
+            args.push("--".into());
+        }
+        args.extend_from_slice(&argv[split..]);
+    };
     if !contained {
         let mut args = if claude {
             session::headless_claude_posture(Vec::new())?
         } else {
             Vec::new()
         };
-        args.extend_from_slice(argv);
+        args.extend_from_slice(&argv[..split]);
+        append_prompt(&mut args);
         return Ok(args);
     }
     let parsed = session::HeadlessVendor::parse(vendor)
         .ok_or_else(|| anyhow::anyhow!("[contained] unknown compete vendor `{vendor}`"))?;
     session::require_vendor_containment(parsed, true, "compete child")?;
     // Generated argv ends with the prompt. Never parse flags inside it.
-    let split = argv.len().saturating_sub(1);
     let (template, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
     // Codex uses its native sandbox, never Claude's permission/settings flags.
     // Global approval flags and the native write-set grants precede `exec`.
@@ -1298,7 +1338,7 @@ fn compete_arm_argv(
     if claude {
         args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
     }
-    args.extend_from_slice(&argv[split..]);
+    append_prompt(&mut args);
     Ok(args)
 }
 

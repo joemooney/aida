@@ -277,7 +277,9 @@ python3 scripts/containment/conformance.py --vendor codex --boundary aida \
 
 This creates a disposable repository through production `aida init`, commits its
 own trusted policy selecting `codex = "aida"`, and scaffolds roles through
-`aida role scaffold`. It requests an implementer grant with implementer child
+`aida role scaffold`. It provisions the fixture roster through production
+`aida team allow-seat <user> implementer`, using the CLI's identity precedence
+(`AIDA_USER`, `USER`, `USERNAME`, then `default`). It requests an implementer grant with implementer child
 seat delegation through `aida role enter`, consumes the successful production
 shell eval block (including key adoption), and runs the production requested-seat
 probe. It then creates a fixture task and launches `aida queue work --no-human=both
@@ -288,8 +290,9 @@ files are fabricated. The host repository's policy is never edited.
 
 Fixture setup commands run with stdin connected to `/dev/null`, including
 `aida init`, so launching the harness from a terminal cannot leave setup waiting
-for interactive input. The separate `aida role enter` step deliberately inherits
-the operator's stdin and stderr for the production terminal-grant flow; its
+for interactive input. The separate `aida team allow-seat` and `aida role enter`
+steps deliberately inherit the operator's stdin and stderr for the production
+roster and terminal-grant flows. Role entry's
 stdout remains a private captured eval block. The shell continuation receives
 that block through its own stdin pipe.
 <!-- trace:BUG-2460 | ai:codex -->
@@ -298,12 +301,18 @@ that block through its own stdin pipe.
 managed-agent identity is retained. The original `CODEX_HOME` location is
 preserved so the production authentication checks still apply; credentials
 are never copied. A managed agent's refusal to issue a direct TTY grant is expected:
-the harness exits nonzero with `fixture-role-enter-refused`, records the setup
-commands and exit status in `report.json`, leaves the receipt digest null, and
-marks C0–C4 unknown. It does not create a TTY, clear agent identity, or fall back
+the harness exits nonzero with `fixture-role-enter-refused-managed`. A role-entry
+diagnostic reporting no team roster maps to `fixture-roster-missing`; other
+role-entry failures map to `fixture-role-enter-refused`. Failed role-entry stdout
+is retained as `diagnostic` in `report.json` and displayed on stderr; successful
+eval output is never recorded. Roster provisioning failures stop earlier with
+`fixture-roster-allow-seat-refused`. Each refusal records the setup commands and
+exit status, leaves the receipt digest null, and marks C0–C4 unknown.
+It does not create a TTY, clear agent identity, or fall back
 to a native sandbox. The offline fake-vendor test runs real initialization and
-role commands through this refusal and verifies no vendor execution occurred.
+roster and role commands through this refusal and verifies no vendor execution occurred.
 `agy` and `claude` explicitly refuse `--boundary aida` in this slice.
+<!-- trace:BUG-2462 | ai:codex -->
 
 The live path requires production host prerequisites and Codex API-key auth
 (`OPENAI_API_KEY`); ChatGPT auth remains subject to the launcher's existing
@@ -338,7 +347,7 @@ python3 -m unittest tests/test_containment_conformance_aida.py
 
 It uses `target/debug/aida` when present, otherwise `aida` on PATH, and fails
 if neither exists. CI runs it after building the workspace in the gates lane.
-The offline test gives the harness an idle PTY on stdin and verifies real
-fixture initialization reaches the expected managed-agent role refusal without
+The offline test gives the harness an idle PTY on stdin and stderr and verifies real
+fixture initialization and roster provisioning reach the expected managed-agent role refusal without
 executing the fake vendor. This test terminal grants no authority; managed-agent
 identity remains set throughout.

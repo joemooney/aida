@@ -170,7 +170,8 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
         HeadlessVendor::Claude,
         false,
         "child-grant-cifix-789",
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -211,7 +212,8 @@ fn phase_driver_advisor_command_scrubs_purpose() {
         "100",
         HeadlessVendor::Claude,
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
