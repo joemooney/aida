@@ -170,6 +170,21 @@ pub(crate) fn send_direct(
     send_direct_bounded(project_root, rule, title, message, None)
 }
 
+// Errors before transport invocation cannot have published a notification.
+// trace:TASK-3074 | ai:codex
+#[derive(Debug)]
+struct DirectPublicationRefused;
+impl std::fmt::Display for DirectPublicationRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("operator notification refused before publication")
+    }
+}
+impl std::error::Error for DirectPublicationRefused {}
+
+pub(crate) fn direct_publication_refused(error: &anyhow::Error) -> bool {
+    error.is::<DirectPublicationRefused>()
+}
+
 /// [`send_direct`] with a bound on how long the notify command may run: a
 /// caller with a deadline (the night-shift tick) passes one, and a command
 /// still running at the bound is killed and reported as a failure.
@@ -181,7 +196,9 @@ pub(crate) fn send_direct_bounded(
     message: &str,
     timeout: Option<Duration>,
 ) -> Result<DirectNotifyOutcome> {
-    let Some(config) = NotifyConfig::load(project_root)? else {
+    let Some(config) =
+        NotifyConfig::load(project_root).map_err(|e| e.context(DirectPublicationRefused))?
+    else {
         return Ok(DirectNotifyOutcome::default());
     };
     let mut state = load_state(project_root).unwrap_or_default();
@@ -193,7 +210,7 @@ pub(crate) fn send_direct_bounded(
     let now = Utc::now();
     if should_suppress(&mut state, rule, now, config.min_interval) {
         outcome.suppressed += 1;
-        save_state(project_root, &state)?;
+        save_state(project_root, &state).map_err(|e| e.context(DirectPublicationRefused))?;
         return Ok(outcome);
     }
 
@@ -205,7 +222,7 @@ pub(crate) fn send_direct_bounded(
             queued_at: Some(now),
         });
         outcome.pending += 1;
-        save_state(project_root, &state)?;
+        save_state(project_root, &state).map_err(|e| e.context(DirectPublicationRefused))?;
         return Ok(outcome);
     }
 
@@ -215,7 +232,13 @@ pub(crate) fn send_direct_bounded(
             outcome.sent += 1;
         }
         Err(err) => {
-            log_failure(project_root, err);
+            let refused = direct_publication_refused(&err);
+            log_failure(project_root, anyhow::anyhow!("{err:#}"));
+            if refused {
+                save_state(project_root, &state)
+                    .map_err(|e| e.context(DirectPublicationRefused))?;
+                return Err(err);
+            }
             save_state(project_root, &state)?;
             anyhow::bail!("notify command failed; see .aida/{LOG_FILE}");
         }
@@ -697,7 +720,8 @@ fn run_command_bounded(
             cmd.process_group(0);
         }
         cmd.spawn()
-            .with_context(|| format!("spawn notify command `{command}`"))?
+            .with_context(|| format!("spawn notify command `{command}`"))
+            .map_err(|e| e.context(DirectPublicationRefused))?
     };
     #[cfg(windows)]
     let mut child = Command::new("cmd")
@@ -708,7 +732,8 @@ fn run_command_bounded(
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| format!("spawn notify command `{command}`"))?;
+        .with_context(|| format!("spawn notify command `{command}`"))
+        .map_err(|e| e.context(DirectPublicationRefused))?;
     let Some(timeout) = timeout else {
         if let Some(mut stdin) = child.stdin.take() {
             write_message(&mut stdin, message)?;
@@ -1450,6 +1475,42 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(50));
             }
         }
+    }
+
+    // trace:TASK-3074 | ai:codex
+    #[test]
+    fn pipeline_operator_prepublication_refusal_and_transport_uncertainty() {
+        let repo = Repo::new();
+        let root = repo.path();
+        repo.write_config("[notify]\ncommand = [\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "invalid trusted notify config"]);
+        repo.pin_main();
+        let result = send_direct_bounded(root, "refused", "t", "m", Some(Duration::from_secs(1)));
+        assert!(direct_publication_refused(result.as_ref().unwrap_err()));
+
+        let config = NotifyConfig::from_toml("[notify]\ncommand = \"cat\"\n")
+            .unwrap()
+            .unwrap();
+        let error = run_command_bounded(
+            &root.join("missing"),
+            &config,
+            "spawn-refused",
+            "t",
+            "m",
+            Some(Duration::from_secs(1)),
+        )
+        .unwrap_err();
+        assert!(direct_publication_refused(&error));
+
+        // The command may publish before exiting unsuccessfully.
+        repo.write_config("[notify]\ncommand = \"cat > published; exit 1\"\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted failing transport"]);
+        repo.pin_main();
+        let result = send_direct_bounded(root, "uncertain", "t", "m", Some(Duration::from_secs(1)));
+        assert!(!direct_publication_refused(result.as_ref().unwrap_err()));
+        assert!(root.join("published").exists());
     }
 
     // send_direct reports what really happened: a message dropped by the
