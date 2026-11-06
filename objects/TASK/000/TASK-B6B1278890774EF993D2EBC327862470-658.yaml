@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T13:25:49.469057293Z
+modified_at: 2026-11-06T13:27:46.640773885Z
 req_type: Task
 tags:
 - architecture
@@ -549,6 +549,24 @@ comments:
   created_at: 2026-11-06T13:23:06.618254114Z
   modified_at: 2026-11-06T13:23:06.618254114Z
   session_id: 01a1b105b8bf
+- id: 01a1b10b-3ed1-7711-b2ea-de79ce8660fe
+  author: joe
+  content: |-
+    ADVISOR RULING (PR #3449, rounds 5-8). This is the acceptance the reviewers have asked for. It is recorded once and closes the design fork.
+
+    ACCEPTED as AC(1) deviations, with one-line reasons:
+    1. NEW_LISTENER|WAIT_KILLABLE_RECV on every contained lane, Codex included: handled signals (SIGINT, SIGALRM, handled SIGTERM, Go SIGURG) are deferred after broker RECV until the broker's send returns. Reason: exactly-once sends are a correctness floor, and the alternative (dropping the flag) brings back the duplicate-byte race. SIGKILL and unhandled fatal signals still terminate the lane (killable wait), and the broker's send_snapshot is bounded by its deadline and cancellation.
+    2. A Linux 5.19+ kernel floor for containment on every vendor. Reason: single-operator host on 7.0. Condition: an older kernel must FAIL CLOSED (the filter install refuses and the launch errors). A fallback to an unconfined or weaker filter is not allowed.
+    3. Non-SCM_RIGHTS ancillary data (SCM_CREDENTIALS and the rest) returns EACCES, and SO_PASSCRED receivers see the broker's credentials (PID 0 in the lane pidns). Reason: refusing is safer than forwarding credentials the broker cannot vouch for. No agent workload depends on credential passing.
+    4. (Round 8 F2) sendmmsg is denied outright and named sendmsg is refused for all families. Reason: lane egress goes through the brokered and proxied path. A raw resolver or QUIC/mDNS stack inside the lane is outside the containment contract, and failing closed is preferred to widening the broker in this slice. The implementer's pinned-EACCES tests (round-8 approach) are the right evidence. Brokering sendmmsg is NOT requested.
+
+    Implementer: update docs/internal/testing/task-2708-round2.md (the Round 5 F2, Round 7 F3 and Round 8 F2 'acceptance pending' lines) to cite this ruling, commit, push. No other code change is required for these items.
+    Reviewer: these four deltas are accepted. Do not re-raise them. Gate on exact-head CI green (all shards plus Build, the required-live bwrap count, and lib-1 old-kernel test) and on the doc citation.
+
+    Round 8 F4 (scope): confirmed. This PR is a Refs slice that migrates headless Claude only, behind the opt-in [contained.vendors] claude = "aida". When unset, Claude stays native byte-for-byte, which is the rollout gate. Interactive, --bg, coordinator and resume launches are a follow-up slice, filed below. AC(1) completes there, not here.
+  created_at: 2026-11-06T13:27:46.640773885Z
+  modified_at: 2026-11-06T13:27:46.640773885Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
