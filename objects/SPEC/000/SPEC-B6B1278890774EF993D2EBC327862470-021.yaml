@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T02:03:39.788261222Z
+modified_at: 2026-11-06T02:03:47.327635261Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -21,6 +21,12 @@ comments:
   created_at: 2026-11-05T21:11:39.281411537Z
   modified_at: 2026-11-05T21:11:39.281411537Z
   session_id: 01a1ad68128d
+- id: 01a1ae99-08ff-7df1-a1cc-c9422f6796c2
+  author: joe
+  content: 'Advisor triage 2026-11-05 19:10 MST: APPROVED (real: post_exit_message gives every clean exit a completing trailer, so Refs-only slices such as TASK-3074 PR-A would complete their spec). The trailer must follow the PR''s declared form (Refs vs completing) and the advisor''s slice plan. Folded TASK-2907: validate that the publication spec is a single resolvable spec of the lease, refusing epic or multi-spec scopes by name. LIGHT gate.'
+  created_at: 2026-11-06T02:03:47.327635261Z
+  modified_at: 2026-11-06T02:03:47.327635261Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
