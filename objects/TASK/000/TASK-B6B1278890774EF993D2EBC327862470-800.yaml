@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-06T06:53:54.803865174Z
+modified_at: 2026-11-06T06:57:08.195171194Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -253,6 +253,12 @@ comments:
   content: 'Round 3 rework source is complete in the native seat: unresolved and persistent escalation reservations/results are separate with distinct notifier rule keys; known pre-publication fingerprint/config/spawn failures retry; invalid state errors name the file and inspection/removal remedy; operator-direct notices say no advisor request exists. Added injected-time unresolved@60 -> acted@65 -> persistent@95 -> no-more regression, deferred-then-acted and operator-direct sent/queued coverage, refusal retry versus ambiguous delivery, state diagnostics and delivery-boundary tests. Formatting, feature-disabled CLI and TUI seam checks have passed; focused Rust tests and remaining fast gates are still running. Git metadata stays read-only, with no commit/push/PR/queue-done/ship/review-record from this seat. Host must produce a NEW commit and retitle PR #3478 to [AI:codex] feat(mailbox): correlate request actions and escalate pipeline stalls (TASK-3074), then use /tmp/task3074-round3-pr-body.md for its change notes. Existing merge holds are unchanged. Final validation handoff will follow.'
   created_at: 2026-11-06T06:53:54.803865174Z
   modified_at: 2026-11-06T06:53:54.803865174Z
+  session_id: 01a1af929d57
+- id: 01a1afa5-9a63-7023-9df8-e9be27a46986
+  author: joe
+  content: 'Round 3 FINAL host handoff: findings 1-4 implemented and validated; no finding disputed. All 45 detector tests plus mailbox delivery, notifier refusal/uncertainty and bounded real-delivery regressions passed (48 targeted Rust tests total). make check-ci-fast passed all 38 gates, including feature-disabled CLI, TUI seam, formatting and portability; git diff --check passed. Changed files: aida-cli-lib/src/pipeline_stall.rs, pipeline_stall_action_tests.rs, supervise_cmd.rs, notify.rs and docs/cli/06-roles-sessions.md. Native-seat edits remain uncommitted on task-3074-r2211 at 5eb73e380d51. Host MUST make a NEW commit and set both its subject and PR #3478 title to [AI:codex] feat(mailbox): correlate request actions and escalate pipeline stalls (TASK-3074). Set the PR body from /tmp/task3074-round3-pr-body.md (full PR-B summary plus round-3 fixes and validation). Complete handoff: /tmp/task3074-round3-handoff.md; logs: /tmp/task3074-round3-tests.log, /tmp/task3074-round3-delivery.log, /tmp/task3074-round3-fast.log. No commit, push, PR mutation, queue-done, ship, hold clearance or review record was performed. TASK-3074 remains In Progress; existing merge-hold-gate refusals require the ordinary eligible review/clearance path after host publication. No new punt or manual hold introduced.'
+  created_at: 2026-11-06T06:57:08.195171194Z
+  modified_at: 2026-11-06T06:57:08.195171194Z
   session_id: 01a1af929d57
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
