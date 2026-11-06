@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-06T05:22:23.788464031Z
+modified_at: 2026-11-06T05:41:04.780275433Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -168,6 +168,58 @@ comments:
   content: 'Implementing the newest advisor brief: approved completing PR-B only, after landed PR-A #3458. Pending source adds typed persisted/sent/queued/refused/uncertain delivery evidence, version-2 alarm episodes with UUID plus exact request ID/fingerprint, latest authorized action correlation, and bounded 30-minute unresolved/persistent escalation through notify::send_direct_bounded. Reservations prevent duplicate external delivery after uncertainty or post-send persistence failure; sent/queued escalation is once per episode. Legacy v1 episodes without request IDs report action unknown and close; no recovery command. Injected-time deadline/continuity/retry/crash tests and docs are added. Default-feature cargo check passed; focused test build and fast gates are running. Native seat will leave edits uncommitted, without push/PR/queue-done/ship/review-record. Host completing subject: [AI:codex] feat(mailbox): correlate request actions and escalate pipeline stalls (TASK-3074).'
   created_at: 2026-11-06T05:22:23.788448511Z
   modified_at: 2026-11-06T05:22:23.788448511Z
+- id: 01a1af5f-f88c-7792-b536-967ac6e17a0a
+  author: joe
+  content: |
+    # TASK-3074 PR-B host publication handoff
+
+    Required completing commit and PR title:
+
+    `[AI:codex] feat(mailbox): correlate request actions and escalate pipeline stalls (TASK-3074)`
+
+    This is the approved completing PR-B after PR-A #3458. The newest advisor brief
+    supersedes the old PR-A review/trailer findings. LIGHT gate; no new manual hold
+    or punt was introduced. Native-seat Git metadata is read-only: all edits remain
+    uncommitted for the host launcher. No commit, push, PR creation, queue-done,
+    pr ship or review record was performed from this seat.
+
+    Changes:
+
+    - aida-cli-lib/src/pipeline_stall.rs: typed persisted/sent/queued/refused/uncertain delivery evidence; version-2 episode UUID and exact request identity; latest authorized receipt lookup; injected-time unresolved/persistent/deferred escalation; durable reservations and once-per-episode sent/queued escalation; safe legacy closure and strict state read errors.
+    - aida-cli-lib/src/pipeline_stall_action_tests.rs: ten injected-time tests for deadlines, latest revisions, correlation, gaps/unknown/reversal, recovery, previews, retry, queued/uncertain delivery, and pre/post-send write failure.
+    - aida-cli-lib/src/pipeline_stall_signals.rs: typed delivery fixtures and approved legacy aggregate closure regression.
+    - aida-cli-lib/src/supervise_cmd.rs: typed alarm delivery with persisted request ID/fingerprint; direct routing from stalls/watch; correlated mailbox writer regression.
+    - aida-core/src/mailbox_lifecycle/action.rs: read-only exact-ID/fingerprint authorized revision lookup using the existing checked bounded ledger reader.
+    - aida-core/src/mailbox_lifecycle/action/tests.rs: exact identity matching and mismatch rejection.
+    - docs/cli/06-roles-sessions.md: delivery/result, legacy-state and escalation contract.
+    - docs/advanced/mailbox.md: response semantics and link to completed escalation behavior.
+
+    AGENTS.md and OVERVIEW.md are unchanged. No recovery command, protected-operation
+    authority, automatic lease release, rework, merge or spec status mutation exists.
+
+    Validation completed:
+
+    - Final-source focused pipeline_stall suite: 41 passed, including ten new injected-time tests (initial run also passed).
+    - Core action ledger suite: 15 passed, including exact correlation assertions.
+    - Final-source delivery writer regression: 1 passed.
+    - Final-source bounded operator notifier regression: 1 passed.
+    - make check-ci-fast: all 38 gates passed (including feature-disabled compilation, formatting and portability).
+    - Default-feature cargo check --profile agent --offline: passed.
+    - git diff --check: passed.
+
+    Final-source feature-disabled cargo check -p aida-cli --no-default-features
+    --profile agent --offline passed. Final cargo fmt --all -- --check and
+    git diff --check passed. All 58 targeted tests and 38 fast gates passed.
+
+    No implementation blockers remain. Host commit/publication and subsequent queue
+    completion are required; the seat intentionally leaves TASK-3074 In Progress.
+
+    Logs: /tmp/task3074-prb-tests.log, /tmp/task3074-prb-core.log,
+    /tmp/task3074-prb-fast.log, /tmp/task3074-prb-final-tests.log,
+    /tmp/task3074-prb-final-check.log.
+  created_at: 2026-11-06T05:41:04.780275433Z
+  modified_at: 2026-11-06T05:41:04.780275433Z
+  session_id: 01a1af471ec6
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
