@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T10:16:02.900591667Z
+modified_at: 2026-11-06T10:16:11.643743050Z
 req_type: Story
 relationships:
 - rel_type:
@@ -234,6 +234,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 typed --until gate, question-park canonicalization and display are sound and unit-tested, but CI cli-0 is red at c2351689 because existing integration tests still pass free-text --until, which this PR now refuses; plus stale free-text guidance in docs/templates and an empty-consequence regression in question parking.. No triage reason was given.'
   created_at: 2026-11-06T10:16:02.900589599Z
   modified_at: 2026-11-06T10:16:02.900589599Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b05b-d7f6-7112-b418-7db4b1d58594
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3491):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c23516892593
+    Recorded: 2026-11-06T10:14:28.117259029+00:00
+    Findings:
+    1. CI cli-0 red (caused by this PR): aida-cli/tests/bug_1687_defer_status_lens.rs:187-190 defer() helper passes free text ('after the stability push', 'next major', 'q3', 'q4' at :213/:249/:267/:268/:318/:415) so 4 tests panic at :68; aida-cli/tests/queue_work_dry_run.rs:282 ('operator revisits') and :144 ('the dependency decision lands', with --reason) fail at :290/:149. Migrate these fixtures to typed conditions (e.g. date:/manual:<who> with --reason; note queue_work_dry_run.rs:282 has no --reason so manual needs one) and update assertions that read deferred_until (bug_1687 :335, :386) to the canonical form.
+    2. Question-park empty-consequence regression: aida-cli-lib/src/questions.rs:533-546 always overwrites deferred_until. Before this PR an empty/whitespace consequence left the existing trigger untouched; now it replaces an existing typed condition with manual:<resolver> and pushes a comment with empty prose ('Deferred by question resolution (label): '). This contradicts the new doc line 'A bare re-deferral preserves the previous trigger' (docs/cli/02-specs.md:278). Keep the prior trigger when consequence.trim() is empty and the spec already has one (only fall back to manual when there is none), skip the empty-prose comment, and add a test.
+    3. Stale free-text guidance now instructs a refused command: docs/cli/07-project-setup.md:370 ('a free-text condition ... "when a slice verb ships"') and :377; docs/internal/agents/aida-repository-guide.md:113/:369; aida-core/templates/skills/aida-orchestrate.md:143 and skills-portable/aida-orchestrate.md:200 ('--until "<concrete trigger>"'); aida-core/templates/skills/aida-human-audit.md:48/:76 and commands/aida-human-audit.md:17; docs/lifecycle.md:191. Update to the typed forms (edit template masters, then make sync-templates) so agents following skills don't hit the new refusal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T10:16:11.510889264Z
+  modified_at: 2026-11-06T10:16:11.510889264Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
