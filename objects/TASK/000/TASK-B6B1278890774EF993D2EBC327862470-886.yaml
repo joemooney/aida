@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T22:43:33.309565133Z
+modified_at: 2026-11-06T23:11:49.600219349Z
 req_type: Task
 tags:
 - from-review
@@ -85,6 +85,19 @@ comments:
   created_at: 2026-11-06T22:42:44.207667655Z
   modified_at: 2026-11-06T22:42:44.207667655Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b321-f560-7ff3-a195-56d8a9d93c6e
+  author: joe
+  content: |
+    Round 3: addressed both review findings. The shard-tooling ratchet now pins the single AIDA-sized relay override (exact filter, all-slot reservation, 540s timeout), requires its 480s timing budget, and checks all other budgets against the ordinary kill. Updated the testing guide. The full fast gate additionally exposed five unguarded fixture commits; both ci_inventory.rs fixture Git helpers now prepend aida_core::git_ops::NO_AUTO_MAINTENANCE.
+
+    Final validation: make check-ci-fast passed all 38 fast gates, including STORY-1853 test-speed tooling and the Git maintenance ratchet. Standalone shard tooling: 25 tests passed; maintenance ratchet: 8 passed. cargo fmt --all -- --check and git diff --check passed. The CLI build passed. A focused nextest ci-profile run of aida_sized_relay_native_statuses_reach_required_pr_and_train_gates passed in 364.953s; its JUnit timing-budget check passed. That contract run preceded the final fixture-only maintenance-argument change.
+
+    Finding 2 CI evidence: reviewed commit 56fdf0a5272c7abec1db5e5cc04220c458c95434, CI (lib-1), job 128189748090, succeeded with all 7384 tests passed. The three-SHA contract passed in 219.211s and the shard timing-budget step succeeded: https://github.com/joemooney/aida/actions/runs/42304334321/job/128189748090 . Both local and CI runs fit the 480s fixture cap and 540s nextest guard.
+
+    Native publication declaration recorded: [AI:codex] fix(ci): validate bounded relay timeout and guard fixture Git (TASK-3232). Three files remain uncommitted for the host launcher: tests/test_ci_test_shards.py, aida-cli-lib/src/ci_inventory.rs, docs/internal/testing/ci-test-shards.md. No commit, push, queue completion, merge-hold clearance, or review recording performed. Existing merge hold remains for the authorized clearance path.
+  created_at: 2026-11-06T23:11:49.600219349Z
+  modified_at: 2026-11-06T23:11:49.600219349Z
+  session_id: 01a1b3080af4
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
   author: joe
