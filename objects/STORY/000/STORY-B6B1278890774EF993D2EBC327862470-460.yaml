@@ -1,0 +1,37 @@
+id: 01a1ae37-9822-7172-a4a8-bd3141b4ff5e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-460
+agreed_id: STORY-2537
+title: One process-identity and liveness primitive (ProcIdentity) for every owner, lease and lock (regroup R3)
+description: |
+  ## Why (regroup 2026-11-03, R3)
+  "Who is this process, and is it alive?" is answered separately in about 75 non-test files from PIDs, /proc ancestry and inherited env. None of those is stable across sandboxes, PID namespaces, daemons or clock steps. Evidence: BUG-2425, 2419, 2417, 2212, TASK-2799, BUG-1934, BUG-2130, BUG-2427, BUG-2428/2429, and today BUG-2458 (the ownership judge trusts systemd --user as a lane's holder). TASK-1750 shipped a pid+starttime helper, but it does not cover namespaces, subreapers or attestation.
+
+  ## Proposal (sketch-first keystone; advisor signoff before code)
+  1. `aida_core::proc_identity::ProcIdentity { boot_id, pidns_inode, pid, starttime }`, with ONE liveness judge returning Alive / Dead / ForeignUnknown (a heartbeat fallback for foreign namespaces) and a refusal for init/subreaper identities. A ratchet forbids raw pid comparisons and kill(pid,0) outside the module.
+  2. Migrate consumers: the STORY-2325 ownership judge (and fix BUG-2458 through it), leases, the merge lock, review-watch reservations, and mail-wake bindings.
+  3. Later slice, separate signoff: a per-user broker socket (generalizing STORY-2343's SO_PEERCRED socket) that attests identity and issues scoped capabilities. It replaces AIDA_SESSION_GRANT in the environment and gives one "human at terminal" rule for ship, train and hold-clear.
+
+  ## Acceptance
+  - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
+  - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
+  - Later slices are filed as children when the sketch is signed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T00:17:21.442941596Z
+modified_at: 2026-11-06T00:17:21.442941596Z
+req_type: Story
+tags:
+- architecture
+- needs-sketch
+- regroup
+- sketch-first
+filed_at:
+  code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bdeb8f49978
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
