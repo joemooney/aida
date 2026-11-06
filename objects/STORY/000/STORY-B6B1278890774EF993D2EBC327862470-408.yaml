@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T01:39:02.035706378Z
+modified_at: 2026-11-06T01:40:12.073287190Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-11-05T16:16:54.880616023Z
   modified_at: 2026-11-05T16:16:54.880616023Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ae83-70a9-7e53-8271-bb5d34f102f1
+  author: joe
+  content: 'Pickup result: the original advisor sign-off and merged prerequisite TASK-3096 are acknowledged. Added a concrete request-admission addendum to docs/plans/2026-11-05-story-2480-work-ci-relay.md and committed it as 494b4ab353806acc17faff55a3ad75d884ed8e22 on story-2480-r1832. The outstanding decision is durable home-assigned SHA/attempt admission: recommend immutable retained ci/<attempt> refs; alternative is a separately specified home-authored registry. A local speculative codec was discarded rather than leaving unintegrated runtime scaffolding. No runtime files changed. Plan integrity, git diff --cached --check and whitespace checks passed; runtime tests are inapplicable to this documentation-only change. aida pr hold was attempted and refused with local branch story-2480-r1832 does not exist, although git show-ref --verify confirms the branch at 494b4ab3538. No direct push bypass was attempted, no hold marker is claimed, and no PR was opened. Launcher: retain Needs Attention and do not auto-open an implementation PR or mark this story Done; the implementation remains incomplete pending the request-admission decision. No pr ship, review record, or queue done was run.'
+  created_at: 2026-11-06T01:40:12.073287190Z
+  modified_at: 2026-11-06T01:40:12.073287190Z
+  session_id: 01a1ae7e6e01
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
