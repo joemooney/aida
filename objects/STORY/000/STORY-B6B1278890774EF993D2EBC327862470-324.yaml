@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T13:03:15.066159969Z
+modified_at: 2026-11-06T13:03:17.383352033Z
 req_type: Story
 tags:
 - architecture
@@ -523,6 +523,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-B converts the Codex/agy native/None builders correctly and shrinks the ratchet 170->157, but it disables doctor''s slot-dir check on real hosts, leaves new refusal paths untested, never routes untrusted argv through the posture-flag tail, and weakens one test. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-06T13:03:15.066158356Z
   modified_at: 2026-11-06T13:03:15.066158356Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0f4-d305-75b2-8cb4-e2cbc614cc01
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3501):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4bf2017ec6f0
+    Recorded: 2026-11-06T13:01:46.982227761+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3501#issuecomment-6685428278
+    Findings:
+    1. F1 (major, strict tier): new refusal and seat-change paths have no tests. (a) dispatch.rs:2618-2622 build_implementer_launch_command now refuses any posture other than None ('requires the supervised agent launcher'). (b) Claude --bg dispatch lanes now REMOVE AIDA_SESSION_ROLE/AIDA_SESSION_GRANT (assign_seat NO_SEAT), where before they set role=implementer and grant=''. (c) build_codex_session_command (session.rs:2794) and the Native/None phase builders now refuse under a contained parent (LaunchRefusal::WeakerThanParent), where before they stripped AIDA_CONTAINED. No test builds the dispatch command at all. Add tests that pin each refusal, and the dispatch Claude-bg env (no role/grant/purpose; scope/name/user still set). Also confirm with a test or evidence that the lane lease supplies the implementer role the bg env no longer carries.
+    2. F2 (major, regression): doctor_cmd.rs:2577 now delegates to launch::resources::cargo_slot_dir(), which returns None unless the slot dir is mode 0700. On this host /run/user/1000/cargo-slots-1000 is mode 0775, so doctor's BUG-1702 check (a Cargo target pointed at the slot tmpfs) and the slot input to disk_headroom_light_report_with (doctor_cmd.rs:1784) go silent. Keep doctor's existence-based discovery, and report a non-0700 or foreign-owned slot dir as a finding. Do not widen it, and do not hide it.
+    3. F3 (minor, amendment 5): every PR-B site passes all argv in LaunchRequest.args with tail: Vec::new(). That covers compete_cmd.rs:1151 (operator-configured arm template argv, passed through verbatim when uncontained), the phase builders' headless_vendor_args, and the dispatch prompt. So refuse_posture_flags never runs on caller-supplied input at these sites; the new table test story_2326_pr_b_posture_flags_are_refused_for_each_vendor only exercises synthetic tails through resolve_under. Move the caller-supplied or default_flags part into tail (the prompt excepted), or document per site why it is trusted. Add one site-level test where a posture flag in compete template argv is refused.
+    4. F4 (minor, test weakened): session.rs:13430, in the contained=true Claude reviewer-plan case, changes host_main from crate::seat_clone::launcher_main() (what production passes) to None. The PR does not touch spawn_reviewer_launch_plan, and the added comment 'Native/None constructors do not cross the AIDA boundary' is wrong for this case, which is exactly the Aida boundary (aida_boundary -> prepare_contained_mailbox_for_launch). Restore the production input and isolate the seat-cwd dependency instead (as the goldens do with run_path_isolated_test), or justify the change.
+    5. F5 (minor, scope tracking): these signed-sketch PR-B items are neither delivered nor re-homed: Codex prepare_launch moving inside the profile; the eight grant-issuing sites collapsing into issue_launch_child; control children moving to control_child/control_env; autopilot intake, questions and queue_cmd exec. The ratchet LEDGER still labels autopilot_intake.rs (3), codex_tool_env.rs (3), compete_cmd.rs (2) and part of session.rs as 'slice B' after this slice. Relabel those entries to the slice that now owns them and record the deferral on STORY-2326. Also: the CARGO_HOME rw-bind bug (amendment 7) has no filing evidence.
+    6. F6 (minor, TOCTOU): resources.rs:118-131 open_host_settings checks path.canonicalize() against the write roots, then opens the original path. O_NOFOLLOW only guards the last path component, so a parent-directory symlink swapped between the two calls can open a file inside a write root that passes the uid/mode/nlink checks. Compare the opened handle's dev/ino with the canonical path's metadata, or check the location via /proc/self/fd, before trusting it.
+    7. F7 (cosmetic): dispatch.rs:2582-2584 doc comment still says the builder sets AIDA_SESSION_ROLE=implementer, which is no longer true for Claude --bg. The OVERVIEW.md 'Agent launch migration' and AGENTS.md additions are per-slice progress notes ('Converted paths include...', 'remain separate slices'), which CLAUDE.md says belong in the PR body or a spec comment. The PR body has only the publication boilerplate; move the change notes there.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T13:03:17.253424286Z
+  modified_at: 2026-11-06T13:03:17.253424286Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
