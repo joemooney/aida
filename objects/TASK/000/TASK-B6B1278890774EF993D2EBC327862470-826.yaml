@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-826
 agreed_id: TASK-2879
 title: Standalone native implementer finish requires a post-exit host handoff
 description: The standalone pickup prompt requires a commit and open PR before exit, but native lanes have read-only .git and aida ship --from-seat --commit-pending refuses while their lane owner is live. STORY-1651 verified this refusal through the deputy. Align the launcher and prompt around an explicit post-exit commit and PR handoff; preserve the live-owner check. Detailed validation and publication command are recorded in the story comment.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T23:57:45.583109634Z
+modified_at: 2026-11-06T03:03:17.884284415Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -283,6 +283,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1aecf-8458-7923-9396-d03bb7694ee1
+  author: aida-auto-bump
+  timestamp: 2026-11-06T03:03:17.848934649Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1aecf-847c-7561-b731-82dd65195cdc
+  timestamp: 2026-11-06T03:03:17.884256643Z
+  agent: aida
+  commit_sha: 3354aeb7221258c39c4f340581deb26b49f5c995
+  summary: All TASK-2879 ACs verified (native prompt/stop contract, post-exit publish reconciling moved remote head with live-owner/conflict/push refusals, native queue-done via lease branch, Refs trailer mirroring); all prior-round findings resolved; main merges clean; CI run 42144765299 green on all 7 shards at head (merge-hold-gate failure is the expected supervised hold).
+  review_verdict: approved
 filed_at:
   code_sha: 9f572b1f0d1fb80300d25c2eaa21cdda507fc1e8
   branch: main
@@ -294,3 +308,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T23:55:11.966192274Z
   implemented_by: joe
+  completed_at: 2026-11-06T03:03:17.848928523Z
+  completion_sha: 3354aeb7221258c39c4f340581deb26b49f5c995
