@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-230
 agreed_id: BUG-2464
 title: Standalone implementer reports no-pr reason=unpushed-commits for a clean seat that only fast-forwarded to newer main
 description: 'Observed 3 times on 2026-11-06 (TASK-3222 at 06:50 and 07:46, BUG-2463 at 08:09): the lane punted with no edits and no commits of its own, yet the result line said ''implementer: no-pr reason=unpushed-commits'' and the error said it was ''leaving commits it did not push''. Each time the advisor inspected the seat and found it clean, with no commits outside origin. Cause: headless_background.rs Snapshot::unshipped() treats any HEAD != launch_head (with origin not at HEAD) as UnpushedCommits, so a seat whose HEAD advanced only by fast-forwarding to a newer origin/main matches. Fix: UnpushedCommits only when HEAD has commits reachable from no remote ref (git rev-list HEAD --not --remotes is non-empty). Otherwise report the punt and its reason (or no-pr reason=no-changes). Regression test: a seat fast-forwarded to a newer origin/main with a clean tree reports no unpushed commits. trace site: aida-cli-lib/src/headless_background.rs:522-533; standalone_implementer.rs:270.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:11:02.348332640Z
-modified_at: 2026-11-06T15:43:19.475727945Z
+modified_at: 2026-11-06T16:51:58.486432623Z
 req_type: Bug
 tags:
 - area:lanes
@@ -64,6 +64,20 @@ history:
   timestamp: 2026-11-06T15:43:22.327215075Z
   session_id: 01a1b176e0aa
   changes: []
+- id: 01a1b1c6-3134-7a21-9580-9c9ff19c0638
+  author: aida-auto-bump
+  timestamp: 2026-11-06T16:51:58.388195333Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b1c6-3196-7e92-9598-c5f8cab3d23e
+  timestamp: 2026-11-06T16:51:58.486427711Z
+  agent: aida
+  commit_sha: b04e8bf3c8b9bb345b55dbb12e9463c619a13e66
+  summary: 'BUG-2464 PASS: UnpushedCommits now requires HEAD commits absent from every remote ref (worktree + private-clone probes); regression test covers ff-to-remote-main, real local commit, second remote, unknown evidence. CI at head still queued at review time (only merge-hold-gate done) — ship must gate on green CI.'
+  review_verdict: approved
 filed_at:
   code_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
   branch: main
@@ -72,3 +86,7 @@ filed_at:
   aida_build_sha: f50fa16ae95
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T16:51:58.388188502Z
+  completion_sha: b04e8bf3c8b9bb345b55dbb12e9463c619a13e66
