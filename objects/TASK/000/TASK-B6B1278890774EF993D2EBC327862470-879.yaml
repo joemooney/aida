@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T19:15:01.307706847Z
+modified_at: 2026-11-06T19:26:38.074609435Z
 req_type: Task
 tags:
 - architecture
@@ -389,6 +389,12 @@ comments:
   created_at: 2026-11-06T19:04:49.543089169Z
   modified_at: 2026-11-06T19:04:49.543089169Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b253-c9fa-7fe0-ab71-6e9e12600a6b
+  author: joe
+  content: 'Round 3 rework complete in native seat; edits intentionally uncommitted for host publication. Baseline HEAD 3bde6c0d4a4 already merges origin/main b34755f19c7; ancestry verified. Changed scripts/check-store-writers.py, scripts/store-writers.toml, tests/test_store_writer_inventory.py, docs/internal/security/store-mutation-writers.md. Findings 1-4: regenerated and reviewed additions/stale rows against merged main; findings/session/review/punt(s)/rework/merge-hold/role/node/pr shell vocabulary; shell function scopes and null-redirect exclusions; Path.open positional modes, preserved os.open flag handling, remove/touch/move/copy and literal git/aida subprocess sinks. Finding 5 uses the explicitly permitted named Limits blocker: raw Rust git plumbing and Command::new git/aida arguments remain TASK-3223 cutover work, never claimed covered by incidental locks. Finding 6: explicit MCP queue add/rework inner entrypoints and punt core/response/ledger seams; operation-specific resolution notes, including PEEK-only queue_work/db_sync/pull/session/role explanations; queue done restricted to its concrete Done arm (3 sites, previously 11). Final inventory 3195 sink sites and 292 operations, all new sites blocked; 111 additions and 55 stale removals reviewed. Original three mutants and bare-name collision negative retained. Validation: 36 Python tests PASS; make check-ci-fast PASS, all 40 gates including Store writer inventory ratchet and Store writer inventory mutation fixtures; git diff --check PASS. Native publication declaration recorded: [AI:codex] fix(inventory): cover script writers and operation seams (Refs TASK-3222). No commit/push/PR/queue-done/review-record/pr-ship performed. Host must commit/publish, regenerate again if main moves, and confirm remote Gates including mutation fixtures; no unpublished-head remote CI success claimed. Existing merge hold remains subject to ordinary authorized clearance. No runtime, IPC, permission or containment changes.'
+  created_at: 2026-11-06T19:26:38.074609435Z
+  modified_at: 2026-11-06T19:26:38.074609435Z
+  session_id: 01a1b2491d8f
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
