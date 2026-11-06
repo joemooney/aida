@@ -254,6 +254,7 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
 
 #[test]
 fn contained_child_commands_export_aida_contained() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let p = tmp.path();
 
@@ -266,7 +267,8 @@ fn contained_child_commands_export_aida_contained() {
         HeadlessVendor::Claude,
         true,
         "",
-    );
+    )
+    .unwrap();
     assert_eq!(env_value(&ci_fix, "AIDA_CONTAINED"), Some(Some("1".into())));
     let advisor = build_phase_driver_advisor_command(
         p,
@@ -278,7 +280,8 @@ fn contained_child_commands_export_aida_contained() {
         "V",
         HeadlessVendor::Claude,
         true,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_value(&advisor, "AIDA_CONTAINED"),
         Some(Some("1".into()))
@@ -294,7 +297,8 @@ fn contained_child_commands_export_aida_contained() {
         HeadlessVendor::Claude,
         false,
         "",
-    );
+    )
+    .unwrap();
     assert_eq!(env_value(&ci_fix_plain, "AIDA_CONTAINED"), Some(None));
 }
 

@@ -2030,6 +2030,9 @@ fn disk_headroom_light_report_probing(
     // filesystem than the project's, so the project-root floor above never sees it fill.
     // trace:BUG-1702 | ai:claude
     if let Some(slot_dir) = cargo_slot_dir {
+        findings.extend(cargo_slot_permission_findings(&slot_dir, unsafe {
+            libc::geteuid()
+        }));
         findings.extend(cargo_slot_findings(
             free_bytes(&slot_dir),
             &cargo_slot_target_artifacts(&slot_dir),
@@ -2576,15 +2579,28 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
 // trace:BUG-1702 | ai:claude
 fn cargo_slot_dir() -> Option<std::path::PathBuf> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
-    let uid = users_uid()?;
-    let dir = std::path::PathBuf::from(runtime).join(format!("cargo-slots-{uid}"));
-    dir.is_dir().then_some(dir)
+    let uid = unsafe { libc::geteuid() };
+    let path = std::path::PathBuf::from(runtime).join(format!("cargo-slots-{uid}"));
+    path.is_dir().then_some(path)
 }
 
-fn users_uid() -> Option<u32> {
-    // `id -u` without pulling in a libc dependency for one number.
-    let out = std::process::Command::new("id").arg("-u").output().ok()?;
-    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+// Discovery for diagnostics deliberately differs from launch admission: an unsafe
+// existing directory must remain visible and must never be widened by doctor.
+// trace:STORY-2326 | ai:codex
+fn cargo_slot_permission_findings(path: &std::path::Path, uid: u32) -> Vec<DoctorFinding> {
+    use std::os::unix::fs::MetadataExt;
+    let problem = match std::fs::symlink_metadata(path) {
+        Ok(m) if m.is_dir() && m.uid() == uid && m.mode() & 0o7777 == 0o700 => return vec![],
+        Ok(m) => format!("uid {}, mode {:04o}", m.uid(), m.mode() & 0o7777),
+        Err(err) => format!("unreadable: {err}"),
+    };
+    vec![DoctorFinding {
+        category: "disk-headroom".into(),
+        id: "cargo-slot-permissions".into(),
+        summary: format!("Cargo slot directory {} is not a uid-{uid}-owned mode-0700 directory ({problem}); launch resource admission refuses it", path.display()),
+        action: "Ask the host operator to repair the cargo slot directory ownership and permissions".into(),
+        safe_heal: false,
+    }]
 }
 
 /// Entries in the slot directory that mean a Cargo TARGET directory was pointed at it.
@@ -16283,3 +16299,45 @@ mod loose_objects_followup_tests {
 #[cfg(test)]
 #[path = "tests/bug_home_036_bare_id_tests.rs"]
 mod bug_home_036_bare_id_tests;
+
+#[cfg(test)]
+mod story_2326_doctor_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn unsafe_existing_slots_remain_visible_to_doctor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let uid = unsafe { libc::geteuid() };
+        let slot = tmp.path().join(format!("cargo-slots-{uid}"));
+        std::fs::create_dir(&slot).unwrap();
+        std::fs::set_permissions(&slot, std::fs::Permissions::from_mode(0o775)).unwrap();
+        std::fs::create_dir(slot.join("debug")).unwrap();
+        std::fs::write(slot.join("debug/artifact"), "target output").unwrap();
+        let _env =
+            crate::test_env::EnvVarsGuard::apply(&[("XDG_RUNTIME_DIR", tmp.path().to_str())]);
+        assert_eq!(cargo_slot_dir(), Some(slot.clone()));
+        let report = disk_headroom_light_report_probing(
+            tmp.path(),
+            |_| Some(100 << 30),
+            cargo_slot_dir(),
+            None,
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.id == "cargo-slot-permissions"));
+        assert!(!cargo_slot_target_artifacts(&slot).is_empty());
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.id == "cargo-slot-target-dir"));
+        assert_eq!(
+            std::fs::metadata(&slot).unwrap().permissions().mode() & 0o777,
+            0o775
+        );
+        std::fs::set_permissions(&slot, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(cargo_slot_permission_findings(&slot, uid).is_empty());
+        assert!(!cargo_slot_permission_findings(&slot, uid.wrapping_add(1)).is_empty());
+    }
+}
