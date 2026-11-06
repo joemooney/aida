@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T07:55:20.403891367Z
-modified_at: 2026-11-06T07:55:20.403891367Z
+modified_at: 2026-11-06T07:56:57.159363047Z
 req_type: Task
 tags:
 - carried-from:TASK-3074
 - finding-hash:e0bc8df3
 - from-review:PR-3478
 - kind:carried-forward
+comments:
+- id: 01a1afdc-5dc7-7321-9b0f-d60f6eaecbf8
+  author: joe
+  content: 'Advisor 2026-11-06 01:00: PR #3478 has merged; the systemic fix for generic host-commit titles is TASK-2902 (#3477). Rejected.'
+  created_at: 2026-11-06T07:56:57.159363047Z
+  modified_at: 2026-11-06T07:56:57.159363047Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 filed_at:
   code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
   branch: main
