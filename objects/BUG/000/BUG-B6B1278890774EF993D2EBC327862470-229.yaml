@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:59:24.595886026Z
-modified_at: 2026-11-06T17:05:37.117270952Z
+modified_at: 2026-11-06T17:10:21.065670543Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-11-06T15:10:19.800838602Z
   modified_at: 2026-11-06T15:10:19.800838602Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1d7-0489-78a0-ba8f-bbb05b5fa409
+  author: joe
+  content: 'Implemented standalone native-seat fix: forge-reported Merged observations without existing landing evidence may recover the exact pinned original head through a private origin fetch bounded by the existing 30-second Git runner. Full-tree equality with the independently fetched base is required; unavailable heads and conflicting trees remain unconfirmed, with no completion/cleanup authority. Open/Closed checks retain their existing behavior. Added a real rebase/fresh-clone regression covering absent original objects, conflicting/unavailable heads, non-actionable reads, temporary-ref cleanup and unchanged FETCH_HEAD/tracking/checkout; documented conservative later-base-change limit. Validation: cargo fmt --all -- --check and git diff --check passed; manual real-Git rebase/private-fetch fixture passed. untested=true: targeted cargo test --profile agent -p aida-cli-lib --lib story_2401_forge_observed_tests refused because this native session has no lane job runner. make check-ci-fast stopped while its first Cargo check waited for a shared build slot (exit 130). Host must run targeted Rust tests and fast gate. Four files left uncommitted; no commit, push, PR, queue completion, ship merge, or review record performed.'
+  created_at: 2026-11-06T17:10:21.065670543Z
+  modified_at: 2026-11-06T17:10:21.065670543Z
+  session_id: 01a1b1d29929
 history:
 - id: 01a1b128-ae31-7223-a86b-105066ff77ba
   author: joe
