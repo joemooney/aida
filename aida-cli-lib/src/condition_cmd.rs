@@ -55,7 +55,7 @@ impl CliConditionFacts {
 // Strict, read-only reads: an unreadable canonical object must never turn a
 // query into a smaller count or select a legacy fallback store.
 // trace:STORY-2402 | ai:codex
-fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsStore> {
+pub(crate) fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsStore> {
     let path = match file {
         Some(path) => path.to_path_buf(),
         None => match crate::detect_distributed_store_from(root) {
