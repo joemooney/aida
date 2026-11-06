@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T20:35:45.116593091Z
-modified_at: 2026-11-06T20:46:58.228080428Z
+modified_at: 2026-11-06T20:47:01.869201106Z
 req_type: Task
 tags:
 - carried-from:BUG-2469
 - finding-hash:87a5f0dd
 - from-review:PR-3529
 - kind:carried-forward
+comments:
+- id: 01a1b29d-64ed-71e3-b41e-fb07d61d35be
+  author: joe
+  content: 'Advisor 13:46 ruling (carried findings from #3529). One PR: (1) the ''branch pr-N is held'' refusal names the eligibility failure (missing pr_head_sha, fetch failure, rewritten head, unpublished commits); (2) add trace:BUG-2469.acec8dd7/.ac5829b2/.ac77bc7f to the test at bug_2457_review_repickup_tests.rs:191 (TASK-HOME-899). Targeted cargo test on bug_2457 plus make check-ci-fast.'
+  created_at: 2026-11-06T20:47:01.869201106Z
+  modified_at: 2026-11-06T20:47:01.869201106Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b29d-56b4-72e0-9f29-ddd41d92b8e1
   author: joe
