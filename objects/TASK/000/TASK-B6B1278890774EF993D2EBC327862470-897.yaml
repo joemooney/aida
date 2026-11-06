@@ -9,12 +9,12 @@ description: |-
 
   PR: #3530
   Reviewed sha: d0030668f326367acc868fa54a530172ced0f9f3
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:35:34.914132727Z
-modified_at: 2026-11-06T21:30:11.111767505Z
+modified_at: 2026-11-06T23:27:23.787883840Z
 req_type: Task
 tags:
 - carried-from:BUG-2468
@@ -83,6 +83,20 @@ history:
   author: joe
   timestamp: 2026-11-06T21:32:24.406986675Z
   changes: []
+- id: 01a1b330-3667-7602-9936-2b207c63ee96
+  author: aida-auto-bump
+  timestamp: 2026-11-06T23:27:23.751876164Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b330-368b-7b93-8c82-5ddda7fc77bf
+  timestamp: 2026-11-06T23:27:23.787881179Z
+  agent: aida
+  commit_sha: 4c9ea2014890768f28a0960a0be8e85b4ae2d4e1
+  summary: 'AC1 bare-name legacy start detected, mirroring ~/bin/aida-deputy-shell case table (run/reserved verbs/[A-Za-z0-9]* arm) — verified by legacy_runner_bare_names_do_not_match_other_verbs_or_invalid_start_names + legacy_runner_start_forms_and_submit_guidance_agree_with_list; AC2 native submit refuses with legacy-live guidance (legacy submit or native restart), writes no job/socket, grants no authority — verified by the start-forms test; AC3 unit tests + check-ci-fast: implementer reports 44/44 deputy_shell tests + 38 fast gates; PR CI run 42297172858 still queued on runner backlog at review time, so ship must gate on green CI. Non-blocking: when runner_status is Unknown (sandboxed submitter), submit still says ''no script deputy is running'' rather than echoing list''s UNKNOWN.'
+  review_verdict: approved
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
   branch: main
@@ -90,3 +104,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b34755f19c7
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T23:27:23.751869955Z
+  completion_sha: 4c9ea2014890768f28a0960a0be8e85b4ae2d4e1
