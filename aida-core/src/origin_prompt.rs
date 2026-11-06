@@ -232,8 +232,8 @@ mod tests {
             "api_key=abcdefghijklmnop",
             "ghp_abcdefghijklmnopqrstuvwxyz1234",
             "sk-proj-abcdefghijklmnopqrstuvwxyz",
-            "xoxb-example-token",
-            "gho_short-token",
+            "xoxb-abcdefghijklmnopqrstuvwxyz",
+            "gho_abcdefghijklmnopqrstuvwxyz",
             "https://example.test/ghp_abcdefghijklmnopqrstuvwxyz1234",
             "quoted-sk-proj-abcdefghijklmnopqrstuvwxyz",
             "AKIA1234567890123456",
@@ -320,6 +320,16 @@ mod tests {
 
     #[test]
     fn origin_prompt_deferred_create_catches_up_with_artifact() {
+        assert_deferred_create_catches_up_with_artifact(false);
+    }
+
+    #[test]
+    fn origin_prompt_deferred_damaged_artifact_does_not_block_later_commit() {
+        assert_deferred_create_catches_up_with_artifact(true);
+    }
+
+    // trace:STORY-1468 | ai:codex
+    fn assert_deferred_create_catches_up_with_artifact(damaged: bool) {
         let dir = tempfile::tempdir().unwrap();
         let b = backend(dir.path());
         git(dir.path(), &["init", "-q"]);
@@ -334,6 +344,10 @@ mod tests {
         let row = b
             .add_requirement_with_origin_prompt(req(), Some(&prompt))
             .unwrap();
+        let artifact = OriginPrompt::relative_path(row.id);
+        if damaged {
+            std::fs::write(dir.path().join(&artifact), "version: [truncated").unwrap();
+        }
         let b = b.with_auto_commit(true);
         b.add_requirement(req()).unwrap();
         let files = git(dir.path(), &["show", "--pretty=", "--name-only", "HEAD"]);
@@ -341,6 +355,12 @@ mod tests {
             files.contains(&OriginPrompt::relative_path(row.id)),
             "{files}"
         );
+        if damaged {
+            assert_eq!(
+                git(dir.path(), &["show", &format!("HEAD:{artifact}")]),
+                "version: [truncated"
+            );
+        }
         assert!(git(dir.path(), &["status", "--porcelain"])
             .trim()
             .is_empty());

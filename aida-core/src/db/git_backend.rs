@@ -1099,8 +1099,10 @@ impl GitBackend {
                 !committed_ids.contains(&op.id)
                     && matches!(op.kind, crate::oplog::OpKind::Create { .. })
             }) {
-                if crate::origin_prompt::OriginPrompt::read(&self.root, op.target_id)?.is_some() {
-                    let artifact = crate::origin_prompt::OriginPrompt::relative_path(op.target_id);
+                let artifact = crate::origin_prompt::OriginPrompt::relative_path(op.target_id);
+                // Catch-up preserves existing bytes; validation belongs to intake/read.
+                // A damaged deferred artifact must not block unrelated writes.
+                if self.root.join(&artifact).is_file() {
                     crate::git_ops::add(&self.root, &[&artifact])?;
                 }
             }
