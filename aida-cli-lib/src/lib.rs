@@ -493,6 +493,8 @@ mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
 mod ci_gate;
+mod ci_receipt;
+mod ci_relay;
 mod harvest;
 mod integrate_checkout;
 mod integrate_view;
