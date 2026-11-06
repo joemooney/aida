@@ -1,7 +1,24 @@
 //! Next-head reviews must pass the real queue pickup a second time.
 // trace:BUG-2457 | ai:codex
-use super::tests::{fixture, git_ok};
+use super::tests::fixture;
 use aida_core::db::DatabaseBackend as _;
+
+// Keep the maintenance guard visible to the fixture ratchet in this file.
+// trace:BUG-2457 | ai:codex
+fn git_ok(repo: &std::path::Path, args: &[&str]) -> String {
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
 
 fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(

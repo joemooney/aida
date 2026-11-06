@@ -11455,9 +11455,7 @@ pub(crate) fn preflight_queue_work_branch(
 fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u64) -> Result<()> {
     let branch = forge.local_branch_for(n);
     let path = crate::session_start::pickup_worktree_path(root, &branch)?;
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let output = aida_core::git_ops::host_git_command(root)
         .args(["worktree", "list", "--porcelain"])
         .output()?;
     anyhow::ensure!(
