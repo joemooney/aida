@@ -1,5 +1,6 @@
 id: 01a1ae30-135e-7a11-bcbf-c6aef99805b9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-852
+agreed_id: TASK-2912
 title: '[minor/non-blocking, process] AGENTS.md:1-4 prepends a paragraph and OVERVIEW.m…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2887, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:9ad58651
 - from-review:PR-3446
 - kind:carried-forward
+history:
+- id: 01a1ae5c-e486-7240-bdf2-15dd05a06bd6
+  author: joe
+  timestamp: 2026-11-06T00:58:05.830329307Z
+  changes: []
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
