@@ -295,6 +295,16 @@ fn task_2838_distinct_tool_limit_fails_closed_after_recovery() {
         }
         assert_eq!(evidence.unresolved.len(), MAX_TOOLS);
         assert_eq!(evidence.invalid, count > MAX_TOOLS);
+        // A repeated failure at capacity is still the same tool. Retain its
+        // latest step so an earlier DONE cannot incorrectly clear the error.
+        evidence.line(
+            ERROR
+                .replace("run_command", "tool_0")
+                .replace("step_index\":2", "step_index\":4")
+                .as_bytes(),
+            false,
+        );
+        assert_eq!(evidence.invalid, count > MAX_TOOLS);
         for index in 0..count {
             evidence.line(
                 RETRY
@@ -304,6 +314,19 @@ fn task_2838_distinct_tool_limit_fails_closed_after_recovery() {
             );
         }
         evidence.line(SUCCESS.as_bytes(), false);
+        assert_eq!(evidence.unresolved.len(), 1);
+        assert_eq!(evidence.unresolved.get("tool_0"), Some(&Some(4)));
+        assert_eq!(
+            evidence.status(ExitStatus::from_raw(0)).code(),
+            Some(INCOMPLETE)
+        );
+        evidence.line(
+            RETRY
+                .replace("run_command", "tool_0")
+                .replace("step_index\":3", "step_index\":5")
+                .as_bytes(),
+            false,
+        );
         assert!(evidence.unresolved.is_empty());
         assert_eq!(
             evidence.status(ExitStatus::from_raw(0)).code(),

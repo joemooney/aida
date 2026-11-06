@@ -59,7 +59,10 @@ impl Evidence {
                 if failed {
                     self.errors = self.errors.saturating_add(1);
                     if let Some(name) = name.filter(|n| n.len() <= 256) {
-                        if self.unresolved.len() < MAX_TOOLS {
+                        // Repeated errors update the failed step even at capacity;
+                        // only a new distinct tool consumes another bounded slot.
+                        // trace:TASK-2838 | ai:codex
+                        if self.unresolved.len() < MAX_TOOLS || self.unresolved.contains_key(name) {
                             self.unresolved
                                 .insert(name.to_owned(), step["step_index"].as_u64());
                         } else {
