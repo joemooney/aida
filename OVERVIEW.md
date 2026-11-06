@@ -8,7 +8,7 @@ Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
-global cap of two, and the two-round limit. PID/start/boot receipts precede queue
+local cap of two, and the two-round limit. PID/start/boot receipts precede queue
 work; capacity is released only by a terminal receipt or proof that the
 dispatcher's exact process is gone. Stale overlap notices name the change's
 base branch and publish idempotently to the exact forge author's local mailbox.
@@ -1448,6 +1448,25 @@ removes a roster entry and affects future credit without undoing merges.
 Publications use node-qualified UUID identity and signed per-node supersession;
 an independent concurrent refusal cannot be overwritten by another node's approval.
 The bounded committed-blob readers refuse malformed or unverifiable evidence.
-Watcher reservation synchronization and untrusted-node envelopes remain separate
-work. See [second-node operation](docs/agents/second-review-node.md).
+Distributed watchers synchronize publications before forge discovery, including
+on hosts without a local verdict directory. The trusted `[review] admission_hub`
+and `admission_ref` select the single GitHub authority; GitLab and bridges only
+mirror. Signed Reserved → Running → Terminal transitions and pre-spawn
+Reserved → Cancelled use explicit expected-tip CAS and confirmed unpredictable
+tokens. Active older heads fence newer ones; uncertain pushes/processes retain
+claims without time/PID expiry or failover. Local capacity/process receipts stay
+in force. Admission state is sharded into bounded per-PR blobs; historical
+closed PRs cannot exhaust a global table budget. The direct-human
+`review nodes admission-reconcile` command requires stopped reviewers and an
+inspected exact hub tip, signs a recovery anchor, and fences abandoned or revoked
+owner tokens without deleting Git history. Local release is allowed only after
+remote claims are inactive. Hub configuration ships disabled until operators
+enroll and upgrade every watcher. Admission snapshots config, roster and verdict
+evidence under short store locks around hub I/O, retrying changed evidence;
+unrelated store commits do not block lifecycle transitions. Readers validate
+anchor signatures and scope but rely on trusted writers to preserve chains;
+they do not detect shard truncation or replay against Git ancestors.
+Untrusted-node envelopes remain separate work. See
+[second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:TASK-3196 | ai:codex -->

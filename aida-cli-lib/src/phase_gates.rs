@@ -504,38 +504,36 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
         )
     })?;
     let dest = dest_dir.join(freshest.file_name().expect("candidate has a file name"));
-    let temp_name = format!(
-        ".{}.publish-{}-{}",
-        dest.file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("verdict"),
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    let temp = dest_dir.join(temp_name);
-    let staged = (|| -> std::io::Result<()> {
+    // Wall-clock nanoseconds can repeat in sibling threads. Allocate an owned
+    // random staging file; a failed create must never unlink a peer's file.
+    // trace:STORY-2492 | ai:codex
+    let mut staged = tempfile::Builder::new()
+        .prefix(&format!(
+            ".{}.publish-",
+            dest.file_name().unwrap().to_string_lossy()
+        ))
+        .tempfile_in(&dest_dir)
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!("could not create canonical verdict staging file: {e}"),
+            )
+        })?;
+    let written = (|| -> std::io::Result<()> {
         use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp)?;
-        file.write_all(bodies[0].as_bytes())?;
-        file.sync_all()
+        staged.write_all(bodies[0].as_bytes())?;
+        staged.as_file().sync_all()
     })();
-    if let Err(e) = staged {
-        let _ = std::fs::remove_file(&temp);
+    if let Err(e) = written {
         return Err(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             format!("could not stage canonical verdict evidence: {e}"),
         ));
     }
-    let publication = crate::gate::review_verdict::publish_verdict_no_replace(&temp, &dest);
-    if publication.is_err() {
-        let _ = std::fs::remove_file(&temp);
-    }
+    let publication = crate::gate::review_verdict::publish_verdict_no_replace(staged.path(), &dest);
+    // NamedTempFile owns cleanup on every path, including a collision. A
+    // successful no-replace rename has already removed this staging name.
+    drop(staged);
     match publication {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
