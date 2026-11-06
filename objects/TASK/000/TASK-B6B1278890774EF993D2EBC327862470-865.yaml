@@ -1,0 +1,29 @@
+id: 01a1afb1-537e-74b2-bb7a-e5f2349043c4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-865
+title: '[minor, non-blocking] conformance.py run_aida(): subprocess.run([''bash''], timeo…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3131, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking] conformance.py run_aida(): subprocess.run(['bash'], timeout=args.timeout+120) can be exceeded by continuation setup (3x30s) + bounded_launch(args.timeout); on TimeoutExpired only the exec'd python dies, the aida queue work process group (process_group=0) is orphaned, Network is not closed, and the stale pre-continuation report overwrites setup evidence.
+
+  PR: #3475
+  Reviewed sha: d5be5ad2aff3bc38b337669f29bf5fc0899fa7c3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T07:09:56.478316488Z
+modified_at: 2026-11-06T07:09:56.478316488Z
+req_type: Task
+tags:
+- carried-from:TASK-3131
+- finding-hash:033b7e29
+- from-review:PR-3475
+- kind:carried-forward
+filed_at:
+  code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 379c7c3c10e
+  vendor: claude
