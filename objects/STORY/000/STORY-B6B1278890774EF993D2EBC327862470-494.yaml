@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-06T19:24:07.751558369Z
+modified_at: 2026-11-06T19:24:13.675441829Z
 req_type: Story
 tags:
 - area:advisor
@@ -272,6 +272,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 inventory verified exact (267 rows match host sha256 at commit time); sketch ignores the shipped aida dispatch subsystem (STORY-1917) and existing branch-update surfaces, proposing parallel ones without reconciliation. It was punted on: design-fork: Sketch-only lane complete per advisor comment dated 2026-11-06 17:28 UTC. Full architecture sketch posted on the spec and saved at docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md; 267-script hashed inventory at docs/internal/agents/advisor-script-inventory.md. Advisor signoff is required before runtime code: approve grant succession, fixed host-operation transport, slot accounting and conflict recovery. BUG-2467 delegation and BUG-2468 runner integration must be verified before dependent runtime work; prompt-free auto-mode sweep remains unperformed. Inventory/hash/link checks and cargo fmt --all -- --check passed. Native Refs declaration records documentation intent only; this punt remains a publication veto.. No triage reason was given.'
   created_at: 2026-11-06T19:24:07.751557070Z
   modified_at: 2026-11-06T19:24:07.751557070Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b251-957e-7563-8a47-2b6acde26b6e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3526):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: caaed1b527aa
+    Recorded: 2026-11-06T18:43:24.662219920+00:00
+    Findings:
+    1. major: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md 'Existing surfaces to reuse' + 'Proposed command surface' + 'Dispatch and publication' omit the shipped aida dispatch subsystem (STORY-1917, PR-3206: aida-cli-lib/src/dispatch.rs, dispatch_args.rs, dispatch_flow.rs, gate/dispatch_auth.rs). That subsystem already gives a sandboxed advisor a typed, mandate-authorized, deduplicated request queue (aida dispatch request impl|take|flow|review|train, list/show/cancel/tick) with a host-side executor (aida dispatch serve) that binds the advisor terminal's grant. The sketch instead proposes a parallel aida advisor dispatch add|status|run surface and a new host supervisor ledger. Revise it to extend aida dispatch (slot cap, queue/dependency conditions, per-request vendor, resume intent) or explain why a separate surface is needed, and add dispatch serve to the services that must re-bind on advisor grant rotation (AC2), since serve inherits the launching terminal's grant.
+    2. major: the 'Host merge and conflicts' section of the sketch proposes a new aida pr update-branch host job without reconciling it with existing branch-update surfaces: aida pr rebase (temp worktree + force-push-with-lease), review_watch_update.rs (gh pr update-branch with a conflict refusal, UpdateFailure::refused), forge.rs github_update_branch_argv (pinned expected head), and aida dispatch request flow, which already runs update-branch. State what is new (a local merge with a conflict report for PRs where GitHub's update-branch refuses) versus reused, and resolve the naming overlap: 'update-branch' already means GitHub's server-side merge in review-watch and dispatch flow.
+    3. minor: docs/internal/agents/advisor-script-inventory.md:49 and :253 mark stall-check.sh as move-to-aida 'coordinate with STORY-2476', but STORY-2476 (pipeline stall alarm) is already Completed. Either retire it as superseded, or name the stall-check behavior the shipped alarm does not cover.
+    4. cosmetic: the inventory snapshot is exact as of the commit (11:16), but two scripts appeared afterwards: launch-BUG-2469.sh (11:26) and review-watch-loop.sh (11:37, a new respawn loop around aida review watch that AC2's supervised review-watch should replace). The doc already says to recheck before migration; listing review-watch-loop.sh with launch-review-watch.sh under move-to-aida would keep the AC2 scope complete.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:24:13.566445713Z
+  modified_at: 2026-11-06T19:24:13.566445713Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
