@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T20:28:24.035522086Z
+modified_at: 2026-11-06T20:48:28.456683367Z
 req_type: Task
 tags:
 - architecture
@@ -119,6 +119,30 @@ comments:
   created_at: 2026-11-06T20:27:01.075195497Z
   modified_at: 2026-11-06T20:27:01.075195497Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b29e-b728-7dc3-a208-c0c4ad572090
+  author: joe
+  content: |
+    Round 3 implementation (native seat; source edits left uncommitted for the host):
+
+    Finding 1: fetched the prior lib-0 job log directly with gh api (job 128098033035); it and head lib-1 (job 128102222044) fail on the same config trust guard. The scanner treated owner_tests.rs's temporary config fixture write as production. Added an explicit cfg(test) boundary to that fixture function; no trust inventory exception or production policy change.
+
+    Finding 2: GitHub Actions run 42278859626, gates job 128102222285, now reports the Store mutation channel tests step completed/success at 5f3b1918. The workflow already requires AIDA_REQUIRE_STORE_MUTATION_LIVE=1. This seat also ran the full suite with that variable: 21 tests passed, zero skips, including lifecycle refusal, sibling namespace/FD isolation and the new post-exec delay regression. A new-head CI run remains the host's responsibility after publication.
+
+    Finding 3: spawn_vendor_headless_forking now checks require_store_service_surface before issuing its child grant. A command customization boundary, matching run_vendor_headless_child, lets the session-level regression put the requirement explicitly on the child Command. The regression exercises fresh and forked Codex session paths and asserts the refusal plus absence of vendor execution.
+
+    Finding 4: MutationAuthority uses the approved five-second I/O bound. The live vendor emits an exec marker; the fixture then delays a real authority reply for 1.25 seconds and verifies the lane completes its post-exec service probe. An in-memory substitution of the former one-second timeout reproduced fatal Unavailable/BrokenPipe refusal, confirming the regression catches the bug. Timeout still permanently shuts down the endpoint.
+
+    Changed source files: aida-cli-lib/src/session.rs; aida-cli-lib/src/store_mutation/owner_tests.rs; aida-cli-lib/src/store_mutation/service.py; tests/test_store_mutation.py.
+
+    Validation: make check-ci-fast passed all 39 fast gates, including the feature-disabled CLI check and cargo formatting. git diff --check passed. Targeted Rust command: cargo test --profile agent -p aida-cli-lib --lib -- store_mutation:: task_3225 every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy. Result: 11 passed, 0 failed, 0 ignored. This includes all four real-owner tests, two owner unit tests, three launch tests, the new session regression and the config trust guard. The cold build took 19m03s; test execution took 0.91s. untested=false.
+
+    No commit, push, PR creation, review recording, queue completion or merge-hold clearance was performed. The operator's drive-mode merge gate remains intact. The host must commit/publish these edits and obtain green lib-0 and gates at the new head before review/merge.
+
+    Native publication declaration recorded: [AI:codex] fix(containment): enforce required service and bound authority stalls (Refs TASK-3225).
+    CI evidence: https://github.com/joemooney/aida/actions/runs/42278859626/job/128102222285 (Store mutation channel tests step success at the existing head).
+  created_at: 2026-11-06T20:48:28.456683367Z
+  modified_at: 2026-11-06T20:48:28.456683367Z
+  session_id: 01a1b28c4e36
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
   author: joe
