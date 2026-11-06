@@ -3371,3 +3371,27 @@ exec sleep 120
         "{failure:?}"
     );
 }
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_auto_punt_uses_phase_driver_control_fixture() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::test_env::AmbientGuard::hermetic(root, None);
+    let mut driver = driver(root, "STORY-2326");
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    let fake = root.join("aida-fixture");
+    crate::test_exec::write_executable(&fake, "#!/bin/sh\nprintf '%s\n' \"$@\" > punt-args\n");
+    driver.aida_exe = fake;
+    let logs = root.join(".aida/headless-logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    std::fs::write(logs.join("implementer-session.jsonl"), r#"{"type":"result","subtype":"success","is_error":false,"result":"Which path do you want me to take? My recommendation is B."}"#).unwrap();
+    assert!(driver.auto_punt_text_question(root, "session").is_some());
+    let args = std::fs::read_to_string(root.join("punt-args")).unwrap();
+    assert!(
+        args.starts_with("punt\nSTORY-2326\n--category\ndesign-fork\n"),
+        "{args}"
+    );
+    driver.aida_exe = root.join("missing-control");
+    assert!(driver.auto_punt_text_question(root, "session").is_none());
+}

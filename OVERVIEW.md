@@ -399,8 +399,8 @@ source ratchet inventories constructors and protected environment writers outsid
 the launcher. The effectful vendor profile owns Codex finalization, after seat
 and identity decisions and before stdio or process hooks. Launched children mint
 through one `launch::issue_launch_child` entry, retaining delegation and keyring
-checks. AIDA control children require the canonical current executable and forward
-only the caller's grant selector; routing roles travel as explicit command args.
+checks. AIDA control children execute the kernel-held `/proc/self/exe` image, surviving
+promote/rollback renames and unlinking, and forward only the caller's grant selector; routing roles travel as explicit command args.
 The TUI uses the same selector-only `control_env` policy. Resource validation
 grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->

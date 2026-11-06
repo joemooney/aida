@@ -509,7 +509,9 @@ fn start_pending(
     std::thread::spawn(move || {
         // The receiver may have been dropped if the TUI exited mid-run; the
         // send error is then expected and ignored.
-        let _ = tx.send(work());
+        let mut result = work();
+        include_control_diagnostics(&mut result.status);
+        let _ = tx.send(result);
     });
     *pending = Some(Pending {
         op: PendingOp::new(label),
@@ -565,6 +567,9 @@ fn event_loop(
             .refresh_if_due(project_root, liveness_visible, || {
                 store.map(|s| s.liveness_inputs()).unwrap_or_default()
             });
+        if let Some(status) = st.status.as_mut() {
+            include_control_diagnostics(status);
+        }
         st.drain = drain_panel::probe(project_root);
         terminal.draw(|f| render(f, st, loaded_spec.as_ref(), pending.as_ref().map(|p| &p.op)))?;
 
@@ -1510,8 +1515,7 @@ fn apply_drive_outcome(
 // trace:STORY-744 | ai:claude — the `force` path is the gate-hold override.
 // trace:TASK-1076 | ai:claude — the `solo` path is the routing toggle.
 fn spawn_drive(id: &str, force: bool, solo: bool) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["zen", id]);
     if force {
         cmd.arg("--force");
@@ -1542,8 +1546,7 @@ fn spawn_drive(id: &str, force: bool, solo: bool) -> bool {
 /// surface the existing gate popup with the fresh reason.
 // trace:TASK-1075 | ai:codex
 fn run_drive_remedy(id: &str) -> VerbResult {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["questions", "remedy", id]);
     if !apply_control_env(&mut cmd) {
         return VerbResult::drive_after(
@@ -1599,6 +1602,18 @@ fn first_nonempty_line(s: &str) -> Option<String> {
 /// the terminal; the cockpit repaints from scratch on return.
 // trace:STORY-744 | ai:claude
 // trace:TASK-1252 | ai:codex — mutation-style interactive CLI path.
+fn clarify_control_command(id: &str) -> std::io::Result<Command> {
+    let mut cmd = Command::new("/proc/self/exe");
+    cmd.args(["questions", "clarify", id]);
+    if !apply_control_env(&mut cmd) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "control child refused; see status for reason",
+        ));
+    }
+    Ok(cmd)
+}
+
 fn clarify_and_reoffer(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
@@ -1608,18 +1623,10 @@ fn clarify_and_reoffer(
     id: &str,
 ) -> Result<()> {
     st.gate_hold = None;
-    let exe = crate::app::aida_exe();
     let id_owned = id.to_string();
     // Hand the terminal to the interactive clarifier while it runs.
     let status = term::suspend_for_child(|| {
-        let mut cmd = Command::new(&exe);
-        cmd.args(["questions", "clarify", &id_owned]);
-        if !apply_control_env(&mut cmd) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "control child program is not the running AIDA executable",
-            ));
-        }
+        let mut cmd = clarify_control_command(&id_owned)?;
         if let Ok(cwd) = std::env::current_dir() {
             cmd.current_dir(cwd);
         }
@@ -1699,8 +1706,7 @@ impl DriveGateVerdict {
 // trace:STORY-744 | ai:claude
 // trace:TASK-1252 | ai:codex
 fn probe_drive_gate(id: &str) -> std::result::Result<DriveGateVerdict, String> {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["zen", id, "--json"]);
     // Advisor authority for parity with the drive it stands in for (the probe
     // itself only reads, but keeps the provenance consistent).
@@ -1773,8 +1779,7 @@ fn groom_args() -> [&'static str; 1] {
 // trace:TASK-1252 | ai:codex
 fn run_groom_propose() -> (String, String) {
     let title = "groom — proposed dispositions (propose-only, nothing applied)".to_string();
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(groom_args());
     if !apply_control_env(&mut cmd) {
         return (
@@ -1814,8 +1819,7 @@ fn archive_args(id: &str) -> [&str; 2] {
 /// The CLI checks the caller's inherited selector for this disposition.
 // trace:STORY-703 | ai:claude
 fn archive_spec(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(archive_args(id));
     if !apply_control_env(&mut cmd) {
         return false;
@@ -1899,8 +1903,7 @@ fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
 /// Uses `aida queue add --for advisor <id>` — the reliable routing path.
 // trace:STORY-690 | ai:claude
 fn queue_for_advisor(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["queue", "add", "--for", "advisor", id]);
     // The CLI checks the caller's authority; routing intent is explicit argv.
     // trace:STORY-2326 | ai:codex
@@ -1945,8 +1948,7 @@ fn request_approval_status(routed: &[String], failed: &[String], skipped: &[Stri
 /// success. Uses `aida queue add --for implementer <id>` — the reliable
 // routing path, the mirror of [`queue_for_advisor`]. trace:TASK-915 | ai:claude
 fn queue_for_implementer(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["queue", "add", "--for", "implementer", id]);
     // BUG-630: dispatching to the implementer queue needs advisor authority
     // (the TASK-647 gate, correctly — this commits the team to execute). Carry
@@ -1995,8 +1997,7 @@ fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> Str
 /// forwards the caller's selector for validation by the CLI. The
 // do-it-yourself mirror of [`queue_for_advisor`]. trace:TASK-920 | ai:claude
 fn approve_spec(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["edit", id, "--status", "approved"]);
     // Approval is advisor-gated; forward the caller's selector for validation.
     if !apply_control_env(&mut cmd) {
@@ -2078,8 +2079,7 @@ fn batch_approve_status(outcome: &BatchApproveOutcome) -> String {
 /// sibling of [`approve_spec`].
 // trace:TASK-949 | ai:claude
 fn reject_spec(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
+    let mut cmd = Command::new("/proc/self/exe");
     cmd.args(["edit", id, "--status", "rejected"]);
     // Rejection is advisor-gated; forward the caller's selector for validation.
     if !apply_control_env(&mut cmd) {
@@ -2162,9 +2162,8 @@ fn accept_comment_args(id: &str) -> [&str; 4] {
 /// the reviewer-at-the-keyboard walkthrough. The Done-status mirror of
 // [`approve_spec`]. trace:TASK-933 | ai:claude
 fn accept_spec(id: &str) -> bool {
-    let exe = crate::app::aida_exe();
     let cwd = std::env::current_dir().ok();
-    let mut edit = Command::new(&exe);
+    let mut edit = Command::new("/proc/self/exe");
     edit.args(accept_edit_args(id));
     // Record this transition under the caller's validated selector.
     if !apply_control_env(&mut edit) {
@@ -2180,16 +2179,20 @@ fn accept_spec(id: &str) -> bool {
     // Best-effort: record the reviewer-acceptance comment. A failed comment
     // does NOT un-accept the spec — the transition above is the load-bearing
     // result — so the accept is still reported as succeeded.
-    let mut note = Command::new(&exe);
+    record_acceptance_note(id, cwd.as_deref());
+    true
+}
+
+fn record_acceptance_note(id: &str, cwd: Option<&std::path::Path>) {
+    let mut note = Command::new("/proc/self/exe");
     note.args(accept_comment_args(id));
     if !apply_control_env(&mut note) {
-        return true;
+        return;
     }
-    if let Some(cwd) = cwd.as_ref() {
+    if let Some(cwd) = cwd {
         note.current_dir(cwd);
     }
     let _ = note.output();
-    true
 }
 
 /// The status-line confirmation for an `accept` run: which ids the reviewer
@@ -3041,7 +3044,9 @@ fn render_hint(
     let text = st.status.clone().unwrap_or_else(|| base.to_string());
     // trace:TASK-1526 | ai:codex
     let text = match aida_core::db::cache_refresh::cache_read_note() {
-        Some(note) => format!("{note} | {text}"),
+        // Action failures must remain visible on a narrow status line.
+        // trace:STORY-2326 | ai:codex
+        Some(note) => format!("{text} | {note}"),
         None => text,
     };
     f.render_widget(
@@ -5355,10 +5360,46 @@ mod drive_gate_probe_tests {
 /// Forward the caller's selector to this executable only. Ordinary CLI gates
 /// validate it; TUI gestures never manufacture advisor/reviewer role authority.
 // trace:STORY-2326 | ai:codex
+thread_local! {
+    static CONTROL_DIAGNOSTICS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    #[cfg(test)]
+    static CONTROL_REFUSE_AFTER: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+fn include_control_diagnostics(status: &mut String) {
+    CONTROL_DIAGNOSTICS.with(|errors| {
+        let errors = errors.take();
+        if !errors.is_empty() {
+            *status = format!("{} · {status}", errors.join(" · "));
+        }
+    });
+}
+
 fn apply_control_env(cmd: &mut Command) -> bool {
-    let current = std::fs::canonicalize("/proc/self/exe");
-    let program = std::path::Path::new(cmd.get_program()).canonicalize();
-    if !matches!((current, program), (Ok(current), Ok(program)) if current == program) {
+    let check = || -> Result<()> {
+        #[cfg(test)]
+        CONTROL_REFUSE_AFTER.with(|remaining| {
+            if let Some(n) = remaining.get() {
+                remaining.set(n.checked_sub(1));
+                anyhow::ensure!(n > 0, "injected control refusal");
+            }
+            Ok(())
+        })?;
+        anyhow::ensure!(
+            cmd.get_program() == "/proc/self/exe",
+            "control child must execute /proc/self/exe"
+        );
+        std::fs::metadata("/proc/self/exe")?;
+        Ok(())
+    };
+    if let Err(error) = check() {
+        let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy()).collect();
+        CONTROL_DIAGNOSTICS.with(|errors| {
+            errors.borrow_mut().push(format!(
+                "control child refused: {error:#} ({})",
+                args.join(" ")
+            ))
+        });
         return false;
     }
     let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);
@@ -5381,8 +5422,7 @@ mod story_2326_control_tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn story_2326_tui_control_forwards_selector_without_fabricating_role() {
-        let current = std::fs::canonicalize("/proc/self/exe").unwrap();
-        let mut cmd = Command::new(&current);
+        let mut cmd = Command::new("/proc/self/exe");
         cmd.env(aida_core::launch_policy::ROLE_ENV, "advisor");
         let selector = std::env::var_os(aida_core::launch_policy::GRANT_ENV);
         assert!(apply_control_env(&mut cmd));
@@ -5398,5 +5438,90 @@ mod story_2326_control_tests {
         let mut vendor = Command::new("/bin/true");
         assert!(!apply_control_env(&mut vendor));
         assert!(vendor.get_envs().next().is_none());
+    }
+}
+
+#[cfg(test)]
+mod story_2326_refusal_tests {
+    use super::*;
+
+    fn refused(work: impl FnOnce()) {
+        CONTROL_DIAGNOSTICS.with(|errors| errors.borrow_mut().clear());
+        CONTROL_REFUSE_AFTER.with(|remaining| remaining.set(Some(0)));
+        work();
+        assert_eq!(
+            CONTROL_REFUSE_AFTER.with(|remaining| remaining.get()),
+            None,
+            "gesture did not check its control command"
+        );
+        let mut status = "gesture finished with a long selected-spec list ".repeat(10);
+        include_control_diagnostics(&mut status);
+        assert!(status.contains("control child refused"), "{status}");
+        assert!(
+            status.starts_with("control child refused: injected control refusal"),
+            "{status}"
+        );
+        let mut state = RedesignState::new(Vec::new(), "advisor");
+        state.status = Some(status.clone());
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(80, 1)).unwrap();
+        terminal
+            .draw(|frame| {
+                render_hint(
+                    frame,
+                    Rect::new(0, 0, 80, 1),
+                    &state,
+                    &Theme::default(),
+                    None,
+                )
+            })
+            .unwrap();
+        let visible = (0..80)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(visible.contains("injected control refusal"), "{visible}");
+        let saved = status.clone();
+        include_control_diagnostics(&mut status);
+        assert_eq!(status, saved, "diagnostic must be consumed once");
+    }
+
+    #[test]
+    fn story_2326_all_tui_control_gestures_surface_refusal_reason() {
+        refused(|| assert!(!spawn_drive("TASK-1", false, false)));
+        refused(|| assert!(!run_drive_remedy("TASK-1").invalidate));
+        refused(|| assert!(clarify_control_command("TASK-1").is_err()));
+        refused(|| assert!(probe_drive_gate("TASK-1").is_err()));
+        refused(|| assert!(run_groom_propose().0.contains("control child")));
+        refused(|| assert!(!archive_spec("TASK-1")));
+        refused(|| assert!(!queue_for_advisor("TASK-1")));
+        refused(|| assert!(!queue_for_implementer("TASK-1")));
+        refused(|| assert!(!approve_spec("TASK-1")));
+        refused(|| assert!(!reject_spec("TASK-1")));
+        refused(|| assert!(!accept_spec("TASK-1")));
+        // The transition already succeeded; a best-effort comment refusal
+        // must still reach status while preserving the completed transition.
+        refused(|| record_acceptance_note("TASK-1", None));
+    }
+
+    #[test]
+    fn story_2326_background_control_refusal_reaches_operator_status() {
+        let mut pending = None;
+        let mut state = RedesignState::new(Vec::new(), "advisor");
+        assert!(start_pending(&mut pending, &mut state, "approve", || {
+            CONTROL_REFUSE_AFTER.with(|remaining| remaining.set(Some(0)));
+            assert!(!approve_spec("TASK-1"));
+            VerbResult {
+                status: "FAILED to approve".into(),
+                invalidate: false,
+                follow_up_drive: None,
+            }
+        }));
+        let result = pending
+            .unwrap()
+            .rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        apply_verb_result(&mut state, &result);
+        assert!(state.status.unwrap().contains("injected control refusal"));
     }
 }

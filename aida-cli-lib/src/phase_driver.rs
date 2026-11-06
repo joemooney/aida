@@ -1390,8 +1390,17 @@ impl RealPhaseDriver {
         }
         let content = read_headless_log_for_session(&self.project_root, session_uuid)?;
         let punt = pending_text_question_from_headless_log(&content)?;
-        let status = crate::launch::control_child(self.aida_exe())
-            .ok()?
+        let mut command = match self.control_child() {
+            Ok(command) => command,
+            Err(error) => {
+                eprintln!(
+                    "auto-punt control child refused for {}: {error:#}",
+                    self.spec
+                );
+                return None;
+            }
+        };
+        let status = command
             .current_dir(worktree_path)
             .args(build_auto_punt_args(&self.spec, &punt.detail, &punt.lean))
             .status_retrying_etxtbsy()

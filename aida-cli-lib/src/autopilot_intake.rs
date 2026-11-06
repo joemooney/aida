@@ -1011,20 +1011,8 @@ pub(crate) fn handle_intake_command(
         contained,
     )?;
 
-    let child_grant = crate::launch::issue_launch_child(
-        &project_root,
-        "advisor",
-        &current_user_id(None),
-        session::sandboxed_child_grant(vendor, contained)?,
-    )?;
-    crate::launch::assign_seat(
-        &mut command,
-        aida_core::launch_policy::LaunchKind::Fresh,
-        crate::launch::SeatDecision::Child {
-            role: "advisor",
-            grant: &child_grant.id,
-        },
-    )?;
+    let child_grant =
+        crate::launch::assign_advisor_child(&project_root, vendor, contained, &mut command)?;
 
     // trace:BUG-2398 | ai:claude
     let status_code = session::coordinator_status_with_handle_guard(
@@ -1036,7 +1024,7 @@ pub(crate) fn handle_intake_command(
     )
     .with_context(|| format!("failed to launch {} headless intake pass", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
-    crate::session::revoke_headless_child_grant(&child_grant.id);
+    drop(child_grant);
     let status_code = status_code?;
 
     if status_code.success() {

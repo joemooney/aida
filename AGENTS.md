@@ -467,7 +467,7 @@ context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
 Launch adapters and the shared grant issuer live under `aida-cli-lib/src/launch/`.
-Control children forward selectors only to the canonical current AIDA executable;
+Control children execute `/proc/self/exe` and forward selectors to that running image;
 requested routing roles belong in argv. See [launch architecture](OVERVIEW.md#agent-launch-migration).
 <!-- trace:STORY-2326 | ai:codex -->
 
