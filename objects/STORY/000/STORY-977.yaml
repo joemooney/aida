@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:58.191330588Z
-modified_at: 2026-09-07T17:00:43.759211553Z
+modified_at: 2026-11-06T00:14:53.548999918Z
 req_type: Story
 tags:
 - aida-why
@@ -33,6 +33,12 @@ comments:
   created_at: 2026-09-07T17:00:42.813714246Z
   modified_at: 2026-09-07T17:00:42.813714246Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a1ae35-566d-7190-a097-fa60a9571e2d
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 5: KEEP DEFERRED, pending a product pass with the operator.'
+  created_at: 2026-11-06T00:14:53.548999918Z
+  modified_at: 2026-11-06T00:14:53.548999918Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 deferred: true
 deferred_at: 2026-09-07T17:00:43.759211553Z
 deferred_until: operator explicitly decides on the standalone aida-why extraction (positioning proposal, not a recorded decision)
