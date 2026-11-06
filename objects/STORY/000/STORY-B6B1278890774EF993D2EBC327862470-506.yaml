@@ -1,0 +1,34 @@
+id: 01a1b246-fffc-7de2-b52e-a034e6e501d7
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-506
+agreed_id: STORY-2583
+title: 'Review PR-3532: [AI:codex] fix: Conformance harness appends a second [contained] table to the fixture config.toml (init already writes one), so spec-add and queue-add fail to parse and C0-C4 report un'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b23e`) for branch `bug-b6b1278890774ef993d2ebc327862470-236`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3532>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-236` → `main`
+
+  ## Covers
+
+  - BUG-2470
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3532` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T19:12:39.932911839Z
+modified_at: 2026-11-06T19:12:39.932911839Z
+req_type: Story
+filed_at:
+  code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 01a1b23e4725
