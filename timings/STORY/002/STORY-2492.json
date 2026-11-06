@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2492",
+  "publishes": [
+    {
+      "at": "2026-11-06T21:33:23.180705117Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T07:55:45.621173760Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T13:19:41.105036367Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T13:39:33.224600229Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T15:56:51.163432417Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T20:25:42.708816798Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T03:39:48.851649475Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T04:20:52.316829262Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T07:48:20.495042278Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T12:44:05.317633321Z",
+      "spec": "STORY-2492",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2492",
+        "branch": "origin/story-2492-r2216",
+        "first_seen": "2026-11-06T12:44:05.317574791+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T16:07:01.951435986Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T17:03:17.920159639Z",
+      "spec": "STORY-2492",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2492",
+        "branch": "pr-3508",
+        "first_seen": "2026-11-06T17:03:17.919952318+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T17:03:17.959213908Z",
+      "spec": "STORY-2492",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2492",
+        "branch": "origin/story-2492-ac5",
+        "first_seen": "2026-11-06T17:03:17.959013612+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T21:32:15.701600286Z",
+      "spec": "STORY-2492",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3508
+      }
+    },
+    {
+      "ts": "2026-11-06T21:33:22.985483093Z",
+      "spec": "STORY-2492",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2",
+        "pr": 3508,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
