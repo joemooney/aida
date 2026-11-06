@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:21:25.514461963Z
-modified_at: 2026-11-06T13:24:20.888709708Z
+modified_at: 2026-11-06T13:27:24.722719863Z
 req_type: Bug
 tags:
 - conformance
@@ -18,6 +18,13 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-06T13:21:40.577681101Z
+comments:
+- id: 01a1b10a-e932-7f62-bd99-461f53cb222a
+  author: joe
+  content: 'Implemented native-seat handoff: conformance.py now provisions the fixture roster with production aida team allow-seat using CLI user precedence and inherited operator stdin/stderr, then classifies actual failed role-entry stdout as fixture-roster-missing, fixture-role-enter-refused-managed, or fixture-role-enter-refused with diagnostic retained in report.json. Updated shared-boundary docs and offline tests. Validation: python3 -m unittest tests/test_containment_conformance.py tests/test_containment_conformance_aida.py passed all 36 tests in 39.853s; real CLI + fake vendor verifies roster creation then managed-role refusal without vendor execution. Operator live seat-preflight remains for host/operator validation because this managed seat cannot mint a human grant. Edits left uncommitted for host publication; no queue completion attempted.'
+  created_at: 2026-11-06T13:27:24.722719863Z
+  modified_at: 2026-11-06T13:27:24.722719863Z
+  session_id: 01a1b10811d7
 history:
 - id: 01a1b105-ada8-77d2-933e-a2903d555ebc
   author: joe
@@ -31,6 +38,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b108-8ffa-7f12-bbc8-5834d56e550a
+  author: joe
+  timestamp: 2026-11-06T13:24:50.810309434Z
+  session_id: 01a1b10811d7
+  changes: []
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
