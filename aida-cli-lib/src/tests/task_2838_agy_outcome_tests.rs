@@ -364,7 +364,7 @@ fn task_2838_tee_disabled_diagnostics_reach_stderr() {
     // libtest normally captures eprintln; a child with nocapture proves these
     // diagnostics actually reach stderr with both log tee and forwarding off.
     for mode in ["direct", "coordinator"] {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
+        let output = std::process::Command::new(crate::resolve_aida_exe())
             .args([
                 "--exact",
                 "agy_outcome::tests::task_2838_tee_disabled_diagnostics_reach_stderr",
