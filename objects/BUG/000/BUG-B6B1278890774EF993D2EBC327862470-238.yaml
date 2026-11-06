@@ -1,0 +1,26 @@
+id: 01a1b25c-a59d-7591-b336-d7b4dd4469b8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-238
+agreed_id: BUG-2472
+title: 'aida review watch admits train PRs (train/* branches): each attempt fails with ''no queued review story'', burns a reviewer slot and leaves a stuck attempt'
+description: |-
+  Seen 2026-11-06: PR-3521, PR-3528 and PR-3534 are '[train] land #...' PRs on train/<stamp> branches. Review watch admitted each for review. The reviewer exited with 'no queued review story for PR-N ... help: aida pr auto-queue-review --branch <branch>', the slot was held until exit, and the attempt was recorded as 'exited without completing'. Following the help text files a bogus review story for the train (the advisor did this once: STORY-2586, rejected). Train members are already reviewed at their own heads, and the train PR exists only to land them.
+
+  Acceptance:
+  1. Review watch skips any PR whose head branch is a train branch (the prefix pr_train creates), logging it once as 'train PR: not reviewed'.
+  2. auto-queue-review refuses a train branch.
+  3. A test covers both.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T19:36:18.589883017Z
+modified_at: 2026-11-06T19:36:18.589883017Z
+req_type: Bug
+filed_at:
+  code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
