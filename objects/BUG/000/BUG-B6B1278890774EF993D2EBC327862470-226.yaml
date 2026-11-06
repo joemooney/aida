@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-226
 agreed_id: BUG-2460
 title: Shared-boundary conformance harness hangs in fixture aida init when stdin is a terminal
 description: 'Observed 2026-11-06 00:09 and 00:23 MST: python3 scripts/containment/conformance.py --vendor codex --boundary aida, run from the operator''s script deputy (a TTY), reported fixture-init-unavailable twice. The fixture ''aida init --footprint minimal ...'' hit the harness''s 30s timeout. Root cause: fixture_command() (scripts/containment/conformance.py ~:491) calls subprocess.run(capture_output=True) without stdin, so the child inherits the terminal and blocks. With stdin detached the same harness completes init in about 3s and reaches role enter (verified 00:31 MST). Fix: pass stdin=subprocess.DEVNULL to every fixture setup command except the step that deliberately needs the operator''s terminal (role enter), and add an offline test that runs fixture init with a pty on stdin. Acceptance: (1) fixture setup never blocks on an inherited TTY; (2) the regression test fails before the fix; (3) docs/internal/testing/containment-conformance.md notes the stdin contract. LIGHT gate.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:26:45.721586405Z
-modified_at: 2026-11-06T07:26:45.721586405Z
+modified_at: 2026-11-06T07:34:34.531172669Z
 req_type: Bug
 tags:
 - conformance
@@ -24,6 +24,13 @@ history:
   timestamp: 2026-11-06T07:27:09.115976630Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
   changes: []
+- id: 01a1afc7-e123-78a3-9da4-758fa6072d40
+  author: aida-session-start
+  timestamp: 2026-11-06T07:34:34.531169437Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
   branch: main
