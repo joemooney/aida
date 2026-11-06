@@ -13,6 +13,10 @@
     {
       "at": "2026-11-06T23:28:12.810242260Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-06T23:28:21.683702002Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -79,6 +83,26 @@
     {
       "ts": "2026-11-06T23:28:11.939692950Z",
       "spec": "TASK-B6B1278890774EF993D2EBC327862470-900",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "81421a1a64df5a2fbf360b23f337d35003935066",
+        "pr": 3542,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-06T23:28:20.377874230Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-900",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "81421a1a64df5a2fbf360b23f337d35003935066",
+        "pr": 3542,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-06T23:28:21.516005156Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-900",
       "kind": {
         "event": "SpecCompleted",
         "commit": "81421a1a64df5a2fbf360b23f337d35003935066",
