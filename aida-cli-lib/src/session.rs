@@ -3479,7 +3479,7 @@ fn composing_for_claude_wrapper() -> bool {
 /// The named refusal for a Claude AIDA launch surface the wrapper does not
 /// own yet, under `[contained.vendors] claude = "aida"`.
 // trace:TASK-2708 | ai:claude
-pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches only so far; this launch surface (interactive, --bg, coordinator or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
+pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches and coordinators so far; this launch surface (interactive, --bg or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
 // trace:TASK-2631 | ai:codex
@@ -6370,6 +6370,12 @@ pub(crate) fn build_coordinator_headless_command(
     let tuning = resolve_agent_tuning(&root, vendor, seat);
     let prompt =
         crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    // Only this coordinator entry point owns the attested spawn below. The
+    // exec/resume builder must retain its existing per-surface refusal.
+    // trace:TASK-3219 | ai:codex
+    let wrapper = vendor == HeadlessVendor::Claude
+        && contained_wrapper_launch(vendor, aida_contained_env()? || contained)?;
+    let _composition = wrapper.then(ClaudeWrapperComposition::enter);
     let mut command = build_coordinator_headless_command_inner(
         host_main,
         vendor,
@@ -6385,8 +6391,17 @@ pub(crate) fn build_coordinator_headless_command(
         stream,
     )?;
     command.env("AIDA_HEADLESS_VENDOR", vendor.as_str());
+    if wrapper {
+        // Host-only routing metadata, excluded from the wrapper's child env.
+        // Never downgrade to native if trusted policy changes after composition.
+        command.env(CLAUDE_COORDINATOR_WRAPPER_ENV, "1");
+    }
     Ok(command)
 }
+
+// Routing intent grants no containment credit; prepare revalidates trusted policy.
+// trace:TASK-3219 | ai:codex
+const CLAUDE_COORDINATOR_WRAPPER_ENV: &str = "AIDA_CLAUDE_COORDINATOR_WRAPPER";
 
 /// The program and argv [`build_coordinator_headless_command`] would launch,
 /// for a dry-run preview. Building the preview reserves no child handle,
@@ -6406,6 +6421,11 @@ pub(crate) fn coordinator_headless_preview(
     let prompt =
         crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
     let contained = aida_contained_env()? || contained;
+    // Preview the same coordinator argv without preparing a boundary.
+    // trace:TASK-3219 | ai:codex
+    let _composition = (vendor == HeadlessVendor::Claude
+        && contained_wrapper_launch(vendor, contained)?)
+    .then(ClaudeWrapperComposition::enter);
     let (program, mut args) = compose_headless_command_for(
         host_main,
         vendor,
@@ -6545,7 +6565,48 @@ pub(crate) fn coordinator_status_with_handle_guard(
     mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
 ) -> Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    use std::process::Stdio;
     finalize_coordinator_launch(vendor, cmd, project_root)?;
+    // A coordinator is a foreground headless child. Retain the shared owner
+    // until exit, and bind its explicit child grant before releasing the worker.
+    // Resolve from the launch cwd, rather than the coordination-state root.
+    // trace:TASK-3219 | ai:codex
+    let root = cmd
+        .get_current_dir()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(headless_worktree_root);
+    let explicit = |key: &str| {
+        cmd.get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v)
+            .and_then(|v| v.to_str())
+            .map(str::to_owned)
+    };
+    if vendor == HeadlessVendor::Claude
+        && (explicit(CLAUDE_COORDINATOR_WRAPPER_ENV).as_deref() == Some("1")
+            || (explicit("AIDA_CONTAINED").as_deref() == Some("1")
+                && claude_uses_contained_wrapper(&root)?))
+    {
+        let grant = explicit(crate::gate::seat_authority::GRANT_ENV)
+            .context("contained coordinator requires an explicit child grant decision")?;
+        cmd.env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", &root);
+        let host_main = crate::seat_clone::host_main_from(&root);
+        let mut run =
+            crate::containment::launch::PreparedLaunch::prepare(cmd, &root, host_main.as_deref())?
+                .spawn(stdout.map(Stdio::from).unwrap_or_else(Stdio::inherit))?;
+        anyhow::ensure!(
+            containment_applied(vendor, true, Some(run.receipt())),
+            "missing applied receipt"
+        );
+        if let Some(guard) = guard.as_mut() {
+            guard.disarm();
+        }
+        crate::gate::seat_authority::bind_contained_launch_worker(&grant, run.receipt())?;
+        run.release()?;
+        let status = run.child.wait()?;
+        return run.vendor_exit(status);
+    }
     // AGY needs structured output even for quiet coordinators. Forward JSON
     // to streaming consumers; quiet callers receive only the final response.
     // Interactive AGY launches without stream-json retain their ordinary IO.
