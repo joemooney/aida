@@ -1,0 +1,29 @@
+id: 01a1afda-d5a0-7d41-b66c-194dc499fbe0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-868
+title: 'non-blocking minor: aida-cli-lib/src/pipeline_stall.rs tick_with_effects maps a…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3074, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking minor: aida-cli-lib/src/pipeline_stall.rs tick_with_effects maps a Deferred receipt to the unresolved escalation slot. Once the 30-minute unresolved notice has gone out, a later deferral whose deadline lapses never escalates: request t=30, unresolved sent t=60, deferred t=65 until t=180, never acted means the stall persists silently. Consider a separate once-per-episode deferral-expiry kind (_deferral rule key) with an injected-time test. Also, receipt.until.unwrap_or(now + ESCALATE_MS) fails silent if a Deferred receipt lacks until (unreachable under PR-A validation).
+
+  PR: #3478
+  Reviewed sha: dbe1eca498edc77f806b362d98807005d38c7832
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T07:55:16.768119746Z
+modified_at: 2026-11-06T07:55:16.768119746Z
+req_type: Task
+tags:
+- carried-from:TASK-3074
+- finding-hash:16ee27de
+- from-review:PR-3478
+- kind:carried-forward
+filed_at:
+  code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a8e8311d546
+  vendor: claude
