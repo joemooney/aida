@@ -196,8 +196,11 @@ them** (STORY-1843 slice B2c):
    For your own inbox, failed receipt reads leave affected messages with
    unknown read state, withheld from inbox rows and unread counts; independently
    readable mail can still appear with a partial-view warning. An explicit
-   ID read can still resolve those messages. Retrying after receipt reads
-   recover uses the existing acknowledgements without re-sending mail.
+   ID read can still resolve those messages. A corrupt message row does not
+   prevent reading that source's receipts independently. Missing or prunable
+   worktrees and inventory gaps alone do not mark observed mail's receipt
+   state unknown; inventory gaps still warn and prevent ACK. Retrying after
+   receipt reads recover uses existing acknowledgements without re-sending mail.
    <!-- trace:BUG-2449 | ai:codex -->
 2. It writes and flushes the output.
 3. Only then it commits the plan: under the mailbox lifecycle lock, then the

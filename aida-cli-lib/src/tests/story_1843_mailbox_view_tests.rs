@@ -542,11 +542,10 @@ fn story1843_awaiting_mail_channel_shares_the_view() {
 
     std::fs::remove_dir_all(&r.sib).unwrap();
     let mail = awaiting_mail(&r.main, facts);
-    // The missing worktree could hold the canonical message's receipt.
-    // Unknown read state is not new mail, and zero is not caught up here.
+    // A missing worktree does not hide independently readable urgent mail.
     // trace:BUG-2449 | ai:codex
-    assert_eq!(mail.unread, 0);
-    assert_eq!(mail.urgent, 0);
+    assert_eq!(mail.unread, 1);
+    assert_eq!(mail.urgent, 1);
     assert!(mail.partial, "a missing worktree is never caught up");
 }
 
@@ -1280,4 +1279,26 @@ fn bug2449_corrupt_local_receipt_is_not_an_unread_inbox_row() {
     let restored = view_from(&r.main, &r.store, &audience);
     assert!(!restored.is_partial());
     assert_eq!(ids(&restored.unread()), ["fresh"]);
+}
+
+/// An incomplete inventory warns without blanking independently readable
+/// private mail, and the partial view still refuses acknowledgement.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_inventory_gap_keeps_new_mail_and_partial_warning() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.main, &mail("new", "operator", 10, true)).unwrap();
+    let mut limits = explicit_limits();
+    limits.max_roots = 1;
+    let view = read_own_mail(&r.main, &r.store, &audience, &limits);
+    assert_eq!(ids(&view.unread()), ["new"]);
+    assert!(view.is_partial());
+    let keys: Vec<String> = audience.keys().map(str::to_string).collect();
+    let notice = crate::mailbox_cmd::notice_text(&view, &keys, 10);
+    assert!(notice.contains("1 unread"), "{notice}");
+    assert!(notice.contains("partial"), "{notice}");
+    assert!(view.partial_note().unwrap().contains("InventoryOverBudget"));
+    let displayed: Vec<_> = view.records().iter().collect();
+    assert!(plan_ack(&view, &displayed).is_err());
 }

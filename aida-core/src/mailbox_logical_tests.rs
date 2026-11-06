@@ -998,3 +998,70 @@ fn bug2449_failed_local_source_leaves_receipt_state_unknown() {
     let recovered = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
     assert_eq!(recovered.caught_up(), Some(true));
 }
+
+/// Bad message rows do not erase readable receipts or hide new mail. A bad
+/// per-ID receipt still withholds only its affected message.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_corrupt_message_source_salvages_receipts() {
+    let r = repo();
+    let audience =
+        ResolvedAudience::from_identity_policy(vec!["reader".into()], vec![], vec![]).unwrap();
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    for id in ["seen", "new", "unknown"] {
+        put(&r.main, &message(id, "t", "reader", 1));
+    }
+    receipt(&r.sib_a, "reader", "seen", 2);
+    receipt(&r.sib_a, "reader", "unknown", 2);
+    std::fs::write(r.sib_a.join(".aida/mailbox/broken.json"), "{broken").unwrap();
+    std::fs::write(
+        r.sib_a
+            .join(".aida/mailbox/.read-receipts/reader/unknown.txt"),
+        "bad receipt",
+    )
+    .unwrap();
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
+    assert!(!snapshot.complete());
+    assert!(!snapshot.ack_eligible());
+    assert_eq!(snapshot.caught_up(), None);
+    assert_eq!(snapshot.unread_ids(), ["new"]);
+    assert_eq!(snapshot.inspection_unknown_ids, ["unknown"]);
+    assert_eq!(
+        status_of(&snapshot, &r.sib_a),
+        &SourceStatus::Error(SourceErrorCode::CorruptMessage),
+        "receipt salvage preserves the original source diagnostic"
+    );
+    assert!(matches!(
+        snapshot
+            .records
+            .iter()
+            .find(|r| r.message.id == "seen")
+            .unwrap()
+            .read,
+        ReadEvidence::Acknowledged { .. }
+    ));
+}
+
+/// Inventory failure is a coverage warning, not a failed receipt read for
+/// every message. Newly observed private mail remains visible; ACK refuses.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_inventory_gap_preserves_independently_readable_mail() {
+    let r = repo();
+    let audience =
+        ResolvedAudience::from_identity_policy(vec!["reader".into()], vec![], vec![]).unwrap();
+    put(&r.main, &message("new", "t", "reader", 1));
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_roots = 1;
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    assert_eq!(
+        snapshot.inventory_error,
+        Some(SourceErrorCode::InventoryOverBudget)
+    );
+    assert_eq!(snapshot.unread_ids(), ["new"]);
+    assert!(snapshot.inspection_unknown_ids.is_empty());
+    assert!(!snapshot.complete());
+    assert!(!snapshot.ack_eligible());
+    assert_eq!(snapshot.caught_up(), None);
+}
