@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T04:34:13.877457874Z
+modified_at: 2026-11-06T13:50:40.039565177Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -101,6 +101,12 @@ comments:
   created_at: 2026-11-06T03:43:38.977744648Z
   modified_at: 2026-11-06T03:43:38.977744648Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b120-33a7-77c1-943d-28ae0485b472
+  author: joe
+  content: 'ADVISOR BRIEF (relaunch; idle since the 2026-11-05 20:50 ruling): implement the approved request-admission contract. Home assigns the attempt number, pushes the exact SHA to the immutable retained refs/aida/ci/<attempt> on work GitLab (never rewritten or deleted), and reads receipts back keyed by (attempt, SHA). No home-side registry. Follow the full 20:50 ruling, including retention. Per the work-clone memory, never add origin pushes to the tracked schedule. LIGHT gate; use (Refs STORY-2480) unless the story completes.'
+  created_at: 2026-11-06T13:50:40.039565177Z
+  modified_at: 2026-11-06T13:50:40.039565177Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
