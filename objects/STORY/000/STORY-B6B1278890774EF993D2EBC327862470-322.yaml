@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T08:38:13.606572271Z
+modified_at: 2026-11-06T08:38:18.386103310Z
 req_type: Story
 tags:
 - architecture
@@ -318,6 +318,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Partial PR-C slice (pure-core spec_key precedence, PR3306 fixture enabled) shipped under a COMPLETING (STORY-2324) trailer; spec''s own handoff says PR-C is incomplete. Retitle to Refs, fix the listed core issues; CI was still pending at review time.. It was punted on: blocked-dependency: PR-C production cutover is withheld: the binding gate requires validation through the lane job runner, but aida lane job run refuses because lease 01a1afd07f09 names no lane job runner. Reproduced twice, including cargo test --profile agent -p aida-cli-lib --lib story_2324. Existing PR-A/PR-B are landed on origin/main a8e8311d546. This seat retains only bounded pure-core preparatory edits (canonical UUID attribution and superseded-head refusal regression); all incomplete reader routing/deletions were removed. Direct local targeted validation is supplemental and does not satisfy the required runner gate. Resume PR-C in a lane with a configured runner; do not publish this as completed PR-C.. No triage reason was given.'
   created_at: 2026-11-06T08:38:13.606570487Z
   modified_at: 2026-11-06T08:38:13.606570487Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b002-397e-7953-87f6-d174d8d93c11
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2324):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 735e02c157e0
+    Recorded: 2026-11-06T08:20:05.603167487+00:00
+    Findings:
+    1. MAJOR (trailer/scope): the commit subject '[AI:codex] chore(seat): work native Codex lane 01a1afd07f09 left uncommitted (STORY-2324)' carries the completing (STORY-2324) trailer, so merging marks STORY-2324 completed. The PR only touches gate/effective.rs (pure core) and its tests. The PR-C acceptance the advisor authorized on 2026-11-05 is all missing: routing ship/train/mandate_ship/auto-release/queue done+rework/review verdict/awaiting/status through effective_gate_state; the one-time import/archive of review-verdicts, merge-holds, clearances and pr-holds; the deletions (review_alias selection, ledger/legacy.rs, hold marker branch, hold_store_root, hold_collect.rs); the spec-&str and path-literal ratchets; the agreement test. Spec comment 19, this lane's own handoff, says 'PR-C is NOT complete'. Fix: rewrite the subject to describe the change, e.g. 'fix(gate): persisted spec_key wins over audit labels in effective_gate_state; enable PR3306 fixture (Refs STORY-2324)'.
+    2. MINOR (fail-closed wedge): effective.rs:504-513 marks the WHOLE gate Unsafe when any unbound event in a member's by-spec label bucket is stamped with a different UUID. load_view reads unbound buckets by label (effective.rs:625-628), so a node label or retired ID that re-binds to another requirement (sketch section 2 says node labels re-bind) leaves older events stamped with the previous owner's UUID in that bucket. Every PR shipping the new owner would then refuse permanently, with no recovery path short of ledger surgery. Such an event belongs to another requirement and was not recorded on this change, so drop it from the member's sequence (or at least scope the Unsafe to that member and name the bucket and seq in the reason). Also, the set.member(*key).is_none() arm is unreachable from load_view, which only inserts set members; there is no test with load_view-shaped data.
+    3. MINOR (ordering): superseded_refusal (effective.rs:277-309) gates on approval.seq > event.seq across events from different files. member_events chains unbound by-spec events with PR-N.jsonl events, and seq is only a total order within one file (load_view comment at effective.rs:648-649; sketch section 3). The cross-file seq comparison is arbitrary: it can keep a refusal that was genuinely answered, or rely only on wall-clock time. Compare seq only when both events are on change_events; for cross-file pairs, state explicitly that order time is the order. Add a test for an unbound old-head refusal followed by a change-level approval at head.
+    4. MINOR (bucketing consistency): stamped foreign events are bucketed by the raw e.spec label, untrimmed and case-preserved (effective.rs:431-435), while unstamped foreign events use label.to_ascii_uppercase() (effective.rs:446). So 'bug-2403' and 'BUG-2403' split into two foreign_labels entries. Worse, two different foreign UUIDs that share one label share one bucket, so a later foreign approval for UUID2 becomes the newest and masks a foreign refusal for UUID1 (foreign approvals are then filtered out, effective.rs:459-467). Key stamped foreign buckets by SpecKey, and normalize the display label.
+    5. EVIDENCE: CI at 735e02c157e0 was still pending (lib-0/1, cli-0/1, rest, gates, contracts) at review time. The lane handoff (spec comment 19) records the retained core change as untested=true because the targeted gate::effective run never settled. The re-review needs green CI at the new head, citing the story_2324_effective tests, including the un-ignored PR3306 fixture.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T08:38:18.238145881Z
+  modified_at: 2026-11-06T08:38:18.238145881Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
