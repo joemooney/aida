@@ -170,7 +170,7 @@ fn proc_identity_detached_stamp_tracks_reparented_worker_until_dead() {
     )
     .unwrap();
     let name = "ps_integrate::story_2254_ps_detached_codex_tests::proc_identity_detached_stamp_tracks_reparented_worker_until_dead";
-    let mut launcher = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut launcher = std::process::Command::new(crate::aida_bin::running_executable_fallback())
         .args(["--exact", name, "--nocapture"])
         .env(ROOT_ENV, root)
         .spawn()

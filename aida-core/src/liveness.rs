@@ -1376,7 +1376,7 @@ impl LeaseState {
     // trace:TASK-55 | ai:claude
     pub fn label(self) -> &'static str {
         match self {
-            LeaseState::Unknown => "unknown",
+            LeaseState::Unknown => "unknown (foreign pidns)",
             LeaseState::Live => "live",
             LeaseState::Dormant => "dormant",
             LeaseState::Stale => "stale",
@@ -1754,18 +1754,6 @@ pub fn lease_state_for(
     live_sessions: &[LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
-    // trace:STORY-2537 trace:BUG-2458 | ai:codex
-    if l.holder_record.as_deref().is_some_and(|raw| {
-        crate::proc_identity::recorded_holder(
-            raw,
-            l.active_pid,
-            l.active_pid_start_time.as_deref(),
-            l.pid_namespace,
-        )
-        .is_err()
-    }) {
-        return LeaseState::Unknown;
-    }
     let worktree_exists = l.worktree_path.exists();
     let has_live_claude = || {
         live_sessions.iter().any(|s| {
@@ -1783,30 +1771,47 @@ pub fn lease_state_for(
             now.signed_duration_since(l.heartbeat()).num_hours(),
         );
     }
-    // trace:STORY-2537 trace:BUG-2458 | ai:codex
-    if l.active_pid.is_some() || l.creator_pid.is_some() || l.holder_record.is_some() {
-        let verdict = l
-            .holder_record
-            .as_deref()
-            .ok_or(crate::proc_identity::HolderRefusal::EvidenceUnavailable(
-                "legacy lease".into(),
-            ))
-            .and_then(|raw| {
-                crate::proc_identity::recorded_holder(
-                    raw,
-                    l.active_pid,
-                    l.active_pid_start_time.as_deref(),
-                    l.pid_namespace,
-                )
-            })
+    // Only an admitted holder replaces legacy reader policy. Foreign expiry
+    // above remains independent of admission. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if let Some(raw) = l.holder_record.as_deref() {
+        let admitted = serde_json::from_str::<crate::proc_identity::HolderRecord>(raw)
+            .map(|record| record.refusal().is_none())
+            .unwrap_or(true);
+        if admitted {
+            let verdict = crate::proc_identity::recorded_holder(
+                raw,
+                l.active_pid,
+                l.active_pid_start_time.as_deref(),
+                l.pid_namespace,
+            )
             .and_then(|record| record.observe());
-        return match verdict {
-            Ok(crate::proc_identity::Verdict::Alive) => LeaseState::Live,
-            Ok(crate::proc_identity::Verdict::Dead(_)) => LeaseState::Stale,
-            _ => LeaseState::Unknown,
+            return match verdict {
+                Ok(crate::proc_identity::Verdict::Alive) => LeaseState::Live,
+                Ok(crate::proc_identity::Verdict::Dead(_)) => LeaseState::Stale,
+                _ => LeaseState::Unknown,
+            };
+        }
+    }
+    let age_hours = now.signed_duration_since(l.started_at).num_hours();
+    if l.review_verb || l.claim_verb {
+        let alive = l
+            .creator_pid
+            .map(|pid| process_identity_is_alive(pid, l.creator_pid_start_time.as_deref()))
+            .unwrap_or(false);
+        return if alive {
+            LeaseState::Live
+        } else {
+            LeaseState::Stale
         };
     }
-    LeaseState::Unknown
+    if let Some(pid) = l.active_pid {
+        return if process_identity_is_alive(pid, l.active_pid_start_time.as_deref()) {
+            LeaseState::Live
+        } else {
+            LeaseState::Stale
+        };
+    }
+    classify_lease_state(worktree_exists, has_live_claude(), age_hours)
 }
 
 /// Does `lease`'s scope resolve to `spec`? True iff the raw scope string equals
@@ -2813,29 +2818,58 @@ mod tests {
     }
 
     #[test]
-    fn unstamped_active_pid_retains_unknown() {
+    fn active_pid_backs_process_lease_liveness() {
         let mut l = lease("TASK-741", ".");
         l.active_pid = Some(std::process::id());
         assert_eq!(
             lease_state_for(&l, &[], chrono::Utc::now()),
-            LeaseState::Unknown
+            LeaseState::Live
         );
     }
 
     #[test]
-    fn invalid_active_pid_is_not_proof_of_death() {
+    fn dead_active_pid_makes_process_lease_stale() {
         let mut l = lease("TASK-741", ".");
         l.active_pid = Some(0);
         assert_eq!(
             lease_state_for(&l, &[], chrono::Utc::now()),
-            LeaseState::Unknown
+            LeaseState::Stale
         );
+    }
+
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    #[test]
+    fn refused_holder_preserves_legacy_policy_and_foreign_backstop() {
+        use crate::proc_identity::{HolderRecord, HolderRefusal};
+        let now = chrono::Utc::now();
+        let mut l = lease("BUG-2458", ".");
+        l.active_pid = Some(std::process::id());
+        l.holder_record = Some(
+            serde_json::to_string(&HolderRecord::refused(HolderRefusal::EvidenceUnavailable(
+                "no cooperative handoff".into(),
+            )))
+            .unwrap(),
+        );
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Live);
+        l.active_pid = Some(0);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        l.pid_namespace = l.pid_namespace.map(|ns| ns ^ 1);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Unknown);
+        l.started_at = now - chrono::Duration::hours(25);
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        // Malformed admission is unknown locally, but cannot suppress the
+        // separate foreign-namespace expiry policy either.
+        l.holder_record = Some("broken".into());
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Stale);
+        l.pid_namespace = crate::pid_observer::current_pid_namespace();
+        assert_eq!(lease_state_for(&l, &[], now), LeaseState::Unknown);
     }
 
     #[test]
     fn spec_verdicts_marks_live_stale_and_flag_only() {
-        // Unstamped leases retain Unknown even with cwd activity or a missing tree.
-        // TASK-2 also has no admitted worker identity.
+        // TASK-1 has a live lease (a live claude sits in its worktree).
+        // TASK-2 has a spec-scoped lease but no live claude and a missing
+        //        worktree → the lease is Stale.
         // TASK-3 is In-Progress with no lease at all → flag-only → Stale.
         // TASK-9 is not In-Progress and unleased → absent (Idle).
         let now = chrono::Utc::now();
@@ -2860,8 +2894,8 @@ mod tests {
         }];
 
         let map = spec_verdicts(&specs, &leases, &live, now);
-        assert_eq!(map.get("TASK-1"), Some(&SpecLiveness::Unknown));
-        assert_eq!(map.get("TASK-2"), Some(&SpecLiveness::Unknown));
+        assert_eq!(map.get("TASK-1"), Some(&SpecLiveness::Live));
+        assert_eq!(map.get("TASK-2"), Some(&SpecLiveness::Stale));
         assert_eq!(map.get("TASK-3"), Some(&SpecLiveness::Stale));
         assert!(!map.contains_key("TASK-9"));
 
@@ -2869,9 +2903,9 @@ mod tests {
     }
 
     #[test]
-    fn spec_verdicts_unadmitted_owner_stays_unknown_and_folds_case() {
+    fn spec_verdicts_live_wins_over_stale_and_folds_case() {
         // A lowercase-scoped live lease AND an In-Progress flag for the same
-        // spec: activity cannot attest its holder; fold the key to upper case.
+        // spec: Live must win, and the key must fold to the upper-cased disp.
         let now = chrono::Utc::now();
         let live_wt = std::env::temp_dir().join("aida-bug677-livewins");
         std::fs::create_dir_all(&live_wt).unwrap();
@@ -2892,7 +2926,7 @@ mod tests {
         }];
 
         let map = spec_verdicts(&specs, &leases, &live, now);
-        assert_eq!(map.get("TASK-7"), Some(&SpecLiveness::Unknown));
+        assert_eq!(map.get("TASK-7"), Some(&SpecLiveness::Live));
 
         let _ = std::fs::remove_dir_all(&live_wt);
     }

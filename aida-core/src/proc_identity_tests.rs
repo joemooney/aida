@@ -147,10 +147,34 @@ fn proc_identity_cooperative_worker_and_subreaper() {
             Some(HolderRefusal::EvidenceUnavailable(_))
         ));
     }
+    // The core lease reader must select the admitted child rather than its
+    // still-live creator, including after the child exits.
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let lease = record.validate().ok().map(|id| {
+        let lease: crate::liveness::SessionLeaseLite = serde_json::from_value(serde_json::json!({
+            "scope": "BUG-2458",
+            "started_at": chrono::Utc::now(),
+            "holder_record": serde_json::to_string(&record).unwrap(),
+            "active_pid": child.id(),
+            "active_pid_start_time": format!("linux-starttime:{}", id.starttime),
+            "pid_namespace": id.pidns_inode,
+            "creator_pid": std::process::id(),
+        }))
+        .unwrap();
+        assert_eq!(
+            crate::liveness::lease_state_for(&lease, &[], chrono::Utc::now()),
+            crate::liveness::LeaseState::Live
+        );
+        lease
+    });
     child.kill().unwrap();
     child.wait().unwrap();
     if record.validate().is_ok() {
         assert!(matches!(record.observe().unwrap(), Verdict::Dead(_)));
+        assert_eq!(
+            crate::liveness::lease_state_for(&lease.unwrap(), &[], chrono::Utc::now()),
+            crate::liveness::LeaseState::Stale
+        );
     }
 
     let mut cmd = std::process::Command::new("/bin/sleep");

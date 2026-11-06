@@ -11,7 +11,7 @@ pub(crate) use leases_args::*;
 // trace:TASK-714
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
 pub(crate) struct SessionLease {
-    /// Versioned cooperative holder evidence; absent legacy records retain Unknown.
+    /// Versioned cooperative holder evidence; absent/refused captures retain legacy policy.
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) holder_record: Option<String>,

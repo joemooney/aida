@@ -7705,7 +7705,15 @@ pub(crate) fn stamp_lease_detached_worker_at(
     pid: u32,
     start: &str,
 ) -> Result<()> {
-    let holder = aida_core::proc_identity::HolderRecord::capture(pid);
+    // Legacy test callers may supply synthetic start tokens. They exercise
+    // namespace/authorship transport, not cooperative admission; never pair a
+    // freshly captured generation with their supplied token.
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let holder = aida_core::proc_identity::HolderRecord::refused(
+        aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+            "legacy detached stamp has no cooperative handoff".into(),
+        ),
+    );
     stamp_lease_detached_worker_with_holder_at(
         project_root,
         lease_id,
