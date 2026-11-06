@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T06:36:54.569726127Z
+modified_at: 2026-11-06T06:36:56.874287984Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -77,6 +77,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI green at a5d077a; core declaration/scope/veto/failed-exit-Refs paths verified by tests, but agent rotation wipes a prior generation''s declaration (partial slice can complete its spec) and a declared completing subject bypasses the TASK-2879 existing-Refs-PR gate. No triage reason was given.'
   created_at: 2026-11-06T06:36:54.569724636Z
   modified_at: 2026-11-06T06:36:54.569724636Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1af93-1e20-74a3-bde3-e6464efea02c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2902):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a5d077a3d642
+    Recorded: 2026-11-06T06:28:50.054939526+00:00
+    Findings:
+    1. MAJOR agent_launch.rs:7229 — native_publication::prepare runs inside run_agent_generation, i.e. on EVERY rotation generation of the same seat/lease (rotation loop agent_launch.rs:7040-7155 relaunches with generation+=1). prepare deletes .aida/native-publication.json and mints a new token, so a generation-1 '(Refs ID)' declaration is wiped when generation 2 starts; generation 2's clean exit then takes the ordinary completing path and a partial slice completes its spec. Provision only on the first generation (RotationEnv generation==1 / non-rotating launch) and add a regression test.
+    2. MINOR-MAJOR ship_from_seat.rs:476-486 — the declared path returns before the TASK-2879 forge gate (post_exit_completion_allowed), so a seat-written completing declaration '(ID)' on a rework of an existing Refs PR is committed completing. The advisor ruling says the trailer must follow the PR's declared form; a seat-controlled file should not override that host-side guard. Apply the same downgrade (completing -> Refs when the existing PR title is Refs or the lookup is inconclusive) to declared subjects, and test it with a fake gh returning a Refs PR title.
+    3. MINOR tests — the sketch's regression list required coverage 'across launch paths', but no test asserts that standalone (standalone_implementer.rs:664), drain (session.rs:6549), resume (session.rs:7944), bg (agent_launch.rs:6507, agent_codex_background.rs:1152) or generation launches provision/clear the binding; only direct prepare() calls are tested. Such a test would have caught the rotation defect above.
+    4. COSMETIC session.rs:7944 — the resume path calls prepare for any implementer role without the Codex/native gate the other paths use, so non-native clone lanes also get host binding files and can fail launch on prepare errors. Gate it like the drain path (vendor == Codex).
+    5. COSMETIC native_publication.rs:219-221 — host binding files .aida/native-publications/<lease>.json are never removed when the lease ends and accumulate in the primary checkout; remove them beside lease release / punt-hold cleanup.
+    6. COSMETIC ship_from_seat.rs:346-348 — a punt/hold veto now returns PostExitCommit::Clean, whose documented meaning is 'the seat had nothing pending'; pending work stays uncommitted with no stderr note. Use a distinct outcome or log the veto.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T06:36:56.736194178Z
+  modified_at: 2026-11-06T06:36:56.736194178Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
