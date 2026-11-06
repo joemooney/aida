@@ -3,10 +3,11 @@
 //! it into a process. The seat a child runs as is assigned only through
 //! [`spawn::assign_seat`].
 //!
-//! Slice A (this module's first cut) converts the Claude contained launch
-//! paths. Codex finalization, the resume paths, `dispatch.rs`, the declared
-//! resource renderers and the per-vendor environment allowlist are later
-//! slices; the unconverted sites are listed, exactly, in the ratchet ledger
+//! Slice A converts the Claude contained launch paths. PR-B converts fresh
+//! Codex session/exec, compete and dispatch plus Native/None phase builders.
+//! Codex finalization still runs last at the caller after seat env setup.
+//! Resume paths, resource renderers and the per-vendor environment allowlist
+//! are later slices; unconverted sites are listed in the ratchet ledger
 //! (`tests/story_2326_launch_ratchet_tests.rs`). TASK-1749 C1: nothing here
 //! clears the environment.
 // trace:STORY-2326 | ai:claude

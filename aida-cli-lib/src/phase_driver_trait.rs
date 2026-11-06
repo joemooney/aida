@@ -3891,7 +3891,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             _ => None,
         };
-        let mut child_cmd = build_phase_driver_ci_fix_command(
+        let child_cmd = build_phase_driver_ci_fix_command(
             &worktree,
             &program,
             &fix_args,
@@ -3901,6 +3901,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.contained,
             child_grant.env_value(),
         );
+        let mut child_cmd = match child_cmd {
+            Ok(cmd) => cmd,
+            Err(error) => {
+                if let Some(id) = child_grant.id() {
+                    session::revoke_headless_child_grant(id);
+                }
+                if let Some(lease_id) = stamped_lease {
+                    let _ = session::set_lease_grant_key_at(
+                        &self.project_root,
+                        &lease_id,
+                        session::LEASE_CI_FIX_CHILD_GRANT_KEY,
+                        None,
+                    );
+                }
+                tee.stop();
+                eprintln!("CI-fix launch refused: {error:#}");
+                return false;
+            }
+        };
         let prepared = if vendor == session::HeadlessVendor::Codex {
             // trace:BUG-2398 | ai:codex
             child_cmd
@@ -4067,26 +4086,50 @@ pub(crate) fn punt_resume_vendor(
 pub(crate) fn build_phase_driver_ci_fix_command(
     worktree: &std::path::Path,
     program: &str,
-    fix_args: &[String],
+    headless_vendor_args: &[String],
     ceiling_key: &str,
     ceiling_value: &str,
     vendor: session::HeadlessVendor,
     // trace:BUG-2133 | ai:claude
     contained: bool,
     grant_env: &str,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new(program);
+) -> anyhow::Result<std::process::Command> {
+    // The Aida path retains its existing os-wrap boundary; PR-B migrates
+    // Native/None vendor launches. trace:STORY-2326 | ai:codex
+    let posture = session::containment_posture(vendor, contained)?;
+    let mut cmd = if posture == session::ContainmentPosture::Aida {
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(headless_vendor_args);
+        // Aida Codex gets no applied-containment credit without a receipt.
+        if session::containment_applied(vendor, contained, None) {
+            cmd.env("AIDA_CONTAINED", "1");
+        } else {
+            cmd.env_remove("AIDA_CONTAINED");
+        }
+        cmd
+    } else {
+        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+            vendor: crate::launch::context::launch_vendor(vendor),
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: program.into(),
+            // Trusted output of session::headless_vendor_args (including
+            // posture flags and a prompt), not a default_flags/template tail.
+            // Caller configuration flags must be validated before this builder.
+            args: headless_vendor_args.to_vec(),
+            tail: Vec::new(),
+            posture,
+            cwd: worktree.to_path_buf(),
+            set_cwd: true,
+            // Native/None constructors do not cross the AIDA boundary.
+            host_main: None,
+        })?;
+        crate::launch::spawn_agent(&ctx)?
+    };
     cmd.current_dir(worktree)
-        .args(fix_args)
         .env("AIDA_HEADLESS", "1")
         .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
-    if session::containment_applied(vendor, contained, None) {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-    }
-    cmd
+    Ok(cmd)
 }
 
 /// BUG-1930 / TASK-1350: what a headless implementer's stream says about

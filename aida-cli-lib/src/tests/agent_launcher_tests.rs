@@ -4752,7 +4752,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "10",
         session::HeadlessVendor::Claude,
         false,
-    );
+    )
+    .unwrap();
     assert!(
         advisor_cmd
             .get_envs()
@@ -4770,7 +4771,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         session::HeadlessVendor::Claude,
         false,
         "",
-    );
+    )
+    .unwrap();
     assert!(
         ci_fix_cmd
             .get_envs()

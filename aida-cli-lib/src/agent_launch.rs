@@ -2444,6 +2444,8 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
 /// BUG-2151: the Claude `agent new` launch posture.
 // trace:BUG-2151 | ai:claude
 pub(crate) struct ClaudeNewPosture {
+    /// Contained settings are composed by `apply_agent_default_flags` only
+    /// after passthrough validation; `contained` carries the posture until then.
     pub(crate) default_args: Vec<String>,
     pub(crate) contained: bool,
     /// The launcher set the posture itself, so the `[agents]` knobs and
@@ -2482,13 +2484,11 @@ pub(crate) fn resolve_claude_new_posture(
     // trace:BUG-2172 | ai:codex
     crate::session::refuse_contained_permission_override(permission_mode, parent_contained)?;
     let contained_posture = || -> Result<ClaudeNewPosture> {
-        // trace:BUG-2131 | ai:claude
-        aida_core::git_ops::ensure_git_supports_contained()?;
+        // trace:TASK-2708 | ai:codex — decide posture without composing a
+        // boundary. Invalid passthrough flags must refuse before trusted
+        // wrapper policy lookup or any launch setup.
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags(
-                crate::seat_clone::launcher_main().as_deref(),
-                "claude",
-            )?,
+            default_args: Vec::new(),
             contained: true,
             explicit: true,
         })

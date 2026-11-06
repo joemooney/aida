@@ -390,6 +390,15 @@ create/comment operations to recover confirmed writes without replay. See [the w
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
+### Agent launch migration
+
+`aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and
+constructs vendor processes through `spawn_agent`. Seat assignment is explicit;
+background handoffs recover lane identity from the worktree lease. An exact-count
+source ratchet inventories constructors and protected environment writers outside
+the launcher. Resource validation grants no write authority by itself.
+<!-- trace:STORY-2326 | ai:codex -->
+
 ### The four layers
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/internal/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
@@ -1468,6 +1477,10 @@ child's project. It refuses by name ("Codex AIDA posture requires the
 receipt-owning headless launch boundary") whatever posture the surface stamped.
 A test-time inventory pins every Codex spawn path.
 <!-- trace:TASK-2708 | ai:claude -->
+
+The shared send broker pins sockets and snapshots arguments, with bounded workers,
+notification-aware blocking waits, socket send timeouts and queued admission.
+<!-- trace:TASK-2708 | ai:codex -->
 
 Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`
 (or the configured AIDA home). A Codex lane gets only its own notice directory;
