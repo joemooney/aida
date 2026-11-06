@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from urllib.parse import urlsplit
 
@@ -338,6 +339,88 @@ class WorkCiTests(unittest.TestCase):
         self.assertTrue(fetches)
         for command in fetches.splitlines():
             self.assertTrue(command.endswith("refs/heads/aida-intent:refs/intake/incoming"), command)
+
+    # trace:STORY-2480 | ai:codex
+    def test_cold_history_bounds_inventory_and_exact_old_read(self):
+        f = self.f
+        f.poll()
+        original = f.receipt()
+        shas = {1: f.sha}
+        values = []
+        for n in range(2, 36):
+            f.git(f.source, "commit", "--allow-empty", "-qm", f"source {n}")
+            sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
+            shas[n] = sha
+            value = dict(original, sha=sha, attempt=n)
+            if n == 2:
+                value["jobs"] = [dict(original["jobs"][0], name="not-in-home")]
+            value["digest"] = hashlib.sha256(json.dumps({k: v for k, v in value.items() if k != "digest"}, separators=(",", ":")).encode()).hexdigest()
+            values.append(value)
+        f.git(f.source, "push", "-q", str(f.home),
+              *[f"{sha}:refs/aida/ci/{n}" for n, sha in shas.items() if n > 1], principal="request")
+        for value in values:
+            f.inject(value)
+        fresh = f.clone("cold-history", "home")
+        shim = f.root / "shim"
+        shim.mkdir()
+        log = f.root / "fetches"
+        real_git = shutil.which("git")
+        wrapper = shim / "git"
+        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(sys.argv[-1]+'\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
+        wrapper.chmod(0o700)
+        f.env["PATH"] = str(shim) + os.pathsep + f.env["PATH"]
+
+        def source_fetches():
+            return [line for line in log.read_text().splitlines() if line in shas.values()]
+
+        start = time.monotonic()
+        pulled = f.cli(fresh, "pull")
+        self.assertLess(time.monotonic() - start, 30)
+        self.assertIn("3 unverified-history", pulled.stderr)
+        self.assertEqual(set(source_fetches()), set(shas[n] for n in range(4, 36)))
+        self.assertEqual(len(source_fetches()), 32)
+        checkpoint = f.private(fresh) / "validated-tip"
+        self.assertTrue(checkpoint.exists())
+        log.write_text("")
+        rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
+        self.assertEqual(sum(row["verification"] == "unverified-history" for row in rows), 3)
+        self.assertFalse(source_fetches())
+        # Even when all recent statuses are already handled, processing must
+        # never promote old audit bytes into receipt authority implicitly.
+        for value in values:
+            if value["attempt"] >= 4:
+                marker = f.private(fresh) / f"ci-status-{value['attempt']}.json"
+                marker.write_text(value["digest"])
+                marker.chmod(0o600)
+        f.cli(fresh, "ci", "process")
+        self.assertFalse(source_fetches())
+        self.assertFalse(f.statuses)
+        # Exact read revalidates only this old identity and persists its proof.
+        rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", "1", "--sha", shas[1], "--json").stdout)
+        self.assertEqual([row["verification"] for row in rows], ["verified"])
+        self.assertEqual(source_fetches(), [shas[1]])
+        log.write_text("")
+        f.cli(fresh, "ci", "read", "--attempt", "1", "--sha", shas[1])
+        self.assertFalse(source_fetches())
+        # A validator fingerprint change invalidates all old proof, but uses
+        # exactly the same bounded path and creates a fresh incremental checkpoint.
+        state = json.loads(checkpoint.read_text())
+        state["validator"] = "different compiled validators"
+        checkpoint.write_text(json.dumps(state))
+        pulled = f.cli(fresh, "pull")
+        self.assertIn("3 unverified-history", pulled.stderr)
+        self.assertEqual(len(source_fetches()), 32)
+        log.write_text("")
+        f.cli(fresh, "pull")
+        self.assertFalse(source_fetches())
+        self.assertFalse(f.statuses)
+        refused = f.cli(fresh, "ci", "read", "--attempt", "2", "--sha", shas[2], ok=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertNotIn("not-in-home", refused.stderr)
+        rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
+        old = next(row for row in rows if row["audit"]["attempt"] == 2)
+        self.assertEqual(old["verification"], "unverified-history")
+        self.assertFalse(f.statuses)
 
     def test_pending_attempt_does_not_starve_later_attempt(self):
         f = self.f

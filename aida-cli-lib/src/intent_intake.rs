@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
@@ -17,6 +17,20 @@ const BRANCH: &str = "refs/heads/aida-intent";
 const INCOMING: &str = "refs/intake/incoming";
 const PROFILE: &str = "profile.json";
 const REPO_CONFIG: &[u8] = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n";
+// Bound cold/fingerprint-invalidated inventory work independently of retained history.
+// trace:STORY-2480 | ai:codex
+const CI_HISTORY_REVALIDATION_ATTEMPTS: usize = 32;
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Checkpoint {
+    validator: String,
+    tip: String,
+    // One bit per lexically sorted CI path at tip; <=8192 bytes, well below
+    // Private's 64-KiB cap even when every retained result has been verified.
+    verified_ci: String,
+}
+
 const CAP: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Subcommand)]
@@ -237,6 +251,7 @@ pub(super) struct Intake {
     pub private: Private,
     pub worktree: PathBuf,
     ci_snapshot: RefCell<Option<crate::ci_relay::Snapshot>>,
+    verified_ci: RefCell<BTreeSet<String>>,
     profile: Profile,
     _lock: fs::File,
     blobs: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -348,6 +363,7 @@ impl Intake {
             private,
             worktree,
             ci_snapshot: RefCell::new(None),
+            verified_ci: RefCell::new(BTreeSet::new()),
             profile,
             _lock: lock,
             blobs: RefCell::new(BTreeMap::new()),
@@ -375,6 +391,7 @@ impl Intake {
             .as_ref()
             .unwrap()
             .validate(path, bytes)?;
+        self.verified_ci.borrow_mut().insert(path.to_owned());
         Ok(())
     }
 
@@ -416,24 +433,33 @@ impl Intake {
             &["rev-list", "--reverse", "--topo-order", "--parents", tip],
             &[],
         )?)?;
-        // Owner-only checkpoint pins a previously validated immutable Git object.
-        // Rewritten/unrelated history cannot reuse it; it falls back to full validation.
-        // Only new commits need intermediate-tree checks. Re-read the checkpoint
-        // tree; unchanged CI files retain that validator-bound admission proof.
-        // Bind proof to the compiled validators, including dirty source changes:
-        // future validation rules must never inherit an older validator's proof.
-        let validator = validator_prefix();
+        // A checkpoint preserves the exact subset with inventory authority. A
+        // validator change (including dirty sources) takes the same bounded cold path.
         let checkpoint = self
             .private
             .read("validated-tip")?
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .and_then(|value| value.strip_prefix(&validator).map(str::to_owned))
-            .filter(|tip| tip.len() == 40 && tip.bytes().all(|b| b.is_ascii_hexdigit()));
-        let checkpoint = checkpoint.filter(|tip| {
-            commits
-                .lines()
-                .any(|line| line.split_whitespace().next() == Some(tip.as_str()))
-        });
+            .and_then(|bytes| serde_json::from_slice::<Checkpoint>(&bytes).ok())
+            .filter(|c| {
+                c.validator == validator_prefix()
+                    && c.verified_ci.len() <= 8192
+                    && c.verified_ci.bytes().all(|b| matches!(b, b'0' | b'1'))
+                    && commits
+                        .lines()
+                        .any(|line| line.split_whitespace().next() == Some(c.tip.as_str()))
+            });
+        self.verified_ci.borrow_mut().clear();
+        if let Some(c) = &checkpoint {
+            let paths = self.ci_paths(&c.tip)?;
+            if paths.len() != c.verified_ci.len() {
+                bail!("Invalid CI checkpoint verification set");
+            }
+            *self.verified_ci.borrow_mut() = paths
+                .into_iter()
+                .zip(c.verified_ci.bytes())
+                .filter_map(|(path, bit)| (bit == b'1').then_some(path))
+                .collect();
+        }
+        let checkpoint = checkpoint.map(|c| c.tip);
         let mut reached = checkpoint.is_none();
         let deadline = Instant::now() + Duration::from_secs(30);
         let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
@@ -533,13 +559,30 @@ impl Intake {
                     // Retained refs remain live authority. One remote ref
                     // snapshot checks all identities without fetching sources.
                     self.ci_admit(path)?;
-                    // trace:STORY-2480 | ai:codex
-                    // A checkpoint is written only after acceptance, and is bound
-                    // to these validators. Git objects are immutable. Revalidate
-                    // new/changed bytes, never refetch every historical source SHA.
-                    if checkpoint.as_deref() != Some(fields[0])
-                        && previous.get(path) != Some(&bytes)
-                    {
+                    let snapshot = self.ci_snapshot.borrow();
+                    let (sha, n) = snapshot.as_ref().unwrap().admit(path)?;
+                    let r = crate::ci_receipt::Receipt::parse_history(&bytes, sha, n)?;
+                    if r.path() != path {
+                        bail!("Noncanonical CI result path");
+                    }
+                    // Cold history validates only the newest retained attempts.
+                    // Warm history validates new bytes; older unverified files
+                    // remain audit data until an exact reader requests them.
+                    let selected = if checkpoint.is_none() {
+                        snapshot
+                            .as_ref()
+                            .unwrap()
+                            .requests
+                            .keys()
+                            .rev()
+                            .take(CI_HISTORY_REVALIDATION_ATTEMPTS)
+                            .any(|attempt| *attempt == n)
+                    } else {
+                        checkpoint.as_deref() != Some(fields[0])
+                            && previous.get(path) != Some(&bytes)
+                    };
+                    drop(snapshot);
+                    if selected && !self.ci_verified(path) {
                         self.ci_validate(path, &bytes)?;
                     }
                 } else if folder == "observations" {
@@ -587,16 +630,61 @@ impl Intake {
             previous = current;
             parent = Some(fields[0]);
         }
+        let unverified = previous
+            .keys()
+            .filter(|p| p.starts_with("ci-results/") && !self.ci_verified(p))
+            .count();
+        if unverified > 0 {
+            eprintln!("CI intake: {unverified} unverified-history results (audit only; exact attempt/SHA read required)");
+        }
         Ok(previous)
+    }
+
+    fn ci_paths(&self, tip: &str) -> Result<Vec<String>> {
+        let tree = git(
+            &self.worktree,
+            &["ls-tree", "-rz", "--name-only", "--full-tree", tip],
+            &[],
+        )?;
+        let mut paths: Vec<_> = tree
+            .split(|b| *b == 0)
+            .filter(|p| p.starts_with(b"ci-results/"))
+            .map(|p| String::from_utf8(p.to_vec()))
+            .collect::<std::result::Result<_, _>>()?;
+        paths.sort();
+        Ok(paths)
     }
 
     // Candidate/quarantine validation never replaces proof of an accepted tip.
     // trace:TASK-3096 | ai:codex
     fn checkpoint(&self, tip: &str) -> Result<()> {
+        let verified_ci = self
+            .ci_paths(tip)?
+            .iter()
+            .map(|path| if self.ci_verified(path) { '1' } else { '0' })
+            .collect();
         self.private.write(
             "validated-tip",
-            format!("{}{tip}", validator_prefix()).as_bytes(),
+            &serde_json::to_vec(&Checkpoint {
+                validator: validator_prefix(),
+                tip: tip.to_owned(),
+                verified_ci,
+            })?,
         )
+    }
+
+    pub(super) fn ci_verified(&self, path: &str) -> bool {
+        self.verified_ci.borrow().contains(path)
+    }
+
+    pub(super) fn verify_ci_read(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        if !self.ci_verified(path) {
+            self.ci_validate(path, bytes)?;
+            if let Some(tip) = self.tip()? {
+                self.checkpoint(&tip)?;
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {

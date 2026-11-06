@@ -180,12 +180,25 @@ Existing observation and processing-receipt formats stay unchanged. Ordinary
 intake pulls/publications validate CI history too, so any clone reading that
 history must enroll CI admission access. Observation-only clones encountering
 CI files refuse with explicit enrollment guidance; they never skip validation.
-The accepted-tip checkpoint binds the validator sources and immutable history.
-Unchanged CI files retain its proof; only newly introduced receipts require
-source fetching and inventory validation. One live ref listing still checks
-every retained admission, including cached files. Policy changes invalidate the
-checkpoint. Home processing skips already-published results before inventory
-work. Invalid input remains in the independent
+The accepted-tip checkpoint binds the validator sources, immutable history and
+exact set of inventory-verified result paths. On a missing checkpoint (including
+a fresh clone or changed validator fingerprint), only the newest 32 retained
+attempts receive source fetches and full inventory validation. Every result
+still requires retained admission, strict schema, digest and canonical path;
+every intermediate tree retains the immutable-history checks. Older results
+are reported as `unverified-history`: readable audit data without receipt
+authority, excluded from native status publication. A fresh checkpoint preserves
+that distinction, so the next pass validates only newly introduced receipts.
+One live ref listing still checks every retained admission, including cached
+files. Failed validation cannot advance the accepted checkpoint.
+
+Use `aida intent ci read --json` to audit results with their verification state.
+An exact `aida intent ci read --attempt 1 --sha <full-sha> --json` revalidates an
+older result against its retained source inventory before returning verified
+receipt authority, then persists that proof. A warm exact read fetches only the
+requested old SHA; a cold read also performs the bounded newest-32 pass. These
+reads never publish statuses. Home processing skips unverified, obsolete and
+already-published results. Invalid input remains in the independent
 quarantine ref/object database; it cannot advance the accepted intake branch or
 publish a native status. No work logs, URLs, paths, runner identities or diagnostic
 prose enter the return schema. Allow-lists and digests cannot establish that work
@@ -243,4 +256,5 @@ AIDA_TEST_BIN="$PWD/target/debug/aida" python3 tests/test_work_ci_relay.py
 ```
 
 CI commands accept `--json` (or `--format json`) and emit one result object
-with a `message` field on success; refusals remain nonzero exits.
+with a `message` field on success, except `ci read`, which emits an array of
+`{path, verification, audit}` objects; refusals remain nonzero exits.

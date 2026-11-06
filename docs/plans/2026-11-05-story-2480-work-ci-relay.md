@@ -231,10 +231,9 @@ source cap. Finding 3 explicitly permits this rescope plus a follow-up spec.
 Requested follow-up title: **Admit AIDA repository size and GitLab templates to
 work CI relay inventory** (draft task, parent STORY-2480).
 
-The native seat attempted `aida add`; node-local ID allocation refused writes
-to clone-common Git metadata (read-only), before writing an object. The host
-must file this draft using the existing AIDA allocator after seat exit. This
-section retains the exact requested scope, not a parallel requirements store.
+Filed during round 3 as **TASK-3232** (canonical
+`TASK-b6b1278890774ef993d2ebc327862470-886`), a `from-review` draft child of
+STORY-2480. Advisor promotion remains pending; this slice claims no deployment.
 
 Acceptance for that task:
 

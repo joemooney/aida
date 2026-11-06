@@ -96,6 +96,22 @@ impl Receipt {
         format!("ci-results/{}/{}.json", self.sha, self.attempt)
     }
     pub fn parse(bytes: &[u8], inventory: &Inventory, sha: &str, attempt: u32) -> Result<Self> {
+        let r = Self::parse_history(bytes, sha, attempt)?;
+        if r.failing_tests.iter().any(|t| !inventory.tests.contains(t))
+            || r.jobs
+                .iter()
+                .map(|j| j.name.clone())
+                .collect::<BTreeSet<_>>()
+                != inventory.jobs
+        {
+            bail!("Invalid CI receipt inventory");
+        }
+        Ok(r)
+    }
+
+    // Structural integrity is enough for audit, never for receipt authority.
+    // trace:STORY-2480 | ai:codex
+    pub fn parse_history(bytes: &[u8], sha: &str, attempt: u32) -> Result<Self> {
         if bytes.len() > LIMIT {
             bail!("CI receipt exceeds size limit");
         }
@@ -116,14 +132,7 @@ impl Receipt {
             || r.jobs
                 .iter()
                 .any(|j| !identifier(&j.name) || j.duration_seconds > 86400)
-            || r.failing_tests
-                .iter()
-                .any(|t| !identifier(t) || !inventory.tests.contains(t))
-            || r.jobs
-                .iter()
-                .map(|j| j.name.clone())
-                .collect::<BTreeSet<_>>()
-                != inventory.jobs
+            || r.failing_tests.iter().any(|t| !identifier(t))
         {
             bail!("Invalid CI receipt identity, digest, inventory or limits");
         }
@@ -188,6 +197,23 @@ mod tests {
         let bytes = r.seal().unwrap(); // Recomputed digest grants no allow-list authority.
         assert!(Receipt::parse(&bytes, &inventory, &r.sha, 7).is_err());
     }
+    #[test]
+    fn audit_integrity_does_not_grant_inventory_authority() {
+        let (mut r, inventory) = fixture();
+        r.jobs[0].name = "unknown-but-well-formed".into();
+        let bytes = r.seal().unwrap();
+        assert!(Receipt::parse_history(&bytes, &r.sha, r.attempt).is_ok());
+        assert!(Receipt::parse(&bytes, &inventory, &r.sha, r.attempt).is_err());
+        r.digest = "0".repeat(64);
+        assert!(
+            Receipt::parse_history(&serde_json::to_vec(&r).unwrap(), &r.sha, r.attempt).is_err()
+        );
+        let bytes = String::from_utf8(bytes)
+            .unwrap()
+            .replace("\"version\":1", "\"version\":2");
+        assert!(Receipt::parse_history(bytes.as_bytes(), &r.sha, r.attempt).is_err());
+    }
+
     #[test]
     fn hostile_nested_types_and_bounds_refuse() {
         let (mut r, inventory) = fixture();

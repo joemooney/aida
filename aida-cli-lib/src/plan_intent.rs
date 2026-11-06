@@ -2297,7 +2297,7 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
 #[clap(
     name = "intent",
     subcommand_negates_reqs = true,
-    override_usage = "aida intent [OPTIONS] <ID>\n       aida intent <note|validate|export> ...\n       aida intent <enroll|publish|pull|list|process> ...\n       aida intent ci <enroll|request|poll|process> ..."
+    override_usage = "aida intent [OPTIONS] <ID>\n       aida intent <note|validate|export> ...\n       aida intent <enroll|publish|pull|list|process> ...\n       aida intent ci <enroll|request|poll|process|read> ..."
 )]
 pub(crate) struct IntentArgs {
     // trace:STORY-2479 | ai:codex

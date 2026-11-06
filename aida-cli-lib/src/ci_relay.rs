@@ -41,6 +41,15 @@ pub(crate) enum CiCommand {
     Poll,
     /// Home only: validate intake and publish native statuses for latest attempts.
     Process,
+    /// Audit retained results, or revalidate one exact attempt/SHA before reading it.
+    Read {
+        /// Exact retained attempt to revalidate; requires --sha.
+        #[clap(long, requires = "sha")]
+        attempt: Option<u32>,
+        /// Exact retained source SHA; requires --attempt.
+        #[clap(long, requires = "attempt")]
+        sha: Option<String>,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -861,7 +870,7 @@ fn poll(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     }
     output(
         json_format,
-        format!("CI relay: no pending admitted requests"),
+        "CI relay: no pending admitted requests".to_string(),
     );
     Ok(())
 }
@@ -1004,10 +1013,10 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
         .iter()
         .filter(|(path, _)| path.starts_with("ci-results/"))
     {
-        // files() has validated the accepted history. Select latest attempts
-        // before source inventory work; old results never publish statuses.
+        // Only inventory-verified history grants receipt authority. Select
+        // current attempts before source work; audit-only history cannot publish.
         let r: Receipt = serde_json::from_slice(bytes)?;
-        if latest.get(&r.sha) != Some(&r.attempt) {
+        if !intake.ci_verified(path) || latest.get(&r.sha) != Some(&r.attempt) {
             continue;
         }
         let marker = format!("ci-status-{}.json", r.attempt);
@@ -1072,7 +1081,7 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     }
     output(
         json_format,
-        format!("CI intake: no unprocessed current results"),
+        "CI intake: no unprocessed current results".to_string(),
     );
     Ok(())
 }
@@ -1139,7 +1148,7 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
         intake.private.write(CONFIG, &canonical)?;
         output(
             json_format,
-            format!("Enrolled CI profile; return credential branch/tag probes refused"),
+            "Enrolled CI profile; return credential branch/tag probes refused".to_string(),
         );
         return Ok(());
     }
@@ -1186,6 +1195,40 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                 bail!("CI processing requires a home profile");
             }
             process(intake, &p, json_format)?;
+        }
+        CiCommand::Read { attempt, sha } => {
+            if sha.as_ref().is_some_and(|s| !ci_receipt::oid(s)) || *attempt == Some(0) {
+                bail!("Exact positive attempt and full lowercase SHA required");
+            }
+            intake.sync()?;
+            let files = intake.files()?;
+            let requested = attempt
+                .zip(sha.as_deref())
+                .map(|(n, sha)| format!("ci-results/{sha}/{n}.json"));
+            if let Some(path) = &requested {
+                let bytes = files
+                    .get(path)
+                    .context("No result for requested attempt/SHA")?;
+                intake.verify_ci_read(path, bytes)?;
+            }
+            let rows: Vec<_> = files.iter().filter(|(path, _)| path.starts_with("ci-results/")
+                && requested.as_ref().is_none_or(|p| p == *path))
+                .map(|(path, bytes)| -> Result<Value> {
+                    Ok(json!({"path": path, "verification": if intake.ci_verified(path) { "verified" } else { "unverified-history" },
+                        "audit": serde_json::from_slice::<Receipt>(bytes)?}))
+                }).collect::<Result<_>>()?;
+            if json_format {
+                println!("{}", serde_json::to_string(&rows)?);
+            } else {
+                for row in rows {
+                    println!(
+                        "{} {} {}",
+                        row["path"].as_str().unwrap(),
+                        row["verification"].as_str().unwrap(),
+                        row["audit"]
+                    );
+                }
+            }
         }
         CiCommand::Enroll { .. } => unreachable!(),
     }

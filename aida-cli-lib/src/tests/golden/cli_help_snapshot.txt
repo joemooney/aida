@@ -9318,7 +9318,7 @@ Usage: aida internal codex-bg-supervise [OPTIONS] --attempt <ATTEMPT>
 
 Options:
       --attempt <ATTEMPT>
-          
+          Exact retained attempt to revalidate; requires --sha.
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -11418,7 +11418,7 @@ since generation
 Usage: aida intent [OPTIONS] <ID>
        aida intent <note|validate|export> ...
        aida intent <enroll|publish|pull|list|process> ...
-       aida intent ci <enroll|request|poll|process> ...
+       aida intent ci <enroll|request|poll|process|read> ...
 
 Commands:
   ci        Configure or run the restricted work CI return channel
@@ -11476,6 +11476,7 @@ Commands:
   request  Home only: create retained immutable home/work refs for an explicit attempt
   poll     Run one bounded work polling pass; invoke periodically from a user timer
   process  Home only: validate intake and publish native statuses for latest attempts
+  read     Audit retained results, or revalidate one exact attempt/SHA before reading it
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -11593,6 +11594,37 @@ Usage: aida intent ci process [OPTIONS]
 Options:
       --json
           Emit a JSON result object
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci read
+Audit retained results, or revalidate one exact attempt/SHA before reading it
+
+Usage: aida intent ci read [OPTIONS]
+
+Options:
+      --attempt <ATTEMPT>
+          Exact retained attempt to revalidate; requires --sha
+
+      --json
+          Emit a JSON result object
+
+      --sha <SHA>
+          Exact retained source SHA; requires --attempt
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -42911,6 +42943,48 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit a JSON result object"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "read"
+    ],
+    "about": "Audit retained results, or revalidate one exact attempt/SHA before reading it",
+    "flags": [
+      {
+        "name": "attempt",
+        "takes_value": true,
+        "help": "Exact retained attempt to revalidate; requires --sha"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      },
+      {
+        "name": "sha",
+        "takes_value": true,
+        "help": "Exact retained source SHA; requires --attempt"
       }
     ],
     "hidden": false
