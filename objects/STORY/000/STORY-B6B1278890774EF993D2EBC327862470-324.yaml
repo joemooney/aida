@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T19:34:11.579177840Z
+modified_at: 2026-11-06T20:08:43.035061758Z
 req_type: Story
 tags:
 - architecture
@@ -669,6 +669,11 @@ comments:
   created_at: 2026-11-06T19:32:45.828664010Z
   modified_at: 2026-11-06T19:32:45.828664010Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b27a-511b-70d2-96a3-fdde06e48438
+  author: mcp
+  content: 'PR #3531 round 5 implementation: control children now execute the kernel-held /proc/self/exe image instead of comparing cached executable paths; regression covers promotion rename, replacement and unlinking. Auto-punt uses the phase-driver control fixture seam and logs construction refusal. Intake/clarify use a scoped advisor grant, with deterministic keyring-refusal and revocation coverage. All 12 TUI control paths retain refusal reasons for operator status, including worker results and best-effort acceptance notes. Native validation so far: cargo test --profile agent -p aida-cli-lib --lib story_2326 passed 37/37; make check-ci-fast passed all 38 gates; git diff --check passed. Final fixture-mode library rerun and standalone TUI tests are still in progress. Refs publication subject has been recorded with aida ship; edits remain uncommitted for the host. Finding 4 still requires the host to publish a new commit and cite green CI at that exact head; current published run 42280808820 remains pending.'
+  created_at: 2026-11-06T20:08:43.035044397Z
+  modified_at: 2026-11-06T20:08:43.035044397Z
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
