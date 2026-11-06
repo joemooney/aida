@@ -1,5 +1,6 @@
 id: 01a1afb1-6a2b-7323-8940-e7de80831eda
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-866
+agreed_id: TASK-2924
 title: '[minor, non-blocking] aida-cli-lib/src/launch/contained.rs:838-847: uncondition…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3131, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:26643d8d
 - from-review:PR-3475
 - kind:carried-forward
+history:
+- id: 01a1afda-8505-7023-a387-0f796879fbf5
+  author: joe
+  timestamp: 2026-11-06T07:54:56.133017656Z
+  changes: []
 filed_at:
   code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
   branch: main
