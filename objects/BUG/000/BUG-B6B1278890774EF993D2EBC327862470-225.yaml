@@ -1,0 +1,31 @@
+id: 01a1aed2-d346-7a91-bddd-af3efb394f88
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-225
+agreed_id: BUG-2459
+title: Host post-exit commit uses a node-local alias trailer (e.g. SPEC-HOME-022) that does not resolve, so every native lane's self-publication fails
+description: |
+  ## Problem
+  Since STORY-2475 and TASK-2879 landed (#3398 at 84cd51b, #3462), every native Codex lane's host post-exit commit fails: `host post-exit commit failed: ✗ ship --from-seat: 1 commit trailer reference(s) name a spec that does not resolve`. ship_from_seat.rs::post_exit_message (and post_exit_message_with_completion) build the trailer with `aida_core::node_alias::display_spec_id(spec)`, which renders the node-LOCAL alias (e.g. `(SPEC-HOME-022)`, `(BUG-HOME-215)`, `(STORY-HOME-408)`). Trailer resolution does not accept those aliases. Observed on 10 lanes on 2026-11-05: BUG-2449, BUG-2457, TASK-2902, TASK-2903, TASK-2904, TASK-2838, TASK-2879, TASK-3111, STORY-2480 and STORY-2537 (logs: ~/.local/share/aida/ops/advisor-scripts/lane-<SPEC>.log). The advisor's out-of-band auto-publish has been covering for it, so STORY-2475's AC1 does not actually hold on main.
+
+  ## Acceptance
+  - The post-exit commit trailer names the spec by its canonical display ID (e.g. `TASK-2904`, resolved from the store), or by its origin ID when no display ID exists; never by a node-local alias. Both the completing `(ID)` and `(Refs ID)` forms are covered.
+  - Regression test: a lease whose scope is an origin ID with a HOME-alias mapping produces a trailer that `ship --from-seat`'s trailer check resolves, and the host commit and push succeed end to end in the existing seat-publish fixture.
+  - Audit the other display_spec_id call sites that write commit or PR text, and switch any that feed trailer resolution.
+  LIGHT gate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T03:06:54.662965941Z
+modified_at: 2026-11-06T03:06:54.662965941Z
+req_type: Bug
+tags:
+- from-advisor:STORY-2475
+- vendor:codex
+filed_at:
+  code_sha: 93dc9165bde3bd7b80a0ac39df763581a3aebbd9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b6bdfaf7f4a
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
