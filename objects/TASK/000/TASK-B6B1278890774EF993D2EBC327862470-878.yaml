@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T17:17:34.527893679Z
+modified_at: 2026-11-06T17:35:46.793180556Z
 req_type: Task
 tags:
 - architecture
@@ -166,6 +166,12 @@ comments:
   content: 'S1 coordinator implementation is ready in the native worktree, uncommitted. Routes opted-in Claude headless coordinators through PreparedLaunch, accepted receipt, explicit worker-grant binding and release; retains per-surface refusals for S2-S4 and leaves native argv unchanged. Host-only routing intent prevents a policy-removal downgrade. Added real-spawn quiet/stream/preflight-failure regression, composition/native regression, required-live CI count, and audited the extra Claude-only receipt call in the Codex spawn inventory. Required-live coordinator count: 1/1 successful. Final formatting passes; 38 fast gates passed. The final-source broader run passed 73 tests; five existing process fixtures need the matching CLI, which is building before their rerun. Recorded Refs-only native publication declaration: [AI:codex] feat(containment): wrap Claude coordinator launches (Refs TASK-3219). No completion or publication from this seat.'
   created_at: 2026-11-06T17:17:34.527893679Z
   modified_at: 2026-11-06T17:17:34.527893679Z
+  session_id: 01a1b1b68af3
+- id: 01a1b1ee-4c69-7012-babf-05ffdea3a379
+  author: joe
+  content: 'Final S1 validation handoff: matching CLI built successfully (cargo build -p aida-cli --profile agent). Final-source regression selection task_3219/bug_2389/bug_2398/task_2707/task_2708: 77 passed, 1 failed. The sole failure is bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording refusing the app-server socket directory mode/ownership; it reproduces with private TMPDIR/XDG_RUNTIME_DIR and umask 077. TASK-2758 already records this exact host failure, accepted by advisor as non-blocking/no work on 2026-11-02; that ruling is preserved, with no duplicate finding or reopen. Installed-Codex composition companion remains intentionally opt-in and skipped. Required-live TASK-3219 count is explicitly 1/1 successful under AIDA_REQUIRE_BWRAP_LIVE=1, including quiet/stream output and refusal before model release. Launcher-entry ratchet, cargo fmt --all -- --check and git diff --check pass; make check-ci-fast passed all 38 fast gates. Six changed files: session.rs, containment/tests/launch_tests.rs, tests/task_2708_codex_fail_closed_tests.rs, .github/workflows/ci.yml, OVERVIEW.md and docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md. No S1 design blocker. S2-S4 remain per the binding advisor order, and CLAUDE_WRAPPER_UNWIRED stays for their surfaces. Edits remain uncommitted; the recorded host subject is Refs TASK-3219. No queue completion from this native seat.'
+  created_at: 2026-11-06T17:35:46.793180556Z
+  modified_at: 2026-11-06T17:35:46.793180556Z
   session_id: 01a1b1b68af3
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
