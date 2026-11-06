@@ -438,7 +438,13 @@ pub(crate) fn deferred_revisit_trigger(req: &aida_core::models::Requirement) -> 
     if let Some(cond) = req.deferred_until.as_deref() {
         let cond = cond.trim();
         if !cond.is_empty() {
-            return Some(cond.to_string());
+            // Canonicalize typed triggers; legacy text remains readable until migration.
+            // trace:STORY-2402 | ai:codex
+            return Some(
+                cond.parse::<aida_core::condition::Condition>()
+                    .map(|condition| condition.to_string())
+                    .unwrap_or_else(|_| cond.to_string()),
+            );
         }
     }
     // `tags` is a HashSet, so "the first `deferred:*` tag" has no stable

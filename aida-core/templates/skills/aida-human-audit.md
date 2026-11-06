@@ -45,7 +45,7 @@ truth, don't police it in prose.
 
    - **B — Stale spec state.** The item is real but its state is wrong or
      imprecise. *Fix the spec* so it self-corrects or surfaces with the right
-     reason: `aida edit <ID> --status …`, `aida defer <ID> --until "<trigger>"`,
+     reason: `aida edit <ID> --status …`, `aida defer <ID> --until "date:2026-12-01"`,
      `aida archive <ID>`, or add a `blocked-by` / `parent` relationship. The
      `--until` trigger is what distinguishes "parked, returns on X" from
      "filed away."
@@ -73,7 +73,10 @@ truth, don't police it in prose.
 - **Never auto-approve or auto-merge** to make an item disappear — an approval
   or a merge is an explicit human judgment (that item is bucket A).
 - Deferring / archiving is a **view-level park, not deletion** — the YAML, audit
-  trail, and graph survive. Use `--until` triggers so deferred work returns.
+  trail, and graph survive. Use typed `--until` triggers (`date:2026-12-01`,
+  `pr:123=merged`, or `spec:<SPEC-ID>=completed`); free text is refused.
+  For human judgment, use `--until "manual:<who>" --reason "<why>"`
+  with product/advisor/operator authority.
 - If an item needs an operator decision you can't make (architecture, priority,
   a keystone merge), it is **bucket A** — surface it, don't force it into B.
 

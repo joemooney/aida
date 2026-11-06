@@ -484,7 +484,7 @@ pub enum Verb {
     Accept,
     /// Open scope, any open spec (NOT status-conditional): park the selected
     /// specs off the active view with a revisit trigger via
-    /// `aida defer <id> --until "<trigger>"`. Set-level; the trigger is
+    /// `aida defer <id> [--until <condition>]`. Set-level; the trigger is
     // captured by a single-line input modal before execution. trace:TASK-921
     Defer,
     /// Open / Queue scope, Approved + non-keystone only: kick off the headline
@@ -874,16 +874,10 @@ impl DeferInput {
         self.buffer.pop();
     }
 
-    /// The trigger to use on confirm: the typed buffer, or — when the operator
-    /// confirmed without typing anything — a sensible default so the defer
-    /// still records a revisit condition rather than an empty string.
+    /// A typed condition on confirm; empty means bare defer (retain any trigger).
+    // trace:STORY-2402 | ai:codex
     pub fn trigger(&self) -> String {
-        let t = self.buffer.trim();
-        if t.is_empty() {
-            "revisit later".to_string()
-        } else {
-            t.to_string()
-        }
+        self.buffer.trim().to_string()
     }
 }
 
@@ -2528,7 +2522,7 @@ pub enum RunOutcome {
     // `--until` trigger before it can run. trace:TASK-921
     OpenDeferInput { ids: Vec<String> },
     /// Confirmed `defer`: park each id in `ids` with the captured `trigger`
-    /// via `aida defer <id> --until "<trigger>"`. Emitted by the parent's
+    /// via `aida defer <id> [--until <condition>]`. Emitted by the parent's
     // input-modal confirm path, not by `run_verb`. trace:TASK-921
     Defer { ids: Vec<String>, trigger: String },
     /// `drive` on the focused Approved + non-keystone spec: the parent launches
@@ -4720,13 +4714,13 @@ mod tests {
 
     #[test]
     fn defer_input_empty_trigger_uses_default() {
-        // Confirming with an empty / whitespace-only buffer still records a
-        // sensible default trigger rather than an empty string. trace:TASK-921
+        // Blank input requests bare defer, preserving existing evidence.
+        // trace:STORY-2402 | ai:codex
         let mut di = DeferInput::new(vec!["TASK-0".to_string()]);
-        assert_eq!(di.trigger(), "revisit later");
+        assert_eq!(di.trigger(), "");
         di.push_char(' ');
         di.push_char(' ');
-        assert_eq!(di.trigger(), "revisit later");
+        assert_eq!(di.trigger(), "");
         di.push_char('q');
         // Trigger trims surrounding whitespace.
         assert_eq!(di.trigger(), "q");

@@ -180,7 +180,7 @@ next."** Ask `aida why <SPEC>` — it names the bucket and the reason — or rea
 <!-- trace:BUG-1793 | ai:codex -->
 
 The structural defer flag is also an enforced hold. `aida defer <SPEC>
---reason "…" [--until "…"]` records why the operator parked the spec and,
+--reason "…" [--until "manual:<who>"]` records why the operator parked the spec and,
 optionally, the condition for revisiting it. Explicit pickup, queue-head pickup,
 drain, and direct `aida session start` refuse held specs before taking a lease;
 the refusal names the reason and revisit trigger. Product, advisor, and
@@ -189,7 +189,9 @@ lift one. Use `aida undefer <SPEC>` after the hold is cleared.
 
 For the earlier TASK-1580-style convention, finish or reject the Draft
 DECISION-GATE task, then apply `aida defer <held-spec> --reason "…" --until
-"…"`. Remove its temporary `BlockedBy` edge only after verifying the hold is
+"manual:<who>"`. Supplied triggers must be typed (`spec:`, `pr:`, `release:`,
+`date:`, `query:`, or `manual:`); free text is refused, and manual triggers
+require a non-empty reason. Remove its temporary `BlockedBy` edge only after verifying the hold is
 visible in `aida list --deferred`; the structural hold now supplies the pickup
 fence.
 
