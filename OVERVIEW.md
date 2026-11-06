@@ -1558,21 +1558,17 @@ observation verifies procfs coordinates and rejects masked views. A local
 machine identity in the holder envelope supplies node provenance independently
 of hostname. This is lifecycle evidence, not a grant or signal capability.
 
-Ownership and local lease readers require one selected active worker with
-cooperative non-subreaper capture evidence and a holder generation. The native
-foreground headless spawn performs an async-signal-safe pre-exec self check;
-its pipe receipt binds to the unreaped child before stamping the lease and
-ownership record. Self-stamping can also capture evidence. Arbitrary targets,
-init/namespace-init, known managers, subreapers and unavailable evidence refuse
-admission. Other launch surfaces retain Unknown until they provide this handoff;
-they cannot use creator/launcher metadata as a fallback. Foreign lease expiry
-keeps its existing consumer policy. Legacy ownership migration generation-pins
-repairs, preserves phase/tree/session, and records an operator-repair refusal
-rather than recapturing today's process at an old PID. Repeating repair is a
-no-op. Host migrate/compare evidence remains required before ownership cutover.
+Admitted ownership and lease records select one worker generation with
+cooperative non-subreaper capture evidence. Spawn handoffs bind a pre-exec
+self-check receipt to the unreaped child; self-stamping captures the writer.
+Init, managers, subreapers and unavailable evidence refuse admission. Legacy
+lease readers retain their advisory-lock, worktree and expiry policies, and
+legacy ownership retains its heartbeat policy. An admitted worker never borrows
+liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
+separate consumer policy. Ownership repair pins the recorded generation without
+recapturing today's process at an old PID.
 
-Merge locks, review-watch, mail bindings and remaining legacy probes retain
-separate migration slices. The extended TASK-1750 ratchet inventories temporary
-consumer exceptions in `proc_identity_legacy_baseline.json` and prevents new
-private PID/start decisions. See the signed
+The TASK-1750 ratchet inventories compatibility consumers in
+`proc_identity_legacy_baseline.json` and prevents new private PID/start
+decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).

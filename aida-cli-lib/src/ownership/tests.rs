@@ -560,9 +560,9 @@ fn witness_strategy() -> impl Strategy<Value = Witness> {
 }
 
 proptest! {
-    /// Adding a witness never takes Alive away; adding one that abstains
-    /// never changes the verdict; Dead always has a Dead witness and no
-    /// Alive one.
+    /// An admitted process ignores activity witnesses; ambiguous generations
+    /// are Unknown. Process-backed Dead always has a Dead process witness.
+    /// Legacy heartbeat-only rows keep their separate expiry policy.
     #[test]
     fn combination_properties(
         ws in proptest::collection::vec(witness_strategy(), 0..6),
@@ -575,13 +575,13 @@ proptest! {
         let after = judge_owner(&holder(more), &h, now());
 
         let count = ws.iter().filter(|w| matches!(w.kind, WitnessKind::Process { .. })).count();
-        if matches!(extra.kind, WitnessKind::Heartbeat { .. }) {
+        if matches!(extra.kind, WitnessKind::Heartbeat { .. }) && count > 0 {
             prop_assert_eq!(owner_label(&after), owner_label(&before));
         } else if count >= 1 {
             prop_assert_eq!(owner_label(&after), "unknown");
         }
         let readings: Vec<_> = ws.iter().filter(|w| matches!(w.kind, WitnessKind::Process { .. })).map(|w| judge_witness(w, &h, now())).collect();
-        if matches!(before, OwnerVerdict::Dead { .. }) {
+        if matches!(before, OwnerVerdict::Dead { .. }) && count > 0 {
             let any_dead = readings.iter().any(|r| matches!(r, WitnessReading::Dead(_)));
             let any_alive = readings.iter().any(|r| matches!(r, WitnessReading::Alive));
             prop_assert!(any_dead);
@@ -613,5 +613,26 @@ proptest! {
             prop_assert!(owner_dead);
             prop_assert!(missing || (!dirty && !unpushed));
         }
+    }
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn legacy_ownership_retains_heartbeat_and_combination_policy() {
+    let h = host();
+    for (mut witnesses, expected) in [
+        (vec![beat(5, 30)], "alive"),
+        (vec![stale_beat()], "dead"),
+        (vec![local(2), beat(5, 30)], "alive"),
+        (vec![local(1), stale_beat()], "dead"),
+        (vec![local(1)], "unknown"),
+    ] {
+        for witness in &mut witnesses {
+            witness.admission = None;
+        }
+        assert_eq!(
+            owner_label(&judge_owner(&holder(witnesses), &h, now())),
+            expected
+        );
     }
 }

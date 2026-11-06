@@ -779,6 +779,9 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         prompt,
         |prompt, log, resume, hold| {
             crate::session::run_standalone_implementer_child(
+                // Bind the stamp to this launch's lease root, even uncontained.
+                // trace:STORY-2537 trace:BUG-2458 | ai:codex
+                launch.project_root,
                 launch.host_main,
                 launch.vendor,
                 prompt,

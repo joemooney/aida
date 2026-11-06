@@ -1012,3 +1012,56 @@ fn returned_phase_child_shortcut_is_narrow() {
         Some("t0")
     ));
 }
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn refused_legacy_capture_keeps_dead_owner_recovery_policy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = lease_at(tmp.path(), 0, Some(reaped_pid()), None);
+    lease.review_verb = true;
+    lease.worktree_path = Default::default();
+    lease.holder_record = Some(
+        serde_json::to_string(&aida_core::proc_identity::HolderRecord::refused(
+            aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+                "target has no cooperative handoff".into(),
+            ),
+        ))
+        .unwrap(),
+    );
+    assert_eq!(
+        crate::leases::lease_state_for(&lease, &[], chrono::Utc::now()),
+        aida_core::liveness::LeaseState::Stale
+    );
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    assert!(matches!(
+        crate::leases::auto_release_decision_for_lease(
+            tmp.path(),
+            &lease,
+            &crate::orchestrator::OrchestratorConfig::default()
+        ),
+        crate::orchestrator::AutoReleaseDecision::SafelyDormant { .. }
+    ));
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn foreign_refused_holder_keeps_heartbeat_backstop() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = lease_at(tmp.path(), 25 * 3600, Some(std::process::id()), None);
+    lease.pid_namespace = Some(1234);
+    lease.review_verb = true;
+    lease.worktree_path = Default::default();
+    lease.holder_record = Some(
+        serde_json::to_string(&aida_core::proc_identity::HolderRecord::refused(
+            aida_core::proc_identity::HolderRefusal::Subreaper,
+        ))
+        .unwrap(),
+    );
+    assert_eq!(
+        crate::leases::lease_state_for(&lease, &[], chrono::Utc::now()),
+        aida_core::liveness::LeaseState::Stale
+    );
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    lease.started_at = chrono::Utc::now();
+    assert_eq!(crate::leases::lease_owner_gone(&lease), None);
+}
