@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T20:50:18.012199914Z
+modified_at: 2026-11-06T20:51:27.654213835Z
 req_type: Story
 relationships:
 - rel_type:
@@ -386,6 +386,12 @@ comments:
   created_at: 2026-11-06T20:44:47.298063601Z
   modified_at: 2026-11-06T20:44:47.298063601Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2a1-7326-7021-850b-fe54485fa330
+  author: joe
+  content: 'Round 7 approach: replace the bare manual example ID flagged by the contracts drift guard; seed CliConditionFacts with the strict canonical snapshot already loaded by defer resurface and test that spec/query facts survive removal of their source objects without a reread. Preserve existing legacy-only no-write success/count coverage. Finding 3 is resolved by the binding 2026-11-06 ruling: any unparseable trigger, including malformed typed syntax, remains Unknown pending migration. Run the manual guard, targeted condition/resurface tests and available local lane checks; host must produce the new Refs commit and gate on green contracts/lib-1 at the published head. No derived-attention work.'
+  created_at: 2026-11-06T20:51:27.654213835Z
+  modified_at: 2026-11-06T20:51:27.654213835Z
+  session_id: 01a1b2a05a88
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
