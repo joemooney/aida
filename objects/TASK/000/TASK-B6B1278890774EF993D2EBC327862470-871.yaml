@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T11:28:14.443852823Z
+modified_at: 2026-11-06T11:32:21.592723179Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -60,6 +60,12 @@ comments:
   content: 'Round 2 follow-up: verified inherited fixes for scoped admission evidence snapshots, retry-on-roster-change, Terminal store-tip race, documented trusted-writer anchor limits, Failed local state, and criterion trace corrections. New edits extend store-tip race coverage to Reserved/Running/Cancelled; replace the mutating retry assertion helper with a read-only Failed-state assertion and prove actual dispatch after hub recovery and peer cancellation; retag the exit fixture to TASK-3196; update AGENTS/OVERVIEW limitations. CI job 127849628383 passed all 7533 tests; its sole failure was the 26.03s 2100-shard regression lacking a timing budget. Added a measured 55s budget (2x rounded to 5s), preserving full signed-shard coverage. Native seat leaves edits uncommitted for host publication. Targeted Rust validation is untested=true: aida lane job run refused because this standalone lease has no lane job runner; follow-up host CI must run the admission test module. Merge hold remains in force.'
   created_at: 2026-11-06T11:28:14.443852823Z
   modified_at: 2026-11-06T11:28:14.443852823Z
+  session_id: 01a1b0992c29
+- id: 01a1b0a1-93d8-7ac1-9942-f6ccc84bd311
+  author: joe
+  content: 'Final validation: make check-ci-fast passed all 38 gates, including formatting, trace/doc-header stranding, documentation links/audience coverage, Rust portability and the CLI feature-disabled compile. git diff --check passed. Timing TOML parsed and the recorded 26.03s shard regression is covered by its 55s limit. Targeted admission Rust tests remain untested=true because the standalone native lease has no lane job runner. Changed files: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/gate/review_publication/tests/admission_tests.rs, aida-cli-lib/src/review_watch.rs, scripts/test-time-budget.toml. All edits remain uncommitted for the host; no queue completion, PR publication or hold clearance was attempted.'
+  created_at: 2026-11-06T11:32:21.592723179Z
+  modified_at: 2026-11-06T11:32:21.592723179Z
   session_id: 01a1b0992c29
 history:
 - id: 01a1afff-e7d6-78a2-869f-d7e2e2c949d8
