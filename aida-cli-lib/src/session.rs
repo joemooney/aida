@@ -2784,27 +2784,33 @@ pub(crate) const CODEX_MCP_PLUGIN_NOTE: &str =
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
 // trace:BUG-2006 | ai:antigravity
+// trace:STORY-2326 | ai:codex
 pub(crate) fn build_codex_session_command(
     initial_prompt: &str,
     bypass: bool,
     read_only: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new("codex");
-    if let Some(id) = grant_id {
-        cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
-    }
-    cmd.env_remove("AIDA_CONTAINED");
-    // trace:TASK-2631 | ai:codex
-    cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    cmd.args(codex_interactive_session_args(
-        initial_prompt,
-        bypass,
-        read_only,
-        model,
-    ));
-    cmd
+) -> Result<std::process::Command> {
+    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+        vendor: aida_core::launch_policy::LaunchVendor::Codex,
+        kind: aida_core::launch_policy::LaunchKind::Exec,
+        program: "codex".into(),
+        args: codex_interactive_session_args(initial_prompt, bypass, read_only, model),
+        tail: Vec::new(),
+        posture: ContainmentPosture::None,
+        cwd: std::env::current_dir()?,
+        set_cwd: false,
+        // Native/None constructors do not cross the AIDA boundary.
+        host_main: None,
+    })?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::ThisSession { grant: grant_id },
+    )?;
+    Ok(cmd)
 }
 
 /// BUG-2394: [`codex_session_args`] with the plan lane's read-only posture
@@ -2839,7 +2845,6 @@ pub fn exec_codex_session(
     let requested = drain_contained(&headless_worktree_root())?;
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
-        let mut cmd = std::process::Command::new("codex");
         // TASK-2712: the write set of the lane's own tree and role (the gate
         // ledger only for a reviewer).
         // trace:TASK-2712 TASK-2032 | ai:claude
@@ -2853,14 +2858,28 @@ pub fn exec_codex_session(
         if read_only {
             args = codex_read_only_args(args);
         }
-        cmd.args(args).env_remove("AIDA_CONTAINED");
-        if let Some(id) = grant_id {
-            cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
-        }
+        // trace:STORY-2326 | ai:codex
+        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+            vendor: aida_core::launch_policy::LaunchVendor::Codex,
+            kind: aida_core::launch_policy::LaunchKind::Exec,
+            program: "codex".into(),
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: headless_worktree_root(),
+            set_cwd: false,
+            host_main: host_main.map(Path::to_path_buf),
+        })?;
+        let mut cmd = crate::launch::spawn_agent(&ctx)?;
+        crate::launch::assign_seat(
+            &mut cmd,
+            ctx.kind(),
+            crate::launch::SeatDecision::ThisSession { grant: grant_id },
+        )?;
         eprintln!("  codex: {}", posture.label());
         cmd
     } else {
-        build_codex_session_command(initial_prompt, bypass, read_only, model, grant_id)
+        build_codex_session_command(initial_prompt, bypass, read_only, model, grant_id)?
     };
     stamp_containment_posture(&mut cmd, posture);
     // trace:BUG-2398 | ai:codex — this is the already-delegated tab's seat.
@@ -13408,7 +13427,8 @@ mod tests {
                 program: fake.to_string_lossy().to_string(),
                 args: vec![],
                 contained: true,
-                host_main: crate::seat_clone::launcher_main(),
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
             };
             let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
             assert!(status.success());
@@ -14069,7 +14089,8 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_codex_session_command_strips_aida_contained() {
-        let cmd = build_codex_session_command("prompt", false, false, None, None);
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        let cmd = build_codex_session_command("prompt", false, false, None, None).unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();
         assert!(
             envs.iter()

@@ -2575,16 +2575,8 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
 /// the directory does not exist, so hosts without the convention stay silent.
 // trace:BUG-1702 | ai:claude
 fn cargo_slot_dir() -> Option<std::path::PathBuf> {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
-    let uid = users_uid()?;
-    let dir = std::path::PathBuf::from(runtime).join(format!("cargo-slots-{uid}"));
-    dir.is_dir().then_some(dir)
-}
-
-fn users_uid() -> Option<u32> {
-    // `id -u` without pulling in a libc dependency for one number.
-    let out = std::process::Command::new("id").arg("-u").output().ok()?;
-    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+    // trace:STORY-2326 | ai:codex
+    crate::launch::resources::cargo_slot_dir()
 }
 
 /// Entries in the slot directory that mean a Cargo TARGET directory was pointed at it.

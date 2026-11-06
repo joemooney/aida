@@ -591,6 +591,11 @@ fn no_tee() -> crate::headless_tee::TeeOptions {
 /// `containment::launch`; an uncontained one never does.
 #[test]
 fn aida_posture_spawn_routes_through_single_boundary_fn() {
+    // Reviewer commands inherit the process cwd. Use a one-test child so
+    // the golden never resolves the live seat checkout. trace:STORY-2326 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let exec = |c| {
         crate::session::build_claude_exec_command(
             None,
@@ -641,6 +646,7 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
 
     let fx = launch_fixture();
     let _ambient = fx.ambient();
+    std::env::set_current_dir(&fx.project).unwrap();
     let claude = crate::session::HeadlessVendor::Claude;
     let log = fx.project.join(".aida/headless.log");
     let fake = std::path::Path::new(&fx.fake);
@@ -817,8 +823,14 @@ fn mask_settings(mut args: Vec<String>) -> Vec<String> {
 /// conversion; only where each child's env is decided moved.
 #[test]
 fn golden_headless_and_lane_claude_paths_are_unchanged() {
+    // Reviewer commands inherit the process cwd. Use a one-test child so
+    // the golden never resolves the live seat checkout. trace:STORY-2326 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = launch_fixture();
     let _ambient = fx.ambient();
+    std::env::set_current_dir(&fx.project).unwrap();
     let claude = crate::session::HeadlessVendor::Claude;
     let log = fx.project.join(".aida/headless.log");
     let posture = |c: bool| {
@@ -1065,5 +1077,90 @@ mod golden {
 
     pub(super) fn agent_new_fg(_contained: bool) -> Vec<String> {
         lines(&["work"])
+    }
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_pr_b_posture_flags_are_refused_for_each_vendor() {
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        for tail in [
+            vec!["--settings", "host.json"],
+            vec!["--permission-mode=bypassPermissions"],
+            vec!["--dangerously-bypass-approvals-and-sandbox"],
+            vec!["--sandbox", "danger-full-access"],
+            vec!["--add-dir", "/"],
+            vec!["--full-auto"],
+            vec!["-c", "sandbox_workspace_write.writable_roots=[\"/\"]"],
+            vec!["-c", "approval_policy=never"],
+            vec!["-c", "\"sandbox_mode\"=danger-full-access"],
+            vec!["--profile", "unrestricted"],
+        ] {
+            let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &tail);
+            req.vendor = vendor;
+            assert!(
+                matches!(
+                    LaunchContext::resolve_under(req, false),
+                    Err(LaunchRefusal::PostureFlag(_))
+                ),
+                "{vendor:?} {tail:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn story_2326_pr_b_phase_builders_preserve_none_argv_and_seat() {
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    for vendor in [
+        crate::session::HeadlessVendor::Codex,
+        crate::session::HeadlessVendor::Agy,
+    ] {
+        let argv = vec!["--prompt".to_owned(), "fix this".to_owned()];
+        let advisor = crate::phase_driver::build_phase_driver_advisor_command(
+            tmp.path(),
+            vendor.program(),
+            &argv,
+            &tmp.path().join("request"),
+            &tmp.path().join("response"),
+            "CEILING",
+            "10",
+            vendor,
+            false,
+        )
+        .unwrap();
+        let ci_fix = crate::phase_driver_trait::build_phase_driver_ci_fix_command(
+            tmp.path(),
+            vendor.program(),
+            &argv,
+            "CEILING",
+            "10",
+            vendor,
+            false,
+            "child-grant",
+        )
+        .unwrap();
+        for cmd in [&advisor, &ci_fix] {
+            assert_eq!(
+                cmd.get_args().collect::<Vec<_>>(),
+                argv.iter().map(OsStr::new).collect::<Vec<_>>()
+            );
+            assert_eq!(cmd.get_current_dir(), Some(tmp.path()));
+            let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
+            assert_eq!(env.get(OsStr::new("AIDA_CONTAINED")), Some(&None));
+            assert_eq!(
+                env.get(OsStr::new("AIDA_CONTAINMENT_POSTURE")),
+                Some(&Some(OsStr::new("none")))
+            );
+        }
+        assert_eq!(
+            owned_ops(&ci_fix).get("AIDA_SESSION_GRANT"),
+            Some(&Some("child-grant".into()))
+        );
+        assert_eq!(
+            owned_ops(&advisor).get("AIDA_SESSION_ROLE"),
+            Some(&Some("advisor".into()))
+        );
     }
 }

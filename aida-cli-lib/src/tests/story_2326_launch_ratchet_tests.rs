@@ -28,14 +28,13 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/autopilot_intake.rs", 3, "slice B: autopilot intake"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
     ("aida-cli-lib/src/codex_tool_env.rs", 3, "slice B: Codex finalize respawns the built child (get_program), twice in production; the third is the #[cfg(test)] fn tool_shell_command_for_test from main, which production() does not skip (it skips cfg(test) modules only)"),
-    ("aida-cli-lib/src/compete_cmd.rs", 5, "slice B: compete arms and judge"),
+    ("aida-cli-lib/src/compete_cmd.rs", 2, "slice B: compete arms and judge"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
     ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
     ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
-    ("aida-cli-lib/src/dispatch.rs", 3, "slice B: dispatch implementer launch (Q5)"),
     ("aida-cli-lib/src/doctor_cmd.rs", 1, "slice D: vendor query (codex version)"),
     ("aida-cli-lib/src/external_cmd.rs", 1, "not a vendor child: exec of an external aida-* subcommand"),
     ("aida-cli-lib/src/forge.rs", 1, "not a vendor child: forge CLI (gh/glab)"),
@@ -67,7 +66,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
-    ("aida-cli-lib/src/session.rs", 49, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B); the interactive exec of a built launch"),
+    ("aida-cli-lib/src/session.rs", 42, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
     ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
@@ -88,7 +87,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 /// merges after 0ff32132 brought in +3 (lane_job.rs, seat_target_overlay.rs,
 /// and codex_tool_env.rs's cfg(test) fn), all ledgered above. The rebase onto
 /// main 339203a5 brought in +3 (STORY-2338's deputy_shell/runner.rs), ledgered.
-const CEILING: usize = 170;
+// PR-B removes 13 markers: compete (-3), dispatch (-3), phase builders
+// (their legacy Aida markers remain), fresh Codex session/exec (-7).
+// trace:STORY-2326 | ai:codex
+const CEILING: usize = 157;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

@@ -1,9 +1,6 @@
-//! The sandbox resources a launch declares once. Slice A declares the type
-//! and the one fixed decision, sccache off for every lane (advisor ruling O2:
-//! a compile cache a seat can write poisons every seat and the host). The
-//! per-backend renderers (Claude `--settings`, bwrap, Codex writable roots,
-//! the lane-job runner) read it in slice C, which also resolves the cargo
-//! slot directory.
+//! Declared launch resources. Sccache is always off. PR-B adds fail-closed
+//! slot, target and generated-settings validation; backend renderers in the
+//! following slice consume these checks. No helper creates or widens a slot.
 // trace:STORY-2326 | ai:claude
 
 use std::path::PathBuf;
@@ -54,5 +51,152 @@ impl SandboxResources {
                 self.cargo.target_dir.clone().into_os_string(),
             ),
         ]
+    }
+}
+
+/// Resolve only an existing, private slot directory. Never create it or
+/// broaden its permissions. Symlinks are refused rather than followed.
+// trace:STORY-2326 | ai:codex
+pub(crate) fn cargo_slot_dir() -> Option<PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    let uid = unsafe { libc::geteuid() };
+    checked_slot_dir(
+        PathBuf::from(runtime).join(format!("cargo-slots-{uid}")),
+        uid,
+    )
+}
+
+fn checked_slot_dir(path: PathBuf, uid: u32) -> Option<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    (metadata.is_dir() && metadata.uid() == uid && metadata.mode() & 0o7777 == 0o700)
+        .then_some(path)
+}
+
+impl CargoResources {
+    /// Accept the host-recorded clone target or this worktree's own target.
+    /// Canonicalization catches aliases into the host or another seat.
+    /// The caller supplies an existing target (no mkdir here).
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn resolve(
+        authority_root: &std::path::Path,
+        seat_root: &std::path::Path,
+        target_dir: &std::path::Path,
+    ) -> anyhow::Result<Self> {
+        let authority = authority_root.canonicalize()?;
+        let seat = seat_root.canonicalize()?;
+        let target = target_dir.canonicalize()?;
+        let host_target = authority.join("target");
+        let host_target = host_target.canonicalize().unwrap_or(host_target);
+        let recorded_target = crate::seat_clone::host_recorded_clone(&authority, &seat)
+            .and_then(|clone| clone.cargo_target_dir)
+            .and_then(|path| path.canonicalize().ok());
+        let own_target = seat.join("target").canonicalize().ok();
+        let local_target = own_target.as_ref() == Some(&target)
+            && target.starts_with(&seat)
+            && !target.starts_with(&host_target);
+        let recorded_target = recorded_target.as_ref() == Some(&target) && target != host_target;
+        anyhow::ensure!(
+            seat != authority && target.is_dir() && (local_target || recorded_target),
+            "cargo target must be private to the launching seat"
+        );
+        Ok(Self {
+            target_dir: target,
+            slot_dir: cargo_slot_dir(),
+            sccache: Sccache::Off,
+        })
+    }
+}
+
+/// Validate a generated host settings file by handle before a renderer uses
+/// it. Its canonical location must be outside every sandbox write root;
+/// mode 0600 alone cannot isolate processes sharing the host uid.
+/// Renderers are introduced in the following slice.
+// trace:STORY-2326 | ai:codex
+pub(crate) fn open_host_settings(
+    path: &std::path::Path,
+    write_roots: &[PathBuf],
+) -> anyhow::Result<std::fs::File> {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let canonical = path.canonicalize()?;
+    for root in write_roots {
+        anyhow::ensure!(
+            !canonical.starts_with(root.canonicalize()?),
+            "generated launch settings must be outside sandbox write roots"
+        );
+    }
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    anyhow::ensure!(
+        metadata.is_file()
+            && metadata.nlink() == 1
+            && metadata.uid() == unsafe { libc::geteuid() }
+            && metadata.mode() & 0o7777 == 0o600,
+        "generated launch settings must be a host-owned private regular file"
+    );
+    Ok(file)
+}
+
+#[cfg(test)]
+mod story_2326_resources_tests {
+    use super::*;
+    use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn slot_directory_requires_existing_owned_mode_0700() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("slots");
+        let uid = unsafe { libc::geteuid() };
+        assert!(checked_slot_dir(path.clone(), uid).is_none());
+        std::fs::create_dir(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(checked_slot_dir(path.clone(), uid).is_none());
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(checked_slot_dir(path.clone(), uid), Some(path.clone()));
+        assert!(checked_slot_dir(path.clone(), uid.wrapping_add(1)).is_none());
+        let alias = tmp.path().join("alias");
+        symlink(&path, &alias).unwrap();
+        assert!(checked_slot_dir(alias, uid).is_none());
+    }
+
+    #[test]
+    fn target_refuses_host_other_seat_and_symlink_aliases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let host = tmp.path().join("host");
+        let seat = tmp.path().join("seat");
+        let other = tmp.path().join("other");
+        for root in [&host, &seat, &other] {
+            std::fs::create_dir_all(root.join("target")).unwrap();
+        }
+        assert!(CargoResources::resolve(&host, &seat, &seat.join("target")).is_ok());
+        for target in [host.join("target"), other.join("target"), seat.clone()] {
+            assert!(CargoResources::resolve(&host, &seat, &target).is_err());
+        }
+        symlink(other.join("target"), seat.join("alias")).unwrap();
+        assert!(CargoResources::resolve(&host, &seat, &seat.join("alias")).is_err());
+    }
+
+    #[test]
+    fn lane_cannot_write_its_settings_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seat = tmp.path().join("seat");
+        std::fs::create_dir(&seat).unwrap();
+        let settings = tmp.path().join("settings.json");
+        std::fs::write(&settings, "{}").unwrap();
+        std::fs::set_permissions(&settings, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(open_host_settings(&settings, &[seat.clone()]).is_ok());
+        assert!(open_host_settings(&settings, &[tmp.path().to_path_buf()]).is_err());
+        let inside = seat.join("settings.json");
+        std::fs::write(&inside, "{}").unwrap();
+        std::fs::set_permissions(&inside, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(open_host_settings(&inside, &[seat.clone()]).is_err());
+        let alias = tmp.path().join("alias");
+        symlink(&settings, &alias).unwrap();
+        assert!(open_host_settings(&alias, &[seat.clone()]).is_err());
+        std::fs::set_permissions(&settings, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(open_host_settings(&settings, &[seat]).is_err());
     }
 }

@@ -2267,7 +2267,10 @@ impl RealPhaseDriver {
             &ceiling_value,
             vendor,
             self.contained,
-        );
+        )
+        .map_err(|error| {
+            PhaseFailure::of(FailureKind::Spawn, format!("advisor launch: {error:#}"))
+        })?;
         // trace:BUG-2398 | ai:codex — Codex tools get their own delegation,
         // never the consult launcher's ambient advisor selector.
         let codex_grant = if vendor == session::HeadlessVendor::Codex {
@@ -2446,7 +2449,7 @@ pub(crate) fn contained_child_program_and_args(
 pub(crate) fn build_phase_driver_advisor_command(
     project_root: &std::path::Path,
     program: &str,
-    advisor_args: &[String],
+    headless_vendor_args: &[String],
     request_path: &std::path::Path,
     response_path: &std::path::Path,
     ceiling_key: &str,
@@ -2454,23 +2457,44 @@ pub(crate) fn build_phase_driver_advisor_command(
     vendor: session::HeadlessVendor,
     // trace:BUG-2133 | ai:claude
     contained: bool,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new(program);
+) -> anyhow::Result<std::process::Command> {
+    // The Aida path retains its existing os-wrap boundary; PR-B migrates
+    // Native/None vendor launches. trace:STORY-2326 | ai:codex
+    let posture = session::containment_posture(vendor, contained)?;
+    let mut cmd = if posture == session::ContainmentPosture::Aida {
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(headless_vendor_args);
+        // Aida Codex gets no applied-containment credit without a receipt.
+        if session::containment_applied(vendor, contained, None) {
+            cmd.env("AIDA_CONTAINED", "1");
+        } else {
+            cmd.env_remove("AIDA_CONTAINED");
+        }
+        cmd
+    } else {
+        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+            vendor: crate::launch::context::launch_vendor(vendor),
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: program.into(),
+            args: headless_vendor_args.to_vec(),
+            tail: Vec::new(),
+            posture,
+            cwd: project_root.to_path_buf(),
+            set_cwd: true,
+            // Native/None constructors do not cross the AIDA boundary.
+            host_main: None,
+        })?;
+        crate::launch::spawn_agent(&ctx)?
+    };
     // Intentionally inherits the drain launcher's grant because the consult runs at the launcher's own advisor authority.
     cmd.current_dir(project_root)
-        .args(advisor_args)
         .env("AIDA_HEADLESS", "1")
         .env(punt::REQUEST_FILE_ENV, request_path)
         .env(punt::RESPONSE_FILE_ENV, response_path)
         .env("AIDA_SESSION_ROLE", "advisor")
         .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::scrub_launcher_session_env(&mut cmd);
-    if session::containment_applied(vendor, contained, None) {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-    }
-    cmd
+    Ok(cmd)
 }
 
 impl RealPhaseDriver {
