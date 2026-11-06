@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-229
 agreed_id: BUG-2463
 title: Confirm rebase-merged PRs when the original head is absent locally
 description: 'PR #3493 round-5 finding 5: GitHub rebase-merges can report Merged while the original pinned head is absent locally and no squash/merge-subject receipt exists. metadata_for stays Pending forever, preventing merge credit and cleanup. Add bounded private PR-head fetch or another independently verified rebase landing receipt; unavailable or conflicting evidence must retain state. Include a regression with a rebase merge and no local original-head object.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:59:24.595886026Z
-modified_at: 2026-11-06T15:06:04.841148293Z
+modified_at: 2026-11-06T15:07:55.153472515Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -42,8 +42,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b166-ed91-7c91-8790-63313fd7abd4
+  author: joe
+  timestamp: 2026-11-06T15:07:55.153488386Z
+  session_id: 01a1b1653621
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: dd852f74c3b
   vendor: codex
   session: 01a1b124f63b
+attention_reason:
+  category: blocked-dependency
+  detail: 'The assigned checkout at 3267a3e97d8 does not contain aida-cli-lib/src/forge_confirmation.rs or metadata_for, the defective confirmation boundary named by BUG-2463. Read-only inspection locates metadata_for at line 248 on origin/story-2401-r0147 (d2a2e3f5a3f), the still-separate PR #3493. Importing that branch would bundle its broader lifecycle changes into this standalone defect, contrary to the binding advisor ruling. No source edits or Git mutations performed. Relaunch BUG-2463 on a base containing the confirmation boundary after #3493 lands, or provide an explicitly authorized dependency base while keeping publication separate.'
+  lean: Keep BUG-2463 standalone and relaunch after the prerequisite confirmation code is available; then add bounded private PR-head fetch with exact head verification and rebase/no-local-head regression plus unavailable/conflicting evidence cases.
+  raised_by: implementer
+  raised_at: 2026-11-06T15:07:55.153472515Z
