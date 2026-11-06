@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-882
 agreed_id: TASK-3225
 title: 'STORY-2561 S1b: per-lane SEQPACKET store-mutation channel, launch-bound identity and lifecycle (read-only verbs)'
 description: 'Split from TASK-3222 by the advisor ruling on sketch v1 (2026-11-06). Implement sketch v1 sections 1-4 and the matching section 6 tests: broker-injected per-lane AF_UNIX SEQPACKET channel at an exact synthetic epoch address (no host listener), per-message SCM_CREDENTIALS sender checks against the pinned lane, a closed v1 protocol with ONLY session_probe and request_status, the bounds and retry-key semantics, and lifecycle at PreparedLaunch/ContainedChild with refuse-on-absent. No CLI/MCP routing, no grant change. It extends contained_host.py from PR #3449, so start after #3449 merges.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T19:12:17.378355903Z
+modified_at: 2026-11-06T20:18:10.170088624Z
 req_type: Task
 tags:
 - architecture
@@ -157,6 +157,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b282-f87a-7c82-89b4-25ad57964a3c
+  author: aida-orchestrator
+  timestamp: 2026-11-06T20:18:10.170115785Z
+  session_id: 01a1b2790740
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: f50fa16ae956f2508aa8550cc4efb9915f9db768
@@ -166,3 +175,11 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 code addresses all 6 prior findings and matches sketch v1 sections 1-4 and the 07:10 signoff, but there is no green CI evidence: lib-0 ''Run tests'' FAILED at round-2 commit 69171ae (main green), the new Rust tests were never run, the forced-live gates step has never run in CI, and head CI is still queued.'
+  recovery_hint: address the review findings, move TASK-3225 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T20:18:10.170088624Z
