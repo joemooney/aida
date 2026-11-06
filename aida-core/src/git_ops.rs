@@ -7422,12 +7422,16 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
     let committed = crate::db::with_store_write_lock(aida_repo, || {
         let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
-        // Stage all changes in objects/ and metadata.yaml
+        // Stage spec objects and their separately stored opt-in provenance.
+        // trace:STORY-1468 | ai:codex
         add_all(aida_repo, "objects")?;
         if aida_repo.join("metadata.yaml").exists() {
             add(aida_repo, &["metadata.yaml"])?;
         }
 
+        if aida_repo.join("provenance/origin-prompts").is_dir() {
+            add_all(aida_repo, "provenance/origin-prompts")?;
+        }
         // Commit
         if !commit(aida_repo, message)? {
             return Ok(None); // nothing to sync
