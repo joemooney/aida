@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T16:05:18.563471602Z
+modified_at: 2026-11-06T16:05:21.807451357Z
 req_type: Task
 tags:
 - from-review
@@ -20,6 +20,13 @@ relationships:
   target_id: 01a1b126-227d-7b60-b09c-df9a5dabd18e
   created_at: 2026-11-06T16:05:18.563468185Z
   created_by: joe
+comments:
+- id: 01a1b19b-850f-7420-b7aa-2971c7bf48b9
+  author: joe
+  content: 'ADVISOR: approved as STORY-2480''s next slice (the remainder of its acceptance after #3504''s static-only relay). Sequenced after #3504 merges (review story STORY-2562). Keep the 08:24 bounded-revalidation ruling (newest 32 attempts plus on-demand) for the AIDA-sized fixtures. LIGHT gate. Title (Refs STORY-2480), or (TASK-3232) if it completes this task.'
+  created_at: 2026-11-06T16:05:21.807451357Z
+  modified_at: 2026-11-06T16:05:21.807451357Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
   author: joe
