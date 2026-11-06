@@ -1,0 +1,26 @@
+id: 01a1b210-6ed1-7bb2-bdef-55d7974cd337
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-235
+agreed_id: BUG-2469
+title: A review that dies before recording a verdict leaves its aida-pr-N worktree and lease, so the next-head review refuses 'branch pr-N is held' (BUG-2457 covers only completed reviews)
+description: |-
+  Seen 2026-11-06 11:10 MST. Reviews of PR-3508 (head d27492e8) and PR-3506 (head 2bea7e60) were admitted at 16:42Z and recorded no verdict. Their aida-pr-N worktrees and reviewer leases (01a1b1bd, 01a1b1be) stayed. When the PRs got new heads, review watch failed both with 'branch pr-N is held by worktree ... before pickup setup' and did not relaunch. Recovery took four manual acts: git worktree remove, review watch --release, and session end --force --discard-unpushed (plain --force refused with 'cannot establish remote commit coverage', because the old head is reachable only from refs/pull/N/head, not from refs/remotes), then deleting the branch.
+
+  Acceptance:
+  1. Reviewer pickup for PR-N reclaims an existing aida-pr-N worktree and lease when the worktree is clean, no live process holds the lease, and the old pr_head_sha is an ancestor of the current PR head (fetched from refs/pull/N/head). It refuses as today otherwise.
+  2. The session-end coverage check counts refs/pull/N/head for a reviewer lease (review_verb=true, claim_verb=false), since a reviewer checkout has no commits of its own.
+  3. A test covers a dead reviewer lease on an old head followed by a new-head pickup.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T18:13:03.825877231Z
+modified_at: 2026-11-06T18:13:03.825877231Z
+req_type: Bug
+filed_at:
+  code_sha: a10c9d7d86f6a8bd4b2cc6249c2c3e34398f666f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6fe228acc8b
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
