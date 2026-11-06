@@ -1,14 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-11-03T16:01:33.180231656Z
+last_run: 2026-11-06T18:08:34.565395949Z
 last_by:
   seat: advisor
-  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   vendor: claude
 result: done
-note: 'Resolved: aida worktree reclaim --apply freed 305.7 GiB (99% to 82%, 158 GB free). Hygiene follow-up is STORY-2351 (scheduled reap/gc/reclaim).'
-due_since: 2026-11-06T17:10:29.972194426Z
-due_reason: on CronJobFailed:disk-headroom-guard
-due_failure:
-  trip_id: disk-headroom-guard@2026-11-06T17:08:40.075760178Z
-  job: disk-headroom-guard
-  error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
