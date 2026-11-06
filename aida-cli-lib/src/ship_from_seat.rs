@@ -210,7 +210,7 @@ pub(crate) fn pending_message_check(
     })
     .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
     if let Some(explicit) = explicit_spec {
-        explicit_spec_check(explicit, &trailer_ids)
+        explicit_spec_check(store.as_ref(), explicit, &trailer_ids)
             .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
     }
     Ok(())
@@ -254,13 +254,26 @@ pub(crate) enum PostExitCommit {
     Failed(String),
 }
 
+/// Persist the agreed display ID when available, otherwise the origin ID.
+/// Friendly aliases are input/display conveniences, not trailer identities.
+// trace:BUG-2459 | ai:codex
+fn canonical_trailer_spec(store: Option<&aida_core::RequirementsStore>, spec: &str) -> String {
+    let origin = aida_core::node_alias::expand_or_keep(spec);
+    store
+        .and_then(|store| store.get_requirement_by_spec_id(&origin))
+        .map(|requirement| requirement.display_id()) // canonical-id: commit trailer
+        .unwrap_or(origin)
+}
+
 /// The message the host commits a native lane's leftover work with. Only a
 /// clean child exit (status 0) earns a completing `(SPEC)` trailer; the
 /// leftovers of a crashed or failed lane are salvage, committed with
 /// `(Refs SPEC)` so they never complete the spec at merge (advisor F4).
 // trace:TASK-2712 | ai:claude
 pub(crate) fn post_exit_message(spec: &str, lane: &str, clean_exit: bool) -> String {
-    let spec = aida_core::node_alias::display_spec_id(spec);
+    // Trailers are persisted lookup keys, never friendly node labels.
+    // trace:BUG-2459 | ai:codex
+    let spec = aida_core::node_alias::expand_or_keep(spec);
     if clean_exit {
         format!("[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({spec})")
     } else {
@@ -297,7 +310,7 @@ fn post_exit_message_with_completion(
 ) -> String {
     let mut message = post_exit_message(spec, lane, clean_exit);
     if clean_exit && !completing {
-        let display = aida_core::node_alias::display_spec_id(spec);
+        let display = aida_core::node_alias::expand_or_keep(spec);
         message = message
             .trim_end_matches(&format!("({display})"))
             .to_string()
@@ -340,7 +353,11 @@ pub(crate) fn post_exit_commit(
                 .ok()
         })
         .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
-    let message = post_exit_message_with_completion(spec, lane, clean_exit, completing);
+    // Resolve the lease's origin ID against the host store before formatting.
+    // trace:BUG-2459 | ai:codex
+    let store = crate::load_store_for_lookup(&main);
+    let trailer_spec = canonical_trailer_spec(store.as_ref(), spec);
+    let message = post_exit_message_with_completion(&trailer_spec, lane, clean_exit, completing);
     match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
         Ok(Some(tip)) => PostExitCommit::Committed(tip),
         Ok(None) => PostExitCommit::Clean,
@@ -1173,14 +1190,19 @@ where
 }
 
 /// An explicit `aida ship <SPEC> --from-seat` spec must be one the seat's
-/// commits name in their trailers (aliases expanded, case ignored); a branch
+/// commits name in their trailers (origin/agreed IDs resolved through the host
+/// store, aliases expanded, case ignored); a branch
 /// whose commits name another spec is refused rather than published under
 /// the wrong one.
 // trace:BUG-HOME-038 | ai:claude
-pub(crate) fn explicit_spec_check(explicit: &str, trailer_ids: &[String]) -> Result<()> {
+// trace:BUG-2459 | ai:codex
+pub(crate) fn explicit_spec_check(
+    store: Option<&aida_core::RequirementsStore>,
+    explicit: &str,
+    trailer_ids: &[String],
+) -> Result<()> {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
-    let canonical =
-        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
+    let canonical = |id: &str| aida_core::id_identity::id_key(&canonical_trailer_spec(store, id));
     let want = canonical(explicit);
     if trailer_ids.iter().any(|id| canonical(id) == want) {
         return Ok(());
@@ -1524,7 +1546,7 @@ fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions) -> Result<
             crate::trace::resolve_spec_in_store(store.as_ref(), id)
         })?;
     if let Some(explicit) = opts.spec.as_deref() {
-        explicit_spec_check(explicit, &trailer_ids)?;
+        explicit_spec_check(store.as_ref(), explicit, &trailer_ids)?;
     }
     Ok(())
 }
