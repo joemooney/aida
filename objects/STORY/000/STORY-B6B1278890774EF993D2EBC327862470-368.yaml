@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T09:21:18.370118040Z
+modified_at: 2026-11-06T09:46:59.695246669Z
 req_type: Story
 relationships:
 - rel_type:
@@ -210,6 +210,19 @@ comments:
     Validation progress: make check-ci-fast passed all 38 fast-tier gates. The single targeted cargo test -p aida-cli-lib story2402_s2 (profile agent) is still compiling its test binary; snapshot regeneration is included in that targeted run. Source diff and formatting checks passed. The host Cargo slot wrapper stalled despite cargo ps reporting no busy slots; stopped those queued attempts and used the documented AIDA_CARGO_NO_SLOT option with an isolated writable target, populated from dependency artifacts copied under the source Cargo lock. No commits, pushes, PRs, queue completion, ship or review-record operations were attempted.
   created_at: 2026-11-06T09:21:18.370118040Z
   modified_at: 2026-11-06T09:21:18.370118040Z
+  session_id: 01a1b01443f2
+- id: 01a1b041-1cef-7521-bf9b-06705518adf9
+  author: joe
+  content: |-
+    S2 final native implementer handoff (2026-11-06): implemented only the next signed-off trigger slice on origin/main 6454b6e602ad. Explicit --until values now parse and persist canonically before store/queue mutation; free text is refused, and explicit manual conditions require a non-empty --reason with existing hold authority intact. Bare re-deferral preserves its prior condition and timestamp. Question parking stores typed consequences canonically; prose/empty consequences become manual:<resolver> with original evidence in an authored comment. Trigger readers canonicalize typed values while retaining legacy text. CLI help, its golden snapshot, and the manual describe the new syntax.
+
+    Changed files: aida-cli-lib/src/defer_cmd.rs; questions.rs; status_display.rs; punt_done.rs; tests/story_2402_defer_tests.rs (new); tests/questions_tests.rs; tests/golden/cli_help_snapshot.txt; docs/cli/02-specs.md.
+
+    Validation: cargo test --profile agent -p aida-cli-lib story2402_s2 passed all 5 focused tests (12,582 unit tests filtered out); rerun checked the generated snapshot without update mode. make check-ci-fast passed all 38 fast-tier gates, including the no-default-features check and formatting. git diff --check passes. Two initial persistence-fixture setup failures were corrected: the fixture now initializes temporary Git, bootstraps a local WORK binding, and allocates its requirement normally instead of inventing a legacy ID. No production behavior fix was needed after the first fast-gate pass. Final test log: /tmp/story2402-s2-test-final.log; fast gate: /tmp/story2402-s2-ci-fast.log. No workspace or unfiltered tests ran.
+
+    All eight source/doc files are intentionally uncommitted. Native Git metadata is read-only; the host launcher owns commit/push/PR publication after exit. Suggested subject: [AI:codex] feat(defer): enforce typed deferral conditions (Refs STORY-2402). Retain the Refs trailer: S3-S5 and derived attention remain outstanding, and the parent must remain incomplete. No source blocker, new punt, hold clearance, queue done, ship or review record. Existing publication vetoes remain untouched. Turn ended.
+  created_at: 2026-11-06T09:46:59.695246669Z
+  modified_at: 2026-11-06T09:46:59.695246669Z
   session_id: 01a1b01443f2
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
