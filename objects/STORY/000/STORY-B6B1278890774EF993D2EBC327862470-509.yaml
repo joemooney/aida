@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T19:34:28.604690414Z
-modified_at: 2026-11-06T19:35:59.770759093Z
+modified_at: 2026-11-06T19:36:02.159773690Z
 req_type: Story
 relationships:
 - rel_type:
@@ -48,6 +48,13 @@ relationships:
   target_id: 01a1b1df-48e0-7080-9974-1455a802f981
   created_at: 2026-11-06T19:35:04.339223653Z
   created_by: joe
+comments:
+- id: 01a1b25c-656f-7e92-bc0e-e61825176a3b
+  author: joe
+  content: 'Advisor: filed in error. PR-3534 is a train PR (train/20261106-192652-1); trains are not reviewed.'
+  created_at: 2026-11-06T19:36:02.159773690Z
+  modified_at: 2026-11-06T19:36:02.159773690Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b25b-38a3-7261-8830-936cc83144e9
   author: joe
