@@ -1412,6 +1412,7 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
         return Ok(crate::gate::ledger::adopt_change_bound(
             project_root,
             existing,
+            branch,
             &crate::zen_drive_root::extract_spec_ids_from_commit(&commit_msg),
         ));
     }
@@ -1750,6 +1751,7 @@ pub(crate) fn open_orchestrator_pr_for_pushed_branch(
         return Ok(crate::gate::ledger::adopt_change_bound(
             project_root,
             existing,
+            branch,
             &crate::zen_drive_root::extract_spec_ids_from_commit(&commit_msg),
         ));
     }

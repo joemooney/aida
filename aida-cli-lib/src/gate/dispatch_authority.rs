@@ -1580,7 +1580,9 @@ pub(crate) fn verdict_at_head(
     head_oid: &str,
 ) -> Option<VerdictKind> {
     let key = format!("PR-{pr}");
-    let current = review_verdict::current_verdict(main_worktree, &key)?;
+    // trace:STORY-2492 | ai:codex — stale publications cannot compete with this head's review.
+    let current = super::review_publication::current_at_head(main_worktree, &[&key], head_oid)
+        .or_else(|| review_verdict::current_verdict(main_worktree, &key))?;
     let v = review_verdict::parse_recorded_verdict(&current.body)?;
     if v.is_closed() {
         return None;

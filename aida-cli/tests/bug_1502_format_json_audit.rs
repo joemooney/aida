@@ -559,6 +559,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
             "aida mailbox wake-snapshot",
             &["mailbox", "wake-snapshot", "--recipient", "advisor"],
         ),
+        // trace:STORY-2402 | ai:codex
+        (
+            "aida condition check",
+            &["condition", "check", "manual:joe"],
+        ),
         ("aida fasttrack status", &["fasttrack", "status"]),
         ("aida show", &["show", &spec, "--no-git"]),
         ("aida list", &["list", "--limit", "1"]),
