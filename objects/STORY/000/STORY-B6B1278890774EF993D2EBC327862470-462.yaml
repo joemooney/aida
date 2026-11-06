@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-06T16:13:55.264729538Z
+modified_at: 2026-11-06T16:19:41.944370591Z
 req_type: Story
 tags:
 - architecture
@@ -182,6 +182,12 @@ comments:
   created_at: 2026-11-06T16:09:45.286032575Z
   modified_at: 2026-11-06T16:09:45.286032575Z
   session_id: 01a1b19d684e
+- id: 01a1b1a8-a4f8-70c1-960e-2b8e7fcaffeb
+  author: joe
+  content: 'ADVISOR SIGNOFF on docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md (PR #3512, retitled docs(plans) with Refs). APPROVED as written: pure descriptors in aida-core/src/vendors/ behind one profile(LaunchVendor) registry with no new vendor enum; effectful adapters extend PR-C''s adapter, with one later mechanical move into vendors/; closed capability enums; persisted spellings round-trip (agy/antigravity); agy''s admission refusal and no native credit are preserved; the production-code vendor-literal ratchet uses an inventoried, shrinking ledger with mutant fixtures (scope approved). SEQUENCING (binding): no implementation until STORY-2326 PR-C merges. Then step 1 (snapshot and descriptors) is the first Refs slice. The sketch PR may merge as docs.'
+  created_at: 2026-11-06T16:19:41.944370591Z
+  modified_at: 2026-11-06T16:19:41.944370591Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
