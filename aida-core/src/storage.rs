@@ -249,6 +249,36 @@ impl Storage {
         })
     }
 
+    // trace:STORY-1468 | ai:codex
+    pub fn check_origin_prompt_support(&self) -> Result<()> {
+        if !self.file_path.is_dir() {
+            anyhow::bail!("Originating prompt capture requires the git-canonical store; SQLite, PostgreSQL and YAML backends are unsupported");
+        }
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(&self.file_path)?;
+        Ok(())
+    }
+
+    pub fn add_with_origin_prompt(
+        &self,
+        req: Requirement,
+        prompt: &crate::origin_prompt::OriginPrompt,
+    ) -> Result<Requirement> {
+        self.check_origin_prompt_support()?;
+        self.git_backend_for(&self.file_path)?
+            .add_requirement_with_origin_prompt(req, Some(prompt))
+    }
+
+    pub fn read_origin_prompt(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<crate::origin_prompt::OriginPrompt>> {
+        if !self.file_path.is_dir() {
+            anyhow::bail!("Originating prompt retrieval requires the git-canonical store");
+        }
+        crate::origin_prompt::OriginPrompt::read(&self.file_path, id)
+    }
+
     /// Returns the path to the storage file
     pub fn path(&self) -> &Path {
         &self.file_path

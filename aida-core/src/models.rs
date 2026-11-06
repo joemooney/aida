@@ -664,9 +664,8 @@ impl std::str::FromStr for ExecutionMode {
 /// absolute path, or email is ever recorded. The branch NAME is recorded
 /// verbatim — it is a code fact that travels with the commits anyway.
 ///
-/// Forward-compatible: unknown keys are ignored on read, so later fields (the
-/// originating prompt, STORY-1468) can be added here without breaking older
-/// binaries.
+/// Forward-compatible: unknown keys are ignored on read. Originating prompts
+/// are separate opt-in artifacts, never fields of this public projection.
 // trace:CR-8 | ai:claude
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct FilingProvenance {
@@ -696,8 +695,7 @@ pub struct FilingProvenance {
     // trace:STORY-1674 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness_version: Option<String>,
-    // Reserved: STORY-1468 (deferred) adds the originating prompt here as
-    // another optional, serde-default field.
+    // trace:STORY-1468 | ai:codex — prompt content lives outside Requirement.
 }
 
 impl FilingProvenance {

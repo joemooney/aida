@@ -181,6 +181,8 @@ pub mod node;
 pub mod node_alias;
 pub mod object_store;
 pub mod oplog;
+#[cfg(feature = "native")]
+pub mod origin_prompt;
 /// trace:STORY-333 | ai:claude
 pub mod pickability;
 #[cfg(feature = "native")]
@@ -198,6 +200,7 @@ pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;
 pub mod review_config;
+pub mod secret_screen;
 // trace:BUG-626 | ai:claude
 pub mod rollup;
 #[cfg(feature = "native")]
