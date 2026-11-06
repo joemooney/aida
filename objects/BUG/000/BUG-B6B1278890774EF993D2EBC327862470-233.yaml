@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T18:13:44.441270043Z
+modified_at: 2026-11-06T18:13:48.256284535Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -38,6 +38,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Foreground claude/codex/agy and rotation paths carry delegable seats correctly and the ancestor-chain revalidation is sound, but the detached codex --bg path validates --delegate-seat and then drops it, so a requested narrowing comes out as the full parent set. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-06T18:13:44.441268636Z
   modified_at: 2026-11-06T18:13:44.441268636Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b211-1b83-7382-8b9f-cbcb1eff5861
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2467):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 10d8363f1125
+    Recorded: 2026-11-06T18:06:31.354404192+00:00
+    Findings:
+    1. [major] aida-cli-lib/src/agent_codex_background.rs:600-604 vs :749: agent_new_codex_bg calls validate_launch_delegable_seats(config.delegate_seats) but mints through issue_detached_launch_child -> issue_child_for -> issue_child_from(..., &[]) (seat_authority.rs:2441). The narrowed set is never passed. For an advisor/integrator seat, empty means inherit, so 'aida agent new codex --bg --role advisor --spec X --delegate-seat reviewer' gives a child grant with the parent's FULL delegable set. The operator asked for a narrower set and got a wider one, a fail-open against AC2. Fix: thread seats into issue_detached_launch_child (e.g. via issue_child_from_with_delegation) and add a test asserting the detached grant's delegable_seats equals the narrowed set.
+    2. [minor] aida-cli-lib/src/agent_launch.rs:1618 agent_resume_launch_config hard-codes delegate_seats: Vec::new(). Resuming an advisor that was launched with an explicit --delegate-seat narrowing re-mints its grant with the full inherited parent set, so the narrowing silently widens on resume. Either persist the selection (registry/lease) and restore it on resume, or document that resume inherits the parent set. AC3 covers rotation, which works, but resume is the same relaunch shape.
+    3. [minor][test-coverage] AC1 'never widens' and AC2 are covered only on run_tracked_agent/run_rotating_agent and direct issuer calls (bug_2467_delegator_launch_tests.rs, story_101 rotation test). No test exercises the codex --bg detached issuer or the resume path with a narrowing, which is how finding 1 got through. Add one for each.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T18:13:48.035509829Z
+  modified_at: 2026-11-06T18:13:48.035509829Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
