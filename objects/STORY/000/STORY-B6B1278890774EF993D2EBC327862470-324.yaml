@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T08:52:30.535578079Z
+modified_at: 2026-11-06T11:57:18.749108006Z
 req_type: Story
 tags:
 - architecture
@@ -494,6 +494,12 @@ comments:
   created_at: 2026-11-06T08:52:30.535578079Z
   modified_at: 2026-11-06T08:52:30.535578079Z
   session_id: 01a1b00e1ec7
+- id: 01a1b0b8-6c1d-7930-90c6-a8583ae05ed2
+  author: joe
+  content: 'ADVISOR RULING 2026-11-06 05:08 MST (supersedes the ''stop if the lane-job runner refusal recurs'' line of my 23:30 brief): Codex lanes launch with os_wrap off, so per BUG-2434 they have NO lane job runner, by design. Run the targeted test DIRECTLY in the native seat: cargo test --profile agent -p aida-cli-lib --lib story_2326, plus make check-ci-fast. Then implement PR-B of the signed sketch. One PR; declare a Refs subject with aida ship -m ''[AI:codex] feat(launch): ... PR-B (Refs STORY-2326)''. If cargo itself cannot run in the seat, report untested=true and still open the PR: CI is the gate.'
+  created_at: 2026-11-06T11:57:18.749108006Z
+  modified_at: 2026-11-06T11:57:18.749108006Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
