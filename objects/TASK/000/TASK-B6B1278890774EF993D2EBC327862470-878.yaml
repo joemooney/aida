@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T22:52:10.250063875Z
+modified_at: 2026-11-06T23:50:48.945370309Z
 req_type: Task
 tags:
 - architecture
@@ -189,6 +189,12 @@ comments:
   content: 'S2 approach: implement the approved explicit interactive I/O mode with a private PTY, host raw-terminal relay, resize and signal forwarding, and RAII restoration. Route foreground Claude agent-new through prepare/receipt/worker grant and registry binding/release/wait, retaining native launch behavior and background/resume refusals. Expected files: launch/contained.rs plus a focused PTY module, contained_lane.py, agent_launch.rs, wrapper tests, required-live CI wording and the approved plan/OVERVIEW architecture description. Validate PTY input/resize/restoration and receipt-before-release with a fake worker, targeted wrapper/PTY cargo tests, required-live count separately, formatting and make check-ci-fast. No new design fork; S3/S4 remain out of scope.'
   created_at: 2026-11-06T22:52:10.250063875Z
   modified_at: 2026-11-06T22:52:10.250063875Z
+  session_id: 01a1b30ef0e0
+- id: 01a1b345-a771-7ac3-baab-c977c0f15939
+  author: joe
+  content: 'S2 implementation and final validation: private-PTY foreground Claude agent-new now uses the shared wrapper, receipt acceptance, worker grant and registry binding, release and supervision. Tracks the attested worker separately from the helper; relays terminal input/output and resize, forwards signals using a pinned worker pidfd, and restores termios on normal exits, errors and unwind. Version queries run inside the lane after receipt acceptance, with stripped seat selectors, private stdio, a two-second collection deadline and 257-byte raw output bound; failed queries leave version provenance unknown. Headless/native behavior is retained; background and resume remain refused. Final command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-required-results.log. Result: 52 passed, zero failed; the installed-Codex companion remains intentionally opt-in. Separate actual live count: 2/2 task_3219_live_ tests (S1 coordinator and new S2 interactive 1/1), with no infrastructure refusal. PTY unit count: 3/3; confined-version helper covers six bounded-output/cleanup cases. make check-ci-fast passed all 38 gates after adding the explicit Linux guard to the proc-reading live fixture; cargo fmt and git diff --check pass. One earlier isolated-worker exit-1 failure lost its private-terminal exception text; it did not recur in five full-suite repetitions, instrumented diagnostics or the final fresh required-live Cargo run. This is retained as a fixture diagnostics follow-up, with no observed escape or identified production defect. Ten changed files remain uncommitted for host publication. S2 is a Refs slice only; S3/S4 remain and only S4 completes TASK-3219.'
+  created_at: 2026-11-06T23:50:48.945370309Z
+  modified_at: 2026-11-06T23:50:48.945370309Z
   session_id: 01a1b30ef0e0
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
