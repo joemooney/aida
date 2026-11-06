@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T13:50:37.094530338Z
+modified_at: 2026-11-06T15:01:28.116105071Z
 req_type: Story
 relationships:
 - rel_type:
@@ -298,6 +298,19 @@ comments:
   created_at: 2026-11-06T13:50:37.094530338Z
   modified_at: 2026-11-06T13:50:37.094530338Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b161-05b4-7ee0-997e-e734dfe402c6
+  author: joe
+  content: |-
+    Native implementer handoff, 2026-11-06: implemented the advisor-dispatched hourly trigger resurfacing slice only. aida defer resurface evaluates typed conditions on deferred/parked specs, clears met plain deferrals through the shared undefer field transition and records condition/observation evidence in an audit comment. Met operator holds and manual conditions older than 14 days route idempotently to the human queue without lifting holds. Unknown forge/release observations stay parked and exit successfully; malformed/internal errors fail after independent rows are checked. Dry-run writes neither specs nor queue rows. Atomic compare-before-clear retains concurrently edited rows. The timer-only defer-resurface job is enabled hourly, with CronJobFailed routed to advisor. Derived attention and lifecycle status changes are out of scope; the parent story remains open.
+
+    Changed files: .aida/config.toml; aida-cli-lib/src/condition_cmd.rs; defer_cmd.rs; defer_resurface.rs (new); lib.rs; maintenance_schedule.rs; tests/story_1728_command_registry_tests.rs; tests/story_2402_defer_tests.rs; tests/story_2402_resurface_tests.rs (new); tests/golden/cli_help_snapshot.txt; docs/cli/02-specs.md; docs/internal/cli-format-json-audit.md.
+
+    Validation: cargo test --profile agent -p aida-cli-lib story2402_s4 --lib passed 6/6 with 12,645 tests filtered out, including persisted audit/status preservation, dry-run, human reader visibility, repeated routing, unknowns, age thresholds, parse-error continuation, CLI parsing, timer-only allowlist and complete help/catalog snapshot. The existing parent-help test also passed. make check-ci-fast passed all 38 gates after correcting a formatting-only failure. The initial focused run passed all 5 behavior tests and failed only the expected old help snapshot; regenerated and reviewed the snapshot, then the final focused Cargo run passed without snapshot-update mode. Logs: /tmp/story2402-s4-rerun.log and /tmp/story2402-s4-fast-rerun.log. Generated help retains the standard clap default-value blank line.
+
+    Publication declaration recorded successfully: [AI:codex] feat(defer): resurface typed conditions hourly (Refs STORY-2402). No implementation blockers. Edits are intentionally uncommitted: host must commit and publish after this native process exits. No commit, push, PR creation, queue completion, pr ship or review record was performed.
+  created_at: 2026-11-06T15:01:28.116105071Z
+  modified_at: 2026-11-06T15:01:28.116105071Z
+  session_id: 01a1b135d315
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
