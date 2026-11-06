@@ -1,10 +1,8 @@
 job: fleet-heartbeat
-last_run: 2026-11-03T16:01:38.388489893Z
+last_run: 2026-11-06T14:23:15.987505071Z
 last_by:
   seat: advisor
-  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: 'Advisor sweep 08:58 MST: ps, PRs and lanes checked; 5 Claude rework/fix lanes active; 3 PRs training via the deputy.'
-due_since: 2026-11-03T17:09:39.657539614Z
-due_reason: every 1h
+note: 'Digest 07:15 MST: PRs 7 open (#3505 train for #3503 in CI; #3449 code-approved, awaiting exact-head CI; #3483/#3504 host-merged, awaiting review; #3493/#3501 rework lanes live). Lanes 4/4 (2326, 2401, 2402, 2492), fillers queued TASK-3222 and BUG-2463. Acted: grants rotated on 3 loops, TASK-2708 ruling, BUG-2446 design session, 2 host merges, 3 stale leases ended. Waits on human: C3/C4 conformance re-run after #3503 lands. Next: the due job.'
