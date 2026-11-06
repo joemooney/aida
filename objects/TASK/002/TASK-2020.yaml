@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-11-05T18:50:18.002479403Z
+modified_at: 2026-11-06T06:25:13.509128046Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-11-05T18:50:18.002479403Z
   modified_at: 2026-11-05T18:50:18.002479403Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af88-6325-73c1-8f41-c32408933444
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 23:30 MST: resume this spec on a fresh lane. Start from origin/main; check landed slices with git log origin/main --grep <this spec>, then implement the NEXT unlanded slice of the advisor-signed sketch (one PR, Refs trailer unless it completes the spec). Ignore any /tmp recovery patch from an earlier lane: those rounds have landed. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast; never a workspace or unfiltered run. Data: /home/joe/ai/aida-worktrees/task-2020-timings/ (10 green main runs); cite them in the budget header.'
+  created_at: 2026-11-06T06:25:13.509128046Z
+  modified_at: 2026-11-06T06:25:13.509128046Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a15cb7-a1aa-72a3-a509-3930d0fc908f
   author: joe
