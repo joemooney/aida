@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T19:32:04.816740324Z
+modified_at: 2026-11-06T19:55:29.419060381Z
 req_type: Story
 relationships:
 - rel_type:
@@ -361,6 +361,12 @@ comments:
   created_at: 2026-11-06T19:30:32.650617880Z
   modified_at: 2026-11-06T19:30:32.650617880Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b26e-350b-7aa1-8e6f-b40f19749a68
+  author: joe
+  content: 'Round 7 on PR #3533: accepted and addressed all four findings. Recovery clears named-member TTY consent; Gate/Merge recovery reuses normal CI waiting and confirmed red retirement; Done journals are fsynced then removed and no longer remain active; operator inspection/discard under run.lock is documented. Added production LiveTrainForge recovery fixtures with RecordingForge, strict gh list and a local bare remote for reopen, unique lookup, ambiguity and head/base/branch mismatches, plus consent, pending/red, pruning and candidate-filter regressions. Validation: 168 pr_train tests passed; all 38 check-ci-fast gates passed; git diff --check passed. Native edits remain uncommitted for a new host round-7 commit; publication declaration accepted: [AI:codex] fix(train): constrain recovery authority and prune completed journals (Refs STORY-2401). Details and logs in docs/plans/2026-11-06-story-2401-confirmed-negatives.md. No merge, hold clearance, review record or queue completion performed.'
+  created_at: 2026-11-06T19:55:29.419060381Z
+  modified_at: 2026-11-06T19:55:29.419060381Z
+  session_id: 01a1b258be51
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
