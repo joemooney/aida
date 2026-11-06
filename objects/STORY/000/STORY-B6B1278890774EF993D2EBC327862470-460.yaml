@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T14:25:31.347452900Z
+modified_at: 2026-11-06T14:58:34.234925856Z
 req_type: Story
 tags:
 - architecture
@@ -171,6 +171,12 @@ comments:
   created_at: 2026-11-06T07:38:36.420545835Z
   modified_at: 2026-11-06T07:38:36.420545835Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b15e-5e7a-7bd3-95f7-a1e4988def67
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 primitive (aida-core/src/proc_identity.rs) and judge matrix are sound, but the lease-reader migration removes worktree/live-claude/creator liveness signals and refuses every non-self capture, so legacy and interactive leases read Unknown and are never auto-released; ~35 lease/liveness tests fail across lib-1, cli-1 and gates at e938ac4. Detached-lane BUG-2458 regression test missing.. No triage reason was given.'
+  created_at: 2026-11-06T14:58:34.234924363Z
+  modified_at: 2026-11-06T14:58:34.234924363Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
@@ -316,6 +322,14 @@ history:
   session_id: 01a1b13d3f15
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b15e-5e7a-7bd3-95f7-a1d0f2754256
+  author: joe
+  timestamp: 2026-11-06T14:58:34.234911695Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -324,11 +338,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Slice-1 primitive (aida-core/src/proc_identity.rs) and judge matrix are sound, but the lease-reader migration removes worktree/live-claude/creator liveness signals and refuses every non-self capture, so legacy and interactive leases read Unknown and are never auto-released; ~35 lease/liveness tests fail across lib-1, cli-1 and gates at e938ac4. Detached-lane BUG-2458 regression test missing.
-  recovery_hint: address the review findings, move STORY-2537 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T14:25:31.347452900Z
