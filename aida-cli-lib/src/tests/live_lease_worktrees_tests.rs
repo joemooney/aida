@@ -3,6 +3,7 @@ use process_probe::LiveSession;
 
 fn lease_at(id: &str, worktree: &std::path::Path) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),

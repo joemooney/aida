@@ -1310,7 +1310,7 @@ fn trusted_policy(root: &Path, vendors: &str) {
 
 /// Only an explicit trusted `claude = "aida"` selects the wrapper; then
 /// every Claude AIDA composition outside a wrapper-owned headless launch
-/// (interactive, --bg, coordinator, resume) refuses by name, and inside one
+/// (interactive, --bg, resume) refuses by name, and inside one
 /// the legacy os_wrap is not applied. Applied credit for Claude with a
 /// receipt is the receipt's acceptance, never the Claude-native credit.
 #[test]
@@ -2429,4 +2429,267 @@ fn task_3048_runtime_descriptor_masks_host_state_for_every_vendor() {
         masks,
         crate::containment::runtime_host_parents(host.path()).unwrap()
     );
+}
+
+/// S1 exercises the coordinator builder and its actual spawn adapter. All
+/// authority/credentials are synthetic; the real wrapper still attests and
+/// holds the fake vendor behind the receipt/binding barrier.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_live_claude_coordinator_wrapper() {
+    use std::io::{Seek, SeekFrom};
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !live_available() {
+        return;
+    }
+    use crate::session::{self, HeadlessVendor};
+    use aida_core::agents_config::AgentSeat;
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    for p in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    let home = crate::home_dir().unwrap();
+    // Keep fake executables in the mounted project: the isolated test HOME
+    // can be under /dev/shm, which the wrapper deliberately replaces.
+    let bin = root.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let config = home.join(".claude");
+    std::fs::create_dir_all(&config).unwrap();
+    credentials_expiring_in(&config, 8 * 3600);
+    let program = bin.join("claude");
+    std::fs::write(
+        &program,
+        r#"#!/usr/bin/python3
+import os,sys,json,errno,socket
+from pathlib import Path
+if '--version' in sys.argv:
+    print('synthetic-3219');sys.exit(0)
+assert os.environ['AIDA_SESSION_ROLE']=='advisor'
+assert 'AIDA_CLAUDE_COORDINATOR_WRAPPER' not in os.environ
+assert os.environ['AIDA_SESSION_GRANT']==''
+assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
+assert 'AIDA_HANDLE_LAUNCH_TOKEN' not in os.environ
+assert 'AIDA_AGENT_REGISTRY_TOKEN' not in os.environ
+assert Path('preflight-ran').read_text()=='yes'
+settings=json.loads(sys.argv[sys.argv.index('--settings')+1])
+assert settings['sandbox']['enabled']
+assert settings['sandbox']['failIfUnavailable']
+assert not settings['sandbox']['allowUnsandboxedCommands']
+# Retain the shared headless CLI/MCP argv, including its native MCP selection.
+assert '--mcp-config' not in sys.argv and '--strict-mcp-config' not in sys.argv
+assert sys.argv[sys.argv.index('--setting-sources')+1]=='project'
+assert settings['env']['CLAUDE_CODE_DISABLE_BACKGROUND_TASKS']=='1'
+assert 'Monitor' in settings['permissions']['deny']
+port=settings['sandbox']['network']['httpProxyPort']
+s=socket.socket();s.connect(('127.0.0.1',port))
+s.sendall(b'GET / HTTP/1.1\r\n\r\n');assert b'405' in s.recv(4096)
+try:
+    Path('.git/config').write_text('escape');raise AssertionError('git writable')
+except OSError as e: assert e.errno in (errno.EROFS,errno.EACCES,errno.EPERM),e
+Path('model-ran').write_text('yes')
+print('coordinator stream' if '--output-format' in sys.argv else 'coordinator quiet')
+sys.exit(7)
+"#,
+    )
+    .unwrap();
+    let aida = bin.join("aida");
+    std::fs::write(&aida, "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'aida synthetic'; exit 0; fi\nprintf yes > preflight-ran\necho 'seat_grant_valid=true expected_seat=true'\n").unwrap();
+    for file in [&program, &aida] {
+        std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let _aida = crate::kernel::test_aida_exe::set(aida.clone());
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_OS_WRAP", Some("1")),
+            ("CLAUDE_CONFIG_DIR", Some(config.to_str().unwrap())),
+        ],
+    );
+    for stream in [false, true] {
+        let guard = session::child_reservation_guard();
+        let mut cmd = session::build_coordinator_headless_command(
+            None,
+            HeadlessVendor::Claude,
+            "synthetic",
+            "dontAsk",
+            AgentSeat::Advisor,
+            "",
+            true,
+            stream,
+        )
+        .unwrap();
+        assert_eq!(Path::new(cmd.get_program()).file_name().unwrap(), "claude");
+        let mut output = tempfile::tempfile().unwrap();
+        let status = session::coordinator_status_with_handle_guard(
+            HeadlessVendor::Claude,
+            &mut cmd,
+            root.path(),
+            Some(output.try_clone().unwrap()),
+            guard,
+        )
+        .unwrap();
+        assert_eq!(status.code(), Some(7));
+        output.seek(SeekFrom::Start(0)).unwrap();
+        let mut text = String::new();
+        output.read_to_string(&mut text).unwrap();
+        assert!(
+            text.contains(if stream {
+                "coordinator stream"
+            } else {
+                "coordinator quiet"
+            }),
+            "{text}"
+        );
+    }
+    std::fs::remove_file(root.path().join("model-ran")).unwrap();
+    // A failed seat preflight must not release the vendor, even though its
+    // argv and credentials are otherwise valid.
+    std::fs::write(&aida, "#!/bin/sh\nexit 1\n").unwrap();
+    let guard = session::child_reservation_guard();
+    let mut cmd = session::build_coordinator_headless_command(
+        None,
+        HeadlessVendor::Claude,
+        "synthetic",
+        "dontAsk",
+        AgentSeat::Advisor,
+        "",
+        true,
+        false,
+    )
+    .unwrap();
+    assert!(session::coordinator_status_with_handle_guard(
+        HeadlessVendor::Claude,
+        &mut cmd,
+        root.path(),
+        None,
+        guard,
+    )
+    .is_err());
+    assert!(!root.path().join("model-ran").exists());
+}
+
+/// The opt-in affects only coordinator-owned composition; unwired entry
+/// points still refuse, and the unset policy keeps the old command exactly.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_coordinator_composition_scope_and_native_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{self, HeadlessVendor};
+    use aida_core::agents_config::AgentSeat;
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let bin = root.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let program = bin.join("claude");
+    std::fs::write(&program, "#!/bin/sh\necho synthetic-3219\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_AGENT_CMD", None),
+            ("PATH", Some(&path)),
+        ],
+    );
+    for stream in [false, true] {
+        let preview = session::coordinator_headless_preview(
+            None,
+            HeadlessVendor::Claude,
+            "synthetic",
+            "dontAsk",
+            AgentSeat::Advisor,
+            true,
+            stream,
+        )
+        .unwrap();
+        let mut expected = session::compose_headless_command_for(
+            None,
+            HeadlessVendor::Claude,
+            "synthetic",
+            "preview",
+            true,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        // Quiet coordinators omit the JSON flags; streaming adds partial events.
+        if stream {
+            let i = expected.1.iter().position(|a| a == "--verbose").unwrap();
+            expected.1.insert(i, "--include-partial-messages".into());
+        } else {
+            let i = expected
+                .1
+                .iter()
+                .position(|a| a == "--output-format")
+                .unwrap();
+            expected.1.drain(i..i + 2);
+            expected.1.retain(|a| a != "--verbose");
+        }
+        assert_eq!(preview, expected);
+    }
+    trusted_policy(root.path(), "claude = \"aida\"");
+    for stream in [false, true] {
+        session::coordinator_headless_preview(
+            None,
+            HeadlessVendor::Claude,
+            "synthetic",
+            "dontAsk",
+            AgentSeat::Advisor,
+            true,
+            stream,
+        )
+        .unwrap();
+        let guard = session::child_reservation_guard();
+        let mut cmd = session::build_coordinator_headless_command(
+            None,
+            HeadlessVendor::Claude,
+            "synthetic",
+            "dontAsk",
+            AgentSeat::Advisor,
+            "",
+            true,
+            stream,
+        )
+        .unwrap();
+        assert!(cmd.get_args().any(|a| a == "--settings"));
+        // Removing the opt-in after composition cannot downgrade an already
+        // wrapper-owned command to the direct native spawn.
+        trusted_policy(root.path(), "");
+        cmd.env_remove(crate::gate::seat_authority::GRANT_ENV);
+        let error = session::coordinator_status_with_handle_guard(
+            HeadlessVendor::Claude,
+            &mut cmd,
+            root.path(),
+            None,
+            guard,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("explicit child grant decision"),
+            "{error:#}"
+        );
+        trusted_policy(root.path(), "claude = \"aida\"");
+        assert_eq!(
+            session::claude_contained_flags_for(None, root.path())
+                .unwrap_err()
+                .to_string(),
+            session::CLAUDE_WRAPPER_UNWIRED
+        );
+    }
 }
