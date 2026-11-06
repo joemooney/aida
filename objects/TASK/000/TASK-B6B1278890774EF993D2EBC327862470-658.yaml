@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T12:56:33.681338411Z
+modified_at: 2026-11-06T12:56:38.723953715Z
 req_type: Task
 tags:
 - architecture
@@ -490,6 +490,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No PR-file code change since round 6 (e16c5274..aede2be5 only merges main; OVERVIEW.md from main). Round-5 F1 fix stands. Round-5/6 F2 (WAIT_KILLABLE_RECV signal deferral plus a Linux 5.19+ floor for every lane, Codex included) still has no advisor acceptance recorded on TASK-2708, which has been in NeedsAttention since 12:46Z. CI at the head is still pending. AC1: PARTIAL. AC2/AC3: not applicable (Refs slice, not started).. It was punted on: design-fork: Round 6 F1 (PR #3449, reviewed e16c5274da6a), carrying Round 5 F2: explicit advisor acceptance is still absent for both AC1 deviations: all contained vendors including Codex require Linux 5.19+ for NEW_LISTENER|WAIT_KILLABLE_RECV; handled SIGINT, SIGALRM, SIGTERM and Go SIGURG are deferred after broker RECV, potentially indefinitely for a blocked send without SO_SNDTIMEO. Latest spec comments 54-55 requeue and repeat the review but contain no acceptance or exactly-once redesign ruling. This finding is not disputed. Please record explicit acceptance of BOTH deviations on TASK-2708, or direct an exactly-once redesign; implementer cannot grant advisor signoff or safely remove the flag. docs/internal/testing/task-2708-round2.md Round 5 F2 remains correctly acceptance pending. Round 6 F2 CI gate also remains open: read-only GitHub check at 2026-11-06 12:46 UTC shows six shards green at e16c5274da6a but CI(gates) in progress and expected supervised merge-hold failure. Current PR head is aede2be58b3 with new CI pending; no all-green claim at either head. Mechanical bdcec264ee88 remains an ancestor. No source edits, new test runs, commit/push, review verdict, hold clearance or queue completion; this native-seat punt preserves the publication veto.. No triage reason was given.'
   created_at: 2026-11-06T12:56:33.681332199Z
   modified_at: 2026-11-06T12:56:33.681332199Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0ee-bde4-7c71-9754-4013652328d8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3449):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: aede2be58b3e
+    Recorded: 2026-11-06T12:53:54.646602842+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3449#issuecomment-6685282540
+    Findings:
+    1. 1. BLOCKER (advisor decision, not implementer code): round-5 F2 is still open. contained_lane.py:127 installs every lane filter with NEW_LISTENER|WAIT_KILLABLE_RECV (flags 8|32). (a) After broker RECV, handled signals (SIGINT, SIGALRM, handled SIGTERM, Go SIGURG) are deferred, possibly forever for a blocking send without SO_SNDTIMEO (contained_host.py send_snapshot polls until progress, deadline or cancellation). (b) The containment kernel floor becomes Linux 5.19 for all vendors. AC(1) 'keep existing behavior' needs an explicit advisor acceptance of both deviations on TASK-2708, referenced from docs/internal/testing/task-2708-round2.md:220-259 (which still says 'acceptance pending'), or a ruling that directs an exactly-once redesign. Spec comments end at #55 (round-6 findings) and history shows NeedsAttention at 05:46 MST with no later ruling. Once accepted, update the doc's F2 line to cite the ruling; no code change is needed.
+    2. 2. GATE: CI at the exact head aede2be58b3e was still pending (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) when this was recorded. merge-hold-gate fails as the expected supervised hold. CI at e16c5274 never completed (queued, then superseded). The run at the earlier merge commit 2d054799 FAILED the gates and Build jobs; its logs were not reachable from this seat. The last fully green PR-code run is b29dacfa. Before approving, the next reviewer must confirm that every shard is green at the head, including the required-live bwrap gate (task_2708_live_ count) and the lib shard that runs task_2708_target_socket_old_kernel_thread_file_tables, and that the 2d054799 gates/Build failure did not recur.
+    3. 3. MINOR (AC1 keep-existing-behavior, undocumented): broker_send (contained_host.py, control-message loop) now refuses every ancillary type except SOL_SOCKET/SCM_RIGHTS, so a lane sendmsg carrying SCM_CREDENTIALS gets EACCES where it previously CONTINUEd. Because the host broker performs the send, an SO_PASSCRED receiver also sees the broker's pid (0 inside the lane pidns), not the sender's. docs/internal/testing/task-2708-round2.md:25-26 documents the named-sendmsg and sendmmsg refusals but not this one. Document it as an accepted delta next to F2, or forward SCM_CREDENTIALS with the trapped task's pid, plus a test.
+    4. 4. COSMETIC: .github/workflows/ci.yml required-live step: grep -q '^ok launch::contained::tests::task_2708_claude_prepare_fake_home$' fails the step with no ::error:: line, unlike the neighbouring count checks. Add an explicit error message so a red run names the missing test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T12:56:38.628102524Z
+  modified_at: 2026-11-06T12:56:38.628102524Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
