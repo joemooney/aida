@@ -1203,6 +1203,7 @@ true"#,
         )
         .unwrap();
         let mut config = crate::agent_launch::AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "claude",
             default_args: launcher.clone(),
@@ -1240,6 +1241,7 @@ true"#,
         let tree = tmp.path().canonicalize().unwrap();
         std::fs::create_dir_all(tree.join(".aida")).unwrap();
         let config = |contained| crate::agent_launch::AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "claude",
             default_args: Vec::new(),
@@ -1743,6 +1745,7 @@ true"#;
             &[("AIDA_OS_WRAP", None)],
         );
         let config = crate::agent_launch::AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "/usr/bin/true",
             default_args: crate::session::claude_contained_flags_for(
@@ -2016,6 +2019,7 @@ true"#;
         launcher.extend(["--model".to_string(), "m".to_string()]);
         launcher.push("--add-dir=/etc".to_string());
         let mut config = crate::agent_launch::AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "codex",
             binary: "codex",
             default_args: launcher,
@@ -2111,6 +2115,7 @@ true"#;
             // What `tool_contained_flags("codex")` yields for a launcher in
             // the fixture's main (resolved from main, never this checkout).
             let mut config = crate::agent_launch::AgentLaunchConfig {
+                delegate_seats: Vec::new(),
                 agent_type: "codex",
                 binary: "codex",
                 default_args: crate::codex_native_sandbox::codex_native_sandbox_flags_in(

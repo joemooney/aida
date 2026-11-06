@@ -388,6 +388,9 @@ pub(crate) struct SupervisorInit {
     pub spec: String,
     pub lease_id: String,
     pub grant_id: String,
+    /// Explicit launcher narrowing; empty means inherit on a later resume.
+    #[serde(default)]
+    pub delegate_seats: Vec<String>,
     pub description: Option<String>,
     pub mail_wake: String,
     pub context_path: Option<std::path::PathBuf>,
@@ -532,6 +535,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     // A contained parent refuses codex outright (inherited containment is
     // sticky; native is never relabelled as AIDA containment).
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -548,6 +552,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         )
     })?;
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -594,6 +599,11 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         .or_else(|| existing_owner.as_ref().and_then(|lease| lease.role.clone()))
         .unwrap_or_else(|| agent_new_scope_role(&spec_id).to_string());
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
+    crate::gate::seat_authority::validate_launch_delegable_seats(
+        &project_root,
+        Some(&expected_role),
+        &config.delegate_seats,
+    )?;
     let early_instance = resolve_role_instance_for_launch(
         &project_root,
         Some(&expected_role),
@@ -746,6 +756,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         true,
         &attempt,
         &format!("{}:{}", scope.role, scope.spec),
+        &config.delegate_seats,
     )?;
     guard.grant_id = Some(grant.id.clone());
     session::stamp_lease_child_grant_at(&project_root, &lease_id, &grant.id)?;
@@ -825,6 +836,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         spec: spec_id.clone(),
         lease_id: lease_id.clone(),
         grant_id: grant.id.clone(),
+        delegate_seats: config.delegate_seats.clone(),
         description,
         mail_wake: mail_wake.as_str().to_string(),
         context_path: context_path.clone(),
@@ -1502,6 +1514,8 @@ pub(crate) fn supervise_attempt(
             worker.pid,
             &worker.start,
             agent_registry::SpawnedRow {
+                // trace:BUG-2467 | ai:codex
+                delegate_seats: init.delegate_seats.clone(),
                 role: Some(init.role.clone()),
                 current_spec: Some(init.spec.clone()),
                 worktree_path: init.worker.cwd.clone(),

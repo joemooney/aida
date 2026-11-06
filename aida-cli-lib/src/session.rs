@@ -940,6 +940,7 @@ pub(crate) fn preflight_codex_agent_handle(name: &str) -> Result<()> {
 fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunchConfig> {
     let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
     let mut config = crate::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![crate::CODEX_NO_DAEMON_FLAG.to_string()],

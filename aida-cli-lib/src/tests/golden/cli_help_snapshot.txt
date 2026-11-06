@@ -3628,6 +3628,11 @@ archived (retrospective, filed). Deferred rows are hidden from `aida list`, `aid
 history` by default; surface them with `--deferred` (only) or `--all` (union).
 
 Usage: aida defer [OPTIONS] <ID>
+       aida defer <COMMAND>
+
+Commands:
+  resurface  Evaluate parked specs and resurface met conditions; never lift operator holds
+  help       Print this message or the help of the given subcommand(s)
 
 Arguments:
   <ID>
@@ -3642,6 +3647,36 @@ Options:
       --reason <REASON>
           Why the work is being held. Required for a durable operator hold; legacy deferrals may
           omit it
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida defer resurface
+Evaluate parked specs and resurface met conditions; never lift operator holds
+
+Usage: aida defer resurface [OPTIONS]
+
+Options:
+      --dry-run
+          Report actions without changing specs or queues
+
+      --manual-age-days <MANUAL_AGE_DAYS>
+          Route manual conditions older than this many days to aida human
+          
+          [default: 14]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -17519,6 +17554,9 @@ Options:
       --role <ROLE>
           Role for a launch using the configured default vendor
 
+      --delegate-seat <DELEGATE_SEATS>
+          Narrow delegable seats when using the configured default vendor
+
       --spec <SPEC>
           Spec for a launch using the configured default vendor
 
@@ -17547,6 +17585,10 @@ Options:
       --role <ROLE>
           Role propagated to the spawned Claude process as AIDA_SESSION_ROLE
 
+      --delegate-seat <DELEGATE_SEATS>
+          Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the
+          parent's delegable seats; never widens its authority
+
       --spec <SPEC>
           SPEC-ID to work. Creates a scoped worktree + lease before launch
 
@@ -17567,10 +17609,6 @@ Options:
           Opaque Claude model name passed through as `claude --model`. Overrides `[agents.claude]
           model`; AIDA does not validate it
 
-      --sandbox
-          Launch Claude in contained mode: strict Bash sandboxing, no unsandboxed fallback,
-          destructive-command deny rules, and project-relative edit auto-allow only
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -17581,12 +17619,16 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --no-context
-          Do not write/inject the AIDA launch-context snapshot
+      --sandbox
+          Launch Claude in contained mode: strict Bash sandboxing, no unsandboxed fallback,
+          destructive-command deny rules, and project-relative edit auto-allow only
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --no-context
+          Do not write/inject the AIDA launch-context snapshot
 
       --no-title
           Do not set the terminal/tab title for this launch
@@ -17697,6 +17739,10 @@ Options:
       --role <ROLE>
           Role propagated to the spawned Codex process as AIDA_SESSION_ROLE
 
+      --delegate-seat <DELEGATE_SEATS>
+          Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the
+          parent's delegable seats; never widens its authority
+
       --spec <SPEC>
           SPEC-ID to work. Creates a scoped worktree + lease before launch
 
@@ -17719,9 +17765,6 @@ Options:
           Opaque Codex model name passed through as `codex --model`. Overrides `[agents.codex]
           model`; AIDA does not validate it
 
-      --no-context
-          Do not write/inject the AIDA launch-context snapshot
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -17732,12 +17775,15 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --no-title
-          Do not set the terminal/tab title for this launch
+      --no-context
+          Do not write/inject the AIDA launch-context snapshot
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --no-title
+          Do not set the terminal/tab title for this launch
 
       --show-context
           Print the generated launch-context snapshot before spawning
@@ -17850,6 +17896,10 @@ Options:
       --role <ROLE>
           Role propagated to the spawned Antigravity process as AIDA_SESSION_ROLE
 
+      --delegate-seat <DELEGATE_SEATS>
+          Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the
+          parent's delegable seats; never widens its authority
+
       --spec <SPEC>
           SPEC-ID to work. Creates a scoped worktree + lease before launch
 
@@ -17870,9 +17920,6 @@ Options:
       --no-context
           Do not write/inject the AIDA launch-context snapshot
 
-      --no-title
-          Do not set the terminal/tab title for this launch
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -17883,12 +17930,15 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --show-context
-          Print the generated launch-context snapshot before spawning
+      --no-title
+          Do not set the terminal/tab title for this launch
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --show-context
+          Print the generated launch-context snapshot before spawning
 
       --no-exec
           Print the complete resolved launch contract — argv, active role, prompt source,
@@ -34893,6 +34943,42 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "defer",
+      "resurface"
+    ],
+    "about": "Evaluate parked specs and resurface met conditions; never lift operator holds",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report actions without changing specs or queues"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "manual-age-days",
+        "takes_value": true,
+        "help": "Route manual conditions older than this many days to aida human"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
       "undefer"
     ],
     "about": "Inverse of `aida defer` — clears the deferred flag (and its revisit trigger) so the spec reappears in default `aida list` / `aida history` / `aida search` views",
@@ -48879,6 +48965,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "delegate-seat",
+        "takes_value": true,
+        "help": "Narrow delegable seats when using the configured default vendor"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -48929,6 +49020,11 @@ Working on aida itself
         "name": "cwd",
         "takes_value": true,
         "help": "AIDA project root or descendant used as the launch base"
+      },
+      {
+        "name": "delegate-seat",
+        "takes_value": true,
+        "help": "Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the parent's delegable seats; never widens its authority"
       },
       {
         "name": "description",
@@ -49108,6 +49204,11 @@ Working on aida itself
         "help": "AIDA project root or descendant used as the launch base"
       },
       {
+        "name": "delegate-seat",
+        "takes_value": true,
+        "help": "Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the parent's delegable seats; never widens its authority"
+      },
+      {
         "name": "description",
         "takes_value": true,
         "help": "Optional human-readable description of this agent session"
@@ -49263,6 +49364,11 @@ Working on aida itself
         "name": "cwd",
         "takes_value": true,
         "help": "AIDA project root or descendant used as the launch base"
+      },
+      {
+        "name": "delegate-seat",
+        "takes_value": true,
+        "help": "Narrow the seats an advisor/integrator child may delegate (repeatable). Defaults to the parent's delegable seats; never widens its authority"
       },
       {
         "name": "description",

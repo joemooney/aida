@@ -717,11 +717,18 @@ impl Queue {
             Some(arg) if matches!(basename(arg), b"bash" | b"sh") => 1,
             _ => return native,
         };
+        // The bash runner also accepts `aida-deputy-shell NAME`.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
+        let name = match args.get(script + 1).copied() {
+            Some(b"run") => args.get(script + 2),
+            Some(b"submit" | b"list" | b"status" | b"log" | b"wait") => None,
+            Some(arg) if arg.first().is_some_and(u8::is_ascii_alphanumeric) => args.get(script + 1),
+            _ => None,
+        };
         if args
             .get(script)
             .is_some_and(|arg| basename(arg) == b"aida-deputy-shell")
-            && args.get(script + 1) == Some(&b"run".as_slice())
-            && args.get(script + 2) == Some(&self.name.as_bytes())
+            && name == Some(&self.name.as_bytes())
         {
             RunnerStatus::Legacy(pid)
         } else {

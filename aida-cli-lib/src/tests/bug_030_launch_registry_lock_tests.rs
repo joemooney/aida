@@ -169,6 +169,7 @@ fn pre_spawn_error_returns_without_starting_a_child() {
     std::fs::write(project.join(".aida/config.toml"), "").unwrap();
     let binary = tmp.path().join("missing-vendor");
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
