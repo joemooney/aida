@@ -1,6 +1,6 @@
 //! STORY-2324 PR-A: the pure `effective_gate_state` (test plan section 8:
-//! the table tests and the re-spelling / late-approval properties). No file,
-//! git, clock or environment input: every case is an event vector.
+//! the table tests and the re-spelling / late-approval properties). The pure
+//! cases use event vectors; the rebound-label fixture also checks load_view.
 // trace:STORY-2324 | ai:claude
 
 use super::*;
@@ -663,11 +663,10 @@ proptest! {
 /// RequestChanges recorded at a superseded head under one label of a member,
 /// then an approval at the current head keyed by the change itself. Once
 /// PR-C reads by canonical key plus head, the refusal at a head the change
-/// no longer has must not count. Today's selection (and PR-A's pure core)
-/// still answer with it, so this stays ignored until the PR-C cutover.
+/// no longer has must not count. Production readers remain unchanged until
+/// the PR-C cutover; this is the pure core's regression.
 // trace:STORY-2324 | ai:claude
 #[test]
-#[ignore = "STORY-2324 PR-C: the reader keyed by SpecKey + head ignores refusals at superseded heads"]
 fn a_refusal_at_a_superseded_head_under_another_label_does_not_block_the_current_approval() {
     let r = subject();
     let superseded = "a2b504db00000000000000000000000000000000";
@@ -689,4 +688,199 @@ fn a_refusal_at_a_superseded_head_under_another_label_does_not_block_the_current
         matches!(s.verdict, Verdict::Approved { seq: 9, .. }),
         "{s:?}"
     );
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn canonical_stamp_overrides_an_obsolete_or_missing_audit_label() {
+    let r = subject();
+    for label in [Some("TASK-404"), None] {
+        let mut approval = verdict_ev(9, label, "approved", HEAD_A);
+        approval.spec_key = Some(SpecKey(r.id));
+        let s = state(&[r.clone()], &["BUG-2403"], &view(vec![approval]), HEAD_A);
+        assert!(
+            matches!(s.members[0].verdict, Verdict::Approved { seq: 9, .. }),
+            "{s:?}"
+        );
+        assert!(s.foreign_labels.is_empty());
+    }
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn foreign_stamp_cannot_borrow_a_members_audit_label() {
+    let r = subject();
+    let foreign = SpecKey(uuid::Uuid::new_v4());
+    let mut approval = verdict_ev(9, Some("BUG-2403"), "approved", HEAD_A);
+    approval.spec_key = Some(foreign);
+    let s = state(&[r.clone()], &["BUG-2403"], &view(vec![approval]), HEAD_A);
+    assert_eq!(s.members[0].verdict, Verdict::Absent);
+    assert!(refusals(&s).contains(&Refusal::NoApproval));
+    let mut refusal = verdict_ev(10, None, "request-changes", HEAD_A);
+    refusal.spec_key = Some(foreign);
+    let s = state(&[r], &["BUG-2403"], &view(vec![refusal]), HEAD_A);
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested));
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn a_current_approval_cannot_discard_current_unknown_or_late_refusals() {
+    let r = subject();
+    for (sha, refusal_at, approval_at) in [
+        (HEAD_A, 5, 9),    // same head: the refusal still answers
+        ("", 5, 9),        // unknown head: never prove supersession
+        ("ccccccc", 5, 9), // abbreviated head: no proof of a different full commit
+        (HEAD_B, 10, 9),   // late collection: the refusal is actually newer
+    ] {
+        let refusal = verdict_ev_at(
+            5,
+            Some("BUG-2403"),
+            "request-changes",
+            sha,
+            &at(refusal_at),
+            &[],
+        );
+        let approval = verdict_ev_at(9, None, "approved", HEAD_A, &at(approval_at), &[]);
+        let s = state(
+            &[r.clone()],
+            &["BUG-2403"],
+            &view(vec![refusal, approval]),
+            HEAD_A,
+        );
+        assert!(refusals(&s).contains(&Refusal::ChangesRequested), "{s:?}");
+    }
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn an_unrelated_members_approval_cannot_answer_a_stale_refusal() {
+    let a = subject();
+    let b = req("TASK-10", None, Some(ExecutionMode::Drain));
+    let v = view(vec![
+        verdict_ev(5, Some("BUG-2403"), "request-changes", HEAD_B),
+        verdict_ev(9, Some("TASK-10"), "approved", HEAD_A),
+    ]);
+    let s = state(&[a, b], &["BUG-2403", "TASK-10"], &v, HEAD_A);
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested), "{s:?}");
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn a_rebound_labels_unbound_events_do_not_belong_to_the_new_owner() {
+    let r = subject();
+    for word in ["approved", "request-changes"] {
+        let mut event = verdict_ev(9, Some("BUG-2403"), word, HEAD_A);
+        event.spec_key = Some(SpecKey(uuid::Uuid::new_v4()));
+        let mut v = view(vec![verdict_ev(10, None, "approved", HEAD_A)]);
+        v.unbound.insert(SpecKey(r.id), vec![event]);
+        let s = state(&[r.clone()], &["BUG-2403"], &v, HEAD_A);
+        assert_eq!(s.members[0].verdict, Verdict::Absent, "{s:?}");
+        assert!(matches!(s.decision, Decision::Mergeable { .. }), "{s:?}");
+    }
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn load_view_rebound_label_keeps_old_owner_events_out_of_the_member_sequence() {
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    let dir = root.path().join(".aida/gate-ledger");
+    std::fs::create_dir_all(dir.join("by-spec")).unwrap();
+    let mut old = verdict_ev(1, Some("BUG-2403"), "request-changes", HEAD_A);
+    old.change = "BUG-2403".into();
+    old.spec_key = Some(SpecKey(uuid::Uuid::new_v4()));
+    let mut own = verdict_ev(2, Some("BUG-2403"), "approved", HEAD_A);
+    own.change = "BUG-2403".into();
+    own.spec_key = Some(SpecKey(r.id));
+    let line = |e: &GateEvent| format!("{}\n", serde_json::to_string(e).unwrap());
+    std::fs::write(dir.join("by-spec/BUG-2403.jsonl"), line(&old) + &line(&own)).unwrap();
+    let v = load_view(root.path(), ChangeKey::pr(3185), &set).unwrap();
+    // This is the actual load shape: one member bucket contains both UUIDs.
+    assert_eq!(v.unbound[&SpecKey(r.id)], vec![old, own]);
+    let s = effective_gate_state(HEAD_A, &set, &v, &drain());
+    assert!(matches!(s.decision, Decision::Mergeable { .. }), "{s:?}");
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn unbound_old_head_refusal_is_answered_by_change_approval_regardless_of_file_seq() {
+    let r = subject();
+    for seq in [1, 9, 50] {
+        let mut old = verdict_ev_at(
+            seq,
+            Some("BUG-2403"),
+            "request-changes",
+            HEAD_B,
+            &at(5),
+            &[],
+        );
+        old.change = "BUG-2403".into();
+        old.spec_key = Some(SpecKey(r.id));
+        let mut v = view(vec![verdict_ev_at(
+            9,
+            None,
+            "approved",
+            HEAD_A,
+            &at(9),
+            &[],
+        )]);
+        v.unbound.insert(SpecKey(r.id), vec![old]);
+        let s = state(&[r.clone()], &["BUG-2403"], &v, HEAD_A);
+        assert!(matches!(s.decision, Decision::Mergeable { .. }), "{s:?}");
+    }
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn change_ledger_supersession_still_requires_later_seq_as_well_as_order_time() {
+    let v = view(vec![
+        verdict_ev_at(1, None, "approved", HEAD_A, &at(9), &[]),
+        verdict_ev_at(2, Some("BUG-2403"), "request-changes", HEAD_B, &at(5), &[]),
+    ]);
+    let s = state(&[subject()], &["BUG-2403"], &v, HEAD_A);
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested), "{s:?}");
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn same_seq_in_separate_files_does_not_hide_a_late_current_head_refusal() {
+    let r = subject();
+    let mut v = view(vec![verdict_ev_at(
+        1,
+        Some("BUG-2403"),
+        "approved",
+        HEAD_A,
+        &at(5),
+        &[],
+    )]);
+    let mut late = verdict_ev_at(1, Some("BUG-2403"), "request-changes", HEAD_A, &at(9), &[]);
+    late.change = "BUG-2403".into();
+    v.unbound.insert(SpecKey(r.id), vec![late]);
+    let s = state(&[r], &["BUG-2403"], &v, HEAD_A);
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested), "{s:?}");
+}
+
+// trace:STORY-2324 | ai:codex
+#[test]
+fn foreign_uuid_sequences_are_separate_and_display_labels_are_normalized() {
+    let r = subject();
+    let foreign = SpecKey(uuid::Uuid::new_v4());
+    let other = SpecKey(uuid::Uuid::new_v4());
+    let mut refusal = verdict_ev(1, Some(" bug-404 "), "request-changes", HEAD_A);
+    refusal.spec_key = Some(foreign);
+    let mut approval = verdict_ev(2, Some("BUG-404"), "approved", HEAD_A);
+    approval.spec_key = Some(other);
+    let mut events = vec![refusal, approval];
+    // Stamped and unstamped display labels share normalized diagnostics.
+    events.push(verdict_ev(3, Some("bug-404"), "approved", HEAD_A));
+    events.push(verdict_ev(4, Some("BUG-2403"), "approved", HEAD_A));
+    let s = state(&[r.clone()], &["BUG-2403"], &view(events.clone()), HEAD_A);
+    assert_eq!(s.foreign_labels, vec!["BUG-404"]);
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested), "{s:?}");
+    // Conversely, the same foreign UUID is one sequence across audit labels.
+    events[1].spec_key = Some(foreign);
+    events[1].spec = Some("TASK-405".into());
+    let s = state(&[r], &["BUG-2403"], &view(events), HEAD_A);
+    assert!(matches!(s.decision, Decision::Mergeable { .. }), "{s:?}");
 }

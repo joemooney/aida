@@ -26,7 +26,7 @@ For a multi-repository workspace, `aida init --sibling` creates a separate sibli
 - **Derived cache:** `.aida/cache.db` is a read projection. `aida cache status` inspects it and `aida cache rebuild` rebuilds from available canonical history. Reads can report stale, deferred or busy context; a read is not an unconditional promise of a synchronous full rebuild.
 - **Local operational state:** grants, mandates, runtime session files, verdict artifacts and handoffs have their own local scope and validation. Clone allocation/transport state resides in the common Git directory; machine preferences have their own home-directory scope. A cache rebuild or store clone does not restore all of these or grant authority.
 
-Recovery starts by identifying which state is missing. Preserve unpublished store commits and needed local evidence before changing attachments. A remote branch contains only history that was successfully published to it. Read the [storage reference](cli/10-storage.md) and [mode comparison](storage-modes.md) before migrating a legacy backend.
+Recovery starts by identifying which state is missing. Preserve unpublished store commits and needed local evidence before changing attachments. A remote branch contains only history that was successfully published to it. Read the [storage reference](cli/10-storage.md) and [mode comparison](advanced/storage-modes.md) before migrating a legacy backend.
 
 ## Understand clone identity and allocation
 
@@ -44,6 +44,6 @@ Execution requires the documented reviewed private deny policy, trusted baseline
 
 ## Inspect queues at the right scope
 
-Project queues can live in the store, while role-global queues live under `~/.aida/queue/`. A store push cannot transfer a different machine's role-global queue. Active roles, explicit filters and user identity affect what a queue view selects. Use the [multi-node guide](multi-node.md) to distinguish identity, routing and unpublished history before attempting repairs.
+Project queues can live in the store, while role-global queues live under `~/.aida/queue/`. A store push cannot transfer a different machine's role-global queue. Active roles, explicit filters and user identity affect what a queue view selects. Use the [multi-node guide](advanced/multi-node.md) to distinguish identity, routing and unpublished history before attempting repairs.
 
-The [administrator guide](admin-guide.md), [multi-hub guide](multi-hub-sync.md) and [setup reference](cli/07-project-setup.md) provide detail. The [configuration guide](configuration-guide.md) explains feature-specific scopes. For source evidence, inspect [clone allocation](../aida-core/src/allocation_authority.rs), [transport dispatch](../aida-cli-lib/src/transport_profile.rs), [recoverable pull](../aida-cli-lib/src/transport_pull.rs), and [agent scaffolding](../aida-cli-lib/src/init_cmd.rs).
+The [administrator guide](advanced/admin-guide.md), [multi-hub guide](advanced/multi-hub-sync.md) and [setup reference](cli/07-project-setup.md) provide detail. The [configuration guide](configuration-guide.md) explains feature-specific scopes. For source evidence, inspect [clone allocation](../aida-core/src/allocation_authority.rs), [transport dispatch](../aida-cli-lib/src/transport_profile.rs), [recoverable pull](../aida-cli-lib/src/transport_pull.rs), and [agent scaffolding](../aida-cli-lib/src/init_cmd.rs).

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Batch-render docs/positioning/*.md to PDF and land them in the artifacts repo.
+# Batch-render docs/internal/positioning/*.md to PDF and land them in the artifacts repo.
 # trace:TASK-1127 | ai:claude
 #
-# Positioning rots fast (see docs/positioning/README.md "Maintenance rhythm"),
+# Positioning rots fast (see docs/internal/positioning/README.md "Maintenance rhythm"),
 # so the PDF set is a re-runnable render, not a one-off. Reuses the same
 # DejaVu/xelatex stack as scripts/paper-pdf.sh, but tuned for these docs: the
 # leading `# H1` becomes the PDF title block and the `##` sections are promoted
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_DIR="$REPO_ROOT/docs/positioning"
+SRC_DIR="$REPO_ROOT/docs/internal/positioning"
 LUA_TABLE_WIDTHS="$REPO_ROOT/scripts/pandoc-table-widths.lua"
 LUA_BREAK_CODE="$REPO_ROOT/scripts/pandoc-break-long-code.lua"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-$HOME/artifacts/positioning}"
@@ -105,7 +105,7 @@ gen_index() {
     echo "# AIDA positioning — PDF renders"
     echo
     echo "Reader-facing *\"should I use AIDA or X?\"* comparisons, rendered from"
-    echo "[\`docs/positioning/\`](https://github.com/joemooney/aida/tree/main/docs/positioning)"
+    echo "[\`docs/internal/positioning/\`](https://github.com/joemooney/aida/tree/main/docs/internal/positioning)"
     echo "in \`joemooney/aida\`. Rendered **$(date +%Y-%m-%d)**."
     echo
     echo "These PDFs are point-in-time; the markdown in the repo is the live source"

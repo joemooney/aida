@@ -1,6 +1,6 @@
 //! Independent, observation-based pipeline alarms. No completion/merge authority.
 // trace:STORY-2476 | ai:codex
-use anyhow::Result;
+use anyhow::{Context, Result};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -13,6 +13,45 @@ pub(super) const ALARM_SENDER: &str = "aida-pipeline-detector";
 
 // An absent observer cannot prove that a predicate held throughout a long gap.
 const MAX_GAP_MS: i64 = 15 * 60 * 1000;
+
+// trace:TASK-3074 | ai:codex
+const ESCALATE_MS: i64 = 30 * 60 * 1000;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub(super) struct RequestIdentity {
+    pub message_id: String,
+    pub fingerprint: String,
+}
+
+/// Persisted mailbox identity is distinct from operator transport acceptance.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub(super) enum SendResult {
+    Persisted { request: RequestIdentity },
+    Sent,
+    Queued,
+    Refused,
+    Uncertain,
+}
+
+// Preserve ambiguous post-transport errors; only proven pre-publication errors retry.
+// trace:TASK-3074 | ai:codex
+pub(super) fn operator_delivery(
+    result: Result<crate::notify::DirectNotifyOutcome>,
+) -> Result<SendResult> {
+    match result {
+        Ok(outcome) => Ok(match outcome.delivery() {
+            crate::notify::DirectDelivery::Sent => SendResult::Sent,
+            crate::notify::DirectDelivery::Deferred => SendResult::Queued,
+            _ => SendResult::Refused,
+        }),
+        Err(error) if crate::notify::direct_publication_refused(&error) => {
+            eprintln!("pipeline operator delivery refused: {error:#}");
+            Ok(SendResult::Refused)
+        }
+        Err(error) => Err(error),
+    }
+}
 
 #[derive(Default, Deserialize, Serialize)]
 struct State {
@@ -28,6 +67,83 @@ struct Episode {
     delivery_pending: bool,
     #[serde(default)]
     identity: String,
+    #[serde(default)]
+    uuid: String,
+    #[serde(default)]
+    request: Option<RequestIdentity>,
+    #[serde(default)]
+    delivery: Option<SendResult>,
+    #[serde(default)]
+    delivered_ms: Option<i64>,
+    #[serde(default)]
+    continuity_ms: Option<i64>,
+    #[serde(default)]
+    escalation_pending: bool,
+    #[serde(default)]
+    escalation: Option<SendResult>,
+    // Existing v2 escalation fields retain unresolved notices across upgrades.
+    #[serde(default)]
+    persistent_escalation_pending: bool,
+    #[serde(default)]
+    persistent_escalation: Option<SendResult>,
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+    #[serde(default)]
+    deferral_escalation_pending: bool,
+    #[serde(default)]
+    deferral_escalation: Option<SendResult>,
+}
+impl Episode {
+    fn new(now: i64, identity: &str) -> Self {
+        Self {
+            first_ms: now,
+            observed_ms: now,
+            accepted: false,
+            delivery_pending: false,
+            identity: identity.into(),
+            uuid: uuid::Uuid::new_v4().to_string(),
+            request: None,
+            delivery: None,
+            delivered_ms: None,
+            continuity_ms: Some(now),
+            escalation_pending: false,
+            escalation: None,
+            persistent_escalation_pending: false,
+            persistent_escalation: None,
+            deferral_escalation_pending: false,
+            deferral_escalation: None,
+        }
+    }
+    // Keep each once-per-episode notice independent, including durable reservations.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+    fn escalation_slot(&mut self, kind: EscalationKind) -> (&mut bool, &mut Option<SendResult>) {
+        match kind {
+            EscalationKind::Unresolved => (&mut self.escalation_pending, &mut self.escalation),
+            EscalationKind::Persistent => (
+                &mut self.persistent_escalation_pending,
+                &mut self.persistent_escalation,
+            ),
+            EscalationKind::Deferral => (
+                &mut self.deferral_escalation_pending,
+                &mut self.deferral_escalation,
+            ),
+        }
+    }
+}
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[derive(Clone, Copy)]
+enum EscalationKind {
+    Unresolved,
+    Persistent,
+    Deferral,
+}
+impl EscalationKind {
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Unresolved => "unresolved",
+            Self::Persistent => "persistent",
+            Self::Deferral => "deferral",
+        }
+    }
 }
 #[derive(Default, Debug, Serialize)]
 pub(super) struct Report {
@@ -38,16 +154,20 @@ pub(super) struct Report {
     unknown: Vec<String>,
     busy: bool,
     evidence: Vec<String>,
+    deliveries: BTreeMap<String, SendResult>,
+    escalations: BTreeMap<String, SendResult>,
 }
 impl Report {
     pub(super) fn summary(&self) -> String {
         format!(
-            "pipeline alarms{}: active {:?}, due {:?}, accepted {:?}, unknown {:?}{}",
+            "pipeline alarms{}: active {:?}, due {:?}, accepted {:?}, unknown {:?}, delivery {:?}, escalation {:?}{}",
             if self.execute { "" } else { " (dry-run)" },
             self.active,
             self.due,
             self.accepted,
             self.unknown,
+            self.deliveries,
+            self.escalations,
             if self.busy {
                 "; another tick holds lock"
             } else {
@@ -111,7 +231,7 @@ pub(super) fn run(
     root: &Path,
     execute: bool,
     threshold_mins: u32,
-    send: &mut dyn FnMut(&str) -> Result<bool>,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
 ) -> Result<Report> {
     run_with_home(
         root,
@@ -127,7 +247,7 @@ pub(super) fn run_for_watch(
     root: &Path,
     execute: bool,
     threshold_mins: u32,
-    send: &mut dyn FnMut(&str) -> Result<bool>,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
 ) -> Report {
     run(root, execute, threshold_mins, send).unwrap_or_else(|e| Report {
         execute,
@@ -141,7 +261,7 @@ fn run_with_home(
     home: Option<&Path>,
     execute: bool,
     threshold_mins: u32,
-    send: &mut dyn FnMut(&str) -> Result<bool>,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
 ) -> Result<Report> {
     anyhow::ensure!(
         threshold_mins >= 15,
@@ -185,7 +305,7 @@ fn tick(
     now: i64,
     execute: bool,
     threshold_mins: u32,
-    send: &mut dyn FnMut(&str) -> Result<bool>,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
 ) -> Result<Report> {
     tick_with_writer(
         root,
@@ -203,16 +323,73 @@ fn tick_with_writer(
     now: i64,
     execute: bool,
     threshold_mins: u32,
-    send: &mut dyn FnMut(&str) -> Result<bool>,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
+    persist: &mut dyn FnMut(&Path, &[u8]) -> Result<()>,
+) -> Result<Report> {
+    tick_with_effects(
+        root,
+        snapshot,
+        now,
+        execute,
+        threshold_mins,
+        send,
+        &mut |request| {
+            let context = aida_core::mailbox_logical::MailboxContext::resolve(root, None)
+                .map_err(|e| anyhow::anyhow!("action context unavailable: {e:?}"))?;
+            let common = context
+                .repository()
+                .ok_or_else(|| anyhow::anyhow!("missing action repository"))?;
+            aida_core::mailbox_lifecycle::action::latest_for_identity(
+                common.path(),
+                &request.message_id,
+                &request.fingerprint,
+            )
+        },
+        &mut |rule, body| {
+            operator_delivery(crate::notify::send_direct_bounded(
+                root,
+                rule,
+                "aida: pipeline stall escalation",
+                body,
+                Some(std::time::Duration::from_secs(10)),
+            ))
+        },
+        persist,
+    )
+}
+
+// All time and external effects are injected for deadline and crash-boundary tests.
+// trace:TASK-3074 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn tick_with_effects(
+    root: &Path,
+    snapshot: &Snapshot,
+    now: i64,
+    execute: bool,
+    threshold_mins: u32,
+    send: &mut dyn FnMut(&str) -> Result<SendResult>,
+    inspect: &mut dyn FnMut(
+        &RequestIdentity,
+    )
+        -> Result<Option<aida_core::mailbox_lifecycle::action::ActionReceipt>>,
+    notify: &mut dyn FnMut(&str, &str) -> Result<SendResult>,
     persist: &mut dyn FnMut(&Path, &[u8]) -> Result<()>,
 ) -> Result<Report> {
     let path = root.join(".aida/pipeline-stalls.json");
-    let mut state = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<State>(&b).ok())
-        .filter(|s| s.version == 1)
-        .unwrap_or_default();
-    state.version = 1;
+    let mut state = match std::fs::read(&path) {
+        Ok(bytes) => serde_json::from_slice::<State>(&bytes).with_context(|| format!(
+            "invalid pipeline alarm state {}; inspect, then remove the file to reset alarm tracking", path.display()
+        ))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => State::default(),
+        Err(e) => return Err(e.into()),
+    };
+    anyhow::ensure!(
+        state.version <= 2,
+        "unsupported pipeline alarm state version {} in {}; inspect, then remove the file to reset alarm tracking",
+        state.version, path.display()
+    );
+    let legacy = state.version == 1;
+    state.version = 2;
     // Upgrade the former aggregate receipt episode without losing accepted or
     // unresolved deliveries. Receipt keys/heads contain no comma separators.
     // trace:TASK-3075 | ai:codex
@@ -226,16 +403,6 @@ fn tick_with_writer(
                 .or_insert(member_episode);
         }
     }
-    // Retire settled receipt/head episodes only on known evidence. Unresolved
-    // delivery reservations survive even receipt deletion or PR closure.
-    // trace:TASK-3075 | ai:codex
-    if let Some(members) = &snapshot.empty_rework_members {
-        state.episodes.retain(|key, episode| {
-            !key.starts_with("empty-rework-exit:")
-                || episode.delivery_pending
-                || members.contains(&episode.identity)
-        });
-    }
     let mut report = Report {
         execute,
         evidence: snapshot
@@ -246,6 +413,34 @@ fn tick_with_writer(
             .collect(),
         ..Default::default()
     };
+    let mut closed = std::collections::BTreeSet::new();
+    if legacy {
+        state.episodes.retain(|key, episode| {
+            if episode.request.is_none() {
+                report
+                    .unknown
+                    .push(format!("{key}: action unknown; legacy episode closed"));
+                closed.insert(key.clone());
+                false
+            } else {
+                true
+            }
+        });
+    }
+    // Retire settled receipt/head episodes only on known evidence. Unresolved
+    // delivery reservations survive even receipt deletion or PR closure.
+    // trace:TASK-3075 | ai:codex
+    if let Some(members) = &snapshot.empty_rework_members {
+        state.episodes.retain(|key, episode| {
+            !key.starts_with("empty-rework-exit:")
+                || episode.delivery_pending
+                || episode.escalation_pending
+                || episode.persistent_escalation_pending
+                || episode.deferral_escalation_pending
+                || members.contains(&episode.identity)
+        });
+    }
+    let mut escalation_due = Vec::new();
     let mut due_episodes = Vec::new();
     // Each empty-rework receipt/head owns its delivery state. Adding or removing
     // another blocked PR must never re-arm an accepted (or unresolved) head.
@@ -270,6 +465,9 @@ fn tick_with_writer(
             }
         });
     for (kind, active, identity, episode_key) in observations {
+        if closed.contains(&episode_key) {
+            continue;
+        }
         let alarm = snapshot.extra.iter().find(|a| a.kind == kind);
         // Age/event delivery belongs to the evidence identity, not a continuous
         // run of true observations. Preserve accepted and unresolved deliveries
@@ -277,8 +475,14 @@ fn tick_with_writer(
         // trace:TASK-3075 | ai:codex
         let identity_keyed = alarm.is_some_and(|a| a.immediate);
         if active != Some(true) {
-            if !identity_keyed {
+            if active == Some(false) && !identity_keyed {
                 state.episodes.remove(kind);
+            } else {
+                for (key, episode) in &mut state.episodes {
+                    if key == &episode_key || key.starts_with(&format!("{kind}:")) {
+                        episode.continuity_ms = None;
+                    }
+                }
             }
             if active.is_none() {
                 report.unknown.push(kind.into());
@@ -299,34 +503,129 @@ fn tick_with_writer(
         let episode = state
             .episodes
             .entry(episode_key.clone())
-            .or_insert(Episode {
-                first_ms: now,
-                observed_ms: now,
-                accepted: false,
-                delivery_pending: false,
-                identity: identity.into(),
-            });
-        if (!identity_keyed
-            && (now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS))
-            || episode.identity != identity
-        {
-            *episode = Episode {
-                first_ms: now,
-                observed_ms: now,
-                accepted: false,
-                delivery_pending: false,
-                identity: identity.into(),
-            };
+            .or_insert_with(|| Episode::new(now, identity));
+        let gap = now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS;
+        if episode.identity != identity {
+            *episode = Episode::new(now, identity);
+        } else if gap {
+            if !episode.accepted && !episode.delivery_pending {
+                episode.first_ms = now;
+            }
+            episode.continuity_ms = Some(now);
         }
+        if episode.continuity_ms.is_none() && !episode.accepted && !episode.delivery_pending {
+            episode.first_ms = now;
+        }
+        let continuity = *episode.continuity_ms.get_or_insert(now);
         episode.observed_ms = now;
+        if episode.escalation_pending
+            || episode.persistent_escalation_pending
+            || episode.deferral_escalation_pending
+        {
+            report
+                .unknown
+                .push(format!("{kind}: escalation outcome unresolved"));
+        }
         if episode.delivery_pending {
-            report.unknown.push(format!("{kind}: prior delivery outcome unresolved; inspect advisor inbox before resetting state"));
+            report.unknown.push(format!(
+                "{kind}: prior delivery outcome unresolved; action unknown"
+            ));
+        }
+        if episode.accepted || episode.delivery_pending {
+            let receipt = episode.request.as_ref().map(&mut *inspect).transpose();
+            let (escalation_kind, deadline, description) = match receipt {
+                Ok(Some(Some(receipt))) => {
+                    use aida_core::mailbox_lifecycle::action::Outcome;
+                    let deadline = match receipt.outcome {
+                        Outcome::Deferred => {
+                            // A malformed receipt must not move its fallback deadline
+                            // forward on every observation.
+                            // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+                            if receipt.until.is_none() {
+                                report
+                                    .unknown
+                                    .push(format!("{kind}: deferred action missing deadline"));
+                            }
+                            receipt
+                                .until
+                                .unwrap_or(receipt.recorded_at.saturating_add(ESCALATE_MS))
+                        }
+                        Outcome::Acted | Outcome::Declined => {
+                            receipt.recorded_at.saturating_add(ESCALATE_MS)
+                        }
+                    };
+                    (
+                        if receipt.outcome == Outcome::Deferred {
+                            EscalationKind::Deferral
+                        } else {
+                            EscalationKind::Persistent
+                        },
+                        deadline,
+                        format!(
+                            "{}; {}",
+                            if receipt.outcome == Outcome::Deferred {
+                                if receipt.until.is_some() {
+                                    "unresolved request; deferral deadline reached"
+                                } else {
+                                    "unresolved request; deferral deadline missing"
+                                }
+                            } else {
+                                "persistent stall"
+                            },
+                            crate::mailbox_action::receipt_summary(&receipt)
+                        ),
+                    )
+                }
+                Ok(_) => (
+                    EscalationKind::Unresolved,
+                    episode
+                        .delivered_ms
+                        .unwrap_or(episode.first_ms)
+                        .saturating_add(ESCALATE_MS),
+                    if matches!(
+                        episode.delivery,
+                        Some(SendResult::Sent | SendResult::Queued)
+                    ) {
+                        "stall persists; no advisor request (operator-direct delivery)"
+                    } else {
+                        "unresolved request; action unknown"
+                    }
+                    .into(),
+                ),
+                Err(e) => {
+                    report
+                        .unknown
+                        .push(format!("{kind}: action unavailable: {e:#}"));
+                    (
+                        EscalationKind::Unresolved,
+                        episode
+                            .delivered_ms
+                            .unwrap_or(episode.first_ms)
+                            .saturating_add(ESCALATE_MS),
+                        "unresolved request; action unavailable".into(),
+                    )
+                }
+            };
+            let (pending, sent) = episode.escalation_slot(escalation_kind);
+            if !*pending
+                && sent.is_none()
+                && now >= deadline
+                && now.saturating_sub(continuity) >= ESCALATE_MS
+            {
+                escalation_due.push((episode_key.clone(), escalation_kind, description));
+            }
         }
         if now - episode.first_ms >= delay && !episode.accepted && !episode.delivery_pending {
             due_episodes.push(episode_key);
             if !report.due.iter().any(|k| k == kind) {
                 report.due.push(kind.into());
             }
+        }
+    }
+    // Missing detector observations interrupt continuity too, even within a short gap.
+    for episode in state.episodes.values_mut() {
+        if episode.observed_ms != now {
+            episode.continuity_ms = None;
         }
     }
     if execute && !report.due.is_empty() {
@@ -353,32 +652,93 @@ fn tick_with_writer(
             (out.status.success() && out.stdout.len() <= 1024 * 1024)
                 .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
         }));
+        details.extend(
+            due_episodes
+                .iter()
+                .map(|key| format!("Episode {}: {key}", state.episodes[key].uuid)),
+        );
         let body = format!("Pipeline needs attention: {} (continuous alarms: >= {threshold_mins} minutes; age/event alarms: see evidence).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
             report.due.join(", "), bounded_digest(&details));
         // Reserve durably before external delivery. A failed post-send write leaves
         // an unresolved reservation, preventing duplicate urgent mail on later ticks.
         for key in &due_episodes {
-            state.episodes.get_mut(key).unwrap().delivery_pending = true;
+            let episode = state.episodes.get_mut(key).unwrap();
+            episode.delivery_pending = true;
+            episode.delivered_ms = Some(now);
         }
         persist(&path, &serde_json::to_vec_pretty(&state)?)?;
-        let delivered = send(&body);
-        for key in &due_episodes {
-            state.episodes.get_mut(key).unwrap().delivery_pending = false;
-        }
-        // Known refused/failed deliveries remain retryable after persistence.
-        match delivered {
-            Ok(true) => {
-                for key in &due_episodes {
-                    state.episodes.get_mut(key).unwrap().accepted = true;
-                }
-                report.accepted = report.due.clone();
+        let delivered = match send(&body) {
+            Ok(result) => result,
+            Err(error) => {
+                report
+                    .unknown
+                    .push(format!("delivery outcome uncertain: {error:#}"));
+                SendResult::Uncertain
             }
-            Ok(false) => report
-                .unknown
-                .push("delivery unavailable; retry next tick".into()),
-            Err(e) => report
-                .unknown
-                .push(format!("delivery failed; retry next tick: {e:#}")),
+        };
+        for key in &due_episodes {
+            let episode = state.episodes.get_mut(key).unwrap();
+            episode.delivery_pending = delivered == SendResult::Uncertain;
+            episode.accepted = matches!(
+                delivered,
+                SendResult::Persisted { .. } | SendResult::Sent | SendResult::Queued
+            );
+            if let SendResult::Persisted { request } = &delivered {
+                episode.request = Some(request.clone());
+            }
+            episode.delivery = Some(delivered.clone());
+            report.deliveries.insert(key.clone(), delivered.clone());
+        }
+        if matches!(delivered, SendResult::Persisted { .. } | SendResult::Sent) {
+            report.accepted = report.due.clone();
+        } else {
+            report.unknown.push(format!("delivery: {delivered:?}"));
+        }
+    }
+    for (key, escalation_kind, description) in escalation_due {
+        let episode = state.episodes.get_mut(&key).unwrap();
+        let rule = format!(
+            "pipeline_escalation_{}_{}",
+            episode.uuid,
+            escalation_kind.suffix()
+        );
+        let body = format!(
+            "Pipeline episode {} ({key}): {description}. Request: {}.\n{}",
+            episode.uuid,
+            episode.request.as_ref().map_or(
+                if matches!(
+                    episode.delivery,
+                    Some(SendResult::Sent | SendResult::Queued)
+                ) {
+                    "none (operator-direct delivery)"
+                } else {
+                    "unknown"
+                },
+                |r| r.message_id.as_str()
+            ),
+            bounded_digest(&snapshot.details)
+        );
+        if execute {
+            *episode.escalation_slot(escalation_kind).0 = true;
+            persist(&path, &serde_json::to_vec_pretty(&state)?)?;
+            let outcome = match notify(&rule, &body) {
+                Ok(result) => result,
+                Err(error) => {
+                    report
+                        .unknown
+                        .push(format!("escalation outcome uncertain: {error:#}"));
+                    SendResult::Uncertain
+                }
+            };
+            let episode = state.episodes.get_mut(&key).unwrap();
+            let (pending, sent) = episode.escalation_slot(escalation_kind);
+            *pending = outcome == SendResult::Uncertain;
+            if matches!(outcome, SendResult::Sent | SendResult::Queued) {
+                *sent = Some(outcome.clone());
+            }
+            report.escalations.insert(key, outcome);
+        } else {
+            report.evidence.push(format!("escalation due: {body}"));
         }
     }
     if execute {
@@ -903,7 +1263,7 @@ mod tests {
         root: &Path,
         s: &Snapshot,
         minutes: i64,
-        send: &mut dyn FnMut(&str) -> Result<bool>,
+        send: &mut dyn FnMut(&str) -> Result<SendResult>,
     ) -> Report {
         tick(root, s, minutes * MIN, true, 30, send).unwrap()
     }
@@ -922,7 +1282,7 @@ mod tests {
         }
         let report = tick(t.path(), &idle(), 45 * MIN, true, 45, &mut |body| {
             assert!(body.contains(">= 45 minutes"));
-            Ok(true)
+            Ok(SendResult::Sent)
         })
         .unwrap();
         assert_eq!(report.accepted, ["pipeline-idle"]);
@@ -987,7 +1347,7 @@ mod tests {
         let mut send = |body: &str| {
             assert!(body.contains("pipeline-idle"));
             sent += 1;
-            Ok(true)
+            Ok(SendResult::Sent)
         };
         for minute in [0, 10, 20, 29] {
             assert!(at(t.path(), &idle(), minute, &mut send).due.is_empty());
@@ -1002,14 +1362,12 @@ mod tests {
             before,
             std::fs::read(t.path().join(".aida/pipeline-stalls.json")).unwrap()
         );
-        assert!(at(t.path(), &idle(), 30, &mut |_| Ok(false))
+        assert!(at(t.path(), &idle(), 30, &mut |_| Ok(SendResult::Refused))
             .accepted
             .is_empty());
-        assert!(
-            at(t.path(), &idle(), 31, &mut |_| anyhow::bail!("mail failed"))
-                .accepted
-                .is_empty()
-        );
+        assert!(at(t.path(), &idle(), 31, &mut |_| Ok(SendResult::Refused))
+            .accepted
+            .is_empty());
         assert_eq!(
             at(t.path(), &idle(), 32, &mut send).accepted,
             ["pipeline-idle"]
@@ -1025,7 +1383,7 @@ mod tests {
     fn unknown_long_gap_and_clock_reversal_restart_timer() {
         let t = tempfile::tempdir().unwrap();
         std::fs::create_dir(t.path().join(".aida")).unwrap();
-        let mut no = |_: &str| -> Result<bool> { panic!("not due") };
+        let mut no = |_: &str| -> Result<SendResult> { panic!("not due") };
         at(t.path(), &idle(), 0, &mut no);
         let mut unknown = idle();
         unknown.lanes_running = None;
@@ -1074,7 +1432,7 @@ mod tests {
         s.ready = Some(true);
         s.train_running = Some(false);
         s.lanes_running = None;
-        let mut send = |_: &str| Ok(true);
+        let mut send = |_: &str| Ok(SendResult::Sent);
         for m in [0, 10, 20] {
             at(t.path(), &s, m, &mut send);
         }
@@ -1111,7 +1469,7 @@ mod tests {
             30,
             &mut |_| {
                 sent += 1;
-                Ok(true)
+                Ok(SendResult::Sent)
             },
             &mut |path, bytes| {
                 writes += 1;
@@ -1458,3 +1816,7 @@ mod tests {
         assert_eq!(any(&[Some(true), None]), Some(true));
     }
 }
+
+#[cfg(test)]
+#[path = "pipeline_stall_action_tests.rs"]
+mod action_tests;

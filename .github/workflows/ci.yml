@@ -259,7 +259,7 @@ jobs:
       # trace:BUG-1526 | ai:claude
       #
       # BUG-1578: this guard cross-checks Rust `// external-prose-classifier:`
-      # markers against docs/architecture/external-tool-output-classifiers.md
+      # markers against docs/internal/architecture/external-tool-output-classifiers.md
       # (a doc-only file). Gating it on full_ci meant a docs-only PR that
       # corrupted that doc got a green required Build with no verifier run.
       # It needs no build artifacts (pure-Python static analysis over checked
@@ -292,6 +292,13 @@ jobs:
           command -v git
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
+
+      # Real production setup with fake Codex: stops at the managed-seat refusal.
+      # Requires the workspace binary; keep it out of the fast no-build suite.
+      # trace:TASK-3131 | ai:codex
+      - name: Shared-boundary production fixture refusal
+        if: matrix.shard == 'gates' && steps.changes.outputs.full_ci == 'true'
+        run: python3 -m unittest tests/test_containment_conformance_aida.py
 
       # Test-timing parser, budget gate and local test-profile reshape: pure
       # Python, no cargo. trace:STORY-1853 | ai:claude
@@ -416,6 +423,11 @@ jobs:
       - name: Run single-spec show latency regression
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: python3 tests/test_show_latency.py --aida target/debug/aida
+
+      # trace:STORY-1468 | ai:codex
+      - name: Run originating prompt CLI output regression
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
+        run: python3 tests/test_origin_prompt.py --aida target/debug/aida
 
       # Restricted work CI channel: two local bare repos and fake pipeline/status API.
       # trace:STORY-2480 | ai:codex
@@ -660,7 +672,9 @@ jobs:
       # covers that path, keeping this guard live on docs-only PRs too.
       # trace:TASK-1447 | ai:claude
       - name: Minimal aida-cli build for docs-only guards
-        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci != 'true') }}
+        if: ${{ (matrix.shard == 'contracts' || matrix.shard == 'gates') && (steps.changes.outputs.full_ci != 'true') }}
+        # The gates shard's Documentation landing smoke also needs this
+        # binary on docs-only PRs. trace:STORY-2324 | ai:codex
         # aida-cli-lib defaults exclude the `remote`/postgres features, so
         # this needs neither protoc nor libgtk/libssl (no "Install Linux
         # dependencies" step) — building just the `aida` binary crate is far
@@ -688,6 +702,21 @@ jobs:
           # trace:TASK-2604 | ai:claude
           python3 -m unittest tests/test_showcase_publish.py
 
+      # trace:STORY-1651 | ai:codex
+      - name: Documentation audience coverage
+        if: matrix.shard == 'gates'
+        run: |
+          python3 -m unittest tests/test_doc_audiences.py
+          python3 docs/archive/2026-10-cleanup/inventory.py --check
+          python3 scripts/check-doc-links.py
+          python3 scripts/check-doc-paths.py
+
+      # trace:STORY-1651 | ai:codex
+      - name: Documentation landing smoke
+        if: matrix.shard == 'gates'
+        run: |
+          AIDA_TEST_BIN="$PWD/target/debug/aida" python3 -m unittest tests/test_docs_landing_smoke.py
+
       # trace:STORY-1352 | ai:codex
       #
       # TASK-1447: NOT gated on full_ci — same "Minimal aida-cli build" step
@@ -697,7 +726,7 @@ jobs:
         if: matrix.shard == 'contracts'
         run: |
           BASE="origin/${{ github.base_ref }}"
-          python3 docs/monitor-contract-fixtures/verify.py "$BASE"
+          python3 docs/internal/monitor-contract-fixtures/verify.py "$BASE"
 
       # BUG-1922: every fenced `aida ...` line in a skill/command template must
       # name a real command and only flags its `--help` lists, so an invented

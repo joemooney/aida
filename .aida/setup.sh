@@ -206,5 +206,5 @@ echo -e "    ${CYAN}aida add --title \"...\" --type functional${NC}  Add require
 echo -e "    ${CYAN}aida db status${NC}                         Store status"
 echo -e "    ${CYAN}git push origin aida-store${NC}             Sync store to remote"
 echo ""
-echo "  For more: docs/storage-modes.md"
+echo "  For more: docs/advanced/storage-modes.md"
 echo ""

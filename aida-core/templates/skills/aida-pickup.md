@@ -22,6 +22,25 @@ say “still working,” “continuing,” or equivalent about yourself. Delegat
 work is not your own active work. See `.aida/discipline/advisor-role.md`.
 <!-- trace:TASK-1557 | ai:codex -->
 
+## Native sandbox finish override
+
+When `AIDA_CONTAINMENT_POSTURE=native`, Git metadata is read-only. This
+supersedes the commit/push/PR/queue-done exit gates below: implement and run
+targeted tests, leave the edits uncommitted, then end with a handoff naming
+changed files, validation results and blockers. Do not run `aida queue done`
+from the seat. After the child process exits, the host launcher commits and
+publishes; the host must finish queue completion after publication. An existing
+Refs PR keeps non-completing commit trailers. Every native lane must declare
+its descriptive publication subject before exiting: use
+`aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
+`aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
+partial slice. In a native seat this only records a lease-bound declaration;
+the host commits and publishes after exit. Failed exits always retain Refs.
+Publication refuses while another live process owns the seat; do not ask a deputy to bypass that refusal. A punt
+or manual hold remains a publication veto. Other postures keep the ordinary
+shipping workflow below.
+<!-- trace:TASK-2879 trace:TASK-2902 trace:BUG-2461 | ai:codex -->
+
 ## Purpose
 
 Drive the implementer / reviewer / triage / architect loop where the active
@@ -816,7 +835,7 @@ fence — so Claude Code's terminal draws the box-rule grid instead of raw
 pipes. The **Why** column is load-bearing: it explains the role / lease /
 worktree implication of each path, never just restates the action. A
 single linear next-step stays a compact one-liner — the table is for 2+
-options only. Full convention: `docs/skills-convention.md`.
+options only. Full convention: `docs/internal/skills-convention.md`.
 
 **Apply the finish-state communication rubric (TASK-359).** Every template
 below is finish-state communication, so it must carry all six rubric

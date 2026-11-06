@@ -2222,6 +2222,12 @@ fn spawn_vendor_headless_forking(
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
+    // trace:TASK-2838 | ai:codex
+    let status = if vendor == HeadlessVendor::Agy {
+        crate::agy_outcome::log_status(log_path, status)
+    } else {
+        status
+    };
     // The child has exited: end its registry row now. Its prompts are its only
     // heartbeats and a `-p` lane gets one, so gc would end it at its start.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
@@ -4191,7 +4197,12 @@ pub fn agy_headless_args(prompt: &str) -> Vec<String> {
 // The permission posture is unchanged — the same single flag, moved, not weakened.
 // trace:BUG-1686 | ai:claude
 pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
-    let mut args = vec!["--dangerously-skip-permissions".to_string()];
+    // trace:TASK-2838 | ai:codex
+    let mut args = vec![
+        "--dangerously-skip-permissions".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+    ];
     if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
         args.extend(["--effort".to_string(), effort.to_string()]);
     }
@@ -4487,7 +4498,7 @@ pub(crate) fn assert_headless_posture(args: &[String], contained: bool, label: &
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
-/// `docs/spikes/2026-05-16-claude-headless.md`:
+/// `docs/internal/spikes/2026-05-16-claude-headless.md`:
 ///   - `-p` — print mode: single turn, exits on its own, no Ctrl+D.
 ///   - `--permission-mode bypassPermissions` — mandatory; `acceptEdits`
 ///     leaves `Bash` gated and `default` auto-denies silently (spike Q2).
@@ -6416,17 +6427,29 @@ pub(crate) fn coordinator_status_with_handle_guard(
     vendor: HeadlessVendor,
     cmd: &mut std::process::Command,
     project_root: &Path,
-    stdout: Option<std::process::Stdio>,
+    stdout: Option<std::fs::File>,
     mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
 ) -> Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
     finalize_coordinator_launch(vendor, cmd, project_root)?;
-    if let Some(stdout) = stdout {
+    // AGY needs structured output even for quiet coordinators. Forward JSON
+    // to streaming consumers; quiet callers receive only the final response.
+    // Interactive AGY launches without stream-json retain their ordinary IO.
+    // trace:TASK-2838 | ai:codex
+    let agy_stream =
+        vendor == HeadlessVendor::Agy && cmd.get_args().any(|arg| arg == "stream-json");
+    let mut forward = stdout;
+    if agy_stream {
+        cmd.stdout(std::process::Stdio::piped());
+    } else if let Some(stdout) = forward.take() {
         cmd.stdout(stdout);
     }
     let mut child = cmd.spawn_retrying_etxtbsy()?;
     if let Some(guard) = guard.as_mut() {
         guard.disarm();
+    }
+    if agy_stream {
+        return Ok(crate::agy_outcome::coordinator_status(&mut child, forward)?);
     }
     Ok(child.wait()?)
 }
@@ -6546,6 +6569,16 @@ pub(crate) fn run_vendor_headless_to_exit(
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    // trace:TASK-2902 | ai:codex
+    if vendor == HeadlessVendor::Codex {
+        if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+            crate::native_publication::prepare(
+                &crate::main_worktree_root_from(&headless_worktree_root()),
+                tree,
+            )?;
+        }
+    }
+
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
     // lane job runner too, so it can run its targeted tests outside its
     // 60-second tool-call cap, and a lane that ran none is reported untested.
@@ -7253,7 +7286,12 @@ fn run_vendor_headless_child(
     }
     let status = status?;
     tee.stop();
-    Ok(status)
+    // trace:TASK-2838 | ai:codex
+    Ok(if vendor == HeadlessVendor::Agy {
+        crate::agy_outcome::log_status(log_path, status)
+    } else {
+        status
+    })
 }
 
 /// BUG-741: `codex exec` is not discoverable by the Claude-specific worktree
@@ -7931,6 +7969,15 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         _ => aida_core::agents_config::AgentSeat::Implementer,
     };
     let tuning = resolve_agent_tuning(cwd, vendor, agent_seat);
+    // trace:TASK-2902 | ai:codex
+    if vendor == HeadlessVendor::Codex && crate::canonical_role_name(seat) == "implementer" {
+        crate::native_publication::prepare(
+            &host_main
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| crate::main_worktree_root_from(cwd)),
+            cwd,
+        )?;
+    }
     let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -13747,9 +13794,11 @@ mod tests {
         .unwrap();
         let fake = tmp.path().join("fake-vendor");
         let env_out = tmp.path().join("env.txt");
+        // Emit valid AGY terminal evidence for the uncontained control.
+        // trace:TASK-2838 | ai:codex
         crate::test_exec::write_executable(
             &fake,
-            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nprintf '%s\\n' '{{\"event\":\"result\",\"result\":{{\"status\":\"SUCCESS\"}}}}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
         let tee_opts = crate::headless_tee::TeeOptions {
@@ -13815,7 +13864,7 @@ mod tests {
                 false,
             )
             .unwrap();
-            assert!(status.success());
+            assert!(status.success(), "{vendor:?}: {status}");
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
                 !env_contents

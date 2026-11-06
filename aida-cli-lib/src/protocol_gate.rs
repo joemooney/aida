@@ -165,8 +165,13 @@ impl ProtocolReport {
 }
 
 /// `docs/spikes/<YYYY-MM-DD>-<slug>.md`, directly under `docs/spikes/`.
+// trace:STORY-1651 | ai:codex
 fn is_spike_deliverable(path: &str) -> bool {
-    let Some(name) = path.strip_prefix("docs/spikes/") else {
+    // Project-neutral defaults coexist with this repository's contributor directory.
+    let Some(name) = path
+        .strip_prefix("docs/spikes/")
+        .or_else(|| path.strip_prefix("docs/internal/spikes/"))
+    else {
         return false;
     };
     if name.contains('/') || !name.ends_with(".md") {
@@ -1031,7 +1036,8 @@ mod tests {
 
     #[test]
     fn spike_deliverable_path_shape() {
-        assert!(is_spike_deliverable("docs/spikes/2026-01-02-x.md"));
+        assert!(is_spike_deliverable("docs/spikes/2026-01-02-legacy.md"));
+        assert!(is_spike_deliverable("docs/internal/spikes/2026-01-02-x.md"));
         assert!(!is_spike_deliverable("docs/spikes/x.md"));
         assert!(!is_spike_deliverable("docs/spikes/2026-01-02-x.txt"));
         assert!(!is_spike_deliverable("docs/spikes/sub/2026-01-02-x.md"));

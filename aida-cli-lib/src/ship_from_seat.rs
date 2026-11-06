@@ -132,19 +132,38 @@ pub(crate) fn pending_commit_preflight(
     explicit_spec: Option<&str>,
     message: &str,
 ) -> Result<PendingCommit> {
+    seat_write_preflight(
+        main,
+        clone,
+        explicit_spec,
+        message,
+        "commit the seat's pending work",
+        "Nothing was committed",
+    )
+}
+
+// trace:TASK-2879 | ai:codex
+fn seat_write_preflight(
+    main: &Path,
+    clone: &Path,
+    explicit_spec: Option<&str>,
+    message: &str,
+    action: &str,
+    unchanged: &str,
+) -> Result<PendingCommit> {
     let meta = std::fs::symlink_metadata(clone)
         .with_context(|| format!("could not read the seat path {}", clone.display()))?;
     anyhow::ensure!(
         !meta.file_type().is_symlink(),
-        "refusing to commit the seat's pending work: {} is a symbolic link; name the seat \
-         clone itself. Nothing was committed",
+        "refusing to {action}: {} is a symbolic link; name the seat \
+         clone itself. {unchanged}",
         clone.display()
     );
     let seat = recorded_seat(main, clone)?;
     let lease = seat_lease(&seat).map_err(|e| {
         anyhow::anyhow!(
-            "refusing to commit the seat's pending work: {e:#} (an ended lease no longer \
-             vouches for the clone). Nothing was committed"
+            "refusing to {action}: {e:#} (an ended lease no longer \
+             vouches for the clone). {unchanged}"
         )
     })?;
     if let Some(pid) = lease.active_pid {
@@ -155,9 +174,9 @@ pub(crate) fn pending_commit_preflight(
                     pid,
                     lease.active_pid_start_time.as_deref()
                 ),
-            "refusing to commit the seat's pending work in {}: its lease is held by live \
+            "refusing to {action} in {}: its lease is held by live \
              process {pid}, which may still be writing. Let that lane finish (or end its \
-             lease), then rerun. Nothing was committed",
+             lease), then rerun. {unchanged}",
             seat.root.display()
         );
     }
@@ -191,7 +210,7 @@ pub(crate) fn pending_message_check(
     })
     .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
     if let Some(explicit) = explicit_spec {
-        explicit_spec_check(explicit, &trailer_ids)
+        explicit_spec_check(store.as_ref(), explicit, &trailer_ids)
             .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
     }
     Ok(())
@@ -235,21 +254,81 @@ pub(crate) enum PostExitCommit {
     Failed(String),
 }
 
+/// Persist the agreed display ID when available, otherwise the origin ID.
+/// Friendly aliases are input/display conveniences, not trailer identities.
+// trace:BUG-2459 | ai:codex
+fn canonical_trailer_spec(store: Option<&aida_core::RequirementsStore>, spec: &str) -> String {
+    let origin = aida_core::node_alias::expand_or_keep(spec);
+    store
+        .and_then(|store| store.get_requirement_by_spec_id(&origin))
+        .map(|requirement| requirement.display_id()) // canonical-id: commit trailer
+        .unwrap_or(origin)
+}
+
 /// The message the host commits a native lane's leftover work with. Only a
 /// clean child exit (status 0) earns a completing `(SPEC)` trailer; the
 /// leftovers of a crashed or failed lane are salvage, committed with
 /// `(Refs SPEC)` so they never complete the spec at merge (advisor F4).
 // trace:TASK-2712 | ai:claude
-pub(crate) fn post_exit_message(spec: &str, lane: &str, clean_exit: bool) -> String {
-    let spec = aida_core::node_alias::display_spec_id(spec);
+// trace:BUG-2461 | ai:codex
+pub(crate) fn post_exit_message(
+    requirement: Option<&aida_core::Requirement>,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+) -> Result<String> {
+    // Trailers are persisted lookup keys, never friendly node labels.
+    // trace:BUG-2459 | ai:codex
+    let spec = aida_core::node_alias::expand_or_keep(spec);
     if clean_exit {
-        format!("[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({spec})")
+        // An unprefixed generic seed lets the shared formatter derive the
+        // conventional type/scope from the spec, without inheriting chore(seat).
+        seat_pr_title(
+            requirement,
+            &format!("[AI:codex] address CI failures and review findings ({spec})"),
+        )
     } else {
-        format!(
+        Ok(format!(
             "[AI:codex] chore(seat): salvage work native Codex lane {lane} left uncommitted \
              after a failed exit (Refs {spec})"
-        )
+        ))
     }
+}
+
+/// A rework's host commit must not turn a Refs PR into completion evidence.
+/// Missing/failed title evidence is conservative: only an observed completing
+/// title or an observed absent PR permits a completing trailer.
+// trace:TASK-2879 | ai:codex
+fn post_exit_completion_allowed(lookup: &crate::forge::ChangeLookup) -> bool {
+    match lookup {
+        crate::forge::ChangeLookup::NoChange => true,
+        // The pure-Git provider's id=0 sentinel represents no PR concept.
+        crate::forge::ChangeLookup::Found(change) if change.id == 0 => true,
+        crate::forge::ChangeLookup::Found(change) => change.title.as_deref().is_some_and(|title| {
+            crate::pr_ship::refs_spec_ids_in_text(title).is_empty()
+                && !crate::pr_ship::extract_trailing_spec_ids_from_subject(title).is_empty()
+        }),
+        _ => false,
+    }
+}
+
+// trace:TASK-2879 | ai:codex
+fn post_exit_message_with_completion(
+    requirement: Option<&aida_core::Requirement>,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    completing: bool,
+) -> Result<String> {
+    let mut message = post_exit_message(requirement, spec, lane, clean_exit)?;
+    if clean_exit && !completing {
+        let display = aida_core::node_alias::expand_or_keep(spec);
+        message = message
+            .trim_end_matches(&format!("({display})"))
+            .to_string()
+            + &format!("(Refs {display})");
+    }
+    Ok(message)
 }
 
 /// TASK-2712 (advisor ruling F1): after a native Codex implementer's child
@@ -275,13 +354,63 @@ pub(crate) fn post_exit_commit(
     if crate::seat_clone::host_recorded_clone(&main, tree).is_none() {
         return PostExitCommit::NotASeat;
     }
-    match commit_seat_pending(
-        &main,
-        tree,
-        Some(spec),
-        &post_exit_message(spec, lane, clean_exit),
-        commit,
+    // trace:TASK-2902 | ai:codex
+    // Every exit path honors vetoes before resolving or inspecting intent.
+    if publication_veto(&main, spec) {
+        eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
+        return PostExitCommit::Clean;
+    }
+    let validated = (|| -> Result<(String, Option<String>)> {
+        let canonical = crate::native_publication::resolve_scope(&main, spec)?;
+        let declared = crate::native_publication::read(&main, tree, &canonical)?;
+        Ok((canonical, declared))
+    })();
+    let (spec, declared) = match validated {
+        Ok(value) => value,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    let spec = spec.as_str();
+    // Resolve against the host forge, never seat-controlled remote config.
+    // trace:TASK-2879 | ai:codex
+    let completing = recorded_seat(&main, tree)
+        .and_then(|seat| lease_branch(&seat))
+        .ok()
+        .and_then(|(branch, _)| {
+            crate::forge::forge_for_open_change(&main)
+                .change_for_branch(&branch)
+                .ok()
+        })
+        .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
+    if let Some(mut message) = declared {
+        if !clean_exit || !completing {
+            let prefix = message.rsplit_once('(').expect("validated trailer").0;
+            message = format!("{prefix}(Refs {spec})");
+        }
+        return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
+            Ok(Some(tip)) => PostExitCommit::Committed(tip),
+            Ok(None) => PostExitCommit::Clean,
+            Err(e) => PostExitCommit::Failed(format!("{e:#}")),
+        };
+    }
+    // Resolve the lease's origin ID against the host store before formatting.
+    // trace:BUG-2459 | ai:codex
+    let store = crate::load_store_for_lookup(&main);
+    let trailer_spec = canonical_trailer_spec(store.as_ref(), spec);
+    // trace:BUG-2461 | ai:codex
+    let requirement = store
+        .as_ref()
+        .and_then(|store| store.get_requirement_by_spec_id(spec));
+    let message = match post_exit_message_with_completion(
+        requirement,
+        &trailer_spec,
+        lane,
+        clean_exit,
+        completing,
     ) {
+        Ok(message) => message,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
         Ok(Some(tip)) => PostExitCommit::Committed(tip),
         Ok(None) => PostExitCommit::Clean,
         Err(e) => PostExitCommit::Failed(format!("{e:#}")),
@@ -378,7 +507,8 @@ pub(crate) fn publish_queue_exit(
             &main,
             FromSeatOptions {
                 clone: tree.to_path_buf(),
-                spec: Some(spec.to_string()),
+                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
                 no_pr: false,
                 dry_run: false,
                 commit_pending: None,
@@ -417,9 +547,7 @@ fn publish_queue_exit_with(
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
-    if crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
-        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
-    {
+    if publication_veto(main, spec) {
         return Ok(());
     }
     finish_queue_exit(commit(), &publish, || {
@@ -433,6 +561,12 @@ fn publish_queue_exit_with(
         }
         notify()
     })
+}
+
+// trace:TASK-2902 | ai:codex
+fn publication_veto(main: &Path, spec: &str) -> bool {
+    crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
+        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
 }
 
 // trace:STORY-2475 | ai:codex
@@ -482,6 +616,184 @@ pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Resu
 #[cfg(test)]
 mod queue_exit_tests {
     use super::*;
+    // trace:BUG-2461 | ai:codex
+    #[test]
+    fn bug_2461_post_exit_derives_spec_subject_and_preserves_refs() {
+        use aida_core::{Requirement, RequirementType};
+        let mut requirement = Requirement::new("Repair native publication".into(), String::new());
+        requirement.feature = "uncategorized".into();
+        for (kind, prefix) in [
+            (RequirementType::Bug, "fix"),
+            (RequirementType::Task, "chore"),
+            (RequirementType::Story, "feat"),
+            (RequirementType::Doc, "docs"),
+        ] {
+            requirement.req_type = kind;
+            for completing in [true, false] {
+                let message = post_exit_message_with_completion(
+                    Some(&requirement),
+                    "BUG-2461",
+                    "lane",
+                    true,
+                    completing,
+                )
+                .unwrap();
+                let trailer = if completing {
+                    "BUG-2461"
+                } else {
+                    "Refs BUG-2461"
+                };
+                assert_eq!(
+                    message,
+                    format!("[AI:codex] {prefix}: Repair native publication ({trailer})")
+                );
+            }
+        }
+        requirement.title = "fix(seat):   Repair native publication".into();
+        assert_eq!(
+            post_exit_message(Some(&requirement), "BUG-2461", "lane", true).unwrap(),
+            "[AI:codex] fix(seat): Repair native publication (BUG-2461)"
+        );
+        assert!(post_exit_message(None, "BUG-2461", "lane", true).is_err());
+        // Failed exits remain salvage even without readable spec prose.
+        let salvage = post_exit_message(None, "BUG-2461", "lane", false).unwrap();
+        assert!(salvage.ends_with("(Refs BUG-2461)"));
+        requirement.title = "Repair (Refs TASK-1)".into();
+        assert!(post_exit_message(Some(&requirement), "BUG-2461", "lane", true).is_err());
+    }
+
+    // trace:TASK-2879 | ai:codex
+    #[test]
+    fn task_2879_post_exit_preserves_refs_and_unknown_titles() {
+        use crate::forge::{ChangeLookup, ChangeRef};
+        for (title, completing) in [
+            (Some("fix: full work (TASK-2879)"), true),
+            (Some("fix: partial work (Refs TASK-2879)"), false),
+            (
+                Some("fix: partial (Refs TASK-2879) then (TASK-2879)"),
+                false,
+            ),
+            (Some("fix: no trailer"), false),
+            (None, false),
+        ] {
+            let found = ChangeLookup::Found(ChangeRef {
+                id: 1,
+                url: String::new(),
+                branch: "task".into(),
+                base: "main".into(),
+                title: title.map(str::to_string),
+            });
+            assert_eq!(
+                post_exit_completion_allowed(&found),
+                completing,
+                "{title:?}"
+            );
+            let requirement =
+                aida_core::Requirement::new("Preserve references".into(), String::new());
+            let message = post_exit_message_with_completion(
+                Some(&requirement),
+                "TASK-2879",
+                "lane",
+                true,
+                post_exit_completion_allowed(&found),
+            )
+            .unwrap();
+            assert_eq!(
+                crate::pr_ship::extract_trailing_spec_ids_from_subject(&message).is_empty(),
+                !completing
+            );
+            assert!(message.ends_with(if completing {
+                "(TASK-2879)"
+            } else {
+                "(Refs TASK-2879)"
+            }));
+            let failed =
+                post_exit_message_with_completion(None, "TASK-2879", "lane", false, completing)
+                    .unwrap();
+            assert!(failed.ends_with("(Refs TASK-2879)"));
+        }
+        assert!(post_exit_completion_allowed(&ChangeLookup::NoChange));
+        for unknown in [
+            ChangeLookup::CliMissing,
+            ChangeLookup::CliFailed("failed".into()),
+            ChangeLookup::Unreachable("timeout".into()),
+        ] {
+            assert!(!post_exit_completion_allowed(&unknown));
+        }
+    }
+
+    // trace:TASK-2879 | ai:codex
+    #[test]
+    fn task_2879_remote_pin_observes_absence_and_cleans_private_ref() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let origin = tmp.path().join("origin.git");
+        std::fs::create_dir(&main).unwrap();
+        let git = |root: &Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&main, &["init", "-b", "main"]);
+        git(
+            &main,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "seed",
+            ],
+        );
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "--bare",
+                main.to_str().unwrap(),
+                origin.to_str().unwrap(),
+            ],
+        );
+        git(
+            &main,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        assert!(pin_remote_branch(&main, "missing").unwrap().is_none());
+        let fetch_head = main.join(".git/FETCH_HEAD");
+        std::fs::write(&fetch_head, "retain fetch head\n").unwrap();
+        let pin = pin_remote_branch(&main, "main").unwrap().unwrap();
+        assert_eq!(pin.tip, git(&main, &["rev-parse", "HEAD"]));
+        assert_eq!(
+            std::fs::read_to_string(&fetch_head).unwrap(),
+            "retain fetch head\n"
+        );
+        let reference = pin.reference.clone();
+        assert_eq!(git(&main, &["rev-parse", &reference]), pin.tip);
+        drop(pin);
+        assert!(git(
+            &main,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/aida/publication/"
+            ]
+        )
+        .is_empty());
+        git(&main, &["remote", "set-url", "origin", "/no-such-remote"]);
+        assert!(pin_remote_branch(&main, "main").is_err());
+    }
+
     // trace:STORY-2475 | ai:codex
     #[test]
     fn story_2475_punt_and_hold_veto_every_publication_effect() {
@@ -987,14 +1299,19 @@ where
 }
 
 /// An explicit `aida ship <SPEC> --from-seat` spec must be one the seat's
-/// commits name in their trailers (aliases expanded, case ignored); a branch
+/// commits name in their trailers (origin/agreed IDs resolved through the host
+/// store, aliases expanded, case ignored); a branch
 /// whose commits name another spec is refused rather than published under
 /// the wrong one.
 // trace:BUG-HOME-038 | ai:claude
-pub(crate) fn explicit_spec_check(explicit: &str, trailer_ids: &[String]) -> Result<()> {
+// trace:BUG-2459 | ai:codex
+pub(crate) fn explicit_spec_check(
+    store: Option<&aida_core::RequirementsStore>,
+    explicit: &str,
+    trailer_ids: &[String],
+) -> Result<()> {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
-    let canonical =
-        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
+    let canonical = |id: &str| aida_core::id_identity::id_key(&canonical_trailer_spec(store, id));
     let want = canonical(explicit);
     if trailer_ids.iter().any(|id| canonical(id) == want) {
         return Ok(());
@@ -1038,7 +1355,7 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
 
 // trace:STORY-2475 | ai:codex
 pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
-    run_from(
+    run_from_with_reconciliation(
         cwd,
         opts,
         &Deps {
@@ -1049,12 +1366,105 @@ pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
                 let _ = crate::queue_review_for_open_pr(main, branch);
             },
         },
+        true,
     )
+}
+
+// trace:TASK-2879 | ai:codex
+struct RemoteBranchPin {
+    main: PathBuf,
+    reference: String,
+    tip: String,
+}
+impl Drop for RemoteBranchPin {
+    fn drop(&mut self) {
+        // If a fetch failed after writing its ref, resolve its current tip
+        // before compare-deleting. Never delete a different observed value.
+        let tip = if self.tip.is_empty() {
+            git_text(&self.main, &["rev-parse", "--verify", &self.reference]).ok()
+        } else {
+            Some(self.tip.clone())
+        };
+        if let Some(tip) = tip {
+            let _ = git_text(&self.main, &["update-ref", "-d", &self.reference, &tip]);
+        }
+    }
+}
+
+/// Observe absence separately from transport failure. Fetch through the host
+/// remote into an invocation-private ref, leaving FETCH_HEAD untouched.
+// trace:TASK-2879 | ai:codex
+fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin>> {
+    let mut observe = aida_core::git_ops::host_remote_git_command(main, "origin");
+    observe
+        .args([
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            &format!("refs/heads/{branch}"),
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    let out = crate::command_output_with_timeout(observe, std::time::Duration::from_secs(20))
+        .context("remote branch observation timed out; nothing pushed")?;
+    if out.status.code() == Some(2) {
+        return Ok(None);
+    }
+    anyhow::ensure!(
+        out.status.success(),
+        "remote branch observation failed: {}; nothing pushed",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let reference = format!("refs/aida/publication/{}", uuid::Uuid::new_v4());
+    let mut pin = RemoteBranchPin {
+        main: main.into(),
+        reference,
+        tip: String::new(),
+    };
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .args([
+            "fetch",
+            "--no-write-fetch-head",
+            "origin",
+            &format!("refs/heads/{branch}:{}", pin.reference),
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    let out = crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
+        .context("remote PR head fetch timed out; nothing pushed")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "remote PR head fetch failed: {}; nothing pushed",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    pin.tip = git_text(
+        main,
+        &[
+            "rev-parse",
+            "--verify",
+            &format!("{}^{{commit}}", pin.reference),
+        ],
+    )?;
+    Ok(Some(pin))
 }
 
 /// [`run`] from `cwd`.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Result<()> {
+    run_from_with_reconciliation(cwd, opts, deps, false)
+}
+
+// Reconciliation belongs after admission of the original bundle. Passing the
+// resolved spec here preserves explicit specs on otherwise unscoped branches.
+// trace:TASK-2879 | ai:codex
+fn run_from_with_reconciliation(
+    cwd: &Path,
+    opts: FromSeatOptions,
+    deps: &Deps<'_>,
+    reconcile: bool,
+) -> Result<()> {
     if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(cwd) {
         anyhow::bail!(
             "`aida ship --from-seat` runs from the main checkout, not from inside the seat \
@@ -1117,9 +1527,56 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         }
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
-    let staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
+    let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
     let checked = check_staged(&main, &staged, &opts);
     drop_quarantine_on_refusal(&staged, opts.dry_run, checked)?;
+    // A plain publish never writes the seat unless the pinned remote head is
+    // missing from its committed history. Live/dirty seats remain publishable
+    // when their existing commits already contain that head (or it is absent).
+    // trace:TASK-2879 | ai:codex
+    let mut merged = false;
+    if reconcile && !opts.dry_run {
+        let result = (|| -> Result<()> {
+            if let Some(remote) = pin_remote_branch(&main, &branch)? {
+                let ancestry = aida_core::git_ops::host_git_command(&main)
+                    .args(["merge-base", "--is-ancestor", &remote.tip, &staged.tip])
+                    .status()?;
+                match ancestry.code() {
+                    Some(0) => return Ok(()),
+                    Some(1) => {}
+                    _ => anyhow::bail!("could not check remote PR head ancestry; nothing pushed"),
+                }
+                let message = format!("[host] chore(seat): merge remote PR head (Refs {spec})");
+                let plan = seat_write_preflight(
+                    &main,
+                    &opts.clone,
+                    Some(&spec),
+                    &message,
+                    "merge the remote PR head",
+                    "Nothing was merged or pushed",
+                )?;
+                crate::seat_clone::merge_publication_head(
+                    &main,
+                    &seat.root,
+                    &branch,
+                    &remote.tip,
+                    &message,
+                    plan.pinned,
+                )?;
+                merged = true;
+                let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
+                staged = stage_bundle(&main, &branch, &bytes, false)?;
+                check_staged(&main, &staged, &opts)?;
+            }
+            Ok(())
+        })();
+        let result = if merged {
+            result.context("the reconciled commit remains in the seat; nothing pushed; fix the refusal and rerun publication")
+        } else {
+            result
+        };
+        drop_quarantine_on_refusal(&staged, false, result)?;
+    }
     let (quarantine, tip) = (&staged.reference, &staged.tip);
     if opts.dry_run {
         eprintln!(
@@ -1141,9 +1598,14 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         .status()
         .context("could not invoke `git push`")?;
     if !push.success() {
+        let recovery = if merged {
+            "; the reconciled commit remains in the seat; push not confirmed; inspect origin before retrying publication"
+        } else {
+            ""
+        };
         anyhow::bail!(
             "`git push origin {quarantine}:refs/heads/{branch}` failed — investigate before \
-             retrying"
+             retrying{recovery}"
         );
     }
     // Pushed: the quarantine ref has done its job (a failure above keeps it
@@ -1193,7 +1655,7 @@ fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions) -> Result<
             crate::trace::resolve_spec_in_store(store.as_ref(), id)
         })?;
     if let Some(explicit) = opts.spec.as_deref() {
-        explicit_spec_check(explicit, &trailer_ids)?;
+        explicit_spec_check(store.as_ref(), explicit, &trailer_ids)?;
     }
     Ok(())
 }

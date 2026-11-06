@@ -142,7 +142,7 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
             "--reason",
             "waiting for operator clearance",
             "--until",
-            "the dependency decision lands",
+            "manual:operator",
         ])
         .output()
         .expect("set operator hold");
@@ -171,7 +171,7 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
         "pickup error omitted hold reason: {pickup_message}"
     );
     assert!(
-        pickup_message.contains("the dependency decision lands"),
+        pickup_message.contains("manual:operator"),
         "pickup error omitted revisit trigger: {pickup_message}"
     );
 
@@ -279,7 +279,7 @@ fn defer_removes_queued_rows_across_queue_identities() {
     );
 
     let defer = aida(&repo, &home)
-        .args(["defer", &spec, "--until", "operator revisits"])
+        .args(["defer", &spec, "--until", "date:2026-12-01"])
         .output()
         .expect("run aida defer");
     let defer_out = format!(
@@ -1595,5 +1595,43 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
             !entry.leased && entry.lease_holder.is_none(),
             "a pooled tree is returned idle: {entry:?}"
         );
+    }
+}
+
+// A real queue-work gate must survive the alias: a review envelope with no
+// queued review story refuses before falling back to implementation.
+// trace:TASK-3111 trace:TASK-2869 trace:TASK-1715.ac6152c7 | ai:codex
+#[test]
+fn pr_review_preserves_the_missing_review_story_refusal() {
+    let base = tempfile::tempdir().unwrap();
+    let (repo, home, _) = init_codex_only_project(base.path());
+    let grant = advisor_grant(&repo, &home);
+    for args in [
+        vec!["queue", "work", "PR-42", "--auto-complete"],
+        vec!["pr", "review", "PR-42"],
+    ] {
+        let out = aida(&repo, &home)
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", &grant)
+            .env("AIDA_FROM_PR_REVIEW", "1")
+            .env("AIDA_FROM_PR_NUMBER", "42")
+            .args(&args)
+            .output()
+            .unwrap();
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!out.status.success(), "{args:?}: {message}");
+        assert!(
+            message.contains("no pickable review story"),
+            "{args:?}: {message}"
+        );
+        assert!(
+            message.contains("refusing to fall back to an implementer pickup"),
+            "{args:?}: {message}"
+        );
+        assert!(!repo.join(".aida/sessions").exists());
     }
 }

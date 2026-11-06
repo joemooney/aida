@@ -15,7 +15,7 @@ Complexity: Medium (one trait method + one launch builder; the substrate already
 ## 1. The problem, stated against the real surface
 
 AIDA's `--no-human=both` autonomous drain has a three-tier escalation cascade
-(STORY-306, `docs/autonomous-drain.md`): a headless implementer that hits a
+(STORY-306, `docs/advanced/autonomous-drain.md`): a headless implementer that hits a
 design-fork it cannot safely resolve **punts** (parks the spec
 `NeedsAttention`, drops a durable record), the orchestrator spawns a headless
 **advisor** that either resolves the fork or escalates it to a human, and on a
@@ -27,7 +27,7 @@ Only the last step is vendor-coupled. For Claude that resume is
 `claude -p --resume <session-id>` (the `resume_implementer` trait method in
 `aida-cli/src/auto_complete.rs`, default impl errors; `RealPhaseDriver`
 overrides it to drive a real `claude --resume`). The reference doc
-`docs/agents/session-communication.md` documents Claude's
+`docs/advanced/session-communication.md` documents Claude's
 `permissionDecision: "defer"` -> `stop_reason: "tool_deferred"` ->
 `claude -p --resume` primitive as Pattern 3.
 
@@ -42,7 +42,7 @@ that cannot be `defer`-resumed at the tool-call level?
 ## 2. The key finding: AIDA never used `defer`
 
 Read against the shipped hooks (confirmed in
-`docs/agents/porting-claude-code-to-codex.md`, "What AIDA Actually Depends On"):
+`docs/archive/audits/porting-claude-code-to-codex.md`, "What AIDA Actually Depends On"):
 **none of AIDA's shipped hooks emit `permissionDecision`, `defer`, or
 `continue: false`.** The `defer` pattern lives in `session-communication.md`
 purely as a reference for what Claude *can* do. AIDA's actual escalation is
@@ -225,11 +225,11 @@ a gate is ever wanted, it is a Claude-only optimization with a Codex fallback of
 
 ## 9. Related
 
-- `docs/autonomous-drain.md` -- the escalation cascade this design slots into.
-- `docs/agents/session-communication.md` -- Claude `ask`/`continue:false`/`defer`
+- `docs/advanced/autonomous-drain.md` -- the escalation cascade this design slots into.
+- `docs/advanced/session-communication.md` -- Claude `ask`/`continue:false`/`defer`
   reference; update its "Codex And Antigravity" section to point here once this
   lands.
-- `docs/agents/porting-claude-code-to-codex.md` -- the dependency-surface audit
+- `docs/archive/audits/porting-claude-code-to-codex.md` -- the dependency-surface audit
   that establishes AIDA never used `defer`.
 - `aida-cli/src/punt.rs` -- `PuntRequest` / `PuntResponse` handshake (agent-neutral).
 - `aida-cli/src/auto_complete.rs` -- `resume_implementer` (the one vendor-coupled

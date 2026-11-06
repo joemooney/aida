@@ -1203,7 +1203,7 @@ pipes. The **Why** column is load-bearing: it explains the role / lease /
 worktree implication of each path, never just restates the action. The
 rows are listed in recommended order — top-to-bottom is the sequence to
 follow, with ⏸ the pause alternative. Full convention:
-`docs/skills-convention.md`.
+`docs/internal/skills-convention.md`.
 
 **Templates.** Each shows a prose lead-in line followed by the next-steps
 table — print the lead-in as normal text, then the table as a real GFM

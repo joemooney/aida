@@ -109,4 +109,4 @@ This report is the reconciled output of a deliberate **multi-agent adversarial l
 
 The exercise produced one durable lesson worth stating plainly: **a delegated finding is not a verified fact.** A synthesis is only as sound as its weakest un-reproduced input, and the corrections here landed exactly in the zone that had been delegated and not personally re-run. Forcing reproduction — the loop's core mechanic — is what caught them.
 
-*Full working artifacts, including the internal review and the Codex rebuttal, are retained under `docs/competitive-analysis/` and anchored to SPIKE-50.*
+*Full working artifacts, including the internal review and the Codex rebuttal, are retained under `docs/internal/competitive-analysis/` and anchored to SPIKE-50.*

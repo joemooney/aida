@@ -99,6 +99,20 @@ to whoever started it, and a separate reviewer and the merge seat take it from t
 a design fork, run `aida punt`; to push the branch but hold the PR for a manual gate, run \
 `aida pr hold`.";
 
+/// Native seats finish through the host after the child exits, while the
+/// recorded lease still vouches for the work. This overrides the ordinary
+/// pickup shipping unit without weakening the live-owner check.
+// trace:TASK-2879 | ai:codex
+pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
+Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
+and write a final handoff listing changed files, validation results and blockers, then exit. \
+Do not commit, push, open a PR or run `aida queue done` from this seat. After your process \
+exits, the host launcher commits and publishes the PR; queue completion follows publication. \
+Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
+run `aida punt`; existing punt or hold signals remain publication vetoes. \
+For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\"` \
+to declare the host publication subject; this records intent without publishing.";
+
 /// BUG-2383: how a standalone implementer runs its local tests. Appended to
 /// its prompt when the launcher's lane job runner is up.
 // trace:BUG-2383 | ai:claude
@@ -647,6 +661,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    // trace:TASK-2902 | ai:codex
+    if launch.vendor == crate::session::HeadlessVendor::Codex {
+        crate::native_publication::prepare(&main_root, &worktree)?;
+    }
     // A job runs seat-written code, so it runs only inside bubblewrap: with
     // os_wrap off the runner would refuse every job, so it is not offered and
     // the lane reports untested=true. An unset os_wrap defaults on for this
@@ -654,8 +672,16 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:BUG-2434 | ai:claude
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
-        "{}{STOP_CONTRACT}{}",
+        "{}{}{}",
         launch.prompt,
+        if launch.vendor == crate::session::HeadlessVendor::Codex
+            && crate::session::containment_posture(launch.vendor, launch.contained)?
+                == crate::session::ContainmentPosture::Native
+        {
+            NATIVE_STOP_CONTRACT
+        } else {
+            STOP_CONTRACT
+        },
         if lane_jobs.is_some() {
             LANE_JOB_CONTRACT
         } else {

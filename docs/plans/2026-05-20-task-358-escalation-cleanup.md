@@ -148,7 +148,7 @@ the implementer is about to perform. Triggers:
   --escalations` as the recovery path. Never blocks the terminal
   `finish_escalated`.
 
-### `docs/autonomous-drain.md`
+### `docs/advanced/autonomous-drain.md`
 
 - Replace the "robust cleanup is a followup" gotcha with the shipped
   description of the auto-clean trigger + the explicit prune verb.
@@ -158,7 +158,7 @@ the implementer is about to perform. Triggers:
 - `aida-cli/src/main.rs` — SessionLease, helpers, edit-hook wiring, prune verb
 - `aida-cli/src/auto_complete.rs` — orchestrator trait + escalate-blocks call
 - `aida-cli/src/cli.rs` — `--escalations` flag
-- `docs/autonomous-drain.md` — gotcha → shipped behavior
+- `docs/advanced/autonomous-drain.md` — gotcha → shipped behavior
 
 ## Reusable helpers (do not reimplement)
 
@@ -249,4 +249,4 @@ resume path preserves its worktree.
   persists" decision is what created this leak), STORY-276 (headless
   implementer — the source of the punt), STORY-332 (Needs Attention +
   punt ledger).
-- See also: `docs/autonomous-drain.md`, `docs/plans/2026-05-19-story-306-advisor-escalation-tier.md`.
+- See also: `docs/advanced/autonomous-drain.md`, `docs/plans/2026-05-19-story-306-advisor-escalation-tier.md`.

@@ -13,7 +13,7 @@
 #
 # NOTE: requires a Linux GitLab runner with the docker executor, the
 # localhost/aida-ci builder image (ci/Dockerfile) and the /builds + /ci-cache
-# host volumes described in docs/gitlab-ci-runner.md (STORY-1216). The live bwrap
+# host volumes described in docs/advanced/gitlab-ci-runner.md (STORY-1216). The live bwrap
 # confinement gate needs unprivileged user namespaces, which a locked-down
 # runner may deny — it is `allow_failure: true` here (reported, not blocking)
 # until the runner's capabilities are confirmed; promote it to a hard gate then.
@@ -24,7 +24,7 @@
 # full verify/test/bwrap set on each push only duplicated it and competed with
 # implementer lanes for the runner host's disk. The merge gates therefore run
 # for merge requests, for the scheduled nightly pipeline on the default branch
-# (CI/CD > Schedules, see docs/gitlab-ci-runner.md) and for a manual "Run
+# (CI/CD > Schedules, see docs/advanced/gitlab-ci-runner.md) and for a manual "Run
 # pipeline" from the UI. They are interruptible, so a newer commit cancels a
 # stale run. Release (tag) jobs and the merge-hold gate are unaffected.
 # trace:TASK-B6B1278890774EF993D2EBC327862470-141 | ai:claude

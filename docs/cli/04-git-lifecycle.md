@@ -107,7 +107,19 @@ the main checkout with `aida ship --from-seat <clone>`. The seat's branch is
 bundled inside the seat sandbox, verified, and fetched into a quarantine ref,
 never run as host git in the clone. The command prints the diff stat and the
 clone's git config and hooks, checks commit trailers, pushes, and opens the
-PR. It never merges; `--dry-run` imports and pushes nothing.
+PR. It never merges the PR; `--dry-run` imports and pushes nothing.
+
+After checking the original bundle's diff and trailers, publication pins the
+remote branch head. If that head is already an ancestor of the seat's committed
+branch (or no remote branch exists), publication leaves the seat untouched;
+a live lane or untracked scratch file does not prevent publishing those commits.
+Otherwise the host first requires an idle, clean seat and merges the pinned
+remote head inside the sandbox, with hooks off and a neutral host commit subject.
+Conflicts abort without pushing. The reconciled bundle is checked again before
+the ordinary non-force push. A later refusal or push failure retains the
+reconciled commit in the seat for inspection and retry; it does not imply that
+anything was published. A remote update after the pin can still refuse the push.
+<!-- trace:TASK-2879 | ai:codex -->
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
 
 Seat publication derives the PR summary from the owning spec. A conventional
@@ -122,7 +134,11 @@ subject remains usable, but the generic rework subject refuses publication.
 <!-- trace:TASK-2891 | ai:codex -->
 
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
-inside its sandbox, and `aida ship` there refuses with the way out. The seat
+inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): partial work (Refs <spec-id>)'`
+records a publication declaration without committing or publishing. Supply the
+complete subject and exactly one live non-epic lease spec; `(ID)` declares
+completion and `(Refs ID)` declares a partial slice. `--dry-run` validates without
+recording. A missing message retains the native publication refusal. The seat
 leaves its edits uncommitted. When an implementer lane's Codex process exits,
 the launcher commits that pending work in the seat clone. An operator can also
 commit and publish it with
@@ -135,6 +151,20 @@ this checkout did not record, an ended lease, a lease another live process
 still holds, or a symlinked or replaced clone path. If the commit fails after
 staging, the index is put back as it was.
 <!-- trace:TASK-2712 | ai:claude -->
+
+The declaration lives at the seat's `.aida/native-publication.json`, bound to
+its host-recorded lease/spec and a fresh launch token. Standalone, drain/resume,
+foreground and background launches clear prior declarations. Supervised rotation
+retains the same token and declaration after generation one. Lease release removes
+the host binding. The host validates scope and declaration before any commit or
+forge probe; stale, mismatched or invalid declarations refuse. Clean exits retain
+the declared subject, but completing trailers downgrade to Refs when the existing
+PR title is Refs or the forge lookup cannot establish completion eligibility.
+This guard also applies with no declaration. Failed exits always use Refs. Punt
+and hold signals veto publication before declaration validation and report that
+pending work remains uncommitted. Post-exit trailers use the store's canonical
+display ID, never a friendly node alias.
+<!-- trace:TASK-2902 | ai:codex -->
 
 ---
 
@@ -639,7 +669,7 @@ shows the current mandate; the statusline shows `MANDATE <time left>` while one
 is active.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
-PR comment as "released under mandate <id> by advisor"; start and stop are
+PR comment as `released under mandate <id> by advisor`; start and stop are
 recorded in `.aida/events.jsonl`. The authority record lives only in the
 user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
 Each record is re-validated on every read (24h cap, no future issue time,

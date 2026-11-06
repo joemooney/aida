@@ -226,13 +226,13 @@ uniform boundary; otherwise Codex-native is stronger and the default."
 - `aida-cli/src/session.rs` -- `os_wrapped_program_and_args`, `bwrap_preflight`,
   `bwrap_availability`, `os_wrap_enabled` (the Claude wrap path + the model for
   the Codex doctor probe).
-- `docs/agents/claude-bubblewrap-sandbox.md` -- the `os_wrap` mechanism +
+- `docs/internal/agents/claude-bubblewrap-sandbox.md` -- the `os_wrap` mechanism +
   userns/AppArmor operational tax this design avoids re-incurring for Codex.
 - `docs/agents/per-agent-config.md` -- `[agents] bypass` / `[contained]` posture
   knobs and the nesting caveat.
 - `aida-cli/src/compete.rs` -- the current `codex exec
   --dangerously-bypass-approvals-and-sandbox` adapter (correct for the bake-off,
   the wrong default for a drain).
-- `docs/agents/porting-claude-code-to-codex.md` -- flags `os_wrap` as the
+- `docs/archive/audits/porting-claude-code-to-codex.md` -- flags `os_wrap` as the
   Claude-launch-specific piece "needing a deliberate Codex wrapper"; this doc is
   that deliberation, and its answer is "native-first, wrapper opt-in."

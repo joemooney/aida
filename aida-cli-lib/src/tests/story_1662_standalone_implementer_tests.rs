@@ -1092,3 +1092,17 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         "the launcher's grant reached the child"
     );
 }
+
+// trace:TASK-2879 | ai:codex
+#[test]
+fn task_2879_native_stop_hands_pending_work_to_host() {
+    let prompt = crate::session::codex_inline_prompt("/aida-pickup TASK-2879").unwrap();
+    for text in [&prompt, &NATIVE_STOP_CONTRACT.to_string()] {
+        assert!(text.contains("uncommitted"));
+        assert!(text.contains("handoff"));
+        assert!(text.contains("after exit") || text.contains("process exits"));
+        assert!(text.contains("aida queue done"));
+    }
+    assert!(!NATIVE_STOP_CONTRACT.contains("when your PR is open"));
+    assert!(STOP_CONTRACT.contains("when your PR is open"));
+}

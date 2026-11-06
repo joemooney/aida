@@ -77,6 +77,20 @@ fn revisions_win_without_marking_read_or_mutating_message() {
             .len(),
         2
     );
+    let fp = fingerprint(&msg).unwrap();
+    assert_eq!(
+        latest_for_identity(&common, &msg.id, &fp)
+            .unwrap()
+            .unwrap()
+            .outcome,
+        Outcome::Declined
+    );
+    assert!(latest_for_identity(&common, "different-request", &fp)
+        .unwrap()
+        .is_none());
+    assert!(latest_for_identity(&common, &msg.id, &"b".repeat(64))
+        .unwrap()
+        .is_none());
     let (_, snap) = snapshot(root, &who);
     assert_eq!(snap.records[0].read, ReadEvidence::Unread);
     assert_eq!(snap.records[0].message.body, msg.body);

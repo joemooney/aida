@@ -2698,6 +2698,77 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
     result
 }
 
+/// Merge a host-fetched remote PR head after committing the child's edits.
+/// Objects are available through the clone's host-object alternates. Every
+/// clone command stays inside the existing writable Git sandbox, with the
+/// host identity and hooks disabled. Conflicts abort and refuse publication.
+// trace:TASK-2879 | ai:codex
+pub(crate) fn merge_publication_head(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    remote: &str,
+    message: &str,
+    pinned: (u64, u64),
+) -> Result<()> {
+    use std::ffi::{OsStr, OsString};
+    let value = |key: &str| -> Result<OsString> {
+        let mut cmd = git(main);
+        cmd.args(["config", "--get", key]);
+        let value = run(cmd, "read host publication identity")?;
+        anyhow::ensure!(!value.is_empty(), "missing host {key}");
+        Ok(value.into())
+    };
+    let name = value("user.name")?;
+    let email = value("user.email")?;
+    let identity = [
+        ("GIT_AUTHOR_NAME", name.clone()),
+        ("GIT_AUTHOR_EMAIL", email.clone()),
+        ("GIT_COMMITTER_NAME", name),
+        ("GIT_COMMITTER_EMAIL", email),
+    ];
+    merge_publication_head_with(
+        &|args| {
+            ensure_dir_identity(tree, pinned)?;
+            let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+            run_commit_sandboxed(tree, main, &args, &identity)
+                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+                .map_err(|e| anyhow::anyhow!("publication Git failed: {e}"))
+        },
+        branch,
+        remote,
+        message,
+    )
+}
+
+// trace:TASK-2879 | ai:codex
+fn merge_publication_head_with(
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    remote: &str,
+    message: &str,
+) -> Result<()> {
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "publication seat is not on its recorded branch {branch}"
+    );
+    anyhow::ensure!(
+        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
+        "publication seat already has an unfinished merge"
+    );
+    anyhow::ensure!(
+        execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty(),
+        "publication seat has pending changes; commit them before merging the remote PR head"
+    );
+    if let Err(why) = execute(&["merge", "--no-edit", "--no-verify", "-m", message, remote]) {
+        if execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
+            execute(&["merge", "--abort"]).context("could not abort publication merge")?;
+        }
+        anyhow::bail!("could not merge the remote PR head; nothing pushed: {why:#}");
+    }
+    Ok(())
+}
+
 // Keep launch admission and the Git operations together: any failed fetch,
 // ancestry check, merge or abort propagates before the vendor can start.
 // trace:STORY-2475 | ai:codex
@@ -3150,6 +3221,64 @@ mod rework_merge_tests {
                 assert_eq!(execute(&["rev-parse", "HEAD^1"]).unwrap(), before);
                 assert_eq!(execute(&["rev-parse", "HEAD^2"]).unwrap(), base);
             }
+        }
+    }
+
+    // trace:TASK-2879 | ai:codex
+    #[test]
+    fn task_2879_publication_merges_remote_and_aborts_conflicts() {
+        for conflicting in [false, true] {
+            let fx = tests::fixture();
+            let execute = |args: &[&str]| {
+                let mut cmd = crate::test_git::git_command();
+                cmd.current_dir(&fx.main).args(args);
+                run(cmd, "publication merge test")
+            };
+            execute(&["checkout", "-b", "pr"]).unwrap();
+            std::fs::write(fx.main.join("README.md"), "lane edit\n").unwrap();
+            execute(&["commit", "-am", "lane edits (Refs TASK-2879)"]).unwrap();
+            let lane_head = execute(&["rev-parse", "HEAD"]).unwrap();
+            execute(&["checkout", "main"]).unwrap();
+            std::fs::write(
+                fx.main.join(if conflicting {
+                    "README.md"
+                } else {
+                    "remote.txt"
+                }),
+                "remote edit\n",
+            )
+            .unwrap();
+            execute(&["add", "."]).unwrap();
+            execute(&["commit", "-m", "remote update"]).unwrap();
+            let remote = execute(&["rev-parse", "HEAD"]).unwrap();
+            execute(&["checkout", "pr"]).unwrap();
+            let message = "merge remote PR head (Refs TASK-2879)";
+            let result = merge_publication_head_with(&execute, "pr", &remote, message);
+            assert_eq!(execute(&["status", "--porcelain"]).unwrap(), "");
+            assert!(!fx.main.join(".git/MERGE_HEAD").exists());
+            if conflicting {
+                assert!(result.unwrap_err().to_string().contains("nothing pushed"));
+                assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), lane_head);
+                assert_eq!(
+                    std::fs::read_to_string(fx.main.join("README.md")).unwrap(),
+                    "lane edit\n"
+                );
+            } else {
+                result.unwrap();
+                assert_eq!(execute(&["rev-parse", "HEAD^1"]).unwrap(), lane_head);
+                assert_eq!(execute(&["rev-parse", "HEAD^2"]).unwrap(), remote);
+                assert_eq!(execute(&["log", "-1", "--format=%s"]).unwrap(), message);
+                // An already integrated remote head is a harmless no-op.
+                merge_publication_head_with(&execute, "pr", &remote, message).unwrap();
+            }
+            assert!(merge_publication_head_with(&execute, "wrong", &remote, message).is_err());
+            std::fs::write(fx.main.join("pending"), "keep me").unwrap();
+            assert!(
+                merge_publication_head_with(&execute, "pr", &remote, message)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("pending changes")
+            );
         }
     }
 
@@ -3904,3 +4033,8 @@ mod bug_2455_force_claim_clone_tests;
 #[cfg(test)]
 #[path = "tests/bug_2451_pickup_entry_tests.rs"]
 mod pickup_entry_tests;
+
+// trace:BUG-2457 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2457_review_repickup_tests.rs"]
+mod review_repickup_tests;

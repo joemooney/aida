@@ -29,7 +29,7 @@
 # through a script"). Three entries are worth recording because a shallower
 # check would misplace them:
 #   - "Monitor contract drift guard" looks pure: its step body only runs
-#     `docs/monitor-contract-fixtures/verify.py`. That script execs
+#     `docs/internal/monitor-contract-fixtures/verify.py`. That script execs
 #     `target/debug/aida contract --json` -> full. It was classified `fast`
 #     first and failed on exactly that, which is why the check is transitive.
 #   - "Removed mode-flag spelling guard" matches `$AIDA_BIN` only inside a REGEX
@@ -44,6 +44,9 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:STORY-1651 | ai:codex
+"Documentation audience coverage" = "fast"
+"Documentation landing smoke" = "full"
 # trace:STORY-2480 | ai:codex
 "Run restricted work CI relay contract" = "full"
 # trace:BUG-2014 | ai:codex
@@ -58,6 +61,8 @@
 "STORY-1853 test-speed tooling tests" = "fast"
 # Pure Python with git/openssl fixtures, ~3s. trace:TASK-3046 | ai:claude
 "Containment conformance evidence tests" = "fast"
+# trace:TASK-3131 | ai:codex — real production CLI setup needs a built binary.
+"Shared-boundary production fixture refusal" = "full"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
@@ -67,6 +72,8 @@
 "Run history template CLI/config/MCP contract tests" = "full"
 # trace:BUG-1801 | ai:codex
 "Run single-spec show latency regression" = "full"
+# trace:STORY-1468 | ai:codex
+"Run originating prompt CLI output regression" = "full"
 "Run MCP doc-consistency test" = "full"
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"

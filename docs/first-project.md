@@ -471,7 +471,7 @@ It drives the implementer session, waits for CI, runs the reviewer, merges, and
 bumps STORY-3 to *Completed* — no further input. The trade-off is real:
 **interactive = better design decisions, autonomous = better throughput**. Run
 the loop by hand until the rhythm is familiar, then reach for `--auto-complete`
-on the mechanical batches. Full guidance: [`autonomous-drain.md`](autonomous-drain.md).
+on the mechanical batches. Full guidance: [`autonomous-drain.md`](advanced/autonomous-drain.md).
 
 ---
 
@@ -518,7 +518,7 @@ message format** section of [`CLAUDE.md`](../CLAUDE.md).
   the verb vocabulary, and the edge cases (cluster PRs, parallel pipelining).
 - **[Getting started](getting-started.md)** — the conversational journey and
   separately labeled operator setup.
-- **[How AIDA compares](positioning/README.md)** — the
+- **[How AIDA compares](internal/positioning/README.md)** — the
   *"why AIDA instead of X?"* question, one neighbor tool at a time.
 - **[Why AIDA?](WHY-AIDA.md)** — the problem statement behind all of it.
 

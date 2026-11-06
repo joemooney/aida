@@ -14,7 +14,7 @@
 //!
 //! The intended public API surface — the load-bearing types/functions that the
 //! in-tree consumers depend on — is documented item-by-item in
-//! [`docs/api/aida-core.md`](https://github.com/joemooney/aida/blob/main/docs/api/aida-core.md).
+//! [`docs/internal/api/aida-core.md`](https://github.com/joemooney/aida/blob/main/docs/internal/api/aida-core.md).
 //! That file is the authoritative contract: it lists each consumed type/fn with
 //! a one-line description and marks which modules are intended-public vs.
 //! incidentally-`pub` internals.
@@ -62,7 +62,7 @@
 //!
 //! Many modules are `pub` only because `aida-cli` reaches into them as a
 //! same-workspace sibling; they are **internal** and may change without notice.
-//! See `docs/api/aida-core.md` for the explicit internal-vs-public split. As a
+//! See `docs/internal/api/aida-core.md` for the explicit internal-vs-public split. As a
 //! rule of thumb: anything not re-exported at the crate root and not listed in
 //! that doc should be treated as internal.
 //!
@@ -181,6 +181,8 @@ pub mod node;
 pub mod node_alias;
 pub mod object_store;
 pub mod oplog;
+#[cfg(feature = "native")]
+pub mod origin_prompt;
 /// trace:STORY-333 | ai:claude
 pub mod pickability;
 #[cfg(feature = "native")]
@@ -198,6 +200,7 @@ pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;
 pub mod review_config;
+pub mod secret_screen;
 // trace:BUG-626 | ai:claude
 pub mod rollup;
 #[cfg(feature = "native")]

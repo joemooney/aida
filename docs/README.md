@@ -1,113 +1,50 @@
 # AIDA documentation
 
-Start here. This index orders the docs by where you are in the journey — from
-*"what is this?"* to running it for a team to extending it. Not sure AIDA is for
-you at all? Jump to [Deciding whether to adopt](#3-deciding-whether-to-adopt).
+Choose the guide for what you want to do.
 
-> New to AIDA? The three-doc on-ramp is **[Why AIDA?](WHY-AIDA.md)** →
-> **[Getting started](getting-started.md)** → **[First project](first-project.md)**.
-> Follow it from the product rationale to a bounded change on your own machine.
-> Setup and delivery time depend on your project and agent configuration.
+## I'm using AIDA
 
-> **How this library is organized.** Sections 1–6 are the **user-facing manual** — guides and reference you read to *use* AIDA (these are the docs destined for the unified "AIDA Book"). Section 7 is **working & internal artifacts** — plans, competitive analysis, spikes — generated *by* running the project. They're indexed here so they're findable, but they are **not manual material** and aren't curated for the book.
+Start with **[Why AIDA?](WHY-AIDA.md)**, then
+**[install AIDA](../README.md#install)** and follow
+**[Getting started](getting-started.md)**. AIDA supports Linux.
 
----
+To try the commands in a new project after installation:
 
-## 1. New to AIDA — the on-ramp
+```sh
+mkdir my-project
+cd my-project
+git init
+aida init
+aida add --type task --title "Make my first change" --status draft
+aida list
+```
 
-| Doc | What it gives you |
-|-----|-------------------|
-| [WHY-AIDA.md](WHY-AIDA.md) | The problem statement — *why this exists* before *how it works*. |
-| [README installation](../README.md#install) | Install AIDA on a supported Linux system. |
-| [getting-started.md](getting-started.md) | Develop conversationally with an AIDA-aware agent, retain agreed intent, and separate one-time operator setup. |
-| [showcase/index.html](showcase/index.html) · [library](showcase/library.html) | Portable product website and searchable guide library. |
-| [product-capabilities.md](product-capabilities.md) | Capture intent, coordinate delivery and inspect evidence across changes. |
-| [product-integrations.md](product-integrations.md) | Connect coding agents, the store and external project tools with explicit setup. |
-| [configuration-guide.md](configuration-guide.md) | Choose the project footprint, protocols and policy. |
-| [product-workflow.md](product-workflow.md) | Follow a change through capture, implementation, review and integration. |
-| [selectable-autonomy.md](selectable-autonomy.md) | Choose human participation while preserving authority and review gates. |
-| [trust-and-evidence.md](trust-and-evidence.md) | Understand the boundaries and limits of recorded evidence. |
-| [metrics-guide.md](metrics-guide.md) | Interpret measured usage and unknown attribution. |
-| [operator-setup.md](operator-setup.md) | Prepare an agent and project, including adopted clones. |
-| [first-project.md](first-project.md) | The follow-along: a TODO CLI from a blank repo to a six-spec graph with two features driven to *Completed*. The best "see what it's *for*" doc. |
-| [using-aida-with-claude-code.md](using-aida-with-claude-code.md) | How AIDA and Claude Code fit together (skills, MCP, the daily loop). |
+Use the ID returned by `aida add` with `aida show <ID>`. Follow
+[Your first project](first-project.md) to capture a small backlog and deliver
+a change. These steps need no contributor documentation.
 
-## 2. Daily use
+- [Everyday CLI commands](cli/01-getting-started.md) and [shaping specs](cli/02-specs.md)
+- [Capture and delivery workflow](product-workflow.md), [lifecycle](lifecycle.md)
+  and [requirement types](requirement-types.md)
+- [Commit trailers](commit-trailer-convention.md), [Git workflow](git-workflow.md)
+  and [history and reporting](cli/08-reporting.md)
+- [Agent and MCP setup](agents/aida-mcp-install-matrix.md),
+  [Codex](agents/codex-mcp-setup.md) and [Claude Code](using-aida-with-claude-code.md)
+- [Configuration](configuration-guide.md), [operator setup](operator-setup.md)
+  and [environment variables](environment-variables.md)
+- [Troubleshooting and FAQ](troubleshooting.md)
+- [CLI reference](cli/README.md) and [rendered guide library](showcase/library.html)
 
-| Doc | What it gives you |
-|-----|-------------------|
-| **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 12 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
-| [user-guide.md](user-guide.md) | *Retired* — a stale `v0.1.0`-era duplicate; now a pointer to the docs above. |
-| [requirement-types.md](requirement-types.md) | What each of the 19 requirement types is *for* and how to write one well — the intent + best-practice layer over the enum's reference list. |
-| [lifecycle.md](lifecycle.md) | The Draft → Approved → Planned → In Progress → Done → Completed → Released state machine, the verb for each transition, and the edge cases. |
-| [review-process.md](review-process.md) | **Who reviews, by execution mode** — the advisor-by-hand / reviewer-phase / headless-tier topology, the fasttrack-vs-review tag split, and the completion handoff loop. The authoritative source for the review/escalation model. |
-| [autonomous-drain.md](autonomous-drain.md) | The hands-off backlog drain + the three autonomy modes (interactive / `--zen` / `--no-human`), escalation, and calibration. |
-| [mailbox.md](mailbox.md) | The inter-agent mailbox — peer↔peer messaging, briefs vs conversation, and the git-canonical sync. |
-| [git-workflow.md](git-workflow.md) | Commit/branch conventions, the `(SPEC-ID)` trailer, and the two-leg code+store sync. |
+## I'm running AIDA at scale
 
-## 3. Deciding whether to adopt
+Use the **[operator and power-user guides](advanced/README.md)** for multiple
+nodes and hubs, shared deployments, forges, CI runners, unattended drains,
+sessions, deputies and the mailbox.
 
-These cut through the *"should I even use this?"* question honestly.
+## I'm working on AIDA
 
-| Doc | What it gives you |
-|-----|-------------------|
-| [positioning/](positioning/README.md) | The positioning index: current framing plus the per-neighbour *"AIDA vs X"* comparisons (Spec Kit, Kiro, Agent Teams, subagents, Aider, Continue, SaaS PM, Karpathy markdown), which are dated snapshots kept in [archive/positioning/](archive/positioning/). |
-| [positioning/when-not-to-use-aida.md](positioning/when-not-to-use-aida.md) | The honest scope limits — six cases where a neighbour tool alone is the right call. |
-| [positioning/composition.md](positioning/composition.md) | When the answer is *"use AIDA **with** X"* — concrete recipes + the seam for each. |
-| [competitive-analysis/](competitive-analysis/README.md) | The living landscape tracking (roster, ecosystem watch, signals). Dated market snapshots are in [archive/competitive-analysis/](archive/competitive-analysis/). |
+Start with **[Contributing](../CONTRIBUTING.md)** and the
+**[contributor documentation](internal/README.md)** for architecture, repository
+discipline, implementation plans, fixtures, research and presentations.
 
-## 4. Operating AIDA for a team
-
-| Doc | What it gives you |
-|-----|-------------------|
-| [admin-guide.md](admin-guide.md) | Storage backends, migration, multi-user setup. |
-| [storage-modes.md](storage-modes.md) | Distributed (git-canonical) vs the legacy modes — the full comparison. |
-| [multi-user-setup.md](multi-user-setup.md) | PostgreSQL-backed shared projection deployment. |
-| [multi-node.md](multi-node.md) | Distributed node identity, IDs, and the merge gate. |
-| [multi-advisor-coordination.md](multi-advisor-coordination.md) | Coordinating multiple advisor seats on one project. |
-| [session-lifecycle.md](session-lifecycle.md) | Scoped sessions, worktrees, and leases — how concurrent work stays isolated. |
-| [explanations/feature-lanes.md](explanations/feature-lanes.md) | Working on a feature on the side without touching `main`: what works today, and the planned (not shipped) feature lanes. |
-| [agents/](agents/) | Per-agent setup (Claude Code, Codex, Cursor, …), the MCP install matrix, and inter-agent communication. |
-| [environment-variables.md](environment-variables.md) | The canonical reference for every `AIDA_*` environment variable — what it does, default, who sets it, scope. |
-
-## 5. Extending & contributing
-
-| Doc | What it gives you |
-|-----|-------------------|
-| [UNDERSTANDING_SKILLS.md](UNDERSTANDING_SKILLS.md) | How Claude Code skills and commands differ. |
-| [extending-skills.md](extending-skills.md) · [skills-convention.md](skills-convention.md) | Authoring and conventions for AIDA's skills/commands. |
-| [user-facing-text-conventions.md](user-facing-text-conventions.md) | The rule that keeps SPEC-IDs out of user-facing output. |
-| [forge-providers.md](forge-providers.md) | The forge abstraction (GitHub / GitLab providers). |
-| [git-verb-surface.md](git-verb-surface.md) | The convention behind the two-leg git-mirror verbs. |
-| [architecture/](architecture/) | Deeper design: autonomy + escalation, the MCP coordination surface, on-disk serialization. |
-| [plans/](plans/) | The implementation-plan archive (`YYYY-MM-DD-<slug>.md`, chronological). |
-
-## 6. Vision & background
-
-| Doc | What it gives you |
-|-----|-------------------|
-| [future-vision.md](future-vision.md) | AIDA in the agentic-coding era — where the bet is heading. |
-| [aida/](aida/) | The constitution, vision, constraints, and glossary that govern the project. |
-| [presentation/](presentation/README.md) | Audience-targeted slide decks (executive / developer / administrator / user) + a live-demo deck. |
-
-## 7. Working & internal artifacts — *not* manual material
-
-Generated by running the project, kept for provenance and traceability. Indexed here so they're findable; **not** part of the user-facing manual, and excluded from the AIDA Book.
-
-| Directory | What it holds |
-|-----------|---------------|
-| [plans/](plans/) | The implementation-plan archive (`YYYY-MM-DD-<slug>.md`) — one per non-trivial spec. Chronological, dated, frozen. |
-| [competitive-analysis/](competitive-analysis/README.md) | The living landscape tracking: the [marketplace roster](competitive-analysis/marketplace-roster.md), ecosystem watch, signals, and refresh discipline. Dated market snapshots are in [archive/competitive-analysis/](archive/competitive-analysis/). Decision-support, not a how-to. |
-| [positioning/](positioning/README.md) | Per-neighbour *"AIDA vs X"* comparisons + when-not-to-use + composition recipes. Adoption-decision support. |
-| [spikes/](spikes/) · [research/](research/) | Investigation outputs — a spike's findings + verdict, frozen at time T. Older spikes and research are in [archive/spikes/](archive/spikes/) and [archive/research/](archive/research/). |
-| [release-notes/](release-notes/) | Monthly and topic release notes (formerly `whats-new-YYYY-MM.md`). |
-| [presentation/](presentation/README.md) | Audience-targeted slide decks (Marp) + the live-demo deck. Derived; render to PDF/HTML out-of-repo. |
-| [casts/](casts/) · [archive/](archive/README.md) | Asciinema casts, and retired docs: superseded guides, dated snapshots, handoff briefs, audits, rendered HTML. The [2026-10 cleanup record](archive/2026-10-cleanup/README.md) lists every file moved and why. |
-| [security/](security/) · [api/](api/) | The marketplace-publication checklist; generated API reference. |
-
-> **Provenance, not staleness:** dated snapshots (plans, spikes, research, and everything under `archive/`) are *frozen at time T* by design — they record what was true when written. Don't "fix" them to match current state; supersede with a new dated file.
-
----
-
-*Also at the repo root: [`OVERVIEW.md`](../OVERVIEW.md) (the big-picture vision) and
-[`CLAUDE.md`](../CLAUDE.md) (conventions for agents working in this repo).*
+The [archive](archive/README.md) holds retired documentation and dated snapshots.

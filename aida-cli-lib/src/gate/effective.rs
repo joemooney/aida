@@ -5,7 +5,8 @@
 //! input arrives in a [`CanonicalSet`] (identity, from one committed store
 //! snapshot) and a [`LedgerView`] (one checked, bounded read of the change's
 //! ledger and its members' unbound entries, built by [`load`]). Ledger
-//! events are attributed to a member by its canonical label set, never by
+//! events are attributed to a member by their persisted UUID, falling back to
+//! its canonical label set for unstamped events, never by
 //! the literal text a writer typed, so re-spelling a label cannot change
 //! the answer.
 //!
@@ -209,7 +210,34 @@ fn is_open_refusal(v: &rv::RecordedVerdict) -> bool {
 /// collection of an old round), nor any refusal when its own order time is
 /// unknown.
 // trace:STORY-2324 | ai:claude
-fn sequence_verdict(events: Vec<GateEvent>, head: &str, change_events: &[GateEvent]) -> Verdict {
+fn sequence_verdict(
+    events: Vec<GateEvent>,
+    head: &str,
+    change_events: &[GateEvent],
+    // Some(n) identifies a member sequence: the first n events are unbound.
+    // The rest are from the single change ledger, where seq is comparable.
+    unbound_count: Option<usize>,
+) -> Verdict {
+    // trace:STORY-2324 | ai:codex — only a member's proved old-head
+    // refusal can be answered across buckets by a later change approval.
+    // Unknown/foreign refusals stay protective; authority is checked later.
+    let events: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter(|(index, event)| {
+            unbound_count.is_none_or(|unbound| {
+                !superseded_refusal(
+                    event,
+                    *index >= unbound,
+                    head,
+                    &events,
+                    unbound,
+                    change_events,
+                )
+            })
+        })
+        .map(|(_, event)| event.clone())
+        .collect();
     let parsed: Vec<(GateEvent, Option<rv::RecordedVerdict>)> = events
         .iter()
         .map(|e| {
@@ -242,7 +270,7 @@ fn sequence_verdict(events: Vec<GateEvent>, head: &str, change_events: &[GateEve
         VerdictKind::Approved => {
             let own = rv::ledger_order_time(&newest);
             let later_refusal = parsed.iter().find(|(e, r)| {
-                e.seq != newest.seq
+                e != &newest
                     && r.as_ref().is_some_and(is_open_refusal)
                     && match (own, rv::ledger_order_time(e)) {
                         (Some(a), Some(b)) => b > a,
@@ -258,6 +286,50 @@ fn sequence_verdict(events: Vec<GateEvent>, head: &str, change_events: &[GateEve
             approval_at_head(newest.seq, &v, head, change_events)
         }
     }
+}
+
+// trace:STORY-2324 | ai:codex
+fn superseded_refusal(
+    event: &GateEvent,
+    event_on_change: bool,
+    head: &str,
+    member_events: &[GateEvent],
+    unbound_count: usize,
+    change_events: &[GateEvent],
+) -> bool {
+    let Some(record) = event.verdict_record().and_then(rv::parse_ledger_record) else {
+        return false;
+    };
+    let full_sha = |s: &str| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit());
+    let Some(reviewed) = record.reviewed_sha.as_deref().filter(|s| full_sha(s)) else {
+        return false;
+    };
+    if !is_open_refusal(&record) || !full_sha(head) || rv::same_reviewed_sha(reviewed, head) {
+        return false;
+    }
+    let change_level = change_events
+        .iter()
+        .filter(|e| e.spec_key.is_none() && e.spec.as_deref().is_none_or(|s| s.trim().is_empty()));
+    member_events
+        .iter()
+        .enumerate()
+        .map(|(i, e)| (e, i >= unbound_count))
+        .chain(change_level.map(|e| (e, true)))
+        .any(|(approval, approval_on_change)| {
+            let Some(v) = approval.verdict_record().and_then(rv::parse_ledger_record) else {
+                return false;
+            };
+            // seq is comparable only on the change ledger. Across files the
+            // proved order time below is the order; unbound seq is file-local.
+            (!event_on_change || !approval_on_change || approval.seq > event.seq)
+                && v.kind.approves()
+                && !v.is_closed()
+                && v.reviewed_sha
+                    .as_deref()
+                    .is_some_and(|s| rv::same_reviewed_sha(s, head))
+                && matches!((rv::ledger_order_time(approval), rv::ledger_order_time(event)),
+                (Some(a), Some(b)) if a > b)
+        })
 }
 
 /// An approval against the head: covered directly, or through the newest
@@ -368,10 +440,38 @@ pub(crate) fn effective_gate_state(
         .iter()
         .filter(|e| e.verdict_record().is_some())
         .collect();
-    let mut foreign: BTreeMap<String, Vec<GateEvent>> = BTreeMap::new();
+    // Persisted identities must not share a sequence through a reused label.
+    // Unstamped events retain their normalized label partition.
+    let mut foreign: BTreeMap<(Option<SpecKey>, String), Vec<GateEvent>> = BTreeMap::new();
+    let mut foreign_labels = std::collections::BTreeSet::new();
     let mut change_own: Vec<GateEvent> = Vec::new();
     let mut per_member: BTreeMap<SpecKey, Vec<GateEvent>> = BTreeMap::new();
     for e in &verdict_events {
+        // trace:STORY-2324 | ai:codex — a persisted UUID is the identity;
+        // the original label is retained only for audit. Do not let a remap
+        // or absent label reassign a stamped event to another requirement.
+        if let Some(key) = e.spec_key {
+            if let Some(member) = set.member(key) {
+                per_member
+                    .entry(key)
+                    .or_default()
+                    .push(canonical_spelling(member, (*e).clone()));
+            } else {
+                let label = e
+                    .spec
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_ascii_uppercase)
+                    .unwrap_or_else(|| key.to_string());
+                foreign_labels.insert(label);
+                foreign
+                    .entry((Some(key), String::new()))
+                    .or_default()
+                    .push((*e).clone());
+            }
+            continue;
+        }
         match e.spec.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             None => change_own.push((*e).clone()),
             Some(label) => match set.member_for_label(label) {
@@ -379,18 +479,19 @@ pub(crate) fn effective_gate_state(
                     .entry(m.key)
                     .or_default()
                     .push(canonical_spelling(m, (*e).clone())),
-                None => foreign
-                    .entry(label.to_ascii_uppercase())
-                    .or_default()
-                    .push((*e).clone()),
+                None => {
+                    let label = label.to_ascii_uppercase();
+                    foreign_labels.insert(label.clone());
+                    foreign.entry((None, label)).or_default().push((*e).clone());
+                }
             },
         }
     }
-    let foreign_labels: Vec<String> = foreign.keys().cloned().collect();
+    let foreign_labels: Vec<String> = foreign_labels.into_iter().collect();
     // trace:STORY-2324 | ai:claude
     let foreign_answers: Vec<Verdict> = foreign
         .into_values()
-        .map(|events| sequence_verdict(events, head, &view.change_events))
+        .map(|events| sequence_verdict(events, head, &view.change_events, None))
         .filter(|v| {
             matches!(
                 v,
@@ -411,6 +512,9 @@ pub(crate) fn effective_gate_state(
             .get(&m.key)
             .into_iter()
             .flatten()
+            // A label can rebind. Its former owner's unbound events are
+            // unrelated to this member and were never recorded on this change.
+            .filter(|u| u.spec_key.is_none_or(|key| key == m.key))
             .filter(|u| {
                 !verdict_events
                     .iter()
@@ -419,11 +523,16 @@ pub(crate) fn effective_gate_state(
             .cloned()
             .map(|e| canonical_spelling(m, e))
             .collect();
+        let unbound_count = unbound.len();
         let events: Vec<GateEvent> = unbound.into_iter().chain(bound).collect();
         let mode = member_mode(set, m);
-        members.push((m, mode, sequence_verdict(events, head, &view.change_events)));
+        members.push((
+            m,
+            mode,
+            sequence_verdict(events, head, &view.change_events, Some(unbound_count)),
+        ));
     }
-    let change_verdict = sequence_verdict(change_own, head, &view.change_events);
+    let change_verdict = sequence_verdict(change_own, head, &view.change_events, None);
     let verdict = aggregate(
         std::iter::once(&change_verdict)
             .chain(std::iter::once(&foreign_verdict))
