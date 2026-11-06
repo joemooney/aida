@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T13:07:08.963645821Z
+modified_at: 2026-11-06T13:10:33.598391528Z
 req_type: Task
 tags:
 - architecture
@@ -508,6 +508,19 @@ comments:
   created_at: 2026-11-06T12:56:38.628102524Z
   modified_at: 2026-11-06T12:56:38.628102524Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0fb-7b7e-70e1-9e97-cf0e9ba6b6a3
+  author: joe
+  content: |
+    Round 7 final handoff for PR #3449 at aede2be58b3e: two source/docs files remain uncommitted for the native-seat host: .github/workflows/ci.yml and docs/internal/testing/task-2708-round2.md. F4 fixed: missing fake-HOME ok result now emits a named ::error:: annotation. Its extracted shell block passes with an ok row and fails with exit 1 plus annotation when absent. F3 compatibility deltas are documented in the summary and next to Round 5 F2: explicit SCM_CREDENTIALS/other non-SCM_RIGHTS ancillary types get EACCES; SO_PASSCRED receivers see broker credentials (PID 0 in lane pidns). No advisor acceptance is claimed.
+
+    F1 and the acceptance portion of F3 are explicitly punted as design-fork; TASK-2708 is Needs Attention. Advisor must accept BOTH Linux 5.19+ for all lanes and handled-signal deferral potentially indefinite without SO_SNDTIMEO, plus the ancillary-credential deltas, or direct an exactly-once/credential-forwarding redesign. These findings are not disputed. Removing WAIT_KILLABLE_RECV reintroduces duplicate sends. The supplied ruling and spec comments 1-58 contain no acceptance. The punt and existing merge hold remain publication vetoes.
+
+    F2 evidence resolved for reviewed base: at 2026-11-06 13:10 UTC all seven CI shards and required Build are green at aede2be58b3e; only expected supervised merge-hold-gate fails. Run 42220164171 gates logs show 9/9 TASK-2708 live tests and help-golden guard passed. Uploaded test-timings-lib-1 JUnit records task_2708_target_socket_old_kernel_thread_file_tables passing. Earlier 2d054799 run 42216248331 failed because help-golden could not resolve origin/main merge base after 200-commit shallow deepening; six test shards and required-live bwrap passed there. Current help-golden/Build success proves that failure did not recur. Future publication-head CI still required.
+
+    Final local validation: both required-live flags cargo test -p aida-cli-lib --lib --profile agent task_2708_ -- --nocapture: 34 passed, no failures/ignored/live skips. make check-ci-fast: 38 gates passed. python3 -m unittest tests/test_ci_test_shards.py: 25 passed. Parsed-workflow diagnostic positive/negative checks, YAML parse, formatting and git diff --check passed. Mechanical bdcec264ee88 remains an ancestor. No commit/push, review verdict, hold clearance, ship or queue completion performed. Detailed evidence: docs/internal/testing/task-2708-round2.md Round 7.
+  created_at: 2026-11-06T13:10:33.598391528Z
+  modified_at: 2026-11-06T13:10:33.598391528Z
+  session_id: 01a1b0efb1db
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
