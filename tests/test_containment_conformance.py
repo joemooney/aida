@@ -63,6 +63,50 @@ class PolicyRevisionTests(unittest.TestCase):
 
 # trace:TASK-3131 | ai:codex
 class AidaBoundaryTests(unittest.TestCase):
+    # trace:BUG-2462 | ai:codex
+    def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
+        fixture_home = Path.home() / ".aida"
+        fixture_home.mkdir(exist_ok=True)
+        diagnostics = [
+            ("cannot check seat: the AIDA store has no team roster (registry/team.toml is missing)",
+             "fixture-roster-missing"),
+            ("AIDA-managed agent sessions cannot issue direct TTY grants; request a scoped child seat",
+             "fixture-role-enter-refused-managed"),
+            ("cannot check seat: unreadable roster", "fixture-role-enter-refused"),
+        ]
+        for diagnostic, reason in diagnostics:
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+                root = Path(directory) / "experiment"
+                args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 1})()
+                def fixture(argv, repo, env, report, stage):
+                    if stage == "init":
+                        (repo / ".aida").mkdir()
+                        (repo / ".aida/config.toml").touch()
+                    report["setup"].append({"stage": stage})
+                    return "fixture"
+                results = [c.subprocess.CompletedProcess([], 0, stdout="roster provisioned"),
+                           c.subprocess.CompletedProcess([], 1, stdout=diagnostic)]
+                with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                        mock.patch.object(c, "fixture_command", side_effect=fixture), \
+                        mock.patch.dict(c.os.environ, {"AIDA_USER": "fixture-user"}), \
+                        mock.patch.object(c.subprocess, "run", side_effect=results) as run, \
+                        mock.patch.object(c, "launch_aida_continuation") as launch, \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaisesRegex(ValueError, "^" + reason + "$"):
+                        c.run_aida(args)
+                launch.assert_not_called()
+                self.assertEqual(run.call_args_list[0].args[0][-4:],
+                                 ["team", "allow-seat", "fixture-user", "implementer"])
+                for call in run.call_args_list:
+                    self.assertNotIn("stdin", call.kwargs)
+                    self.assertNotIn("stderr", call.kwargs)
+                    self.assertEqual(call.kwargs["env"]["AIDA_USER"], "fixture-user")
+                report = json.loads((root / "report.json").read_text())
+                self.assertEqual(report["unsupported_reason"], reason)
+                self.assertEqual(report["setup"][-1]["diagnostic"], diagnostic)
+                self.assertIsNone(report["containment_receipt_sha256"])
+                self.assertEqual({r["status"] for r in report["checks"].values()}, {"unknown"})
+
     # trace:TASK-3194 | ai:codex
     def test_hidden_output_refuses_before_any_setup_or_grant(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as directory:
