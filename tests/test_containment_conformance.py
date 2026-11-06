@@ -302,6 +302,18 @@ except ValueError as error:
                     c.run(args)
                 prepare.assert_not_called()
 
+    # trace:TASK-3048 | ai:codex
+    def test_agy_outer_only_shared_refusal_names_remaining_gates_without_spawning(self):
+        args = type("Args", (), {"vendor": "agy", "boundary": "aida"})()
+        with mock.patch.object(c, "bounded_launch") as launch, \
+                mock.patch.object(c, "prepare") as prepare, \
+                mock.patch.object(c.shutil, "which") as executable:
+            with self.assertRaisesRegex(ValueError, "agy; outer-only adapter requires auth inventory, mediated-write policy and integrated conformance"):
+                c.run(args)
+            launch.assert_not_called()
+            prepare.assert_not_called()
+            executable.assert_not_called()
+
     def test_production_launch_retains_terminal_session_but_owns_cleanup_group(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -525,6 +537,8 @@ else:
         report = json.loads((args.output / "report.json").read_text())
         self.assertFalse(report["whole_lane_pass"])
         self.assertFalse(report["production_launcher_credit"])
+        self.assertEqual(report["agy_posture"],
+                         "aida outer-only (native_layer=none); applied ContainmentReceipt required")
         if refusal_path:
             reason = "default-mode tool safety: unsupported_tool write_file"
             self.assertEqual(report["unsupported_reason"], reason)
