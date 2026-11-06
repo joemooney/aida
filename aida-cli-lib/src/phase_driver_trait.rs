@@ -2203,7 +2203,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:BUG-2140 | ai:antigravity
         self.commit_contained_child_store_changes("reviewer phase")?;
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
-            if !status.success() {
+            // Incomplete AGY evidence must still pass the fresh verdict
+            // handshake below; no tool step grants review authority.
+            // trace:TASK-2838 | ai:codex
+            if !crate::agy_outcome::reviewer_may_check_verdict(headless_vendor, *status) {
                 return Err(auto_complete::PhaseFailure::new(format!(
                     "the reviewer session exited {}",
                     status
