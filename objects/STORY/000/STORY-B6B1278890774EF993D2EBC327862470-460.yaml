@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T14:58:34.234925856Z
+modified_at: 2026-11-06T14:58:37.886711876Z
 req_type: Story
 tags:
 - architecture
@@ -176,6 +176,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 primitive (aida-core/src/proc_identity.rs) and judge matrix are sound, but the lease-reader migration removes worktree/live-claude/creator liveness signals and refuses every non-self capture, so legacy and interactive leases read Unknown and are never auto-released; ~35 lease/liveness tests fail across lib-1, cli-1 and gates at e938ac4. Detached-lane BUG-2458 regression test missing.. No triage reason was given.'
   created_at: 2026-11-06T14:58:34.234924363Z
   modified_at: 2026-11-06T14:58:34.234924363Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b15e-6c13-71e0-8cc2-8fe4cae589d3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3483):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e938ac40584d
+    Recorded: 2026-11-06T14:25:30.188864602+00:00
+    Findings:
+    1. BLOCKING (CI red, caused by this PR): leases.rs lease_state_for now returns Unknown for any lease without an admitted holder_record and drops the worktree-exists / live-claude-in-worktree / classify_lease_state matrix, the BUG-511/TASK-957 creator-pid advisory-lock path and the BUG-2206 dead-creator review path. That contradicts the 21:00 signoff ('slice 1 keeps the existing consumer TTL policies unchanged'). Failing at e938ac4: bug_2002_launch_lease_tests (3), story_1688_lane_liveness_tests (4), bug_2426_review_watch_update_tests bug2442_* (2), bug_2455_force_claim_clone_tests (5, 'the lease records no process id'), bug_2223_orphan_seat_reentry_tests (4), story_2254_ps_detached_codex_tests, cli story_1653_derived_driver (3), story_1662_bg_lane_identity, task_1743_session_leases_listing, task_1784_worktree_add_after_deleted_tree (3). Fix: keep the existing reader policy for leases with no holder_record, and use the ProcIdentity verdict only when an admitted holder exists. Do not edit those tests to match.
+    2. BLOCKING: HolderRecord::capture (proc_identity.rs:326-334) refuses any pid other than std::process::id(). Its callers pass foreign pids: session_start.rs:3345 and leases.rs:357 (nearest claude ancestor), adopt_spec_lease_for_subagent (harness_pid), stamp_lease_active_pid_at (the spawned child), and stamp_lease_detached_worker_at at session.rs:7617 (the detached worker). So every such lease carries a refused holder. lease_state_for then reads it Unknown. auto_release_decision_for_lease (leases.rs:4331) returns AutoReleaseDecision::Live for refused holders, and for local legacy leases whose verdict errs, so dead sessions' leases are never auto-released. Only the native headless pre-exec spawn and review self-leases get admitted holders. Either supply the cooperative handoff at these sites or keep the legacy reader for them; never pin a refused lease Live forever.
+    3. BLOCKING (BUG-2458 AC4 unmet): there is no regression test that a detached (setsid, reparented) lane's record names the lane pid and the judge reads it Dead after the lane exits. Because stamp_lease_detached_worker_at stamps a refused holder (finding 2), a detached lane reads Unknown after exit, not Dead. The fixture reparent check in proc_identity_namespace_reuse_and_clock_matrix does not exercise the lease/ownership write path. Add an end-to-end test: spawn a setsid child through the real stamp path, assert holder pid == child pid, kill it, assert Dead.
+    4. BLOCKING (CI red): story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger fails (lib-1). The likely cause is the new Command spawns in aida-core/src/proc_identity.rs's in-file #[cfg(test)] mod (the ratchet skips only tests.rs / *_tests.rs files) or the session.rs spawn change. Move the test into a *_tests.rs file, or record it in LEDGER with a reason. Also check the lib-0 failures (job 127928615343), whose logs the reviewer could not fetch.
+    5. MAJOR: judge_owner (ownership/judge.rs:287-336) ignores Heartbeat witnesses and requires exactly one Process witness. A record with only a heartbeat, or with heartbeat+process, now reads Unknown/process-only, and migrate refuses every legacy witness. Confirm with the advisor that dropping heartbeat evidence for slice 1 is intended, and state it in the PR body. Otherwise, after cutover, aida own show --compare will show every legacy row as Unknown rather than explained.
+    6. MINOR: lease_state_for (leases.rs:1280) and lease_owner_gone (leases.rs:5176) check holder validity before the BUG-2425 foreign-namespace branch. A foreign-namespace lease with a refused holder therefore loses its existing heartbeat/24h backstop and reads Unknown / None forever. Run the foreign check first.
+    7. MINOR: the new production paths in session_start.rs:3347 and leases.rs:359 use .expect("holder serialization"); propagate with ? as lib_part5.rs:854 already does.
+    8. MINOR (process): commit bde0fca4580 subject ends with the completing '(STORY-2537)' trailer. The advisor requires '(Refs STORY-2537) (BUG-2458)' so that only BUG-2458 completes. The PR title was retitled, but squash-merge only if the title is used as the subject, or reword the commit.
+    9. MINOR (docs rule): the AGENTS.md:487-491 paragraph and the OVERVIEW.md 'Process identity and holder admission' section carry per-change slice status ('Other launch surfaces retain Unknown until...', 'Repeating repair is a no-op', 'Host migrate/compare evidence remains required before ownership cutover'). Those belong in the PR body and a spec comment. Keep a short architecture description of the primitive in OVERVIEW and drop or shorten the AGENTS.md paragraph.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T14:58:37.715703124Z
+  modified_at: 2026-11-06T14:58:37.715703124Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
