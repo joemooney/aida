@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:53:34.672459865Z
-modified_at: 2026-09-24T08:13:46.961333608Z
+modified_at: 2026-11-06T00:14:55.793111280Z
 req_type: Story
 comments:
 - id: 01a0d27a-5251-7110-9ba5-c401b2d71a45
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-09-24T08:13:46.961333608Z
   modified_at: 2026-09-24T08:13:46.961333608Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a1ae35-5f31-7910-8759-cdfabd4c8464
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 5: KEEP DEFERRED, pending a product pass with the operator.'
+  created_at: 2026-11-06T00:14:55.793111280Z
+  modified_at: 2026-11-06T00:14:55.793111280Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 deferred: true
 deferred_at: 2026-09-24T08:13:43.342299468Z
 deferred_until: TASK-1470 merged and Jev call sites on main
