@@ -1,5 +1,5 @@
 {
-  "ceiling": 1220,
+  "ceiling": 1224,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -242,6 +242,10 @@
     "aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs:write_approved_verdict:var:7b07c61dde19eb95da92": 1,
     "aida-cli-lib/src/gate/tests/story_1917_dispatch_request_tests.rs:refuses_without_active_dispatch_mandate_or_bound_advisor_grant:var:7b07c61dde19eb95da92": 1,
     "aida-cli-lib/src/gate/tests/story_1917_dispatch_request_tests.rs:task_2339_wrong_seat_principal_mismatch_and_missing_reviewer_delegation_refusals:var:7b07c61dde19eb95da92": 1,
+    "aida-cli-lib/src/gate/tests/story_2492_entry_tests.rs:collect:var:c0f7739b67c747b444d5": 1,
+    "aida-cli-lib/src/gate/tests/story_2492_entry_tests.rs:two_node_ship_watch_rework_and_train_entry_points:var:03863a63a58f7ed0d105": 1,
+    "aida-cli-lib/src/gate/tests/story_2492_entry_tests.rs:two_node_ship_watch_rework_and_train_entry_points:var:1db1ea8638da7b4cb0d1": 1,
+    "aida-cli-lib/src/gate/tests/story_2492_entry_tests.rs:two_node_ship_watch_rework_and_train_entry_points:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:521c73fca0ebc0196451": 1,
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:b1ea43cf6a4709a4fb47": 1,
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:fa17ffc20afa250a69cf": 1,
