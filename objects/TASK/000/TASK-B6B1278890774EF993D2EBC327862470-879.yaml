@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T19:04:47.127696206Z
+modified_at: 2026-11-06T19:04:49.695854566Z
 req_type: Task
 tags:
 - architecture
@@ -370,6 +370,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1a sink-site redesign follows the 16:22 ruling (no hashes, qualified wrappers, ops listed as blockers, hooks scanned), but the Gates shard is red at head: the new ''Store writer inventory ratchet'' step fails on the merge ref, and the shell/Python sink vocabulary has confirmed blind spots.. No triage reason was given.'
   created_at: 2026-11-06T19:04:47.127695135Z
   modified_at: 2026-11-06T19:04:47.127695135Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b23f-d287-7393-9abf-46820dc19fc7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 467799d1bb43
+    Recorded: 2026-11-06T17:38:35.690717827+00:00
+    Findings:
+    1. 1. BLOCKER (CI red at 467799d): job 128033655976 step 72 'Store writer inventory ratchet' FAILED; step 73 'Store writer inventory mutation fixtures' was SKIPPED, so the three mutants have no CI evidence at this head. CI tests the merge ref, and main is 3 commits ahead (#3510, #3493, #3514; they touch pr_train.rs (+1163/-), forge_confirmation.rs (new), forge_observed.rs, queue_cmd.rs, review_watch*.rs, headless_background.rs). This is the drift the ratchet's message describes. The job log could not be fetched from the reviewer sandbox, so the cause is inferred. Fix: merge current main, run 'python3 scripts/check-store-writers.py --regenerate', review the additions/stale rows/operation diff, and confirm the Gates shard is green, including step 73. The CI 'lane_fixture_fails' lines are the intentional bug-2383 inner fixture (aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs:1190), not a regression.
+    2. 2. BUG (shell writer vocabulary): scripts/check-store-writers.py script_sites() matches the aida subcommand 'finding', but the command is 'findings' (aida-cli-lib/src/findings_gate.rs:2252). So 'aida findings add' is never detected, e.g. scripts/aida-demo.sh:971 has no 'aida findings' row. The set also omits store-writing subcommands: 'session' (aida-core/templates/hooks/aida-subagent-stop.sh:29 runs 'aida session harness-worktree-release' and inventories only '<script>|>'), plus review, punt, rework, merge-hold, role, node and pr. Fix the typo, extend the set or invert it to a read-only allowlist, and add a hook-template mutant using 'aida findings add' and 'aida session ...'.
+    3. 3. PRECISION (shell site identity): every shell site uses item '<script>', so identity is path + kind for the whole file, not path + enclosing item as the 16:22 ruling requires. '>' also matches every '>/dev/null', so almost every script already has a '<script>|>' row (e.g. aida-subagent-stop.sh, aida-demo.sh). Result: a new redirect writer to a store path, or a new 'aida edit'/'git commit' in a script that already has one anywhere, passes the ratchet. Scope shell sites to shell functions ('name() {' / 'function name'), exclude /dev/null redirects, and add a mutant: a new 'echo x > "$store/f"' in a new function of a script that already redirects to /dev/null must refuse.
+    4. 4. GAP (Python sinks): script_sites() reads the open() mode from args[1]. Method-form Path.open(mode) puts the mode in args[0], so path.open('a'|'w'|'wb') is classified as a read and skipped (scripts/containment/conformance.py:240,301,460,610). os.remove, Path.touch, shutil.move/copy and subprocess writers such as ['git','add',...] (conformance.py:623) or ['aida',...] are not sink kinds at all. Handle attribute-call open via args[0], add those kinds, and add mutants: a function whose only write is 'with p.open("w")' and one whose only write is subprocess.run(['aida','edit',...]).
+    5. 5. GAP (Rust git plumbing): raw git subprocess writes are not a sink kind: git(&["update-ref"|"commit-tree"|"hash-object" -w ...]) and Command::new("git"/"aida"). Examples: aida-core/src/git_ops.rs:1904 (update-ref -d in fetch_rebase_target) and :5297. Coverage is only incidental when the same item also hits a seed such as with_store_write_lock. The canonical store is a git ref, so a new function that advances the store ref through plumbing passes the ratchet. Add git ref-mutating argv (update-ref, commit-tree, hash-object -w, push, commit) as a sink kind or a seed wrapper, and add a mutant for it, or list it explicitly in the doc's Limits section as a named cutover blocker.
+    6. 6. MINOR (operation resolution): 42/58 MCP tools and 184/234 CLI operations have sites=[], all with the same blocker text. They are correctly listed as blockers, not omitted, so the ruling is met. But clear writers resolve to nothing: MCP queue_add, queue_work, queue_rework, db_sync, pull, resolve_punt, escalate_punt, session_start/end and role_enter/end. And cli:'queue done' uses the whole handle_queue_command dispatcher as its entrypoint, so its 11 sites are every queue op's sites, not queue done's. Give the named round-1 writers (the MCP queue_* family, and queue done at its concrete arm) a concrete entrypoint the way the explicit dict does for the CLI, or state per-row why each stays unresolved, so TASK-3223 gets usable input.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:04:49.543089169Z
+  modified_at: 2026-11-06T19:04:49.543089169Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
