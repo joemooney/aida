@@ -1,0 +1,43 @@
+id: 01a1b1c5-5707-73b0-a54a-06e9eb403794
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-494
+agreed_id: STORY-2571
+title: 'Advisor runs without permission bypass: move operator plumbing (loop rebind, lane dispatch, host-merge, cross-namespace liveness) into AIDA commands and the deputy'
+description: |
+  Goal: the advisor seat runs without --dangerously-skip-permissions or bypassPermissions. Today most of its unsandboxed Bash is operator plumbing, so it needs bypass to stay unattended. Move that plumbing into AIDA commands or the deputy, so a Claude advisor under --permission-mode auto (or the default) rarely prompts.
+
+  Evidence (advisor session b0a84e34, 2026-11-06): the unsandboxed calls were
+  (1) reading /proc/<pid>/environ to find which grant the review watcher, auto-train and auto-rework loops hold, then killing and relaunching them under the new session's grant (setsid nohup);
+  (2) the advisor-scripts filler (fill-slots3.sh SPEC:vendor), lane launch scripts through aida-deputy-shell run 3, and after-NNN.sh waiters;
+  (3) host-merge.sh and hand conflict resolution in a scratch worktree, then git push to PR branches;
+  (4) cross-namespace liveness: aida ps / session leases report 'foreign pidns' from the sandbox;
+  (5) reading lane logs and headless jsonl under ~/.local/share/aida/ops and .aida/headless-logs;
+  (6) gh/GitHub API reads (CI job logs, PR checks) and aida remote reconcile.
+
+  Acceptance:
+  1. Inventory every advisor-scripts/*.sh in use, with keep / move-to-aida / move-to-deputy / retire for each, checked into docs/internal/agents/.
+  2. The automation loops (review watch, auto-train, auto-rework, slot filler) run as AIDA-supervised services that bind to the current advisor seat grant and re-bind on rotation (e.g. aida advisor loops status|rebind), not loops inheriting a dead session's grant.
+  3. Lane dispatch with a queue and a slot cap is an aida command (it subsumes fill-slots3.sh), callable from a sandboxed advisor, with the host act going through the deputy.
+  4. Host-merging main into a PR branch, with a conflict report, is a deputy job or an aida command.
+  5. aida ps and session leases give a correct liveness answer from a sandboxed caller (through the deputy or a host-side query), with no foreign-pidns unknowns.
+  6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
+
+  Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T16:51:02.535818766Z
+modified_at: 2026-11-06T16:51:02.535818766Z
+req_type: Story
+tags:
+- area:advisor
+- area:deputy
+- permissions
+filed_at:
+  code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dcb86ca85d
+  vendor: claude
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
