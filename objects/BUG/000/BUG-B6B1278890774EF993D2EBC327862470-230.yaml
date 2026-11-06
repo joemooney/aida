@@ -8,11 +8,17 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:11:02.348332640Z
-modified_at: 2026-11-06T15:42:00.298936867Z
+modified_at: 2026-11-06T15:43:19.475727945Z
 req_type: Bug
 tags:
 - area:lanes
 - kind:bug-spotted
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1b186-f0f6-7c10-8db6-17c25057067a
+  created_at: 2026-11-06T15:43:19.475724566Z
+  created_by: joe
 comments:
 - id: 01a1b16a-589c-7912-99f1-00533a2d1857
   author: joe
@@ -51,6 +57,11 @@ history:
 - id: 01a1b178-8417-74e1-9349-7e0821c80e74
   author: joe
   timestamp: 2026-11-06T15:27:07.799618406Z
+  session_id: 01a1b176e0aa
+  changes: []
+- id: 01a1b187-62d7-7ac0-bdb5-9ea195cf9363
+  author: joe
+  timestamp: 2026-11-06T15:43:22.327215075Z
   session_id: 01a1b176e0aa
   changes: []
 filed_at:
