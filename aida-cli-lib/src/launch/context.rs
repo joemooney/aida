@@ -54,12 +54,16 @@ pub(crate) enum LaunchRefusal {
     /// override. A contained launch strips it from its child, so it can only
     /// have been set inside the boundary, where it would swap the vendor.
     AgentCmdUnderContainment,
+    /// A legacy outer-only argv attempts bypass without the shared wrapper.
+    // trace:TASK-3048 | ai:codex
+    OuterOnlyPermission(String),
 }
 
 impl std::fmt::Display for LaunchRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::PostureFlag(flag) => write!(f, "{flag}"),
+            Self::OuterOnlyPermission(detail) => write!(f, "{detail}"),
             Self::WeakerThanParent { vendor, posture } => write!(
                 f,
                 "[contained] this session is contained, so it cannot launch a {} session that \
@@ -152,6 +156,11 @@ impl LaunchContext {
         if parent_contained && agent_cmd {
             return Err(LaunchRefusal::AgentCmdUnderContainment);
         }
+        // A posture marker alone is not an applied receipt. The wrapper adds
+        // receipt-only options itself, after resolving this site-owned argv.
+        // trace:TASK-3048 | ai:codex
+        crate::containment::refuse_unreceipted_bypass(req.vendor.as_str(), &req.args)
+            .map_err(|error| LaunchRefusal::OuterOnlyPermission(error.to_string()))?;
         let mut argv = req.args;
         argv.extend(req.tail);
         Ok(Self {

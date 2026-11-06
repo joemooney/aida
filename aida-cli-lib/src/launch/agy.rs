@@ -40,6 +40,98 @@ impl Adapter {
 mod tests {
     use super::*;
 
+    // Check every central launch surface, including a forged Aida posture:
+    // a context marker never substitutes for the receipt/exec barrier.
+    // trace:TASK-3048 | ai:codex
+    #[test]
+    fn task_3048_legacy_bypass_refuses_before_command_construction() {
+        use crate::launch::context::{LaunchContext, LaunchRefusal, LaunchRequest};
+        use crate::session::ContainmentPosture;
+        use aida_core::launch_policy::{LaunchKind, LaunchVendor};
+        for kind in [
+            LaunchKind::Fresh,
+            LaunchKind::Exec,
+            LaunchKind::Background,
+            LaunchKind::Resume,
+        ] {
+            for posture in [
+                ContainmentPosture::None,
+                ContainmentPosture::Native,
+                ContainmentPosture::Aida,
+            ] {
+                for flag in [
+                    "--dangerously-skip-permissions",
+                    "--dangerously-skip-permissions=true",
+                ] {
+                    let req = LaunchRequest {
+                        vendor: LaunchVendor::Agy,
+                        kind,
+                        program: "agy".into(),
+                        args: vec![flag.into(), "-p".into(), "bounded task".into()],
+                        tail: Vec::new(),
+                        posture,
+                        cwd: std::env::temp_dir(),
+                        set_cwd: false,
+                        host_main: None,
+                    };
+                    let error = LaunchContext::resolve_under(req, false).unwrap_err();
+                    assert!(matches!(error, LaunchRefusal::OuterOnlyPermission(_)));
+                    assert!(error.to_string().contains(
+                        "agy permission bypass requires an applied AIDA ContainmentReceipt"
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn task_3048_prompt_text_cannot_select_permission_posture() {
+        let policy = crate::containment::runtime_policy("agy").unwrap();
+        for option in &policy.prompt_options {
+            for argv in [
+                vec![option.clone(), "--dangerously-skip-permissions".into()],
+                vec![format!("{option}=--dangerously-skip-permissions")],
+            ] {
+                crate::containment::refuse_unreceipted_bypass("agy", &argv).unwrap();
+            }
+        }
+        // A prompt consumes one value; subsequent options still get checked.
+        assert!(crate::containment::refuse_unreceipted_bypass(
+            "agy",
+            &[
+                "-p".into(),
+                "text".into(),
+                "--dangerously-skip-permissions".into()
+            ]
+        )
+        .is_err());
+        // The signed ruling changes only vendors with native_layer=none.
+        for vendor in ["claude", "codex"] {
+            crate::containment::refuse_unreceipted_bypass(
+                vendor,
+                &["--dangerously-skip-permissions".into()],
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn task_3048_agent_defaults_refuse_legacy_bypass_without_contained_parent() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        for agent_type in ["agy", "antigravity"] {
+            let config = crate::AgentLaunchConfig {
+                delegate_seats: Vec::new(),
+                agent_type,
+                binary: "agy",
+                default_args: vec!["--dangerously-skip-permissions".into()],
+                prompt_style: crate::AgentPromptStyle::Flag("--prompt-interactive"),
+                contained: false,
+            };
+            let error = crate::refuse_uncontained_child_of_contained_parent(&config).unwrap_err();
+            assert!(error.to_string().contains("legacy launch refused"));
+        }
+    }
+
     #[test]
     fn agy_adapter_keeps_unmeasured_policy_closed() {
         let policy = crate::containment::runtime_policy("agy").unwrap();

@@ -123,6 +123,35 @@ pub(crate) struct RuntimePolicy {
     pub raw_store_writes: bool,
     pub raw_git_writes: bool,
     pub argv_prefix: Vec<String>,
+    pub prompt_options: Vec<String>,
+}
+
+/// Legacy launchers may not supply an outer-only vendor's permission bypass.
+/// Only the common wrapper adds it, behind its receipt/exec barrier. Inspect
+/// option names, never value-taking prompt contents (including joined forms).
+// trace:TASK-3048 | ai:codex
+pub(crate) fn refuse_unreceipted_bypass(vendor: &str, args: &[String]) -> anyhow::Result<()> {
+    if native_layer(vendor)? != NativeLayer::None {
+        return Ok(());
+    }
+    let policy = runtime_policy(vendor)?;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let (name, joined) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), false), |(name, _)| (name, true));
+        if policy.prompt_options.iter().any(|option| option == name) {
+            if !joined {
+                let _ = args.next();
+            }
+            continue;
+        }
+        anyhow::ensure!(
+            !name.starts_with("--dangerously-"),
+            "{vendor} permission bypass requires an applied AIDA ContainmentReceipt from the shared wrapper; legacy launch refused"
+        );
+    }
+    Ok(())
 }
 
 pub(crate) fn runtime_policy(vendor: &str) -> anyhow::Result<RuntimePolicy> {
@@ -166,6 +195,17 @@ pub(crate) fn runtime_host_parents(home: &Path) -> anyhow::Result<Vec<std::path:
 
 impl RuntimePolicy {
     pub(crate) fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.prompt_options.is_empty()
+                && self
+                    .prompt_options
+                    .iter()
+                    .all(|option| option.starts_with('-')
+                        && !option.starts_with("--dangerously-")
+                        && !option.contains('=')
+                        && !option.chars().any(char::is_whitespace)),
+            "runtime prompt options must be option names"
+        );
         for path in [&self.relative, &self.credential] {
             anyhow::ensure!(
                 !path.is_empty()

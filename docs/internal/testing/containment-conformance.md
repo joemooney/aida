@@ -133,6 +133,17 @@ refuse. Within the common wrapper, argv preparation stays behind its exec
 barrier, and receipt acceptance checks the outer-only descriptor before exec
 can be released. Extra caller options are refused in the runtime-file arm.
 
+Legacy launch contexts now refuse receipt-only permission flags for vendors
+whose shipped descriptor has `native_layer = "none"`, even when the request
+claims AIDA posture. The wrapper adds those options behind its exec barrier;
+a launch-context marker grants no receipt authority. Value-taking prompt
+option names live in vendor data so literal bypass text in a prompt stays
+data. `agent new` checks explicit and configured bypass before setup, and
+headless AGY preflight checks the existing admission gate before creating a
+lease or worktree. Deferred manual handoffs report that refusal instead of
+printing a pasteable bypass command. Native diagnostic runs without bypass
+remain available.
+
 Production AGY admission remains closed in `launch/agy.rs`, and direct wrapper
 preparation also refuses its incomplete auth inventory. Trusted `agy = "aida"`
 or `"native"` settings cannot unlock it. The native diagnostic retains the old
