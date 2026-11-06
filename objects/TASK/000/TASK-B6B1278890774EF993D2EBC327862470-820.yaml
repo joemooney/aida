@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T18:08:46.358828609Z
+modified_at: 2026-11-06T01:27:55.963624930Z
 req_type: Task
 tags:
 - docs:impacted
@@ -287,6 +287,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ae78-3518-7dc3-aed8-532189b3b08f
+  author: aida-auto-bump
+  timestamp: 2026-11-06T01:27:55.928566133Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ae78-353b-70c2-b795-12403c107222
+  timestamp: 2026-11-06T01:27:55.963622613Z
+  agent: aida
+  commit_sha: 158725d7dd93185c7140291f8869b81d2652504e
+  summary: 'Round-4 fixes resolve all open findings: receipts bind to operation UUID (concurrent same-target comments reported as orphans), --reconcile clears unconfirmed journals when another clone published the receipt, git()/sync surface bounded stderr and push() uses the observed remote tip; all 20 intake tests budgeted; CI run 42137726741 green on every shard at bf2baad. merge-hold-gate failure is the by-design supervised hold.'
+  review_verdict: approved
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -295,3 +309,7 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T01:27:55.928560901Z
+  completion_sha: 158725d7dd93185c7140291f8869b81d2652504e
