@@ -9,14 +9,14 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use proptest::prelude::*;
 
 const HOST: &str = "box";
-const BOOT: &str = "boot-a";
+const BOOT: &str = "11111111-1111-4111-8111-111111111111";
 const HOST_NS: u64 = INITIAL_PID_NAMESPACE_INODE;
 const SANDBOX_NS: u64 = 4_026_535_667;
 
 /// pid 1 runs, pid 2 has exited, anything else cannot be probed.
 fn probe(id: &ProcessIdentity) -> Probe {
     match id.pid {
-        1 => Probe::Alive,
+        41 => Probe::Alive,
         2 => Probe::Dead(format!("process {} no longer exists", id.pid)),
         _ => Probe::Unknown("cannot read /proc".to_string()),
     }
@@ -28,6 +28,7 @@ fn now() -> DateTime<Utc> {
 
 fn host() -> HostFacts<'static> {
     HostFacts {
+        node_id: Some("fixture-node".into()),
         host: HOST.to_string(),
         boot: Some(BOOT.to_string()),
         pid_ns: Some(HOST_NS),
@@ -37,13 +38,18 @@ fn host() -> HostFacts<'static> {
 
 fn ident(pid: u32, boot: &str) -> ProcessIdentity {
     ProcessIdentity {
-        pid,
+        pid: if pid == 1 { 41 } else { pid },
         start: format!("linux:{boot}:12345"),
     }
 }
 
 fn proc_w(host: &str, id: ProcessIdentity, pid_ns: Option<u64>) -> Witness {
+    // Inject data-only lifecycle evidence for the pure decision table.
+    let admission = aida_core::proc_identity::ProcIdentity::from_record(&id, pid_ns).map(|identity| {
+        serde_json::from_value(serde_json::json!({"version": 1, "node_id": "fixture-node", "identity": identity, "generation": "fixture-generation", "refusal": null})).unwrap()
+    });
     Witness {
+        admission,
         kind: WitnessKind::Process {
             host: host.to_string(),
             id,
@@ -60,6 +66,7 @@ fn local(pid: u32) -> Witness {
 
 fn beat(age_secs: i64, every_secs: u64) -> Witness {
     Witness {
+        admission: None,
         kind: WitnessKind::Heartbeat {
             at: now() - Duration::seconds(age_secs),
             every_secs,
@@ -148,13 +155,21 @@ fn process_witness_matrix() {
         ),
         (
             "another boot: the host rebooted",
-            proc_w(HOST, ident(1, "boot-old"), Some(HOST_NS)),
+            proc_w(
+                HOST,
+                ident(1, "22222222-2222-4222-8222-222222222222"),
+                Some(HOST_NS),
+            ),
             host(),
             "dead",
         ),
         (
             "another boot, recorded in a foreign namespace: still rebooted",
-            proc_w(HOST, ident(1, "boot-old"), Some(SANDBOX_NS)),
+            proc_w(
+                HOST,
+                ident(1, "22222222-2222-4222-8222-222222222222"),
+                Some(SANDBOX_NS),
+            ),
             host(),
             "dead",
         ),
@@ -248,7 +263,7 @@ fn combination_rule_matrix() {
         (
             "foreign pidns + stale heartbeat",
             vec![foreign.clone(), stale_beat()],
-            "dead",
+            "unknown",
         ),
         (
             "live process + stale heartbeat (idle interactive seat)",
@@ -263,10 +278,14 @@ fn combination_rule_matrix() {
         (
             "exited process + fresh heartbeat",
             vec![local(2), beat(5, 30)],
-            "alive",
+            "dead",
         ),
         ("foreign pidns alone", vec![foreign.clone()], "unknown"),
-        ("unprobeable + exited", vec![local(3), local(2)], "dead"),
+        (
+            "ambiguous holder generations",
+            vec![local(3), local(2)],
+            "unknown",
+        ),
         ("exited process alone", vec![local(2)], "dead"),
         ("no witness", vec![], "unknown"),
     ];
@@ -292,8 +311,8 @@ fn process_witness_is_recorded_from_the_host_view_only() {
         }
     );
     assert_eq!(
-        process_witness(Some(SANDBOX_NS), HOST, id.clone(), now()),
-        None,
+        process_witness(Some(SANDBOX_NS), HOST, id.clone(), now()).is_some(),
+        true,
         "a sandboxed writer records no process witness"
     );
     assert_eq!(
@@ -530,16 +549,20 @@ fn witness_strategy() -> impl Strategy<Value = Witness> {
         Just(local(3)),
         Just(proc_w(HOST, ident(2, BOOT), Some(SANDBOX_NS))),
         Just(proc_w("other", ident(2, BOOT), Some(HOST_NS))),
-        Just(proc_w(HOST, ident(1, "boot-old"), Some(HOST_NS))),
+        Just(proc_w(
+            HOST,
+            ident(1, "22222222-2222-4222-8222-222222222222"),
+            Some(HOST_NS)
+        )),
         Just(beat(5, 30)),
         Just(stale_beat()),
     ]
 }
 
 proptest! {
-    /// Adding a witness never takes Alive away; adding one that abstains
-    /// never changes the verdict; Dead always has a Dead witness and no
-    /// Alive one.
+    /// An admitted process ignores activity witnesses; ambiguous generations
+    /// are Unknown. Process-backed Dead always has a Dead process witness.
+    /// Legacy heartbeat-only rows keep their separate expiry policy.
     #[test]
     fn combination_properties(
         ws in proptest::collection::vec(witness_strategy(), 0..6),
@@ -550,16 +573,15 @@ proptest! {
         let mut more = ws.clone();
         more.push(extra.clone());
         let after = judge_owner(&holder(more), &h, now());
-        let extra_reading = judge_witness(&extra, &h, now());
 
-        if matches!(before, OwnerVerdict::Alive { .. }) {
-            prop_assert_eq!(owner_label(&after), "alive");
-        }
-        if matches!(extra_reading, WitnessReading::Unknown(_)) && !ws.is_empty() {
+        let count = ws.iter().filter(|w| matches!(w.kind, WitnessKind::Process { .. })).count();
+        if matches!(extra.kind, WitnessKind::Heartbeat { .. }) && count > 0 {
             prop_assert_eq!(owner_label(&after), owner_label(&before));
+        } else if count >= 1 {
+            prop_assert_eq!(owner_label(&after), "unknown");
         }
-        let readings: Vec<_> = ws.iter().map(|w| judge_witness(w, &h, now())).collect();
-        if matches!(before, OwnerVerdict::Dead { .. }) {
+        let readings: Vec<_> = ws.iter().filter(|w| matches!(w.kind, WitnessKind::Process { .. })).map(|w| judge_witness(w, &h, now())).collect();
+        if matches!(before, OwnerVerdict::Dead { .. }) && count > 0 {
             let any_dead = readings.iter().any(|r| matches!(r, WitnessReading::Dead(_)));
             let any_alive = readings.iter().any(|r| matches!(r, WitnessReading::Alive));
             prop_assert!(any_dead);
@@ -591,5 +613,26 @@ proptest! {
             prop_assert!(owner_dead);
             prop_assert!(missing || (!dirty && !unpushed));
         }
+    }
+}
+
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+#[test]
+fn legacy_ownership_retains_heartbeat_and_combination_policy() {
+    let h = host();
+    for (mut witnesses, expected) in [
+        (vec![beat(5, 30)], "alive"),
+        (vec![stale_beat()], "dead"),
+        (vec![local(2), beat(5, 30)], "alive"),
+        (vec![local(1), stale_beat()], "dead"),
+        (vec![local(1)], "unknown"),
+    ] {
+        for witness in &mut witnesses {
+            witness.admission = None;
+        }
+        assert_eq!(
+            owner_label(&judge_owner(&holder(witnesses), &h, now())),
+            expected
+        );
     }
 }

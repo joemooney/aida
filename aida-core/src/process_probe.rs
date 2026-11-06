@@ -101,7 +101,7 @@ pub enum ProbeSource {
 /// Ancestry walks stop here even if the parent chain is malformed.
 const MAX_ANCESTRY: usize = 128;
 
-enum StatRead {
+pub(crate) enum StatRead {
     Found {
         state: char,
         ppid: u32,
@@ -269,7 +269,7 @@ pub fn parse_start_identity(start: &str) -> Option<(&str, u64)> {
     parse_start(start)
 }
 
-fn is_exited(state: char) -> bool {
+pub(crate) fn is_exited(state: char) -> bool {
     matches!(state, 'Z' | 'X' | 'x')
 }
 
@@ -279,7 +279,7 @@ fn parse_start(start: &str) -> Option<(&str, u64)> {
     Some((boot, ticks.parse().ok()?))
 }
 
-fn boot_id(root: &Path) -> Result<String, String> {
+pub(crate) fn boot_id(root: &Path) -> Result<String, String> {
     let path = root.join("sys/kernel/random/boot_id");
     std::fs::read_to_string(&path)
         .map(|s| s.trim().to_string())
@@ -288,7 +288,7 @@ fn boot_id(root: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("cannot read the host boot id from {}", path.display()))
 }
 
-fn read_stat(root: &Path, pid: u32) -> Result<StatRead, String> {
+pub(crate) fn read_stat(root: &Path, pid: u32) -> Result<StatRead, String> {
     let path = root.join(pid.to_string()).join("stat");
     let raw = match std::fs::read_to_string(&path) {
         Ok(raw) => raw,

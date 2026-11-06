@@ -218,6 +218,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019eabcd-1234".to_string(),
@@ -302,6 +303,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019eaaaa-bbbb".to_string(),
