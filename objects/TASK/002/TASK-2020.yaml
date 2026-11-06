@@ -6,12 +6,12 @@ description: |
   scripts/test-time-budget.toml was calibrated from only 3 nextest shadow runs on main. A test whose max measured time is under about 6.7s (x1.5 stays under the default) gets no entry and must stay under the hard 10s default_limit. Under nextest's num-cpus parallel load, the wall-clock-sensitive integration tests (bug_1594_show_bounded, bug_1956_*, bug_1993_*) may drift over it and fail the Test time budget step. Recalibrate from more gating runs.
 
   Raised in review of PR-2785: https://github.com/joemooney/aida/pull/2785#issuecomment-6300385815
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-11-06T08:38:06.867836582Z
+modified_at: 2026-11-06T10:01:10.845991577Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -128,6 +128,20 @@ history:
   timestamp: 2026-11-06T08:38:08.351691193Z
   session_id: 01a1aff64258
   changes: []
+- id: 01a1b04e-1983-7b63-add9-6010ac4074e6
+  author: aida-auto-bump
+  timestamp: 2026-11-06T10:01:10.787221499Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b04e-19bd-7632-9b76-c204c0af9c79
+  timestamp: 2026-11-06T10:01:10.845986676Z
+  agent: aida
+  commit_sha: 883f6d983a5c3158cbbf01987388ff6ddf878857
+  summary: stalled() waives only explicitly budgeted overruns <=2x entry; span() catches TypeError and rejects naive timestamps; 5 new unit tests; all 304 sampled budget entries recompute exactly (max x2, round 5, min 15, cap 180) from the 9 artifact runs, 21 unsampled entries retained; story_2331 now measured (60s); CI run 42189045779 green
+  review_verdict: approved
 filed_at:
   code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
   branch: pr-2785
@@ -136,3 +150,7 @@ filed_at:
   aida_build_sha: 6657ffff6d
   vendor: claude
   session: 01a15ae8fccf
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T10:01:10.787215676Z
+  completion_sha: 883f6d983a5c3158cbbf01987388ff6ddf878857
