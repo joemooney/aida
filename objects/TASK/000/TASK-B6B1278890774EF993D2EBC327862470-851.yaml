@@ -1,0 +1,29 @@
+id: 01a1ae30-053a-72b2-9c84-fe210ed7da29
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-851
+title: 'NON-BLOCKING (minor, docs-process): AGENTS.md:7-11 and OVERVIEW.md:1123-1129 ad…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2852, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING (minor, docs-process): AGENTS.md:7-11 and OVERVIEW.md:1123-1129 add per-change notes for a non-architectural diagnostic fix, against the repo CLAUDE.md rule (per-change notes go in the PR body + aida comment; edit AGENTS/OVERVIEW only for architecture changes, since each paragraph conflicts with every open PR). docs/cli/04-git-lifecycle.md already covers the behavior. Suggest dropping both paragraphs in a follow-up.
+
+  PR: #3435
+  Reviewed sha: 41af6f895a2f18d34af441ff9afca9384cf87108
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T00:09:05.082009624Z
+modified_at: 2026-11-06T00:09:05.082009624Z
+req_type: Task
+tags:
+- carried-from:TASK-2852
+- finding-hash:2bdb6ab0
+- from-review:PR-3435
+- kind:carried-forward
+filed_at:
+  code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bdeb8f49978
+  vendor: claude
