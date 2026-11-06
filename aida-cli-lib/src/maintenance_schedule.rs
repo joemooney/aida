@@ -3440,6 +3440,16 @@ fn drain_mode_ready_count(project_root: &Path, backend: &aida_core::CachedGitBac
 // trace:BUG-1557 | ai:claude
 fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
     &[
+        // External condition probes and canonical writes belong only on timer ticks.
+        // trace:STORY-2402 | ai:codex
+        (
+            &["defer resurface"],
+            ScheduledCommand {
+                display: "defer resurface",
+                args: &["defer", "resurface"],
+                hook_allowed: false,
+            },
+        ),
         (
             &["cache verify"],
             ScheduledCommand {
@@ -4785,6 +4795,14 @@ mod tests {
             &vec![toml::Value::from("advisor")]
         );
         assert_eq!(route["enabled"].as_bool(), Some(true));
+    }
+
+    // trace:STORY-2402 | ai:codex
+    #[test]
+    fn story2402_s4_resurface_is_timer_only() {
+        let command = parse_scheduled_command("defer resurface").unwrap();
+        assert_eq!(command.args, &["defer", "resurface"]);
+        assert!(!command.hook_allowed);
     }
 
     #[test]

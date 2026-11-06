@@ -1381,6 +1381,7 @@ mod tests {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         }
     }
@@ -1528,9 +1529,24 @@ mod tests {
                 let project = project.clone();
                 std::thread::spawn(move || {
                     let sid = format!("s-{i}");
-                    reserve_handle(&project, &req(None, Some(&sid)))
-                        .unwrap()
-                        .handle
+                    // This tests uniqueness, not the 250 ms SessionStart
+                    // latency budget. Under loaded CI, eight durable writes
+                    // can exceed that budget. Retry only lock contention;
+                    // other allocation failures must still fail immediately.
+                    // trace:STORY-1843 STORY-2402 | ai:codex
+                    let deadline = std::time::Instant::now() + LAUNCHER_LOCK_BUDGET;
+                    loop {
+                        match reserve_handle(&project, &req(None, Some(&sid))) {
+                            Ok(reservation) => break reservation.handle,
+                            Err(error)
+                                if error.to_string().starts_with("handle allocation lock busy")
+                                    && error.downcast_ref::<std::io::Error>().is_some_and(
+                                        |e| e.kind() == std::io::ErrorKind::WouldBlock,
+                                    )
+                                    && std::time::Instant::now() < deadline => {}
+                            Err(error) => panic!("allocation for {sid} failed: {error:#}"),
+                        }
+                    }
                 })
             })
             .collect();
