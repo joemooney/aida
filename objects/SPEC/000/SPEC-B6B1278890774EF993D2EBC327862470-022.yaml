@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-022
 agreed_id: TASK-2904
 title: Adjacent BUG-2130 fixtures still assume host namespace or PID above 2
 description: 'TASK-2889 validation with a freshly built debug lib-test binary: both assigned regressions pass. Broad bug_2130_liveness_identity_tests run passed 5/7; unchanged worktree_gc_owner_is_caller_matches_legacy_lease_and_exact_caller fails because sample_lease omits pid_namespace, and review_authority_tokens_match_across_legacy_and_exact fails when the test binary is exec''d as PID 2 because it constructs unqualified process tokens (production intentionally refuses unqualified PIDs 1/2). Confirmed both failures on older pre-change artifact /tmp/task-2889-baseline/deps/test-lib (copied from target/worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-801/agent/deps/aida_cli_lib-82ec29df8be17ceb). GC failure reproduces in broader run; token failure reproduces with exec env -u AIDA_PROJECT_ROOT -u AIDA_DRIVE_ROOT -u AIDA_REVIEW_VERDICT_FILE TMPDIR=<private-dir> <old binary> --exact bug_2130_liveness_identity_tests::bug_2130_review_authority_tokens_match_across_legacy_and_exact --test-threads=1. These are separate fixtures from the two covered by TASK-2889/TASK-2900. Adapt fixture namespace evidence and use a suitable live PID without weakening production checks. No outside-seat baseline was run.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T21:02:41.249170258Z
-modified_at: 2026-11-06T03:11:49.860556190Z
+modified_at: 2026-11-06T03:57:34.787554670Z
 req_type: Task
 tags:
 - from-implementer:TASK-2889
@@ -133,6 +133,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1af01-369e-7372-b7c9-af35dfca99e3
+  author: aida-auto-bump
+  timestamp: 2026-11-06T03:57:34.750736372Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1af01-36c3-7bf3-88a8-e02e404812af
+  timestamp: 2026-11-06T03:57:34.787550902Z
+  agent: aida
+  commit_sha: 44f957f8b8466f6213843fa0c6b882c4d83294b8
+  summary: 'Test-only fixture repair meets all TASK-2904 acceptance points: sample_lease stamps current pid_namespace (GC owner-is-caller passes) plus unobservable-namespace refusal check; review-token check uses an RAII-reaped live child PID >2 with strict identity asserts and explicit unqualified PID 1/2 refusal. Unqualified tokens are justified (review_authority.rs:118-120 namespaced tokens require equal starts). No production change. Round-2 rustfmt finding fixed; CI run 42155046115 fully green at 6b117d2 (Check formatting success). merge-hold-gate failure is the supervised hold, not a code defect.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T03:57:34.750730235Z
+  completion_sha: 44f957f8b8466f6213843fa0c6b882c4d83294b8
