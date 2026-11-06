@@ -4,7 +4,7 @@ use std::path::Path;
 
 use aida_core::condition::{Condition, ConditionFacts, Verdict};
 use aida_core::{CachedGitBackend, Comment, DatabaseBackend, QueueEntry, Requirement};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -98,11 +98,10 @@ pub(crate) fn run(
 ) -> Result<()> {
     // Strict canonical reads: corruption cannot silently shrink the sweep.
     let snapshot = crate::condition_cmd::read_store(project_root, Some(store_path))?;
-    let file = store_path.to_str().context("store path is not UTF-8")?;
-    let facts = crate::condition_cmd::CliConditionFacts::new(project_root, Some(file));
+    let facts = crate::condition_cmd::CliConditionFacts::from_store(project_root, snapshot);
     sweep(
         backend,
-        &snapshot.requirements,
+        &facts.store().map_err(anyhow::Error::msg)?.requirements,
         &facts,
         Utc::now(),
         dry_run,
