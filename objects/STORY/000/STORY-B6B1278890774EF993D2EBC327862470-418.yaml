@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T05:21:02.879512166Z
+modified_at: 2026-11-06T05:53:37.017727576Z
 req_type: Story
 tags:
 - docs:impacted
@@ -376,6 +376,12 @@ comments:
   content: 'Slice 2 approach under the 2026-11-05 13:30 MST brief: reuse slice-1 sshsig and current node roster for signed reservation transitions on the explicitly trusted GitHub admission hub/ref. Add bounded exact-tip CAS, token confirmation before dispatch, fail-closed ambiguous outcomes and old-head exclusion, and checked publication history before local-directory fallback. Target two-clone races, unreachable-hub and mirror refusals, transition validation and watcher discovery tests; retain local capacity/process binding. Expected files: review_publication/admission module, review_watch integration, focused tests, config trust inventory, operator docs, AGENTS.md and OVERVIEW.md. The latest brief authorizes completing STORY-2492 directly and supersedes older split-spec requests. No new design fork.'
   created_at: 2026-11-06T05:21:02.879512166Z
   modified_at: 2026-11-06T05:21:02.879512166Z
+  session_id: 01a1af4bb0e5
+- id: 01a1af6b-72f9-7e11-9bf0-1e0dd14949b7
+  author: joe
+  content: 'Native slice-2 implementer handoff: completed the latest advisor brief with explicit trusted GitHub admission_hub/admission_ref, repository/forge binding, signed causal Reserved -> Running -> Terminal and proven pre-spawn Reserved -> Cancelled transitions, unpredictable owner tokens, bounded expected-tip CAS and accepted-transition confirmation before dispatch. Synced publications feed watcher history without local verdict files and override contradictory cached history. Local capacity/process binding remains; ambiguous claims retain capacity, mirrors refuse, and hub failure is named. Changed files: .aida/config.toml; scripts/config-trust.toml; aida-cli-lib/src/gate/review_publication.rs; aida-cli-lib/src/gate/review_publication/admission.rs; aida-cli-lib/src/gate/review_publication/tests/admission_tests.rs; aida-cli-lib/src/gate/tests/story_2492_publication_tests.rs; aida-cli-lib/src/review_watch.rs; aida-cli-lib/src/review_watch_notice.rs; aida-cli-lib/src/tests/task_1993_review_watch_tests.rs; AGENTS.md; OVERVIEW.md; docs/agents/second-review-node.md; docs/cli/06-roles-sessions.md. Validation passed: cargo check -p aida-cli-lib --offline; 17 review_publication tests (including 7 admission cases and real watcher admission boundary with one fake dispatcher); 119 review_watch regressions; config-trust inventory guard; store-Git guard; 8 Git-maintenance ratchet tests; cargo fmt --all -- --check; git diff --check. No implementation blockers found. Live GitHub transport and full CI were not exercised from this seat. Edits are intentionally uncommitted: no commit, push, PR, ship, review record or queue done was run. Host launcher must commit and publish the completing PR under LIGHT gate / STRICT review after this process exits.'
+  created_at: 2026-11-06T05:53:37.017727576Z
+  modified_at: 2026-11-06T05:53:37.017727576Z
   session_id: 01a1af4bb0e5
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
