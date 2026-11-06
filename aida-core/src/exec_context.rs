@@ -239,7 +239,7 @@ mod tests {
     fn exec_context_capture_child_fixture() {
         let environment = Environment::capture();
         assert_eq!(environment.var("PATH"), Ok("/explicit-fixture-path"));
-        assert_eq!(environment.var("HOME"), Err(EnvLookupError::Missing));
+        assert_eq!(environment.get("HOME"), None);
     }
 
     #[test]
@@ -268,7 +268,11 @@ mod tests {
         assert!(ctx.home().is_none());
         assert!(ctx.tools().search_path().is_none());
         assert!(ctx.tools().selected("git").is_none());
-        assert_eq!(ctx.environment().var("HOME"), Err(EnvLookupError::Missing));
+        assert_eq!(ctx.environment().get("HOME"), None);
+        assert_eq!(
+            ctx.environment().var("MISSING"),
+            Err(EnvLookupError::Missing)
+        );
     }
 
     #[cfg(unix)]

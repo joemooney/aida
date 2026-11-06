@@ -10,6 +10,7 @@ cannot hide it. See docs/internal/testing/exec-context-migration.md for limits.
 from __future__ import annotations
 
 import ast
+import fnmatch
 from collections import Counter
 import hashlib
 import json
@@ -26,6 +27,14 @@ RAW = re.compile(r'(?:br|cr|r)(#*)"')
 QUOTED = re.compile(r'(?:b|c)?"')
 CHAR = re.compile(r"(?:b)?'(?:\\(?:u\{[0-9a-fA-F]+\}|.)|[^'\\\n])'")
 IDENT = re.compile(r"(?:r#)?[A-Za-z_][A-Za-z_0-9]*")
+# Strict, reserved and weak Rust keywords are expression/item boundaries, not
+# identifiers extending a preceding path. Include historical/future editions.
+RUST_KEYWORDS = set("""
+    Self abstract as async auto await become box break const continue crate do
+    dyn else enum extern false final fn for gen if impl in let loop macro macro_rules match
+    mod move mut override priv pub raw ref return safe self static struct super
+    trait true try type typeof union unsafe unsized use virtual where while yield
+""".split())
 
 
 def tokens(source):
@@ -141,7 +150,11 @@ def rust_sites(source):
         if not changed:
             break
 
-    found, scope = [], "<module>"
+    found = []
+    # Delimiter depth bounds each function body; returning from a nested fn
+    # restores its enclosing fn, and leaving the outer fn restores <module>.
+    delimiters, functions = [], []
+    pending_fn = None
     for alias, path in imports:
         canonical = resolve(path)
         if canonical[:2] == ("std", "env"):
@@ -149,8 +162,21 @@ def rust_sites(source):
             found.append(f"<import>:binding:{digest}")
     for i, t in enumerate(ts):
         if t == "fn" and i + 1 < len(ts) and IDENT.fullmatch(ts[i + 1]):
-            scope = ts[i + 1]
-        if i in excluded or not IDENT.fullmatch(t) or (i > 1 and ts[i - 1] == "::" and IDENT.fullmatch(ts[i - 2]) and ts[i - 2] not in {"return", "break", "yield", "in"}):
+            pending_fn = (ts[i + 1], len(delimiters))
+        if t in {"(", "[", "{"}:
+            if t == "{" and pending_fn and pending_fn[1] == len(delimiters):
+                functions.append((pending_fn[0], len(delimiters) + 1))
+                pending_fn = None
+            delimiters.append(t)
+        elif t in {")", "]", "}"}:
+            if functions and t == "}" and functions[-1][1] == len(delimiters):
+                functions.pop()
+            if delimiters:
+                delimiters.pop()
+        elif t == ";" and pending_fn and pending_fn[1] == len(delimiters):
+            pending_fn = None  # Trait/extern declaration without a body.
+        scope = functions[-1][0] if functions else "<module>"
+        if i in excluded or not IDENT.fullmatch(t) or (i > 1 and ts[i - 1] == "::" and IDENT.fullmatch(ts[i - 2]) and ts[i - 2] not in RUST_KEYWORDS):
             continue
         path, end = [t], i + 1
         while end + 1 < len(ts) and ts[end] == "::" and IDENT.fullmatch(ts[end + 1]):
@@ -222,17 +248,25 @@ def python_sites(source):
 
 def scan(root=ROOT):
     members = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["members"]
-    paths = set()
-    for member in members:
-        paths.update((root / member).rglob("*.rs"))
-    paths.update((root / "tests").rglob("*.rs"))
-    paths.update((root / "tests").rglob("*.py"))
+    # Scan the index's source inventory, reading working-tree contents. Scratch
+    # files, ignored virtualenvs and build output cannot add local-only sites.
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--", *members, "tests"],
+        cwd=root, capture_output=True, check=True,
+    ).stdout.decode("utf-8").split("\0")
     sites = Counter()
-    for path in sorted(paths):
-        rel = path.relative_to(root).as_posix()
-        if "target" in path.relative_to(root).parts:
+    for rel in sorted(set(tracked) - {""}):
+        path = root / rel
+        in_member = any(fnmatch.fnmatch(rel, member.rstrip("/") + "/*") for member in members)
+        in_tests = rel.startswith("tests/")
+        if not ((in_member or in_tests) and path.suffix == ".rs" or in_tests and path.suffix == ".py"):
             continue
-        source = path.read_text()
+        if not path.exists():
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except UnicodeError as error:
+            raise ValueError(f"tracked source is not UTF-8: {rel}") from error
         entries = python_sites(source) if path.suffix == ".py" else rust_sites(source)
         for entry in entries:
             sites[f"{rel}:{entry}"] += 1
@@ -255,8 +289,25 @@ def check(actual, ledger):
 
 
 def check_growth(ledger, previous):
-    if previous and (Counter(ledger["sites"]) - Counter(previous["sites"]) or ledger["ceiling"] > previous["ceiling"]):
-        raise ValueError("legacy ledger may only shrink relative to the base revision")
+    if not previous:
+        return
+    # Relocation may change only navigation (file/function), never the operation
+    # or exact expression, and cannot borrow multiplicity from a retained site.
+    current, old = Counter(ledger["sites"]), Counter(previous["sites"])
+
+    def fingerprints(sites):
+        counts = Counter()
+        for key, count in sites.items():
+            parts = key.rsplit(":", 2)
+            if len(parts) != 3:
+                raise ValueError(f"invalid legacy site key: {key}")
+            counts[tuple(parts[-2:])] += count
+        return counts
+
+    additions = fingerprints(current - old)
+    retirements = fingerprints(old - current)
+    if additions - retirements or ledger["ceiling"] > previous["ceiling"]:
+        raise ValueError("legacy ledger may only shrink or relocate identical operation/expression sites relative to the base revision")
 
 
 def main():

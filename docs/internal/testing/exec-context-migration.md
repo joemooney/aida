@@ -43,13 +43,20 @@ change `LaunchContext::resolve`. This slice edits neither.
 
 `scripts/exec-context-legacy.json` is a migration exception ledger, not a second
 requirements store. Every entry is owned by STORY-2538 slices B–D. Each key
-contains the repository path, nearest preceding named function (or module/import
+contains the repository path, enclosing named function (or module/import
 binding), operation and SHA-256 prefix of the tokenized reference/call; its value
 is the exact multiplicity. Function names are navigation hints, not Rust name
-resolution. Whitespace/comments do not change call fingerprints; argument, alias,
-function or path edits can require retiring an old entry. The total ceiling is
-computed from the entries. Removed entries must be pruned; replacements cannot
-silently borrow another site's allowance.
+resolution. Whitespace/comments do not change call fingerprints; argument
+or alias edits require retiring an old entry. Function scope ends at the body's
+closing brace; nested functions restore the outer scope on exit. The total
+ceiling is computed from the entries. Removed entries must be pruned.
+
+File moves, split-lib slices and function renames may relocate ledger entries
+without migrating their calls: update the navigation keys and retire the old
+keys in the same change. The base comparison matches additions against retired
+entries by operation plus exact expression digest, including multiplicity; the
+total ceiling cannot grow. Retained entries provide no relocation capacity.
+Changed expressions/operations and extra duplicate calls still refuse.
 
 Initial inventory (including import bindings and Python harness references):
 
@@ -57,15 +64,24 @@ Initial inventory (including import bindings and Python harness references):
 | --- | ---: | --- |
 | aida-core | 119 | R4: storage, config, home, tools and core fixture helpers |
 | aida-cli | 65 | R4: CLI/MCP entry capture and contract fixtures |
-| aida-cli-lib | 889 | R4: functional clusters after coordination with PR-C |
+| aida-cli-lib | 890 | R4: functional clusters after coordination with PR-C |
 | aida-server | 31 | R4: explicit request/service boundaries |
 | aida-tui | 21 | R4: UI/service request boundaries |
 | tests | 90 | R4: Python harness reads and mutation bindings |
-| **Total** | **1,215** | R4 slices B–D; not a zero-legacy claim |
+| **Total** | **1,216** | R4 slices B–D; not a zero-legacy claim |
+
+The initial inventory also includes one unchanged `forge_confirmation::pause`
+reader from PR #3493 (`5af57cdbc221`), merged from main after the first review.
+The 1,215-site reviewed inventory otherwise changes only function navigation
+keys corrected by enclosing-scope tracking; it gains no replacement allowances.
 
 All workspace members are discovered from Cargo.toml, including build scripts,
 examples and Rust integration tests; `tests/**/*.rs` and `tests/**/*.py` are
-included. No workspace member is exempt. Reads (`var`, `var_os`, `vars`,
+included. Source paths come from `git ls-files`, with working-tree contents
+scanned; new source files must be staged to participate. Untracked/ignored
+scratch files and virtualenvs are excluded, deleted sources retire entries,
+and non-UTF-8 tracked sources fail with their path. No workspace member is
+exempt. Reads (`var`, `var_os`, `vars`,
 `vars_os`), mutation (`set_var`, `remove_var`), and environment import bindings
 are inventoried. All Rust mutations are tracked conservatively, including
 production mutations. The only admitted capture is the one exact `vars_os()`
@@ -75,8 +91,9 @@ The guard recognizes direct/leading-`::` paths, grouped imports, module/function
 aliases, raw identifiers, globs and function references passed into helpers.
 A binding to an environment function is itself a source site, so helper
 indirection does not exempt that source. Nested comments, raw/ordinary strings,
-character literals and lifetimes have mutant coverage. Unrelated imports must
-not be recursively expanded (e.g. `anyhow::{anyhow}` is not an env alias).
+character literals and lifetimes have mutant coverage, as do absolute paths
+after Rust keywords (including `if`, `match`, `while` and `mut`). Unrelated
+imports must not be recursively expanded (e.g. `anyhow::{anyhow}` is not an env alias).
 Python harnesses use AST scanning of os environment references, imports and
 aliases, including references used to mutate `os.environ`.
 
@@ -90,7 +107,8 @@ contract; this initial ledger is not proof of that final contract.
 
 Run `python3 scripts/check-exec-context.py` and
 `python3 -m unittest tests/test_exec_context_ratchet.py`. CI's fast gate also
-compares against the PR base ledger: entries and ceiling may only shrink.
+compares against the PR or merge-group base ledger: entries may shrink or
+relocate identical operation/expression fingerprints; the ceiling may only shrink.
 The first introduction bootstraps only when that base has no ledger. A missing
 base commit or unreadable/malformed ledger fails. Locally use `--base REF` to
 exercise the same growth check. After migrating a site, remove its entry (or

@@ -1,6 +1,10 @@
 """Mutation fixtures for the staged execution-context ledger."""
 # trace:STORY-2538 | ai:codex
 import importlib.util
+import json
+import subprocess
+import tempfile
+from collections import Counter
 from pathlib import Path
 import unittest
 
@@ -30,6 +34,61 @@ class ExecContextRatchetTests(unittest.TestCase):
                 self.assertTrue(sites)
                 if "fn f" in source:
                     self.assertTrue(any(not site.startswith("<import>") for site in sites), sites)
+
+    def test_leading_absolute_paths_after_every_keyword(self):
+        # Keep this independent of the scanner's keyword set so omitting a
+        # keyword from the implementation is a failing mutant.
+        keywords = """
+            Self abstract as async auto await become box break const continue
+            crate do dyn else enum extern false final fn for gen if impl in let
+            loop macro macro_rules match mod move mut override priv pub raw ref return safe
+            self static struct super trait true try type typeof union unsafe
+            unsized use virtual where while yield
+        """.split()
+        for keyword in keywords:
+            if keyword == "use":
+                source = 'use ::std::env::var;'
+            else:
+                source = f'fn f() {{ {keyword} ::std::env::var("X") }}'
+            with self.subTest(keyword=keyword):
+                self.assertEqual(1, len(GUARD.rust_sites(source)))
+        for expression in [
+            'if ::std::env::var("X").is_ok() {}',
+            'match ::std::env::var("X") { _ => () }',
+            'while ::std::env::var("X").is_ok() {}',
+            'let _ = &mut ::std::env::var("X");',
+            'let _ = &raw const ::std::env::var("X");',
+        ]:
+            with self.subTest(expression=expression):
+                self.assertEqual(1, len(GUARD.rust_sites('fn f() { ' + expression + ' }')))
+        self.assertEqual([], GUARD.rust_sites('fn f() { unrelated::std::env::var("X"); }'))
+
+    def test_function_scopes_end_and_restore_enclosing_scope(self):
+        source = """
+            fn outer() {
+                if true { std::env::var("before"); }
+                fn inner() { std::env::var("inner"); }
+                std::env::var("after");
+            }
+            static S: Lazy<String> = Lazy::new(|| { std::env::var("static") });
+            const C: fn() = || { std::env::var("const"); };
+            mod nested {
+                fn sibling() { std::env::var("sibling"); }
+                static T: Lazy<String> = Lazy::new(|| { std::env::var("nested") });
+            }
+            trait Tr { fn declaration(); }
+            extern "C" { fn declaration(); }
+            fn last() { std::env::var("last"); }
+        """
+        self.assertEqual(
+            ["outer", "inner", "outer", "<module>", "<module>", "sibling", "<module>", "last"],
+            [site.split(":")[0] for site in GUARD.rust_sites(source)],
+        )
+        original = 'fn f() { std::env::var("X"); }'
+        nested = 'fn f() { fn new_fn() {} std::env::var("X"); }'
+        self.assertEqual(GUARD.rust_sites(original), GUARD.rust_sites(nested))
+        module = 'static S: Lazy<String> = Lazy::new(|| std::env::var("X"));'
+        self.assertEqual(GUARD.rust_sites(module), GUARD.rust_sites('fn f() {}' + module))
 
     def test_unrelated_self_named_import_does_not_expand(self):
         self.assertEqual([], GUARD.rust_sites('use anyhow::{anyhow, Result}; fn f() { anyhow!("x"); }'))
@@ -63,15 +122,85 @@ class ExecContextRatchetTests(unittest.TestCase):
         self.assertNotEqual(original, GUARD.rust_sites('fn g() { std::env::var("A"); }'))
 
     def test_ledger_rejects_additions_duplicates_and_unpruned_retirements(self):
-        from collections import Counter
-        ledger = {"version": 1, "owner": "STORY-2538", "ceiling": 1, "sites": {"a": 1}}
-        GUARD.check(Counter({"a": 1}), ledger)
-        for sites in [{"a": 2}, {"b": 1}, {}]:
+        ledger = {"version": 1, "owner": "STORY-2538", "ceiling": 1, "sites": {"a.rs:f:var:digest": 1}}
+        GUARD.check(Counter({"a.rs:f:var:digest": 1}), ledger)
+        for sites in [{"a.rs:f:var:digest": 2}, {"b.rs:f:var:changed": 1}, {}]:
             with self.assertRaises(ValueError):
                 GUARD.check(Counter(sites), ledger)
         GUARD.check_growth({**ledger, "ceiling": 0, "sites": {}}, ledger)
         with self.assertRaises(ValueError):
-            GUARD.check_growth({**ledger, "sites": {"b": 1}}, ledger)
+            GUARD.check_growth({**ledger, "sites": {"b.rs:f:var:changed": 1}}, ledger)
+
+    def test_growth_allows_only_identical_relocations_with_retired_capacity(self):
+        def ledger(sites):
+            return {"version": 1, "owner": "STORY-2538", "ceiling": sum(sites.values()), "sites": sites}
+
+        old = ledger({"old.rs:f:var:digest": 2, "old.rs:g:set_var:write": 1})
+        for sites in [
+            {"moved.rs:f:var:digest": 2, "old.rs:g:set_var:write": 1},
+            {"old.rs:renamed:var:digest": 2, "old.rs:g:set_var:write": 1},
+            {"one.rs:f:var:digest": 1, "two.rs:f:var:digest": 1, "old.rs:g:set_var:write": 1},
+            {"moved.rs:f:var:digest": 1},
+            {},
+        ]:
+            with self.subTest(sites=sites):
+                GUARD.check_growth(ledger(sites), old)
+        for sites in [
+            {"moved.rs:f:var:changed": 2},  # Expression replacement.
+            {"moved.rs:f:var_os:digest": 2},  # Changed operation.
+            {"moved.rs:f:var:digest": 3},  # Same total, wrong multiplicity.
+            {"old.rs:f:var:digest": 2, "extra.rs:f:var:digest": 1},  # Retained sites have no spare capacity.
+            {"moved.rs:f:var:digest": 2, "extra.rs:g:set_var:write": 2},  # Total growth.
+        ]:
+            with self.subTest(sites=sites), self.assertRaises(ValueError):
+                GUARD.check_growth(ledger(sites), old)
+
+    def test_scan_uses_tracked_member_and_test_sources_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write(name, content):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content.encode() if isinstance(content, str) else content)
+
+            def git(*args):
+                return subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *args],
+                                      cwd=root, check=True, capture_output=True)
+
+            git("init")
+            write("Cargo.toml", '[workspace]\nmembers = ["aida-core", "other"]\n')
+            write("aida-core/src/exec_context.rs", 'fn capture() { std::env::vars_os(); }')
+            write("other/examples/fixture.rs", 'fn f() { std::env::var("X"); }')
+            write("other/target/intentional.rs", 'fn f() { std::env::var("TRACKED"); }')
+            write("tests/integration.rs", 'fn f() { std::env::var("Y"); }')
+            write("tests/harness.py", 'import os\nos.getenv("X")')
+            write("outside/ignored.rs", 'fn f() { std::env::var("Z"); }')
+            write("other/notes.py", 'import os\nos.getenv("Z")')
+            write(".gitignore", 'tests/.venv/\n')
+            git("add", ".")
+            git("add", "--force", "other/target/intentional.rs")
+            write("other/scratch.rs", b"\xff")
+            write("tests/.venv/lib/ignored.py", b"\xff")
+            write("tests/scratch.py", 'import os\nos.getenv("Z")')
+            sites = GUARD.scan(root)
+            self.assertEqual(4, sum(sites.values()))
+            self.assertEqual({"other/examples/fixture.rs", "other/target/intentional.rs", "tests/integration.rs", "tests/harness.py"},
+                             {site.split(":")[0] for site in sites})
+            # Working-tree edits to tracked sources still participate.
+            write("other/examples/fixture.rs", 'fn f() {}')
+            self.assertEqual(3, sum(GUARD.scan(root).values()))
+            (root / "tests/integration.rs").unlink()
+            self.assertEqual(2, sum(GUARD.scan(root).values()))
+            write("tests/bad.py", b"\xff")
+            git("add", "tests/bad.py")
+            with self.assertRaisesRegex(ValueError, "tracked source is not UTF-8: tests/bad.py"):
+                GUARD.scan(root)
+
+    def test_merge_queue_uses_its_base_sha(self):
+        workflow = (GUARD.ROOT / ".github/workflows/ci.yml").read_text()
+        base = next(line for line in workflow.splitlines() if "EXEC_CONTEXT_BASE:" in line)
+        self.assertIn("github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before", base)
 
     def test_python_harness_sources_include_aliases_and_mutation(self):
         for source in [
@@ -92,7 +221,6 @@ class ExecContextRatchetTests(unittest.TestCase):
         self.assertNotEqual(a, c)
 
     def test_repository_matches_exact_ledger(self):
-        import json
         GUARD.check(GUARD.scan(), json.loads((GUARD.ROOT / GUARD.LEDGER).read_text()))
 
 
