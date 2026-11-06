@@ -4384,8 +4384,8 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_at: Option<DateTime<Utc>>,
 
-    /// The revisit trigger — the free-text condition that brings a deferred
-    /// spec back (e.g. "when a slice verb ships", "if the shelf grows"). This
+    /// The typed revisit condition that brings a deferred spec back
+    /// (e.g. "date:2026-12-01", "spec:STORY-12=completed"). Legacy prose remains readable. This
     /// is the one thing that distinguishes deferred (prospective/primed) from
     /// archived (retrospective/filed). Set via `aida defer --until "<cond>"`.
     /// trace:STORY-584 | ai:claude
