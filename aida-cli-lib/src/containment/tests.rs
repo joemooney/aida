@@ -205,6 +205,27 @@ fn task_2705_closed_containment_tracer() {
     }
 }
 
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_only_signed_agy_descriptor_selects_outer_only() {
+    assert_eq!(native_layer("agy").unwrap(), NativeLayer::None);
+    for vendor in ["claude", "codex", "opencode"] {
+        assert_eq!(native_layer(vendor).unwrap(), NativeLayer::Required);
+    }
+    assert!(native_layer("unregistered").is_err());
+    let data: Capabilities = toml::from_str(include_str!("vendors.toml")).unwrap();
+    assert!(matches!(data.vendor["agy"].native, NativeAdapter::None));
+    assert!(matches!(
+        data.vendor["agy"].credentials,
+        CredentialLayout::Unverified
+    ));
+    // The capability row is not a production profile or launch admission.
+    assert!(
+        crate::launch::contained::ContainedVendor::for_program(std::ffi::OsStr::new("agy"))
+            .is_err()
+    );
+}
+
 // Same fixture never reads the live repo/config or executes config commands.
 #[cfg(test)]
 fn trusted_fixture(root: &Path, policy: &str) {
