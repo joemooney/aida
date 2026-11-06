@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T20:22:45.035317028Z
+modified_at: 2026-11-06T22:24:26.972224143Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,12 @@ comments:
   created_at: 2026-11-06T20:22:45.035317028Z
   modified_at: 2026-11-06T20:22:45.035317028Z
   session_id: 01a1b271547b
+- id: 01a1b2f6-955c-7d13-a590-5a61660d5475
+  author: joe
+  content: 'Advisor 15:30: host-merged main into #3535. review_watch.rs conflict: kept the PR''s watch_changes loop and threaded main''s new watch_change ''program'' argument (run_with_program) through the closure. Main''s stops_watcher(error, once) is replaced by the PR''s whole-state-only stops_watcher, as the PR intends. Not compiled locally; CI is the gate. The delta re-review must confirm the --once behavior.'
+  created_at: 2026-11-06T22:24:26.972224143Z
+  modified_at: 2026-11-06T22:24:26.972224143Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b24a-bc58-7413-a436-59c9e08b551a
   author: aida-session-start
