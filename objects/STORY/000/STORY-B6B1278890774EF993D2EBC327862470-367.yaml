@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T14:53:23.610679030Z
+modified_at: 2026-11-06T14:53:30.145543782Z
 req_type: Story
 relationships:
 - rel_type:
@@ -304,6 +304,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 3 (Refs STORY-2401, AC2): all seven round-4 findings are addressed in source with tests (lib-0 timing fixed, typed live gate ejects settled refusals with hold kept, CI registration/settle timeouts eject again, per-head fetch cap, Open-only confirmation, BUG-2463 filed), but CI lib-1 ''Run tests'' turned red at this head (green at fce7267 and 69f14e4; main green). AC1 landed in #3427 (not regressed); AC3/AC4 are slices 4-5.. No triage reason was given.'
   created_at: 2026-11-06T14:53:23.610674177Z
   modified_at: 2026-11-06T14:53:23.610674177Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b159-ba2f-7820-b648-4e648565afcc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d2a2e3f5a3ff
+    Recorded: 2026-11-06T14:51:30.176967054+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3493#issuecomment-6687696215
+    Findings:
+    1. [major] CI red at d2a2e3f5a3f: CI (lib-1) 'Run tests' failed (run 42234207840, job 127947505722). The same shard was green at the previous heads fce726766cb (run 42224787380) and 69f14e4b762 (run 42229515264), and main is green, so the round-5 commit d2a2e3f caused it. Round-5 validation ran only the story_2401 filter. The job log could not be read from the review sandbox (log blob host denied), so the failing test is unidentified. Fix: read the lib-1 log or junit artifact and fix the regression. Behavior changed this round in: LiveTrainForge::observe_gate (pr_train.rs ~2386), now Known(Err) to eject plus retire; wait_train_ci timeouts (pr_train.rs ~790), now plain errors that eject; the review_watch select() per-head fetch cap (review_watch.rs ~1323) and the new always-serialized Attempt.fetch_failures field; phase_driver retraction using metadata_for(Open); and gate/approval.rs observe_merge_path_approval_gate.
+    2. [minor] OVERVIEW.md:675-678 is stale after round 5. It still says 'missing aggregates and exhausted CI reads suspend' and 'Legacy member-gate errors that cannot distinguish refusal from unavailable evidence suspend conservatively'. The code now ejects on settled member-gate refusals (typed MemberGateError) and on required-check registration/settle timeouts; only unavailable reads suspend. Update the paragraph to match docs/plans/2026-11-06-story-2401-confirmed-negatives.md round 5.
+    3. [cosmetic] gate/approval.rs observe_merge_path_approval_gate formats the base-read failure as 'approval base evidence unavailable: {other:?}', the Debug form of Observed (e.g. Known(Err("HTTP 404"))). Through merge_path_approval_gate, that text replaces the prose refusal from review_carryover::proven_base_refusal for burndown_run.rs:1311 and upgrade_release.rs:1680. Render the inner reason with Display, or keep proven_base_refusal's message.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T14:53:30.031562882Z
+  modified_at: 2026-11-06T14:53:30.031562882Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
