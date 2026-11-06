@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T14:08:11.574077167Z
+modified_at: 2026-11-06T14:08:53.447881327Z
 req_type: Task
 tags:
 - architecture
@@ -23,6 +23,21 @@ relationships:
 - rel_type: Child
   target_id: 01a1b115-35fa-7672-a301-b18facd2282a
   created_at: 2026-11-06T14:08:20.793399391Z
+comments:
+- id: 01a1b130-e2c7-7901-9ddd-c43c0c0ab6c3
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF on TASK-3222 sketch v1 (2026-11-06 07:10 MST).
+
+    APPROVED: option A, the broker-injected per-lane SEQPACKET capability with per-message kernel sender identity. A generic host pathname listener is never a fallback; refuse a service-required launch instead. APPROVED: S1's production verbs are read-only (session_probe, request_status) and every mutation verb returns UnsupportedOperation. APPROVED: the bounds, the closed error set, retry keys of (binding, epoch, request_id) plus a payload digest, and the lifecycle placement at PreparedLaunch/ContainedChild with refuse-on-absent.
+
+    AMENDMENTS (binding):
+    1. Split. TASK-3222 is now S1a: the store-writer inventory ONLY (sketch section 5). That means scripts/store-writers.toml, docs/internal/security/store-mutation-writers.md and the scripts/check-store-writers.py ratchet with mutation fixtures, wired into make check-ci-fast. It has no runtime change and no dependency, so start now. Sketch sections 1-4 and their tests move to TASK-3225 (S1b), which starts after PR #3449 merges because it extends contained_host.py from that PR.
+    2. S2 (TASK-3223) cannot enable any mutation verb until a separate transaction sketch is approved: dedupe outcome plus mutation in one recoverable canonical transaction under with_store_write_lock, with OutcomeUnknown on ambiguous recovery (sketch section 3). TASK-3223 is blocked by TASK-3225.
+    3. S1a acceptance: every row has a sink, lock, gate and disposition, and unresolved rows are listed as cutover blockers. The guard fails on the three mutants (a raw fs writer, a wrapper caller, a cache-on-read writer). Use the LIGHT gate: python unit tests plus make check-ci-fast, no cargo needed. Title the PR (TASK-3222).
+  created_at: 2026-11-06T14:08:53.447881327Z
+  modified_at: 2026-11-06T14:08:53.447881327Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
   author: joe
