@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T00:39:18.943447556Z
+modified_at: 2026-11-06T03:48:14.323431800Z
 req_type: Story
 tags:
 - architecture
@@ -106,6 +106,15 @@ comments:
   created_at: 2026-11-06T00:39:17.114582745Z
   modified_at: 2026-11-06T00:39:17.114582745Z
   session_id: 01a1ae49de40
+- id: 01a1aef8-a973-7562-a578-1e62cb0f69da
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-11-05 21:00 MST on the sketch (docs/plans/2026-11-05-story-2537-proc-identity.md, landed in #3464): APPROVED. I sign the identity coordinate contract (boot_id, pidns_inode, pid and field-22 starttime ticks; boot-local; no wall-clock equality), the judge decision table including ForeignUnknown reasons and holder refusal as a separate result (never Alive and never Dead), the cooperative holder-admission policy (stamp the actual worker; refuse init, namespace init and known managers; missing evidence refuses admission), and the clock/expiry separation ('lease expired' reported apart from Dead; BUG-2130 boot plus ticks).
+    Simplifications (single user, surgery OK; operator ruling 2026-10-15): (1) No reader/writer version boundary. Each slice ships readers and writers together with a one-time rewrite of existing records; a legacy record that cannot be rebound safely becomes ForeignUnknown, and an operator repair is only reported. (2) CLOCK_BOOTTIME persisted deadlines are deferred to the merge-lock slice (2); slice 1 keeps the existing consumer TTL policies unchanged.
+    Slices: slice 1 (core plus ownership/leases, including the BUG-2458 fix) is AUTHORIZED NOW as ONE PR titled '(Refs STORY-2537) (BUG-2458)': BUG-2458 completes and the story does not. #3450 is closed as superseded; reuse its useful parts. After slice 1 merges, the advisor files slices 2-5 as child tasks. Slice 6 (the broker) needs its own sketch and signoff later. Gate: LIGHT plus the extended task_1750 ratchet. STRICT review. BUG-2458's host acceptance (aida own migrate, then aida own show --compare) is run by the advisor via deputy after merge.
+  created_at: 2026-11-06T03:48:14.323431800Z
+  modified_at: 2026-11-06T03:48:14.323431800Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
