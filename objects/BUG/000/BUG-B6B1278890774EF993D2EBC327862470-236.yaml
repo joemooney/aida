@@ -15,8 +15,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:50:22.010183066Z
-modified_at: 2026-11-06T19:03:36.015387150Z
+modified_at: 2026-11-06T19:12:06.288292263Z
 req_type: Bug
+comments:
+- id: 01a1b246-7c90-7861-9783-af9ddb62687c
+  author: joe
+  content: 'Implemented fixture policy merge using tomllib and standard-library TOML value rendering, replacing duplicate-table appends. Preserves unrelated init settings and vendor entries; replaces allowed_hosts with exactly api.openai.com and allow.fixture.test; sets agents.contained=true, agents.vendor=codex, and contained.vendors.codex=aida. Added existing-policy/idempotence regression and enhanced the real fresh-init fixture to parse its committed policy with tomllib and assert all required settings. Validation: python3 -m unittest tests.test_containment_conformance tests.test_containment_conformance_aida passed 42 tests; make check-ci-fast passed all 38 gates; git diff --check clean. Some fast guards emitted read-only FETCH_HEAD diagnostics but passed using available refs. Changed scripts/containment/conformance.py, tests/test_containment_conformance.py, tests/test_containment_conformance_aida.py. Native-seat handoff: edits intentionally uncommitted; host must commit/publish and complete queue after publication. No implementation blockers. Advisor live C3/C4 reruns for BUG-2447/BUG-2448 remain external validation.'
+  created_at: 2026-11-06T19:12:06.288292263Z
+  modified_at: 2026-11-06T19:12:06.288292263Z
+  session_id: 01a1b23e4725
 history:
 - id: 01a1b23e-4f96-70e2-9a96-8121704154ae
   author: aida-session-start
