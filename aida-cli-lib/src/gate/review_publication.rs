@@ -32,6 +32,37 @@ use std::{
 };
 use uuid::Uuid;
 
+pub(crate) mod admission;
+
+/// Verified synced history is consulted even without any local verdict files.
+// trace:STORY-2492 | ai:codex
+pub(crate) fn watcher_history(root: &Path, change: &str) -> Result<Vec<(String, String)>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(Vec::new());
+    };
+    let key = ChangeKey::parse(change).context("invalid watcher change")?;
+    let heads: std::collections::BTreeSet<_> = load_receipts(root, &store, &tip, change)?
+        .into_iter()
+        .map(|(receipt, ..)| receipt.head)
+        .collect();
+    let mut history = Vec::new();
+    let started = std::time::Instant::now();
+    for head in heads {
+        ensure!(
+            started.elapsed() < Duration::from_secs(20),
+            "watcher history deadline exhausted"
+        );
+        if let Some((receipt, rel)) = select(root, key, &[], Some(&head))? {
+            history.push((body(&receipt)?, format!(".aida-store/{rel}")));
+        }
+    }
+    ensure!(
+        head(&store)? == tip,
+        "review history changed during watcher selection"
+    );
+    Ok(history)
+}
+
 const ROSTER: &str = "reviews/v1/nodes.json";
 const CHANGES: &str = "reviews/v1/changes";
 const SPEC_INDEX: &str = "reviews/v1/specs";
@@ -73,6 +104,20 @@ pub(crate) fn take_reports() -> Vec<String> {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum NodeCommand {
+    /// Re-anchor one admission chain after stopping all watchers and reviewers.
+    AdmissionReconcile {
+        /// GitHub change key, for example PR-123.
+        change: String,
+        /// Exact hub tip inspected by the operator (no automatic retries).
+        #[arg(long)]
+        expected_tip: String,
+        /// Durable explanation of the stopped-admission recovery.
+        #[arg(long)]
+        reason: String,
+        /// Attest that all watchers and all reviewers for this change are stopped.
+        #[arg(long)]
+        all_reviewers_stopped: bool,
+    },
     /// Enroll a node's public ed25519 key in the shared roster.
     Enroll {
         /// Stable publishing node ID (letters, digits, hyphens and underscores).
@@ -130,7 +175,7 @@ struct Receipt {
     summary: Option<String>,
     findings: Vec<String>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Signed {
     payload: String,
@@ -360,12 +405,22 @@ pub(crate) fn nodes(command: &NodeCommand) -> Result<()> {
     authority_operator()?;
     let root = std::env::current_dir()?;
     let root = super::ledger::store_root(&root)?;
+    if let NodeCommand::AdmissionReconcile {
+        change,
+        expected_tip,
+        reason,
+        all_reviewers_stopped,
+    } = command
+    {
+        return admission::reconcile(&root, change, expected_tip, reason, *all_reviewers_stopped);
+    }
     let store = store(&root).context("review nodes require a distributed store")?;
     let (tip, mut roster) = aida_core::db::with_store_write_lock(&store, || -> Result<_> {
         let tip = head(&store)?;
         Ok((tip.clone(), roster(&store, &tip)?))
     })?;
     match command {
+        NodeCommand::AdmissionReconcile { .. } => unreachable!(),
         NodeCommand::Enroll { node, public_key } => {
             ensure!(node_valid(node), "invalid publishing node id");
             let raw = std::fs::read_to_string(public_key)?;
