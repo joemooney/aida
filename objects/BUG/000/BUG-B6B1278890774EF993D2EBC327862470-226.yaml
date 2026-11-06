@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:26:45.721586405Z
-modified_at: 2026-11-06T07:37:41.416647767Z
+modified_at: 2026-11-06T07:56:34.679892783Z
 req_type: Bug
 tags:
 - conformance
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-11-06T07:36:42.797233683Z
   modified_at: 2026-11-06T07:36:42.797233683Z
   session_id: 01a1afc7d877
+- id: 01a1afdc-05f7-7dc0-9b75-b2368678c16f
+  author: joe
+  content: 'ADVISOR SCOPE ADDITION 2026-11-06 01:00 MST (10-28 ruling: bundle carried-forward harness findings into the open harness PR #3482). In the same push: (a) TASK-2922: refuse /tmp and /run --output in run_aida() BEFORE any setup, so no grant is ever minted for a refused output; (b) TASK-2923: on TimeoutExpired kill the whole ''aida queue work'' process group, close Network, and never let the stale pre-continuation report overwrite the setup evidence; size the outer timeout to cover continuation setup plus bounded_launch; (c) TASK-2925: --await-payload with an absent manifest produces a named refusal, not a FileNotFoundError traceback; (d) TASK-2924: add a Rust test pinning the ''aida-contained-receipt sha256=.. policy_sha=..'' line format the harness regex depends on (keep the line; the noise is accepted). LIGHT gate: the harness python tests plus one targeted cargo test for (d).'
+  created_at: 2026-11-06T07:56:34.679892783Z
+  modified_at: 2026-11-06T07:56:34.679892783Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1afc1-153b-76a0-a99f-4bb9cbc39a71
   author: joe
