@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T16:07:00.898449641Z
+modified_at: 2026-11-06T16:07:03.621324414Z
 req_type: Story
 tags:
 - docs:impacted
@@ -447,6 +447,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC5 e2e and train source-proof change look correct and all 6 criteria now trace, but PR CI lib-1 is red at 101f4b65 (Run tests + Test time budget) while main is green; AC5''s test is unverified in CI.. No triage reason was given.'
   created_at: 2026-11-06T16:07:00.898445573Z
   modified_at: 2026-11-06T16:07:00.898445573Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b19d-1237-7570-a873-e185e7d47255
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 101f4b65e97c
+    Recorded: 2026-11-06T15:40:35.315756687+00:00
+    Findings:
+    1. 1 (blocking): CI (lib-1) failed at 101f4b65e97c, job 127977356781: both 'Run tests' and 'Test time budget' exited 1. Main CI is green at 3267a3e97d. The reviewer sandbox could not download the logs. The likely cause is the new two_node_ship_watch_rework_and_train_entry_points (gate::review_publication::tests::entry_tests). It has no entry in scripts/test-time-budget.toml, so it is held to default_limit = 10s, yet it does OpenSSH signing, runs two watcher rounds, re-execs the lib test binary per dispatcher and collector, and waits up to 25s per dispatcher. Find the failing test in the log, fix it, and add a measured budget entry (max x2, rounded up to 5s, with a rationale comment). AC5 (ac540936) stays unverified until CI is green.
+    2. 2 (minor): story_2492_entry_tests.rs, request-changes round: the train refusal is asserted only as result.is_err(). Any error satisfies it, including the fixture forge's 'unsupported forge request' RuntimeError or a transport failure. Assert that the error names the blocking review verdict, so the test proves the train refused because of B's request-changes.
+    3. 3 (minor): the collect() reviewer substitute writes a human-at-TTY receipt (human_at_tty: true, write_human_receipt) from a non-TTY child. It does not use the delegated reviewer-grant attestation that the watcher's real queue-work child produces. The e2e therefore proves cross-node transport of human-receipt authority, not the grant-delegated reviewer path the watcher uses. Either record through the child's grant attestation, or state the substitution explicitly in the test doc comment and in docs/agents/second-review-node.md (which says 'using the ordinary validated host collector').
+    4. 4 (cosmetic, follow-up OK): a reviewer-only node needs a manual 'touch .aida/review-authorship.jsonl' (second-review-node.md), and no AIDA command initializes it. Consider making node or watcher setup create it.
+    5. 5 (cosmetic): fixtures/story_2492_forge.py and the generated review-cli hard-code /usr/bin/git and #!/usr/bin/python3. Resolve git and python from PATH, as other fixtures do, so the test is not tied to one host layout.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T16:07:03.479031935Z
+  modified_at: 2026-11-06T16:07:03.479031935Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
