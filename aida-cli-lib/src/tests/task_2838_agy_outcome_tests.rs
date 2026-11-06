@@ -363,16 +363,20 @@ fn task_2838_tee_disabled_diagnostics_reach_stderr() {
     }
     // libtest normally captures eprintln; a child with nocapture proves these
     // diagnostics actually reach stderr with both log tee and forwarding off.
+    // Re-exec libtest even when the lane's AIDA_BIN selects the production CLI.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-872 | ai:codex
     for mode in ["direct", "coordinator"] {
-        let output = std::process::Command::new(crate::resolve_aida_exe())
-            .args([
-                "--exact",
-                "agy_outcome::tests::task_2838_tee_disabled_diagnostics_reach_stderr",
-                "--nocapture",
-            ])
-            .env(CHILD_MODE, mode)
-            .output()
-            .unwrap();
+        let output = std::process::Command::new(
+            crate::aida_bin::current_executable_path().expect("test executable"),
+        )
+        .args([
+            "--exact",
+            "agy_outcome::tests::task_2838_tee_disabled_diagnostics_reach_stderr",
+            "--nocapture",
+        ])
+        .env(CHILD_MODE, mode)
+        .output()
+        .unwrap();
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(output.status.success(), "{mode}: {stderr}");
         assert!(
