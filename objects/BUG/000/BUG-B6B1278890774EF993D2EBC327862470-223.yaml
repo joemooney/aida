@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-223
 agreed_id: BUG-2457
 title: A completed review leaves its aida-pr-N worktree, so the review watcher's next-head review of the same PR refuses 'branch pr-N is held by worktree'
 description: 'Observed 2026-11-05 on PR-3367 and PR-3426: after a review of head H1 completed (verdict posted), the reviewer worktree ~/ai/aida-worktrees/aida-pr-N stayed (clean, no process, no merge-hold marker). When the PR got a new head H2, review watch''s pickup refused: ''branch pr-N is held by worktree .../aida-pr-N before pickup setup'', recorded the attempt as exited-without-completing and did not relaunch, so the PR silently stopped getting reviews until the advisor removed the worktree and ran aida review watch --release PR-N. BUG-2428 covered launches that fail before the agent starts; this is the post-success path. Acceptance: (1) a reviewer pickup for PR-N reuses or resets an existing aida-pr-N worktree that is clean, has no live owning process/lease, and carries no merge-hold marker (copy any marker to primary first, per BUG-2176), then checks out the new head; (2) a dirty or live one still refuses with the existing message; (3) a regression test drives two consecutive reviews of different heads of the same PR through the pickup path.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:24:45.297488765Z
-modified_at: 2026-11-06T01:30:55.713745071Z
+modified_at: 2026-11-06T01:31:52.737663588Z
 req_type: Bug
 tags:
 - area:review
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-11-05T18:22:19.080587735Z
   modified_at: 2026-11-05T18:22:19.080587735Z
   session_id: 01a1ace2e7a1
+- id: 01a1ae7b-d221-7752-b513-f4bf288102f7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic meets BUG-2457 acceptance (fail-closed retire of idle default review tree, hold adopted to primary, existing refusal otherwise), but PR CI is red at head: gates (git auto-maintenance ratchet) caused by the new test file, and lib-0 Run tests failed (log unreadable from reviewer sandbox).. No triage reason was given.'
+  created_at: 2026-11-06T01:31:52.737662377Z
+  modified_at: 2026-11-06T01:31:52.737662377Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ace2-fcb8-7df3-bdb6-2dcb17aee41f
   author: aida-session-start
@@ -90,6 +96,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ae7b-d221-7752-b513-f4a5b4517385
+  author: joe
+  timestamp: 2026-11-06T01:31:52.737653134Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -98,11 +112,3 @@ filed_at:
   aida_build_sha: 70a5d68133a
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Logic meets BUG-2457 acceptance (fail-closed retire of idle default review tree, hold adopted to primary, existing refusal otherwise), but PR CI is red at head: gates (git auto-maintenance ratchet) caused by the new test file, and lib-0 Run tests failed (log unreadable from reviewer sandbox).'
-  recovery_hint: address the review findings, move BUG-2457 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T01:30:55.713745071Z
