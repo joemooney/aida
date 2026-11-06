@@ -566,8 +566,12 @@ and local --release cannot clear active claims. Admission uses per-PR shards;
 a direct human can re-anchor abandoned or revoked claims at an inspected hub tip
 with `review nodes admission-reconcile` after stopping all watchers/reviewers.
 Hub configuration remains opt-in until every watcher is enrolled and upgraded.
+Admission compares scoped evidence across hub I/O, so unrelated store commits
+do not strand lifecycle writes. Readers rely on trusted writers to preserve
+chains; anchor checks do not detect truncation or replay against Git ancestors.
 See [second-node setup](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:TASK-3196 | ai:codex -->
 
 ## Local observation envelopes
 

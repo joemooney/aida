@@ -1457,7 +1457,12 @@ closed PRs cannot exhaust a global table budget. The direct-human
 inspected exact hub tip, signs a recovery anchor, and fences abandoned or revoked
 owner tokens without deleting Git history. Local release is allowed only after
 remote claims are inactive. Hub configuration ships disabled until operators
-enroll and upgrade every watcher. Untrusted-node envelopes remain separate work. See
+enroll and upgrade every watcher. Admission snapshots config, roster and verdict
+evidence under short store locks around hub I/O, retrying changed evidence;
+unrelated store commits do not block lifecycle transitions. Readers validate
+anchor signatures and scope but rely on trusted writers to preserve chains;
+they do not detect shard truncation or replay against Git ancestors.
+Untrusted-node envelopes remain separate work. See
 [second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
-<!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:TASK-3196 | ai:codex -->

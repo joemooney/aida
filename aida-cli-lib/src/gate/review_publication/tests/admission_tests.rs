@@ -197,7 +197,29 @@ printf 'spawn\n' >> "$1"
         crate::review_watch::fixture_admit_dispatch(loser, &"c".repeat(40), &program, &marker)
             .is_err()
     );
-    crate::review_watch::assert_failed_admission_can_retry(loser, &"c".repeat(40));
+    crate::review_watch::assert_failed_admission(loser, &"c".repeat(40));
+    // Restore connectivity and retire the winner's fixture reservation. The
+    // failed new-head attempt must actually dispatch, not just be selectable.
+    std::fs::rename(
+        f.temp.path().join("offline.git"),
+        f.temp.path().join("hub.git"),
+    )
+    .unwrap();
+    let winner = if outcomes[0] { &f.a } else { &f.b };
+    let reservation: Transition = serde_json::from_str(&table.changes["PR-7"][0].payload).unwrap();
+    f.step(
+        winner,
+        "PR-7",
+        &reservation.head,
+        reservation.token,
+        State::Cancelled,
+    )
+    .unwrap();
+    assert!(
+        crate::review_watch::fixture_admit_dispatch(loser, &"c".repeat(40), &program, &marker,)
+            .unwrap()
+    );
+    assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 2);
 }
 #[test]
 fn story2492_admission_transitions_fence_tokens_and_terminal_heads() {
@@ -737,6 +759,53 @@ fn task3196_terminal_transition_survives_store_commit_during_hub_read() {
     )
     .unwrap();
     assert_eq!(history.last().unwrap().state, State::Terminal);
+}
+
+// All other lifecycle writes share Terminal's evidence snapshots. Unrelated
+// store commits must not fail polling, preflight or pre-spawn cancellation.
+// trace:TASK-3196 | ai:codex
+#[test]
+fn task3196_admission_lifecycle_survives_store_commits_during_hub_read() {
+    for state in [State::Reserved, State::Running, State::Cancelled] {
+        let f = Fixture::new();
+        let _env = f.environment();
+        let token = Uuid::new_v4();
+        let head = "a".repeat(40);
+        if state != State::Reserved {
+            f.step(&f.a, "PR-7", &head, token, State::Reserved).unwrap();
+        }
+        let store = f.a.join(".aida-store");
+        let before = super::super::head(&store).unwrap();
+        let mut reads = 0;
+        assert!(update_with_observer(
+            &f.a,
+            &f.hub,
+            "PR-7",
+            &head,
+            token,
+            state.clone(),
+            (state != State::Reserved).then(|| "observed lifecycle receipt".into()),
+            || {
+                reads += 1;
+                write(&store, "unrelated-comment", "concurrent agent comment");
+                ok(&store, &["add", "unrelated-comment"]);
+                ok(&store, &["commit", "-qm", "unrelated store write"]);
+            },
+        )
+        .unwrap());
+        assert_eq!(reads, 1, "unrelated writes need no admission retry");
+        assert_ne!(super::super::head(&store).unwrap(), before);
+        let repo = private_repo().unwrap();
+        let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+        let history = chain(
+            &f.hub,
+            "PR-7",
+            &table.changes["PR-7"],
+            &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(history.last().unwrap().state, state);
+    }
 }
 
 // trace:TASK-3196 | ai:codex

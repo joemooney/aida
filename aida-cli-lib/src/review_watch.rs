@@ -2790,7 +2790,7 @@ pub(crate) fn synced_history_precheck(root: &Path, id: u64, head: &str) -> Resul
 }
 
 #[cfg(test)]
-pub(crate) use admission_fixture::{assert_failed_admission_can_retry, fixture_admit_dispatch};
+pub(crate) use admission_fixture::{assert_failed_admission, fixture_admit_dispatch};
 
 #[cfg(test)]
 mod admission_fixture {
@@ -2830,31 +2830,17 @@ mod admission_fixture {
     }
 
     // trace:TASK-3196 | ai:codex
-    pub(crate) fn assert_failed_admission_can_retry(root: &Path, head: &str) {
+    pub(crate) fn assert_failed_admission(root: &Path, head: &str) {
         let store = Store::open(root, "github:github.com/fixture/review").unwrap();
         let state = store.load().unwrap();
         let attempt = state.entries["PR-7"].attempts.last().unwrap();
         assert_eq!(attempt.head, head);
         assert_eq!(attempt.phase, Phase::Failed);
-        let change = forge::Change {
-            id: 7,
-            head: head.into(),
-            base: "main".into(),
-            author: "fixture-author".into(),
-            gitlab: false,
-            overlap: Some(false),
-            behind: Some(0),
-            head_branch: None,
-        };
-        assert!(matches!(
-            select(&store, &change, None, 2).unwrap(),
-            Action::Dispatch(_)
-        ));
     }
 }
 
 // Test entry point into the same exit/cancellation functions used by children.
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[cfg(test)]
 pub(crate) fn fixture_admission_exit(
     root: &Path,
@@ -2927,6 +2913,7 @@ pub(crate) fn fixture_admission_exit(
 }
 
 #[cfg(test)]
+// trace:TASK-3196 | ai:codex
 pub(crate) fn fixture_admission_spawn_failure(
     root: &Path,
     before_cancel: impl FnOnce(),
