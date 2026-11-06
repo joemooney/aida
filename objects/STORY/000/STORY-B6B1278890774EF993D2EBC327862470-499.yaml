@@ -1,0 +1,34 @@
+id: 01a1b204-28b8-7cd0-87ac-0cfe447f17d2
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-499
+agreed_id: STORY-2576
+title: 'Review PR-3523: [AI:codex] fix: aida agent new --role advisor mints a child grant with no delegable seats and has no --delegate-seat, so a launched advisor cannot dispatch reviewers or implementers (B'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b1e7`) for branch `bug-b6b1278890774ef993d2ebc327862470-233`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3523>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-233` → `main`
+
+  ## Covers
+
+  - BUG-2467
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3523` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T17:59:39.448617973Z
+modified_at: 2026-11-06T17:59:39.448617973Z
+req_type: Story
+filed_at:
+  code_sha: 6fe228acc8ba529a71396d2a8236545d2d009d1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dcb86ca85d
+  vendor: claude
+  session: 01a1b1e75574
