@@ -540,6 +540,14 @@ Start it in your terminal, through the `aida()` shell function, holding an advis
 
 Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
 
+`list --name N` also recognizes the legacy `aida-deputy-shell run N` bash
+runner through `runner.pid` and its process command line. This is display-only
+evidence; it supplies no grant or submit-seat authority. When the reader cannot
+observe host processes from its PID namespace, it reports `runner: UNKNOWN
+(cannot see host processes from this sandbox)`. Unreadable process information
+also reports `UNKNOWN`; check from the host terminal before restarting a deputy.
+<!-- trace:BUG-2468 | ai:codex -->
+
 - **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../advanced/deputies.md#letting-a-sandboxed-advisor-submit).
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
