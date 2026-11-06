@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T12:46:50.165861456Z
+modified_at: 2026-11-06T12:53:54.835733191Z
 req_type: Task
 tags:
 - architecture
@@ -944,6 +944,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b0ec-3e67-78c0-9472-1bce3943ed0c
+  author: joe
+  timestamp: 2026-11-06T12:53:54.919234733Z
+  session_id: 01a1b0e8bd83
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -956,3 +962,11 @@ attention_reason:
   detail: 'Round 6 F1 (PR #3449, reviewed e16c5274da6a), carrying Round 5 F2: explicit advisor acceptance is still absent for both AC1 deviations: all contained vendors including Codex require Linux 5.19+ for NEW_LISTENER|WAIT_KILLABLE_RECV; handled SIGINT, SIGALRM, SIGTERM and Go SIGURG are deferred after broker RECV, potentially indefinitely for a blocked send without SO_SNDTIMEO. Latest spec comments 54-55 requeue and repeat the review but contain no acceptance or exactly-once redesign ruling. This finding is not disputed. Please record explicit acceptance of BOTH deviations on TASK-2708, or direct an exactly-once redesign; implementer cannot grant advisor signoff or safely remove the flag. docs/internal/testing/task-2708-round2.md Round 5 F2 remains correctly acceptance pending. Round 6 F2 CI gate also remains open: read-only GitHub check at 2026-11-06 12:46 UTC shows six shards green at e16c5274da6a but CI(gates) in progress and expected supervised merge-hold failure. Current PR head is aede2be58b3 with new CI pending; no all-green claim at either head. Mechanical bdcec264ee88 remains an ancestor. No source edits, new test runs, commit/push, review verdict, hold clearance or queue completion; this native-seat punt preserves the publication veto.'
   raised_by: implementer
   raised_at: 2026-11-06T12:46:50.165861456Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'No PR-file code change since round 6 (e16c5274..aede2be5 only merges main; OVERVIEW.md from main). Round-5 F1 fix stands. Round-5/6 F2 (WAIT_KILLABLE_RECV signal deferral plus a Linux 5.19+ floor for every lane, Codex included) still has no advisor acceptance recorded on TASK-2708, which has been in NeedsAttention since 12:46Z. CI at the head is still pending. AC1: PARTIAL. AC2/AC3: not applicable (Refs slice, not started).'
+  recovery_hint: address the review findings, move TASK-2708 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T12:53:54.835733191Z
