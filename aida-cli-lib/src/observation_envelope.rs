@@ -287,7 +287,7 @@ pub(crate) fn local_entry() -> Option<Result<()>> {
             matches!(
                 arg.to_str(),
                 Some(
-                    "note"
+                    "ci" | "note"
                         | "validate"
                         | "export"
                         | "enroll"
