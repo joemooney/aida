@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: main in sync. The gitlab aida-store was 22 behind (fast-forwardable); aida remote reconcile --execute pushed the union 8de759d to gitlab. No force push.
+due_since: 2026-11-06T14:55:09.458670762Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-06T14:41:45.257510719Z
+  job: hub-drift-guard
+  error: 'exit 1: '
