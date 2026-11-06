@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T20:56:09.251662097Z
+modified_at: 2026-11-06T20:56:16.730568292Z
 req_type: Story
 tags:
 - architecture
@@ -684,6 +684,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 fixes close prior findings 1-3 (control children execute /proc/self/exe with rename/unlink regression; auto-punt routes through self.control_child() and logs refusal; intake/clarify scoped AdvisorChildGrant with keyring-refusal + revocation tests; 12 TUI paths surface refusal reasons) and PR-C scope is met (profile-private prepare_launch, single issue_launch_child, ratchet 157->133), but CI at 7dcdba3ab1f9 is still entirely queued (run 42289630187; prior-head run 42288789494 also queued) so no green PR CI exists, and executing /proc/self/exe without arg0 renames every control child to argv0/comm ''exe''.. No triage reason was given.'
   created_at: 2026-11-06T20:56:09.251657301Z
   modified_at: 2026-11-06T20:56:09.251657301Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2a5-db33-7d12-8cef-d695a7f74dfb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3531):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7dcdba3ab1f9
+    Recorded: 2026-11-06T20:44:22.181241939+00:00
+    Findings:
+    1. BLOCKING (prior finding 4, still open): no green PR CI at the reviewed head. At 7dcdba3ab1f9 all 7 CI shards (gates, lib-0, lib-1, cli-0, cli-1, contracts, rest) of run 42289630187 were still queued after polling; the run at 53d2c47ebd1 (42288789494) was also queued. merge-hold-gate failing is the expected supervised hold, not a code defect. Re-review must cite a green run at the exact head.
+    2. MINOR (new in round 5): launch/control.rs:6-14 control_child and all 12 aida-tui/src/redesign/mod.rs control paths (Command::new("/proc/self/exe")) exec with argv[0]=/proc/self/exe, so the child's comm and cmdline[0] basename become 'exe' instead of 'aida'. Effects: ProcFacts::command_label (aida-core/src/process_probe.rs:82) returns 'exe', so seat_occupancy::loop_anchor (seat_occupancy/mod.rs:866-874) no longer recognizes a zen/TUI-launched 'queue work --auto-complete' loop as a loop anchor (latent today: runtime::authorize has no production caller yet, but the TASK-1607 implicit-claim path would silently take the one-shot no-claim exemption once wired); anchor_command/requester_command labels, worktree_holders/liveness diagnostics, clap usage text ('Usage: exe ...') and operator pgrep/pkill aida all mis-identify these children. Fix: set std::os::unix::process::CommandExt::arg0("aida") (or the caller path's basename) in control_child_with_current and in the TUI control constructor (e.g. one shared helper), and add a test asserting the control child's argv0 basename is 'aida' and that a ProcFacts built from it satisfies loop_anchor for queue work --auto-complete.
+    3. COSMETIC: control_child(_program) (launch/control.rs:6) now ignores its argument, yet every caller still resolves an executable for it (zen_drive_root.rs:337/518/963 resolve_aida_exe(), RealPhaseDriver.aida_exe in production), and comments such as zen_drive_root.rs:952-953 ('resolve_aida_exe() ... survives a mid-run cargo build swap') now describe behaviour that no longer applies (children run the running image, not the replacement; this also reverses the TASK-1262 'use the replacement' intent for TUI gestures). Drop the parameter (keep the path only for the cfg(test) fixture seam) and update the stale comments so the contract is legible.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:56:16.435392370Z
+  modified_at: 2026-11-06T20:56:16.435392370Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
