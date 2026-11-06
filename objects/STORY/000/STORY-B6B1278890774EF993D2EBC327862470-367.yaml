@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T12:44:46.294125834Z
+modified_at: 2026-11-06T12:58:51.519673732Z
 req_type: Story
 relationships:
 - rel_type:
@@ -251,6 +251,13 @@ comments:
   created_at: 2026-11-06T12:42:07.266396048Z
   modified_at: 2026-11-06T12:42:07.266396048Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0f0-c4ff-7e70-980e-57131f87be56
+  author: joe
+  content: 'PR #3493 round 4 (37b6c0f33f0, after merging origin/main at 23c31d3aec0): lib-1 failures were (a) a typed dispatch abort from wait_ci getting re-wrapped as an unconfirmed CI refusal, now passed through; (b) ForgeRails::retire''s Unconfirmed error masking the typed abort in land, now handled by retire_on_abort, which warns and keeps the PR open; the test fakes implement confirm_not_landed. Finding 1: AIDA_FORGE_CONFIRM_PAUSE_MS knob (default 3s, 0 under cfg(test)), set to 0 in task_1335. Finding 2: only Known base tips are cached. Finding 3: GitHub ''Merge pull request #N from'' subject accepted as a non-train receipt. Rebase merges with an absent head are still unmatched (pre-existing). Not verified locally: the 60s per-call cap kills compiles; CI is the verifier.'
+  created_at: 2026-11-06T12:58:51.519673732Z
+  modified_at: 2026-11-06T12:58:51.519673732Z
+  session_id: 01a1b0e3d4fa
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
