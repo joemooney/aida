@@ -241,6 +241,28 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 **Releases do not require any cross-platform run.** `scripts/release.sh` no longer calls `scripts/pre-release-check.sh` (now a no-op that exits 0); `--skip-xplat-check` / `AIDA_SKIP_XPLAT_CHECK` are accepted and ignored for compatibility.
 <!-- trace:TASK-1723 | ai:claude -->
 
+**Superseded PR CI runs are cancelled.** `CI` and `merge-hold-gate` each use
+`${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}`
+as their workflow concurrency group, with `cancel-in-progress` enabled only for
+`pull_request`. A replacement PR run cancels running and pending work in its
+group; the workflow prefix keeps the two required checks independent. A
+merge-train PR follows the same rule as any other PR. Non-PR events (including
+pushes to main and merge-group runs) key on the unique run ID, so they are
+never grouped together or cancelled by this concurrency policy. Successive
+main pushes can run in parallel without replacing pending runs. This does
+not add push triggers for `train/*` branches.
+
+The merge-hold gate retains its `synchronize`, `labeled`, `unlabeled`, and
+`edited` triggers as well as `opened` and `reopened`. Label/body events share
+the PR group rather than competing in separate groups, and the replacement
+still reports the required `merge-hold-gate` job. After a cancellation, verify
+that the current PR head has a completed gate; a cancelled run is not clearance.
+[GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
+does not guarantee dispatch order within a PR group, so an out-of-order label
+event can replace newer event evidence. Inspect the latest head and rerun its
+gate if necessary.
+<!-- trace:TASK-3267 | ai:codex -->
+
 **Cross-worktree cargo cache gotcha** (TASK-0396): cargo's `target/.fingerprint/` references absolute paths from the build that produced each artifact. If `aida session end` removes a worktree, subsequent `cargo build` from a sibling worktree can fail with errors pointing at the deleted worktree's paths. Recovery: `cargo clean -p <crate>` for the affected workspace members, or `cargo clean` for a full reset. See `docs/advanced/session-lifecycle.md` for the full recipe.
 
 **Usage telemetry** (STORY-122): every `aida` invocation appends a single JSONL line at `~/.aida/usage.jsonl` with the command shape (e.g. `queue list`), `args_count`, `exit_code`, and `duration_ms`. Privacy floor: no argument values, no file paths, no requirement content. Opt out with `AIDA_TELEMETRY=0` or `[telemetry] enabled = false` in `.aida/config.toml`. Query with `aida usage` (top-20 in last 30d), `aida usage unused 30d` (deprecation candidates), `aida usage errors` (high error-rate commands), or `aida usage --json` for machine consumers. The monthly-cadence synthesis surface is `/aida-insights` (TASK-577) — wraps `aida usage` + `aida usage drains` + `aida findings calibration --stats` into the three top-line signals (most-used, drain success, calibration agreement) and the deprecation / UX-gap / orchestrator-fix / substrate-gap follow-ups they suggest. The log is local-only and never phoned home.
