@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T11:35:50.238392253Z
+modified_at: 2026-11-06T11:35:52.604819684Z
 req_type: Task
 tags:
 - architecture
@@ -395,6 +395,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 F2/F3/F4 are fixed with live+synthetic tests and CI is green at 9e1319e8 (all shards, incl. required-live gates). But the F1 rework still changes blocking-send behavior in every contained lane (3s ETIMEDOUT, ENOBUFS at 16 workers, SO_SNDTIMEO ignored). Brokered sends also have a signal-restart duplicate-send race. AC(1) keep-existing-behavior is not yet met. AC(2)/(3) not applicable (Refs slice).. No triage reason was given.'
   created_at: 2026-11-06T11:35:50.238387204Z
   modified_at: 2026-11-06T11:35:50.238387204Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0a4-cb9d-7442-8c32-d13ce8eac95d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3449):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9e1319e8b3fb
+    Recorded: 2026-11-06T11:32:34.751004355+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3449#issuecomment-6683846720
+    Findings:
+    1. MAJOR (AC1 keep-existing-behavior, all lanes incl. Codex): contained_host.py:180 SEND_TIMEOUT=3 plus send_snapshot:207-209 turn a BLOCKING send() that makes no progress for 3s into ETIMEDOUT. Before this PR, send(2) on a blocking socket blocked until progress or SO_SNDTIMEO. A slow peer or relay backpressure (Python requests/http.client uploads, Rust std TcpStream::write to a slow server) now fails with an errno callers treat as fatal. broker_send:298 also returns ENOBUFS when 16 blocking sends are in flight, and SO_SNDTIMEO is ignored entirely. Fix: tie the worker's lifetime to the notification, not a fixed deadline. Poll POLLOUT in short steps and re-check NOTIF_ID_VALID each step, so a dead or interrupted caller frees the slot. Honor SO_SNDTIMEO (read it from the dup) as the only deadline. When slots are saturated, queue the notification or block the broker briefly rather than return ENOBUFS (the caller is a blocked lane thread either way). Test: a blocking lane send stalled for longer than 3s by a slow reader still completes. A socket with SO_SNDTIMEO=0.5s gets EAGAIN after about 0.5s.
+    2. MINOR (correctness, all lanes): contained_lane.py:124 installs the filter with flags=8 (NEW_LISTENER) only, without SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV (32). A non-fatal signal can interrupt a trapped send(), for example SIGCHLD in Codex/tokio, Go SIGURG preemption, or SIGALRM. If it lands after the worker's last NOTIF_ID_VALID check (send_snapshot:197) but after its host-side sendto/sendmsg succeeds, the SEND response fails with ENOENT and the kernel restarts the syscall. The restarted send is a new notification, so the same bytes go out twice on a stream (TLS MAC failure to the relay). Every send() in every lane is brokered now, so this window is new to Codex too. Fix: add WAIT_KILLABLE_RECV (kernel 5.19+; refuse by name when unavailable, consistent with the existing kernel gate), and add a test that a signal storm during brokered sends delivers each byte exactly once.
+    3. MINOR (behavior drift): host-side brokered sends run in the Python helper, which ignores SIGPIPE. A lane caller that send()s without MSG_NOSIGNAL to a closed peer now gets EPIPE and no SIGPIPE, unlike the unbrokered kernel path on main. Either deliver SIGPIPE to the caller's thread on EPIPE when MSG_NOSIGNAL is clear (pidfd_send_signal/tgkill), or record the accepted deviation on the spec with advisor signoff.
+    4. MINOR (repo policy, CLAUDE.md TASK-1954/TASK-2015): 686b2ddde83 prepends a per-round note to AGENTS.md:1-6 (links 'round 3 evidence') and adds a round-specific paragraph to OVERVIEW.md:1425-1437. Per-change notes belong in the PR body and an aida comment on the spec. Each prepended AGENTS.md paragraph conflicts with every open PR. Drop the AGENTS.md paragraph. Keep at most a short architecture-level sentence in OVERVIEW.md, and keep round evidence in docs/internal/testing/task-2708-round2.md.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T11:35:52.477958585Z
+  modified_at: 2026-11-06T11:35:52.477958585Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
