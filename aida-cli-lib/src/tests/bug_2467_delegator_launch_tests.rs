@@ -56,6 +56,9 @@ fn bug_2467_parses_delegation_for_every_vendor() {
     assert_eq!(delegate_seats, &["reviewer"]);
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.ac70d987 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.acb17271 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.ac32bf6b | ai:codex
 #[test]
 fn bug_2467_launched_delegators_mint_workers_without_widening() {
     let tmp = tempfile::tempdir().unwrap();
@@ -361,4 +364,94 @@ printf '%s' "$AIDA_SESSION_GRANT" > "$AIDA_PROJECT_ROOT/child-grant"
     let err = agent_resume_ended(tmp.path(), entry).unwrap_err();
     assert!(format!("{err:#}").contains("does not delegate `reviewer`"));
     assert!(!tmp.path().join("child-grant").exists());
+}
+
+// trace:BUG-2467 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.ac63c1c5 | ai:codex
+#[test]
+fn bug_2467_standing_orders_dispatch_inherits_parent_delegation() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    let bin = tmp.path().join("bin");
+    for dir in [&root, &home, &bin] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let mut env = EnvVarsGuard::apply(&[
+        ("HOME", home.to_str()),
+        ("AIDA_HOME", home.join(".aida").to_str()),
+        ("AIDA_TEST_HOME", home.to_str()),
+        ("PATH", Some(&path)),
+        ("AIDA_USER", Some("standing-orders-operator")),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_SESSION_ID", None),
+        ("AIDA_SESSION_SCOPE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_BUILD_PROFILE", None),
+        ("AIDA_BIN", None),
+        (authority::GRANT_ENV, None),
+    ]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    crate::test_env::home_fixture_storage(root.join(".aida-store"))
+        .save(&aida_core::models::RequirementsStore::new())
+        .unwrap();
+    let seats = ["advisor", "integrator", "reviewer", "implementer"];
+    let parent = authority::test_support::mint_grant_for(
+        &root,
+        "standing-orders-operator",
+        "advisor",
+        &seats,
+    );
+    env.set_key(authority::GRANT_ENV, &parent);
+    crate::test_exec::write_executable(
+        &bin.join("claude"),
+        r#"#!/bin/sh
+case "$1" in --version) echo "2.0.0 (Claude Code)"; exit 0;; esac
+printf '%s' "$AIDA_SESSION_GRANT" > "$AIDA_PROJECT_ROOT/child-grant"
+printf '%s\n' "$@" > "$AIDA_PROJECT_ROOT/child-argv"
+"#,
+    );
+    crate::test_exec::write_executable(
+        &bin.join("aida"),
+        "#!/bin/sh\necho 'aida 0.16.0 fixture'\n",
+    );
+    let original_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&root).unwrap();
+    // The exact documented line: no extra flags or direct launcher calls.
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "agent",
+        "new",
+        "claude",
+        "--role",
+        "advisor",
+        "--permission-mode",
+        "auto",
+    ])
+    .unwrap();
+    let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
+    let result = handle_agent_command(&inner);
+    std::env::set_current_dir(original_cwd).unwrap();
+    result.unwrap();
+    let id = std::fs::read_to_string(root.join("child-grant")).unwrap();
+    let child = authority::read_grant(&id).unwrap();
+    assert_ne!(id, parent);
+    assert_eq!(child.seat, "advisor");
+    assert_eq!(child.parent_grant_id.as_deref(), Some(parent.as_str()));
+    assert_eq!(child.delegable_seats, seats);
+    let argv = std::fs::read_to_string(root.join("child-argv")).unwrap();
+    assert!(argv.contains("--permission-mode\nauto\n"), "{argv}");
+    assert!(!argv.contains("dangerously-skip-permissions"), "{argv}");
 }

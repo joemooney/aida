@@ -388,6 +388,9 @@ pub(crate) struct SupervisorInit {
     pub spec: String,
     pub lease_id: String,
     pub grant_id: String,
+    /// Explicit launcher narrowing; empty means inherit on a later resume.
+    #[serde(default)]
+    pub delegate_seats: Vec<String>,
     pub description: Option<String>,
     pub mail_wake: String,
     pub context_path: Option<std::path::PathBuf>,
@@ -833,6 +836,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         spec: spec_id.clone(),
         lease_id: lease_id.clone(),
         grant_id: grant.id.clone(),
+        delegate_seats: config.delegate_seats.clone(),
         description,
         mail_wake: mail_wake.as_str().to_string(),
         context_path: context_path.clone(),
@@ -1500,8 +1504,8 @@ pub(crate) fn supervise_attempt(
             worker.pid,
             &worker.start,
             agent_registry::SpawnedRow {
-                delegate_seats: crate::gate::seat_authority::read_grant(&init.grant_id)?
-                    .delegable_seats,
+                // trace:BUG-2467 | ai:codex
+                delegate_seats: init.delegate_seats.clone(),
                 role: Some(init.role.clone()),
                 current_spec: Some(init.spec.clone()),
                 worktree_path: init.worker.cwd.clone(),

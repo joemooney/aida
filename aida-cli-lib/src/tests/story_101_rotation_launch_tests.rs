@@ -546,6 +546,7 @@ exit 0
 }
 
 // trace:BUG-2467 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.ac958507 | ai:codex
 #[test]
 fn bug_2467_rotation_retains_explicit_delegation_in_every_generation() {
     let _serial = crate::agent_rotation::supervisor_test_lock();
