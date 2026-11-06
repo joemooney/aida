@@ -1435,6 +1435,7 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         },
     )

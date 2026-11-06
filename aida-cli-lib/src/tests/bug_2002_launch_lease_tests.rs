@@ -32,6 +32,7 @@ fn persist(root: &std::path::Path, lease: &SessionLease) {
 
 fn launch(root: &std::path::Path, background: bool, preview: bool) -> Result<()> {
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "/usr/bin/true",
         default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
@@ -414,6 +415,7 @@ fn agent_new_foreground_and_background_reenter_with_explicit_owning_cwd() {
         )
         .unwrap();
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "/bin/sh",
             default_args: vec![script.display().to_string()],
@@ -946,6 +948,7 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
             },
         );
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: Box::leak(script.to_string_lossy().into_owned().into_boxed_str()),
             default_args: vec![],
@@ -1182,6 +1185,7 @@ fn bug2168_dry_preview_reports_explicit_cwd_and_refuses_bad_paths() {
     let cwd = lease.worktree_path.canonicalize().unwrap();
     assert_eq!(plan.launch_cwd, cwd);
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "/usr/bin/true",
         default_args: vec![],
@@ -1231,6 +1235,7 @@ fn bug2168_preview_entrypoints_honor_explicit_cwd() {
             (false, false, true),
         ] {
             let config = AgentLaunchConfig {
+                delegate_seats: Vec::new(),
                 agent_type: "claude",
                 binary: "/usr/bin/true",
                 default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
@@ -1430,6 +1435,7 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
             },
         );
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: Box::leak(script.to_string_lossy().into_owned().into_boxed_str()),
             default_args: vec![],

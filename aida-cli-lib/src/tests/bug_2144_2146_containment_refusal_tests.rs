@@ -268,6 +268,7 @@ fn contained_agent_new_refuses_codex_agy_and_unknown_tools_even_with_per_tool_fl
     let home_s = home.to_string_lossy().into_owned();
     let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
     let mut cfg = crate::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),

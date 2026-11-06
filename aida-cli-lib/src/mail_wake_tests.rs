@@ -244,17 +244,21 @@ fn story_home_096_stamp_keeps_a_hook_write_that_interleaves() {
 fn story_home_096_hook_write_keeps_a_launcher_stamp_that_interleaves() {
     let dir = tempfile::tempdir().unwrap();
     let project = dir.path();
-    let launcher = row(project, "codex", 51, Some("pending"), None);
+    let mut launcher = row(project, "codex", 51, Some("pending"), None);
+    // trace:BUG-2467 | ai:codex — a hook cannot erase resume narrowing.
+    launcher.delegate_seats = vec!["reviewer".into()];
     let mut hook = launcher.clone();
     hook.source = "session-start-hook".into();
     hook.name = Some("codex-codex-07".into());
     hook.mail_wake = None;
+    hook.delegate_seats.clear();
     hook.claude_session_id = Some(THREAD.into());
 
     // The hook read no row; the launcher registered and stamped since.
     let mut merged = hook.clone();
     agent_registry::carry_concurrent_launcher_write(&mut merged, None, Some(&launcher));
     assert_eq!(merged.mail_wake, Some(MailWake::Pending));
+    assert_eq!(merged.delegate_seats, ["reviewer"]);
     assert_eq!(merged.source, "agent-launcher");
     assert_eq!(merged.name.as_deref(), Some("codex-agent-03"));
     assert_eq!(merged.claude_session_id.as_deref(), Some(THREAD));
@@ -271,6 +275,7 @@ fn story_home_096_hook_write_keeps_a_launcher_stamp_that_interleaves() {
     let mut seen = hook.clone();
     agent_registry::carry_concurrent_launcher_write(&mut seen, Some(&launcher), Some(&launcher));
     assert_eq!(seen.mail_wake, Some(MailWake::Pending));
+    assert_eq!(seen.delegate_seats, ["reviewer"]);
     assert_eq!(seen.name.as_deref(), Some("codex-codex-07"));
 
     // A row a recycled pid owns is never folded in.

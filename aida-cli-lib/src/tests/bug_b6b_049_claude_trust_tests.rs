@@ -727,6 +727,7 @@ fn agent_new_bg_trusts_an_implementer_lane_and_never_a_reviewer_tree() {
     let dispatch = |role: &str, cwd: &Path, name: &str| {
         let _ = std::fs::remove_file(&marker);
         let config = crate::agent_launch::AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary,
             default_args: vec!["--bg".into()],
