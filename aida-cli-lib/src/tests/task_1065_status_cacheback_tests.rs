@@ -100,3 +100,31 @@ fn pending_decision_count_reads_cache_column() {
         pending_decision_request_count(&loaded),
     );
 }
+
+// trace:TASK-3112 | ai:codex
+#[test]
+fn task3112_status_away_questions_respect_surfacing_policy() {
+    use aida_core::DatabaseBackend;
+    let dir = tempfile::tempdir().unwrap();
+    let backend = backend_in(dir.path());
+    let mut r = Requirement::new("pending decision".into(), String::new());
+    r.decision_request = Some(pending_dr());
+    backend.add_requirement(r).unwrap();
+    for (questions, visible) in [
+        (presence::QuestionsSurfacing::AlwaysSurface, true),
+        (presence::QuestionsSurfacing::QuietWhenAway, false),
+    ] {
+        let cfg = presence::PresenceConfig {
+            consumers: presence::ConsumersMode::On,
+            questions,
+            ..Default::default()
+        };
+        let mut output = Vec::new();
+        write_status_presence_consumers(&backend, &cfg, presence::Presence::Away, &mut output)
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output.contains("1 decision"), visible, "{output}");
+        assert_eq!(output.contains("aida questions"), visible);
+        assert!(!output.contains("--zen"));
+    }
+}

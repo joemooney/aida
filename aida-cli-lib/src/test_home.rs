@@ -56,7 +56,7 @@ static REDIRECT: OnceLock<Redirect> = OnceLock::new();
 
 /// Exported to child processes: the real homes the top-level test process
 /// fenced, so a re-exec of the test binary keeps the same fence.
-const REAL_HOMES_ENV: &str = "AIDA_LIB_TEST_REAL_HOMES";
+pub(crate) const REAL_HOMES_ENV: &str = "AIDA_LIB_TEST_REAL_HOMES";
 
 /// Env vars cleared before `main` so their fallbacks derive from the temp
 /// `HOME` instead of an operator-set location.
@@ -144,23 +144,19 @@ pub(crate) fn passwd_home() -> Option<PathBuf> {
     None
 }
 
-/// Is `pid` still running? "Unknown" counts as alive, so
-/// [`sweep_stale_test_homes`] only removes a directory whose owner is
-/// definitely gone. An unprobeable pid (0, outside `pid_t`, non-unix) stays
-/// alive here — stricter than the canonical predicate, on purpose — while a
-/// probeable pid delegates to `aida_core::liveness::pid_is_alive` so a
-/// defunct (zombie) owner reads dead (BUG-1741): a zombie holds no open
-/// files, so sweeping its directory is safe.
-// trace:TASK-1513 | ai:claude
-// trace:BUG-1741 | ai:claude
+/// Namespace-local existence probe. Procfs may still be mounted for an
+/// ancestor namespace, so its numeric PID entries cannot establish death here.
+/// Retain zombies and all unknown errors; sweep only an explicit ESRCH.
+// trace:TASK-2886 | ai:codex
 fn pid_is_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
-        // Never probe 0 or a pid outside `pid_t`: unknown counts as alive.
-        if pid == 0 || libc::pid_t::try_from(pid).is_err() {
+        let Some(pid) = libc::pid_t::try_from(pid).ok().filter(|pid| *pid > 0) else {
             return true;
-        }
-        aida_core::liveness::pid_is_alive(pid)
+        };
+        // SAFETY: a positive PID and signal zero only check existence.
+        (unsafe { libc::kill(pid, 0) }) == 0
+            || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
     }
     #[cfg(not(unix))]
     {
@@ -169,16 +165,38 @@ fn pid_is_alive(pid: u32) -> bool {
     }
 }
 
-/// A test binary killed by a signal never runs its `atexit` hook, so its temp
-/// home survives in the temp dir. Remove the leftovers whose owning process is
-/// gone before this run makes its own. Best-effort throughout: a live pid's
-/// directory, a symlink, a directory owned by another user, and any I/O error
-/// are all left alone, and `install` never fails because of the sweep.
-// trace:TASK-1513 | ai:claude
-fn sweep_stale_test_homes(root: &Path, own_pid: u32, is_alive: &dyn Fn(u32) -> bool) -> usize {
-    // Enough to clear a backlog without stalling startup on a busy temp dir.
-    const MAX_SWEEP: usize = 64;
+/// Scope PID liveness to the same boot and PID namespace. Bare PIDs from
+/// another namespace (or an older boot) cannot establish ownership. If this
+/// evidence is unavailable, creation still works but sweeping is disabled.
+// trace:TASK-2886 | ai:codex
+fn home_namespace() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
+        let boot = uuid::Uuid::parse_str(boot.trim()).ok()?;
+        let ns = std::fs::metadata("/proc/self/ns/pid").ok()?;
+        Some(format!("{boot}-{}-{}", ns.dev(), ns.ino()))
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
+}
 
+/// Only sweep uniquely named homes from this boot and PID namespace. Legacy
+/// PID-only names, foreign namespaces, symlinks, foreign owners and I/O errors
+/// are left alone. A live or reused PID conservatively retains its directory.
+// trace:TASK-2886 | ai:codex
+fn sweep_stale_test_homes(
+    root: &Path,
+    namespace: Option<&str>,
+    own_pid: u32,
+    is_alive: &dyn Fn(u32) -> bool,
+) -> usize {
+    const MAX_SWEEP: usize = 64;
+    let Some(namespace) = namespace else {
+        return 0;
+    };
+    let prefix = format!("{TEST_HOME_PREFIX}{namespace}-");
     let Ok(entries) = std::fs::read_dir(root) else {
         return 0;
     };
@@ -187,20 +205,29 @@ fn sweep_stale_test_homes(root: &Path, own_pid: u32, is_alive: &dyn Fn(u32) -> b
         if swept >= MAX_SWEEP {
             break;
         }
-        // `file_type` does not follow symlinks, so a symlinked directory is
-        // skipped rather than followed out of the temp dir.
         if !entry.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            // SAFETY: geteuid always succeeds and has no preconditions.
+            let uid = unsafe { libc::geteuid() };
+            if !entry.metadata().is_ok_and(|m| m.uid() == uid) {
+                continue;
+            }
         }
         let name = entry.file_name();
         let Some(pid) = name
             .to_str()
-            .and_then(|n| n.strip_prefix(TEST_HOME_PREFIX))
-            .and_then(|p| p.parse::<u32>().ok())
+            .and_then(|n| n.strip_prefix(&prefix))
+            .and_then(|rest| rest.split_once('-'))
+            .filter(|(_, nonce)| !nonce.is_empty())
+            .and_then(|(pid, _)| pid.parse::<u32>().ok())
         else {
             continue;
         };
-        if pid == own_pid || is_alive(pid) {
+        if pid == 0 || pid > i32::MAX as u32 || pid == own_pid || is_alive(pid) {
             continue;
         }
         if std::fs::remove_dir_all(entry.path()).is_ok() {
@@ -253,7 +280,12 @@ fn install() -> std::io::Result<()> {
     }
 
     // trace:TASK-1513 | ai:claude
-    sweep_stale_test_homes(&std::env::temp_dir(), std::process::id(), &pid_is_alive);
+    sweep_stale_test_homes(
+        &std::env::temp_dir(),
+        home_namespace().as_deref(),
+        std::process::id(),
+        &pid_is_alive,
+    );
     let test_home = create_test_home()?;
 
     // Toolchains resolve from `$HOME` too; pin them to the real locations so
@@ -335,10 +367,31 @@ fn install_nested(real_homes: Vec<PathBuf>) -> std::io::Result<()> {
 }
 
 fn create_test_home() -> std::io::Result<PathBuf> {
-    let test_home = std::env::temp_dir().join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
-    // A leftover from a crashed run with a recycled pid is stale; start clean.
-    let _ = std::fs::remove_dir_all(&test_home);
-    std::fs::create_dir_all(test_home.join(".aida"))?;
+    create_test_home_in(
+        &std::env::temp_dir(),
+        home_namespace().as_deref(),
+        std::process::id(),
+    )
+}
+
+// trace:TASK-2886 | ai:codex
+fn create_test_home_in(root: &Path, namespace: Option<&str>, pid: u32) -> std::io::Result<PathBuf> {
+    // Atomic, private, random allocation: never delete an existing home even
+    // when another namespace has the same PID. Keep RAII cleanup on failure.
+    let prefix = format!(
+        "{TEST_HOME_PREFIX}{}-{pid}-",
+        namespace.unwrap_or("unknown")
+    );
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    let temp = builder.tempdir_in(root)?;
+    let test_home = temp.path();
+    std::fs::create_dir(test_home.join(".aida"))?;
     // Git reads identity and defaults from `$HOME/.gitconfig`; give spawned
     // `git` a deterministic one so tests do not depend on the operator's.
     std::fs::write(
@@ -347,7 +400,7 @@ fn create_test_home() -> std::io::Result<PathBuf> {
          [init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n\
          [tag]\n\tgpgsign = false\n",
     )?;
-    Ok(test_home)
+    Ok(temp.keep())
 }
 
 /// SAFETY: caller guarantees no other thread exists (pre-`main`).
@@ -599,55 +652,210 @@ mod tests {
         }
     }
 
-    /// Only a directory whose owning process is gone is swept: a live pid's
-    /// directory, this process's own, an unrelated name and a regular file all
-    /// survive.
-    // trace:TASK-1513 | ai:claude
+    /// Re-exec the actual constructor in two independent PID namespaces with
+    /// shared TMPDIR. Both binaries are PID 1; neither may remove the other's
+    /// grant-like fixture at startup or exit. Child deadlines bound failures.
+    // trace:TASK-2886 | ai:codex
+    #[cfg(target_os = "linux")]
     #[test]
-    fn stale_test_home_dirs_are_swept_only_for_dead_pids() {
-        let root = test_home().join("sweep-fixture");
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
+    fn concurrent_pid_namespaces_keep_their_own_homes() {
+        use std::process::{Child, Command, Stdio};
+        use std::time::{Duration, Instant};
 
-        let dead = root.join(format!("{TEST_HOME_PREFIX}1001"));
-        let live = root.join(format!("{TEST_HOME_PREFIX}1002"));
-        let own = root.join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
-        let unrelated = root.join("not-a-test-home");
-        for dir in [&dead, &live, &own, &unrelated] {
-            // A non-empty directory, so a shallow `remove_dir` would not do.
-            std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        fn wait_for(path: &Path) {
+            let deadline = Instant::now() + Duration::from_secs(15);
+            while !path.exists() {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting for {}",
+                    path.display()
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
         }
-        let file = root.join(format!("{TEST_HOME_PREFIX}1003"));
-        std::fs::write(&file, b"not a directory").unwrap();
+        const FIXTURE: &str = "AIDA_TEST_HOME_NAMESPACE_FIXTURE";
+        if let Some(root) = std::env::var_os(FIXTURE) {
+            let root = PathBuf::from(root);
+            let slot = std::env::var("AIDA_TEST_HOME_NAMESPACE_SLOT").unwrap();
+            assert_eq!(std::process::id(), 1);
+            let home = test_home();
+            let grant = home.join(".aida/reviewer-grant");
+            std::fs::write(&grant, &slot).unwrap();
+            let pending = root.join(format!("pending-{slot}"));
+            std::fs::write(&pending, home.as_os_str().as_encoded_bytes()).unwrap();
+            std::fs::rename(pending, root.join(format!("ready-{slot}"))).unwrap();
+            wait_for(&root.join(format!("release-{slot}")));
+            assert_eq!(std::fs::read_to_string(grant).unwrap(), slot);
+            return;
+        }
 
-        let swept = sweep_stale_test_homes(&root, std::process::id(), &|pid| pid == 1002);
-
-        assert_eq!(swept, 1, "only the dead pid's directory is removed");
-        assert!(!dead.exists(), "the dead pid's temp home is gone");
-        assert!(live.is_dir(), "a live pid's temp home is untouched");
-        assert!(own.is_dir(), "this process's own temp home is untouched");
-        assert!(unrelated.is_dir(), "an unrelated directory is untouched");
-        assert!(file.is_file(), "a regular file is never removed");
-
-        std::fs::remove_dir_all(&root).unwrap();
+        // Keep process environments stable while constructing child commands.
+        let _env = crate::test_env::env_lock();
+        let probe = Command::new("unshare")
+            .args(["--user", "--map-root-user", "--pid", "--fork", "true"])
+            .output();
+        match probe {
+            Ok(output) if output.status.success() => {}
+            other => {
+                assert_ne!(
+                    std::env::var("AIDA_REQUIRE_USERNS").as_deref(),
+                    Ok("1"),
+                    "required PID namespace regression cannot run: {other:?}"
+                );
+                eprintln!("SKIP PID namespace test: unshare unavailable: {other:?}");
+                return;
+            }
+        }
+        struct Running(Child);
+        impl Drop for Running {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        fn wait_success(child: &mut Running) {
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                if let Some(status) = child.0.try_wait().unwrap() {
+                    assert!(status.success(), "namespace child failed: {status}");
+                    return;
+                }
+                assert!(Instant::now() < deadline, "namespace child did not exit");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let binary = std::fs::read_link("/proc/self/exe").unwrap();
+        let spawn = |slot: &str| {
+            let mut command = Command::new("unshare");
+            command
+                .env_clear()
+                .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+                .env("TMPDIR", root.path())
+                .env(FIXTURE, root.path())
+                .env("AIDA_TEST_HOME_NAMESPACE_SLOT", slot)
+                .env("RUST_MIN_STACK", "8388608")
+                .args([
+                    "--user",
+                    "--map-root-user",
+                    "--pid",
+                    "--fork",
+                    "--kill-child",
+                ])
+                .arg(&binary)
+                .args([
+                    "--exact",
+                    "test_home::tests::concurrent_pid_namespaces_keep_their_own_homes",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .stdout(Stdio::null());
+            if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
+                command.env("LD_LIBRARY_PATH", path);
+            }
+            Running(command.spawn().unwrap())
+        };
+        let mut first = spawn("first");
+        wait_for(&root.path().join("ready-first"));
+        let first_home =
+            PathBuf::from(std::fs::read_to_string(root.path().join("ready-first")).unwrap());
+        let mut second = spawn("second");
+        wait_for(&root.path().join("ready-second"));
+        let second_home =
+            PathBuf::from(std::fs::read_to_string(root.path().join("ready-second")).unwrap());
+        assert_ne!(first_home, second_home);
+        assert_eq!(
+            std::fs::read_to_string(first_home.join(".aida/reviewer-grant")).unwrap(),
+            "first"
+        );
+        assert_eq!(
+            std::fs::read_to_string(second_home.join(".aida/reviewer-grant")).unwrap(),
+            "second"
+        );
+        std::fs::write(root.path().join("release-first"), "").unwrap();
+        wait_success(&mut first);
+        assert!(
+            !first_home.exists(),
+            "normal exit cleans only its owned home"
+        );
+        assert!(second_home.join(".aida/reviewer-grant").is_file());
+        std::fs::write(root.path().join("release-second"), "").unwrap();
+        wait_success(&mut second);
+        assert!(!second_home.exists());
+        eprintln!("PID namespace regression ran: two concurrent PID-1 homes survived peer startup and exit");
     }
 
-    /// The liveness probe errs towards "alive": a pid outside `pid_t`, and the
-    /// process-group pid 0, are never treated as sweepable.
-    // trace:TASK-1513 | ai:claude
+    // trace:TASK-2886 | ai:codex
     #[test]
-    fn pid_is_alive_errs_towards_alive() {
-        assert!(pid_is_alive(std::process::id()), "this process is alive");
-        assert!(
-            pid_is_alive(0),
-            "pid 0 addresses a process group; never sweep"
+    fn pid_probe_retains_live_and_unprobeable_owners() {
+        assert!(pid_is_alive(std::process::id()));
+        assert!(pid_is_alive(0));
+        assert!(pid_is_alive(u32::MAX));
+        #[cfg(unix)]
+        assert!(!pid_is_alive(i32::MAX as u32 - 1));
+    }
+
+    // trace:TASK-2886 | ai:codex
+    #[test]
+    fn unique_homes_and_sweeps_respect_namespace_ownership() {
+        let root = tempfile::tempdir().unwrap();
+        let make = |ns, pid| create_test_home_in(root.path(), ns, pid).unwrap();
+        let dead = make(Some("this-boot-namespace"), 1001);
+        let live = make(Some("this-boot-namespace"), 1002);
+        let own = make(Some("this-boot-namespace"), 1003);
+        let same_pid = make(Some("this-boot-namespace"), 1003);
+        assert_ne!(own, same_pid);
+        let foreign = make(Some("other-boot-namespace"), 1001);
+        let unknown = make(None, 1001);
+        let legacy = root.path().join(format!("{TEST_HOME_PREFIX}1001"));
+        std::fs::create_dir(&legacy).unwrap();
+        let regular = root
+            .path()
+            .join(format!("{TEST_HOME_PREFIX}this-boot-namespace-1004-file"));
+        std::fs::write(&regular, "keep").unwrap();
+        let invalid_pid = make(Some("this-boot-namespace"), 0);
+        let oversized_pid = make(Some("this-boot-namespace"), u32::MAX);
+        #[cfg(unix)]
+        let symlink = {
+            let path = root
+                .path()
+                .join(format!("{TEST_HOME_PREFIX}this-boot-namespace-1004-link"));
+            std::os::unix::fs::symlink(&foreign, &path).unwrap();
+            path
+        };
+        assert_eq!(
+            sweep_stale_test_homes(root.path(), None, 1003, &|_| panic!("no evidence")),
+            0
         );
-        assert!(pid_is_alive(u32::MAX), "outside pid_t: unknown, so alive");
+        assert_eq!(
+            sweep_stale_test_homes(root.path(), Some("this-boot-namespace"), 1003, &|pid| {
+                assert!([1001, 1002].contains(&pid), "never probe a foreign PID");
+                pid == 1002
+            }),
+            1
+        );
+        assert!(!dead.exists());
+        for retained in [
+            &live,
+            &own,
+            &same_pid,
+            &foreign,
+            &unknown,
+            &legacy,
+            &invalid_pid,
+            &oversized_pid,
+        ] {
+            assert!(retained.is_dir(), "{}", retained.display());
+        }
+        assert!(regular.is_file());
         #[cfg(unix)]
         {
-            // Far above every platform's `pid_max`, so it cannot exist.
-            let impossible = i32::MAX as u32 - 1;
-            assert!(!pid_is_alive(impossible), "an impossible pid is gone");
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&own).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+            assert!(symlink.is_symlink());
         }
     }
 }

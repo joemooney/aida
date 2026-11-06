@@ -66,6 +66,16 @@ requirement (including existing dashed child variants); an unrelated branch
 cannot gain ownership through an alias in a commit trailer. No branch rename
 or forced completion is needed for an ID remapping.
 
+<!-- trace:TASK-2887 | ai:codex -->
+`aida queue done` refuses before changing the spec or queue when the current
+branch cannot be read, including a seat-clone safety refusal or detached HEAD.
+The diagnostic preserves the Git error. Restore branch lookup access or check
+out the spec's branch and retry. `aida queue done <ID> --force` overrides the
+ownership and PR checks for work known to have shipped another way;
+`aida queue done <ID> --skip-pr-check` bypasses only the PR check and still
+requires readable branch ownership evidence. `aida queue done <ID> --yes` only
+skips confirmation.
+
 ---
 
 ### `aida ship`
@@ -128,6 +138,13 @@ staging, the index is put back as it was.
 - `aida pr review <N|PR-N|MR-N>` — a PR/MR is open and still needs **independent review**. It runs exactly `aida queue work PR-N --auto-complete` (or `MR-N`): a separate reviewer session, rework routed back to the implementer, and merge only where merge is already authorized. A bare number takes the configured forge's prefix (PR on GitHub, MR on GitLab). It grants no extra authority — leases, merge holds and supervised/draft restrictions apply as for `queue work`, and the `queue work` spelling still works. The three finish verbs in order: `aida ship --no-merge` opens the PR, `aida pr review` gets it reviewed, `aida pr ship` lands work that is already approved.
   <!-- trace:TASK-1715 | ai:claude -->
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
+  Branch lookup and push use the invoking directory, including sibling worktrees
+  and their subdirectories. A Git safety refusal or repository lookup error is
+  reported with its original diagnostic; it does not prove the branch is missing.
+  In particular, native seats can encounter the private-clone Git refusal. A
+  refused lookup performs no push and records no hold marker. A direct push alone
+  does not record a hold either.
+  <!-- trace:TASK-2852 | ai:codex -->
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".
@@ -316,6 +333,11 @@ failures: the train PR is closed and its members are ejected with that reason.
 - `--target-branch <branch>` — the branch a newly offered merge or pull request should target. Before offering one, AIDA checks that this branch exists on `origin` and differs from the source branch. An explicit value always overrides any saved recovery state.
 - the `prompt` / `assemble` subcommands — generate a markdown review prompt from linked specs' acceptance criteria (from an explicit `--specs` CSV or parsed `(REQ-ID)` trailers in a PR's commit range). The building blocks when you want to review *outside* the interactive flow.
 - `mode mass-change on|off|status` — the switch for the temporary mass-change review mode, in which reviewers defer acceptance gaps as tracked findings instead of blocking on them. `on` writes `[review] mass_change_mode` to the main checkout's `.aida/config.toml` together with the start time, who turned it on, and the expiry: one week by default, or `--days N` (1-30). Running `on` while the mode is active is refused, so the window cannot be extended without turning it off first. When the window closes the mode turns itself off, and nobody has to run anything. While the mode is on, bare `aida status` prints one line such as `mass-change mode: ON, day 3 of 7 (expires …), 12 deferred findings open`. After it expires, `aida status` says it expired. When it is off, `aida status` prints nothing about it. `off` ends the mode early and reports how many deferred findings are still open. Nothing already merged is blocked again. Deferred findings are open specs tagged `review:deferred-finding`. `--json` prints the state for scripts.
+
+- `aida review nodes enroll` / `aida review nodes revoke` — a direct human operator adds or removes a publishing node's ed25519 public key in the shared roster. Removal refuses that node's future review credit after consumers sync. `aida review nodes publisher` configures the local host's private key path; keys and local authority evidence stay on that host.
+- `aida review authorship` — publish the existing author sessions for the checked-out PR head before another host reviews it, when the PR was opened or pushed outside AIDA. Configured hosts do this automatically whenever AIDA opens a PR or pushes a new head to one. Stable session identity remains comparable when a conversation resumes elsewhere.
+- `aida review publish` — retry publication of an existing locally validated verdict. Refusals with filed findings use `--blocking-findings` to name native origin IDs. Consumers verify the OpenSSH signature against the current enrolled roster, require the exact PR head and an independent reviewer, and prefer synced evidence over a contradictory local verdict. Independent concurrent refusals remain blocking. See [second review node setup](../agents/second-review-node.md); watcher reservation synchronization remains deferred.
+<!-- trace:STORY-2492 | ai:codex -->
 
 - the `record` subcommand's finding class — each recorded finding may carry a defect class from a small fixed vocabulary (incomplete-fix, fail-open, absent-evidence-reads-as-good, untested-path, contract-drift, race, perf, portability, stale-base, scope-creep), paired with the findings by position. An unknown class warns and records the finding unclassified; it never blocks the verdict.
 - the `classes` subcommand — counts recorded findings per class across every verdict, archived rounds included, optionally limited to a recent window. It answers "how often does this defect class recur?" without a keyword sweep that cannot tell an approval from a refusal. Findings recorded before classes existed stay unclassified; nothing is back-filled.
