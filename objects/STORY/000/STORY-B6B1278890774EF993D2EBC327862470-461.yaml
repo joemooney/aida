@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T18:56:26.462003751Z
+modified_at: 2026-11-06T18:56:32.955491050Z
 req_type: Story
 tags:
 - architecture
@@ -157,6 +157,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-5 are fixed in source (keyword mutants, ceiling-neutral relocation, scope reset, git ls-files scan, merge_group base). The slice-A API matches the signed-off sketch and its amendment. Blocking: the new ExecContext ratchet CI step fails at the exact head, so finding 6 (green exact-head CI) is still unmet.. No triage reason was given.'
   created_at: 2026-11-06T18:56:26.462001653Z
   modified_at: 2026-11-06T18:56:26.462001653Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b238-3e4c-7523-80a4-71617a10eeba
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 480010af46f4
+    Recorded: 2026-11-06T18:15:25.557408094+00:00
+    Findings:
+    1. BLOCKING: the required gate 'CI (gates)' fails at head 480010af46f4 on the PR's own new step 'ExecContext environment ratchet' (run 42266016666, job 128057999417, step 72). The ledger matches locally under Python 3.12.3 (check(scan(), ledger) passes in-process, 1216 sites), and main's 2 newer commits change no ledger sites, so the failure depends on the environment. Likely root cause: python_sites() in scripts/check-exec-context.py:243 hashes ast.dump(expression_node), and ast.dump output depends on the Python version. Python 3.13+ omits empty lists and None fields (show_empty=False), e.g. 'keywords=[]' on every Call. ubuntu-latest has migrated to Ubuntu 26 (see the runner annotation), so all 85 tests/*.py ledger digests stop matching. The job log could not be downloaded from the review sandbox, so confirm from the log. Fix: hash a version-stable form (e.g. ast.unparse of the node, or a hand-normalized walk) or pin the interpreter with actions/setup-python. Add a golden-digest test so a Python upgrade cannot silently invalidate the ledger, regenerate the Python entries, and cite a green gates run.
+    2. Finding 6 from round 1 is still unmet: no exact-head green CI. At review time 'CI (gates)' was red, cli-0, lib-1 and contracts were still pending, and only lib-0, rest and cli-1 had passed. The exec_context and launch_policy unit tests and the ratchet gate have no green exact-head evidence. Re-review must cite a fully green run at the new head.
+    3. Hardening (non-blocking, same fix): tests/test_exec_context_ratchet.py has no test that pins a known Python or Rust site key to a literal digest. Interpreter or tokenizer drift therefore surfaces only as a whole-ledger mismatch in test_repository_matches_exact_ledger, with no pointer to the cause. Add one golden-key assertion each for rust_sites and python_sites.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T18:56:32.844217851Z
+  modified_at: 2026-11-06T18:56:32.844217851Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
