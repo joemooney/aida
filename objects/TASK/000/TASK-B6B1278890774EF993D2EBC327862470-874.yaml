@@ -1,0 +1,29 @@
+id: 01a1b04e-6fd3-7b62-97e3-39db48e4ae51
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-874
+title: 'non-blocking (cosmetic): scripts/test-time-budget.toml:17 cites the machine-loc…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2020, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): scripts/test-time-budget.toml:17 cites the machine-local path /home/joe/ai/aida-worktrees/task-2020-timings/ in a checked-in file; the run IDs are the durable citation and the path could be dropped.
+
+  PR: #3488
+  Reviewed sha: 346b7b4b04cc1ba841daf476ec03628653bbe14c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T10:01:32.883345998Z
+modified_at: 2026-11-06T10:01:32.883345998Z
+req_type: Task
+tags:
+- carried-from:TASK-2020
+- finding-hash:fcb80d77
+- from-review:PR-3488
+- kind:carried-forward
+filed_at:
+  code_sha: 7823b3899714cb3bfc5ae3b76d6953bf0a3ed0da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2aeb7cc34b1
+  vendor: claude
