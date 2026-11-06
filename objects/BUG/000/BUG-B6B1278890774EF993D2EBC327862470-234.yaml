@@ -14,8 +14,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:19:22.848648683Z
-modified_at: 2026-11-06T18:06:51.466650764Z
+modified_at: 2026-11-06T18:33:09.601617352Z
 req_type: Bug
+comments:
+- id: 01a1b222-d4e1-7cc3-a075-f2dbd7aab228
+  author: joe
+  content: 'Implemented display-only legacy runner.pid plus exact deputy/run/name command-line matching, reused PidObserver to report UNKNOWN from isolated PID namespaces, and preserved unknown evidence on unreadable records/process information. Added real live-bash, stale/reused PID, wrong-name, native identity, stale-native fallback and hidden-proc regressions; updated CLI docs. Formatting and git diff --check pass. Targeted cargo tests are still compiling in the isolated target directory; no diagnostics so far. Native seat: edits remain uncommitted for host publication.'
+  created_at: 2026-11-06T18:33:09.601617352Z
+  modified_at: 2026-11-06T18:33:09.601617352Z
+  session_id: 01a1b2097e9d
 history:
 - id: 01a1b209-88dc-7d60-9d2c-dbfbc4089fb2
   author: aida-session-start
