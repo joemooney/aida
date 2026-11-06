@@ -8,12 +8,12 @@ description: |-
 
   PR: #3530
   Reviewed sha: d0030668f326367acc868fa54a530172ced0f9f3
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T20:35:39.163763957Z
-modified_at: 2026-11-06T20:46:49.924104879Z
+modified_at: 2026-11-06T20:46:54.458824950Z
 req_type: Task
 tags:
 - carried-from:BUG-2468
@@ -27,6 +27,15 @@ comments:
   created_at: 2026-11-06T20:46:49.924104879Z
   modified_at: 2026-11-06T20:46:49.924104879Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+history:
+- id: 01a1b29d-47fa-7ea0-b7b8-7614d1b414d5
+  author: joe
+  timestamp: 2026-11-06T20:46:54.458815357Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
   branch: main
