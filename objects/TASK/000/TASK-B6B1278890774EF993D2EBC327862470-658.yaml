@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T13:23:06.618254114Z
+modified_at: 2026-11-06T13:25:49.469057293Z
 req_type: Task
 tags:
 - architecture
@@ -1058,6 +1058,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b109-751d-7323-854a-caca9e3093b7
+  author: joe
+  timestamp: 2026-11-06T13:25:49.469074463Z
+  session_id: 01a1b105b8bf
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -1065,3 +1073,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+attention_reason:
+  category: design-fork
+  detail: 'Round 8 F1 (PR #3449 reviewed e64a75816810): explicit advisor acceptance is still absent for handled SIGINT/SIGALRM/SIGTERM/Go SIGURG deferral after broker RECV (possibly indefinite for a blocking send without SO_SNDTIMEO), the Linux 5.19+ NEW_LISTENER|WAIT_KILLABLE_RECV floor for every vendor including Codex, and SCM_CREDENTIALS/non-SCM_RIGHTS EACCES plus SO_PASSCRED broker credentials (PID 0 in lane pidns). Please accept all three AC1 deltas explicitly on TASK-2708 or direct exactly-once/credential-forwarding redesign. Round 8 F2 takes the review-permitted acceptance-request option: also explicitly accept connected UDP sendmmsg EACCES and all named network sendmsg EACCES, with DNS A/AAAA/resolver/QUIC/mDNS impact, or direct scoped sendmmsg/named sendmsg brokering. Added exact-errno synthetic coverage and reachable nested-UDP live assertions; direct synthetic regressions pass, but Rust/live tests are untested=true because this lease has no lane job runner. Round 8 F4 additionally needs advisor confirmation of opt-in headless rollout and filing of interactive/background follow-up before AC2. No finding is disputed and no acceptance/completion is claimed. Round 8 F3 remains an exact-publication-head CI gate: e64a758 had three shards running; current head 75eb8ca95841 has queued/running CI and expected supervised hold. Two uncommitted files hold tests and evidence. Mechanical bdcec264 remains. This punt and the existing hold retain publication vetoes; native seat does not commit/push, clear holds, record verdicts or complete the queue.'
+  raised_by: implementer
+  raised_at: 2026-11-06T13:25:49.469057293Z
