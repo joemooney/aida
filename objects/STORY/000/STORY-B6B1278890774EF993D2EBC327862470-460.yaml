@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T00:33:53.867973024Z
+modified_at: 2026-11-06T00:36:02.356442511Z
 req_type: Story
 tags:
 - architecture
@@ -71,6 +71,12 @@ comments:
   created_at: 2026-11-06T00:27:17.967413868Z
   modified_at: 2026-11-06T00:27:17.967413868Z
   session_id: 01a1ae3b3293
+- id: 01a1ae48-b2b4-7b01-ac67-853fb297806b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Sketch content is sound and source-accurate, but the commit subject and PR title carry a completing (STORY-2537) trailer on a sketch-only lane; merging would auto-complete the story with signoff and slice 1 undone.. It was punted on: other: Sketch-only deliverable is finished and validated in docs/plans/2026-11-05-story-2537-proc-identity.md; native .git/index.lock is read-only, so this lane cannot commit/push/open the required docs PR. Host publication must use non-completing (Refs STORY-2537), with PR title exactly (Refs STORY-2537), and must not publish a default completing post-exit subject. See the spec evidence comment for the file hash and suggested commit subject. This is a publication blocker, not implementation completion; advisor sketch signoff remains pending.. No triage reason was given.'
+  created_at: 2026-11-06T00:36:02.356441148Z
+  modified_at: 2026-11-06T00:36:02.356441148Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
@@ -103,6 +109,14 @@ history:
   session_id: 01a1ae4575e5
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ae48-b2b4-7b01-ac67-852409c78792
+  author: joe
+  timestamp: 2026-11-06T00:36:02.356419413Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -111,16 +125,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-attention_reason:
-  category: other
-  detail: Sketch-only deliverable is finished and validated in docs/plans/2026-11-05-story-2537-proc-identity.md; native .git/index.lock is read-only, so this lane cannot commit/push/open the required docs PR. Host publication must use non-completing (Refs STORY-2537), with PR title exactly (Refs STORY-2537), and must not publish a default completing post-exit subject. See the spec evidence comment for the file hash and suggested commit subject. This is a publication blocker, not implementation completion; advisor sketch signoff remains pending.
-  raised_by: implementer
-  raised_at: 2026-11-06T00:27:19.096349432Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Sketch content is sound and source-accurate, but the commit subject and PR title carry a completing (STORY-2537) trailer on a sketch-only lane; merging would auto-complete the story with signoff and slice 1 undone.
-  recovery_hint: address the review findings, move STORY-2537 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T00:33:53.867973024Z
