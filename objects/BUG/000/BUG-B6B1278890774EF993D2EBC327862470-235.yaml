@@ -14,8 +14,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:13:03.825877231Z
-modified_at: 2026-11-06T18:30:19.559756241Z
+modified_at: 2026-11-06T18:44:47.224942331Z
 req_type: Bug
+comments:
+- id: 01a1b22d-79f8-7b01-ae21-94d563e8b7d6
+  author: joe
+  content: 'Implemented in the native implementer worktree; edits intentionally uncommitted for host publication. Default PR/MR reviewer pickup now reclaims one exact dead reviewer lease and its clean unused unlocked default worktree only when the recorded head is an ancestor of a freshly fetched forge head and actual checkout commits are covered. Holds and mail retention remain guarded; lease release follows successful tree removal. Session-end and takeover coverage share reviewer-only forge-head evidence; claims, implementers and private clones keep ordinary remote coverage. Fetch uses an invocation-private ref without changing FETCH_HEAD or the occupied branch. Changed: aida-cli-lib/src/pr_lease_takeover.rs, queue_cmd.rs, seat_clone.rs, session_end.rs, tests/bug_2457_review_repickup_tests.rs; docs/cli/06-roles-sessions.md. Validation: cargo test -p aida-cli-lib --lib review_repickup_tests (2 passed); cargo test -p aida-cli-lib --lib story_2315_pr_lease_takeover_tests (32 passed); cargo fmt --all -- --check and git diff --check passed. Regression exercises dead old-head to new-head pickup plus refusal for live/unknown owners, dirt, locks, holders, rewritten/missing refs, absent recorded metadata, local commits, claims and duplicate leases; confirms merge-hold preservation and FETCH_HEAD stability. No known blockers. No commit, push, PR, ship, review record or queue completion run from this seat.'
+  created_at: 2026-11-06T18:44:47.224942331Z
+  modified_at: 2026-11-06T18:44:47.224942331Z
+  session_id: 01a1b21f8cc7
 history:
 - id: 01a1b21f-97e9-72b3-9c5d-b47f63e4ce7f
   author: aida-session-start
