@@ -1123,28 +1123,6 @@ pub(crate) fn redact_secrets(text: &str) -> String {
     let mut out: Vec<String> = Vec::with_capacity(text.split_whitespace().count());
     // Token-ish if it carries a known secret prefix OR is a long opaque run
     // gated behind a secret prefix — we only redact whole whitespace tokens.
-    let looks_secret = |tok: &str| -> bool {
-        let t = tok.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-');
-        const PREFIXES: [&str; 9] = [
-            "ghp_",
-            "gho_",
-            "ghu_",
-            "ghs_",
-            "ghr_",
-            "github_pat_",
-            "sk-",
-            "xoxb-",
-            "xoxp-",
-        ];
-        if PREFIXES.iter().any(|p| t.starts_with(p)) {
-            return true;
-        }
-        // AWS access key id: AKIA + 16 base32 chars.
-        if t.len() == 20 && t.starts_with("AKIA") {
-            return true;
-        }
-        false
-    };
     let mut prev_lower = String::new();
     for tok in text.split_whitespace() {
         // `Bearer <token>` → redact the token after a `Bearer`/`token:` lead.
@@ -1171,7 +1149,7 @@ pub(crate) fn redact_secrets(text: &str) -> String {
                 .iter()
                 .any(|k| lo.starts_with(k))
         };
-        if looks_secret(tok) || after_bearer || kv_secret {
+        if aida_core::secret_screen::looks_secret_token(tok) || after_bearer || kv_secret {
             out.push("[REDACTED]".to_string());
         } else if inline_kv {
             let key = tok.split_once('=').map(|(k, _)| k).unwrap_or(tok);
