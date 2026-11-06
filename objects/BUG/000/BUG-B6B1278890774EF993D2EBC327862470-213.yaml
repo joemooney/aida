@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-06T16:44:33.500204599Z
+modified_at: 2026-11-06T18:50:45.322105075Z
 req_type: Bug
 tags:
 - area:containment
@@ -80,6 +80,12 @@ comments:
   created_at: 2026-11-06T16:44:33.500204599Z
   modified_at: 2026-11-06T16:44:33.500204599Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b232-f0ca-7111-a2cf-a44a1c668f89
+  author: joe
+  content: 'Advisor 11:52: C3/C4 re-run after BUG-2465 landed. role enter now passes, but fixture setup fails on a duplicate [contained] table in the fixture config (BUG-2470, queued). Report: ~/.aida/conformance-aida-1793990948/report.json. Re-run after BUG-2470 lands.'
+  created_at: 2026-11-06T18:50:45.322105075Z
+  modified_at: 2026-11-06T18:50:45.322105075Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a957-aeb7-7150-887a-dd6b7a33021d
   author: joe
