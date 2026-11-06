@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T18:36:06.123047121Z
-modified_at: 2026-11-06T20:45:24.748771259Z
+modified_at: 2026-11-06T20:45:33.611470585Z
 req_type: Task
 tags:
 - carried-from:BUG-2465
 - finding-hash:af135393
 - from-review:PR-3520
 - kind:carried-forward
+comments:
+- id: 01a1b29c-0c2b-7923-bddd-bf81de6a29b3
+  author: joe
+  content: 'Advisor 13:46 ruling (carried findings from #3520, ruled once). One PR: (1) the outer budget covers the nested setup (4x30s) plus inner timeout+180, with corrected comment arithmetic; (2) the setup supervisor SIGKILLs the inner continuation group before the outer group dies, with a test of an inner group that ignores SIGTERM; (3) a closed stdin reports fixture-terminal-stdin-unavailable instead of a bare EBADF (TASK-2943); (4) the advisor setup seat drops --delegate-seat implementer unless setup needs it, matching the docs (TASK-2940). Python tests plus make check-ci-fast; no cargo. Land after BUG-2470 (#3532).'
+  created_at: 2026-11-06T20:45:33.611470585Z
+  modified_at: 2026-11-06T20:45:33.611470585Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b24d-334f-7892-81bd-9100adf7b22b
   author: joe
