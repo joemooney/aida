@@ -91,7 +91,15 @@ impl RequestLock {
             .create(true)
             .truncate(true)
             .open(&path)?;
-        fs2::FileExt::lock_exclusive(&file)?;
+        // trace:BUG-2466 | ai:codex
+        // A bounded advisory reader must not wait on this second flock after
+        // winning the refresh flock. The caller serves Deferred on contention;
+        // the next reader/worker can rederive and retry this hint.
+        if super::cache::fast_fail_cache_enabled() {
+            fs2::FileExt::try_lock_exclusive(&file)?;
+        } else {
+            fs2::FileExt::lock_exclusive(&file)?;
+        }
         Ok(Self(file))
     }
 }
@@ -205,6 +213,39 @@ fn write(cache_path: &Path, request: &RefreshRequest) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn advisory_request_updates_do_not_wait_for_a_held_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache_path(&dir);
+        file_request(&cache, "original").unwrap();
+        let holder = RequestLock::acquire(&cache).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker_cache = cache.clone();
+        let worker = std::thread::spawn(move || {
+            let previous = super::super::cache::set_fast_fail_cache(true);
+            let results = [
+                file_request(&worker_cache, "new").map(|_| ()),
+                record_failed_attempt(&worker_cache, "failed"),
+                clear(&worker_cache),
+                clear_if_target_matches(&worker_cache, "original"),
+            ];
+            super::super::cache::set_fast_fail_cache(previous);
+            tx.send(results).unwrap();
+        });
+        let results = rx.recv_timeout(std::time::Duration::from_secs(2));
+        // Release before joining even on a regression: no hung test process.
+        drop(holder);
+        worker.join().unwrap();
+        for result in results.expect("advisory hint operations waited on a writer") {
+            assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+        }
+        assert_eq!(load(&cache).unwrap().target_head, "original");
+        // Ordinary writers still persist after the holder releases its lock.
+        file_request(&cache, "new").unwrap();
+        assert_eq!(load(&cache).unwrap().target_head, "new");
+    }
 
     fn cache_path(dir: &tempfile::TempDir) -> PathBuf {
         dir.path().join("cache.db")

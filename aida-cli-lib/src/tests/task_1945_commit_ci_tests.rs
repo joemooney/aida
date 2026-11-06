@@ -284,3 +284,63 @@ fn project_config_requires_the_aggregator() {
         vec![CI_AGGREGATOR_CHECK]
     );
 }
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a4b5e | ai:codex
+#[test]
+fn work_ci_native_status_is_a_required_train_and_pr_source() {
+    const CONTEXT: &str = "aida/work-ci";
+    // The relay publishes ordinary native statuses. Exercise the actual
+    // commit readers used by verified trains/readiness, including a newer
+    // pending attempt superseding a successful result for the same SHA.
+    for (state, gl_state, outcome) in [
+        ("success", "success", CheckOutcome::Passed),
+        ("pending", "pending", CheckOutcome::Pending),
+        ("failure", "failed", CheckOutcome::Failed),
+    ] {
+        let (gh, _) = github(
+            vec![json!({"total_count": 0, "check_runs": []})],
+            json!({"sha": SHA, "total_count": 1, "statuses": [
+                {"context": CONTEXT, "state": state}
+            ]}),
+        );
+        let mut api = |_: &str| {
+            Ok(serde_json::to_vec(&json!([
+                {"id": 1, "sha": SHA, "name": CONTEXT, "status": "success"},
+                {"id": 2, "sha": SHA, "name": CONTEXT, "status": gl_state}
+            ]))
+            .unwrap())
+        };
+        let gl = gitlab_commit_checks("1", SHA, &mut api).unwrap();
+        for checks in [gh.unwrap(), gl] {
+            assert_eq!(checks.checks[0].outcome, outcome);
+            assert_eq!(
+                judge_commit_checks(&checks, &[CONTEXT]) == CommitCi::Green,
+                outcome == CheckOutcome::Passed
+            );
+            let status = crate::forge::ci_status_from_commit_checks(Ok(checks));
+            assert_eq!(
+                status.failing_checks.is_empty(),
+                outcome != CheckOutcome::Failed
+            );
+        }
+        // PR ship classifies this context through the same required-check
+        // rows as workflows. Even an informational wildcard cannot waive it.
+        let bucket = match outcome {
+            CheckOutcome::Passed => "pass",
+            CheckOutcome::Pending => "pending",
+            _ => "fail",
+        };
+        let wire =
+            json!([{"name": CONTEXT, "bucket": bucket, "workflow": "", "link": ""}]).to_string();
+        let required = crate::forge::required_checks_from_output(true, &wire, "").unwrap();
+        assert_eq!(required, vec![CONTEXT]);
+        let rows = crate::ci_gate::parse_check_rows(&wire).unwrap();
+        let cfg = crate::ci_gate::CiGateConfig {
+            informational_checks: vec!["*".into()],
+            informational_workflows: vec![],
+        };
+        let verdict = crate::ci_gate::classify_red(&rows, &required, &cfg, false, false);
+        assert_eq!(verdict.real.is_empty(), outcome != CheckOutcome::Failed);
+        assert_eq!(verdict.pending.is_empty(), outcome != CheckOutcome::Pending);
+    }
+}
