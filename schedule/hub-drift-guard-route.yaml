@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-03T16:01:25.295688196Z
+last_run: 2026-11-06T14:22:33.972645627Z
 last_by:
   seat: advisor
-  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: main and release are in sync; aida-store on gitlab is +2 and fast-forwardable. The hourly home-cron 'aida remote reconcile --execute' bridges it, and work-clone policy is gitlab-only pushes.
-due_since: 2026-11-03T19:32:24.468360180Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-06T08:38:34.889215226Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: main in sync. The gitlab aida-store was 22 behind (fast-forwardable); aida remote reconcile --execute pushed the union 8de759d to gitlab. No force push.
