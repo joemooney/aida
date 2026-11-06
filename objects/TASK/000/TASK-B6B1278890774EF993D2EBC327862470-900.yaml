@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:35:45.116593091Z
-modified_at: 2026-11-06T20:55:13.913718572Z
+modified_at: 2026-11-06T21:32:03.714495793Z
 req_type: Task
 tags:
 - carried-from:BUG-2469
@@ -32,6 +32,12 @@ comments:
   created_at: 2026-11-06T20:47:01.869201106Z
   modified_at: 2026-11-06T20:47:01.869201106Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2c6-9f02-7c43-b8ef-0696690e51d5
+  author: joe
+  content: 'Implemented in native seat; edits intentionally uncommitted for host publication. queue_cmd.rs now includes the failed dead-review eligibility reason and its nested diagnostics in the branch-held refusal, without changing retirement eligibility. Extended bug_2469 regression asserts rewritten-head, fetch, missing-metadata and unpublished-commit reasons and verifies unchanged lease bytes/checkout HEAD. Added requested BUG-2469 criterion traces plus canonical-ID spellings, since criteria reporting resolves the canonical ID. Validation: cargo test --profile agent -p aida-cli-lib --lib bug_2457 -- --nocapture passed (1 test); RUST_MIN_STACK=8388608 target/agent/deps/aida_cli_lib-82ec29df8be17ceb bug_2469 --nocapture passed (1 test); make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check passed; aida criteria BUG-2469 reports no untested criteria and no unanchored tests. No blockers. Host should commit/publish and finish queue completion.'
+  created_at: 2026-11-06T21:32:03.714495793Z
+  modified_at: 2026-11-06T21:32:03.714495793Z
+  session_id: 01a1b2a45b41
 history:
 - id: 01a1b29d-56b4-72e0-9f29-ddd41d92b8e1
   author: joe
