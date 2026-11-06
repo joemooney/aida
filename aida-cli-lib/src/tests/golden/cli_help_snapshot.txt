@@ -4995,6 +4995,7 @@ Inter-agent mailbox: peer↔peer messaging (send / inbox / thread)
 Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
+  disposition    Record a recipient's explicit response to a request (does not mark it read)
   wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
   wake-run       Watch every session armed for mail wake and wake its Codex thread when its own
                  inbox has new mail (the service `wake-service` installs)
@@ -5030,6 +5031,47 @@ Commands:
   help           Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox disposition
+Record a recipient's explicit response to a request (does not mark it read)
+
+Usage: aida mailbox disposition [OPTIONS] --reason <REASON> <MESSAGE_ID> <OUTCOME>
+
+Arguments:
+  <MESSAGE_ID>
+          Complete message ID; prefixes and thread references are refused
+
+  <OUTCOME>
+          [possible values: acted, declined, deferred]
+
+Options:
+      --reason <REASON>
+          Explanation for this response (1..4096 bytes)
+
+      --evidence <EVIDENCE>
+          Reference supporting acted (an assertion, not verified completion)
+
+      --until <UNTIL>
+          Deferred deadline in RFC3339, at most 24 hours from now
+
+      --json
+          Print the versioned action receipt as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -5546,6 +5588,9 @@ Arguments:
           Message id or unique id prefix to read
 
 Options:
+      --json
+          Print the message and separate action disposition as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -35911,6 +35956,52 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "disposition"
+    ],
+    "about": "Record a recipient's explicit response to a request (does not mark it read)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "evidence",
+        "takes_value": true,
+        "help": "Reference supporting acted (an assertion, not verified completion)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the versioned action receipt as JSON"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for this response (1..4096 bytes)"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Deferred deadline in RFC3339, at most 24 hours from now"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "wake-snapshot"
     ],
     "about": "Read bounded unread message IDs without bodies or acknowledgement",
@@ -36484,6 +36575,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the message and separate action disposition as JSON"
       }
     ],
     "hidden": false

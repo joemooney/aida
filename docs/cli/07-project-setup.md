@@ -656,6 +656,24 @@ option, using `--sandbox workspace-write --ask-for-approval never` for interacti
 and headless launches. It is shown as “native sandbox, not AIDA-contained” by
 permission reports, doctor, launch banners and statusline. Native sandboxing
 does not apply AIDA's tool rules, write boundaries or network allowlist.
+
+AIDA supplies native Codex launches with Codex add-dir grants for the shared
+store, cache directory (`<main>/.aida/cache-db`), mailbox, deputy inbox and
+applicable build directories. The cache grant includes SQLite's sidecars and
+locks, including when the lane's `.aida/cache-db` links to the main checkout.
+Ordinary CLI coordination such as `aida edit`, `aida comment add` and
+`aida queue done` is intended to work; mutation is not connector-only. A reviewer
+also receives the gate-ledger directory; an implementer does not.
+
+If CLI coordination reports that the shared cache is outside writable roots,
+check the launcher's version with `aida --version`, upgrade AIDA if needed,
+and relaunch the lane. A running lane retains the filesystem grants established at launch;
+upgrading the binary alone cannot add them. Report a recurrence with the launch
+command, binary version and resolved cache path rather than adding broader
+write roots. Git metadata remains protected separately; see
+[native seat publication](04-git-lifecycle.md#aida-ship).
+<!-- trace:TASK-2836 | ai:codex -->
+
 `aida doctor --category permission-posture` reports an incompatible default
 `[agents] vendor`, the active containment setting and the configuration fix.
 <!-- trace:TASK-2631 | ai:codex -->

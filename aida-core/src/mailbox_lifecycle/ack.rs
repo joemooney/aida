@@ -214,16 +214,39 @@ impl AckPlan {
         audience: &ResolvedAudience,
         selected: &[&SnapshotRecord],
     ) -> Result<Option<Self>, AckError> {
+        Self::prepare_records(snapshot, common, audience, selected, false)
+    }
+
+    // Action receipts share source validation, never read-ledger filtering or writes.
+    // trace:TASK-3074 | ai:codex
+    pub(super) fn prepare_action(
+        snapshot: &LogicalSnapshot,
+        common: &Path,
+        audience: &ResolvedAudience,
+        record: &SnapshotRecord,
+    ) -> Result<Self, AckError> {
+        Self::prepare_records(snapshot, Some(common), audience, &[record], true)?
+            .ok_or(AckError::Authority)
+    }
+
+    fn prepare_records(
+        snapshot: &LogicalSnapshot,
+        common: Option<&Path>,
+        audience: &ResolvedAudience,
+        selected: &[&SnapshotRecord],
+        action: bool,
+    ) -> Result<Option<Self>, AckError> {
         let wanted: Vec<&SnapshotRecord> = selected
             .iter()
             .copied()
             .filter(|r| {
-                !r.message.archived
-                    && !r.message.retracted
-                    && matches!(
-                        r.read,
-                        ReadEvidence::Unread | ReadEvidence::LegacyWatermark { .. }
-                    )
+                action
+                    || (!r.message.archived
+                        && !r.message.retracted
+                        && matches!(
+                            r.read,
+                            ReadEvidence::Unread | ReadEvidence::LegacyWatermark { .. }
+                        ))
             })
             .collect();
         if wanted.is_empty() {
@@ -251,7 +274,7 @@ impl AckPlan {
             if keys_seen.len() > MAX_PLAN_KEYS {
                 return Err(AckError::TooLarge);
             }
-            if let Some(common) = common {
+            if let Some(common) = common.filter(|_| !action) {
                 let mut missing = Vec::with_capacity(keys.len());
                 for key in keys {
                     if !ledgers.contains_key(&key) {
@@ -406,7 +429,11 @@ impl AckPlan {
     /// Every lifecycle-tracked holding source is still `Open` at the planned
     /// generation (or, if it had no record, gained only an `Open` one for
     /// the same directory). Lifecycle held; read-only.
-    fn validate_sources(&self, anchor: &Path, held: &LifecycleGuard) -> Result<(), AckError> {
+    pub(super) fn validate_sources(
+        &self,
+        anchor: &Path,
+        held: &LifecycleGuard,
+    ) -> Result<(), AckError> {
         for source in &self.sources {
             let Some((key, planned)) = &source.lifecycle else {
                 continue;
@@ -424,7 +451,7 @@ impl AckPlan {
 
     /// Every planned replica still holds the planned bytes in the planned
     /// directory. Read-only, no-follow, bounded.
-    fn validate_replicas(&self) -> Result<(), AckError> {
+    pub(super) fn validate_replicas(&self) -> Result<(), AckError> {
         for entry in &self.entries {
             for (index, planned) in &entry.replicas {
                 let source = &self.sources[*index];
@@ -552,10 +579,21 @@ pub(crate) fn receipt_lock(
     _lifecycle: &LifecycleGuard,
     timeout: Duration,
 ) -> Result<ReceiptGuard, AckError> {
+    ledger_lock(anchor, _lifecycle, timeout, RECEIPT_LOCK_FILE)
+}
+
+// Both ledgers follow Lifecycle -> ledger, using the same bounded safe open.
+// trace:TASK-3074 | ai:codex
+pub(super) fn ledger_lock(
+    anchor: &Path,
+    _lifecycle: &LifecycleGuard,
+    timeout: Duration,
+    filename: &str,
+) -> Result<ReceiptGuard, AckError> {
     if RECEIPT_HELD.with(Cell::get) {
         return Err(LifecycleError::LockOrder("the Receipt lock is not re-entrant").into());
     }
-    let path = anchor.join(RECEIPT_LOCK_FILE);
+    let path = anchor.join(filename);
     let file = match OpenOptions::new()
         .read(true)
         .write(true)

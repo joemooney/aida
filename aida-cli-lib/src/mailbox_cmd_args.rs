@@ -19,6 +19,26 @@ pub enum WakeServiceAction {
 // trace:STORY-493 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MailboxCommand {
+    /// Record a recipient's explicit response to a request (does not mark it read).
+    // trace:TASK-3074 | ai:codex
+    Disposition {
+        /// Complete message ID; prefixes and thread references are refused.
+        message_id: String,
+        #[clap(value_enum)]
+        outcome: DispositionOutcome,
+        /// Explanation for this response (1..4096 bytes).
+        #[clap(long)]
+        reason: String,
+        /// Reference supporting acted (an assertion, not verified completion).
+        #[clap(long)]
+        evidence: Option<String>,
+        /// Deferred deadline in RFC3339, at most 24 hours from now.
+        #[clap(long)]
+        until: Option<String>,
+        /// Print the versioned action receipt as JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Read bounded unread message IDs without bodies or acknowledgement.
     // trace:TASK-2347 | ai:codex
     // trace:STORY-1843 | ai:claude
@@ -272,6 +292,10 @@ pub enum MailboxCommand {
     Read {
         /// Message id or unique id prefix to read.
         message_id: String,
+        /// Print the message and separate action disposition as JSON.
+        // trace:TASK-3074 | ai:codex
+        #[clap(long)]
+        json: bool,
     },
 
     /// Retract a sent message, leaving a withdrawn tombstone in mailbox views.
@@ -379,4 +403,12 @@ pub enum RetentionCommand {
         #[clap(long)]
         json: bool,
     },
+}
+
+// trace:TASK-3074 | ai:codex
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DispositionOutcome {
+    Acted,
+    Declined,
+    Deferred,
 }

@@ -2614,36 +2614,88 @@ pub(crate) fn prepare_rework_merge(
             }
         }
     };
-    prepare_rework_merge_with(&execute, branch, resume, || {
-        // Fetch in the trusted host, never through a seat-controlled origin.
-        let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
-        fetch
-            .args([
-                "fetch",
-                "--no-write-fetch-head",
-                "origin",
-                "+refs/heads/main:refs/remotes/origin/main",
-                &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
-            ])
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .stdin(std::process::Stdio::null());
-        anyhow::ensure!(
-            crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
-                .is_some_and(|out| out.status.success()),
-            "could not fetch origin/main for rework"
-        );
-        let mut resolve = git(main);
-        resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
-        let base = run(resolve, "pin rework base")?;
-        let mut resolve_head = git(main);
-        resolve_head.args([
-            "rev-parse",
-            "--verify",
-            &format!("refs/remotes/origin/{branch}^{{commit}}"),
-        ]);
-        let pr_head = run(resolve_head, "pin rework PR head")?;
-        Ok((base, pr_head))
-    })
+    prepare_rework_merge_with(
+        &execute,
+        branch,
+        resume,
+        |tip| publish_rework_merge(main, tree, branch, tip),
+        || {
+            // Fetch in the trusted host, never through a seat-controlled origin.
+            let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+            fetch
+                .args([
+                    "fetch",
+                    "--no-write-fetch-head",
+                    "origin",
+                    "+refs/heads/main:refs/remotes/origin/main",
+                    &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+                ])
+                .env("GIT_TERMINAL_PROMPT", "0")
+                .stdin(std::process::Stdio::null());
+            anyhow::ensure!(
+                crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
+                    .is_some_and(|out| out.status.success()),
+                "could not fetch origin/main for rework"
+            );
+            let mut resolve = git(main);
+            resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
+            let base = run(resolve, "pin rework base")?;
+            let mut resolve_head = git(main);
+            resolve_head.args([
+                "rev-parse",
+                "--verify",
+                &format!("refs/remotes/origin/{branch}^{{commit}}"),
+            ]);
+            let pr_head = run(resolve_head, "pin rework PR head")?;
+            Ok((base, pr_head))
+        },
+    )
+}
+
+/// Publish the prepared tip using only the trusted host origin. Clone objects
+/// cross the existing sandboxed bundle boundary; seat hooks never run.
+// trace:BUG-2456 | ai:codex
+fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
+    let imported = host_recorded_clone(main, tree)
+        .map(|seat| crate::ship_from_seat::import_seat_branch(&seat, branch))
+        .transpose()?;
+    // Keep the result until cleanup has run, including tip mismatch, rejection
+    // and timeout. Compare-delete only the exact object imported by this call.
+    let result = (|| {
+        if let Some((_, imported_tip)) = &imported {
+            anyhow::ensure!(
+                imported_tip == tip,
+                "rework branch changed before publication"
+            );
+        }
+        let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
+        push.args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            "origin",
+            &format!("{tip}:refs/heads/{branch}"),
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+        match crate::command_output_with_timeout_detail(push, std::time::Duration::from_secs(30)) {
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+            crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+                "could not publish prepared rework merge: {}",
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            _ => anyhow::bail!("rework merge publication timed out; no vendor launched"),
+        }
+    })();
+    if let Some((reference, imported_tip)) = imported {
+        let mut cleanup = git(main);
+        cleanup.args(["update-ref", "-d", &reference, &imported_tip]);
+        let cleanup = run(cleanup, "remove rework import");
+        if let Err(why) = cleanup {
+            anyhow::bail!("rework import cleanup failed: {why:#}; publication result: {result:?}");
+        }
+    }
+    result
 }
 
 // Keep launch admission and the Git operations together: any failed fetch,
@@ -2653,6 +2705,7 @@ fn prepare_rework_merge_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     branch: &str,
     resume: bool,
+    publish: impl FnOnce(&str) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Vec<String>> {
     anyhow::ensure!(
@@ -2674,7 +2727,23 @@ fn prepare_rework_merge_with(
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
         "seated rework branch is behind the PR head; retry pickup with its current head",
     )?;
-    finish_rework_merge(execute, &base)
+    let before = execute(&["rev-parse", "HEAD"])?;
+    let files = finish_rework_merge(execute, &base)?;
+    // Only publish the host-created merge of the fetched PR head and base.
+    // Existing local lane commits retain the post-exit trailer and punt/hold
+    // gates, including when this merge reports "Already up to date".
+    // trace:BUG-2456 | ai:codex
+    if files.is_empty() && before == pr_head {
+        let tip = execute(&["rev-parse", "HEAD"])?;
+        if tip != before {
+            let parents = execute(&["show", "-s", "--format=%P", &tip])?;
+            let parents: Vec<_> = parents.split_whitespace().collect();
+            if parents == [pr_head.as_str(), base.as_str()] {
+                publish(&tip)?;
+            }
+        }
+    }
+    Ok(files)
 }
 
 // trace:STORY-2475 | ai:codex
@@ -2711,6 +2780,190 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // trace:BUG-2456 | ai:codex
+    #[test]
+    fn bug_2456_publication_failure_refuses_launch_and_current_head_skips_push() {
+        for current in [false, true] {
+            let merged = std::cell::Cell::new(false);
+            let execute = |args: &[&str]| -> Result<String> {
+                match args {
+                    ["symbolic-ref", "--short", "HEAD"] => Ok("rework".into()),
+                    ["rev-parse", "-q", "--verify", "MERGE_HEAD"] => anyhow::bail!("absent"),
+                    ["rev-parse", "HEAD"] => Ok(if current || merged.get() {
+                        "prepared"
+                    } else {
+                        "old"
+                    }
+                    .into()),
+                    ["show", "-s", "--format=%P", "prepared"] => Ok("old base".into()),
+                    ["merge", "--no-edit", "--no-verify", "base"] => {
+                        merged.set(true);
+                        Ok(String::new())
+                    }
+                    _ => Ok(String::new()),
+                }
+            };
+            let result = prepare_rework_merge_with(
+                &execute,
+                "rework",
+                false,
+                |tip| {
+                    assert!(!current, "an already published head needs no push");
+                    assert_eq!(tip, "prepared");
+                    anyhow::bail!("push rejected")
+                },
+                || {
+                    Ok((
+                        "base".into(),
+                        if current { "prepared" } else { "old" }.into(),
+                    ))
+                },
+            );
+            if current {
+                assert!(result.unwrap().is_empty());
+            } else {
+                assert_eq!(result.unwrap_err().to_string(), "push rejected");
+            }
+        }
+    }
+
+    // trace:BUG-2456 | ai:codex
+    #[test]
+    fn bug_2456_only_exact_host_merge_parents_publish() {
+        for parents in ["old base", "base old", "old", "old other", "old base third"] {
+            let merged = std::cell::Cell::new(false);
+            let published = std::cell::Cell::new(false);
+            let execute = |args: &[&str]| -> Result<String> {
+                match args {
+                    ["symbolic-ref", "--short", "HEAD"] => Ok("rework".into()),
+                    ["rev-parse", "-q", "--verify", "MERGE_HEAD"] => anyhow::bail!("absent"),
+                    ["rev-parse", "HEAD"] => {
+                        Ok(if merged.get() { "prepared" } else { "old" }.into())
+                    }
+                    ["show", "-s", "--format=%P", "prepared"] => Ok(parents.into()),
+                    ["merge", "--no-edit", "--no-verify", "base"] => {
+                        merged.set(true);
+                        Ok(String::new())
+                    }
+                    _ => Ok(String::new()),
+                }
+            };
+            prepare_rework_merge_with(
+                &execute,
+                "rework",
+                false,
+                |_| {
+                    published.set(true);
+                    Ok(())
+                },
+                || Ok(("base".into(), "old".into())),
+            )
+            .unwrap();
+            assert_eq!(published.get(), parents == "old base", "{parents}");
+        }
+    }
+
+    // trace:BUG-2456 | ai:codex
+    #[test]
+    fn bug_2456_local_commits_never_publish_before_resume() {
+        for base_ahead in [false, true] {
+            let fx = tests::fixture();
+            let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+            let pr_head = g(&["rev-parse", "HEAD"]);
+            g(&["checkout", "-qb", "rework"]);
+            g(&["commit", "--allow-empty", "-qm", "unpublished lane work"]);
+            let local = g(&["rev-parse", "HEAD"]);
+            let base = if base_ahead {
+                g(&["checkout", "main"]);
+                g(&["commit", "--allow-empty", "-qm", "base advances"]);
+                let base = g(&["rev-parse", "HEAD"]);
+                g(&["checkout", "rework"]);
+                base
+            } else {
+                pr_head.clone()
+            };
+            let execute = |args: &[&str]| -> Result<String> {
+                if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
+                    anyhow::bail!("absent");
+                }
+                Ok(g(args))
+            };
+            assert!(prepare_rework_merge_with(
+                &execute,
+                "rework",
+                true,
+                |_| panic!("local lane commits must retain post-exit publication gates"),
+                || Ok((base.clone(), pr_head.clone())),
+            )
+            .unwrap()
+            .is_empty());
+            if base_ahead {
+                assert_eq!(g(&["rev-parse", "HEAD^1"]), local);
+            } else {
+                assert_eq!(g(&["rev-parse", "HEAD"]), local);
+            }
+        }
+    }
+
+    // No bwrap dependency: move the real remote after fetch, then exercise
+    // the production push and prove refusal stops the launch continuation.
+    // trace:BUG-2456 | ai:codex
+    #[test]
+    fn bug_2456_real_remote_race_refuses_before_vendor_launch() {
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        g(&["checkout", "-qb", "rework"]);
+        g(&["commit", "--allow-empty", "-qm", "PR head"]);
+        let pr_head = g(&["rev-parse", "HEAD"]);
+        g(&["push", "-q", "origin", "rework"]);
+        g(&["checkout", "main"]);
+        g(&["commit", "--allow-empty", "-qm", "main advances"]);
+        let base = g(&["rev-parse", "HEAD"]);
+        g(&["push", "-q", "origin", "main"]);
+        g(&["checkout", "-qb", "racer", &pr_head]);
+        g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
+        let raced = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "rework"]);
+        let execute = |args: &[&str]| -> Result<String> {
+            if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
+                anyhow::bail!("absent");
+            }
+            // This happens after fetch but before publication. A real push
+            // advances origin while preparation retains its fetched PR SHA.
+            if args.first() == Some(&"merge") {
+                g(&["push", "-q", "origin", "racer:refs/heads/rework"]);
+            }
+            Ok(g(args))
+        };
+        let launched = std::cell::Cell::new(false);
+        let result = (|| -> Result<()> {
+            prepare_rework_merge_with(
+                &execute,
+                "rework",
+                false,
+                |tip| publish_rework_merge(&fx.main, &fx.main, "rework", tip),
+                || {
+                    g(&["fetch", "-q", "origin"]);
+                    assert_eq!(g(&["rev-parse", "origin/rework"]), pr_head);
+                    Ok((base.clone(), pr_head.clone()))
+                },
+            )?;
+            launched.set(true);
+            Ok(())
+        })();
+        let why = result.unwrap_err().to_string();
+        assert!(
+            why.contains("could not publish prepared rework merge"),
+            "{why}"
+        );
+        assert!(why.contains("rejected"), "{why}");
+        assert!(!launched.get());
+        assert_eq!(
+            tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/rework"]),
+            raced
+        );
+    }
+
     // Exercise admission against real Git state; the fetch seam pins heads
     // without a network dependency and must never run for local refusals.
     // trace:STORY-2475 | ai:codex
@@ -2731,15 +2984,35 @@ mod rework_merge_tests {
         };
         let no_fetch =
             || -> Result<(String, String)> { panic!("local refusal must precede fetch") };
-        let why = prepare_rework_merge_with(&execute, "wrong", false, no_fetch).unwrap_err();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "wrong",
+            false,
+            |_| panic!("must not publish"),
+            no_fetch,
+        )
+        .unwrap_err();
         assert!(why.to_string().contains("PR head branch"));
         std::fs::write(fx.main.join("pending"), "edits").unwrap();
-        let why = prepare_rework_merge_with(&execute, "main", false, no_fetch).unwrap_err();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            false,
+            |_| panic!("must not publish"),
+            no_fetch,
+        )
+        .unwrap_err();
         assert!(why.to_string().contains("pending changes"));
         // The same dirty seat resumes without touching the edits or fetching.
-        assert!(prepare_rework_merge_with(&execute, "main", true, no_fetch)
-            .unwrap()
-            .is_empty());
+        assert!(prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            no_fetch
+        )
+        .unwrap()
+        .is_empty());
         assert_eq!(
             std::fs::read_to_string(fx.main.join("pending")).unwrap(),
             "edits"
@@ -2747,7 +3020,14 @@ mod rework_merge_tests {
         let before = execute(&["rev-parse", "HEAD"]).unwrap();
         std::fs::write(fx.main.join(".git/MERGE_HEAD"), format!("{before}\n")).unwrap();
         for resume in [false, true] {
-            let why = prepare_rework_merge_with(&execute, "main", resume, no_fetch).unwrap_err();
+            let why = prepare_rework_merge_with(
+                &execute,
+                "main",
+                resume,
+                |_| panic!("must not publish"),
+                no_fetch,
+            )
+            .unwrap_err();
             assert!(why.to_string().contains("unfinished merge"));
         }
         std::fs::remove_file(fx.main.join(".git/MERGE_HEAD")).unwrap();
@@ -2756,14 +3036,24 @@ mod rework_merge_tests {
         execute(&["commit", "--allow-empty", "-m", "new PR head"]).unwrap();
         let ahead = execute(&["rev-parse", "HEAD"]).unwrap();
         execute(&["checkout", "main"]).unwrap();
-        let why =
-            prepare_rework_merge_with(&execute, "main", false, || Ok((before.clone(), ahead)))
-                .unwrap_err();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            false,
+            |_| panic!("must not publish"),
+            || Ok((before.clone(), ahead)),
+        )
+        .unwrap_err();
         assert!(why.to_string().contains("behind the PR head"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
-        let why =
-            prepare_rework_merge_with(&execute, "main", false, || anyhow::bail!("fetch refused"))
-                .unwrap_err();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            false,
+            |_| panic!("must not publish"),
+            || anyhow::bail!("fetch refused"),
+        )
+        .unwrap_err();
         assert_eq!(why.to_string(), "fetch refused");
         assert!(!fx.main.join(".git/MERGE_HEAD").exists());
     }
