@@ -11,12 +11,12 @@ description: |
   - Regression test: a lease whose scope is an origin ID with a HOME-alias mapping produces a trailer that `ship --from-seat`'s trailer check resolves, and the host commit and push succeed end to end in the existing seat-publish fixture.
   - Audit the other display_spec_id call sites that write commit or PR text, and switch any that feed trailer resolution.
   LIGHT gate.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T03:06:54.662965941Z
-modified_at: 2026-11-06T03:54:25.933084712Z
+modified_at: 2026-11-06T04:51:20.141348638Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2475
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-11-06T03:54:27.072227868Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1af32-6da8-7f21-bee4-62bb2842caa8
+  author: aida-auto-bump
+  timestamp: 2026-11-06T04:51:20.105001497Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1af32-6dcd-7b61-8aa5-b9471622a6be
+  timestamp: 2026-11-06T04:51:20.141345882Z
+  agent: aida
+  commit_sha: 379c7c3c10e521909267b068586c4bf6399a35ad
+  summary: 'All 3 ACs verified: post-exit trailers resolve via host store to agreed/origin ID (never HOME alias) for (ID) and (Refs ID); end-to-end origin-scope+HOME-alias regression test commits, pushes, opens PR; remaining display_spec_id sites are display-only. CI run 42159295120 green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 93dc9165bde3bd7b80a0ac39df763581a3aebbd9
   branch: main
@@ -60,3 +74,7 @@ filed_at:
   aida_build_sha: b6bdfaf7f4a
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T04:51:20.104996474Z
+  completion_sha: 379c7c3c10e521909267b068586c4bf6399a35ad
