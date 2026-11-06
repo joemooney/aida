@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T16:43:28.170191012Z
+modified_at: 2026-11-06T17:08:37.026434252Z
 req_type: Task
 tags:
 - architecture
@@ -359,6 +359,12 @@ comments:
   created_at: 2026-11-06T16:25:59.805224665Z
   modified_at: 2026-11-06T16:25:59.805224665Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1d5-6e22-7c73-b286-cc25e27a972d
+  author: joe
+  content: 'Round 2 rework on 858e72278061 follows the binding 2026-11-06 16:22 UTC ruling. Uncommitted changes: scripts/check-store-writers.py, scripts/store-writers.toml, tests/test_store_writer_inventory.py, docs/internal/security/store-mutation-writers.md. Version 2 removes whole-file hashes and source-revision pins entirely. Site identity is path + enclosing item + sink kind; additions and stale sites refuse, while comments, whitespace, payload edits and repeated same-kind calls within one item do not. Wrapper fixed-point propagation uses qualified crate/module/type identities only, including generic impls; bare receiver/name collisions do not propagate. Python uses AST calls and shell uses quote/comment-aware lexical tokens. All aida-core/templates scripts, including actual hooks and terminal templates, are scanned. Final inventory: 3139 sink sites in 484 files, including 30 hook sites; 292 CLI/MCP operation mappings with explicit S2 blockers, including unresolved operations. Known add/edit/comment/claim/queue-done/findings/handoff/mail routes have individual sink references and concrete lock/gate/proposed-operation notes. Remaining unresolved receiver/trait/import/deferred-child routes are blockers, never read-only claims or routing authority. --regenerate preserves reviewed site/operation policy, adds new sites blocked, removes stale rows and refreshes operation references; failure output documents regeneration after merging current main. Validation: 28 targeted Python tests PASS, preserving all three original mutants plus collision, generic impl, hook, unrelated-edit, schema and operation coverage fixtures. make check-ci-fast PASS: 40 gates, including inventory and mutation tests; used documented AIDA_CARGO_NO_SLOT=1 after the sandbox slot wrapper stalled. A six-minute cold-build attempt timed out after both compile checks passed; the warmed bounded rerun passed in full. CI gate classification audit and git diff --check PASS. Full log: /tmp/task-3222-check-ci-fast.log. No remote Gates result at the unpublished new head can be claimed from this native seat. Host must commit/publish, merge current main and regenerate if it moved, and confirm remote Gates. Existing merge-hold requires its ordinary authorized review/clearance path. No commit, push, PR creation, queue completion, review record or pr ship performed; no runtime/IPC/permission changes or S1b/S2/S3 completion claimed.'
+  created_at: 2026-11-06T17:08:37.026434252Z
+  modified_at: 2026-11-06T17:08:37.026434252Z
+  session_id: 01a1b1be5d1e
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
