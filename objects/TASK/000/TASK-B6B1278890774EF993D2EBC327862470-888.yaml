@@ -1,0 +1,29 @@
+id: 01a1b1c6-79b2-72e1-a7fa-ee236c4d2788
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-888
+title: 'cosmetic: headless_background.rs:502 runs the extra sandboxed clone probe even …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2464, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: headless_background.rs:502 runs the extra sandboxed clone probe even when the preceding probe returned Unknown/HasSubmodules (head=None, so the result cannot matter); skip it when facts is None to save up to 5s.
+
+  PR: #3510
+  Reviewed sha: 34343005f959c18982153609cb83af4814c753f4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T16:52:16.946224984Z
+modified_at: 2026-11-06T16:52:16.946224984Z
+req_type: Task
+tags:
+- carried-from:BUG-2464
+- finding-hash:6e175353
+- from-review:PR-3510
+- kind:carried-forward
+filed_at:
+  code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dcb86ca85d
+  vendor: claude
