@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T02:07:07.649114482Z
+modified_at: 2026-11-06T02:07:51.222061687Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -32,6 +32,12 @@ comments:
   created_at: 2026-11-06T02:03:47.327635261Z
   modified_at: 2026-11-06T02:03:47.327635261Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae9c-c1b6-7bc1-8665-b3311e2365eb
+  author: joe
+  content: 'Implementation sketch for approval: add an explicit lane-scoped publication declaration carrying the requested commit subject and its Refs/completing trailer. Provision and clear the declaration alongside punt/hold signals for standalone, drain/resume, and background native implementer launches; bind it to the current lease/spec so stale declarations cannot affect another run. Before any commit/probe/push, resolve the publication argument as exactly one live non-epic spec belonging to the lease, refusing multi-spec/epic/unresolved scopes with the scope named. Validate declared subjects with pending_message_check plus exact lease/spec matching. A clean exit uses the declared form; absent declaration preserves ordinary completion; failed exits must remain Refs regardless of a completing declaration. Keep punt/hold vetoes first. Regression coverage: clean Refs subject survives host commit and PR title, ordinary clean completion, failed-exit downgrade, stale/mismatched/invalid declaration refusal before effects, and single-spec/epic/multi-spec scope validation across launch paths. Decision needed: approve this new handshake and choose its supported authoring surface (dedicated publication-intent command versus extending native aida ship -m). No code changed pending architecture-contract sign-off.'
+  created_at: 2026-11-06T02:07:51.222061687Z
+  modified_at: 2026-11-06T02:07:51.222061687Z
+  session_id: 01a1ae9bac50
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
