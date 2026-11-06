@@ -542,7 +542,10 @@ fn story1843_awaiting_mail_channel_shares_the_view() {
 
     std::fs::remove_dir_all(&r.sib).unwrap();
     let mail = awaiting_mail(&r.main, facts);
+    // A missing worktree does not hide independently readable urgent mail.
+    // trace:BUG-2449 | ai:codex
     assert_eq!(mail.unread, 1);
+    assert_eq!(mail.urgent, 1);
     assert!(mail.partial, "a missing worktree is never caught up");
 }
 
@@ -1184,4 +1187,118 @@ fn bug_032_own_view_dates_unstamped_and_seconds_scale_mail() {
         let shown = crate::mailbox_root::format_mail_timestamp(ts(id));
         assert!(!shown.starts_with("1970"), "{id} renders as {shown}");
     }
+}
+
+/// Failed receipt evidence must not turn historical mail into new inbox rows.
+/// Recovery uses the same receipts, without re-sending or acknowledging mail.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_failed_receipts_stay_unknown_until_the_next_read_recovers() {
+    use aida_core::mailbox_logical::{receipt_ledger_name, RECEIPT_ANCHOR_PATH};
+    let r = mail_repo();
+    let audience = operator();
+    for n in 0..100 {
+        crate::mailbox_store::write_message(
+            &r.sib,
+            &mail(&format!("old-{n:03}"), "advisor", n + 1, false),
+        )
+        .unwrap();
+    }
+    let view = view_from(&r.sib, &r.store, &audience);
+    let rows = view.records().iter().collect::<Vec<_>>();
+    let plan = plan_ack(&view, &rows).unwrap().unwrap();
+    // Write the durable anchor only, so a compatibility mirror cannot mask
+    // an anchor failure. Read again from another worktree.
+    plan.commit(&audience).unwrap();
+    assert!(view_from(&r.main, &r.store, &audience).unread().is_empty());
+    crate::mailbox_store::write_message(&r.main, &mail("fresh", "operator", 200, false)).unwrap();
+
+    let ledger = RECEIPT_ANCHOR_PATH
+        .iter()
+        .fold(r.main.join(".git"), |p, c| p.join(c))
+        .join(receipt_ledger_name("advisor"));
+    let original = std::fs::read(&ledger).unwrap();
+    // Exercise both parse failure and a refused non-regular receipt. Neither
+    // may be interpreted as absence of a receipt.
+    for refused in [false, true] {
+        if refused {
+            std::fs::remove_file(&ledger).unwrap();
+            std::os::unix::fs::symlink("missing-ledger", &ledger).unwrap();
+        } else {
+            std::fs::write(&ledger, b"{broken").unwrap();
+        }
+        let failed = view_from(&r.main, &r.store, &audience);
+        assert!(failed.is_partial());
+        assert_eq!(ids(&failed.unread()), ["fresh"]);
+        let rows = failed.records().iter().collect::<Vec<_>>();
+        assert_eq!(
+            rows.iter()
+                .map(|r| r.message.id.as_str())
+                .collect::<Vec<_>>(),
+            ["fresh"]
+        );
+        assert!(matches!(plan_ack(&failed, &rows), Err(AckError::Partial)));
+        let keys = audience.keys().map(str::to_string).collect::<Vec<_>>();
+        let notice = crate::mailbox_cmd::notice_text(&failed, &keys, 10);
+        assert!(notice.contains("partial"), "{notice}");
+        assert!(!notice.contains("old-"), "{notice}");
+        // An explicit ID read still resolves sibling-only mail, with a
+        // partial warning, even though uncertain inbox rows were withheld.
+        assert!(addressable_for(&r.main, &r.store, &audience)
+            .resolve("old-000")
+            .is_ok());
+        std::fs::remove_file(&ledger).unwrap();
+        std::fs::write(&ledger, &original).unwrap();
+    }
+    for root in [&r.main, &r.sib] {
+        let restored = view_from(root, &r.store, &audience);
+        assert!(!restored.is_partial(), "{:?}", restored.partial_note());
+        assert_eq!(ids(&restored.unread()), ["fresh"]);
+        assert_eq!(restored.records().len(), 101);
+    }
+    assert_eq!(std::fs::read(&ledger).unwrap(), original);
+}
+
+/// A per-ID source receipt failure has the same unknown semantics as an
+/// anchor failure; independently readable new mail remains visible.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_corrupt_local_receipt_is_not_an_unread_inbox_row() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.main, &mail("seen", "advisor", 1, false)).unwrap();
+    crate::mailbox_store::write_message(&r.main, &mail("fresh", "advisor", 2, false)).unwrap();
+    crate::mailbox_store::record_seen(&r.sib, "advisor", &["seen"]).unwrap();
+    let receipt = r.sib.join(".aida/mailbox/.read-receipts/advisor/seen.txt");
+    let original = std::fs::read(&receipt).unwrap();
+    std::fs::write(&receipt, "broken").unwrap();
+    let view = view_from(&r.main, &r.store, &audience);
+    assert!(view.is_partial());
+    assert_eq!(ids(&view.unread()), ["fresh"]);
+    std::fs::write(receipt, original).unwrap();
+    let restored = view_from(&r.main, &r.store, &audience);
+    assert!(!restored.is_partial());
+    assert_eq!(ids(&restored.unread()), ["fresh"]);
+}
+
+/// An incomplete inventory warns without blanking independently readable
+/// private mail, and the partial view still refuses acknowledgement.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_inventory_gap_keeps_new_mail_and_partial_warning() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.main, &mail("new", "operator", 10, true)).unwrap();
+    let mut limits = explicit_limits();
+    limits.max_roots = 1;
+    let view = read_own_mail(&r.main, &r.store, &audience, &limits);
+    assert_eq!(ids(&view.unread()), ["new"]);
+    assert!(view.is_partial());
+    let keys: Vec<String> = audience.keys().map(str::to_string).collect();
+    let notice = crate::mailbox_cmd::notice_text(&view, &keys, 10);
+    assert!(notice.contains("1 unread"), "{notice}");
+    assert!(notice.contains("partial"), "{notice}");
+    assert!(view.partial_note().unwrap().contains("InventoryOverBudget"));
+    let displayed: Vec<_> = view.records().iter().collect();
+    assert!(plan_ack(&view, &displayed).is_err());
 }

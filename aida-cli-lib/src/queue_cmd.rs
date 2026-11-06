@@ -5094,6 +5094,16 @@ pub(crate) fn handle_queue_command(
                 ));
             }
 
+            // A native seat cannot publish its pending edits. Resolve the
+            // branch from the host lease, then defer completion before any
+            // committed-only ownership/PR/test diagnostics or mutation.
+            // trace:TASK-2879 | ai:codex
+            if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
+                if let Ok(root) = find_project_root() {
+                    crate::queue_misc::refuse_native_queue_done(&root)?;
+                }
+            }
+
             // BUG-1244: fail closed before any lifecycle mutation when a
             // branch names another spec, commit evidence exclusively names
             // other specs, or the since-merge-base range cannot be read.
@@ -11448,6 +11458,91 @@ pub(crate) fn preflight_queue_work_branch(
     preflight_queue_work_branch_adopting(root, branch, None)
 }
 
+/// A finished review may leave its disposable checkout after releasing its
+/// lease. Retire only the default review tree, so ordinary occupied branches
+/// and explicitly placed worktrees retain the usual refusal.
+// trace:BUG-2457 | ai:codex
+fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u64) -> Result<()> {
+    let branch = forge.local_branch_for(n);
+    let path = crate::session_start::pickup_worktree_path(root, &branch)?;
+    let output = aida_core::git_ops::host_git_command(root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()?;
+    anyhow::ensure!(
+        output.status.success(),
+        "could not inspect review worktree ownership"
+    );
+    let inventory = String::from_utf8_lossy(&output.stdout);
+    let candidate = crate::worktree_reclaim::parse_worktree_entries(&inventory)
+        .into_iter()
+        .any(|wt| {
+            wt.branch.as_deref() == Some(branch.as_str())
+                && crate::worktree::canonical_or_self(&wt.path)
+                    == crate::worktree::canonical_or_self(&path)
+        });
+    if !candidate {
+        return Ok(());
+    }
+    let leased = list_leases(root)
+        .iter()
+        .any(|l| l.branch == branch || l.worktree_path == path);
+    let locked = inventory.split("\n\n").any(|record| {
+        record
+            .lines()
+            .any(|line| line == format!("branch refs/heads/{branch}"))
+            && record.lines().any(|line| line.starts_with("locked"))
+    });
+    let live = aida_core::liveness::probe_live_agent_processes()
+        .iter()
+        .any(|p| !p.stale_cwd && p.cwd.starts_with(&path));
+    let inside = std::env::current_dir().is_ok_and(|cwd| cwd.starts_with(&path));
+    if leased
+        || locked
+        || live
+        || inside
+        || working_tree_clean(&path) != Some(true)
+        || aida_core::worktree_holders::check_worktree_removal(&path).is_err()
+    {
+        return preflight_queue_work_branch(root, Some(&branch));
+    }
+    // Collect a legacy hold before removal, even if it predates this pickup.
+    // Unknown markers and unreadable directories retain the checkout.
+    let markers = path.join(".aida/merge-holds");
+    for dir in [path.join(".aida"), markers.clone()] {
+        match std::fs::symlink_metadata(&dir) {
+            Ok(metadata) => anyhow::ensure!(
+                metadata.is_dir(),
+                "review state directory is not a directory: {}",
+                dir.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    crate::merge_hold::adopt_worktree_hold(root, &path, n, std::time::UNIX_EPOCH)?;
+    match std::fs::symlink_metadata(&markers) {
+        Ok(metadata) => {
+            anyhow::ensure!(
+                metadata.is_dir(),
+                "review merge-hold directory is not a directory"
+            );
+            if std::fs::read_dir(&markers)?.next().transpose()?.is_some() {
+                return preflight_queue_work_branch(root, Some(&branch));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    aida_core::worktree_holders::check_worktree_removal(&path)?;
+    aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
+        root,
+        &path,
+        false,
+        "next-head review pickup",
+    )?;
+    Ok(())
+}
+
 /// [`preflight_queue_work_branch`], except that the orphan's tree `adopting`
 /// (`aida queue work --resume`) holds its own branch: that is the tree the
 /// pickup re-enters, and session start re-verifies it.
@@ -12357,6 +12452,16 @@ pub(crate) fn handle_queue_work(
             // Force-claim may retire a dead clone, so delegation and launch
             // capacity must succeed before this preflight mutates anything.
             // trace:BUG-2455 | ai:codex
+            // trace:BUG-2457 | ai:codex
+            if role == "reviewer"
+                && adopt_orphan.is_none()
+                && session_branch_override.is_none()
+                && path_override.is_none()
+            {
+                if let Some((forge, n)) = plan.review_target {
+                    retire_idle_review_worktree(&project_root, forge, n)?;
+                }
+            }
             preflight_queue_work_branch_reclaiming(
                 &project_root,
                 session_branch_override.or(review_branch.as_deref()),

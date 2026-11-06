@@ -534,8 +534,7 @@ fn bug_2435_bwrap_overlay_job_takes_its_slot_in_the_host_slot_dir() {
 // (a user namespace back to the host ids, no capabilities), so a host that
 // mounts the overlay but refuses the nested user namespace falls back to cold
 // instead of failing every job. A stand-in `unshare` records the argv.
-// trace:TASK-2829 | ai:claude
-// trace:TASK-2829 | ai:codex
+// trace:TASK-2829 trace:TASK-3111 | ai:codex
 #[test]
 fn task_2829_the_probe_runs_the_lane_job_bwrap_in_a_nested_userns() {
     let tmp = tempfile::tempdir().unwrap();
@@ -660,6 +659,90 @@ fn bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw() {
         assert!(!stdout.contains(refused), "{refused}: {stdout}");
     }
     assert!(stdout.contains("ROOT-STILL-RO"), "{stdout}");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "host\n");
+
+    // mount(8) checks uid before trying the syscall. Use the syscall directly
+    // for the capability control, retaining the same non-root uid and wrapper.
+    // The inherited read-only binds can also be locked by the user namespace:
+    // do not claim removing cap-drop alone makes those binds writable. A fresh
+    // job-owned read-only tmpfs demonstrates mount/remount authority separately.
+    // trace:TASK-3111 trace:TASK-2847 | ai:codex
+    // Host policy may forbid even a capable process from creating a mount
+    // namespace or mounting tmpfs. Only that positive control is optional;
+    // all production-profile denial assertions above remain required-live.
+    let control = r#"import ctypes, errno, os, sys
+libc = ctypes.CDLL(None, use_errno=True)
+admin = int(open('/proc/self/status').read().split('CapEff:')[1].split()[0], 16) & (1 << 21)
+assert bool(admin) == (sys.argv[1] == 'true'), 'unexpected CAP_SYS_ADMIN state'
+def setup_unavailable(operation, rc):
+    error = ctypes.get_errno()
+    if admin and rc == -1 and error in (errno.EPERM, errno.EACCES, errno.ENOSYS):
+        print(f'{operation} refused by host policy: errno={error}')
+        sys.exit(77)
+# Own the mount namespace: bwrap's /dev setup may leave its namespace
+# owned by a parent user namespace, independently of effective capabilities.
+rc = libc.unshare(0x20000) # CLONE_NEWNS
+if admin:
+    setup_unavailable('unshare(CLONE_NEWNS)', rc)
+    assert rc == 0, ctypes.get_errno()
+else:
+    assert rc == -1 and ctypes.get_errno() == errno.EPERM
+os.mkdir('/tmp/cap-control')
+rc = libc.mount(b'tmpfs', b'/tmp/cap-control', b'tmpfs', 1, None)
+if admin:
+    setup_unavailable('mount(tmpfs)', rc)
+    assert rc == 0, ctypes.get_errno()
+    assert libc.mount(None, b'/tmp/cap-control', None, 32, None) == 0, ctypes.get_errno()
+    open('/tmp/cap-control/proof', 'w').write('private tmpfs')
+    print('REMOUNT-CONTROL')
+else:
+    assert rc == -1 and ctypes.get_errno() == errno.EPERM
+    print('CAP-DROP-REFUSED')
+"#;
+    for retain_admin in [false, true] {
+        let argv = crate::session::lane_job_bwrap_argv(
+            &lane.seat,
+            &rw,
+            &[],
+            "/bin/sh",
+            vec![
+                "-c".into(),
+                "command -v python3 >/dev/null || { echo 'python3 unavailable'; exit 77; }; exec python3 -c \"$1\" \"$2\"".into(),
+                "cap-control".into(),
+                control.into(),
+                retain_admin.to_string(),
+            ],
+        );
+        let (program, mut args) = wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap();
+        let drop = args.iter().position(|arg| arg == "--cap-drop").unwrap();
+        if retain_admin {
+            args.splice(
+                drop + 2..drop + 2,
+                ["--cap-add".into(), "CAP_SYS_ADMIN".into()],
+            );
+        }
+        let out = std::process::Command::new(program)
+            .args(&args)
+            .output()
+            .unwrap();
+        if out.status.code() == Some(77) {
+            eprintln!(
+                "SKIP (capability control unavailable), retain_admin={retain_admin}: {}",
+                String::from_utf8_lossy(&out.stdout).trim()
+            );
+            continue;
+        }
+        assert!(out.status.success(), "retain_admin={retain_admin}: {out:?}");
+        let expected = if retain_admin {
+            "REMOUNT-CONTROL"
+        } else {
+            "CAP-DROP-REFUSED"
+        };
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains(expected),
+            "{out:?}"
+        );
+    }
     assert_eq!(std::fs::read_to_string(&victim).unwrap(), "host\n");
 }
 
