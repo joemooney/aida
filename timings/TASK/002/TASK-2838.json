@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2838",
+  "publishes": [
+    {
+      "at": "2026-11-06T09:19:40.558478686Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T18:43:28.525853605Z",
+      "spec": "TASK-2838",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T19:15:57.507112422Z",
+      "spec": "TASK-2838",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T01:29:55.359021251Z",
+      "spec": "TASK-2838",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T07:41:15.630990380Z",
+      "spec": "TASK-2838",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T09:19:08.386466955Z",
+      "spec": "TASK-2838",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3448
+      }
+    },
+    {
+      "ts": "2026-11-06T09:19:40.377322800Z",
+      "spec": "TASK-2838",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2aeb7cc34b17ef04d2b1af76c358df7de5181940",
+        "pr": 3448,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
