@@ -500,8 +500,6 @@ Use `aida-core::exec_context` for explicitly injected execution inputs and
 ambient reader, test environment writer or child allowlist. Existing exceptions
 are tracked by the [exact-site migration ledger](docs/internal/testing/exec-context-migration.md);
 this API foundation does not yet migrate production consumers or activate env_clear.
-The exact-site ratchet uses a normalized Python AST encoding independent of
-`ast.dump` defaults, with literal Rust/Python golden keys guarding digest drift.
 <!-- trace:STORY-2538 | ai:codex -->
 
 ## Cache read behavior

@@ -121,6 +121,13 @@ def rust_sites(source):
     aliases = {"std": ("std",), "env": ("std", "env")}
     imports, excluded = [], set()
     for i, t in enumerate(ts):
+        # trace:STORY-2538 | ai:codex
+        # Crate renames feed the same resolution as `use std as alias`.
+        if (ts[i:i + 4] == ["extern", "crate", "std", "as"]
+                and i + 5 < len(ts) and ts[i + 5] == ";"
+                and IDENT.fullmatch(ts[i + 4])):
+            imports.append((ts[i + 4], ("std",)))
+            excluded.update(range(i, i + 6))
         if t == "use":
             end = i + 1
             while end < len(ts) and ts[end] != ";":

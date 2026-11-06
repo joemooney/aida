@@ -70,6 +70,24 @@ class ExecContextRatchetTests(unittest.TestCase):
                 if "fn f" in source:
                     self.assertTrue(any(not site.startswith("<import>") for site in sites), sites)
 
+    def test_extern_crate_aliases_cannot_hide_new_sites(self):
+        # trace:STORY-2538 | ai:codex
+        empty = {"version": 1, "owner": "STORY-2538", "ceiling": 0, "sites": {}}
+        for source, operation in [
+            ('extern crate std as s; fn f() { s::env::var("X"); }', "var"),
+            ('extern crate std as r#s; fn f() { ::s::env::vars_os(); }', "vars_os"),
+            ('extern crate std as s; use s::env::var as read; fn f() { read("X"); }', "var"),
+            ('extern crate std as s; fn f() { s::env::set_var("X", "Y"); }', "set_var"),
+        ]:
+            with self.subTest(source=source):
+                sites = GUARD.rust_sites(source)
+                self.assertTrue(any(site.startswith(f"f:{operation}:") for site in sites), sites)
+                with self.assertRaisesRegex(ValueError, "new sites"):
+                    GUARD.check(Counter(sites), empty)
+        self.assertEqual([], GUARD.rust_sites(
+            'extern crate other as s; fn f() { s::env::var("X"); }'
+        ))
+
     def test_leading_absolute_paths_after_every_keyword(self):
         # Keep this independent of the scanner's keyword set so omitting a
         # keyword from the implementation is a failing mutant.

@@ -2,7 +2,7 @@
   "version": 1,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
-  "ceiling": 1217,
+  "ceiling": 1220,
   "sites": {
     "aida-cli-lib/build_git_stamp.rs:resolve_git_dirs:var_os:862398672fd9dfd7d2b4": 1,
     "aida-cli-lib/src/advisor.rs:advisor_home_dir:var_os:a68801ef1e0e74e746cc": 1,
@@ -60,6 +60,7 @@
     "aida-cli-lib/src/ci_failures.rs:section_for_spec:var_os:5bdeba83e777bc9892cf": 1,
     "aida-cli-lib/src/ci_idle_timeout.rs:ci_absolute_ceiling_secs:var:ef232b7e0c9d2324aed4": 1,
     "aida-cli-lib/src/ci_idle_timeout.rs:ci_idle_window_secs:var:66a357dc222b1f6be52c": 1,
+    "aida-cli-lib/src/ci_relay.rs:api:var:877c5cac913d13935a7b": 1,
     "aida-cli-lib/src/claim.rs:handle_claim:var:b2f19d32c23343449272": 1,
     "aida-cli-lib/src/claude_trust.rs:trust_enabled:var_os:45a2e356e92ce8dffbc5": 1,
     "aida-cli-lib/src/compete_cmd.rs:compete_vendor_dies_with_parent:var:604832c7c1a491b84b03": 1,
@@ -1156,6 +1157,8 @@
     "tests/test_skill_discovery.py:check:os.environ:d30b27289acc2502f701": 1,
     "tests/test_story_1843_pr3.py:check:os.environ:d30b27289acc2502f701": 1,
     "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:5669a4474ea92d5cb7d0": 1,
-    "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:7bd404f46f1c610eb55d": 1
+    "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:7bd404f46f1c610eb55d": 1,
+    "tests/test_work_ci_relay.py:<module>:os.environ:08a057369b0bd4bb9890": 1,
+    "tests/test_work_ci_relay.py:__init__:os.environ:d30b27289acc2502f701": 1
   }
 }

@@ -58,25 +58,21 @@ entries by operation plus exact expression digest, including multiplicity; the
 total ceiling cannot grow. Retained entries provide no relocation capacity.
 Changed expressions/operations and extra duplicate calls still refuse.
 
-Initial inventory (including import bindings and Python harness references):
+Migration ownership (including import bindings and Python harness references):
 
-| Area | Legacy sites | Migration owner/scope |
-| --- | ---: | --- |
-| aida-core | 119 | R4: storage, config, home, tools and core fixture helpers |
-| aida-cli | 65 | R4: CLI/MCP entry capture and contract fixtures |
-| aida-cli-lib | 890 | R4: functional clusters after coordination with PR-C |
-| aida-server | 31 | R4: explicit request/service boundaries |
-| aida-tui | 21 | R4: UI/service request boundaries |
-| tests | 91 | R4: Python harness reads and mutation bindings |
-| **Total** | **1,217** | R4 slices B–D; not a zero-legacy claim |
+| Area | Migration owner/scope |
+| --- | --- |
+| aida-core | R4: storage, config, home, tools and core fixture helpers |
+| aida-cli | R4: CLI/MCP entry capture and contract fixtures |
+| aida-cli-lib | R4: functional clusters after coordination with PR-C |
+| aida-server | R4: explicit request/service boundaries |
+| aida-tui | R4: UI/service request boundaries |
+| tests | R4: Python harness reads and mutation bindings |
 
-The initial inventory also includes one unchanged `forge_confirmation::pause`
-reader from PR #3493 (`5af57cdbc221`), merged from main after the first review.
-The 1,215-site reviewed inventory otherwise changes only function navigation
-keys corrected by enclosing-scope tracking; it gains no replacement allowances.
-The subsequent main merge (`b34755f19c7`) adds one unchanged Python environment
-read in `test_continuation_preserves_actual_terminal_stdin`. It is included in
-this initial ledger, bringing the current inventory to 1,217 sites.
+The ledger's `ceiling` field is the source of truth for the current total;
+per-area counts derive from its `sites` entries and multiplicities. This is
+not a zero-legacy claim. Counts are not duplicated here because main merges
+can change the bootstrap inventory before the ledger first lands.
 
 All workspace members are discovered from Cargo.toml, including build scripts,
 examples and Rust integration tests; `tests/**/*.rs` and `tests/**/*.py` are
@@ -91,7 +87,8 @@ production mutations. The only admitted capture is the one exact `vars_os()`
 call in `Environment::capture`, with multiplicity one.
 
 The guard recognizes direct/leading-`::` paths, grouped imports, module/function
-aliases, raw identifiers, globs and function references passed into helpers.
+aliases (including `extern crate std as alias`), raw identifiers, globs and
+function references passed into helpers.
 A binding to an environment function is itself a source site, so helper
 indirection does not exempt that source. Nested comments, raw/ordinary strings,
 character literals and lifetimes have mutant coverage, as do absolute paths
@@ -103,9 +100,7 @@ hash a canonical JSON AST walk with sorted field names, ordered children and
 typed literal values. Locations and absent optional fields are omitted,
 including the removed `Constant.kind` field; interpreter-specific `ast.dump`
 formatting is never hashed. Literal golden site keys for Rust and Python point
-to encoding drift before a whole-ledger comparison fails. The Python digest
-regeneration preserves the existing 85 Python keys (90 occurrences) and adds
-only that one merged-main site (86 keys, 91 occurrences). Rust keys are unchanged.
+to encoding drift before a whole-ledger comparison fails.
 
 This is a source-token ratchet, not a Rust compiler or whole-program taint
 analysis. It does not resolve cross-module reexports, macro expansion, dynamic
@@ -121,8 +116,12 @@ compares against the PR or merge-group base ledger: entries may shrink or
 relocate identical operation/expression fingerprints; the ceiling may only shrink.
 The first introduction bootstraps only when that base has no ledger. A missing
 base commit or unreadable/malformed ledger fails. Locally use `--base REF` to
-exercise the same growth check. After migrating a site, remove its entry (or
-reduce its multiplicity), recompute the ceiling, and rerun the guard. Never
+exercise the same growth check. While the base still has no ledger, rescan
+immediately after every merge/update from main, include inherited sites in the
+bootstrap ledger and recompute `ceiling`, then rerun `--base origin/main` before
+requesting review. Once the base has a ledger, its growth check applies.
+After migrating a site, remove its entry (or reduce its multiplicity), recompute
+the ceiling, and rerun the guard. Never
 regenerate the ledger to admit replacement/new ambient reads or mutations.
 
 ## Seam inventory and remaining acceptance
