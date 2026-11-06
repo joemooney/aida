@@ -19,6 +19,48 @@ c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
 
 
+# trace:TASK-3114 | ai:codex
+class PolicyRevisionTests(unittest.TestCase):
+    def test_policy_resolves_in_script_repository_from_outside_cwd(self):
+        original = c.command
+        with tempfile.TemporaryDirectory() as fixture, tempfile.TemporaryDirectory() as outside:
+            repo = Path(fixture)
+            script = repo / "scripts/containment/conformance.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("# policy lookup fixture\n")
+            original(["git", "init", "-q", str(repo)])
+            original(["git", "-C", str(repo), "add", "."])
+            original(["git", "-C", str(repo), "-c", "user.name=Test",
+                      "-c", "user.email=test@example.invalid", "-c", "core.hooksPath=/dev/null",
+                      "commit", "-qm", "fixture"])
+            expected = original(["git", "-C", str(repo), "rev-parse", "HEAD"])
+            original(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", expected])
+            # Give Git an unrelated cwd, as when launched outside the repo.
+            with mock.patch.object(c, "__file__", str(script)), mock.patch.object(
+                    c, "command", side_effect=lambda argv: original(argv, cwd=outside)):
+                sha = c.trusted_policy_sha()
+        self.assertEqual(sha, expected)
+
+    def test_missing_policy_ref_is_a_conformance_refusal_without_traceback(self):
+        with tempfile.TemporaryDirectory() as empty:
+            c.command(["git", "init", "-q", empty])
+            script = Path(empty) / "scripts/containment/conformance.py"
+            with mock.patch.object(c, "__file__", str(script)), mock.patch.object(
+                    c.sys, "argv", [str(script), "--vendor", "codex", "--output", empty]), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as exit:
+                    c.main()
+        self.assertEqual(exit.exception.code, 2)
+        self.assertTrue(stderr.getvalue().startswith("conformance: cannot resolve"))
+        self.assertIn("fetch origin main", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_git_timeout_is_reported_as_policy_refusal(self):
+        with mock.patch.object(c, "command", side_effect=c.subprocess.TimeoutExpired("git", 15)):
+            with self.assertRaisesRegex(ValueError, "cannot resolve.*origin/main"):
+                c.trusted_policy_sha()
+
+
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -165,6 +207,80 @@ else:
             with self.assertRaisesRegex(ValueError, "required vendor executable is not installed: agy"):
                 c.run(args)
             prepare.assert_not_called()
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_settings_allow_only_fixture_file_edits_and_exact_shell(self):
+        payload = self.root / "payload"
+        payload.mkdir()
+        runner, manifest = payload / "runner.py", payload / "manifest.json"
+        settings = c.agy_fixture_settings(self.workspace, runner, manifest)
+        invocation = c.shlex.join([c.sys.executable, str(runner), "--payload", str(manifest)])
+        self.assertEqual(settings, {"permissions": {"allow": [
+            f"write_file({self.workspace})", f"command({invocation})"]}})
+        for bad in (Path("/"), Path("relative"), self.workspace / "..", self.workspace / "glob*",
+                    self.workspace / "injection)\ncommand(*)"):
+            with self.assertRaises(ValueError):
+                c.agy_fixture_settings(bad, runner, manifest)
+        with self.assertRaises(ValueError):
+            c.agy_fixture_settings(self.workspace, self.workspace / "runner.py", manifest)
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_run_uses_private_settings_without_permission_bypass(self):
+        self.run_agy_fixture()
+
+    def test_agy_run_reports_stream_tool_safety_refusal_per_check(self):
+        self.run_agy_fixture("stdout.jsonl")
+
+    def test_agy_run_reports_private_log_tool_safety_refusal_per_check(self):
+        self.run_agy_fixture("runtime/log/cli-test.log", violation=True)
+
+    def run_agy_fixture(self, refusal_path=None, violation=False):
+        args = type("Args", (), {"vendor": "agy", "output": self.root / "agy-run", "timeout": 1})()
+        real_open = os.open
+        def open_fixture(path, flags, *args):
+            if flags == os.O_PATH | os.O_NOFOLLOW:
+                return real_open(__file__, flags)
+            return real_open(path, flags, *args)
+        def launch(argv, workspace, env, root, seconds, pass_fds):
+            self.assertNotIn("--dangerously-skip-permissions", argv)
+            self.assertEqual(argv[-2], "-p")
+            settings_path = Path(argv[argv.index("--settings") + 1])
+            self.assertEqual(settings_path.name, "conformance-settings.json")
+            generated = json.loads((root / "runtime" / settings_path.name).read_text())
+            self.assertEqual(generated, c.agy_fixture_settings(workspace, root / "payload/runner.py", root / "payload/manifest.json"))
+            self.assertEqual(generated["permissions"]["allow"][0], f"write_file({workspace})")
+            self.assertEqual((root / "runtime").stat().st_mode & 0o777, 0o700)
+            self.assertNotIn("write_file(*)", json.dumps(generated))
+            (root / "stdout.jsonl").touch()
+            if refusal_path:
+                log = root / refusal_path
+                log.parent.mkdir(parents=True, exist_ok=True)
+                log.write_text(json.dumps({"message": "auto unavailable; continuing in the default mode"}) + "\n" +
+                               json.dumps({"message": 'Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"'}) + "\n")
+            if violation:
+                (root / "outside/create-sentinel").write_text("measured violation")
+            return {"exit_code": 0}
+        real_relative = Path.is_relative_to
+        scratch = {Path(p).resolve() for p in ("/tmp", "/var/tmp", os.environ.get("TMPDIR", "/tmp"))}
+        def relative(path, other):
+            if path == args.output.resolve() and other in scratch:
+                return False
+            return real_relative(path, other)
+        with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), contextlib.redirect_stdout(io.StringIO()):
+            c.run(args)
+        report = json.loads((args.output / "report.json").read_text())
+        self.assertFalse(report["whole_lane_pass"])
+        self.assertFalse(report["production_launcher_credit"])
+        if refusal_path:
+            reason = "default-mode tool safety: unsupported_tool write_file"
+            self.assertEqual(report["unsupported_reason"], reason)
+            self.assertFalse(report["verified_terminal_receipt"])
+            self.assertEqual(set(report["checks"]), {"C0", "C1", "C2", "C3", "C4"})
+            for name, check in report["checks"].items():
+                self.assertEqual(check["unsupported_reason"], reason)
+                self.assertEqual(check["status"], "fail" if violation and name == "C1" else "unknown")
+        else:
+            self.assertIsNone(report["unsupported_reason"])
 
     def test_run_mounts_payload_outside_workspace_read_only(self):
         # Exercise real preparation/network controls, replacing only the vendor

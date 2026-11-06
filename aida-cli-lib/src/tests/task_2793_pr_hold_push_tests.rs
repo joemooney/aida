@@ -80,6 +80,69 @@ fn hold_fails_when_the_local_branch_is_missing() {
     assert!(err.to_string().contains("does not exist"), "{err}");
 }
 
+// trace:TASK-2852 | ai:codex
+#[test]
+fn hold_pushes_from_a_nested_directory_in_a_sibling_worktree() {
+    let (tmp, work, origin) = repo_with_bare_origin();
+    let sibling = tmp.path().join("sibling");
+    git(
+        &work,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "sibling-branch",
+            sibling.to_str().unwrap(),
+        ],
+    );
+    let nested = sibling.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    let local = git(&sibling, &["rev-parse", "HEAD"]);
+
+    assert_eq!(
+        push_and_verify_held_branch(&nested, "origin", "sibling-branch").unwrap(),
+        local
+    );
+    assert_eq!(
+        git(&origin, &["rev-parse", "refs/heads/sibling-branch"]),
+        local
+    );
+}
+
+// trace:TASK-2852 | ai:codex
+#[test]
+fn hold_preserves_a_seat_clone_refusal_for_an_existing_branch() {
+    let (_tmp, work, origin) = repo_with_bare_origin();
+    // A marker is sufficient for host_git_command to refuse. No containment
+    // capability is supplied: git must not run in this seat-owned repository.
+    std::fs::create_dir(work.join(".aida")).unwrap();
+    std::fs::write(work.join(".aida/seat-clone.toml"), "").unwrap();
+    assert!(!git(&work, &["rev-parse", "refs/heads/held-branch"]).is_empty());
+
+    let err = push_and_verify_held_branch(&work, "origin", "held-branch").unwrap_err();
+    let message = err.to_string();
+    assert!(message.contains("refusing to run git"), "{message}");
+    assert!(message.contains("configuration and hooks"), "{message}");
+    assert!(message.contains("PR is not held"), "{message}");
+    assert!(!message.contains("does not exist"), "{message}");
+    assert!(git(&origin, &["for-each-ref", "refs/heads/held-branch"]).is_empty());
+}
+
+// trace:TASK-2852 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn hold_preserves_git_lookup_errors_for_an_invalid_git_file() {
+    // Ignore TMPDIR, which may be inside a repository or a seat clone. An
+    // invalid gitfile stops Git discovery even if /tmp has a repository above it.
+    let tmp = tempfile::tempdir_in("/tmp").unwrap();
+    std::fs::write(tmp.path().join(".git"), "invalid gitfile\n").unwrap();
+    let err = push_and_verify_held_branch(tmp.path(), "origin", "held-branch").unwrap_err();
+    let message = err.to_string();
+    assert!(message.contains("invalid gitfile format"), "{message}");
+    assert!(message.contains("PR is not held"), "{message}");
+    assert!(!message.contains("does not exist"), "{message}");
+}
+
 #[test]
 fn hold_succeeds_when_the_push_lands_but_the_upstream_config_write_fails() {
     let (_tmp, work, origin) = repo_with_bare_origin();

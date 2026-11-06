@@ -461,6 +461,16 @@ fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
         assert!(message.contains("refusing to launch"), "{message}");
         assert!(message.ends_with(supported), "{message}");
         assert!(!message.contains("fix [contained.vendors]"), "{message}");
+        // Config cannot turn candidate adapter data into launch authority.
+        // trace:TASK-3048 | ai:codex
+        assert!(
+            message.contains("pending fresh all-tool conformance"),
+            "{message}"
+        );
+        assert!(
+            message.contains("host inventory is incomplete"),
+            "{message}"
+        );
 
         for (child, error) in [
             (

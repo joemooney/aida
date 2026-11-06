@@ -58,12 +58,28 @@ not evidence those tools are disabled: all-tool coverage remains unknown.
 
 A private vendor runtime is bind-mounted over the normal runtime directory;
 this overlay is **not** the tested enforcement boundary. Host filesystem and
-device access otherwise remain unchanged. AGY gets `--sandbox`, an exact
-session-local command permission, and read-only mounts of its existing token
-and operator settings. Codex gets AIDA's workspace-write/never/network-enabled
+device access otherwise remain unchanged. AGY gets `--sandbox`, a session-local
+exact payload-command permission and a `write_file` permission
+for only the canonical fixture workspace (AGY uses that permission for native
+writes and edits). These two rules live in `conformance-settings.json` in the
+private runtime; `--settings` points at its overlay path. The command executes
+only the immutable sibling payload and manifest, with its requested Cwd set to
+the fixture workspace. The payload intentionally attempts negative operations
+on disposable fixture siblings; this permission is probe admission, not proof
+of a shell write boundary. No arbitrary command prefix, outside file-tool
+grant, or `--dangerously-skip-permissions` is provided. AGY has read-only mounts
+of its existing token and operator settings. Codex gets AIDA's
+workspace-write/never/network-enabled
 preset and disposable equivalents of the TASK-2712 store/cache/mail/deputy
 write grants. Credentials are opened with `O_PATH` and mounted read-only,
 never read by the harness, copied, or printed. No operator settings change.
+
+The policy SHA is pinned from the harness repository's locally available
+`origin/main` commit, regardless of the caller's working directory. Fetch
+`origin main` in that repository before a host run to refresh this snapshot;
+the runner does not fetch or claim remote freshness. A missing or unreadable
+ref produces a `conformance:` refusal.
+<!-- trace:TASK-3114 | ai:codex -->
 
 The pinned `origin/main` SHA, vendor version/entrypoint hash, payload hash,
 argv, desired policy, actual surrogate grants, before/after hashes/modes, tool
@@ -72,6 +88,54 @@ sibling artifacts. Candidate invocations mirror native settings, **not** the
 production AIDA launcher: the report explicitly grants no production-launch
 credit. In particular, AGY's production launcher must remain refused until S2
 provides and independently proves the selected adapter.
+
+### AGY shared-boundary adapter preparation
+
+<!-- trace:TASK-3048 | ai:codex -->
+The binding 2026-11-05 advisor ruling limits this slice to fixture permissions
+and adapter data, while the advisor owns fresh host measurements. The shared
+launcher's `launch/agy.rs` records posture A, the private runtime/credential
+layout, safe option order before final `-p <prompt>`, allowed write classes,
+raw Git/store denial with mediated-only operations, and browser/URL/MCP/delegated
+tool disablement requirements. It introduces no separate enforcement engine.
+The candidate argv omits `--mode auto`: the advisor's host run observed auto
+unavailable and a fallback to default mode. The table records that observation;
+it grants no default-mode tool support. The harness retains the auto request
+as a measurement and reports tool-safety refusals found in its bounded stream,
+stderr or private `runtime/log/cli-*.log` diagnostics as `unsupported_reason`
+on the report and every C0–C4 check (for example, `default-mode tool safety:
+unsupported_tool write_file`). Measured failures remain failures. These
+vendor diagnostics explain missing evidence and grant no positive credit.
+Candidate data must not be passed through the existing Codex preparation arm,
+which has a different auth model and grants raw store writes.
+
+`daily-cloudcode-pa.googleapis.com` is observed evidence only. Approved auth
+hosts remain empty and the inventory remains explicitly incomplete. The table
+does not grant network access or mount credentials. All AGY containment requests,
+including trusted `agy = "aida"` or `"native"`, fail with a named pending-all-tool
+conformance refusal. There is no config switch to unlock the adapter. A future
+integrated launch must enforce the table through the shared pinned filesystem,
+IPC and egress boundary and demonstrate mediated-write positive controls and
+fresh all-tool conformance before that gate can change. This slice does not
+claim an integrated launch or complete the parent story's real-lane acceptance.
+
+### Non-completing adapter handoff
+
+<!-- trace:TASK-3048 | ai:codex -->
+PR #3426 is a preparation slice. TASK-3048 remains open: the advisor's fresh
+host evidence still has C0–C4 unknown, no vendor receipts, and an incomplete
+authentication-host inventory. The production AGY gate must remain refused.
+
+Land this PR only through `aida pr ship 3426 --merge-method squash --no-complete`
+from the authorized merge seat after review and merge-hold clearance. Keep its
+title ending in `(Refs STORY-2460, TASK-3048)` and a standalone
+`aida: no-complete` line in its body. The title suppresses branch-ID completion
+fallback; the body marker also makes ship append the declaration to the
+explicit squash body, overriding GitHub's `COMMIT_MESSAGES` default. This is
+necessary because an earlier branch commit has a completing task trailer.
+Rebase, merge-commit, and direct GitHub merges are outside this handoff: their
+unmodified commit messages could complete the unfinished task. These are
+PR-specific merge instructions, not a repository-wide merge-method restriction.
 
 ## Result rules
 
@@ -102,8 +166,9 @@ In particular,
 its fixed loopback CONNECT proxy bypasses environment proxies and its names
 resolve only through that fixture. A vendor's own proxy/DNS allow list may be
 correct yet unable to use this route. **This runner cannot earn native posture:**
-C3 has no pass rule. A C3-capable harness with an allowed route expressible by
-the vendor policy, allowed positive receipts, verified execution and denied-route
+C1/C2 cannot attest native file-tool denials, and C3 has no pass rule.
+A C3-capable harness with an allowed route expressible by the vendor policy,
+allowed positive receipts, verified execution and denied-route
 coverage is S2 work, alongside production lifecycle and all-tool acceptance tests.
 
 ## Tests
@@ -171,8 +236,8 @@ measurements neither revoke it nor call it conformant.
 
 The reassessment does **not** claim new vendor execution or validation of the
 new read-only layout against either vendor. Both script deputies were unavailable
-during rework; a fresh authorized host run is still required. Regenerate the
-conservative assessment reproducibly with the command below. The reassessment
+during rework; the later authorized host runs are summarized below. Regenerate
+the conservative assessment reproducibly with the command below. The reassessment
 never credits C0's terminal sub-check: a changed C0 target is the positive
 sentinel, not a violation, so it is `unknown` without a fresh receipt.
 
@@ -181,3 +246,19 @@ python3 scripts/containment/conformance.py \
   --reassess docs/testing/containment-conformance-2026-11-04.json \
   --output docs/testing/containment-conformance-2026-11-04.json
 ```
+
+## Fresh host-run follow-up: 2026-11-05
+
+<!-- trace:TASK-3114 | ai:codex -->
+
+The historical fresh-run follow-up (TASK-2863) is resolved by the advisor's
+2026-11-05 ruling and fresh-run record on STORY-2460 (12:29 and 12:41 UTC).
+The advisor selected fresh shipped-harness runs rather than offline reassessment.
+The recorded private outputs are `~/aida-conformance-codex-FRESH-20261105/`
+and `~/aida-conformance-agy-FRESH-20261105/`.
+Codex 0.166.0 produced C0 pass, C1 unknown and C2–C4 fail;
+AGY produced C0–C4 unknown with zero vendor receipts because headless mode
+refused the required file-write permission. Neither earned a whole-lane pass.
+The advisor assigned fixture-scoped AGY permissions and further conformance
+work to TASK-3048; posture A and the production AGY refusal remain in effect.
+These are the advisor's recorded results, not new measurements by this sweep.

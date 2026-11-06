@@ -181,6 +181,8 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **How `aida show` keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first `show` runs the full search as before and, if it finds nothing, notes that. The next `show` runs the full search once more, this time recording exactly which commits it covered. Later shows only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
 
+**Linked documentation in `aida show`.** The human view lists a **Documentation** section when any Doc entry is linked to the spec, whether the spec references the Doc or the Doc was filed about the spec with `aida doc add --about`; archived, Rejected and Superseded Docs are omitted. Each entry shows its ID, title, audience, scenario and tags, how it is linked, and the `aida doc show <DOC-ID>` command that prints it. Entries are grouped by authorship as recorded in their tags: `human` marks a human-authored explanation, `generated` or `ai-generated` marks generated prose, and anything else is listed as documentation whose authorship is not recorded. Nothing is written to the spec, and the TOON and JSON output are unchanged. The section is absent when no eligible Doc is linked. <!-- trace:TASK-1471 | ai:claude ai:codex -->
+
 **Key options (rationale only).**
 - `scan --update` — without `--update`, `scan` is a *dry read* that just reports discovered annotations; `--update` is what actually writes the links into the graph. The two-step is so you can preview before committing.
 - `scan --extensions` — defaults to `rs`; widen it (`rs,py,ts`) on a polyglot repo or the scan silently misses non-Rust traces.
@@ -420,3 +422,37 @@ round-trips. `validate --json` reports the label, full checksum and
 Intake-branch publication, policy enrollment, processing receipts and backup
 comment recovery are planned separately; these local commands do not publish.
 <!-- doc-intent: shaped by STORY-2479 -->
+
+### `aida condition check`
+
+Check a typed condition without changing requirements:
+
+```bash
+aida condition check 'spec:<spec-id>=completed'
+aida condition check 'pr:2577=merged' --json
+aida condition check 'release:>=0.17'
+aida condition check 'date:2026-12-01'
+aida condition check 'query:tag=operator-held,status=approved count>=5'
+aida condition check 'manual:joe'
+```
+
+The result is `met`, `not-met`, `unknown`, or `manual`. All four exit zero;
+malformed conditions and unreadable or missing spec data exit nonzero.
+`unknown` means the PR or release could not be observed and must not trigger
+a handoff or resurface a spec. `manual` always waits for the named person.
+`--format json` and `--json` emit the same condition, verdict and observation.
+
+Dates use UTC. Releases compare the highest local dotted numeric Git tag,
+ignoring prerelease and non-version tags; this does not fetch remote tags.
+With no release tags, every release comparison is `not-met`, including `<`
+and `<=`; no implicit zero version is assumed.
+Queries combine tag, status, type and feature filters with AND and count only
+non-archived specs. Comparisons accept `>=`, `>`, `<=`, `<`, and `=`.
+Spec and query checks read canonical objects strictly (or an explicit YAML
+store selected with the top-level `aida --file` option); archived SQLite stores
+must be migrated first.
+
+This first slice supplies the language and read-only checker. Deferral write
+gates, migration, scheduled resurfacing and relay/recurrence integration follow
+in separate slices.
+<!-- trace:STORY-2402 | ai:codex -->

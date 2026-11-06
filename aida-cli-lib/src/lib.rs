@@ -82,6 +82,8 @@ mod commit;
 mod compete;
 mod compete_cmd;
 mod complexity_calibration;
+// trace:STORY-2402 | ai:claude
+mod condition_cmd;
 mod config_cmd;
 mod spec_arg;
 // trace:BUG-1938 | ai:claude
@@ -281,6 +283,8 @@ mod shift;
 mod shipped_linkage;
 // trace:BUG-2221 | ai:claude — `aida show` negative-linkage ancestry proof.
 mod show_negative;
+// trace:TASK-1471 | ai:claude — linked Docs section in human `aida show`.
+mod show_docs;
 // trace:BUG-2221 | ai:claude — `aida show` incremental spec-id -> commit index.
 mod linkage_index;
 mod terminal_cmd;
@@ -412,6 +416,7 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 mod forge;
+mod forge_observed;
 mod forge_profiles;
 mod gate_cmd;
 // trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.
@@ -496,6 +501,8 @@ mod mail_retention;
 mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1843 | ai:claude
+// trace:TASK-3074 | ai:codex
+mod mailbox_action;
 mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mail_wake;

@@ -227,6 +227,9 @@ impl MailboxContext {
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResolvedAudience {
+    // Shared-inbox action assertions require more than an unbound role hint.
+    // trace:TASK-3074 | ai:codex
+    verified_binding: bool,
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
@@ -259,6 +262,7 @@ impl ResolvedAudience {
         // Callers of this constructor name roles only; `from_facts` splits
         // the vendor group out.
         Ok(Self {
+            verified_binding: false,
             private,
             human,
             roles: shared.clone(),
@@ -291,6 +295,7 @@ impl ResolvedAudience {
         }
         let mut audience = Self::from_identity_policy(private, human, shared)
             .expect("every key was checked as a bounded mailbox identity");
+        audience.verified_binding = facts.own_handle().is_some();
         audience.recipient = facts.own_recipient().cloned();
         let role = facts
             .role()
@@ -299,6 +304,11 @@ impl ResolvedAudience {
             .roles
             .retain(|k| role.as_deref().is_some_and(|r| r == k));
         audience
+    }
+
+    // trace:TASK-3074 | ai:codex
+    pub(crate) fn has_verified_binding(&self) -> bool {
+        self.verified_binding
     }
 
     /// This session's recipient UUID, when its handle reservation names it.
@@ -358,6 +368,7 @@ impl ResolvedAudience {
                 .collect()
         };
         let narrowed = Self {
+            verified_binding: self.verified_binding,
             private: pick(&self.private),
             human: pick(&self.human),
             shared: pick(&self.shared),

@@ -569,18 +569,51 @@ impl Fixture {
     /// Run the launcher against `stub_body` (the mock vendor's shell body;
     /// `$n` is its 1-based invocation, its argv lands in `args.<n>`).
     fn run(&self, stub_body: &str) -> anyhow::Result<()> {
+        self.run_vendor(stub_body, crate::session::HeadlessVendor::Claude, false)
+    }
+
+    fn run_vendor(
+        &self,
+        stub_body: &str,
+        vendor: crate::session::HeadlessVendor,
+        contained: bool,
+    ) -> anyhow::Result<()> {
+        self.run_mode(stub_body, vendor, contained, 0)
+    }
+
+    fn run_mode(
+        &self,
+        stub_body: &str,
+        vendor: crate::session::HeadlessVendor,
+        contained: bool,
+        mode: u8,
+    ) -> anyhow::Result<()> {
         let mock = self.path("mock-claude.sh");
+        // Resumes issue a real delegated child grant. The fake Codex vendor
+        // acknowledges its model-free preflight separately from the child
+        // invocation whose exit/publication this fixture observes.
+        // trace:STORY-2475 | ai:codex
+        let preflight = if mode == 2 && vendor == crate::session::HeadlessVendor::Codex {
+            "for arg in \"$@\"; do\n\
+             if [ \"$arg\" = sandbox ]; then\n\
+             test -n \"$AIDA_SESSION_GRANT\" || exit 42\n\
+             test \"$AIDA_SESSION_ROLE\" = implementer || exit 43\n\
+             echo 'seat_grant_valid=true expected_seat=true'\n\
+             exit 0\nfi\ndone\n"
+        } else {
+            ""
+        };
         crate::test_exec::write_executable(
             &mock,
             format!(
-                "#!/bin/sh\nn=$(cat \"{count}\" 2>/dev/null || echo 0); n=$((n+1)); echo $n > \"{count}\"\n\
+                "#!/bin/sh\n{preflight}n=$(cat \"{count}\" 2>/dev/null || echo 0); n=$((n+1)); echo $n > \"{count}\"\n\
                  for a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"{args}.$n\"\n{stub_body}\n",
                 count = self.path("count").display(),
                 args = self.path("args").display(),
             ),
         );
         let home = self.path("home");
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_HOME", Some(home.to_str().unwrap())),
             ("HOME", Some(home.to_str().unwrap())),
             ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
@@ -590,20 +623,72 @@ impl Fixture {
             ("AIDA_TEE_HEADLESS", Some("0")),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ]);
+        if mode == 2 {
+            let subject = "story-2475-fixture";
+            env.set_key("AIDA_USER", subject);
+            env.set_key("AIDA_SESSION_ROLE", "advisor");
+            let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+                &self.worktree,
+                subject,
+                "advisor",
+                &["implementer"],
+            );
+            env.set_key(crate::gate::seat_authority::GRANT_ENV, parent);
+        }
         let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
             cause: "test".into(),
         };
+        if mode > 0 {
+            let tee = crate::headless_tee::TeeOptions {
+                enabled: false,
+                label: None,
+            };
+            let log = self.path("child.jsonl");
+            let status = if mode == 1 {
+                crate::session::run_vendor_headless_to_exit(
+                    Some(&self.project),
+                    vendor,
+                    "/aida-pickup STORY-9",
+                    "019e0000-0000-7000-8000-000000000044",
+                    &log,
+                    &tee,
+                    contained,
+                    Some(&self.lease),
+                    "implementer",
+                    &grant,
+                    Some((&self.worktree, "claude/story-9")),
+                )?
+            } else {
+                crate::queue_cmd::run_queue_resume_to_exit(
+                    Some(&self.project),
+                    &crate::session::HeadlessResume {
+                        vendor,
+                        session_id: "019e0000-0000-7000-8000-000000000044",
+                        resume_id: "fixture-thread",
+                    },
+                    "/aida-pickup STORY-9",
+                    &log,
+                    &self.worktree,
+                    &tee,
+                    contained,
+                    "implementer",
+                    (&self.project, "STORY-9", &self.lease),
+                )?
+            };
+            anyhow::ensure!(status.success(), "mock child failed");
+            return Ok(());
+        }
         si::run(si::Launch {
             project_root: &self.project,
-            vendor: crate::session::HeadlessVendor::Claude,
+            vendor,
             prompt: "/aida-pickup STORY-9",
             session_id: "019e0000-0000-7000-8000-000000000044",
             spec: "STORY-9",
             lease_id: &self.lease,
             branch: "claude/story-9",
-            contained: false,
+            contained,
             child_grant: &grant,
-            host_main: None,
+            host_main: contained.then_some(self.project.as_path()),
         })
     }
 
@@ -938,4 +1023,101 @@ fn a_run_that_did_not_park_is_not_resumed() {
     assert_eq!(crate::exit_code_for_error(&err), si::NO_PR_EXIT_CODE);
     assert_eq!(fx.invocations(), 1);
     assert!(!format!("{err:#}").contains("uncommitted"), "{err:#}");
+}
+
+// Exercise the actual standalone launcher after a mock Codex child exits;
+// the existing commit seam observes the publication call on the host thread.
+// trace:STORY-2475 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn story_2475_all_codex_lane_exits_publish_after_child_exit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::HeadlessVendor;
+    use crate::ship_from_seat::{with_post_exit_step, PostExitCommit};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    for mode in [0, 1, 2] {
+        for (vendor, contained, count) in [
+            (HeadlessVendor::Codex, true, 1),
+            (HeadlessVendor::Codex, false, 0),
+            (HeadlessVendor::Claude, false, 0),
+        ] {
+            let fx = Fixture::new("c0ffee247501");
+            fx.git(&fx.project, &["init", "-q", "-b", "main"]);
+            std::fs::write(
+                fx.project.join(".aida/config.toml"),
+                "[forge]\nprovider = \"pure-git\"\n[contained.vendors]\ncodex = \"native\"\n",
+            )
+            .unwrap();
+            fx.git(&fx.project, &["add", ".aida/config.toml"]);
+            fx.git(&fx.project, &["commit", "-qm", "trusted native policy"]);
+            fx.git(
+                &fx.project,
+                &["update-ref", "refs/remotes/origin/main", "HEAD"],
+            );
+            let _ambient = crate::seat_clone::LauncherMainPin::new(&fx.project);
+
+            let observed = Arc::new(AtomicUsize::new(0));
+            let calls = observed.clone();
+            let marker = fx.path("child-exited");
+            let child = format!("touch '{}'\n", marker.display());
+            // Reproduce the CI refusal: resumes validate policy in the seat,
+            // so an unrelated empty repository must not inherit the host opt-in.
+            // trace:STORY-2475 | ai:codex
+            if mode == 2 && vendor == HeadlessVendor::Codex && contained {
+                let error = fx
+                    .run_mode(&child, vendor, contained, mode)
+                    .expect_err("an unprovisioned seat has no trusted native policy");
+                assert!(
+                    format!("{error:#}").contains("cannot run an AIDA-contained session"),
+                    "{error:#}"
+                );
+                assert!(!marker.exists(), "the refused resume must not launch");
+            }
+            // A real seated clone carries origin/main and its trusted policy.
+            // Keep the policy check intact and repair the fixture for every case.
+            std::fs::remove_dir_all(&fx.worktree).unwrap();
+            fx.git(
+                &fx.project,
+                &[
+                    "clone",
+                    "-q",
+                    fx.project.to_str().unwrap(),
+                    fx.worktree.to_str().unwrap(),
+                ],
+            );
+            fx.git(&fx.worktree, &["checkout", "-qb", "claude/story-9"]);
+            let check_marker = marker.clone();
+            let expected_tree = fx.worktree.clone();
+            si::TEST_PR.with(|p| *p.borrow_mut() = Some(None));
+            let result = with_post_exit_step(
+                Box::new(move |_, tree, spec, lane, clean| {
+                    assert!(check_marker.exists(), "publication must follow child exit");
+                    assert_eq!(tree, expected_tree);
+                    assert_eq!(spec, "STORY-9");
+                    assert_eq!(lane, "c0ffee247501");
+                    assert!(clean);
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    PostExitCommit::NotASeat
+                }),
+                || fx.run_mode(&child, vendor, contained, mode),
+            );
+            si::TEST_PR.with(|p| *p.borrow_mut() = None);
+            assert_eq!(
+                result.is_ok(),
+                mode != 0,
+                "mode={mode} vendor={vendor:?} contained={contained}: {result:?}"
+            );
+            assert!(marker.exists(), "mock child must have run: mode={mode} vendor={vendor:?} contained={contained}: {result:?}");
+            assert_eq!(
+                observed.load(Ordering::SeqCst),
+                count,
+                "mode={mode} vendor={vendor:?} contained={contained}: {result:?}"
+            );
+        }
+    }
 }
