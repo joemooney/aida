@@ -528,7 +528,7 @@ Publication requires `--reviewed` when adding a file. It retains the exact
 validated bytes at `observations/<sha256>.json`; an exact duplicate is a no-op,
 while different serialization with the same digest refuses. Full reachable
 history must be orphaned, linear and additive, containing only non-executable
-observation JSON and receipt JSON. Unknown paths, empty trees, foreign commit
+observation JSON, processing-receipt JSON, and enrolled CI-result JSON. Unknown paths, empty trees, foreign commit
 metadata, links, tampering, rewritten/deleted files, invalid receipts and denied
 text refuse, including in intermediate commits. Validation is bounded to 4096
 commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
@@ -652,3 +652,21 @@ This first slice supplies the language and read-only checker. Deferral write
 gates, migration, scheduled resurfacing and relay/recurrence integration follow
 in separate slices.
 <!-- trace:STORY-2402 | ai:codex -->
+
+
+### `aida intent ci` — restricted work CI return channel
+
+<!-- trace:STORY-2480 | ai:codex -->
+
+`intent ci enroll --file <profile.json> --reviewed` enrolls a clone-local CI
+profile after live forbidden branch/tag push probes. Home alone creates retained
+requests with `intent ci request --attempt <positive-u32> --sha <full-sha>`.
+`intent ci poll` performs one bounded outbound work polling pass;
+`intent ci process` validates returned receipts at home and publishes the stable
+native check `aida/work-ci`. Home assigns attempts, retaining immutable exact-SHA
+`refs/aida/ci/<attempt>` refs; work pipeline IDs never grant admission.
+
+Read [setup, server enforcement, supported inventory and crash recovery](../agents/work-ci-relay.md)
+before enrollment. Unsupported dynamic job/test inventory refuses. Work receives
+no home status/API credential. CI results share the existing isolated intake
+transport and lock; there is no separate request registry or automatic rollout.
