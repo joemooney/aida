@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T11:59:23.216312925Z
+modified_at: 2026-11-06T12:20:25.344583564Z
 req_type: Story
 tags:
 - architecture
@@ -500,6 +500,12 @@ comments:
   created_at: 2026-11-06T11:57:18.749108006Z
   modified_at: 2026-11-06T11:57:18.749108006Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0cd-9480-7053-bc06-bad61d0848f1
+  author: joe
+  content: 'PR-B native-seat implementation is staged as uncommitted working-tree edits from origin/main c09c3a01af5; no recovery patch used. Converted fresh Codex session/exec, compete, dispatch, and Native/None phase builders to LaunchContext/spawn_agent, retaining finalization after identity/grant setup. Dispatch Codex remains an AIDA control child; background Claude handoffs now carry no seat keys. Added amendment-7 slot/target/settings validation primitives (renderers remain next slice), posture table and phase-builder tests; exact source ratchet shrinks 170 to 157 and both grant/role caller inventories match. Kept set_contained_env_for_children because queue-work still calls it; resume paths remain out of scope. make check-ci-fast: 38/38 passed; cargo fmt --all -- --check and git diff --check passed. Initial cargo run compiled an intermediate tree: 14 passed, old compiled ledger mismatch plus two existing reviewer golden fixtures resolving the live cwd; fixture repairs now use the existing one-test child isolation with temporary cwd. make test-touched is rebuilding, with the final required story_2326 filter queued behind its build lock; results pending. Native Refs publication declaration recorded: [AI:codex] feat(launch): route native vendor builders through launch context PR-B (Refs STORY-2326). No commit, push, PR creation, review record, or queue completion from this seat.'
+  created_at: 2026-11-06T12:20:25.344583564Z
+  modified_at: 2026-11-06T12:20:25.344583564Z
+  session_id: 01a1b0ba49a2
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
