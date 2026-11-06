@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T14:09:01.737001166Z
+modified_at: 2026-11-06T14:58:27.593919203Z
 req_type: Task
 tags:
 - architecture
@@ -37,6 +37,12 @@ comments:
     3. S1a acceptance: every row has a sink, lock, gate and disposition, and unresolved rows are listed as cutover blockers. The guard fails on the three mutants (a raw fs writer, a wrapper caller, a cache-on-read writer). Use the LIGHT gate: python unit tests plus make check-ci-fast, no cargo needed. Title the PR (TASK-3222).
   created_at: 2026-11-06T14:08:53.447881327Z
   modified_at: 2026-11-06T14:08:53.447881327Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b15e-4489-77a3-81c7-ecc090fbaa7d
+  author: joe
+  content: 'ADVISOR: added scope from the TASK-3222 sketch refresh: bind_contained_launch_worker accepts an empty grant ID. A service-required launch must refuse an absent or empty binding explicitly, with a test.'
+  created_at: 2026-11-06T14:58:27.593919203Z
+  modified_at: 2026-11-06T14:58:27.593919203Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
