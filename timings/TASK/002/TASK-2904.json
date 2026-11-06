@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2904",
+  "publishes": [
+    {
+      "at": "2026-11-06T03:57:39.412333782Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-06T03:08:58.658957806Z",
+      "spec": "TASK-2904",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T03:57:21.594174300Z",
+      "spec": "TASK-2904",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3469
+      }
+    },
+    {
+      "ts": "2026-11-06T03:57:39.253841068Z",
+      "spec": "TASK-2904",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "44f957f8b8466f6213843fa0c6b882c4d83294b8",
+        "pr": 3469,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
