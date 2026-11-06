@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T22:42:41.399374828Z
+modified_at: 2026-11-06T22:42:44.317377081Z
 req_type: Task
 tags:
 - from-review
@@ -70,6 +70,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Inventory/include/native-gate code meets TASK-3232 acceptance by reading and all 3 round-1 findings are fixed, but CI (gates) is red because of this PR: tests/test_ci_test_shards.py rejects the new nextest override and the 480s budget; lib shards still running so AC1/AC3 test evidence is unverified.. No triage reason was given.'
   created_at: 2026-11-06T22:42:41.399371340Z
   modified_at: 2026-11-06T22:42:41.399371340Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b307-536f-7652-82cd-4967c9ba70d9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3232):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 56fdf0a5272c
+    Recorded: 2026-11-06T22:40:59.437255963+00:00
+    Findings:
+    1. [blocker] CI (gates) step 'STORY-1853 test-speed tooling tests' (job 128189748175) fails deterministically on this PR. tests/test_ci_test_shards.py:306 asserts every [[profile.ci.overrides]] in .config/nextest.toml has test-group == 'serial'; the new override at .config/nextest.toml:63-66 has no test-group key (KeyError). tests/test_ci_test_shards.py:309-312 asserts max(budget) <= 10 * top-level terminate-after (180s); scripts/test-time-budget.toml:37 adds a 480s entry. Fix: update the ratchet test to allow this one bounded exception (e.g. compare each budget entry with the kill of the override that matches it, and accept an override with threads-required/slow-timeout and no test-group), or restructure the override; then run make check-ci-fast before pushing, which runs this gate.
+    2. [evidence] AC1 (AIDA-sized >=48 MiB multi-SHA bounded inventory) and AC3 (native statuses consumed by PR/train required-check gates) rest on aida_sized_relay_native_statuses_reach_required_pr_and_train_gates (aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:351), which runs in the lib shards. CI lib-0/lib-1/rest were still in progress at 56fdf0a5; the round-2 implementer note says the three-SHA contract was not rerun locally. The next round must show a green lib shard that includes this test, within its 480s/540s budget.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T22:42:44.207667655Z
+  modified_at: 2026-11-06T22:42:44.207667655Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
