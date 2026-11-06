@@ -66,7 +66,17 @@ fn story2402_s4_verdicts_age_and_holds() {
     row.archived = true;
     row.deferred_until = Some("invalid".into());
     assert_eq!(action(&row, &Facts, now, 14).unwrap().0, Action::Keep);
-    assert!(action(&parked("invalid"), &Facts, now, 14).is_err());
+    for trigger in [
+        "invalid",
+        "Codex ships command-backed status lines",
+        "spec:",
+        "date:bad",
+    ] {
+        let (outcome, evidence, migration) = action(&parked(trigger), &Facts, now, 14).unwrap();
+        assert_eq!(outcome, Action::Keep);
+        assert!(evidence.contains("unknown"));
+        assert!(migration);
+    }
     assert!(action(&parked("spec:TASK-404=completed"), &Facts, now, 14).is_err());
 }
 
@@ -138,8 +148,19 @@ fn story2402_s4_persistence_dry_run_routing_and_repeat() {
             .len(),
         1
     );
-    // Parse errors fail the job while independent valid rows still make progress.
-    let invalid = backend.add_requirement(parked("bad condition")).unwrap();
+    // Queue removal is not hold clearance: unchanged held work is routed again.
+    backend.queue_remove("role:human", &hold.id).unwrap();
+    sweep(&backend, &[hold.clone()], &Facts, now, false, 14).unwrap();
+    assert!(backend
+        .queue_list("role:human", true)
+        .unwrap()
+        .iter()
+        .any(|entry| entry.requirement_id == hold.id));
+    assert!(backend.get_requirement(&hold.id).unwrap().unwrap().deferred);
+    // Real evaluation errors fail while independent valid rows still progress.
+    let invalid = backend
+        .add_requirement(parked("spec:TASK-404=completed"))
+        .unwrap();
     let next = backend.add_requirement(parked("date:2026-01-01")).unwrap();
     assert!(sweep(&backend, &[invalid, next.clone()], &Facts, now, false, 14).is_err());
     assert!(!backend.get_requirement(&next.id).unwrap().unwrap().deferred);
@@ -188,4 +209,68 @@ fn story2402_s4_cli_and_schedule() {
         Some("CronJobFailed:defer-resurface")
     );
     assert_eq!(route["seats"][0].as_str(), Some("advisor"));
+    assert_eq!(route["enabled"].as_bool(), Some(true));
+}
+
+// Exercise production's raw canonical snapshot against the targeted backend reader.
+#[test]
+fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let init = crate::test_exec::output(
+        crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "--initial-branch=main", "--quiet"]),
+    )
+    .unwrap();
+    assert!(init.status.success());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "implementer", &[]);
+    let path = dir.path().join(".aida-store");
+    std::fs::create_dir_all(&path).unwrap();
+    aida_core::work_binding::bootstrap(&path).unwrap().unwrap();
+    let backend = CachedGitBackend::open(&path, &dir.path().join("cache.db")).unwrap();
+    for trigger in [
+        "Codex ships command-backed status lines",
+        "upstream release ships",
+        "advisor decides",
+    ] {
+        backend.add_requirement(parked(trigger)).unwrap();
+    }
+    let before = crate::condition_cmd::read_store(dir.path(), Some(&path)).unwrap();
+    let bytes_before: Vec<_> = before
+        .requirements
+        .iter()
+        .map(|r| {
+            let object = aida_core::object_store::object_path(
+                &path.join("objects"),
+                r.spec_id.as_deref().unwrap(),
+            )
+            .unwrap();
+            (object.clone(), std::fs::read(object).unwrap())
+        })
+        .collect();
+    // Only unparseable deferrals: success, exact count, no object/queue writes.
+    assert_eq!(
+        sweep(
+            &backend,
+            &before.requirements,
+            &Facts,
+            Utc::now(),
+            false,
+            14
+        )
+        .unwrap(),
+        3
+    );
+    run(dir.path(), &path, &backend, false, 14).unwrap();
+    for (object, bytes) in bytes_before {
+        assert_eq!(std::fs::read(object).unwrap(), bytes);
+    }
+    assert!(backend.queue_list("role:human", true).unwrap().is_empty());
+    let met = backend.add_requirement(parked("date:2000-01-01")).unwrap();
+    run(dir.path(), &path, &backend, false, 14).unwrap();
+    let result = backend.get_requirement(&met.id).unwrap().unwrap();
+    assert!(!result.deferred);
+    assert_eq!(result.comments.len(), 1);
+    assert_eq!(result.status, met.status);
 }

@@ -112,17 +112,6 @@ fn help_surface_matches_golden_snapshot() {
     }
 }
 
-// Include the full help/catalog contract in the bounded trigger-slice test filter.
-// trace:STORY-2402 | ai:codex
-#[test]
-#[cfg_attr(
-    not(feature = "tui"),
-    ignore = "golden snapshot requires default features"
-)]
-fn story2402_s4_help_surface_matches_golden_snapshot() {
-    help_surface_matches_golden_snapshot();
-}
-
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.

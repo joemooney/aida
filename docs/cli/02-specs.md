@@ -337,15 +337,19 @@ Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `re
 Evaluates typed conditions on deferred/parked specs without changing lifecycle
 status. A met condition clears a plain deferral and records the observation in
 an audit comment. Met operator holds go to `aida human` for a decision and stay
-held. Manual conditions older than 14 days also route to that queue, once;
-`--manual-age-days N` changes the threshold. Missing timestamps or triggers
+held. Manual conditions older than 14 days also route to that queue;
+`--manual-age-days N` changes the threshold. Existing queue rows are not duplicated.
+Removing a queue row without lifting the hold or changing the condition allows
+it to be routed again on the next sweep. Missing timestamps or triggers
 stay parked, and archived specs are skipped. Use `--dry-run` to preview actions
 without writing specs or queues.
 
 Unknown observations (including failed forge/release probes) are reported and
-left parked, with a successful exit. Malformed conditions and internal errors
-produce a nonzero exit after the remaining specs are checked. Legacy free-text
-triggers need migration before they can be evaluated. Concurrently edited specs
+left parked, with a successful exit. Free-text and unparseable triggers are
+also Unknown and remain unchanged; the run reports `N deferrals awaiting
+typed-condition migration` as information. Only real evaluation errors (such
+as a parseable condition referencing a missing spec) and store/internal errors
+produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
 are retained for a later sweep. This repository registers the sweep hourly as
 the timer-only `defer-resurface` job and routes job failures to the advisor.
 

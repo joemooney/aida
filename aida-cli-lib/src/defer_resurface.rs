@@ -19,14 +19,26 @@ fn action(
     facts: &dyn ConditionFacts,
     now: DateTime<Utc>,
     manual_age_days: u32,
-) -> Result<(Action, String)> {
+) -> Result<(Action, String, bool)> {
     if !req.deferred || req.archived {
-        return Ok((Action::Keep, "not an active deferral".into()));
+        return Ok((Action::Keep, "not an active deferral".into(), false));
     }
     let Some(raw) = req.deferred_until.as_deref() else {
-        return Ok((Action::Keep, "no condition recorded".into()));
+        return Ok((Action::Keep, "no condition recorded".into(), false));
     };
-    let condition: Condition = raw.parse()?;
+    // Until the one-time migration lands, unparseable triggers are Unknown.
+    // They grant no action and must not turn the hourly job into a failure.
+    // trace:STORY-2402 | ai:codex
+    let condition: Condition = match raw.parse() {
+        Ok(condition) => condition,
+        Err(_) => {
+            return Ok((
+                Action::Keep,
+                "unknown (awaiting typed-condition migration)".into(),
+                true,
+            ));
+        }
+    };
     let evaluation = condition.evaluate(facts)?;
     let action = match evaluation.verdict {
         Verdict::Met if req.deferred_reason.is_some() || req.tags.contains("operator-held") => {
@@ -54,7 +66,7 @@ fn action(
         }
         _ => evidence,
     };
-    Ok((action, evidence))
+    Ok((action, evidence, false))
 }
 
 /// Compare the complete observed row under the writer lock. An edited trigger,
@@ -96,6 +108,7 @@ pub(crate) fn run(
         dry_run,
         manual_age_days,
     )
+    .map(|_| ())
 }
 
 fn sweep(
@@ -105,12 +118,14 @@ fn sweep(
     now: DateTime<Utc>,
     dry_run: bool,
     manual_age_days: u32,
-) -> Result<()> {
+) -> Result<usize> {
     let mut errors = Vec::new();
+    let mut awaiting_migration = 0;
     for req in rows.iter().filter(|r| r.deferred && !r.archived) {
         let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
         let result = (|| -> Result<()> {
-            let (action, evidence) = action(req, facts, now, manual_age_days)?;
+            let (action, evidence, needs_migration) = action(req, facts, now, manual_age_days)?;
+            awaiting_migration += usize::from(needs_migration);
             println!(
                 "{id}: {action:?} — {evidence}{}",
                 if dry_run { " (dry run)" } else { "" }
@@ -121,12 +136,8 @@ fn sweep(
             match action {
                 Action::Resurface => {
                     let mut changed = Ok(false);
-                    backend.update_atomically(|store| {
-                        if let Some(current) =
-                            store.requirements.iter_mut().find(|r| r.id == req.id)
-                        {
-                            changed = clear_if_unchanged(current, req, &evidence, now);
-                        }
+                    backend.update_spec_atomically(req, |current| {
+                        changed = clear_if_unchanged(current, req, &evidence, now);
                     })?;
                     if !changed? {
                         println!("{id}: changed during evaluation; retained for the next sweep");
@@ -173,12 +184,13 @@ fn sweep(
             errors.push(format!("{id}: {error:#}"));
         }
     }
+    println!("{awaiting_migration} deferrals awaiting typed-condition migration");
     anyhow::ensure!(
         errors.is_empty(),
         "deferral sweep errors: {}",
         errors.join("; ")
     );
-    Ok(())
+    Ok(awaiting_migration)
 }
 
 #[cfg(test)]
