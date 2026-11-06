@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:24:45.297488765Z
-modified_at: 2026-11-06T01:33:14.767414458Z
+modified_at: 2026-11-06T01:35:55.602954868Z
 req_type: Bug
 tags:
 - area:review
@@ -48,6 +48,12 @@ comments:
   created_at: 2026-11-06T01:31:56.161682994Z
   modified_at: 2026-11-06T01:31:56.161682994Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae7f-86d2-7902-9a0f-32b8ef2ccb93
+  author: joe
+  content: 'Round 2 fixes: replaced the new raw Git builder in retire_idle_review_worktree with host_git_command; added a local git_ok helper over crate::test_git::git_command in bug_2457_review_repickup_tests.rs. No ratchet baseline changes. Read CI job 127644285321: 5238 passed, sole failure was queue_cmd.rs 5 raw builders vs baseline 4. Validation: maintenance ratchet --print excludes the new fixture; maintenance ratchet suite passes (8 tests); rustfmt check and git diff --check pass. Targeted cargo test refused: session has no lane job runner (untested=true). make check-ci-fast attempted but stopped after entering Cargo compilation. Native seat publication requires host launcher commit/push of pending edits; PR #3445 remains open.'
+  created_at: 2026-11-06T01:35:55.602954868Z
+  modified_at: 2026-11-06T01:35:55.602954868Z
+  session_id: 01a1ae7d0a3c
 history:
 - id: 01a1ace2-fcb8-7df3-bdb6-2dcb17aee41f
   author: aida-session-start
