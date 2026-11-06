@@ -1,0 +1,29 @@
+id: 01a1ae30-256e-7222-8e82-382725e3101e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-854
+title: 'non-blocking (cosmetic): lib_part1.rs derive_semantic_title pr-review branch us…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3114, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): lib_part1.rs derive_semantic_title pr-review branch uses skip_while(!="review").nth(1) (first 'review' token, flags-before-target return None); acknowledged deferral in PR body.
+
+  PR: #3438
+  Reviewed sha: 1bc5e284dc5ce9738a5b001d522f407f1d4a36e4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T00:09:13.326941058Z
+modified_at: 2026-11-06T00:09:13.326941058Z
+req_type: Task
+tags:
+- carried-from:TASK-3114
+- finding-hash:a699a889
+- from-review:PR-3438
+- kind:carried-forward
+filed_at:
+  code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bdeb8f49978
+  vendor: claude
