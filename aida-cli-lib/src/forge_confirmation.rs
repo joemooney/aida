@@ -115,12 +115,15 @@ fn base_tip(root: &Path, base: &str) -> Observed<String> {
         let private = format!("refs/aida/confirm/{}", uuid::Uuid::new_v4());
         let spec = format!("+{source}:{private}");
         let result = (|| {
+            // Disable opportunistic tracking-ref updates even when base moved.
+            // trace:BUG-2463 | ai:codex
             let fetched = git(
                 root,
                 &[
                     "fetch",
                     "--no-tags",
                     "--no-write-fetch-head",
+                    "--refmap=",
                     "origin",
                     &spec,
                 ],
@@ -142,6 +145,78 @@ fn base_tip(root: &Path, base: &str) -> Observed<String> {
         });
     }
     tip
+}
+
+/// Recover only the pinned object, without touching FETCH_HEAD, tracking refs
+/// or the checkout. The shared Git runner bounds the fetch to 30 seconds and
+/// retains the private-seat refusal. Never substitute a moving branch head.
+// trace:BUG-2463 | ai:codex
+pub(crate) fn rebase_landed(root: &Path, base: &str, head: &str) -> Observed<bool> {
+    base_tip(root, base).and_then(|tip| {
+        Observed::from_result((|| -> Result<bool> {
+            anyhow::ensure!(
+                matches!(head.len(), 40 | 64) && head.bytes().all(|b| b.is_ascii_hexdigit()),
+                "invalid pinned head"
+            );
+            if !git(
+                root,
+                &["cat-file", "-e", &format!("{head}^{{commit}}")],
+                false,
+            )?
+            .status
+            .success()
+            {
+                let private = format!("refs/aida/confirm/{}", uuid::Uuid::new_v4());
+                let spec = format!("+{head}:{private}");
+                let result = (|| -> Result<()> {
+                    let fetched = git(
+                        root,
+                        &[
+                            "fetch",
+                            "--no-tags",
+                            "--no-write-fetch-head",
+                            "--refmap=",
+                            "origin",
+                            &spec,
+                        ],
+                        true,
+                    )?;
+                    anyhow::ensure!(
+                        fetched.status.success(),
+                        "confirmation pinned head fetch failed"
+                    );
+                    anyhow::ensure!(
+                        stdout(
+                            root,
+                            &["rev-parse", "--verify", &format!("{private}^{{commit}}")]
+                        )?
+                        .eq_ignore_ascii_case(head),
+                        "confirmation fetched head differs from pinned head"
+                    );
+                    Ok(())
+                })();
+                let _ = git(root, &["update-ref", "-d", &private], false);
+                result?;
+            }
+            // Rebase rewrites commit identity and can include unrelated base
+            // changes, both before landing and afterwards. Require every PR
+            // patch to have an equivalent on the independently fetched base.
+            // Unrelated histories and merge commits (which cherry omits) do
+            // not supply this receipt. Changed conflict resolutions retain work.
+            stdout(root, &["merge-base", &tip, head])?;
+            let range = format!("{tip}..{head}");
+            if !stdout(root, &["rev-list", "--min-parents=2", &range])?.is_empty() {
+                return Ok(false);
+            }
+            let patches = stdout(root, &["cherry", &tip, head])?;
+            Ok(!patches.is_empty()
+                && patches.lines().all(|line| {
+                    line.strip_prefix("- ").is_some_and(|sha| {
+                        matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+                }))
+        })())
+    })
 }
 
 fn receipt(root: &Path, tip: &str, head: &str, pr: u64, train_only: bool) -> Result<bool> {

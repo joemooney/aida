@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import pty
 import tempfile
+import tomllib
 import unittest
 
 from tests.test_containment_conformance import c
@@ -83,7 +84,15 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             repo = output / "repository"
             policy = c.command(["git", "-C", str(repo), "show",
                                 report["trusted_policy_sha"] + ":.aida/config.toml"])
-            self.assertIn('codex = "aida"', policy)
+            # Setup must produce valid TOML from the real init template, which
+            # already defines [contained]. Verify the committed launch policy.
+            # trace:BUG-2470 | ai:codex
+            parsed = tomllib.loads(policy)
+            self.assertTrue(parsed["agents"]["contained"])
+            self.assertEqual(parsed["agents"]["vendor"], "codex")
+            self.assertEqual(parsed["contained"]["vendors"]["codex"], "aida")
+            self.assertEqual(parsed["contained"]["allowed_hosts"],
+                             ["api.openai.com", "allow.fixture.test"])
             self.assertTrue((repo / ".aida-store/objects").is_dir())
             roster = (repo / ".aida-store/registry/team.toml").read_text()
             self.assertIn("fixture-operator", roster)

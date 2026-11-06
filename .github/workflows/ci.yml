@@ -380,7 +380,7 @@ jobs:
           # can split a passing test's console line. Keep console output for skips.
           # trace:STORY-2475 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture --logfile "$lib_results" \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ task_2708_claude_prepare_fake_home 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ task_2708_claude_prepare_fake_home task_3219_live_ 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture --logfile "$cli_results" \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
           grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sed 's/^fn //' | sort -u > "$RUNNER_TEMP/live-bwrap.expected"
@@ -424,6 +424,12 @@ jobs:
             echo "::error::required-live test task_2708_claude_prepare_fake_home did not report ok"; exit 1
           fi
           if [ "$expected_2708" -eq 0 ] || [ "$ran_2708" -ne "$expected_2708" ]; then echo "::error::only $ran_2708 of $expected_2708 task_2708_live_ tests ran ok"; exit 1; fi
+          # S1 coordinator launch must exercise the wrapper, never silently skip.
+          # trace:TASK-3219 | ai:codex
+          expected_3219=$(grep -rhoE 'fn task_3219_live_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
+          ran_3219=$(grep -hE '^ok ' "$lib_results" | grep -oE 'task_3219_live_[a-z0-9_]+$' | sort -u | wc -l)
+          echo "task_3219 coordinator live tests: $ran_3219 of $expected_3219 ran ok"
+          if [ "$expected_3219" -eq 0 ] || [ "$ran_3219" -ne "$expected_3219" ]; then echo "::error::only $ran_3219 of $expected_3219 task_3219_live_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction

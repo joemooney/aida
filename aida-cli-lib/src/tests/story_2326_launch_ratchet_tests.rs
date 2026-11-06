@@ -70,6 +70,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
     ("aida-core/src/db/refresh_worker.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-core/src/proc_identity.rs", 1, "not a vendor launch: shared cooperative pre_exec self-check receipt; does not construct or spawn a command"),
     ("aida-tui/src/actions.rs", 1, "generic helper: TUI action argv"),
     ("aida-tui/src/dispatch.rs", 1, "generic helper: TUI run_child"),
 ];
@@ -87,7 +88,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // PR-C moves finalization (-1), phase control (-1), gate control (-1),
 // zen vendor/seat (-3), and TUI control seats (-12) into the launcher.
 // Coordinator seat writes (-4), queue process role export (-1), exec owner (-1).
-const CEILING: usize = 133;
+// Shared cooperative identity capture adds one pre_exec self-check receipt,
+// not a vendor command/spawn; the exact file/count/reason is ledgered above.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+const CEILING: usize = 134;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

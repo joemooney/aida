@@ -245,6 +245,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
     let lease_file = sessions_dir.join(format!("{lease_id}.toml"));
 
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         id: lease_id.to_string(),
         scope: "BUG-2165".to_string(),

@@ -1,6 +1,6 @@
 # A second trusted review node
 
-<!-- trace:STORY-2492 trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex -->
+<!-- trace:STORY-2492 trace:STORY-2492.Docs trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex -->
 
 This workflow lets one Linux host implement a PR and another review it. Both
 hosts must use the same code-origin URL spelling, share the git-canonical AIDA
@@ -37,6 +37,18 @@ checkout's ignored `.aida/review-publisher.json`; the private key is never copie
 into AIDA. A key requiring a passphrase must already be usable by the host's
 OpenSSH signing environment; AIDA does not provide a passphrase prompt. Each
 signing or verification process has a ten-second deadline.
+
+A brand-new reviewer-only clone has a known empty local author history. Initialize
+its readable local ledger before starting the watcher:
+
+```bash
+touch .aida/review-authorship.jsonl
+```
+
+For a clone that has authored work, retain or restore its recorded history.
+Unreadable local authorship evidence refuses publication authority. Node and
+watcher setup do not currently initialize this ledger; command-based initialization
+for a known fresh clone remains a follow-up.
 
 ## Implement on A, review on B
 
@@ -258,3 +270,26 @@ recovered with the stopped-admission command above. Grants and human receipts
 remain local; this protocol grants no remote role authority.
 
 Untrusted work-node envelopes are outside this workflow.
+
+## Command-entry regression
+
+The targeted two-clone regression uses a shared bare store hub and a separate
+bare code hub. A strict local forge CLI supplies API and green CI responses;
+Git pushes, signed publications, watcher dispatch/child receipts, ship refusal,
+train member gating, train construction and pinned landing all use production
+paths. A fixture reviewer replaces the model process and synthesizes a local
+human-at-TTY receipt (`write_human_receipt`, `human_at_tty: true`) in a non-TTY
+child before invoking the ordinary host collector. That collector validates the
+synthetic human-receipt authority; the substitute does not exercise the delegated
+reviewer-grant attestation produced by a real watcher queue-work child. The first
+review requests changes and names a blocking finding origin; A observes both and
+its train refuses. After A pushes a correction,
+B's watcher reviews the new head and A's train lands that exact reviewed content.
+
+```bash
+cargo test -p aida-cli-lib --lib two_node_ship_watch_rework_and_train_entry_points
+```
+
+This test verifies orchestration and trust transport without contacting a hosted
+forge or starting a model. It does not attest a real provider's availability.
+<!-- trace:STORY-2492.ac540936 trace:STORY-2492.Docs | ai:codex -->
