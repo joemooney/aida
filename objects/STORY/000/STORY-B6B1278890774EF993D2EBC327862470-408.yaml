@@ -33,12 +33,12 @@ description: |
   - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
 
   Depends on: observation-envelope story (shared aida-intent branch + validator).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T13:57:39.432612092Z
+modified_at: 2026-11-06T14:30:17.756658131Z
 req_type: Story
 relationships:
 - rel_type:
@@ -190,6 +190,15 @@ history:
   timestamp: 2026-11-06T13:57:40.567454442Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
+- id: 01a1b144-7b9c-7650-8181-dfb975ea2b2a
+  author: aida-orchestrator
+  timestamp: 2026-11-06T14:30:17.756678300Z
+  session_id: 01a1b13f30ee
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -198,3 +207,11 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Receipt codec, hub hook and relay journals are careful and fail closed, but the PR's own e2e contract step is red in CI at the head, history revalidation grows without bound and will brick the shared intake, and the inventory cannot admit AIDA's own repository.
+  recovery_hint: address the review findings, move STORY-2480 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T14:30:17.756658131Z
