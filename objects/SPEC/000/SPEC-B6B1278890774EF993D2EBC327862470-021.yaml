@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T05:29:32.118484955Z
+modified_at: 2026-11-06T05:46:37.422512239Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-11-06T04:31:23.187115477Z
   modified_at: 2026-11-06T04:31:23.187115477Z
   session_id: 01a1aefca358
+- id: 01a1af65-0bee-72e1-b2c3-1a9bc12c5420
+  author: joe
+  content: 'Native-seat follow-up on the BUG-2459-integrated branch: fixed all four failures from CI run 42166350401. Marked publication scope display_id as canonical persisted identity; created the seat fixture before installing the origin/agreed-ID mapping so setup cannot overwrite it; regenerated both help and catalog portions of the golden snapshot; replaced the manual example spec ID with <spec-id>. Changed files: aida-cli-lib/src/native_publication.rs, aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs, aida-cli-lib/src/tests/golden/cli_help_snapshot.txt, docs/cli/04-git-lifecycle.md. Validation: all 61 distinct targeted tests passed across feature, seat-publication, queue-exit, foreground/background launcher, canonical-ID ratchet and help-snapshot runs. The broader run initially exposed the second catalog copy in the snapshot; full regeneration and subsequent verification passed. Full manual verifier and static manual check passed; cargo fmt --all -- --check and git diff --check passed. Four files remain uncommitted. No commit, push, PR creation, queue completion, pr ship or review record performed. No implementation blocker; host must commit/publish the edits and rerun CI.'
+  created_at: 2026-11-06T05:46:37.422512239Z
+  modified_at: 2026-11-06T05:46:37.422512239Z
+  session_id: 01a1af555e26
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
