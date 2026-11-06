@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T13:16:22.743065757Z
+modified_at: 2026-11-06T13:37:43.114335674Z
 req_type: Story
 tags:
 - architecture
@@ -555,6 +555,12 @@ comments:
   content: 'Round 3 validation update: make check-ci-fast passed all 38 fast gates; cargo fmt --all -- --check and git diff --check passed. Direct cargo test --profile agent -p aida-cli-lib --lib story_2326 is still compiling its native-seat test binary. Retrieved finished lib-1 job 127901243186 via job-log API: its only failure was the old dispatch integration expectation ROLE=implementer. Updated that integration assertion to the approved no-seat background environment and included the regression in the story_2326 filter. Merge-hold job 127910671299 refuses the active review hold, which remains untouched. PR #3501 body now contains migration notes and PR-C ownership; native Refs declaration recorded. Final cargo result follows before handoff.'
   created_at: 2026-11-06T13:16:22.743065757Z
   modified_at: 2026-11-06T13:16:22.743065757Z
+  session_id: 01a1b0f60225
+- id: 01a1b114-58ca-72b2-8ea8-ce70295d06fa
+  author: joe
+  content: 'Round 3 final handoff: F1-F7 changes are uncommitted on reviewed head 4bf2017ec6f for native host publication. Direct cargo test --profile agent -p aida-cli-lib --lib story_2326 passed: 27 passed, zero failed, zero ignored, including the updated dispatch integration regression. make check-ci-fast passed all 38 gates on the corrected tree. cargo fmt --all -- --check and git diff --check passed. Initial tests identified two new fixture mistakes: empty debug/ is not a target artifact, and an absent inherited grant remains absent via GrantFix::Keep. Both fixtures are corrected and pass. Doctor retains existence-based slot discovery, diagnoses unsafe permissions without healing, and still reports target artifacts; host settings validation compares opened dev/ino to approved canonical metadata. PR #3501 body holds change notes, evidence and PR-C scope; BUG-2418 is the existing completed CARGO_HOME filing. Native publication subject: [AI:codex] feat(launch): address review gaps in launcher PR-B (Refs STORY-2326). No commit, push, PR creation, queue completion, review record or hold clearance from this seat. The prior head CI lib-1 failure is now covered by the passing dispatch regression; the review hold stays active. Host must commit/push these changes to existing PR #3501 after exit.'
+  created_at: 2026-11-06T13:37:43.114335674Z
+  modified_at: 2026-11-06T13:37:43.114335674Z
   session_id: 01a1b0f60225
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
