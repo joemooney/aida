@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T11:28:47.961315545Z
+modified_at: 2026-11-06T11:28:50.399996605Z
 req_type: Story
 relationships:
 - rel_type:
@@ -261,6 +261,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 typed --until gate, canonical question parking and trigger display are sound and round-1 findings 1-3 are fixed (cli-0/contracts green), but CI lib-1 is red because the round-4 empty-consequence change broke this PR''s own S2 test, and the TUI defer action now always fails on its free-text default.. No triage reason was given.'
   created_at: 2026-11-06T11:28:47.961313119Z
   modified_at: 2026-11-06T11:28:47.961313119Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b09e-5a5a-7232-a55c-f646a8997648
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3491):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d6641c6469da
+    Recorded: 2026-11-06T11:26:02.250141105+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3491#issuecomment-6683735095
+    Findings:
+    1. BLOCKING - CI lib-1 red (job 127857230369), caused by this PR: aida-cli-lib/src/tests/story_2402_defer_tests.rs:438-476 (story2402_s2_question_parking_records_typed_or_manual_evidence) still loops over consequence "" with a seeded deferred_until=date:2026-01-01 and expects Manual{resolver} plus comments[0]. Round 4 (questions.rs:533) now correctly preserves the existing trigger on an empty consequence, so parsed is Date and the assert_eq at :136 panics (and :471 would index an empty comments vec). Fix the test, not the behaviour: take "" out of that loop or assert the preserved date:2026-01-01 with no added comment for it. Then confirm lib-1 is green at the new head.
+    2. TUI defer regression: aida-tui/src/redesign/state.rs:880-886 DeferInput::trigger() falls back to the free-text default "revisit later" and forwards any typed prose to 'aida defer <id> --until <trigger>' (aida-tui/src/redesign/mod.rs:2198-2207). This PR refuses free text, so the TUI's default defer and every prose defer now fail. defer_spec drops stderr, so the operator sees only 'FAILED to defer: <ids>' with no reason. Fix: on empty input, defer bare (omit --until) or use a typed default. Surface the refusal stderr in defer_status, name the typed forms in the input prompt, and add a unit test for the default trigger.
+    3. Minor: aida-cli-lib/src/questions.rs:542-543 builds Condition::Manual{who: current_user_id(None)}.to_string() without validating it. current_user_id (gate/kernel_deps.rs:33) returns AIDA_USER/USER verbatim, and the store's welcome text suggests 'export AIDA_USER=<your-name>'. With AIDA_USER="Joe Mooney" (or set but empty) the parked trigger becomes 'manual:Joe Mooney' or 'manual:', which condition.rs:296-306 single_token refuses on read-back. The supposedly canonical trigger is then unparseable legacy text that S4 cannot evaluate. Round-trip the built condition through Condition::from_str and fall back to a sanitized token (or to a fixed resolver such as manual:operator), and add a test with a whitespace identity.
+    4. Cosmetic, non-blocking: some placeholder guidance still reads as free text. Examples: aida-cli-lib/src/burndown.rs:919 and human.rs:1258 ('aida defer <id> --until <trigger>'), aida-core/src/models.rs:4390, and the TUI doc comments (redesign/mod.rs:1388, state.rs:487/2531). Consider naming the typed forms or using <condition>.
+    5. Cosmetic, non-blocking: commit 9b078815078 has the non-descriptive subject 'chore(seat): work native Codex lane 01a1b01443f2 left uncommitted (STORY-2402)' with a bare completion trailer, and the auto-filed review story STORY-2554 inherited it. On a non-squash merge this trailer would mark the parent STORY-2402 complete while S3-S5 remain. Squash-merge under the PR title, which carries 'Refs STORY-2402'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T11:28:50.266701011Z
+  modified_at: 2026-11-06T11:28:50.266701011Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
