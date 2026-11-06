@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T07:38:12.545503362Z
+modified_at: 2026-11-06T07:38:36.420545835Z
 req_type: Story
 tags:
 - architecture
@@ -165,6 +165,12 @@ comments:
   created_at: 2026-11-06T07:36:11.350029609Z
   modified_at: 2026-11-06T07:36:11.350029609Z
   session_id: 01a1af901efd
+- id: 01a1afcb-9204-73d1-9d37-c424a90bcadd
+  author: joe
+  content: 'ADVISOR 2026-11-06 00:45 MST: the host post-exit publication opened #3483 with the generic title ''chore(seat): work native Codex lane ... left uncommitted (STORY-2537)'', a COMPLETING trailer for a slice-1 PR. Retitled to ''(Refs STORY-2537) (BUG-2458)'' so the merge completes BUG-2458 only. Reviewer: also check the AGENTS.md/OVERVIEW.md edits against the repo rule (per-change notes belong in the PR body).'
+  created_at: 2026-11-06T07:38:36.420545835Z
+  modified_at: 2026-11-06T07:38:36.420545835Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
