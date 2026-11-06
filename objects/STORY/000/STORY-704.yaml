@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:54:29.682662741Z
-modified_at: 2026-07-20T04:46:39.113602092Z
+modified_at: 2026-11-06T00:14:57.213776858Z
 req_type: Story
 tags:
 - doc-projection
 - living-docs
+comments:
+- id: 01a1ae35-64bd-7d71-b125-6a61fc071195
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 5: KEEP DEFERRED, pending a product pass with the operator.'
+  created_at: 2026-11-06T00:14:57.213776858Z
+  modified_at: 2026-11-06T00:14:57.213776858Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 deferred: true
 deferred_at: 2026-07-20T04:46:39.113602092Z
 deferred_until: EPIC-24 core capture is proven in use
