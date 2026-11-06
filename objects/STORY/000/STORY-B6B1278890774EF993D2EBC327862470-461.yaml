@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T17:04:35.166622782Z
+modified_at: 2026-11-06T17:04:39.837413119Z
 req_type: Story
 tags:
 - architecture
@@ -95,6 +95,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice A API (ExecContext, EnvPolicy/ChildEnv) matches the signed-off sketch and amendment; the exact-site ratchet has an evasion gap and a no-relocation trap, and CI at the head was still queued at review time.. No triage reason was given.'
   created_at: 2026-11-06T17:04:35.166618774Z
   modified_at: 2026-11-06T17:04:35.166618774Z
+  session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b1d1-cf00-72a0-9c8d-154551ceab41
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3403d57daf27
+    Recorded: 2026-11-06T16:39:38.803881903+00:00
+    Findings:
+    1. check-exec-context.py rust_sites: a leading-:: path after an identifier keyword is skipped as a path continuation (only return/break/yield/in are exempt). 'fn f(){ if ::std::env::var("X").is_ok(){} }', 'match ::std::env::var("X") {..}' and '&mut ::std::env::...' all produce [] (reproduced against the PR script), so new ambient reads pass the zero-new-sites gate even though the migration doc claims leading-:: coverage. Fix: treat every Rust keyword (if/match/while/mut/else/move/unsafe/as/let, etc.) as a non-path predecessor, and add mutant fixtures for each to tests/test_exec_context_ratchet.py.
+    2. check_growth (scripts/check-exec-context.py) refuses every key that is absent from the base ledger. Keys embed the file path and the enclosing fn name, so a pure file move or split-lib slice, or a fn rename, around any of the 1215 legacy sites fails CI with 'ledger may only shrink'. No sanctioned relocation path exists, but exec-context-migration.md says such edits 'can require retiring an old entry'. Fix: allow ceiling-neutral relocation (match the moved entries by op + expression digest multiset, with no growth in the total), or get an explicit advisor ruling that legacy sites must be migrated before any move and document it.
+    3. rust_sites scope tracking never resets after a fn body ends, so a module-level static/const/Lazy after a fn is keyed to that fn. Adding a nested fn above a site renames its scope, which turns into a spurious new site plus a stale site and trips the growth gate. Track brace depth to scope the fn name, or key module-level sites as <module>.
+    4. scan() walks the filesystem with rglob (only excluding parts named 'target') instead of git-tracked files. Untracked or ignored .rs/.py files, such as a tests/.venv or scratch files, produce false 'new sites' locally, and read_text() crashes on a non-UTF-8 file. Use 'git ls-files' over the member and tests roots.
+    5. ci.yml ExecContext step: EXEC_CONTEXT_BASE is 'github.event.pull_request.base.sha || github.event.before'. Neither field exists on merge_group events, so the growth check silently drops to the no-base path in the merge queue. Add github.event.merge_group.base_sha.
+    6. CI at reviewed head 3403d57 was still queued or in progress at review time (run 42253260412: gates, cli-0/1, lib-0, rest queued), so there is no exact-head green evidence for the new exec_context and launch_policy tests or for the ratchet gate. Re-review must cite a green run.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T17:04:39.680102382Z
+  modified_at: 2026-11-06T17:04:39.680102382Z
   session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
 history:
