@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T15:58:20.123802868Z
+modified_at: 2026-11-06T16:00:28.276015278Z
 req_type: Story
 tags:
 - architecture
@@ -22,6 +22,45 @@ comments:
   created_at: 2026-11-06T15:29:52.087107778Z
   modified_at: 2026-11-06T15:29:52.087107778Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b197-04c0-7c73-b1c0-8499b5afdd41
+  author: joe
+  content: |
+    SKETCH — STORY-2538, 2026-11-06, Codex. Awaiting advisor/master sign-off; proposal only. This satisfies the advisor's 15:29Z sketch-only brief, not implementation or publication approval. Inspected checkout 5518bd9d7a9 (PR-B #3501). No source edits, commits, PRs or queue completion.
+
+    1. Observed baseline and boundary
+    launch/context.rs already resolves LaunchRequest into private LaunchContext fields: program, argv, posture, cwd, host_main and parent containment. Its resolve wrapper reads ambient containment and AIDA_AGENT_CMD; resolve_with is pure. launch/spawn.rs builds the Command, applies the containment boundary and assigns seats separately. aida-core/src/launch_policy.rs defines OWNED_KEYS, Decided/Forwarded dispositions, background-forbidden and vendor-only keys, plus vendor/kind/posture policy. It explicitly preserves inherited non-owned environment until the later per-vendor allowlist slice. There is not yet a shared EnvPolicy or env-clear environment type on this checkout. Thus the trigger provides a launch-context foundation, not a completed child-environment abstraction.
+
+    Test helpers still mutate global environ under RAII locks; PATH/HOME mutation requires an exact isolated subprocess. That prevents some writer races but does not synchronize ordinary production readers. test_env.rs explicitly forwards AIDA_REQUIRE_BWRAP_LIVE across env_clear; CI also declares AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE. These declarations must survive test isolation without reaching ordinary vendor children. The description's 14 AIDA_TEST seams is historical: a literal source search now finds many more names, including fixture-only keys. Inventory real readers before migration; don't equate name occurrences with production override sites.
+
+    2. One execution input, distinct from launch authority
+    Propose aida-core/src/exec_context.rs as the shared dependency-direction-safe owner. ExecContext contains an immutable OsString-keyed environment snapshot, explicit home and project/authority root inputs, tool locators, and an injected clock. Production captures at command/service request entry before worker threads or fixture mutations; nested helpers receive &ExecContext, long-lived workers capture a new context only at an explicit request boundary. No process-global singleton, implicit thread-local override or fallback getenv in an accessor.
+
+    Keep cwd separate from the pinned main/authority root (TASK-1333/TASK-2032). Home is explicit and absent/invalid home remains an error where required, never an automatic operator-home fallback. Preserve non-Unicode environment values; string conversion remains fallible. Capture environment facts once, but do not freeze time: a Clock interface supplies wall time for timestamps and monotonic time for elapsed budgets. A SystemClock samples when called; a fake clock advances explicitly in tests. Liveness, grant, lease, store trust and filesystem checks remain live at their existing locked boundaries. A captured role/grant selector is only an input to validation, never proof of authority.
+
+    ToolPaths records explicit tool selections/search PATH, not a test-controlled replacement authority. Resolving against fixture PATH is possible in tests; executable admission, canonical path checks, host finalization and containment remain the launcher's responsibility. ExecContext does not imply that a tool is trusted or installed. No Debug/serialization that exposes environment values or secrets.
+
+    3. Environment ownership defined once
+    Extend the existing core launch_policy module with the ONE typed EnvPolicy/ChildEnv projection shared by ExecContext and STORY-2326. ExecContext holds the captured inputs; launch_policy decides which inputs can cross a vendor/kind boundary. Do not copy an allowlist into exec_context or maintain separate test/prod lists. Retain OWNED_KEYS and their seat/background/vendor-only semantics as the authoritative owned-key table. A future policy may share its declaration through a single compiled manifest, with closed fields and explicit per-vendor entries; exact format and activation require the existing STORY-2326 compatibility approval.
+
+    Distinguish parent-readable facts from child-passable keys. ExecContext must represent inputs used by ordinary AIDA commands; the vendor child environment is a restricted projection of those inputs plus explicitly validated launcher decisions. Never pass the whole snapshot to envs(). No blanket AIDA_* forwarding. Test overrides and required-live declarations are fixture/harness inputs, not credential or vendor allowlist entries. Trusted operator additions, if supported, retain config-trust/default-branch provenance. Unknown/unapproved additions cannot expand child authority.
+
+    PR-C owns vendor-profile extraction, moving Codex prepare_launch inside that profile, grant-issuer consolidation, control_child/control_env migration, remaining resume/finalization sites and resource renderers. R4 must not move or duplicate prepare_launch, change those grant flows, or activate env_clear in those constructors. R4 first supplies the reusable context/policy input API and migrates readers/tests; PR-C consumes that API after its profile seams settle. STORY-2326's later compatibility-gated allowlist slice owns behavioral env_clear activation. Coordinate signature changes before touching shared launch files; migrate the small LaunchContext::resolve ambient wrapper only after PR-C ownership is reconciled.
+
+    4. Migration and ratchets
+    A: after sign-off, land the pure context/clock/tool/environment API and a reader/seam inventory, with focused tests; preserve existing launch inheritance. B: migrate bounded functional clusters (launch parent facts/resources first after PR-C, then config/home/tool consumers and remaining core/CLI/TUI readers). Pass context through internal APIs; do not replace every getenv with a hidden global context accessor. C: convert in-process env guards and AIDA_TEST production switches into explicit context/builders or fixture dependencies. External CLI contract tests set Command.env/env_clear before child exec; testing the production capture boundary still needs real subprocess inputs. Retain the existing real-home fences and isolated-process safeguards until their consumers are migrated. No production test bypass becomes a public context knob. D: finish the inventories, remove legacy guards/seams, and close the ratchets.
+
+    Target end state: no direct env reads outside the capture module and no process-global set_var/remove_var in tests (including wrappers). Cover qualified/unqualified imports, aliases, vars/vars_os enumeration and helper indirection; child Command.env remains allowed. Use repository token-aware guard style and mutant fixtures. During migration maintain an explicit exact-site legacy ledger with scope/owner, zero new sites and a monotonically shrinking ceiling, not a broad directory exemption or a misleading immediately-zero assertion. Any necessary platform/test bootstrap exception must be explicitly approved and itemized. Scan every Rust workspace member plus relevant test harnesses; grep counts are inventory hints, not proof.
+
+    5. Required-live behavior and acceptance evidence
+    TestHarness capabilities are explicit required/optional inputs captured by the runner and carried across isolated subprocesses, separate from vendor environment policy. Unavailable optional capability emits a reason; unavailable required capability fails, as do required probe errors and a required test that never ran. Preserve the two existing bwrap/Codex declarations; don't accidentally turn fake-context success into live containment evidence.
+
+    Tests to require per slice: fixture home/PATH/tool/clock contexts coexist concurrently without global mutation; missing/non-Unicode inputs; elapsed deadlines with advancing fake monotonic time; allowlist projection and secret/test-key exclusion; owned-key/background invariants; exact-child capture propagation with required-live unavailable => nonzero; scanner mutant fixtures for aliased reads and mutations. Run targeted filters, fmt/diff checks and LIGHT for code slices. Final acceptance additionally requires the zero-legacy ledger, no global-env test writers, all existing child-launch compatibility matrices, and exact-head required-live CI. No tests were run in this sketch-only lane because no executable behavior changed.
+
+    6. Decisions requested
+    Approve the core-owned immutable context plus shared launch_policy projection; approve the staged legacy-ledger ratchet rather than a flag-day repository rewrite; confirm PR-C owns prepare_launch/vendor/control/grant work and the later STORY-2326 slice owns env_clear activation. Resolve those ownership/API decisions before implementation. Lean: approve this separation so R4 does not invent a second allowlist or compete with PR-C. Next lane should implement slice A only under the approved sketch, using a Refs subject unless the entire story is complete.
+  created_at: 2026-11-06T16:00:26.816585875Z
+  modified_at: 2026-11-06T16:00:26.816585875Z
+  session_id: 01a1b1950b3b
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
@@ -45,6 +84,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b195-6fe3-71e3-b2aa-c41cb60c1c4c
+  author: joe
+  timestamp: 2026-11-06T15:58:43.171690409Z
+  session_id: 01a1b1950b3b
+  changes: []
+- id: 01a1b197-0a74-79a0-bb90-2e64a65cdaff
+  author: joe
+  timestamp: 2026-11-06T16:00:28.276032769Z
+  session_id: 01a1b1950b3b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -53,3 +105,9 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only advisor brief fulfilled: posted the ExecContext design on the spec. Await advisor/master sign-off on core context ownership, shared launch_policy environment projection, staged ratchets, and PR-C API boundaries. No source changes or PR; publication must remain vetoed.'
+  lean: Use one core ExecContext with shared launch_policy projection; PR-C retains prepare_launch/vendor/control/grant work and the later STORY-2326 slice retains env_clear activation.
+  raised_by: implementer
+  raised_at: 2026-11-06T16:00:28.276015278Z
