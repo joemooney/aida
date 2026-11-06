@@ -1,0 +1,29 @@
+id: 01a1b1c6-6d9d-7593-b472-5bbd0f0ff2a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-887
+title: 'minor (non-blocking): headless_background.rs:546-550 treats an unreadable reach…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2464, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): headless_background.rs:546-550 treats an unreadable reachability probe (head_has_unpushed=None, e.g. 5s timeout or bwrap failure) as 'no unpushed commits'. In settle_outcome's stale rework-PR branch (standalone_implementer.rs:327-330) a seat with real local commits and a failed probe now settles as pr-opened with the old head instead of no-pr reason=unpushed-commits. Suggest falling back to the prior moved&&!pushed signal when the probe is None. Lease safety is unaffected (finished_lease_ends needs origin at HEAD).
+
+  PR: #3510
+  Reviewed sha: 34343005f959c18982153609cb83af4814c753f4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T16:52:13.853812178Z
+modified_at: 2026-11-06T16:52:13.853812178Z
+req_type: Task
+tags:
+- carried-from:BUG-2464
+- finding-hash:41510bb2
+- from-review:PR-3510
+- kind:carried-forward
+filed_at:
+  code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dcb86ca85d
+  vendor: claude
