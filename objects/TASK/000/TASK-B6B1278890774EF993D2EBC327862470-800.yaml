@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-800
 agreed_id: TASK-3074
 title: Track acted-on request dispositions and unresolved stall escalation
 description: 'Follow-up to STORY-2476 advisor ruling: define and approve explicit acted, declined and deferred dispositions tied to message IDs. Preserve seen/read ACK distinctions. Add authorized receipts and unresolved alarm escalation through the existing operator notifier; reading or wake acceptance never proves action.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-06T06:57:08.195171194Z
+modified_at: 2026-11-06T07:55:05.250212279Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -455,8 +455,26 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1afda-a849-7161-b064-eca790548bcf
+  author: aida-auto-bump
+  timestamp: 2026-11-06T07:55:05.161092923Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1afda-a8a2-7cc2-b8d8-62469352b5c4
+  timestamp: 2026-11-06T07:55:05.250205871Z
+  agent: aida
+  commit_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
+  summary: 'PR-B round-3 rework fixes all prior findings: separate unresolved/persistent escalation slots and rule keys (unresolved@60->acted@65->persistent@95 test), pre-publication refusals retry while post-publication errors reserve, state errors name file+remedy, operator-direct wording; CI green at dbe1eca (only the expected merge-hold-gate fails). Two non-blocking follow-ups in findings (could not be filed as draft tasks: contained store is read-only).'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: codex
   session: 01a1a96dc251
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T07:55:05.161085764Z
+  completion_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
