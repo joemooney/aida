@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T21:02:41.249170258Z
-modified_at: 2026-11-06T03:08:57.919127800Z
+modified_at: 2026-11-06T03:09:00.253407849Z
 req_type: Task
 tags:
 - from-implementer:TASK-2889
@@ -44,6 +44,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test-only fixture repair meets every TASK-2904 acceptance point and all test lanes are green, but CI (gates) fails Check formatting (rustfmt drift in the new lines), so Build (ubuntu-latest) is red. No triage reason was given.'
   created_at: 2026-11-06T03:08:57.919126312Z
   modified_at: 2026-11-06T03:08:57.919126312Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aed4-bd50-7cf0-8c00-35cbb7c215ea
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2904):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c99bd492c6d5
+    Recorded: 2026-11-06T03:05:50.318823311+00:00
+    Findings:
+    1. rustfmt drift fails CI (gates) 'Check formatting' at c99bd492c6d5 (run 42152058718): aida-cli-lib/src/tests/bug_2130_liveness_identity_tests.rs:328 is 101 columns long (let legacy = ...process_start_identity_legacy(me).expect("child legacy start");), and the two assert!(process_identity_matches_strict(me, &legacy/&exact)) lines at :330-331 must also be rewrapped. Fix: run cargo fmt --all, then confirm cargo fmt --all -- --check is clean. The spec comment's claim that fmt --check passed does not hold at this head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T03:09:00.112247543Z
+  modified_at: 2026-11-06T03:09:00.112247543Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1add3-42dc-7060-8755-c164ecf5d293
