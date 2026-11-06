@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T09:51:18.360835418Z
+modified_at: 2026-11-06T10:19:40.033488520Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -43,6 +43,12 @@ comments:
   created_at: 2026-11-06T09:26:44.060575004Z
   modified_at: 2026-11-06T09:26:44.060575004Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b05f-0681-70e3-a087-091d0a1b1d16
+  author: joe
+  content: 'Round 2 rework: admission now snapshots publisher/roster/relevant verdict evidence under short store locks inside the bounded retry loop, compares relevant evidence before CAS, and ignores unrelated store-tip moves. Added passing Terminal tests for an unrelated store commit and roster-change retry; strengthened the two-node loser test to assert local Failed and later select Dispatch. Corrected the anchor comment and second-node guide to state the trusted-writer ancestor-continuity/replay limitation (the permitted finding-2 resolution), moved unrelated criterion traces to TASK-3196 and Docs coverage to the guide. Refreshed recovery-command help/audit inventories and fixed the gates Git-maintenance guard. Validation so far: 16 admission tests passed; help snapshot regenerated and verified without update mode; audit exactly matches generator output from the refreshed catalog; 8 Git maintenance ratchet tests, cargo fmt --all -- --check and git diff --check passed. CLI audit integration binary is still compiling. Native seat: six changed files remain uncommitted for the host launcher; no commit, push, queue completion, review record or merge-hold clearance performed.'
+  created_at: 2026-11-06T10:19:40.033488520Z
+  modified_at: 2026-11-06T10:19:40.033488520Z
+  session_id: 01a1b04506e7
 history:
 - id: 01a1afff-e7d6-78a2-869f-d7e2e2c949d8
   author: joe
