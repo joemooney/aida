@@ -100,7 +100,8 @@ def audience(p):
         "docs/agents/claude-surfaces-codex-parity.md", "docs/agents/codex-mcp-roundtrip-verdict.md",
     }:
         return "generated"
-    if p.startswith("docs/advanced/"):
+    # The two-host enrollment workflow is for operators, despite its agents path.
+    if p.startswith("docs/advanced/") or p == "docs/agents/second-review-node.md":
         return "advanced"
     if p.startswith(("docs/internal/", "docs/plans/", "docs/aida/")) or p == "docs/cli/11-dev.md":
         return "internal"

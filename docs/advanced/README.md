@@ -7,6 +7,7 @@ unattended delivery. For installation and your first spec, start with the
 - [Administration](admin-guide.md) and [storage modes](storage-modes.md)
 - [Multiple nodes](multi-node.md), [multiple hubs](multi-hub-sync.md),
   [air-gapped development](air-gapped-development.md) and [multi-user setup](multi-user-setup.md)
+- [A second trusted review node](../agents/second-review-node.md)
 - [Forge providers](forge-providers.md) and [GitLab CI runners](gitlab-ci-runner.md)
 - [Autonomous drains](autonomous-drain.md), [multiple advisors](multi-advisor-coordination.md)
   and [session lifecycle](session-lifecycle.md) and [session communication](session-communication.md)

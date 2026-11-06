@@ -967,7 +967,7 @@ does not implement repeated unresolved escalation.
 
 This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Explicit recipient responses
-use [`aida mailbox disposition`](../mailbox.md#explicit-responses-to-requests),
+use [`aida mailbox disposition`](../advanced/mailbox.md#explicit-responses-to-requests),
 independently of read ACKs. Correlating those responses with alarm episodes and
 unresolved escalation remains follow-up work, along with Claude/Antigravity
 wake; reading or accepting a wake is not action.
