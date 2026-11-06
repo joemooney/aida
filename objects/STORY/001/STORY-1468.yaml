@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-06T06:19:21.328363695Z
+modified_at: 2026-11-06T07:12:55.268942368Z
 req_type: Story
 relationships:
 - rel_type:
@@ -115,6 +115,12 @@ comments:
   created_at: 2026-11-06T01:18:26.782101383Z
   modified_at: 2026-11-06T01:18:26.782101383Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1afb4-0de4-7402-a85f-14a684bcdcea
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-06 00:22 MST: at head 1d86e2c CI (contracts) still fails the CLI-manual drift guard: docs/cli/verify-manual.py reports ''spec-id leak ... 02-specs.md:17 STORY-123''. Replace the literal ID with the <spec-id> placeholder. Verify locally with: python3 docs/cli/verify-manual.py. Then address the minor MCP robustness findings from the 01:14Z review in the same push.'
+  created_at: 2026-11-06T07:12:55.268942368Z
+  modified_at: 2026-11-06T07:12:55.268942368Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
   author: joe
