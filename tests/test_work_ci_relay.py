@@ -8,6 +8,7 @@ import hashlib
 import http.server
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,7 +17,7 @@ import unittest
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = os.environ.get("AIDA_TEST_BIN", str(ROOT / "target/debug/aida"))
+BINARY = str(Path(os.environ.get("AIDA_TEST_BIN", str(ROOT / "target/debug/aida"))).resolve())
 HOOK = ROOT / "scripts/ci-relay/pre-receive.py"
 
 
@@ -44,7 +45,7 @@ class Api(http.server.BaseHTTPRequestHandler):
             elif path.endswith("/jobs"):
                 self.reply([{"name": "build", "status": state.result, "duration": 1.25}])
             elif path.endswith("/test_report"):
-                self.reply({"test_suites": [{"test_cases": [{"name": "checks", "status": "failed"}]}] if state.result == "failed" else []})
+                self.reply({"test_suites": [{"test_cases": [{"name": "module::checks", "status": "failed"}]}] if state.result == "failed" else []})
             else:
                 self.reply({"id": state.pipeline, "sha": state.sha, "ref": f"ci/{state.attempt}", "status": state.result})
 
@@ -102,7 +103,7 @@ class Fixture:
         env = dict(self.env)
         if principal:
             env["AIDA_CI_PRINCIPAL"] = principal
-        result = subprocess.run(["git", *args], cwd=cwd, env=env, text=True, capture_output=True, timeout=40)
+        result = subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *args], cwd=cwd, env=env, text=True, capture_output=True, timeout=40)
         if ok and result.returncode:
             raise AssertionError(result.stderr)
         return result
@@ -111,12 +112,12 @@ class Fixture:
         home = clone / "isolated-home"
         home.mkdir(exist_ok=True)
         env = dict(self.env, HOME=str(home), XDG_CONFIG_HOME=str(home / "config"), XDG_CACHE_HOME=str(home / "cache"), AIDA_CI_PRINCIPAL=principal, AIDA_TELEMETRY="0")
-        result = subprocess.run([BINARY, "intent", *args], cwd=clone, env=env, text=True, capture_output=True, timeout=50)
+        result = subprocess.run([BINARY, "intent", *args], cwd=clone, env=env, text=True, capture_output=True, timeout=50, umask=0o022)
         if ok and result.returncode:
             raise AssertionError(result.stderr + result.stdout)
         return result
 
-    def clone(self, name, role):
+    def clone(self, name, role, ci=True):
         clone = self.root / name
         clone.mkdir()
         self.git(clone, "init", "-q", "-b", "main")
@@ -128,7 +129,8 @@ class Fixture:
                    "timeout_seconds": 600, "max_polls": 8}
         file = clone / "profile.json"
         file.write_text(json.dumps(profile))
-        self.cli(clone, "ci", "enroll", "--file", str(file), "--reviewed")
+        if ci:
+            self.cli(clone, "ci", "enroll", "--file", str(file), "--reviewed")
         return clone
 
     def private(self, clone):
@@ -151,7 +153,7 @@ class Fixture:
         file.write_text(json.dumps(value))
         self.git(repo, "add", path)
         env = dict(self.env, GIT_AUTHOR_NAME="AIDA Intake", GIT_AUTHOR_EMAIL="intake@invalid", GIT_COMMITTER_NAME="AIDA Intake", GIT_COMMITTER_EMAIL="intake@invalid")
-        result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "Record reviewed intake data"], cwd=repo, env=env, capture_output=True, timeout=20)
+        result = subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "Record reviewed intake data"], cwd=repo, env=env, capture_output=True, timeout=20)
         assert result.returncode == 0, result.stderr
         self.git(repo, "push", "-q", str(self.home), "HEAD:refs/heads/aida-intent", principal="return")
 
@@ -161,6 +163,10 @@ class WorkCiTests(unittest.TestCase):
         self.f = Fixture()
         self.addCleanup(self.f.close)
 
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.acc0579e | ai:codex
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a4b5e | ai:codex
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.acadec5a | ai:codex
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.AC6 | ai:codex
     def test_pass_fail_restart_and_observation_coexistence(self):
         f = self.f
         before = f.git(f.home, "show-ref", "refs/heads/main", "refs/heads/aida-store").stdout
@@ -205,6 +211,7 @@ class WorkCiTests(unittest.TestCase):
         self.assertEqual(before, f.git(f.home, "show-ref", "refs/heads/main", "refs/heads/aida-store").stdout)
         self.assertFalse((fresh / ".aida").exists())
 
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.acd204af | ai:codex
     def test_server_ref_restrictions_independent_of_client(self):
         f = self.f
         f.git(f.source, "commit", "--allow-empty", "-qm", "next")
@@ -215,6 +222,7 @@ class WorkCiTests(unittest.TestCase):
             self.assertNotEqual(f.git(f.source, "push", str(f.work), target, ok=False, principal="request").returncode, 0)
         self.assertEqual(f.git(f.work, "rev-parse", "refs/aida/ci/1").stdout.strip(), f.sha)
 
+    # trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a391b | ai:codex
     def test_tampered_receipt_and_unknown_fields_fail_closed(self):
         f = self.f
         f.poll()
@@ -285,7 +293,78 @@ class WorkCiTests(unittest.TestCase):
         journal.write_text(json.dumps(j))
         self.assertIn("expired", f.poll().stdout)
         self.assertFalse(f.statuses)
-        self.assertNotEqual(f.git(f.home, "rev-parse", "--verify", "refs/heads/aida-intent", ok=False).returncode, 0)
+        self.assertEqual(f.receipt()["status"], "canceled")
+        f.cli(f.home_clone, "ci", "process")
+        self.assertEqual([s["state"] for s in f.statuses], ["failed"])
+
+    def test_observation_only_clone_explains_ci_enrollment(self):
+        f = self.f
+        observer = f.clone("observer", "home", ci=False)
+        f.cli(observer, "pull")  # no CI history yet
+        f.poll()
+        result = f.cli(observer, "pull", ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Intake contains CI results", result.stderr)
+        self.assertIn("aida intent ci enroll", result.stderr)
+        self.assertFalse((f.private(observer) / "validated-tip").exists())
+
+    def test_several_shas_reuse_accepted_history_without_source_fetches(self):
+        f = self.f
+        for attempt in range(1, 5):
+            if attempt > 1:
+                f.git(f.source, "commit", "--allow-empty", "-qm", "next source")
+                f.sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
+                f.git(f.source, "-c", "core.hooksPath=/dev/null", "push", "-q", str(f.home), f"{f.sha}:refs/aida/ci/{attempt}", principal="request")
+                f.cli(f.home_clone, "ci", "request", "--attempt", str(attempt), "--sha", f.sha, principal="request")
+            f.attempt, f.pipeline = attempt, 40 + attempt
+            f.poll()
+            f.cli(f.home_clone, "ci", "process")
+        # Count remote fetches by exact SHA through a transparent Git wrapper.
+        # Intake transport deliberately clears GIT_*; PATH is the test seam.
+        shim = f.root / "shim"
+        shim.mkdir()
+        log = f.root / "fetches"
+        real_git = shutil.which("git")
+        wrapper = shim / "git"
+        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(' '.join(sys.argv[1:])+'\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
+        wrapper.chmod(0o700)
+        f.env["PATH"] = str(shim) + os.pathsep + f.env["PATH"]
+        for _ in range(2):
+            f.cli(f.home_clone, "pull")
+            f.cli(f.home_clone, "ci", "process")
+        self.assertEqual(sum(s["state"] == "success" for s in f.statuses), 4)
+        fetches = log.read_text()
+        self.assertNotIn(f.sha, fetches)
+        self.assertTrue(fetches)
+        for command in fetches.splitlines():
+            self.assertTrue(command.endswith("refs/heads/aida-intent:refs/intake/incoming"), command)
+
+    def test_pending_attempt_does_not_starve_later_attempt(self):
+        f = self.f
+        f.result = "running"
+        f.poll()
+        f.cli(f.home_clone, "ci", "request", "--attempt", "2", "--sha", f.sha, principal="request")
+        f.attempt, f.pipeline, f.result = 2, 42, "success"
+        self.assertIn("attempt 2: receipt published", f.poll().stdout)
+        self.assertEqual(f.receipt(2)["status"], "success")
+        self.assertFalse(json.loads((f.private(f.work_clone) / "ci-attempt-1.json").read_text())["done"])
+
+    def test_cached_history_still_requires_retained_admission(self):
+        f = self.f
+        f.poll()
+        f.cli(f.home_clone, "pull")
+        # Administrative corruption bypasses immutable-ref server policy.
+        f.git(f.home, "update-ref", "-d", "refs/aida/ci/1")
+        refused = f.cli(f.home_clone, "pull", ok=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("no retained home admission", refused.stderr)
+
+    def test_ci_json_output(self):
+        f = self.f
+        result = f.cli(f.work_clone, "ci", "poll", "--json", principal="mirror")
+        self.assertIn("published", json.loads(result.stdout)["message"])
+        result = f.cli(f.home_clone, "ci", "process", "--json")
+        self.assertIn("native status", json.loads(result.stdout)["message"])
 
 
 if __name__ == "__main__":

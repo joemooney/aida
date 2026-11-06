@@ -169,6 +169,7 @@ mod tests {
             },
         )
     }
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a391b | ai:codex
     #[test]
     fn strict_wire_and_admission() {
         let (mut r, inventory) = fixture();

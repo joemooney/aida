@@ -219,3 +219,32 @@ CI codec, pinned static inventory, a bounded work timer, and home-only native
 status publication. See [operation, support limits and recovery](../agents/work-ci-relay.md).
 Runtime rollout requires server-enforced per-credential ref restrictions; no
 production credential or runner is enrolled by the implementation session.
+
+## Round 2 inventory follow-up (2026-11-06)
+
+This implementation slice supports bounded flat static inventories, not AIDA's
+own CI deployment. AIDA has about 48 MiB of tracked Rust sources versus the
+16 MiB inventory cap, and its GitLab config uses workflow/default/include,
+hidden templates and rules. A separate flat pipeline alone cannot address the
+source cap. Finding 3 explicitly permits this rescope plus a follow-up spec.
+
+Requested follow-up title: **Admit AIDA repository size and GitLab templates to
+work CI relay inventory** (draft task, parent STORY-2480).
+
+The native seat attempted `aida add`; node-local ID allocation refused writes
+to clone-common Git metadata (read-only), before writing an object. The host
+must file this draft using the existing AIDA allocator after seat exit. This
+section retains the exact requested scope, not a parallel requirements store.
+
+Acceptance for that task:
+
+- A fixture at least as large as AIDA (48 MiB) with several distinct source
+  SHAs validates within a documented bounded budget, using bulk object reads
+  and/or explicit test-bearing crate scope.
+- AIDA's committed GitLab configuration is admitted with deterministic selected
+  job names from local includes/templates. Remote includes, commit escapes and
+  dynamic expansion refuse; work API claims never define inventory.
+- A retained request launches the intended AIDA jobs, returns qualified test
+  failures safely, and gates native AIDA PR/train checks end to end.
+
+No AIDA runner deployment or story completion is claimed by this slice.

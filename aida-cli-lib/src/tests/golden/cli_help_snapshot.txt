@@ -11479,6 +11479,9 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
+      --json
+          Emit a JSON result object
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -11503,6 +11506,9 @@ Usage: aida intent ci enroll [OPTIONS] --file <FILE> --reviewed
 Options:
       --file <FILE>
           Strict profile JSON; copies endpoint policy and credential variable names
+
+      --json
+          Emit a JSON result object
 
       --reviewed
           Confirm destination and server-side credential policy review
@@ -11532,6 +11538,9 @@ Options:
       --attempt <ATTEMPT>
           Previously unused home-assigned positive u32; retained forever
 
+      --json
+          Emit a JSON result object
+
       --sha <SHA>
           Exact full lowercase commit object ID already available at home
 
@@ -11557,6 +11566,9 @@ Run one bounded work polling pass; invoke periodically from a user timer
 Usage: aida intent ci poll [OPTIONS]
 
 Options:
+      --json
+          Emit a JSON result object
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -11579,6 +11591,9 @@ Home only: validate intake and publish native statuses for latest attempts
 Usage: aida intent ci process [OPTIONS]
 
 Options:
+      --json
+          Emit a JSON result object
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -42743,6 +42758,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
       }
     ],
     "hidden": false
@@ -42775,6 +42795,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
       },
       {
         "name": "reviewed",
@@ -42814,6 +42839,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      },
+      {
         "name": "sha",
         "takes_value": true,
         "help": "Exact full lowercase commit object ID already available at home"
@@ -42844,6 +42874,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
       }
     ],
     "hidden": false
@@ -42871,6 +42906,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
       }
     ],
     "hidden": false

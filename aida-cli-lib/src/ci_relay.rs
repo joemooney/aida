@@ -125,7 +125,7 @@ fn profile(intake: &Intake) -> Result<Profile> {
         &intake
             .private
             .read(CONFIG)?
-            .context("Enroll CI with intent ci enroll first")?,
+            .context("Intake contains CI results but this clone has no CI admission profile; enroll with aida intent ci enroll --file <profile.json> --reviewed before reading shared CI history")?,
     )
     .map_err(|_| anyhow::anyhow!("Invalid CI profile"))?;
     validate_profile(&p)?;
@@ -154,6 +154,11 @@ fn source(intake: &Intake) -> Result<PathBuf> {
     if !root.exists() {
         fs::DirBuilder::new().mode(0o700).create(&root)?;
         git(&root, &["init", "--bare", "--quiet", "--template="])?;
+        // Git creates this file using the caller's umask (0644 in CI).
+        // Normalize only our freshly initialized private repository, never
+        // repair a pre-existing configuration whose identity is untrusted.
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(root.join("config"), fs::Permissions::from_mode(0o600))?;
         Private::open(&root)?.write("config", REPO_CONFIG)?;
     }
     let private = Private::open(&root)?;
@@ -177,6 +182,7 @@ fn source(intake: &Intake) -> Result<PathBuf> {
 }
 fn refs(root: &Path, remote: &str) -> Result<BTreeMap<u32, String>> {
     let mut result = BTreeMap::new();
+    // remote-creds-ok(TASK-2001): isolated intake uses reviewed explicit URL and SSH identity; ambient credential helpers are deliberately disabled.
     let output = git(
         root,
         &["ls-remote", "--refs", "--", remote, "refs/aida/ci/*"],
@@ -199,6 +205,7 @@ fn refs(root: &Path, remote: &str) -> Result<BTreeMap<u32, String>> {
     Ok(result)
 }
 fn fetch(root: &Path, remote: &str, sha: &str) -> Result<()> {
+    // remote-creds-ok(TASK-2001): isolated intake explicit URL uses SSH identity, never host credential helpers.
     git(
         root,
         &[
@@ -217,6 +224,7 @@ fn fetch(root: &Path, remote: &str, sha: &str) -> Result<()> {
     Ok(())
 }
 fn immutable_push(root: &Path, remote: &str, sha: &str, target: &str) -> Result<()> {
+    // remote-creds-ok(TASK-2001): isolated intake explicit URL uses SSH identity, never host credential helpers.
     let output = git(root, &["ls-remote", "--refs", "--", remote, target])?;
     if !output.is_empty() {
         if output != format!("{sha}\t{target}") {
@@ -226,6 +234,7 @@ fn immutable_push(root: &Path, remote: &str, sha: &str, target: &str) -> Result<
     }
     // No force, deletion, tags or ambient push mappings. Server-side immutable
     // request rules remain mandatory to close the lookup/push race.
+    // remote-creds-ok(TASK-2001): isolated intake explicit URL uses SSH identity, never host credential helpers.
     git(
         root,
         &[
@@ -447,7 +456,7 @@ impl Snapshot {
             deadline: std::time::Instant::now() + Duration::from_secs(30),
         })
     }
-    pub fn validate(&self, path: &str, bytes: &[u8]) -> Result<Receipt> {
+    pub fn admit<'a>(&self, path: &'a str) -> Result<(&'a str, u32)> {
         let rest = path
             .strip_prefix("ci-results/")
             .context("Invalid CI path")?;
@@ -456,6 +465,10 @@ impl Snapshot {
         if self.requests.get(&n).map(String::as_str) != Some(sha) {
             bail!("CI result has no retained home admission");
         }
+        Ok((sha, n))
+    }
+    pub fn validate(&self, path: &str, bytes: &[u8]) -> Result<Receipt> {
+        let (sha, n) = self.admit(path)?;
         if !self.inventories.borrow().contains_key(sha) {
             if std::time::Instant::now() >= self.deadline {
                 bail!("CI admission validation deadline exceeded");
@@ -655,16 +668,22 @@ fn pipeline_receipt(p: &Profile, j: &Journal, inventory: &Inventory) -> Result<O
                     let name = test["name"]
                         .as_str()
                         .context("Missing CI test identifier")?;
-                    if !inventory.tests.contains(name) {
+                    // Return only a home-derived identifier. JUnit producers
+                    // qualify Rust names with modules; no work-authored prefix
+                    // may cross the return boundary.
+                    let canonical = name.rsplit("::").next().unwrap_or(name);
+                    if !inventory.tests.contains(canonical) {
                         bail!("Work returned an unknown test identifier");
                     }
-                    failing_tests.push(name.to_owned());
+                    failing_tests.push(canonical.to_owned());
                 }
                 Some("success" | "skipped") => {}
                 _ => bail!("Unknown CI test state"),
             }
         }
     }
+    failing_tests.sort();
+    failing_tests.dedup();
     let mut receipt = Receipt {
         version: 1,
         kind: "ci-result".into(),
@@ -691,13 +710,27 @@ fn pending_bytes(intake: &Intake, j: &Journal) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
-fn poll(intake: &Intake, p: &Profile) -> Result<()> {
+fn poll(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     let root = source(intake)?;
     let home = refs(&root, &p.home_remote)?;
     let work = refs(&root, &p.work_remote)?;
     // One attempt per invocation bounds total work; all attempt/deadline state
     // survives timer restarts. Later requests cannot replenish an old budget.
-    for (n, sha) in &home {
+    let cursor = intake
+        .private
+        .read("ci-poll-cursor")?
+        .and_then(|b| String::from_utf8(b).ok())
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    // Persist selection before network I/O, so even a failed/slow attempt
+    // cannot starve subsequent requests on the next timer tick.
+    for (n, sha) in home
+        .range((
+            std::ops::Bound::Excluded(cursor),
+            std::ops::Bound::Unbounded,
+        ))
+        .chain(home.range(..=cursor))
+    {
         if work.get(n) != Some(sha) {
             bail!("Home/work retained request refs disagree");
         }
@@ -705,6 +738,9 @@ fn poll(intake: &Intake, p: &Profile) -> Result<()> {
         if j.done {
             continue;
         }
+        intake
+            .private
+            .write("ci-poll-cursor", n.to_string().as_bytes())?;
         let path = format!("ci-results/{sha}/{n}.json");
         if j.receipt_parts > 0 {
             let bytes = pending_bytes(intake, &j)?;
@@ -712,15 +748,47 @@ fn poll(intake: &Intake, p: &Profile) -> Result<()> {
             intake.append(&path, &bytes)?;
             j.done = true;
             save(intake, &j)?;
-            println!("CI attempt {n}: receipt published");
+            output(json_format, format!("CI attempt {n}: receipt published"));
             return Ok(());
         }
         if chrono::Utc::now().timestamp() >= j.deadline || j.polls >= p.max_polls {
-            println!("CI attempt {n}: expired; no success published");
-            // Expiration is terminal, not a retry-budget reset. Continue on a
-            // later tick to the next attempt without an unbounded scan of APIs.
+            // An expired run is a terminal cancellation, never a forever
+            // pending native check. Only home-derived job names are returned.
+            fetch(&root, &p.home_remote, sha)?;
+            let inventory = inventory(&root, sha)?;
+            let mut receipt = Receipt {
+                version: 1,
+                kind: "ci-result".into(),
+                sha: sha.clone(),
+                attempt: *n,
+                status: Status::Canceled,
+                jobs: inventory
+                    .jobs
+                    .iter()
+                    .map(|name| Job {
+                        name: name.clone(),
+                        status: Status::Canceled,
+                        duration_seconds: 0,
+                    })
+                    .collect(),
+                failing_tests: vec![],
+                digest: String::new(),
+            };
+            let bytes = receipt.seal()?;
+            for (part, chunk) in bytes.chunks(32768).enumerate() {
+                intake
+                    .private
+                    .write(&format!("ci-pending-{n}-{part}"), chunk)?;
+            }
+            j.receipt_parts = bytes.chunks(32768).len();
+            save(intake, &j)?;
+            intake.append(&path, &bytes)?;
             j.done = true;
             save(intake, &j)?;
+            output(
+                json_format,
+                format!("CI attempt {n}: expired; cancellation receipt published"),
+            );
             return Ok(());
         }
         j.polls += 1;
@@ -765,11 +833,14 @@ fn poll(intake: &Intake, p: &Profile) -> Result<()> {
             save(intake, &j)?;
         }
         if j.pipeline.is_none() {
-            println!("CI attempt {n}: awaiting pipeline registration");
+            output(
+                json_format,
+                format!("CI attempt {n}: awaiting pipeline registration"),
+            );
             return Ok(());
         }
         match pipeline_receipt(p, &j, &inventory)? {
-            None => println!("CI attempt {n}: pipeline pending"),
+            None => output(json_format, format!("CI attempt {n}: pipeline pending")),
             Some(bytes) => {
                 // Private files have a 64-KiB cap; journal is committed only
                 // after all bounded chunks are durable. Partial writes retry.
@@ -783,12 +854,15 @@ fn poll(intake: &Intake, p: &Profile) -> Result<()> {
                 intake.append(&path, &bytes)?;
                 j.done = true;
                 save(intake, &j)?;
-                println!("CI attempt {n}: receipt published");
+                output(json_format, format!("CI attempt {n}: receipt published"));
             }
         }
         return Ok(());
     }
-    println!("CI relay: no pending admitted requests");
+    output(
+        json_format,
+        format!("CI relay: no pending admitted requests"),
+    );
     Ok(())
 }
 fn publish_status(e: &Endpoint, r: &Receipt) -> Result<()> {
@@ -915,7 +989,7 @@ fn status_observed(e: &Endpoint, r: &Receipt) -> Result<bool> {
     }
     Ok(!matching.is_empty())
 }
-fn process(intake: &Intake, p: &Profile) -> Result<()> {
+fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     intake.sync()?;
     let files = intake.files()?;
     let snapshot = Snapshot::load(intake)?;
@@ -930,10 +1004,17 @@ fn process(intake: &Intake, p: &Profile) -> Result<()> {
         .iter()
         .filter(|(path, _)| path.starts_with("ci-results/"))
     {
-        let r = snapshot.validate(path, bytes)?;
+        // files() has validated the accepted history. Select latest attempts
+        // before source inventory work; old results never publish statuses.
+        let r: Receipt = serde_json::from_slice(bytes)?;
         if latest.get(&r.sha) != Some(&r.attempt) {
             continue;
         }
+        let marker = format!("ci-status-{}.json", r.attempt);
+        if intake.private.read(&marker)?.as_deref() == Some(r.digest.as_bytes()) {
+            continue;
+        }
+        let r = snapshot.validate(path, bytes)?;
         let marker = format!("ci-status-{}.json", r.attempt);
         if let Some(old) = intake.private.read(&marker)? {
             if old != r.digest.as_bytes() {
@@ -952,7 +1033,10 @@ fn process(intake: &Intake, p: &Profile) -> Result<()> {
         if status_observed(endpoint, &r)? {
             intake.private.write(&marker, r.digest.as_bytes())?;
             intake.private.remove(&pending)?;
-            println!("CI attempt {}: native status reconciled", r.attempt);
+            output(
+                json_format,
+                format!("CI attempt {}: native status reconciled", r.attempt),
+            );
             return Ok(());
         }
         if intake.private.read(&pending)?.is_some() {
@@ -980,10 +1064,16 @@ fn process(intake: &Intake, p: &Profile) -> Result<()> {
         )?;
         intake.private.write(&marker, r.digest.as_bytes())?;
         intake.private.remove(&pending)?;
-        println!("CI attempt {}: native status published", r.attempt);
+        output(
+            json_format,
+            format!("CI attempt {}: native status published", r.attempt),
+        );
         return Ok(());
     }
-    println!("CI intake: no unprocessed current results");
+    output(
+        json_format,
+        format!("CI intake: no unprocessed current results"),
+    );
     Ok(())
 }
 fn probe(intake: &Intake, root: &Path, sha: &str) -> Result<()> {
@@ -1017,7 +1107,14 @@ fn probe(intake: &Intake, root: &Path, sha: &str) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) fn run(intake: &Intake, command: &CiCommand) -> Result<()> {
+fn output(json_format: bool, message: String) {
+    if json_format {
+        println!("{}", json!({"message": message}));
+    } else {
+        println!("{message}");
+    }
+}
+pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Result<()> {
     if let CiCommand::Enroll { file, reviewed } = command {
         if !reviewed {
             bail!("CI enrollment requires reviewed configuration");
@@ -1040,7 +1137,10 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand) -> Result<()> {
         fetch(&root, &p.home_remote, sha)?;
         probe(intake, &root, sha)?;
         intake.private.write(CONFIG, &canonical)?;
-        println!("Enrolled CI profile; return credential branch/tag probes refused");
+        output(
+            json_format,
+            format!("Enrolled CI profile; return credential branch/tag probes refused"),
+        );
         return Ok(());
     }
     let p = profile(intake)?;
@@ -1070,19 +1170,22 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand) -> Result<()> {
                 sha,
             )?;
             immutable_push(&root, &p.work_remote, sha, &target)?;
-            println!("CI attempt {attempt}: retained exact-SHA request published");
+            output(
+                json_format,
+                format!("CI attempt {attempt}: retained exact-SHA request published"),
+            );
         }
         CiCommand::Poll => {
             if p.role != "work" {
                 bail!("CI poll requires a work profile without home API credentials");
             }
-            poll(intake, &p)?;
+            poll(intake, &p, json_format)?;
         }
         CiCommand::Process => {
             if p.role != "home" {
                 bail!("CI processing requires a home profile");
             }
-            process(intake, &p)?;
+            process(intake, &p, json_format)?;
         }
         CiCommand::Enroll { .. } => unreachable!(),
     }
@@ -1104,10 +1207,23 @@ mod tests {
         )
         .unwrap();
         git(temp.path(), &["add", "."]).unwrap();
-        git(temp.path(), &["commit", "-qm", "source"]).unwrap();
+        git(
+            temp.path(),
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "source",
+            ],
+        )
+        .unwrap();
         let sha = git(temp.path(), &["rev-parse", "HEAD"]).unwrap();
         (temp, sha)
     }
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a391b | ai:codex
     #[test]
     fn pinned_inventory_rejects_indirect_jobs() {
         let (repo, sha) = repository("build:\n  script: cargo test\n", ".gitlab-ci.yml");

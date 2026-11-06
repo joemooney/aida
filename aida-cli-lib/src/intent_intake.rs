@@ -23,6 +23,9 @@ const CAP: usize = 8 * 1024 * 1024;
 pub(crate) enum IntakeCommand {
     /// Configure or run the restricted work CI return channel.
     Ci {
+        /// Emit a JSON result object.
+        #[clap(long = "json", global = true)]
+        ci_json: bool,
         #[clap(subcommand)]
         command: crate::ci_relay::CiCommand,
     },
@@ -355,6 +358,14 @@ impl Intake {
         self.profile.remote.clone()
     }
 
+    fn ci_admit(&self, path: &str) -> Result<()> {
+        if self.ci_snapshot.borrow().is_none() {
+            *self.ci_snapshot.borrow_mut() = Some(crate::ci_relay::Snapshot::load(self)?);
+        }
+        self.ci_snapshot.borrow().as_ref().unwrap().admit(path)?;
+        Ok(())
+    }
+
     pub(super) fn ci_validate(&self, path: &str, bytes: &[u8]) -> Result<()> {
         if self.ci_snapshot.borrow().is_none() {
             *self.ci_snapshot.borrow_mut() = Some(crate::ci_relay::Snapshot::load(self)?);
@@ -408,7 +419,7 @@ impl Intake {
         // Owner-only checkpoint pins a previously validated immutable Git object.
         // Rewritten/unrelated history cannot reuse it; it falls back to full validation.
         // Only new commits need intermediate-tree checks. Re-read the checkpoint
-        // tree and validate every live file against the current policy as well.
+        // tree; unchanged CI files retain that validator-bound admission proof.
         // Bind proof to the compiled validators, including dirty source changes:
         // future validation rules must never inherit an older validator's proof.
         let validator = validator_prefix();
@@ -519,7 +530,18 @@ impl Intake {
                     bail!("Intake tree exceeds 32 MiB");
                 }
                 if folder == "ci-results" {
-                    self.ci_validate(path, &bytes)?;
+                    // Retained refs remain live authority. One remote ref
+                    // snapshot checks all identities without fetching sources.
+                    self.ci_admit(path)?;
+                    // trace:STORY-2480 | ai:codex
+                    // A checkpoint is written only after acceptance, and is bound
+                    // to these validators. Git objects are immutable. Revalidate
+                    // new/changed bytes, never refetch every historical source SHA.
+                    if checkpoint.as_deref() != Some(fields[0])
+                        && previous.get(path) != Some(&bytes)
+                    {
+                        self.ci_validate(path, &bytes)?;
+                    }
                 } else if folder == "observations" {
                     let value = envelope::parse(&bytes, &self.profile.deny_patterns)?;
                     if value.checksum != checksum {
@@ -1128,7 +1150,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
     let intake = Intake::open(command)?;
     let json = json_format
         || match command {
-            IntakeCommand::Ci { .. } => false,
+            IntakeCommand::Ci { ci_json, .. } => *ci_json,
             IntakeCommand::Enroll { json, .. }
             | IntakeCommand::Publish { json, .. }
             | IntakeCommand::Pull { json }
@@ -1136,7 +1158,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             | IntakeCommand::Process { json, .. } => *json,
         };
     match command {
-        IntakeCommand::Ci { command } => crate::ci_relay::run(&intake, command)?,
+        IntakeCommand::Ci { command, .. } => crate::ci_relay::run(&intake, command, json)?,
         IntakeCommand::Enroll { .. } => {
             if json {
                 println!(

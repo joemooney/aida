@@ -106,6 +106,10 @@ A work profile contains exactly these fields:
 }
 ```
 
+The request ref filter is fixed to `refs/aida/ci/*` by the advisor ruling;
+it is not a configurable profile field. Attempts and their exact SHAs are the
+only request authority, and retained refs must never be rewritten or deleted.
+
 At home set `role` to `home` and supply `home_api` in the same endpoint shape.
 GitLab projects use positive numeric IDs; GitHub uses `owner/repository` and
 `forge: "github"`, with `url: "https://api.github.com"`. The home clone's remote
@@ -139,15 +143,25 @@ the operator must arrange a work pipeline with exactly the pinned job names.
 The relay never invents a pipeline definition.
 
 Literal Rust `#[test]` / `#[tokio::test]` function names in committed regular
-`.rs` files form the supported failing-test inventory. Names are unqualified
-function identifiers, matching the API's `name` field. Inline modules are walked;
+`.rs` files form the supported failing-test inventory. Receipts use unqualified
+function identifiers. Qualified JUnit names such as `module::checks` map to the
+home-derived final function identifier `checks`; work-authored module prefixes
+are never returned. Repeated failures of that identifier deduplicate. Inline
+modules are walked;
 all committed `.rs` files are inspected without running code. Dynamic/generated,
 parameterized and non-Rust test names are unsupported and refuse if returned.
 This profile does not promise discovery of every generated or conditionally
 compiled test. There is no test-discovery subprocess or work-supplied inventory.
 Source reads are bounded (1 MiB/file, 4096 Rust files, 16 MiB total, 20 seconds).
-Unsupported existing repository workflows require a separate supported pipeline
-configuration before rollout; no real runner deployment is claimed here.
+This slice is explicitly limited to repositories within those bounds and flat
+static pipeline definitions. **AIDA itself is not currently supported**: its
+tracked Rust sources total about 48 MiB and its GitLab configuration uses
+includes, defaults, workflow rules and hidden templates. A separate supported
+pipeline alone does not solve the source-size limit. Deployment to AIDA needs
+the inventory follow-up recorded on STORY-2480 (round 2 finding 3); no actual
+AIDA runner deployment is claimed. That follow-up must cover bounded bulk source
+reads/test-bearing scope, committed local template expansion, deterministic
+selected jobs and an AIDA-sized end-to-end fixture.
 
 Receipts use exactly `version`, `kind`, `sha`, `attempt`, `status`, `jobs`,
 `failing_tests`, `digest`. Kind is `ci-result`, version is 1. Jobs contain exactly
@@ -164,7 +178,14 @@ listed order, excluding `digest`, using serde_json escaping.
 Immutable bytes live at `ci-results/<sha>/<attempt>.json` on `aida-intent`.
 Existing observation and processing-receipt formats stay unchanged. Ordinary
 intake pulls/publications validate CI history too, so any clone reading that
-history must enroll CI admission access. Invalid input remains in the independent
+history must enroll CI admission access. Observation-only clones encountering
+CI files refuse with explicit enrollment guidance; they never skip validation.
+The accepted-tip checkpoint binds the validator sources and immutable history.
+Unchanged CI files retain its proof; only newly introduced receipts require
+source fetching and inventory validation. One live ref listing still checks
+every retained admission, including cached files. Policy changes invalidate the
+checkpoint. Home processing skips already-published results before inventory
+work. Invalid input remains in the independent
 quarantine ref/object database; it cannot advance the accepted intake branch or
 publish a native status. No work logs, URLs, paths, runner identities or diagnostic
 prose enter the return schema. Allow-lists and digests cannot establish that work
@@ -179,11 +200,23 @@ absolute deadline, poll count and exact pipeline ID **before** side effects.
 Pending receipt bytes are persisted in bounded owner-only chunks before push;
 restart retries those exact bytes. Concurrent intake publication reuses the
 existing bounded fast-forward retry path; it never force-pushes or overwrites
-immutable files. Expiration publishes no success and never replenishes its
-budget. Retry with a fresh home-assigned attempt instead of editing a journal.
+immutable files. Each timer pass selects one unfinished attempt in persistent
+round-robin order,
+so pending or failing requests cannot starve later attempts. Expiration publishes
+a terminal cancellation receipt with the expected jobs canceled and zero durations;
+home maps it to a failed native check. It never replenishes the original budget.
+Retry with a fresh home-assigned attempt instead of editing a journal.
 
 The home processor publishes one stable native check, `aida/work-ci`. Configure
-that exact context as required in the home merge/train policy. Local transport
+that exact context as required in the home merge/train policy. AIDA's existing
+commit CI readers consume these native statuses on GitHub and GitLab; verified
+trains/readiness use their ordinary required-check judge, and `aida pr ship`
+on GitHub classifies this status through its normal forge check rows.
+GitLab commit-target readers consume it too; the legacy branch/MR pipeline
+summary is not a relay-status display. A newer pending status blocks the
+required-check paths until a current success arrives. The source integration
+regression is `work_ci_native_status_is_a_required_train_and_pr_source`.
+Local transport
 configuration cannot change protected-branch or required-check settings. A newer
 admitted attempt supersedes older receipts for the same SHA, even while its
 result is pending; old receipts cannot overwrite it. The request command marks the native check pending before sending a new attempt
@@ -208,3 +241,6 @@ cargo test -p aida-cli-lib --no-default-features ci_receipt::tests --lib
 cargo build -p aida-cli --no-default-features
 AIDA_TEST_BIN="$PWD/target/debug/aida" python3 tests/test_work_ci_relay.py
 ```
+
+CI commands accept `--json` (or `--format json`) and emit one result object
+with a `message` field on success; refusals remain nonzero exits.

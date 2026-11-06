@@ -593,13 +593,6 @@ ordinary authorized CLI writers with durable operation journals and receipts.
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
-`intent ci` shares that intake lock/transport. Immutable retained
-`refs/aida/ci/<attempt>` refs carry home-assigned request authority; execution
-branches and work pipeline IDs do not. Both validators pin static home inventory;
-only home publishes `aida/work-ci`. Server-enforced per-credential restrictions
-are required before deployment. See [work CI setup and limits](docs/agents/work-ci-relay.md).
-<!-- trace:STORY-2480 | ai:codex -->
-
 ## Requirements Management
 
 Before implementing, read the owning requirement:
