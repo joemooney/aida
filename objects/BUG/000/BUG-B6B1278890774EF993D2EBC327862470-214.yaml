@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-05T19:14:19.353162386Z
+modified_at: 2026-11-06T07:27:52.939494516Z
 req_type: Bug
 tags:
 - area:containment
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-11-05T19:14:19.353162386Z
   modified_at: 2026-11-05T19:14:19.353162386Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1afc1-c06b-7f23-a6c4-ee8397483f45
+  author: joe
+  content: 'ADVISOR 2026-11-06 00:35 MST: TASK-3131 merged (#3475), so the --boundary aida harness exists. The advisor''s live runs through the script deputy (00:09 and 00:23) scored nothing, for two reasons. (1) BUG-2460: fixture init hangs on an inherited TTY stdin; a lane is dispatched. (2) Even with init fixed, ''aida role enter'' in the fixture refuses (''managed agents must not mint seat grants'') because the deputy shell carries the advisor session identity. The live run therefore needs a PLAIN operator terminal with no AIDA_SESSION_* env, after BUG-2460 lands: python3 scripts/containment/conformance.py --vendor codex --boundary aida --output "$HOME/.aida/conformance-aida-$(date +%s)" --timeout 120. Close this bug if C3 (BUG-2447) / C4 (BUG-2448) pass under boundary=aida.'
+  created_at: 2026-11-06T07:27:52.939494516Z
+  modified_at: 2026-11-06T07:27:52.939494516Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
