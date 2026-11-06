@@ -680,6 +680,25 @@ pub(crate) fn ack(
     Ok(())
 }
 
+// trace:BUG-2468 | ai:codex
+pub(crate) fn write_runner_status(status: ds::RunnerStatus, out: &mut dyn Write) -> Result<()> {
+    match status {
+        ds::RunnerStatus::Live(r) => writeln!(
+            out,
+            "runner: live, pid {} (grant {}…), submitters {}",
+            r.pid,
+            r.grant_prefix,
+            r.submit_seats.join(", ")
+        )?,
+        ds::RunnerStatus::Legacy(pid) => {
+            writeln!(out, "runner: live, pid {pid} (legacy bash runner)")?
+        }
+        ds::RunnerStatus::NotRunning => writeln!(out, "runner: NOT running")?,
+        ds::RunnerStatus::Unknown(why) => writeln!(out, "runner: UNKNOWN ({why})")?,
+    }
+    Ok(())
+}
+
 pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<()> {
     if !q.root.exists() {
         writeln!(
@@ -689,16 +708,7 @@ pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<
         )?;
         return Ok(());
     }
-    match q.live_runner() {
-        Some(r) => writeln!(
-            out,
-            "runner: live, pid {} (grant {}…), submitters {}",
-            r.pid,
-            r.grant_prefix,
-            r.submit_seats.join(", ")
-        )?,
-        None => writeln!(out, "runner: NOT running")?,
-    }
+    write_runner_status(q.runner_status(), out)?;
     if q.paused() {
         writeln!(
             out,
