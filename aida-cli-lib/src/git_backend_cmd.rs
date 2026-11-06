@@ -1474,9 +1474,23 @@ pub(crate) fn handle_git_backend_command(
     // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
     let _show_fast_fail = (command.name() == "show").then(ShowFastFail::arm);
     let open_phase = crate::usage::phase("open");
-    let dispenser = load_dispenser(store_path)?;
-    let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
-    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    // trace:BUG-2466 | ai:codex
+    // Reading one spec never allocates an ID. Opening the legacy dispenser
+    // takes an exclusive allocation lock even when it already exists.
+    let inner = {
+        let _phase = crate::usage::phase("open.backend");
+        let inner = aida_core::GitBackend::new(store_path)?;
+        if command.name() == "show" {
+            inner
+        } else {
+            inner.with_dispenser(load_dispenser(store_path)?)
+        }
+    };
+    let cache_path = {
+        let _phase = crate::usage::phase("open.location");
+        aida_core::CachedGitBackend::default_cache_path(store_path)
+    };
+    let cache_phase = crate::usage::phase("open.cache");
     // BUG-681: the per-turn `aida awaiting --notice` line is fired by the
     // UserPromptSubmit hook under Claude Code's 5s timeout. The notice is
     // ADVISORY — under cache-lock contention it must bail instantly (degrade to
@@ -1528,13 +1542,13 @@ pub(crate) fn handle_git_backend_command(
                         c.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>()
                     })) =>
         {
-            let inner =
-                aida_core::GitBackend::new(store_path)?.with_dispenser(load_dispenser(store_path)?);
+            let inner = aida_core::GitBackend::new(store_path)?;
             aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
                 .map_err(|_| e)?
         }
         Err(e) => return Err(e),
     };
+    drop(cache_phase);
     drop(open_phase);
     // BUG-b6b1278890774ef993d2ebc327862470-008: the pre-dispatch hygiene
     // checks (auto-push warning here, team-identity guard below) were time
