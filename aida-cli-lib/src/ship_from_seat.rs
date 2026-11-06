@@ -342,6 +342,22 @@ pub(crate) fn post_exit_commit(
     if crate::seat_clone::host_recorded_clone(&main, tree).is_none() {
         return PostExitCommit::NotASeat;
     }
+    // trace:TASK-2902 | ai:codex
+    // Every exit path honors vetoes before resolving or inspecting intent.
+    if publication_veto(&main, spec) {
+        eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
+        return PostExitCommit::Clean;
+    }
+    let validated = (|| -> Result<(String, Option<String>)> {
+        let canonical = crate::native_publication::resolve_scope(&main, spec)?;
+        let declared = crate::native_publication::read(&main, tree, &canonical)?;
+        Ok((canonical, declared))
+    })();
+    let (spec, declared) = match validated {
+        Ok(value) => value,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    let spec = spec.as_str();
     // Resolve against the host forge, never seat-controlled remote config.
     // trace:TASK-2879 | ai:codex
     let completing = recorded_seat(&main, tree)
@@ -353,6 +369,17 @@ pub(crate) fn post_exit_commit(
                 .ok()
         })
         .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
+    if let Some(mut message) = declared {
+        if !clean_exit || !completing {
+            let prefix = message.rsplit_once('(').expect("validated trailer").0;
+            message = format!("{prefix}(Refs {spec})");
+        }
+        return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
+            Ok(Some(tip)) => PostExitCommit::Committed(tip),
+            Ok(None) => PostExitCommit::Clean,
+            Err(e) => PostExitCommit::Failed(format!("{e:#}")),
+        };
+    }
     // Resolve the lease's origin ID against the host store before formatting.
     // trace:BUG-2459 | ai:codex
     let store = crate::load_store_for_lookup(&main);
@@ -455,7 +482,8 @@ pub(crate) fn publish_queue_exit(
             &main,
             FromSeatOptions {
                 clone: tree.to_path_buf(),
-                spec: Some(spec.to_string()),
+                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
                 no_pr: false,
                 dry_run: false,
                 commit_pending: None,
@@ -494,9 +522,7 @@ fn publish_queue_exit_with(
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
-    if crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
-        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
-    {
+    if publication_veto(main, spec) {
         return Ok(());
     }
     finish_queue_exit(commit(), &publish, || {
@@ -510,6 +536,12 @@ fn publish_queue_exit_with(
         }
         notify()
     })
+}
+
+// trace:TASK-2902 | ai:codex
+fn publication_veto(main: &Path, spec: &str) -> bool {
+    crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
+        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
 }
 
 // trace:STORY-2475 | ai:codex
