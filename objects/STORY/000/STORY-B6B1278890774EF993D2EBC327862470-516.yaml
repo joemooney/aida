@@ -13,16 +13,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-06T21:41:03.638236900Z
+modified_at: 2026-11-06T21:41:33.427165637Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a1949a-191b-7113-bb06-9bfc8dce2c27
   created_at: 2026-11-06T21:41:11.543412679Z
+- rel_type: Blocks
+  target_id: 01a1a957-8feb-7de1-97e1-21c419394f26
+  created_at: 2026-11-06T21:41:33.427156453Z
+  created_by: joe
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
   timestamp: 2026-11-06T21:41:12.760807201Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes: []
+- id: 01a1b2cf-54cd-7860-bbd0-3750028e30ef
+  author: joe
+  timestamp: 2026-11-06T21:41:34.541009601Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes: []
 execution_mode: guided
