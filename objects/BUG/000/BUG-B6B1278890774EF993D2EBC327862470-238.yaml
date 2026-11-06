@@ -9,13 +9,21 @@ description: |-
   1. Review watch skips any PR whose head branch is a train branch (the prefix pr_train creates), logging it once as 'train PR: not reviewed'.
   2. auto-queue-review refuses a train branch.
   3. A test covers both.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:36:18.589883017Z
-modified_at: 2026-11-06T19:36:18.589883017Z
+modified_at: 2026-11-06T19:50:28.426085517Z
 req_type: Bug
+history:
+- id: 01a1b269-9d4a-7d51-a0a9-acfb2ce6265f
+  author: aida-session-start
+  timestamp: 2026-11-06T19:50:28.426083097Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
   branch: main
