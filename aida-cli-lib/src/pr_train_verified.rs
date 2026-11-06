@@ -67,7 +67,7 @@ impl VerifiedTrainMerge<'_> {
             .for_each(|id| *id = id.to_ascii_uppercase());
         hints.sort();
         hints.dedup();
-        let bodies = read_bodies(root, change.id, &hints)?;
+        let bodies = read_bodies(root, change.id, &hints, &self.tip)?;
         let live_bodies: Vec<String> = bodies
             .iter()
             .map(|(_, record)| serde_json::to_string(record))
@@ -325,9 +325,10 @@ fn collect(
             tags.dedup();
         }
 
-        // Additional alias-aware inputs retain every conflicting record. These
-        // are read-only lookups; M1 binding and spec-only routing are unchanged.
-        let bodies = read_bodies(&live.project_root, fresh.pr, &ids)?;
+        // The exact-head publication answers first, as it does at the member
+        // gate. Without one, alias-aware local inputs retain every conflict.
+        // These reads do not change M1 binding or spec-only routing.
+        let bodies = read_bodies(&live.project_root, fresh.pr, &ids, &fresh.head)?;
         anyhow::ensure!(!bodies.is_empty(), "train source approval evidence missing");
         corpus::enforce_corpus_gate_before_merge(
             &live.project_root,
@@ -607,13 +608,26 @@ fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
     Ok(out)
 }
 
-fn read_bodies(root: &Path, pr: u64, ids: &[String]) -> Result<Bodies> {
+// trace:STORY-2492.ac540936 | ai:codex
+fn read_bodies(root: &Path, pr: u64, ids: &[String], head: &str) -> Result<Bodies> {
     let main = crate::main_worktree_root_from(root);
     for root in [root, main.as_path()] {
         let store = ledger::store_root(root)?;
         validate_ledger(&store, &format!("PR-{pr}"))?;
         for id in ids {
             validate_ledger(&store, id)?;
+        }
+    }
+    // The member gate accepts this exact-head signed publication. Carry the
+    // same body into the mechanical source proof, without requiring a local
+    // reviewer receipt or ledger copy. Query only this PR: spec aliases must
+    // never project a rider's approval onto the train PR's own head.
+    let key = format!("PR-{pr}");
+    for site in [root, main.as_path()] {
+        if let Some(publication) =
+            crate::gate::review_publication::current_at_head(site, &[key.as_str()], head)
+        {
+            return Ok(vec![(key, serde_json::from_str(&publication.body)?)]);
         }
     }
     corpus::corpus_gate_bodies(&[root, main.as_path()], pr, ids)
