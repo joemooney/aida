@@ -18,7 +18,7 @@ fn git_ok(root: &Path, args: &[&str]) -> String {
         .args(args);
     text(run(cmd).unwrap()).unwrap()
 }
-fn write(root: &Path, rel: &str, bytes: impl AsRef<[u8]>) {
+pub(super) fn write(root: &Path, rel: &str, bytes: impl AsRef<[u8]>) {
     let path = root.join(rel);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
@@ -33,7 +33,7 @@ fn key(root: &Path, name: &str) -> Publisher {
         private_key: path,
     }
 }
-fn available() -> bool {
+pub(super) fn available() -> bool {
     let _env = crate::test_env::env_lock();
     if Command::new("ssh-keygen").arg("-V").output().is_err() {
         eprintln!("SKIP: ssh-keygen is absent; trusted-node signature tests require OpenSSH");
@@ -51,13 +51,13 @@ fn env(home: &Path) -> crate::test_env::EnvVarsGuard {
 fn file(path: &str, bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
     vec![(path.to_string(), bytes.to_vec())]
 }
-struct Fixture {
-    temp: tempfile::TempDir,
-    a: PathBuf,
-    b: PathBuf,
-    spec: aida_core::Requirement,
+pub(super) struct Fixture {
+    pub(super) temp: tempfile::TempDir,
+    pub(super) a: PathBuf,
+    pub(super) b: PathBuf,
+    pub(super) spec: aida_core::Requirement,
     finding: aida_core::Requirement,
-    sha: String,
+    pub(super) sha: String,
     signer: Publisher,
     third: Publisher,
 }
@@ -65,7 +65,7 @@ impl Fixture {
     fn new() -> Self {
         Self::new_with_forge(false)
     }
-    fn new_with_forge(forge: bool) -> Self {
+    pub(super) fn new_with_forge(forge: bool) -> Self {
         let config = if forge {
             "[deployment]\nstore_path = '.aida-store'\n[review]\nadmission_hub = 'https://github.com/fixture/review.git'\nadmission_ref = 'refs/aida/review-admission'\n"
         } else {
@@ -281,7 +281,7 @@ impl Fixture {
         f.sync(&f.b);
         f
     }
-    fn sync(&self, node: &Path) {
+    pub(super) fn sync(&self, node: &Path) {
         git_ok(
             &node.join(".aida-store"),
             &["pull", "-q", "--ff-only", "origin", "aida-store"],
@@ -331,7 +331,7 @@ impl Fixture {
     fn collect(&self, record: &rv::JsonObj) -> Result<usize, std::io::Error> {
         self.collect_for(7, record)
     }
-    fn candidates(&self, root: &Path, head: &str) -> Vec<rv::RecordedVerdict> {
+    pub(super) fn candidates(&self, root: &Path, head: &str) -> Vec<rv::RecordedVerdict> {
         ship::merge_gate_verdict_candidates(&[root], 7, &["STORY-1".into()], Some(head))
     }
     fn selected(&self) -> rv::RecordedVerdict {
@@ -339,7 +339,7 @@ impl Fixture {
         assert_eq!(candidates.len(), 1);
         candidates[0].clone()
     }
-    fn receipts(&self, root: &Path, change: &str) -> Vec<(Receipt, Signed, String)> {
+    pub(super) fn receipts(&self, root: &Path, change: &str) -> Vec<(Receipt, Signed, String)> {
         let store = root.join(".aida-store");
         load_receipts(root, &store, &head(&store).unwrap(), change).unwrap()
     }
@@ -1060,6 +1060,3 @@ fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
         "stale publications do not suppress a new head"
     );
 }
-
-#[path = "story_2492_entry_tests.rs"]
-mod entry_tests;

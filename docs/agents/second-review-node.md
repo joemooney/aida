@@ -46,7 +46,9 @@ touch .aida/review-authorship.jsonl
 ```
 
 For a clone that has authored work, retain or restore its recorded history.
-Unreadable local authorship evidence refuses publication authority.
+Unreadable local authorship evidence refuses publication authority. Node and
+watcher setup do not currently initialize this ledger; command-based initialization
+for a known fresh clone remains a follow-up.
 
 ## Implement on A, review on B
 
@@ -275,9 +277,13 @@ The targeted two-clone regression uses a shared bare store hub and a separate
 bare code hub. A strict local forge CLI supplies API and green CI responses;
 Git pushes, signed publications, watcher dispatch/child receipts, ship refusal,
 train member gating, train construction and pinned landing all use production
-paths. A fixture reviewer replaces the model process, using the ordinary
-validated host collector. The first review requests changes and names a blocking
-finding origin; A observes both and its train refuses. After A pushes a correction,
+paths. A fixture reviewer replaces the model process and synthesizes a local
+human-at-TTY receipt (`write_human_receipt`, `human_at_tty: true`) in a non-TTY
+child before invoking the ordinary host collector. That collector validates the
+synthetic human-receipt authority; the substitute does not exercise the delegated
+reviewer-grant attestation produced by a real watcher queue-work child. The first
+review requests changes and names a blocking finding origin; A observes both and
+its train refuses. After A pushes a correction,
 B's watcher reviews the new head and A's train lands that exact reviewed content.
 
 ```bash

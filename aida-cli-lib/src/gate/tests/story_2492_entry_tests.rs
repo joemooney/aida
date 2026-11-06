@@ -1,5 +1,8 @@
 //! Two-node command-entry regression. No decision, gate or train rail is mocked.
+//! The reviewer substitute synthesizes local human-at-TTY receipt evidence from
+//! a non-TTY child; delegated reviewer-grant attestation is not exercised here.
 // trace:STORY-2492.ac540936 | ai:codex
+use super::tests::{available, write, Fixture};
 use super::*;
 use clap::Parser;
 
@@ -18,7 +21,8 @@ fn git_ok(root: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
 
-const TEST: &str = "gate::review_publication::tests::entry_tests::two_node_ship_watch_rework_and_train_entry_points";
+const TEST: &str =
+    "gate::review_publication::entry_tests::two_node_ship_watch_rework_and_train_entry_points";
 
 #[derive(Parser)]
 struct Watch {
@@ -54,7 +58,11 @@ fn wait(child: &mut std::process::Child, root: &Path) {
     }
 }
 
-// Model substitute: ordinary authority validation and host collection still run.
+// Model substitute: this non-TTY child synthesizes a human-at-TTY receipt via
+// write_human_receipt and human_at_tty=true. The ordinary host collector validates
+// it, but this does not exercise the real queue-work child's delegated reviewer
+// grant attestation. This test covers transport of locally validated human
+// authority; it must not claim end-to-end delegated-grant coverage.
 fn collect(root: &Path) {
     let sha = std::env::var("AIDA_REVIEW_WATCH_HEAD").unwrap();
     let decision = std::fs::read_to_string(root.parent().unwrap().join("decision")).unwrap();
@@ -126,7 +134,9 @@ fn two_node_ship_watch_rework_and_train_entry_points() {
     write(
         &bin,
         "forge.json",
-        serde_json::to_vec(&serde_json::json!({"hub":hub,"prs":{}})).unwrap(),
+        serde_json::to_vec(&serde_json::json!({"hub":hub,"prs":{},
+            "git": crate::find_executable_on_path("git").expect("Git must be on PATH")}))
+        .unwrap(),
     );
     let forge_script = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("src/gate/tests/fixtures/story_2492_forge.py"),
@@ -189,7 +199,7 @@ fn two_node_ship_watch_rework_and_train_entry_points() {
     std::fs::create_dir(&home_b).unwrap();
     std::fs::create_dir(&home).unwrap();
     let script = format!(
-        r#"#!/usr/bin/python3
+        r#"#!/usr/bin/env python3
 import os, sys
 args = sys.argv[1:]
 os.environ['AIDA_TEST_GH_BINARY'] = os.path.join(os.path.dirname(sys.argv[0]), 'bin', 'gh')
@@ -364,10 +374,17 @@ os.execv({exe:?}, [{exe:?}, '--exact', '--nocapture', '--test-threads=1', {test:
         if decision == "request-changes" {
             let selected = f.candidates(&f.a, &h);
             assert_eq!(selected.len(), 1);
-            assert!(selected[0].kind.blocks_done());
+            assert_eq!(selected[0].kind, rv::VerdictKind::RequestChanges);
             let receipt = f.receipts(&f.a, "PR-7").pop().unwrap().0;
             assert_eq!(receipt.blocking_finding_origin_ids, vec!["TASK-NODEB-2"]);
-            assert!(result.is_err(), "train must refuse B's blocking verdict");
+            // The train's approval gate reports a request-changes head as
+            // lacking approval. Pin that exact PR/head refusal alongside the
+            // synced blocking verdict above, excluding forge/transport errors.
+            let error = format!("{:#}", result.unwrap_err());
+            assert!(
+                error.contains("#7: PR-7 has no approval recorded at its head"),
+                "train must refuse B's blocking verdict: {error}"
+            );
             assert_eq!(
                 git_ok(&f.a, &["ls-remote", "origin", "main"])
                     .split_whitespace()

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Strict local forge transport for the two-node command-entry test.
 
 Git objects and pushes are real; only the remote forge's API/CI is simulated.
@@ -18,7 +18,7 @@ a = sys.argv[1:]
 # while delegating every actual Git operation to the real local transport.
 if pathlib.Path(__file__).name == 'git':
     if 'remote' in a and 'get-url' in a:
-        result = subprocess.run(['/usr/bin/git', *a], capture_output=True)
+        result = subprocess.run([state['git'], *a], capture_output=True)
         output = result.stdout
         if output.strip() == state['hub'].encode():
             output = b'https://github.com/fixture/review.git\n'
@@ -26,13 +26,13 @@ if pathlib.Path(__file__).name == 'git':
         sys.stderr.buffer.write(result.stderr)
         sys.exit(result.returncode)
     routed = [state['hub'] if arg == 'https://github.com/fixture/review.git' else arg for arg in a]
-    os.execv('/usr/bin/git', ['/usr/bin/git', *routed])
+    os.execv(state['git'], [state['git'], *routed])
 with (root / 'forge.log').open('a') as log:
     log.write(json.dumps(a) + '\n')
 
 
 def git(*args):
-    return subprocess.check_output(['/usr/bin/git', '--git-dir', state['hub'], *args], text=True).strip()
+    return subprocess.check_output([state['git'], '--git-dir', state['hub'], *args], text=True).strip()
 
 
 def save():
@@ -51,7 +51,7 @@ def option(name, default=None):
 def row(n):
     r = dict(state['prs'][str(n)])
     r['headRefOid'] = git('rev-parse', r['headRefName'])
-    subprocess.check_call(['/usr/bin/git', '--git-dir', state['hub'], 'update-ref',
+    subprocess.check_call([state['git'], '--git-dir', state['hub'], 'update-ref',
                            f'refs/pull/{n}/head', r['headRefOid']])
     r.update(number=int(n), url=f'https://github.com/fixture/review/pull/{n}',
              isDraft=False, isCrossRepository=False, headRepository={'name': 'review'},
@@ -116,7 +116,7 @@ if a[:2] == ['pr', 'merge']:
     assert '--rebase' in a, a
     base = git('rev-parse', r['baseRefName'])
     assert git('rev-parse', r['headRefOid'] + '^') == base
-    subprocess.check_call(['/usr/bin/git', '--git-dir', state['hub'], 'update-ref',
+    subprocess.check_call([state['git'], '--git-dir', state['hub'], 'update-ref',
                            'refs/heads/' + r['baseRefName'], r['headRefOid'], base])
     state['prs'][n]['state'] = 'MERGED'
     save()
