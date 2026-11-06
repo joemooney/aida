@@ -477,7 +477,8 @@ pub(crate) enum Unshipped {
     /// The tree has this many uncommitted paths.
     UncommittedWork(usize),
     /// The tree is clean, but `HEAD` moved past the launch head and contains
-    /// commits absent from every remote-tracking ref.
+    /// commits absent from every remote-tracking ref (or origin is behind
+    /// and remote reachability could not be read).
     UnpushedCommits,
 }
 
@@ -499,9 +500,10 @@ impl SeatState {
                 head: facts.as_ref().and_then(|f| f.head.clone()),
                 origin: origin_head(&seat.main, branch),
                 uncommitted: facts.as_ref().map(|f| f.dirty.len()),
-                head_has_unpushed: crate::seat_clone::head_has_unpushed_commits(
-                    &seat.main, &seat.root,
-                ),
+                // trace:TASK-2938 | ai:codex
+                head_has_unpushed: facts.as_ref().and_then(|_| {
+                    crate::seat_clone::head_has_unpushed_commits(&seat.main, &seat.root)
+                }),
             };
         }
         Self {
@@ -534,7 +536,8 @@ impl SeatState {
     /// stray path beside a push is not a stall); otherwise a dirty tree is
     /// [`Unshipped::UncommittedWork`], and a clean tree whose `HEAD` moved
     /// past `launch_head` with commits absent from all remote refs is
-    /// [`Unshipped::UnpushedCommits`].
+    /// [`Unshipped::UnpushedCommits`]. If reachability is unreadable, fall
+    /// back to the moved head and known non-push signal.
     pub(crate) fn unshipped(&self, launch_head: Option<&str>) -> Option<Unshipped> {
         if self.pushed_since(launch_head) == Some(true) {
             return None;
@@ -544,9 +547,10 @@ impl SeatState {
         }
         let moved = self.head.as_deref().is_some_and(|h| launch_head != Some(h));
         // trace:BUG-2464 | ai:codex
+        // trace:TASK-2938 | ai:codex
         (moved
             && self.pushed_since(launch_head) == Some(false)
-            && self.head_has_unpushed == Some(true))
+            && self.head_has_unpushed.unwrap_or(true))
         .then_some(Unshipped::UnpushedCommits)
     }
 }
