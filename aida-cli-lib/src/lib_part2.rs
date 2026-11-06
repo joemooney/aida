@@ -711,15 +711,38 @@ pub(crate) fn apply_agent_default_flags(
     // BUG-1699 posture split, so a widening default is refused, not dropped.
     // trace:BUG-2158 | ai:claude
     let contained_claude_parent = config.agent_type == "claude" && session::aida_contained_env()?;
-    // trace:TASK-2631 | ai:codex — generated explicit Claude containment stays AIDA-only.
-    if config.contained {
-        refuse_uncontainable_agent_tool_at(config.agent_type, project_root)?;
-    }
     if contained_claude_parent {
         refuse_unallowlisted_contained_passthrough(&flag_options.extra_flags, "--extra-flag")?;
     }
+    let mut per_tool = if flag_options.use_config_defaults {
+        load_agent_default_flags(project_root, config.agent_type)?
+    } else {
+        Vec::new()
+    };
+    if contained_claude_parent {
+        refuse_unallowlisted_contained_passthrough(
+            &per_tool,
+            "[agents.claude] default_flags in agents.toml (pass --no-default-flags to skip them)",
+        )?;
+    }
+    // trace:TASK-2631 | ai:codex — generated explicit Claude containment stays AIDA-only.
+    // trace:TASK-2708 | ai:codex — reject disqualifying flags before policy
+    // lookup and boundary composition. Posture resolution intentionally leaves
+    // settings pending; callers with an already-composed boundary keep it.
+    if config.contained {
+        refuse_uncontainable_agent_tool_at(config.agent_type, project_root)?;
+        if config.agent_type == "claude"
+            && explicit_permission
+            && !config.default_args.iter().any(|a| a == "--settings")
+        {
+            // trace:BUG-2131 | ai:codex
+            aida_core::git_ops::ensure_git_supports_contained()?;
+            let flags =
+                tool_contained_flags(crate::seat_clone::launcher_main().as_deref(), "claude")?;
+            config.default_args.splice(0..0, flags);
+        }
+    }
     if flag_options.use_config_defaults {
-        let mut per_tool = load_agent_default_flags(project_root, config.agent_type)?;
         // trace:TASK-2631 | ai:codex
         let native = !explicit_permission
             && load_agents_contained(project_root)?
@@ -760,12 +783,6 @@ pub(crate) fn apply_agent_default_flags(
                 .default_args
                 .extend(tool_contained_flags(None, config.agent_type)?);
             config.contained = false;
-        }
-        if contained_claude_parent {
-            refuse_unallowlisted_contained_passthrough(
-                &per_tool,
-                "[agents.claude] default_flags in agents.toml (pass --no-default-flags to skip them)",
-            )?;
         }
         // STORY-495: the uniform `[agents] bypass` knob injects this tool's
         // bypass flag UNLESS (a) the launcher already set an explicit posture
