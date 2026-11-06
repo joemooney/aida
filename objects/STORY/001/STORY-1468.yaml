@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-06T08:22:26.136472717Z
+modified_at: 2026-11-06T08:22:28.748017249Z
 req_type: Story
 relationships:
 - rel_type:
@@ -126,6 +126,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework fixes all 9 round-1 findings and every STORY-1468/signoff criterion is implemented and tested, but CI (gates) is red because of this PR: the new ci.yml step is not classified in scripts/ci-gate-tiers.toml. No triage reason was given.'
   created_at: 2026-11-06T08:22:26.136470737Z
   modified_at: 2026-11-06T08:22:26.136470737Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1aff3-bbf4-7853-aa87-7f174296fb4c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1468):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1d5ab874677b
+    Recorded: 2026-11-06T07:43:48.970686518+00:00
+    Findings:
+    1. BLOCKING (CI red, caused by this PR): commit 9ee08bfb250 adds the Build-job step 'Run originating prompt CLI output regression' to .github/workflows/ci.yml:421, but scripts/ci-gate-tiers.toml does not list it. scripts/check-ci-gates.py audit() (L229-252) reports 'CI gate is not classified' and CI (gates) step 'STORY-1853 test-speed tooling tests' fails at 1d5ab874677b. main at a8e8311 is green. Fix: add '"Run originating prompt CLI output regression" = "full"' under [tiers] next to the show-latency entry (L72), then re-run make check-ci-fast. The earlier check-ci-fast pass predates this ci.yml edit.
+    2. minor: git_backend.rs:1096-1106 deferred-create catch-up calls OriginPrompt::read(...)?, which validates the artifact. An uncommitted artifact that is truncated or invalid (for example after a crash mid-write) then makes every later write's commit fail until someone intervenes by hand. Stage on existence (root.join(relative_path).is_file()) instead of a full validating read, or log the error and skip that artifact.
+    3. cosmetic: aida-core/src/secret_screen.rs contains_secret_token drops the old 20+ character minimum after the gh*_/sk-/xox[bp]- prefixes. Any word starting with 'sk-' (e.g. 'sk-learn', 'sk-SE') now refuses intake. Failing closed is acceptable; consider keeping a minimum length for the prose scan.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T08:22:28.596327262Z
+  modified_at: 2026-11-06T08:22:28.596327262Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
