@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T22:51:05.424429042Z
+modified_at: 2026-11-06T22:52:10.250063875Z
 req_type: Task
 tags:
 - architecture
@@ -184,6 +184,12 @@ comments:
   created_at: 2026-11-06T22:45:58.717904425Z
   modified_at: 2026-11-06T22:45:58.717904425Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b30f-f68a-7231-a844-411d79ad7608
+  author: joe
+  content: 'S2 approach: implement the approved explicit interactive I/O mode with a private PTY, host raw-terminal relay, resize and signal forwarding, and RAII restoration. Route foreground Claude agent-new through prepare/receipt/worker grant and registry binding/release/wait, retaining native launch behavior and background/resume refusals. Expected files: launch/contained.rs plus a focused PTY module, contained_lane.py, agent_launch.rs, wrapper tests, required-live CI wording and the approved plan/OVERVIEW architecture description. Validate PTY input/resize/restoration and receipt-before-release with a fake worker, targeted wrapper/PTY cargo tests, required-live count separately, formatting and make check-ci-fast. No new design fork; S3/S4 remain out of scope.'
+  created_at: 2026-11-06T22:52:10.250063875Z
+  modified_at: 2026-11-06T22:52:10.250063875Z
+  session_id: 01a1b30ef0e0
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
