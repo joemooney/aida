@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T20:11:24.010796829Z
+modified_at: 2026-11-06T20:14:22.388993305Z
 req_type: Story
 tags:
 - architecture
@@ -222,6 +222,12 @@ comments:
   created_at: 2026-11-06T18:53:24.250039688Z
   modified_at: 2026-11-06T18:53:24.250039688Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b27f-7eb4-7850-95ce-98cae3e9459a
+  author: joe
+  content: 'PR #3483 CI follow-up at 060a752a: remaining failures traced to the legacy detached test shim admitting self against synthetic start tokens, a raw executable lookup in the new reparenting regression, and the changed foreign-pidns label contract. Fixed all three without weakening existing assertions. Also found the core SessionLeaseLite reader still had the original legacy-policy regression; restored its legacy policies and original tests, with new refused-holder/foreign-backstop coverage. No heartbeat removal or ownership cutover proposed; prior round fixes remain. Targeted build and make check-ci-fast are running. Native seat leaves edits uncommitted; host must publish a new commit and squash with subject ending (Refs STORY-2537) (BUG-2458).'
+  created_at: 2026-11-06T20:14:22.388993305Z
+  modified_at: 2026-11-06T20:14:22.388993305Z
+  session_id: 01a1b27cbb43
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
