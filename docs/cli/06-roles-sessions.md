@@ -964,22 +964,27 @@ A delivery reservation is persisted before sending. Known refusal is retryable;
 a crash, ambiguous failure or failed post-send write retains its reservation
 and suppresses duplicate advisor copies. A v1 episode without a request ID is
 reported as **action unknown** and closed on the next evaluation; no recovery
-command exists. A later evaluation may start a fresh episode.
+command exists. A later evaluation may start a fresh episode. Invalid or unsupported
+state errors name the state file: inspect it, then remove it to reset tracking.
 
 While a predicate remains continuously true, its request escalates after 30
 minutes without an authorized disposition. An `acted` or `declined` response
 closes the response obligation, but a stall persisting another 30 minutes after
 the response escalates with the actor, reason and evidence. `deferred` postpones
-escalation until its deadline. Only the latest authorized revision matching the
+the unresolved escalation until its deadline. An unresolved or deferral-deadline
+notice does not consume the later persistent-stall notice. Operator-direct initial
+delivery has no advisor request to disposition; its notice says the stall persists
+with no advisor request. Only the latest authorized revision matching the
 exact request ID and fingerprint counts. Unknown observations, backwards clocks
 and gaps over 15 minutes restart escalation continuity without resending the
 request. Known predicate recovery closes continuous episodes; age/event kinds
 retain their per-evidence delivery suppression as described above.
 
-Escalation uses the existing operator notifier with an episode-specific rule
-and a ten-second command timeout. Quiet hours queue it; operator opt-out is
-respected. Sent and queued escalations are recorded once per episode. Refusal
-retries on a later tick; uncertainty retains a reservation and reports unknown.
+Escalation uses the existing operator notifier with distinct episode-specific
+`_unresolved` and `_persistent` rules and a ten-second command timeout. Quiet hours
+queue it; operator opt-out is respected. Each escalation kind is sent or queued at
+most once per episode. Refusal retries on a later tick; uncertainty retains a
+reservation and reports unknown.
 Previews report due escalation without writes, notification calls or receipts.
 
 This detector never starts work, ends a session, releases a lease or merges.

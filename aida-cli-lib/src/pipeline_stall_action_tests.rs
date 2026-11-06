@@ -98,7 +98,10 @@ fn unresolved_boundary_exact_identity_and_one_escalation() {
         step(t.path(), &active(), m, true, None, &mut notify);
     }
     assert_eq!(notices.len(), 1);
-    assert_eq!(notices[0].0, format!("pipeline_escalation_{}", e.uuid));
+    assert_eq!(
+        notices[0].0,
+        format!("pipeline_escalation_{}_unresolved", e.uuid)
+    );
     assert!(notices[0].1.contains("unresolved request; action unknown"));
     assert!(notices[0].1.contains("exact-request"));
 }
@@ -137,15 +140,36 @@ fn acted_declined_and_latest_deferred_revision_control_deadline() {
             },
         );
         assert_eq!(r.escalations["pipeline-idle"], SendResult::Queued);
-        // A later revision cannot resend an already accepted operator escalation.
-        step(
-            t.path(),
-            &active(),
-            deadline + 1,
-            true,
-            Some(receipt(Outcome::Acted, 35, None)),
-            &mut |_, _| panic!("duplicate"),
-        );
+        // A deferral notice does not consume the later persistent-stall notice.
+        // Revising an already sent persistent notice does not resend it.
+        let response_at = deadline + 1;
+        for minute in [
+            response_at,
+            response_at + 10,
+            response_at + 20,
+            response_at + 29,
+            response_at + 30,
+            response_at + 40,
+        ] {
+            let report = step(
+                t.path(),
+                &active(),
+                minute,
+                true,
+                Some(receipt(Outcome::Acted, response_at, None)),
+                &mut |rule, body| {
+                    assert_eq!(outcome, Outcome::Deferred);
+                    assert_eq!(minute, response_at + 30);
+                    assert!(rule.ends_with("_persistent"));
+                    assert!(body.contains("persistent stall"));
+                    Ok(SendResult::Sent)
+                },
+            );
+            assert_eq!(
+                report.escalations.len(),
+                usize::from(outcome == Outcome::Deferred && minute == response_at + 30)
+            );
+        }
     }
 }
 
@@ -433,5 +457,122 @@ fn unreadable_action_evidence_escalates_as_unknown_without_asserting_action() {
             .unknown
             .iter()
             .any(|s| s.contains("unsafe action ledger")));
+    }
+}
+
+// trace:TASK-3074 | ai:codex
+#[test]
+fn unresolved_then_acted_gets_separate_persistent_escalation_once() {
+    let t = tempfile::tempdir().unwrap();
+    start(t.path());
+    let mut notices = Vec::new();
+    let mut notify = |rule: &str, body: &str| {
+        notices.push((rule.to_owned(), body.to_owned()));
+        Ok(SendResult::Sent)
+    };
+    for m in [40, 50, 60] {
+        step(t.path(), &active(), m, true, None, &mut notify);
+    }
+    for m in [65, 75, 85, 94, 95, 105, 115, 125] {
+        let report = step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(receipt(Outcome::Acted, 65, None)),
+            &mut notify,
+        );
+        assert_eq!(report.escalations.len(), usize::from(m == 95));
+    }
+    assert_eq!(notices.len(), 2);
+    assert!(notices[0].0.ends_with("_unresolved"));
+    assert!(notices[1].0.ends_with("_persistent"));
+    assert_ne!(notices[0].0, notices[1].0);
+    assert!(notices[1].1.contains("persistent stall; acted"));
+    assert!(notices[1].1.contains("advisor"));
+    assert!(notices[1].1.contains("recipient decision"));
+    assert!(notices[1].1.contains("PR-42"));
+}
+
+#[test]
+fn operator_direct_escalation_has_no_fictitious_request() {
+    for delivery in [SendResult::Sent, SendResult::Queued] {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir(t.path().join(".aida")).unwrap();
+        let mut notices = 0;
+        for m in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90] {
+            tick_with_effects(
+                t.path(),
+                &active(),
+                m * MIN,
+                true,
+                30,
+                &mut |_| {
+                    assert_eq!(m, 30);
+                    Ok(delivery.clone())
+                },
+                &mut |_| panic!("no advisor request"),
+                &mut |_, body| {
+                    assert_eq!(m, 60);
+                    assert!(body
+                        .contains("stall persists; no advisor request (operator-direct delivery)"));
+                    assert!(!body.contains("unresolved request"));
+                    assert!(!body.contains("Request: unknown"));
+                    notices += 1;
+                    Ok(SendResult::Sent)
+                },
+                &mut |p, b| Ok(aida_core::write_atomic(p, b)?),
+            )
+            .unwrap();
+        }
+        assert_eq!(notices, 1);
+    }
+}
+
+#[test]
+fn invalid_state_names_file_and_recovery_remedy_without_mutation() {
+    let t = tempfile::tempdir().unwrap();
+    std::fs::create_dir(t.path().join(".aida")).unwrap();
+    let path = t.path().join(".aida/pipeline-stalls.json");
+    for bytes in ["invalid", r#"{"version":3,"episodes":{}}"#] {
+        std::fs::write(&path, bytes).unwrap();
+        let error = tick(t.path(), &active(), 0, true, 30, &mut |_| {
+            panic!("invalid state sends")
+        })
+        .unwrap_err();
+        let text = format!("{error:#}");
+        assert!(text.contains(path.to_str().unwrap()));
+        assert!(text.contains("inspect, then remove the file"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn initial_known_refusal_retries_but_publication_uncertainty_reserves() {
+    for result in [SendResult::Refused, SendResult::Uncertain] {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir(t.path().join(".aida")).unwrap();
+        for m in [0, 10, 20, 30] {
+            tick(t.path(), &active(), m * MIN, true, 30, &mut |_| {
+                if result == SendResult::Uncertain {
+                    anyhow::bail!("transport may have published");
+                }
+                Ok(result.clone())
+            })
+            .unwrap();
+        }
+        let mut sends = 0;
+        let report = tick(t.path(), &active(), 31 * MIN, true, 30, &mut |_| {
+            sends += 1;
+            Ok(SendResult::Sent)
+        })
+        .unwrap();
+        assert_eq!(sends, usize::from(result == SendResult::Refused));
+        if result == SendResult::Uncertain {
+            assert!(report
+                .unknown
+                .iter()
+                .any(|s| s.contains("outcome unresolved")));
+        }
     }
 }

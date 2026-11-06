@@ -1,6 +1,6 @@
 //! Independent, observation-based pipeline alarms. No completion/merge authority.
 // trace:STORY-2476 | ai:codex
-use anyhow::Result;
+use anyhow::{Context, Result};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -34,6 +34,25 @@ pub(super) enum SendResult {
     Uncertain,
 }
 
+// Preserve ambiguous post-transport errors; only proven pre-publication errors retry.
+// trace:TASK-3074 | ai:codex
+pub(super) fn operator_delivery(
+    result: Result<crate::notify::DirectNotifyOutcome>,
+) -> Result<SendResult> {
+    match result {
+        Ok(outcome) => Ok(match outcome.delivery() {
+            crate::notify::DirectDelivery::Sent => SendResult::Sent,
+            crate::notify::DirectDelivery::Deferred => SendResult::Queued,
+            _ => SendResult::Refused,
+        }),
+        Err(error) if crate::notify::direct_publication_refused(&error) => {
+            eprintln!("pipeline operator delivery refused: {error:#}");
+            Ok(SendResult::Refused)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 #[derive(Default, Deserialize, Serialize)]
 struct State {
     version: u32,
@@ -62,6 +81,11 @@ struct Episode {
     escalation_pending: bool,
     #[serde(default)]
     escalation: Option<SendResult>,
+    // Existing v2 escalation fields retain unresolved notices across upgrades.
+    #[serde(default)]
+    persistent_escalation_pending: bool,
+    #[serde(default)]
+    persistent_escalation: Option<SendResult>,
 }
 impl Episode {
     fn new(now: i64, identity: &str) -> Self {
@@ -78,6 +102,8 @@ impl Episode {
             continuity_ms: Some(now),
             escalation_pending: false,
             escalation: None,
+            persistent_escalation_pending: false,
+            persistent_escalation: None,
         }
     }
 }
@@ -282,18 +308,13 @@ fn tick_with_writer(
             )
         },
         &mut |rule, body| {
-            let result = crate::notify::send_direct_bounded(
+            operator_delivery(crate::notify::send_direct_bounded(
                 root,
                 rule,
                 "aida: pipeline stall escalation",
                 body,
                 Some(std::time::Duration::from_secs(10)),
-            )?;
-            Ok(match result.delivery() {
-                crate::notify::DirectDelivery::Sent => SendResult::Sent,
-                crate::notify::DirectDelivery::Deferred => SendResult::Queued,
-                _ => SendResult::Refused,
-            })
+            ))
         },
         persist,
     )
@@ -318,13 +339,16 @@ fn tick_with_effects(
 ) -> Result<Report> {
     let path = root.join(".aida/pipeline-stalls.json");
     let mut state = match std::fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice::<State>(&bytes)?,
+        Ok(bytes) => serde_json::from_slice::<State>(&bytes).with_context(|| format!(
+            "invalid pipeline alarm state {}; inspect, then remove the file to reset alarm tracking", path.display()
+        ))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => State::default(),
         Err(e) => return Err(e.into()),
     };
     anyhow::ensure!(
         state.version <= 2,
-        "unsupported pipeline alarm state version"
+        "unsupported pipeline alarm state version {} in {}; inspect, then remove the file to reset alarm tracking",
+        state.version, path.display()
     );
     let legacy = state.version == 1;
     state.version = 2;
@@ -373,6 +397,7 @@ fn tick_with_effects(
             !key.starts_with("empty-rework-exit:")
                 || episode.delivery_pending
                 || episode.escalation_pending
+                || episode.persistent_escalation_pending
                 || members.contains(&episode.identity)
         });
     }
@@ -454,7 +479,7 @@ fn tick_with_effects(
         }
         let continuity = *episode.continuity_ms.get_or_insert(now);
         episode.observed_ms = now;
-        if episode.escalation_pending {
+        if episode.escalation_pending || episode.persistent_escalation_pending {
             report
                 .unknown
                 .push(format!("{kind}: escalation outcome unresolved"));
@@ -464,12 +489,9 @@ fn tick_with_effects(
                 "{kind}: prior delivery outcome unresolved; action unknown"
             ));
         }
-        if (episode.accepted || episode.delivery_pending)
-            && episode.escalation.is_none()
-            && !episode.escalation_pending
-        {
+        if episode.accepted || episode.delivery_pending {
             let receipt = episode.request.as_ref().map(&mut *inspect).transpose();
-            let (deadline, description) = match receipt {
+            let (persistent, deadline, description) = match receipt {
                 Ok(Some(Some(receipt))) => {
                     use aida_core::mailbox_lifecycle::action::Outcome;
                     let deadline = match receipt.outcome {
@@ -481,6 +503,7 @@ fn tick_with_effects(
                         }
                     };
                     (
+                        receipt.outcome != Outcome::Deferred,
                         deadline,
                         format!(
                             "{}; {}",
@@ -494,17 +517,27 @@ fn tick_with_effects(
                     )
                 }
                 Ok(_) => (
+                    false,
                     episode
                         .delivered_ms
                         .unwrap_or(episode.first_ms)
                         .saturating_add(ESCALATE_MS),
-                    "unresolved request; action unknown".into(),
+                    if matches!(
+                        episode.delivery,
+                        Some(SendResult::Sent | SendResult::Queued)
+                    ) {
+                        "stall persists; no advisor request (operator-direct delivery)"
+                    } else {
+                        "unresolved request; action unknown"
+                    }
+                    .into(),
                 ),
                 Err(e) => {
                     report
                         .unknown
                         .push(format!("{kind}: action unavailable: {e:#}"));
                     (
+                        false,
                         episode
                             .delivered_ms
                             .unwrap_or(episode.first_ms)
@@ -513,8 +546,20 @@ fn tick_with_effects(
                     )
                 }
             };
-            if now >= deadline && now.saturating_sub(continuity) >= ESCALATE_MS {
-                escalation_due.push((episode_key.clone(), description));
+            let (pending, sent) = if persistent {
+                (
+                    episode.persistent_escalation_pending,
+                    &episode.persistent_escalation,
+                )
+            } else {
+                (episode.escalation_pending, &episode.escalation)
+            };
+            if !pending
+                && sent.is_none()
+                && now >= deadline
+                && now.saturating_sub(continuity) >= ESCALATE_MS
+            {
+                escalation_due.push((episode_key.clone(), persistent, description));
             }
         }
         if now - episode.first_ms >= delay && !episode.accepted && !episode.delivery_pending {
@@ -597,20 +642,39 @@ fn tick_with_effects(
             report.unknown.push(format!("delivery: {delivered:?}"));
         }
     }
-    for (key, description) in escalation_due {
+    for (key, persistent, description) in escalation_due {
         let episode = state.episodes.get_mut(&key).unwrap();
-        let rule = format!("pipeline_escalation_{}", episode.uuid);
+        let rule = format!(
+            "pipeline_escalation_{}_{}",
+            episode.uuid,
+            if persistent {
+                "persistent"
+            } else {
+                "unresolved"
+            }
+        );
         let body = format!(
             "Pipeline episode {} ({key}): {description}. Request: {}.\n{}",
             episode.uuid,
-            episode
-                .request
-                .as_ref()
-                .map_or("unknown", |r| r.message_id.as_str()),
+            episode.request.as_ref().map_or(
+                if matches!(
+                    episode.delivery,
+                    Some(SendResult::Sent | SendResult::Queued)
+                ) {
+                    "none (operator-direct delivery)"
+                } else {
+                    "unknown"
+                },
+                |r| r.message_id.as_str()
+            ),
             bounded_digest(&snapshot.details)
         );
         if execute {
-            episode.escalation_pending = true;
+            if persistent {
+                episode.persistent_escalation_pending = true;
+            } else {
+                episode.escalation_pending = true;
+            }
             persist(&path, &serde_json::to_vec_pretty(&state)?)?;
             let outcome = match notify(&rule, &body) {
                 Ok(result) => result,
@@ -622,9 +686,17 @@ fn tick_with_effects(
                 }
             };
             let episode = state.episodes.get_mut(&key).unwrap();
-            episode.escalation_pending = outcome == SendResult::Uncertain;
+            let (pending, sent) = if persistent {
+                (
+                    &mut episode.persistent_escalation_pending,
+                    &mut episode.persistent_escalation,
+                )
+            } else {
+                (&mut episode.escalation_pending, &mut episode.escalation)
+            };
+            *pending = outcome == SendResult::Uncertain;
             if matches!(outcome, SendResult::Sent | SendResult::Queued) {
-                episode.escalation = Some(outcome.clone());
+                *sent = Some(outcome.clone());
             }
             report.escalations.insert(key, outcome);
         } else {

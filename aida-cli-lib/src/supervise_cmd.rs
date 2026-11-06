@@ -199,7 +199,6 @@ fn display_id(req: &aida_core::Requirement) -> Option<String> {
 // trace:TASK-3075 | ai:codex
 // trace:TASK-3074 | ai:codex
 fn deliver_pipeline_alarm(project_root: &Path, body: &str) -> Result<pipeline_stall::SendResult> {
-    use pipeline_stall::SendResult;
     let root = crate::main_worktree_root_from(project_root);
     if let Some(advisor) = live_advisor_recipient(&root) {
         return send_advisor_request(&root, &advisor, body.to_owned());
@@ -209,18 +208,13 @@ fn deliver_pipeline_alarm(project_root: &Path, body: &str) -> Result<pipeline_st
         "supervise_pipeline_{}",
         body.lines().next().unwrap_or("alarm")
     );
-    let outcome = notify::send_direct_bounded(
+    pipeline_stall::operator_delivery(notify::send_direct_bounded(
         &root,
         &rule,
         "aida: pipeline needs advisor",
         body,
         Some(std::time::Duration::from_secs(10)),
-    )?;
-    Ok(match outcome.delivery() {
-        notify::DirectDelivery::Sent => SendResult::Sent,
-        notify::DirectDelivery::Deferred => SendResult::Queued,
-        _ => SendResult::Refused,
-    })
+    ))
 }
 
 fn nudge_state_path(project_root: &Path) -> PathBuf {
@@ -408,13 +402,36 @@ fn send_advisor_request(
         from_role,
         relayed_from: None,
     };
+    persist_advisor_request(
+        project_root,
+        &msg,
+        &mut aida_core::mailbox_lifecycle::action::fingerprint,
+        &mut crate::mailbox_store::write_message,
+    )
+}
+
+// Fingerprinting precedes the only potentially publishing effect.
+// trace:TASK-3074 | ai:codex
+fn persist_advisor_request(
+    project_root: &Path,
+    msg: &aida_core::mailbox::Message,
+    fingerprint: &mut dyn FnMut(&aida_core::mailbox::Message) -> Result<String>,
+    write: &mut dyn FnMut(&Path, &aida_core::mailbox::Message) -> Result<()>,
+) -> Result<pipeline_stall::SendResult> {
+    let fingerprint = match fingerprint(msg) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("pipeline advisor request refused before publication: {error:#}");
+            return Ok(pipeline_stall::SendResult::Refused);
+        }
+    };
     let request = pipeline_stall::RequestIdentity {
         message_id: msg.id.clone(),
-        fingerprint: aida_core::mailbox_lifecycle::action::fingerprint(&msg)?,
+        fingerprint,
     };
     // A writer error may follow atomic publication; the alarm caller retains
     // its reservation and records uncertainty, preserving this diagnostic.
-    crate::mailbox_store::write_message(project_root, &msg)?;
+    write(project_root, msg)?;
     Ok(pipeline_stall::SendResult::Persisted { request })
 }
 
@@ -998,6 +1015,25 @@ mod pipeline_delivery_tests {
                 }
             }
         );
+        // A fingerprint error is known to precede the mailbox writer.
+        assert_eq!(
+            persist_advisor_request(
+                root.path(),
+                &rows[0],
+                &mut |_| anyhow::bail!("injected fingerprint refusal"),
+                &mut |_, _| panic!("must not publish after fingerprint refusal")
+            )
+            .unwrap(),
+            pipeline_stall::SendResult::Refused
+        );
+        // Once the writer runs, errors can follow atomic publication.
+        assert!(persist_advisor_request(
+            root.path(),
+            &rows[0],
+            &mut aida_core::mailbox_lifecycle::action::fingerprint,
+            &mut |_, _| anyhow::bail!("injected error after publication")
+        )
+        .is_err());
         assert_eq!(rows[0].intent, aida_core::mailbox::Intent::Request);
         assert!(rows[0].urgent);
         assert_eq!(
