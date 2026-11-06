@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T16:09:11.080249518Z
+modified_at: 2026-11-06T16:31:25.015044033Z
 req_type: Story
 tags:
 - architecture
@@ -73,6 +73,23 @@ comments:
   created_at: 2026-11-06T16:01:28.477249760Z
   modified_at: 2026-11-06T16:01:28.477249760Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1b3-5f57-7e32-ad0f-5c0325fb986d
+  author: joe
+  content: |-
+    Native implementer handoff — approved slice A, 2026-11-06, Codex.
+
+    Implemented the immutable aida-core::exec_context foundation: OsString Environment snapshot with one explicit capture boundary, explicit home/project/authority roots, ToolPaths and injected wall/monotonic Clock. Environment/context/tool/policy types do not implement Debug/serialization; lookup and projection errors omit names and values. Added EnvPolicy/ChildEnv in the existing launch_policy module, reusing OWNED_KEYS and the background/vendor-only tables. There is no deployed vendor allowlist and no env_clear activation. No production readers migrated; no file under aida-cli-lib/src/launch/ edited, and LaunchContext::resolve unchanged.
+
+    Added exact-site token-aware Rust and AST-based Python harness inventory/guard, alias/group/glob/raw-identifier/reference mutants and a CI fast gate. Initial legacy ceiling: 1215 sites across all workspace Rust members and tests Rust/Python harnesses. The guard refuses new sites, unpruned removals and ledger growth relative to the CI base; only one exact capture site is exempt. Inventory documents indirect-resolution limitations and production/test seam clusters. This is a staged baseline, not final zero-legacy acceptance.
+
+    Changed files (12): aida-core/src/exec_context.rs, aida-core/src/launch_policy.rs, aida-core/src/lib.rs; scripts/check-exec-context.py, scripts/exec-context-legacy.json, tests/test_exec_context_ratchet.py; .github/workflows/ci.yml, scripts/ci-gate-tiers.toml; AGENTS.md, OVERVIEW.md, docs/internal/api/aida-core.md, docs/internal/testing/exec-context-migration.md.
+
+    Validation: final cargo test -p aida-core exec_context passed 8 tests, with one ignored child fixture explicitly executed successfully by the env-cleared exact-child parent test (no parent environment capture). cargo test -p aida-core launch_policy passed all 7 tests. Scanner mutant suite passed all 9 tests; --base origin/main ledger check passed with zero additions. make check-ci-fast passed all 39 gates, including the new guard. cargo fmt --all -- --check, git diff --check, documentation link and path checks passed. Existing fast guards printed read-only FETCH_HEAD refusals and their fallback checks passed; no repository Git metadata was changed from this seat.
+
+    Recorded native partial publication subject: [AI:codex] feat(core): add execution context foundation and migration ratchet (Refs STORY-2538). All edits remain uncommitted for host publication. No commit/push/PR creation, queue completion, ship-to-merge, or review record was performed. No slice-A blocker remains. Broader STORY-2538 is incomplete: slices B-D must migrate readers/test writers, retire legacy entries, audit indirect consumers and verify required-live behavior. PR-C owns prepare_launch/vendor/control/grant work; STORY-2326 owns compatibility-gated env_clear activation. Exact-head published CI remains host-side follow-up.
+  created_at: 2026-11-06T16:31:25.015044033Z
+  modified_at: 2026-11-06T16:31:25.015044033Z
+  session_id: 01a1b19dc012
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
