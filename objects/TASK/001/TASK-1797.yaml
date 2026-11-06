@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:21:29.287594158Z
-modified_at: 2026-11-04T02:45:28.392831981Z
+modified_at: 2026-11-06T00:16:14.336554323Z
 req_type: Task
 tags:
 - operator-held
@@ -19,6 +19,12 @@ comments:
   created_at: 2026-11-04T02:45:28.392831981Z
   modified_at: 2026-11-04T02:45:28.392831981Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1ae36-9200-72b2-93a9-e98235f4a55c
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 6: approved as an operator action, adding a v* tag ruleset on GitHub (about 5 minutes, repo settings). Waiting on the operator.'
+  created_at: 2026-11-06T00:16:14.336554323Z
+  modified_at: 2026-11-06T00:16:14.336554323Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a15d01-40d1-7a43-adec-7707074a8246
   author: joe
