@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-021
 agreed_id: TASK-2902
 title: Native lane clean-exit commits cannot preserve approved partial-spec Refs trailers
 description: 'Observed while implementing TASK-3074 PR-A under the advisor''s explicit two-PR signoff (2026-11-05 18:42 UTC): PR-A must use (Refs TASK-3074), and PR-B completes. In a native Codex seat, `aida ship TASK-3074 --no-merge --dry-run` refuses publication and requires host-side post-exit commit. `aida-cli-lib/src/ship_from_seat.rs::post_exit_message` unconditionally gives every clean exit a completing `(SPEC)` trailer, whereas only failed-exit salvage uses `(Refs SPEC)`. `open_pr` takes its title from that commit subject. Thus the default host path cannot represent this approved partial implementation without a manual host subject override. Suggested follow-up: carry an explicit non-completing/Refs publication intent through the native exit handshake, while retaining ordinary successful completion. For this pickup, host publication must use `[AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074)` and keep TASK-3074 In Progress for PR-B.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T03:43:35.625038804Z
+modified_at: 2026-11-06T03:44:55.096742851Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -43,6 +43,12 @@ comments:
   content: 'ADVISOR RULING 2026-11-05 20:50 MST: sketch APPROVED. Authoring surface: EXTEND the native-seat ''aida ship -m <subject>''. Inside a native seat it records the lane-scoped publication declaration instead of publishing; no new command. All other points stand as proposed: binding to the lease/spec, clearing beside punt/hold, the exact single non-epic spec resolution (absorbs TASK-2907), failed exits always Refs, punt/hold vetoes first, and the regression list. Coordinate with BUG-2459 (the post-exit trailer must use the canonical display ID). If BUG-2459 lands first, rebase on it. LIGHT gate.'
   created_at: 2026-11-06T03:43:35.625038804Z
   modified_at: 2026-11-06T03:43:35.625038804Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aef5-9f38-7402-a253-1c8931c6ee01
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: The approved bug fix requires a new native publication-intent handshake and authoring surface; no existing declaration is transported (post_exit_commit_reported receives only main/tree/spec/lane/clean_exit). AGENTS.md Sketch-First Protocol requires master sign-off for new file formats and orchestrator semantics. Posted a concrete sketch on TASK-2902; need approval of the lane-bound declaration and command surface before implementation. Folded TASK-2907 scope validation is included in that sketch.. No triage reason was given.'
+  created_at: 2026-11-06T03:44:55.096741532Z
+  modified_at: 2026-11-06T03:44:55.096741532Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
@@ -82,12 +88,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aef5-9f38-7402-a253-1c7f83728e4e
+  author: joe
+  timestamp: 2026-11-06T03:44:55.096732632Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
-attention_reason:
-  category: design-fork
-  detail: The approved bug fix requires a new native publication-intent handshake and authoring surface; no existing declaration is transported (post_exit_commit_reported receives only main/tree/spec/lane/clean_exit). AGENTS.md Sketch-First Protocol requires master sign-off for new file formats and orchestrator semantics. Posted a concrete sketch on TASK-2902; need approval of the lane-bound declaration and command surface before implementation. Folded TASK-2907 scope validation is included in that sketch.
-  lean: Extend native aida ship -m with an explicit declaration-only path, preserving an exact validated Refs or completing subject in a fresh lease-bound signal; never derive completion intent from prose or exit status alone when a declaration exists.
-  raised_by: implementer
-  raised_at: 2026-11-06T02:07:53.439915204Z
