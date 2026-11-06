@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T08:45:06.895293147Z
+modified_at: 2026-11-06T08:49:49.906183008Z
 req_type: Story
 tags:
 - architecture
@@ -341,6 +341,12 @@ comments:
   content: 'Round-2 native-seat rework: effective.rs now ignores foreign-UUID unbound records in a reused member label bucket; only compares supersession seq when both events are change-ledger events (cross-file ordering uses proved order time); partitions stamped foreign verdicts by SpecKey and normalizes/deduplicates display labels. Added load_view-backed rebound fixture and ordering/foreign-UUID regressions; kept PR3306 fixture enabled. PR-C remains NOT complete. Publication must replace the completing PR title/squash subject with [AI:codex] fix(gate): preserve UUID partitions and file-local ordering (Refs STORY-2324). This seat cannot rewrite Git metadata, commit, push or edit the PR. cargo fmt --all -- --check and git diff --check passed. Targeted cargo test via aida lane job run refused: lease 01a1b0049b0b names no lane job runner, untested=true. check-ci-fast (umask 022) is running; final handoff will record outcome. New-head green CI and targeted story_2324_effective tests are still required before re-review; merge hold remains in place.'
   created_at: 2026-11-06T08:45:06.895293147Z
   modified_at: 2026-11-06T08:45:06.895293147Z
+  session_id: 01a1b0049b0b
+- id: 01a1b00c-c752-73e3-9354-ecf9eee0063c
+  author: joe
+  content: 'Round-2 validation final: umask 022; make check-ci-fast exited 0, all 38 fast-tier gates passed. Log: /tmp/story-2324-round2-check-ci-fast.log. Some guard-internal fetch attempts reported read-only .git/FETCH_HEAD; the guards still passed. cargo fmt --all -- --check and git diff --check passed. Targeted gate::effective Rust tests remain untested=true because this lease has no lane job runner; no direct-cargo bypass was attempted. Edits are uncommitted in aida-cli-lib/src/gate/effective.rs and aida-cli-lib/src/gate/tests/story_2324_effective_tests.rs. Host must commit/publish with a non-completing (Refs STORY-2324) title, repair the existing completing PR title/squash subject, and obtain targeted-test plus new-head CI evidence before re-review. STORY-2324/PR-C remain incomplete; existing merge hold remains untouched.'
+  created_at: 2026-11-06T08:49:49.906183008Z
+  modified_at: 2026-11-06T08:49:49.906183008Z
   session_id: 01a1b0049b0b
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
