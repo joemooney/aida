@@ -294,6 +294,7 @@ fn seat(head: Option<&str>, origin: OriginHead, uncommitted: usize) -> SeatState
         head: head.map(String::from),
         origin,
         uncommitted: Some(uncommitted),
+        head_has_unpushed: Some(true),
     }
 }
 
@@ -1120,4 +1121,87 @@ fn story_2475_all_codex_lane_exits_publish_after_child_exit() {
             );
         }
     }
+}
+
+/// A clean seat can advance to newer main without producing any local commits.
+// trace:BUG-2464 | ai:codex
+#[test]
+fn bug_2464_fast_forward_to_remote_main_is_not_unpushed_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {:?}", out);
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "Test"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "launch"]);
+    let launch_head = git(&["rev-parse", "HEAD"]);
+    git(&["branch", "seat"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "new remote main"]);
+    let remote_head = git(&["rev-parse", "HEAD"]);
+    let remote = tempfile::tempdir().unwrap();
+    git(&["init", "-q", "--bare", remote.path().to_str().unwrap()]);
+    git(&["remote", "add", "origin", remote.path().to_str().unwrap()]);
+    git(&["push", "-q", "origin", "main"]);
+    assert_eq!(git(&["rev-parse", "origin/main"]), remote_head);
+    git(&["checkout", "-q", "seat"]);
+    git(&["merge", "--ff-only", "origin/main"]);
+    let mut state = SeatState::read(root, "seat");
+    assert_eq!(state.origin, OriginHead::Absent);
+    assert_ne!(state.head.as_deref(), Some(launch_head.as_str()));
+    assert_eq!(state.uncommitted, Some(0));
+    assert_eq!(state.head_has_unpushed, Some(false));
+    assert_eq!(state.unshipped(Some(&launch_head)), None);
+    let launch = si::LaunchSeat {
+        pr: None,
+        head: Some(&launch_head),
+    };
+    let (outcome, work) = si::settle_outcome(
+        si::Outcome::Punted {
+            reason: "design fork".into(),
+        },
+        &launch,
+        &state,
+    );
+    assert_eq!(
+        si::report(&outcome, Some(0), work.as_ref()).0,
+        "implementer: punted reason=design fork"
+    );
+    assert_eq!(
+        si::settle_outcome(si::Outcome::NoPr, &launch, &state),
+        (si::Outcome::NoPr, None)
+    );
+
+    git(&["commit", "-q", "--allow-empty", "-m", "local work"]);
+    state.head = seat_head(root);
+    state.head_has_unpushed = head_has_unpushed_commits(root);
+    assert_eq!(state.head_has_unpushed, Some(true));
+    assert_eq!(
+        state.unshipped(Some(&launch_head)),
+        Some(Unshipped::UnpushedCommits)
+    );
+    // A different remote also establishes that the commit was published.
+    git(&[
+        "update-ref",
+        "refs/remotes/backup/seat",
+        state.head.as_deref().unwrap(),
+    ]);
+    state.head_has_unpushed = head_has_unpushed_commits(root);
+    assert_eq!(state.head_has_unpushed, Some(false));
+    assert_eq!(state.unshipped(Some(&launch_head)), None);
+    git(&["update-ref", "-d", "refs/remotes/backup/seat"]);
+    state.head_has_unpushed = None;
+    assert_eq!(
+        state.unshipped(Some(&launch_head)),
+        None,
+        "unknown evidence cannot establish unpushed commits"
+    );
+    assert_eq!(head_has_unpushed_commits(&root.join("missing")), None);
 }
