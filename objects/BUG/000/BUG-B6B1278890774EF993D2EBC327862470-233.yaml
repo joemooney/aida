@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T18:21:29.394212441Z
+modified_at: 2026-11-06T18:52:59.891366672Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,12 @@ comments:
   content: 'Round 2 approach: pass explicit delegate-seat selections through the detached Codex issuer; persist launch selections in registry rows and restore them on resume, revalidating against the current parent. Add detached-issuer and resumed-launch regressions for narrowed grants and refusal of widening. Refresh the intended CLI help golden snapshot. Investigate the gates fixture separately; retain the supervised merge hold. Expected files: seat_authority, agent_codex_background, agent_launch, agent_registry, their tests, CLI help golden and session docs. No design conflicts.'
   created_at: 2026-11-06T18:21:29.394212441Z
   modified_at: 2026-11-06T18:21:29.394212441Z
+  session_id: 01a1b21657b8
+- id: 01a1b234-fe73-7c13-bdf8-862ee52eb9b5
+  author: joe
+  content: 'Round 2 implemented all three findings: detached Codex issuance now receives delegate_seats; launcher registry persists narrowing, carries it through interleaved hooks, and restores it on resume with current-parent revalidation. Added detached advisor/integrator grant assertions and a real narrowed launch -> ended registry -> resume regression including lost-parent-delegation refusal. Refreshed/rechecked CLI help golden (including all four delegate-seat help/catalog surfaces). Validation: BUG-2467 6/6; focused detached issuer/registry/hook tests 87/87; resume config tests from clean /tmp 2/2; help snapshot 1/1; rustfmt and diff whitespace pass. Broader related 155-test run (parallel and serial) is 151 pass/4 fail: cross-route admission fixture expects a live lease, ps fixture expects Live instead of Unknown, and two resume config tests encounter deleted cwd after other fixtures. The two config tests pass in isolated /tmp; cross-route failure also reproduces alone at unchanged receipt test line 371. Full related suite is therefore not green in this native seat. Changes left uncommitted per native finish override; publication subject recorded as [AI:codex] fix(launch): preserve detached and resumed delegation narrowing (Refs BUG-2467). Existing merge hold retained; host must commit/publish after exit.'
+  created_at: 2026-11-06T18:52:59.891366672Z
+  modified_at: 2026-11-06T18:52:59.891366672Z
   session_id: 01a1b21657b8
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
