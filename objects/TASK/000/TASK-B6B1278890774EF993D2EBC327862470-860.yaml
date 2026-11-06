@@ -1,0 +1,37 @@
+id: 01a1aefa-0217-7822-b877-e316da3f44b3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-860
+title: 'Repeated unchanged review findings: STORY-2537'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2537; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (STORY-2537):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 815153669ded
+  Recorded: 2026-11-06T00:33:53.089331619+00:00
+  Findings:
+  1. BLOCKING: the commit 815153669de subject '[AI:codex] fix: address CI failures and review findings (STORY-2537)' and the PR #3464 title use the completing '(STORY-2537)' trailer. The binding advisor brief (spec comment 0) requires a docs PR titled '(Refs STORY-2537)'. The implementer's evidence comment (comment 2) says not to publish the default completing subject. The sketch itself (docs/plans/2026-11-05-story-2537-proc-identity.md:8-9) says merging does not complete the story. Fix: reword the commit to '[AI:codex] docs(plan): sketch shared process identity (Refs STORY-2537)' and retitle the PR to match. The 'fix:' type and 'address CI failures and review findings' summary are also wrong: this is a new docs file, not a fix.
+  2. MINOR: docs/plans/2026-11-05-story-2537-proc-identity.md:39 lists 'row_matches_process' as an aida-core/src/mailbox_identity.rs symbol. That symbol does not exist anywhere in the repo. The strict PID/start matching lives in row_binds_chain / is_self_or_ancestor (mailbox_identity.rs:447-467) and the observe() pid_start check (~:860). Correct the inventory name.
+  3. AC status: AC1 (sketch: type, per-namespace judge table, consumer inventory, migration order) verified by doc sections at lines 24-41, 48-111 and 189-223. AC1 advisor signoff is unverified: none is recorded, and the sketch says it is pending. AC2 (slice 1 code + tests for same-ns/foreign-ns/subreaper/pid-reuse/clock-step) is not applicable to this sketch-only lane per the brief; its future tests are specified at lines 232-264. AC3 (child specs filed) is not applicable because the sketch is unsigned. Because AC1 signoff and AC2 are incomplete, the PR must not carry a completing trailer (see finding 1).
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T03:49:42.551242070Z
+modified_at: 2026-11-06T03:49:42.551242070Z
+req_type: Task
+tags:
+- from-advisor:STORY-2537
+- kind:observation
+- linked:STORY-2537
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 8de632ba2d73afd0efc6dd88965a36b2e2d6f136
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 93dc9165bde
+  vendor: claude
+  session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
