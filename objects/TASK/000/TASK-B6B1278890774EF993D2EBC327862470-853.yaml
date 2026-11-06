@@ -1,0 +1,29 @@
+id: 01a1ae30-1c67-72f2-80ca-41305907d17d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-853
+title: 'non-blocking (minor): tests/test_containment_conformance.py PolicyRevisionTests…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3114, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): tests/test_containment_conformance.py PolicyRevisionTests fixture commit does not pass -c commit.gpgsign=false, so it fails on a developer machine with global commit signing; CI unaffected.
+
+  PR: #3438
+  Reviewed sha: 1bc5e284dc5ce9738a5b001d522f407f1d4a36e4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T00:09:11.015215874Z
+modified_at: 2026-11-06T00:09:11.015215874Z
+req_type: Task
+tags:
+- carried-from:TASK-3114
+- finding-hash:a6fad677
+- from-review:PR-3438
+- kind:carried-forward
+filed_at:
+  code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bdeb8f49978
+  vendor: claude
