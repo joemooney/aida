@@ -13,7 +13,7 @@ from tests.test_containment_conformance import c
 
 
 class AidaProductionBoundaryTests(unittest.TestCase):
-    # trace:BUG-2460 trace:BUG-2462 | ai:codex
+    # trace:BUG-2460 trace:BUG-2462 trace:BUG-2465 | ai:codex
     def test_terminal_stdin_fixture_initializes_then_refuses_managed_role_enter(self):
         built = Path(__file__).resolve().parents[1] / "target/debug/aida"
         aida = str(built) if built.is_file() else c.shutil.which("aida")
@@ -69,7 +69,10 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             self.assertFalse(report["whole_lane_pass"])
             self.assertEqual({r["status"] for r in report["checks"].values()}, {"unknown"})
             self.assertEqual([r["stage"] for r in report["setup"]][-3:],
-                             ["role-scaffold", "roster-allow-seat", "role-enter"])
+                             ["roster-allow-seat", "roster-allow-seat", "role-enter"])
+            self.assertEqual(report["setup"][-3]["exit_code"], 0)
+            self.assertEqual(report["setup"][-3]["argv"][-2:], ["fixture-operator", "advisor"])
+            self.assertEqual(report["setup"][-1]["argv"][1:4], ["role", "enter", "advisor"])
             self.assertEqual(report["setup"][-2]["exit_code"], 0)
             self.assertEqual(report["setup"][-2]["argv"][-2:], ["fixture-operator", "implementer"])
             self.assertEqual(report["unsupported_reason"], "fixture-role-enter-refused-managed")
@@ -85,6 +88,7 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             roster = (repo / ".aida-store/registry/team.toml").read_text()
             self.assertIn("fixture-operator", roster)
             self.assertIn("implementer", roster)
+            self.assertIn("advisor", roster)
             self.assertTrue((output / "authority-home/.aida/roles/implementer.toml").is_file())
             self.assertEqual(report["aida_binary_sha256"], c.hashlib.sha256(Path(aida).resolve().read_bytes()).hexdigest())
 
