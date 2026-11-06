@@ -154,7 +154,10 @@ struct Table {
     anchor: Option<Signed>,
 }
 // A recovery reset is an explicit signed authority transition. Consumers verify
-// it too; an empty shard cannot silently discard a predecessor chain.
+// its signature and scope, but do not compare shards with Git ancestors.
+// Trusted writers must preserve chains and only reset through recovery; a buggy
+// trusted writer can truncate a shard or replay a previously signed anchor.
+// trace:TASK-3196 | ai:codex
 fn validate_anchor(hub: &Hub, key: &str, table: &Table, roster: &Roster) -> Result<()> {
     if let Some(anchor) = &table.anchor {
         let value: serde_json::Value = serde_json::from_str(&anchor.payload)?;
@@ -423,9 +426,23 @@ fn update(
             .is_ok_and(|id| id > 0 && key == format!("PR-{id}"))),
         "admission_mirror_refused: only GitHub PRs admit; GitLab is a mirror"
     );
+    update_with_observer(root, hub, key, head, token, state, evidence, || {})
+}
+
+// Both snapshots use a short store lock; hub I/O never holds that lock. Compare
+// only admission evidence, so unrelated store writes cannot strand exit claims.
+// trace:TASK-3196 | ai:codex
+fn admission_evidence(
+    root: &Path,
+    hub: &Hub,
+    key: &str,
+    head: &str,
+    state: &State,
+) -> Result<Option<(Publisher, Roster)>> {
     let store = store(root).context("review admission needs a canonical store")?;
     aida_core::db::with_store_write_lock(&store, || {
-        if state == State::Reserved
+        require_pinned(root, &Some(hub.clone()))?;
+        if *state == State::Reserved
             && watcher_history(root, key)?.iter().any(|(body, _)| {
                 rv::parse_recorded_verdict(body)
                     .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
@@ -435,101 +452,130 @@ fn update(
         }
         let config =
             publisher(root)?.context("review admission requires an enrolled local publisher")?;
-        let store_tip = super::head(&store)?;
-        let roster = roster(&store, &store_tip)?;
-        Ok(Some((config, roster, store_tip)))
-    })?.map_or(Ok(false), |(config, roster, store_tip)| {
-        let repo = private_repo()?;
-        for _ in 0..ATTEMPTS {
-            let (tip, mut table) = read_table(repo.path(), hub, key)?;
-            validate_anchor(hub, key, &table, &roster)?;
-            table.changes.retain(|change, _| change == key);
-            let records = table.changes.entry(key.into()).or_default();
-            let history = chain(hub, key, records, &roster)?;
-            let prior = history.last();
-            if state == State::Reserved {
-                if prior.is_some_and(|p| active(&p.state))
-                    || history
-                        .iter()
-                        .any(|p| p.head == head && p.state == State::Terminal)
-                {
-                    return Ok(false);
-                }
-            } else {
-                let p = prior.context("missing accepted admission")?;
-                ensure!(
-                    p.token == token && p.node == config.node && p.head == head,
-                    "admission token not owned by this node"
-                );
-                // Retrying a Running consume must never spawn again.
-                ensure!(p.state != state, "admission token already consumed");
-            }
-            let t = Transition {
-                version: 1,
-                kind: "review-admission".into(),
-                repository: hub.repository.clone(),
-                hub: hub.url.clone(),
-                reference: hub.reference.clone(),
-                change: key.into(),
-                head: head.into(),
-                id: Uuid::new_v4(),
-                predecessor: prior.map(|p| p.id),
-                token,
-                node: config.node.clone(),
-                session: if state == State::Reserved {
-                    std::env::var("AIDA_SESSION_ID")
-                        .ok()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or_else(|| format!("watch:{token}"))
-                } else {
-                    prior.unwrap().session.clone()
-                },
-                state: state.clone(),
-                evidence: evidence.clone(),
-            };
-            records.push(sign(&config, &t)?);
-            chain(hub, key, records, &roster)?;
-            let next = commit_table(repo.path(), tip.as_deref(), key, &table)?;
-            let lease = format!(
-                "--force-with-lease={}:{}",
-                hub.reference,
-                tip.as_deref().unwrap_or("")
-            );
-            let target = format!("{next}:{}", hub.reference);
-            require_pinned(root, &Some(hub.clone()))?;
-            ensure!(super::head(&store)? == store_tip, "admission evidence changed; retry");
-            if let Err(error) = remote_git(
-                repo.path(),
-                &hub.url,
-                &["push", "--porcelain", &lease, &hub.url, &target],
-            ) {
-                let observed = remote_tip(repo.path(), hub)?;
-                // Only a proven peer update allows reconstruction. Lost push
-                // responses and connectivity errors retain the claim safely.
-                if observed == tip || observed.as_deref() == Some(&next) {
-                    return Err(error).context("admission_push_uncertain: no dispatch; reconcile accepted claims before retry");
-                }
-                continue;
-            }
-            let (_, accepted) = read_table(repo.path(), hub, key)?;
-            validate_anchor(hub, key, &accepted, &roster)?;
-            let accepted = chain(
-                hub,
-                key,
-                accepted
-                    .changes
-                    .get(key)
-                    .context("accepted admission disappeared")?,
-                &roster,
-            )?;
-            ensure!(
-                accepted.iter().any(|r| r.id == t.id),
-                "admission token was not confirmed; no dispatch"
-            );
-            return Ok(true);
-        }
-        bail!("admission CAS retry budget exhausted; no dispatch")
+        let roster = roster(&store, &super::head(&store)?)?;
+        Ok(Some((config, roster)))
     })
+}
+
+// The observer lets regressions move canonical evidence during the network
+// window. Production uses the same path with a no-op observer.
+// trace:TASK-3196 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn update_with_observer(
+    root: &Path,
+    hub: &Hub,
+    key: &str,
+    head: &str,
+    token: Uuid,
+    state: State,
+    evidence: Option<String>,
+    mut after_read: impl FnMut(),
+) -> Result<bool> {
+    let repo = private_repo()?;
+    for _ in 0..ATTEMPTS {
+        let Some((config, roster)) = admission_evidence(root, hub, key, head, &state)? else {
+            return Ok(false);
+        };
+        let (tip, mut table) = read_table(repo.path(), hub, key)?;
+        after_read();
+        validate_anchor(hub, key, &table, &roster)?;
+        table.changes.retain(|change, _| change == key);
+        let records = table.changes.entry(key.into()).or_default();
+        let history = chain(hub, key, records, &roster)?;
+        let prior = history.last();
+        if state == State::Reserved {
+            if prior.is_some_and(|p| active(&p.state))
+                || history
+                    .iter()
+                    .any(|p| p.head == head && p.state == State::Terminal)
+            {
+                return Ok(false);
+            }
+        } else {
+            let p = prior.context("missing accepted admission")?;
+            ensure!(
+                p.token == token && p.node == config.node && p.head == head,
+                "admission token not owned by this node"
+            );
+            // Retrying a Running consume must never spawn again.
+            ensure!(p.state != state, "admission token already consumed");
+        }
+        let t = Transition {
+            version: 1,
+            kind: "review-admission".into(),
+            repository: hub.repository.clone(),
+            hub: hub.url.clone(),
+            reference: hub.reference.clone(),
+            change: key.into(),
+            head: head.into(),
+            id: Uuid::new_v4(),
+            predecessor: prior.map(|p| p.id),
+            token,
+            node: config.node.clone(),
+            session: if state == State::Reserved {
+                std::env::var("AIDA_SESSION_ID")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| format!("watch:{token}"))
+            } else {
+                prior.unwrap().session.clone()
+            },
+            state: state.clone(),
+            evidence: evidence.clone(),
+        };
+        records.push(sign(&config, &t)?);
+        chain(hub, key, records, &roster)?;
+        let next = commit_table(repo.path(), tip.as_deref(), key, &table)?;
+        let lease = format!(
+            "--force-with-lease={}:{}",
+            hub.reference,
+            tip.as_deref().unwrap_or("")
+        );
+        let target = format!("{next}:{}", hub.reference);
+        let Some((current_config, current_roster)) =
+            admission_evidence(root, hub, key, head, &state)?
+        else {
+            return Ok(false);
+        };
+        if current_config.node != config.node
+            || current_config.private_key != config.private_key
+            || current_roster.nodes != roster.nodes
+        {
+            continue;
+        }
+        if let Err(error) = remote_git(
+            repo.path(),
+            &hub.url,
+            &["push", "--porcelain", &lease, &hub.url, &target],
+        ) {
+            let observed = remote_tip(repo.path(), hub)?;
+            // Only a proven peer update allows reconstruction. Lost push
+            // responses and connectivity errors retain the claim safely.
+            if observed == tip || observed.as_deref() == Some(&next) {
+                return Err(error).context(
+                    "admission_push_uncertain: no dispatch; reconcile accepted claims before retry",
+                );
+            }
+            continue;
+        }
+        let (_, accepted) = read_table(repo.path(), hub, key)?;
+        validate_anchor(hub, key, &accepted, &roster)?;
+        let accepted = chain(
+            hub,
+            key,
+            accepted
+                .changes
+                .get(key)
+                .context("accepted admission disappeared")?,
+            &roster,
+        )?;
+        ensure!(
+            accepted.iter().any(|r| r.id == t.id),
+            "admission token was not confirmed; no dispatch"
+        );
+        return Ok(true);
+    }
+    bail!("admission CAS/evidence retry budget exhausted; no dispatch")
 }
 
 /// Explicit stopped-admission recovery. The direct-human gate is enforced by

@@ -1,6 +1,6 @@
 # A second trusted review node
 
-<!-- trace:STORY-2492 | ai:codex -->
+<!-- trace:STORY-2492 trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex -->
 
 This workflow lets one Linux host implement a PR and another review it. Both
 hosts must use the same code-origin URL spelling, share the git-canonical AIDA
@@ -175,7 +175,10 @@ The watcher then queries open forge changes and reads verified synced publicatio
 even when there is no local verdict directory. The local two-review ceiling still
 applies. Before spawning a dispatcher it signs a Reserved transition and pushes
 with an explicit expected-tip lease to the configured ref. It requires a definite
-successful push and confirms the accepted transition. A losing CAS reloads and
+successful push and confirms the accepted transition. Unrelated store commits
+do not refuse transitions: short store locks refresh publisher, roster and
+relevant verdict evidence before publication; changed evidence rebuilds within
+the same retry budget. Network I/O holds no store lock. A losing CAS reloads and
 reconstructs against the winner, for at most three attempts, preserving other
 changes and tree entries. It never rebases a losing claim into an accepted one.
 
@@ -224,6 +227,13 @@ chain remains reachable in Git history. Old tokens cannot transition into the
 new anchor. A moved tip, missing stopped-process attestation, unenrolled recovery
 publisher or uncertain push refuses; inspect the hub again before retrying.
 The command never retries a raced recovery against a different tip.
+
+Consumers verify the current shard's signed chain and the recovery anchor's
+signature and scope. They do not compare the shard with ancestor commits or
+check `predecessor_tip` against Git history. Preserving or resetting chains
+therefore relies on trusted writers: a buggy trusted writer could truncate a
+shard or replay an old signed anchor without detection by these readers.
+<!-- trace:TASK-3196 | ai:codex -->
 
 On each node, run `aida review watch --release PR-123` to clear stopped local
 attempts. This now checks that the hub no longer has an active claim, and still

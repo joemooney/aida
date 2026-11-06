@@ -197,6 +197,7 @@ printf 'spawn\n' >> "$1"
         crate::review_watch::fixture_admit_dispatch(loser, &"c".repeat(40), &program, &marker)
             .is_err()
     );
+    crate::review_watch::assert_failed_admission_can_retry(loser, &"c".repeat(40));
 }
 #[test]
 fn story2492_admission_transitions_fence_tokens_and_terminal_heads() {
@@ -387,7 +388,7 @@ fn story2492_admission_sync_refreshes_publications_without_shared_fetch_head() {
     .is_empty());
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_admission_recovery_fences_old_tokens_and_recovers_revoked_owner() {
     let f = Fixture::new();
@@ -461,7 +462,7 @@ fn story2492_admission_recovery_fences_old_tokens_and_recovers_revoked_owner() {
         .is_some());
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_admission_exit_liveness_and_hub_failure() {
     for (ambiguous, unclaimed, unreachable) in [
@@ -517,7 +518,7 @@ fn story2492_admission_exit_liveness_and_hub_failure() {
 
 // A repository with >2000 independently signed shards and >1 MiB of total
 // admission content still admits independently, beyond the old global limits.
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_admission_shards_exceed_the_old_global_budgets() {
     let f = Fixture::new();
@@ -585,7 +586,15 @@ fn story2492_admission_shards_exceed_the_old_global_budgets() {
     remote_git(
         repo.path(),
         &f.hub.url,
-        &["push", &f.hub.url, &format!("{next}:{}", f.hub.reference)],
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            &f.hub.url,
+            &format!("{next}:{}", f.hub.reference),
+        ],
     )
     .unwrap();
     assert!(f
@@ -604,7 +613,7 @@ fn story2492_admission_shards_exceed_the_old_global_budgets() {
     assert_eq!(unchanged.changes["PR-7"].len(), 1);
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_continuous_watcher_survives_a_sync_refusal() {
     let f = Fixture::new();
@@ -617,7 +626,7 @@ fn story2492_continuous_watcher_survives_a_sync_refusal() {
     assert!(crate::review_watch::fixture_sync_pass(&f.b, false).unwrap());
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_documented_recovery_command_parses_and_config_stays_opt_in() {
     crate::command_registry::try_parse_from([
@@ -648,7 +657,7 @@ fn story2492_documented_recovery_command_parses_and_config_stays_opt_in() {
         .is_none());
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_admission_recovery_requires_a_direct_human() {
     let _agent =
@@ -665,7 +674,7 @@ fn story2492_admission_recovery_requires_a_direct_human() {
         .contains("AIDA-managed agent sessions cannot issue direct TTY grants"));
 }
 
-// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+// trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_failed_hub_cancellation_still_frees_local_capacity() {
     let f = Fixture::new();
@@ -685,4 +694,99 @@ fn story2492_failed_hub_cancellation_still_frees_local_capacity() {
     .unwrap();
     // Safety is independent of local capacity: the accepted claim remains.
     assert!(require_released(&f.a, "PR-7").is_err());
+}
+
+// trace:TASK-3196 | ai:codex
+#[test]
+fn task3196_terminal_transition_survives_store_commit_during_hub_read() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let token = Uuid::new_v4();
+    let head = "a".repeat(40);
+    f.step(&f.a, "PR-7", &head, token, State::Reserved).unwrap();
+    f.step(&f.a, "PR-7", &head, token, State::Running).unwrap();
+    let store = f.a.join(".aida-store");
+    let before = super::super::head(&store).unwrap();
+    assert!(update_with_observer(
+        &f.a,
+        &f.hub,
+        "PR-7",
+        &head,
+        token,
+        State::Terminal,
+        Some("observed worker exit".into()),
+        || {
+            write(
+                &store,
+                "unrelated-comment",
+                "another agent wrote during hub fetch",
+            );
+            ok(&store, &["add", "unrelated-comment"]);
+            ok(&store, &["commit", "-qm", "unrelated store write"]);
+        },
+    )
+    .unwrap());
+    assert_ne!(super::super::head(&store).unwrap(), before);
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let history = chain(
+        &f.hub,
+        "PR-7",
+        &table.changes["PR-7"],
+        &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(history.last().unwrap().state, State::Terminal);
+}
+
+// trace:TASK-3196 | ai:codex
+#[test]
+fn task3196_terminal_retries_changed_roster_evidence() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let token = Uuid::new_v4();
+    let head = "a".repeat(40);
+    f.step(&f.a, "PR-7", &head, token, State::Reserved).unwrap();
+    f.step(&f.a, "PR-7", &head, token, State::Running).unwrap();
+    let store = f.a.join(".aida-store");
+    let mut reads = 0;
+    assert!(update_with_observer(
+        &f.a,
+        &f.hub,
+        "PR-7",
+        &head,
+        token,
+        State::Terminal,
+        Some("observed worker exit".into()),
+        || {
+            reads += 1;
+            if reads == 1 {
+                let mut r = roster(&store, &super::super::head(&store).unwrap()).unwrap();
+                r.nodes.insert("new-peer".into(), r.nodes["b"].clone());
+                write(&store, ROSTER, serde_json::to_vec(&r).unwrap());
+                ok(&store, &["add", ROSTER]);
+                ok(&store, &["commit", "-qm", "enroll another peer"]);
+            }
+        },
+    )
+    .unwrap());
+    assert_eq!(
+        reads, 2,
+        "changed evidence must rebuild within the retry loop"
+    );
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let history = chain(
+        &f.hub,
+        "PR-7",
+        &table.changes["PR-7"],
+        &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        history.len(),
+        3,
+        "only the refreshed Terminal was published"
+    );
+    assert_eq!(history.last().unwrap().state, State::Terminal);
 }

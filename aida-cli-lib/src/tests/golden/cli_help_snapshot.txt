@@ -21125,12 +21125,48 @@ Manage explicitly trusted review publishers (operator only)
 Usage: aida review nodes [OPTIONS] <COMMAND>
 
 Commands:
-  enroll     Enroll a node's public ed25519 key in the shared roster
-  revoke     Remove a node; all of its publications immediately lose credit after sync
-  publisher  Configure this host recorder's node and private key path. Keys stay local
-  help       Print this message or the help of the given subcommand(s)
+  admission-reconcile  Re-anchor one admission chain after stopping all watchers and reviewers
+  enroll               Enroll a node's public ed25519 key in the shared roster
+  revoke               Remove a node; all of its publications immediately lose credit after sync
+  publisher            Configure this host recorder's node and private key path. Keys stay local
+  help                 Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes admission-reconcile
+Re-anchor one admission chain after stopping all watchers and reviewers
+
+Usage: aida review nodes admission-reconcile [OPTIONS] --expected-tip <EXPECTED_TIP> --reason <REASON> <CHANGE>
+
+Arguments:
+  <CHANGE>
+          GitHub change key, for example PR-123
+
+Options:
+      --expected-tip <EXPECTED_TIP>
+          Exact hub tip inspected by the operator (no automatic retries)
+
+      --reason <REASON>
+          Durable explanation of the stopped-admission recovery
+
+      --all-reviewers-stopped
+          Attest that all watchers and all reviewers for this change are stopped
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -52477,6 +52513,48 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes",
+      "admission-reconcile"
+    ],
+    "about": "Re-anchor one admission chain after stopping all watchers and reviewers",
+    "flags": [
+      {
+        "name": "all-reviewers-stopped",
+        "takes_value": false,
+        "help": "Attest that all watchers and all reviewers for this change are stopped"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "expected-tip",
+        "takes_value": true,
+        "help": "Exact hub tip inspected by the operator (no automatic retries)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Durable explanation of the stopped-admission recovery"
       }
     ],
     "hidden": false
