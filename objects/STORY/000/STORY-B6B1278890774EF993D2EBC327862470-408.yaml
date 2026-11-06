@@ -33,12 +33,12 @@ description: |
   - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
 
   Depends on: observation-envelope story (shared aida-intent branch + validator).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:13:28.183880561Z
+modified_at: 2026-11-06T15:21:01.280844498Z
 req_type: Story
 relationships:
 - rel_type:
@@ -270,6 +270,15 @@ history:
   timestamp: 2026-11-06T14:57:12.705175572Z
   session_id: 01a1b159080c
   changes: []
+- id: 01a1b172-ec60-76b3-84d2-b1a7e6d78339
+  author: aida-orchestrator
+  timestamp: 2026-11-06T15:21:01.280868462Z
+  session_id: 01a1b16e80c2
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -278,3 +287,11 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 2 fixes most findings (umask CI repro, JUnit canonicalisation, cancellation receipts, round-robin cursor, criterion traces, --json, train/PR readers), but history revalidation is still unbounded on any checkpoint miss: a fresh clone, a new enrollment or any edit to the four validator source files refetches and re-inventories every historical CI SHA under one 30s deadline. CI at the head is still pending.'
+  recovery_hint: address the review findings, move STORY-2480 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T15:21:01.280844498Z
