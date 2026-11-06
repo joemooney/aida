@@ -671,6 +671,13 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts one or two reviewers (default two).
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
+A refusal or setup failure for one change is reported against that change and
+leaves the watcher processing the other changes in the same pass, including
+with `--once`. The reason is visible in `aida awaiting`; observed pickup exits
+also retain their attempt diagnostic. Watch-level failures, such as an invalid
+grant or unusable shared state, still exit nonzero.
+<!-- trace:BUG-2471 | ai:codex -->
+
 The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
 per-command timeouts; the watcher avoids unbounded version-detection probes.
 Initial root resolution and later probes clear ambient Git routing variables.
