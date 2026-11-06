@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-06T16:22:36.110741835Z
+modified_at: 2026-11-06T17:44:51.873303997Z
 req_type: Story
 tags:
 - architecture
@@ -350,6 +350,12 @@ comments:
   created_at: 2026-11-06T16:22:36.110741835Z
   modified_at: 2026-11-06T16:22:36.110741835Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1f6-9da1-7b42-ac99-0907fa651628
+  author: joe
+  content: 'PR-C coordination: implementing the signed ownership boundary. Effectful VendorProfile lives in aida-cli-lib/src/launch/profile.rs, keyed by existing core LaunchVendor; its private Codex prepare_launch executes after final metadata and before stdio/hooks. R5 should extend/move that adapter once after PR-C, not add a parallel finalizer. Pure control_env stays in core launch_policy; grant logic stays in launch. No env-clear cutover in this slice.'
+  created_at: 2026-11-06T17:44:51.873303997Z
+  modified_at: 2026-11-06T17:44:51.873303997Z
+  session_id: 01a1b1f00f15
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
