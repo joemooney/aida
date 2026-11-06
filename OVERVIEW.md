@@ -1556,9 +1556,15 @@ a receipt with the kernel-attested shim PID, start identity, namespaces, identit
 UID map, and pinned policy commit. Rust validates that receipt while exec is
 blocked, finishes host PID binding, then releases the vendor. Configured posture
 and receipt-shaped JSON confer no applied credit. The temporary `ClaudeNative`
-arm preserves existing Claude behavior until its separate migration. Interactive,
-background, resume/fork, Claude migration and OpenCode integration remain later
-slices. The authenticated operator run is still required for acceptance.
+arm preserves existing Claude behavior without the trusted opt-in. Under
+`[contained.vendors] claude = "aida"`, foreground headless phases and
+coordinators use the shared boundary. Coordinators retain quiet or streaming
+output, bind their explicit child grant to the attested worker before release,
+and keep the private state owner until exit. Interactive, background and
+resume/fork launches still refuse under that opt-in; their migration and
+OpenCode integration remain later slices. The authenticated operator run is
+still required for acceptance.
+<!-- trace:TASK-3219 | ai:codex -->
 
 Under `codex = "aida"` every other Codex surface fails closed. This covers
 interactive `aida agent new`, `--bg`, resume, coordinator, phase-driver
@@ -1617,3 +1623,29 @@ Untrusted-node envelopes remain separate work. See
 [second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
 <!-- trace:TASK-3196 | ai:codex -->
+
+## Process identity and holder admission
+
+<!-- trace:STORY-2537 trace:BUG-2458 | ai:codex -->
+
+`aida_core::proc_identity` names a process by boot ID, PID namespace, numeric
+PID and raw field-22 start ticks. Its judge separates Alive, Dead and
+ForeignUnknown; wall time and consumer expiry do not participate. Direct
+observation verifies procfs coordinates and rejects masked views. A local
+machine identity in the holder envelope supplies node provenance independently
+of hostname. This is lifecycle evidence, not a grant or signal capability.
+
+Admitted ownership and lease records select one worker generation with
+cooperative non-subreaper capture evidence. Spawn handoffs bind a pre-exec
+self-check receipt to the unreaped child; self-stamping captures the writer.
+Init, managers, subreapers and unavailable evidence refuse admission. Legacy
+lease readers retain their advisory-lock, worktree and expiry policies, and
+legacy ownership retains its heartbeat policy. An admitted worker never borrows
+liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
+separate consumer policy. Ownership repair pins the recorded generation without
+recapturing today's process at an old PID.
+
+The TASK-1750 ratchet inventories compatibility consumers in
+`proc_identity_legacy_baseline.json` and prevents new private PID/start
+decisions. See the signed
+[process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
