@@ -13,8 +13,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T19:16:44.760865339Z
+modified_at: 2026-11-06T19:19:57.333416215Z
 req_type: Bug
+comments:
+- id: 01a1b24d-ac95-76d2-b42d-ca99117a4cd9
+  author: joe
+  content: 'Implementation in progress: current continuous watcher already isolates ordinary per-change errors, but --once still aborts its pass. Updated the shared pass boundary to continue all changes in both modes, retain refusal reasons for aida awaiting, and preserve fail-fast behavior for unusable shared state. Added two-PR pickup-refusal and fatal-state regressions; targeted Rust validation is compiling.'
+  created_at: 2026-11-06T19:19:57.333416215Z
+  modified_at: 2026-11-06T19:19:57.333416215Z
+  session_id: 01a1b24ab322
 history:
 - id: 01a1b24a-bc58-7413-a436-59c9e08b551a
   author: aida-session-start
