@@ -13,12 +13,12 @@ description: |-
   3. The rotate relay's relaunch carries the same set.
   4. A test asserts that an advisor child launched via agent new can mint a reviewer grandchild (review watch admits one) and an implementer grandchild.
   5. The standing orders and handoff launch line ('aida agent new claude --role advisor --permission-mode auto') then work as written, with no bypass needed (feeds STORY-2571).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T19:59:47.077611983Z
+modified_at: 2026-11-06T20:26:21.793383068Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -146,6 +146,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b28a-78e1-74e0-bd29-6a5ec016c3c9
+  author: aida-session-start
+  timestamp: 2026-11-06T20:26:21.793378710Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6fe228acc8ba529a71396d2a8236545d2d009d1a
   branch: main
