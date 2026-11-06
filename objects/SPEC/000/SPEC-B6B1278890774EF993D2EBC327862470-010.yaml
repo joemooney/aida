@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-010
 agreed_id: TASK-2838
 title: AGY headless exits successfully after denied or uninitialized command tools
 description: 'Observed while executing STORY-2460''s sketch-only native sandbox experiment with agy 1.4.12. Run a0d7722d-d013-4ddf-91a2-2ec38ad0db30 exited 0 with result.status=SUCCESS, empty response and denied_actions=[command] after print-mode permission refusal. Run 80ae5463-0380-4f26-9d8b-e75388580679, with an exact session-local command allow rule, exited 0/status SUCCESS despite run_command TOOL_ERROR before payload execution: ~/.gemini/antigravity-cli/bin/agentapi was read-only under outer Codex lane. No test sentinels were created. These are not empirical native sandbox passes. Triage whether AIDA''s AGY adapter must classify denied_actions/tool errors/absent positive completion evidence instead of trusting process exit. Preserve explicit pending/failed outcome without interpreting every recoverable tool error as final failure. Full bounded-run evidence and limits are in SKETCH v1 on STORY-2460; transient artifacts /tmp/story2460-pdqj_i8_/. No production changes made.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-06T06:33:53.243816668Z
+modified_at: 2026-11-06T06:50:33.412815658Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -348,6 +348,15 @@ history:
   timestamp: 2026-11-06T06:25:30.357933618Z
   session_id: 01a1af8693f7
   changes: []
+- id: 01a1af9f-9444-75e1-86ff-d4d4581222d1
+  author: aida-orchestrator
+  timestamp: 2026-11-06T06:50:33.412844957Z
+  session_id: 01a1af9758d8
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e422daaa1a4
@@ -360,6 +369,14 @@ implementation_info:
   implemented_at: 2026-11-05T19:04:56.661188528Z
   implemented_by: joe
   reopened_at_sha: 158725d7dd93185c7140291f8869b81d2652504e
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 4 at d609195a9e3a: every advisor-ruling criterion for TASK-2838 is met by inspection and targeted tests, and the new MAX_TOOLS same-tool update is correct and pinned. CI (lib-0) fails at this head and also failed at the two prior PR heads, while main 379c7c3 passes lib-0, so the merge is blocked.'
+  recovery_hint: address the review findings, move TASK-2838 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T06:50:33.412815658Z
 interface_changes:
   cli:
   - AGY headless reports denied, unresolved tool-error, and missing terminal evidence as incomplete (exit 65); quiet coordinator output stays readable
