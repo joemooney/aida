@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T07:48:19.272631986Z
+modified_at: 2026-11-06T07:48:24.516924072Z
 req_type: Story
 tags:
 - docs:impacted
@@ -399,6 +399,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-2 admission CAS/race/mirror/unreachable cases work and are tested, but the design has fleet-wide liveness holes: an unbounded single-table budget, active claims that never expire with no recovery tool, revocation bricking chains, and a committed hub config that disables dispatch on unenrolled hosts. sync errors kill the watcher, and AC5 is still partial while the trailers complete STORY-2492.. No triage reason was given.'
   created_at: 2026-11-06T07:48:19.272629663Z
   modified_at: 2026-11-06T07:48:19.272629663Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afd4-8a94-7be1-a323-c02b63f41e14
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 863d593bab5a
+    Recorded: 2026-11-06T06:35:41.613118012+00:00
+    Findings:
+    1. 1 (blocking): admission.json is a single append-only table holding every PR's signed chain forever, capped at CAP=1 MiB / 2000 changes / 2048 transitions (admission.rs read_table/commit_table) with no compaction. At about 1 KB per signed transition and 3 per reviewed head, that is about 300 heads before 'admission table budget exhausted' refuses every reservation on every node, which is days at this repo's PR rate. The guide says 'operator maintenance with admission stopped' but no tool exists. Prune or compact Terminal/Cancelled chains of closed PRs (or shard per change), and test past the budget.
+    2. 2 (blocking): Reserved/Running claims never expire and there is no recovery command. Terminal is written only when every worker/reviewer is observable and stopped, and 'admission::transition(..Terminal..)?' in child_with_program's exit closure (review_watch.rs ~1865) returns early on a hub error. A crash, reboot, killed watcher or unreachable hub at exit leaves the chain active. chain() then refuses any new Reserved for that PR, including newer heads ('active admission cannot be replaced'), and local --release refuses (review_watch.rs ~2077), so one crashed reviewer wedges the PR on all nodes until someone does manual git surgery on refs/aida/review-admission. This is the old round's finding #5 class (fail-closed lockout with no recovery path), which the advisor put in scope. Add an operator reconcile/cancel path with a refusal and happy-path test.
+    3. 3 (blocking): Revoking a roster node makes every chain it ever signed unverifiable: chain() calls verify_signature on every historical record, and story2492_admission_rejects_tampering_revocation_and_unknown_versions asserts the error. Every PR that node ever admitted then refuses all future admission, with no tooling to recover. Verify historical records against the roster at signing time, or let an operator re-anchor or compact the chain, and test it.
+    4. 4 (blocking): The PR commits [review] admission_hub/admission_ref to .aida/config.toml, so Hub::load returns Some on every AIDA host the moment it merges. Hosts without .aida/review-publisher.json, including the primary /home/joe/ai/aida (none enrolled), then fail every dispatch with 'review admission requires an enrolled local publisher' (admission.rs update()). The review watcher stops dispatching, contradicting second-review-node.md's own 'upgrade every watcher ... before enabling this configuration'. Ship the code with the config off (enable it after enrollment), or make the unenrolled case a named, tested local-only fallback or refusal with a migration note.
+    5. 5 (major): 'admission::sync(&root)?' in the continuous run() loop (review_watch.rs ~2102) exits the whole watcher on any sync error: dirty store, store ahead of or diverged from origin, or origin unreachable. discover() errors right below sleep and continue when !args.once. The guide says 'divergence, dirty state and sync errors refuse that pass'. Handle sync like discover and add a test that the continuous watcher survives a sync refusal.
+    6. 6 (major): reserve_dispatch's early '?' returns (Hub::load error, validate_repository mismatch, the store.transaction) happen before mark_spawn_failed. The local attempt stays Phase::Reserved, select() treats it as held (review_watch.rs ~1320), and --release refuses in distributed mode, so the head is stuck locally. Likewise in watch_change's spawn-failure arm, a failing 'admission::transition(..Cancelled..)?' skips mark_spawn_failed. Mark the local attempt failed on every error path and test it.
+    7. 7 (major): AC5 is still partial. The two-clone end-to-end test never drives the ship/ready or train entry point (round-3 finding 6 was deferred for lack of a forge seam; rework_cycle_rereviews_on_another_node_and_the_train_lands_the_new_head calls the decision function directly), and none of this diff's tests run a real watcher on B reviewing a PR shipped on A. The PR title and both commit trailers end in (STORY-2492), so the merge completes the story with AC5 unmet. Add the forge seam and test, or re-trailer so the merge does not complete the story.
+    8. 8 (minor): A node that loses the race (reserve Ok(false)) marks its attempt Phase::Failed, which does not block reselection, so every poll it re-runs ls-remote, fetch and full chain ssh-keygen verification against GitHub for each PR another node is reviewing, and logs 'already reserved' each pass. Record the remote hold locally and skip until a synced verdict or head change.
+    9. 9 (minor): update() holds with_store_write_lock across up to 3 rounds of GitHub ls-remote/fetch/push plus a confirm fetch, with no network timeout, so a hanging connection blocks every local store writer. Do the network I/O outside the store lock, or bound it.
+    10. 10 (minor): The liveness paths are untested: there is no test of the child-exit Running->Terminal transition, of an ambiguous exit retaining its claim, of the hub being unreachable at Terminal, or of mark_unclaimed_exit cancelling. Tests also lack criterion-level traces (e.g. trace:STORY-2492.ac8cff0f, convention at remote_create.rs:4852), so all six criteria report untraced in aida criteria.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T07:48:24.340591555Z
+  modified_at: 2026-11-06T07:48:24.340591555Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
