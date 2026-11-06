@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T20:18:02.610042169Z
+modified_at: 2026-11-06T06:24:40.035679299Z
 req_type: Story
 relationships:
 - rel_type:
@@ -196,6 +196,12 @@ comments:
   created_at: 2026-11-05T20:18:02.610042169Z
   modified_at: 2026-11-05T20:18:02.610042169Z
   session_id: 01a1ad4bdc48
+- id: 01a1af87-e063-7e00-a83f-bed71edfe705
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 23:30 MST: resume this spec on a fresh lane. Start from origin/main; check landed slices with git log origin/main --grep <this spec>, then implement the NEXT unlanded slice of the advisor-signed sketch (one PR, Refs trailer unless it completes the spec). Ignore any /tmp recovery patch from an earlier lane: those rounds have landed. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast; never a workspace or unfiltered run. Scope: trigger half only (the derived-attention half waits on STORY-2324/2325).'
+  created_at: 2026-11-06T06:24:40.035679299Z
+  modified_at: 2026-11-06T06:24:40.035679299Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
