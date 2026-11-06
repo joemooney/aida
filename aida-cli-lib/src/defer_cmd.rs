@@ -198,16 +198,23 @@ pub(crate) fn handle_undefer_command(
         );
     }
     let now = chrono::Utc::now();
+    clear_deferral(&mut req, now);
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "undefer");
+    println!("{} {display_id}", "Undeferred:".cyan().bold());
+    Ok(())
+}
+
+/// Shared field transition for explicit undefer and machine-met plain shelves.
+/// Callers establish hold authority before invoking this transition.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn clear_deferral(req: &mut aida_core::Requirement, now: chrono::DateTime<chrono::Utc>) {
     req.deferred = false;
     req.deferred_at = None;
     req.deferred_until = None;
     req.deferred_reason = None;
     req.tags.remove("operator-held");
     req.modified_at = now;
-    backend.update_requirement(&req)?;
-    record_role_activity(&display_id, "undefer");
-    println!("{} {display_id}", "Undeferred:".cyan().bold());
-    Ok(())
 }
 
 /// Defer a spec — park it as primed/conditional work, hidden from the
@@ -224,10 +231,18 @@ pub(crate) fn handle_undefer_command(
 /// `--deferred` (only) or `--all` (union).
 // trace:STORY-584 | ai:claude
 #[derive(clap::Parser, Debug)]
-#[clap(name = "defer")]
+#[clap(
+    name = "defer",
+    subcommand_negates_reqs = true,
+    args_conflicts_with_subcommands = true
+)]
 pub(crate) struct DeferArgs {
+    #[clap(subcommand)]
+    pub command: Option<DeferCommand>,
+
     /// SPEC-ID or UUID to defer.
-    pub id: String,
+    #[clap(required = true)]
+    pub id: Option<String>,
 
     /// Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged,
     /// release:>=<version>, date:<YYYY-MM-DD>, query:<filters> count<op><n>,
@@ -243,12 +258,53 @@ pub(crate) struct DeferArgs {
     pub reason: Option<String>,
 }
 
+// trace:STORY-2402 | ai:codex
+#[derive(clap::Subcommand, Debug)]
+pub(crate) enum DeferCommand {
+    /// Evaluate parked specs and resurface met conditions; never lift operator holds.
+    Resurface {
+        /// Report actions without changing specs or queues.
+        #[clap(long)]
+        dry_run: bool,
+        /// Route manual conditions older than this many days to aida human.
+        #[clap(long, default_value_t = 14, value_parser = clap::value_parser!(u32).range(1..))]
+        manual_age_days: u32,
+    },
+}
+
 fn run_defer(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <DeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    if let Some(DeferCommand::Resurface {
+        dry_run,
+        manual_age_days,
+    }) = args.command.as_ref()
+    {
+        return match &ctx.store {
+            None | Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+                Ok(crate::command_registry::Flow::Continue)
+            }
+            Some(crate::command_registry::StoreCtx::Git {
+                store_path,
+                backend,
+            }) => {
+                crate::defer_resurface::run(
+                    &crate::find_project_root()?,
+                    store_path,
+                    backend,
+                    *dry_run,
+                    *manual_age_days,
+                )?;
+                Ok(crate::command_registry::Flow::Continue)
+            }
+            Some(crate::command_registry::StoreCtx::Legacy { .. }) => {
+                anyhow::bail!("aida defer resurface requires the distributed git-canonical store")
+            }
+        };
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -261,11 +317,13 @@ fn run_defer(
             use crate::git_backend_cmd::*;
             let (store_path, backend) = (*store_path, *backend);
             match &args {
-                DeferArgs { id, until, reason } => {
+                DeferArgs {
+                    id, until, reason, ..
+                } => {
                     // STORY-584: park a spec on the primed/conditional shelf, hidden
                     // from the default open-work view. trace:STORY-584 | ai:claude
                     self::defer_single(
-                        id,
+                        id.as_deref().expect("clap requires a spec or subcommand"),
                         until.as_deref(),
                         reason.as_deref(),
                         backend,

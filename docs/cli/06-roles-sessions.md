@@ -56,7 +56,8 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **One line** — authority is a grant minted at an interactive terminal and scoped to one session; launchers that issue child grants hand it down one explicitly named child seat at a time.
 
-**Mental model.** Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...] [--ttl <dur>])"` at an interactive human TTY to establish a session seat. The requested seat must be in your **team roster**; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>`, which themselves require an interactive TTY (a terminal check, not proof that a human is typing). The roster is a *ceiling* (which seats you may ever take), the grant is the *active seat* (which one this session holds). Child delegation is **empty by default**: list each child seat this session may hand out with a repeated `--delegate-seat`. A **child grant** is a distinct grant for one seat: one per launched session, bound to the parent and limited to the parent's delegation set. Children cannot delegate onward. Which launchers issue one, and when, is in the table below. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An **MCP server captures the grant it starts with** and re-validates it on every gated call (so revoking the grant takes effect immediately), but it cannot acquire a *different* one while running: to change a server's authority, enter the seat at a TTY and restart/reconnect the server. Grant lifetime defaults to 24 hours. The operator can pass `--ttl <dur>` (e.g. `72h` or `90m`) to set a custom duration, capped by `[seat] max_grant_hours` (default 24h, hard ceiling 168h; bare numbers without a unit are refused). Effective cap is `min(global, project)` when both are configured; project configuration alone can only lower the default 24h ceiling. All grants are subject to an unconfigurable hard ceiling of 168 hours. A cap below 24 does not shorten the default 24h grant when `--ttl` is omitted. Managed agent sessions cannot mint direct grants. <!-- trace:TASK-1787 | ai:antigravity -->
+**Mental model.** Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...] [--ttl <dur>])"` at an interactive human TTY to establish a session seat. The requested seat must be in your **team roster**; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>`, which themselves require an interactive TTY (a terminal check, not proof that a human is typing). The roster is a *ceiling* (which seats you may ever take), the grant is the *active seat* (which one this session holds). Direct shell grants have **empty delegation by default**: list each child seat this session may hand out with a repeated `--delegate-seat`. A **child grant** is a distinct grant for one seat: one per launched session, bound to the parent and limited to the parent's delegation set. Advisor and integrator children can delegate onward within the validated parent's set; `agent new --delegate-seat` narrows that set. Implementer and reviewer children cannot delegate onward. Which launchers issue one, and when, is in the table below. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An **MCP server captures the grant it starts with** and re-validates it on every gated call (so revoking the grant takes effect immediately), but it cannot acquire a *different* one while running: to change a server's authority, enter the seat at a TTY and restart/reconnect the server. Grant lifetime defaults to 24 hours. The operator can pass `--ttl <dur>` (e.g. `72h` or `90m`) to set a custom duration, capped by `[seat] max_grant_hours` (default 24h, hard ceiling 168h; bare numbers without a unit are refused). Effective cap is `min(global, project)` when both are configured; project configuration alone can only lower the default 24h ceiling. All grants are subject to an unconfigurable hard ceiling of 168 hours. A cap below 24 does not shorten the default 24h grant when `--ttl` is omitted. Managed agent sessions cannot mint direct grants. <!-- trace:TASK-1787 | ai:antigravity -->
+<!-- trace:BUG-2467 | ai:codex -->
 
 **Grants are bound to a process tree.** A grant id is not a bearer token. `aida role enter` binds the grant to the shell that ran it and that shell's terminal session: any process in this terminal session can use this grant (an agent you start there, its tool calls and hooks), and no process outside it can, even with the id exported. A child grant is bound to the launcher that minted it, so a worker it execs or spawns holds it. `aida role enter <seat> --bind-pid <pid>` binds a grant to a named running session's process, which serves only that session's unsandboxed hooks and MCP server. Matching uses each process's kernel start identity, so a recycled pid never matches. Every refusal (`aida doctor --category seat-grant`, `aida role status`) names the fix. A grant minted before binding existed is refused outright: after upgrading, re-enter each seat with `eval "$(aida role enter <seat>)"`, and start background and relay seats from that role shell or an aida launcher (not with `--bind-pid`, whose grant their sandboxed tool calls cannot present). A review approval records which bound process presented its grant, and `aida pr ship` re-checks that against the grant. <!-- trace:BUG-1934 | ai:claude -->
 
@@ -226,6 +227,21 @@ path bypasses pooling. Worktree errors name the requested path, underlying
 cause and recovery commands. A refused launch rolls back this attempt's
 allocations; existing leases and directories are preserved, and cleanup refuses
 a tree with live users. A failed spawn revokes only its newly issued grant.
+
+Advisor and integrator children inherit the validated parent's delegable seats.
+For example, a shell entered with `--delegate-seat advisor --delegate-seat
+reviewer --delegate-seat implementer` can launch `aida agent new claude --role
+advisor --permission-mode auto`; that advisor can then dispatch reviewers and
+implementers. Repeat `--delegate-seat` on `agent new` to select a narrower set,
+for example `--delegate-seat reviewer`. Requests outside the parent's set refuse
+with a role-entry recovery command. Implementer and reviewer children always
+have no delegable seats and reject explicit delegation flags. Rotation retains
+the selection for every generation. Ended-session resume restores the recorded
+explicit selection and validates it against the current parent; legacy records
+without a selection inherit the current parent set. Detached Codex launches
+honour the same narrowing. Descendant authority expires with its grant
+chain and refuses if any ancestor is revoked or no longer authorized.
+<!-- trace:BUG-2467 | ai:codex -->
 
 For AIDA delegation, keep the advisor shell's validated parent grant and clear
 `AIDA_SESSION_PURPOSE`; the launcher issues the child's own grant. If the grant
@@ -551,13 +567,17 @@ Start it in your terminal, through the `aida()` shell function, holding an advis
 
 Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
 
-`list --name N` also recognizes the legacy `aida-deputy-shell run N` bash
-runner through `runner.pid` and its process command line. This is display-only
-evidence; it supplies no grant or submit-seat authority. When the reader cannot
+`list --name N` also recognizes the legacy `aida-deputy-shell run N` and
+`aida-deputy-shell N` bash runner forms through `runner.pid` and the process
+command line. This is display-only evidence; it supplies no grant or submit-seat
+authority. When a legacy runner is live, native `submit` refuses with guidance to
+use `aida-deputy-shell submit N <file>` or stop it and restart with
+`aida deputy shell run --name N` in the operator's terminal. When the reader cannot
 observe host processes from its PID namespace, it reports `runner: UNKNOWN
 (cannot see host processes from this sandbox)`. Unreadable process information
 also reports `UNKNOWN`; check from the host terminal before restarting a deputy.
 <!-- trace:BUG-2468 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex -->
 
 - **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../advanced/deputies.md#letting-a-sandboxed-advisor-submit).
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.

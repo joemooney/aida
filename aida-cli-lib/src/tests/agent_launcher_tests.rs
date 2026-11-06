@@ -345,6 +345,7 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
     )
     .unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![
@@ -445,6 +446,7 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
     std::fs::create_dir_all(project.join(".aida")).unwrap();
     std::fs::write(project.join("CLAUDE.md"), "# guidance").unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -514,6 +516,7 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(&project).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![],
@@ -604,6 +607,7 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
     std::fs::create_dir_all(project.join(".aida")).unwrap();
     std::fs::write(project.join("CLAUDE.md"), "# guidance").unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -717,6 +721,7 @@ fn verbose_diagnostics_never_print_the_full_prompt_text() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(&project).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -773,6 +778,7 @@ fn verbose_diagnostics_redact_secret_looking_argv_values() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(&project).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![
@@ -993,6 +999,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     ]);
 
     let mut codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec!["--built-in".to_string()],
@@ -1020,6 +1027,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     );
 
     let mut antigravity = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),
@@ -1036,6 +1044,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     assert_eq!(antigravity.default_args, vec!["--user-agy"]);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), "acceptEdits".to_string()],
@@ -1082,6 +1091,7 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
     ]);
 
     let mut codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -1108,6 +1118,7 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
     );
 
     let mut explicit = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -1520,6 +1531,7 @@ fn apply_agent_default_flags_knob_injects_when_native() {
     let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -1560,6 +1572,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
     let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -1582,6 +1595,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
     // codex (or agy) `agent new` launch is refused. trace:BUG-2144 | ai:claude
     for (agent_type, binary) in [("codex", "codex"), ("antigravity", "agy")] {
         let mut cfg = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type,
             binary,
             default_args: Vec::new(),
@@ -1646,6 +1660,7 @@ fn apply_agent_default_flags_rejects_bypass_and_contained() {
     let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -1679,6 +1694,7 @@ fn apply_agent_default_flags_explicit_skips_knob() {
     let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), "plan".to_string()],
@@ -1725,6 +1741,7 @@ fn apply_agent_default_flags_per_tool_flags_override_knob() {
     ]);
 
     let mut codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -1770,6 +1787,7 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
     let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
 
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -1810,6 +1828,7 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         resumed_from: None,
     };
     let claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -1817,6 +1836,7 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         contained: false,
     };
     let codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -1824,6 +1844,7 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         contained: false,
     };
     let antigravity = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),
@@ -2034,6 +2055,7 @@ fn show_prompt_prints_the_exact_injected_role_prompt() {
     let _home_guard =
         crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),
@@ -2817,6 +2839,7 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         ),
     );
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
@@ -2951,6 +2974,7 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
         std::fs::create_dir_all(&tree).unwrap();
         crate::test_git::commit_fixture(&tree);
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "codex",
             binary: "codex",
             default_args,
@@ -3093,6 +3117,7 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         ),
     );
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: vec!["--dangerously-skip-permissions".to_string()],
@@ -3197,6 +3222,7 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
         )
         .unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -3290,6 +3316,7 @@ fn cold_advisor_launch_context_names_gate_prohibition_and_next_command() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -3374,6 +3401,7 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "antigravity",
         default_args: Vec::new(),
@@ -3467,6 +3495,7 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -3536,6 +3565,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         token: "token".into(),
     };
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -4014,6 +4044,7 @@ fn launch_reviewer(
     };
     launch(
         AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "codex",
             binary: "/usr/bin/true",
             default_args,
@@ -4364,6 +4395,7 @@ fn terminate_reports_survivors_and_live_pids_tracks_real_processes() {
 fn is_contained_launch_detection() {
     // Claude with contained: true is contained
     let claude_contained = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -4374,6 +4406,7 @@ fn is_contained_launch_detection() {
 
     // Claude with contained: false is uncontained
     let claude_uncontained = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -4384,6 +4417,7 @@ fn is_contained_launch_detection() {
 
     // Codex is never contained even if contained field is true
     let codex_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![],
@@ -4394,6 +4428,7 @@ fn is_contained_launch_detection() {
 
     // Antigravity is never contained
     let agy_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
         default_args: vec![],
@@ -4404,6 +4439,7 @@ fn is_contained_launch_detection() {
 
     // Unknown agent type is never contained
     let unknown_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "other",
         binary: "other",
         default_args: vec![],
@@ -4482,6 +4518,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
             ("AIDA_CONTAINED", Some("1")),
         ]);
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "claude",
             default_args: vec![
@@ -4523,6 +4560,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
             ("AIDA_CONTAINED", None),
         ]);
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: "claude",
             binary: "claude",
             default_args: vec![],
@@ -4564,6 +4602,7 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
         resumed_from: None,
     };
     let uncontained_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -4577,6 +4616,7 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
     );
 
     let contained_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -4605,6 +4645,7 @@ fn apply_agent_default_flags_sets_contained_flag_for_claude() {
     )
     .unwrap();
     let mut claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -4621,6 +4662,7 @@ fn apply_agent_default_flags_sets_contained_flag_for_claude() {
     assert!(claude.contained);
 
     let mut codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -4645,6 +4687,7 @@ fn apply_agent_default_flags_sets_contained_flag_for_claude() {
     )
     .unwrap();
     let mut claude_bypass = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),
@@ -4684,6 +4727,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 
     // Contained Claude config
     let contained_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--settings=test.json".to_string()],
@@ -4702,6 +4746,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 
     // Uncontained Claude config (with --permission-mode bypass)
     let uncontained_config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![
@@ -4950,6 +4995,7 @@ fn codex_fresh_launch_does_not_double_no_daemon() {
     ]);
 
     let launcher = || AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],
@@ -5087,6 +5133,7 @@ fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
     let options = AgentPromptOptions::new(Some(launch.prompt.clone()), false);
     for vendor in ["codex", "claude"] {
         let config = AgentLaunchConfig {
+            delegate_seats: Vec::new(),
             agent_type: vendor,
             binary: vendor,
             default_args: Vec::new(),
@@ -5111,6 +5158,7 @@ fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
     }
     let guided = guided_review_launch_request("BUG-2387");
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),

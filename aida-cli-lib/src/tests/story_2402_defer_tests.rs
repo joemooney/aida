@@ -203,7 +203,12 @@ fn story2402_s2_defer_help_matches_snapshot() {
     let (prefix, rest) = golden.split_once("===== aida defer\n").unwrap();
     let (expected, suffix) = rest.split_once("===== aida undefer\n").unwrap();
     if std::env::var_os("AIDA_UPDATE_SNAPSHOTS").is_some() {
-        let updated = format!("{prefix}===== aida defer\n{help}===== aida undefer\n{suffix}");
+        let nested = expected
+            .find("===== aida defer resurface\n")
+            .map(|at| &expected[at..])
+            .unwrap_or("");
+        let updated =
+            format!("{prefix}===== aida defer\n{help}{nested}===== aida undefer\n{suffix}");
         let (body, _) = updated
             .split_once("===== catalog (hidden included)\n")
             .unwrap();
@@ -215,6 +220,13 @@ fn story2402_s2_defer_help_matches_snapshot() {
         )
         .unwrap();
     } else {
-        assert_eq!(help, expected);
+        // Nested subcommand help follows the parent in the full snapshot.
+        assert_eq!(
+            help,
+            expected
+                .split("===== aida defer resurface\n")
+                .next()
+                .unwrap()
+        );
     }
 }

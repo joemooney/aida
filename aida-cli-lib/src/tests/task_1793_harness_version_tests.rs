@@ -46,6 +46,7 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
     let binary = tmp.path().join("vendor");
     let test_bin = crate::aida_bin::current_executable_path().unwrap();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: vec![],
@@ -182,6 +183,7 @@ fn task1793_version_accepts_256_bytes_plus_newline() {
 
 fn fixture_config(agent_type: &'static str) -> AgentLaunchConfig {
     AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type,
         binary: agent_type,
         default_args: vec![],

@@ -338,7 +338,30 @@ and `open.cache` sub-spans for diagnosing remaining latency.
 
 Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. Existing free-text triggers remain readable pending migration. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
 
-**Chains with** — `defer --until` parks it; the trigger condition is your reminder; `undefer` (or a future trigger-aware sweep) brings it back to the ready set.
+**Chains with** — `defer --until` parks it; `undefer` or the hourly `defer resurface` sweep brings it back to the ready set.
+
+### `aida defer resurface`
+
+Evaluates typed conditions on deferred/parked specs without changing lifecycle
+status. A met condition clears a plain deferral and records the observation in
+an audit comment. Met operator holds go to `aida human` for a decision and stay
+held. Manual conditions older than 14 days also route to that queue;
+`--manual-age-days N` changes the threshold. Existing queue rows are not duplicated.
+Removing a queue row without lifting the hold or changing the condition allows
+it to be routed again on the next sweep. Missing timestamps or triggers
+stay parked, and archived specs are skipped. Use `--dry-run` to preview actions
+without writing specs or queues.
+
+Unknown observations (including failed forge/release probes) are reported and
+left parked, with a successful exit. Free-text and unparseable triggers are
+also Unknown and remain unchanged, including invalid typed syntax such as
+`spec:` or `date:bad`; the run reports `N deferrals awaiting typed-condition
+migration` as information. A store containing only these unmigrated triggers
+exits successfully without writing objects or queues. Only real evaluation errors
+(such as a spec condition naming a spec that does not exist) and store/internal errors
+produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
+are retained for a later sweep. This repository registers the sweep hourly as
+the timer-only `defer-resurface` job and routes job failures to the advisor.
 
 ---
 
@@ -648,9 +671,9 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-This first slice supplies the language and read-only checker. Deferral write
-gates, migration, scheduled resurfacing and relay/recurrence integration follow
-in separate slices.
+Deferral writes require this language, and the hourly `defer resurface` job
+evaluates stored conditions (see above). Legacy trigger migration and
+relay/recurrence integration remain separate slices.
 <!-- trace:STORY-2402 | ai:codex -->
 
 
