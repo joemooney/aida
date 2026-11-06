@@ -25,14 +25,14 @@ The binding 2026-11-06 advisor rulings govern this revision of PR #3449.
   continued against mutable memory. Anonymous connected IPC and SCM_RIGHTS
   remain supported. Named sendmsg destinations of every family and sendmmsg
   return EACCES, including connected UDP sendmmsg and named UDP sendmsg to a
-  reachable lane/descendant resolver. These are AC1 compatibility deviations
-  requiring advisor acceptance (Round 8 F2 below), not just unreachable-network
+  reachable lane/descendant resolver. These are AC1 compatibility deviations,
+  ACCEPTED by the advisor ruling on TASK-2708 (2026-11-06 06:30 MST) (Round 8 F2 below), not just unreachable-network
   refusals. Ancillary messages other than SOL_SOCKET/SCM_RIGHTS
   (including explicit SCM_CREDENTIALS) now refuse with EACCES. An SO_PASSCRED
   receiver sees the host broker's credentials rather than the trapped sender's
   (the broker PID appears as 0 in the lane PID namespace). These additional
-  behavior deviations require advisor acceptance alongside Round 5 F2; this
-  implementer does not claim that acceptance. Sends are bounded to 64 iovecs, 1 MiB payload,
+  behavior deviations were ACCEPTED by the advisor ruling on TASK-2708 (2026-11-06 06:30 MST),
+  alongside Round 5 F2. Sends are bounded to 64 iovecs, 1 MiB payload,
   4 KiB ancillary data, and use MSG_DONTWAIT so they cannot block the broker.
   A live Unix datagram test checks delivery refusal and connected positive controls.
 * F5: both host `.claude.json` and `.claude.json.backup` receive empty read-only
@@ -225,7 +225,7 @@ b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
   must never be invoked by the fixed path. This replaces the inaccurate
   ENOENT-based test; local live tests on a newer kernel alone do not prove
   Linux 5.19-6.8 compatibility.
-* F2: **advisor acceptance pending**. All contained vendors, including Codex,
+* F2: **ACCEPTED by the advisor ruling on TASK-2708 (2026-11-06 06:30 MST)**; an older kernel must fail closed. All contained vendors, including Codex,
   require Linux 5.19+ for NEW_LISTENER | WAIT_KILLABLE_RECV. Once the broker
   receives a notification, handled signals (including SIGINT, SIGALRM, handled
   SIGTERM and Go SIGURG) are deferred until it responds. A blocking send without
@@ -241,7 +241,7 @@ b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
   an "accepted price" is recorded here as advisor signoff. A named F2 punt asks
   the advisor to accept these two deviations on TASK-2708 or direct a redesign.
   No acceptance is claimed by this implementer.
-* Ancillary credentials (Round 7 F3): **advisor acceptance pending** alongside
+* Ancillary credentials (Round 7 F3): **ACCEPTED by the advisor ruling on TASK-2708 (2026-11-06 06:30 MST)** alongside
   F2. The broker accepts only SOL_SOCKET/SCM_RIGHTS control messages; explicit
   SCM_CREDENTIALS and other ancillary types return EACCES. For implicit
   SO_PASSCRED delivery the receiver sees the broker's credentials, including PID
@@ -249,7 +249,7 @@ b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
   These are additional AC1 compatibility deviations, not evidence of sender
   impersonation support. The Round 7 punt requests an explicit acceptance or a
   direction to implement sender-credential forwarding with regression coverage.
-* UDP API compatibility (Round 8 F2): **advisor acceptance pending** alongside
+* UDP API compatibility (Round 8 F2): **ACCEPTED by the advisor ruling on TASK-2708 (2026-11-06 06:30 MST)** alongside
   F2 and ancillary credentials. The filter refuses every sendmmsg with EACCES,
   including unnamed messages on connected UDP sockets. The broker also refuses
   named sendmsg for every address family, even when socket_scope proves lane or
@@ -414,3 +414,15 @@ changed in this round.
 The native seat leaves the two changed files uncommitted. The design-fork punt
 and supervised hold remain publication/merge vetoes. No source commit/push,
 review verdict, hold clearance or queue completion is performed.
+
+## Resolution: advisor acceptance (2026-11-06)
+
+The advisor ruling recorded on TASK-2708 at 2026-11-06 06:30 MST accepts all four
+AC1 deviations: (1) NEW_LISTENER|WAIT_KILLABLE_RECV handled-signal deferral after
+broker RECV, which keeps exactly-once sends; (2) the Linux 5.19+ containment floor
+for every vendor, on the condition that an older kernel fails closed;
+(3) non-SCM_RIGHTS ancillary data returns EACCES, and SO_PASSCRED receivers see
+broker credentials; (4) sendmmsg and named sendmsg return EACCES. The
+"acceptance pending" notes in the earlier rounds above are superseded by this
+ruling and kept only as history. Interactive, --bg, coordinator and resume
+launches are the follow-up TASK-3219.
