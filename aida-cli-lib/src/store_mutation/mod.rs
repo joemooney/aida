@@ -259,9 +259,12 @@ impl Session {
         self.helper.as_raw_fd()
     }
 }
+// trace:TASK-3225 | ai:codex
 fn worker_binding_token(pid: u32, receipt_start: &str) -> Result<String> {
-    let start =
-        aida_core::liveness::process_start_identity(pid).context("service worker disappeared")?;
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid)
+        .map_err(anyhow::Error::msg)
+        .context("service worker disappeared")?;
+    let start = format!("linux-starttime:{}", identity.starttime);
     anyhow::ensure!(
         start.strip_prefix("linux-starttime:") == Some(receipt_start),
         "service worker changed"
@@ -340,6 +343,28 @@ mod tests {
             crate::gate::review_authority::author_process_token("proc", pid, Some(&start))
         );
         assert!(worker_binding_token(pid, "changed").is_err());
+    }
+    // A worker is a child, not a cooperative holder captured by the host itself.
+    // trace:TASK-3225 | ai:codex
+    #[test]
+    fn task_3225_worker_binding_captures_child_and_refuses_exited_process() {
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let start = aida_core::liveness::process_start_identity(pid).unwrap();
+        let raw = start.strip_prefix("linux-starttime:").unwrap();
+        let binding = worker_binding_token(pid, raw);
+        let changed = worker_binding_token(pid, "changed");
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert_eq!(
+            binding.unwrap(),
+            crate::gate::review_authority::author_process_token("proc", pid, Some(&start))
+        );
+        assert!(changed.is_err());
+        assert!(worker_binding_token(pid, raw).is_err());
     }
     // trace:TASK-3225 | ai:codex
     #[test]
