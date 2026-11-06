@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T07:09:56.478316488Z
-modified_at: 2026-11-06T07:56:45.173738050Z
+modified_at: 2026-11-06T08:00:42.730120919Z
 req_type: Task
 tags:
 - carried-from:TASK-3131
@@ -27,6 +27,12 @@ comments:
   content: 'Advisor 2026-11-06 01:00: bundled into BUG-2460 (PR #3482) per the 10-28 ruling; tracked there.'
   created_at: 2026-11-06T07:56:43.203791406Z
   modified_at: 2026-11-06T07:56:43.203791406Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afdf-ceea-7350-a9b1-157a779190bc
+  author: joe
+  content: 'Advisor 2026-11-06 01:05: correction, now tracked in TASK-3194 (one follow-up carrying all four).'
+  created_at: 2026-11-06T08:00:42.730120919Z
+  modified_at: 2026-11-06T08:00:42.730120919Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1afda-84ff-7f12-865f-d0165bd45915
