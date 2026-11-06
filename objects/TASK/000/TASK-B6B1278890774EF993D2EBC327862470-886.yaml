@@ -12,6 +12,16 @@ modified_at: 2026-11-06T15:44:15.178611844Z
 req_type: Task
 tags:
 - from-review
+relationships:
+- rel_type: Child
+  target_id: 01a1a977-b3b6-7502-a0ee-01f971e843f3
+  created_at: 2026-11-06T15:44:30.585832496Z
+history:
+- id: 01a1b188-7f48-76d0-a34d-07de8890a555
+  author: joe
+  timestamp: 2026-11-06T15:44:35.144829703Z
+  session_id: 01a1b18688e4
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: f50fa16ae95
