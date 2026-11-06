@@ -270,17 +270,28 @@ fn canonical_trailer_spec(store: Option<&aida_core::RequirementsStore>, spec: &s
 /// leftovers of a crashed or failed lane are salvage, committed with
 /// `(Refs SPEC)` so they never complete the spec at merge (advisor F4).
 // trace:TASK-2712 | ai:claude
-pub(crate) fn post_exit_message(spec: &str, lane: &str, clean_exit: bool) -> String {
+// trace:BUG-2461 | ai:codex
+pub(crate) fn post_exit_message(
+    requirement: Option<&aida_core::Requirement>,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+) -> Result<String> {
     // Trailers are persisted lookup keys, never friendly node labels.
     // trace:BUG-2459 | ai:codex
     let spec = aida_core::node_alias::expand_or_keep(spec);
     if clean_exit {
-        format!("[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({spec})")
+        // An unprefixed generic seed lets the shared formatter derive the
+        // conventional type/scope from the spec, without inheriting chore(seat).
+        seat_pr_title(
+            requirement,
+            &format!("[AI:codex] address CI failures and review findings ({spec})"),
+        )
     } else {
-        format!(
+        Ok(format!(
             "[AI:codex] chore(seat): salvage work native Codex lane {lane} left uncommitted \
              after a failed exit (Refs {spec})"
-        )
+        ))
     }
 }
 
@@ -303,12 +314,13 @@ fn post_exit_completion_allowed(lookup: &crate::forge::ChangeLookup) -> bool {
 
 // trace:TASK-2879 | ai:codex
 fn post_exit_message_with_completion(
+    requirement: Option<&aida_core::Requirement>,
     spec: &str,
     lane: &str,
     clean_exit: bool,
     completing: bool,
-) -> String {
-    let mut message = post_exit_message(spec, lane, clean_exit);
+) -> Result<String> {
+    let mut message = post_exit_message(requirement, spec, lane, clean_exit)?;
     if clean_exit && !completing {
         let display = aida_core::node_alias::expand_or_keep(spec);
         message = message
@@ -316,7 +328,7 @@ fn post_exit_message_with_completion(
             .to_string()
             + &format!("(Refs {display})");
     }
-    message
+    Ok(message)
 }
 
 /// TASK-2712 (advisor ruling F1): after a native Codex implementer's child
@@ -384,7 +396,20 @@ pub(crate) fn post_exit_commit(
     // trace:BUG-2459 | ai:codex
     let store = crate::load_store_for_lookup(&main);
     let trailer_spec = canonical_trailer_spec(store.as_ref(), spec);
-    let message = post_exit_message_with_completion(&trailer_spec, lane, clean_exit, completing);
+    // trace:BUG-2461 | ai:codex
+    let requirement = store
+        .as_ref()
+        .and_then(|store| store.get_requirement_by_spec_id(spec));
+    let message = match post_exit_message_with_completion(
+        requirement,
+        &trailer_spec,
+        lane,
+        clean_exit,
+        completing,
+    ) {
+        Ok(message) => message,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
     match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
         Ok(Some(tip)) => PostExitCommit::Committed(tip),
         Ok(None) => PostExitCommit::Clean,
@@ -591,6 +616,52 @@ pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Resu
 #[cfg(test)]
 mod queue_exit_tests {
     use super::*;
+    // trace:BUG-2461 | ai:codex
+    #[test]
+    fn bug_2461_post_exit_derives_spec_subject_and_preserves_refs() {
+        use aida_core::{Requirement, RequirementType};
+        let mut requirement = Requirement::new("Repair native publication".into(), String::new());
+        requirement.feature = "uncategorized".into();
+        for (kind, prefix) in [
+            (RequirementType::Bug, "fix"),
+            (RequirementType::Task, "chore"),
+            (RequirementType::Story, "feat"),
+            (RequirementType::Doc, "docs"),
+        ] {
+            requirement.req_type = kind;
+            for completing in [true, false] {
+                let message = post_exit_message_with_completion(
+                    Some(&requirement),
+                    "BUG-2461",
+                    "lane",
+                    true,
+                    completing,
+                )
+                .unwrap();
+                let trailer = if completing {
+                    "BUG-2461"
+                } else {
+                    "Refs BUG-2461"
+                };
+                assert_eq!(
+                    message,
+                    format!("[AI:codex] {prefix}: Repair native publication ({trailer})")
+                );
+            }
+        }
+        requirement.title = "fix(seat):   Repair native publication".into();
+        assert_eq!(
+            post_exit_message(Some(&requirement), "BUG-2461", "lane", true).unwrap(),
+            "[AI:codex] fix(seat): Repair native publication (BUG-2461)"
+        );
+        assert!(post_exit_message(None, "BUG-2461", "lane", true).is_err());
+        // Failed exits remain salvage even without readable spec prose.
+        let salvage = post_exit_message(None, "BUG-2461", "lane", false).unwrap();
+        assert!(salvage.ends_with("(Refs BUG-2461)"));
+        requirement.title = "Repair (Refs TASK-1)".into();
+        assert!(post_exit_message(Some(&requirement), "BUG-2461", "lane", true).is_err());
+    }
+
     // trace:TASK-2879 | ai:codex
     #[test]
     fn task_2879_post_exit_preserves_refs_and_unknown_titles() {
@@ -617,12 +688,16 @@ mod queue_exit_tests {
                 completing,
                 "{title:?}"
             );
+            let requirement =
+                aida_core::Requirement::new("Preserve references".into(), String::new());
             let message = post_exit_message_with_completion(
+                Some(&requirement),
                 "TASK-2879",
                 "lane",
                 true,
                 post_exit_completion_allowed(&found),
-            );
+            )
+            .unwrap();
             assert_eq!(
                 crate::pr_ship::extract_trailing_spec_ids_from_subject(&message).is_empty(),
                 !completing
@@ -632,7 +707,9 @@ mod queue_exit_tests {
             } else {
                 "(Refs TASK-2879)"
             }));
-            let failed = post_exit_message_with_completion("TASK-2879", "lane", false, completing);
+            let failed =
+                post_exit_message_with_completion(None, "TASK-2879", "lane", false, completing)
+                    .unwrap();
             assert!(failed.ends_with("(Refs TASK-2879)"));
         }
         assert!(post_exit_completion_allowed(&ChangeLookup::NoChange));
