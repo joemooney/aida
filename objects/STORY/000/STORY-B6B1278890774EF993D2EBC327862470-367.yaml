@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T13:55:54.280903561Z
+modified_at: 2026-11-06T14:07:27.213644735Z
 req_type: Story
 relationships:
 - rel_type:
@@ -287,6 +287,12 @@ comments:
   created_at: 2026-11-06T13:54:33.041848161Z
   modified_at: 2026-11-06T13:54:33.041848161Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b12f-91ed-7d53-9d41-24eb035924d6
+  author: joe
+  content: 'Round 5 repairs on PR #3493: downloaded run 42224787380 lib-0 timing artifact; the failing unbudgeted test was stranded_review_pr_forge_failure_is_preserved_for_reporting at 15.59s. Its isolated fixture now uses zero retry delay. Live pre-land gates distinguish settled refusals (Known Err, member ejection) from unavailable evidence (suspension), preserving holds. Required-check registration and settle deadlines again terminate deterministically after negative landing confirmation. Review watch retains a per-head counter and caps fetch-unavailable dispatches at three. Retraction/abandoned-train cleanup use Open-only confirmation. Rebase-merge confirmation follow-up filed as BUG-2463. Historical commit remains unchanged because this branch was not rebuilt. Targeted story_2401 tests and make check-ci-fast are running; this native seat leaves edits uncommitted for the host and does not clear the merge hold.'
+  created_at: 2026-11-06T14:07:27.213644735Z
+  modified_at: 2026-11-06T14:07:27.213644735Z
+  session_id: 01a1b124f63b
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
