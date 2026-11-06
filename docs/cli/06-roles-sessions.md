@@ -224,7 +224,10 @@ implementers. Repeat `--delegate-seat` on `agent new` to select a narrower set,
 for example `--delegate-seat reviewer`. Requests outside the parent's set refuse
 with a role-entry recovery command. Implementer and reviewer children always
 have no delegable seats and reject explicit delegation flags. Rotation retains
-the selection for every generation. Descendant authority expires with its grant
+the selection for every generation. Ended-session resume restores the recorded
+explicit selection and validates it against the current parent; legacy records
+without a selection inherit the current parent set. Detached Codex launches
+honour the same narrowing. Descendant authority expires with its grant
 chain and refuses if any ancestor is revoked or no longer authorized.
 <!-- trace:BUG-2467 | ai:codex -->
 

@@ -189,6 +189,7 @@ fn harness(spec: &str) -> Harness {
         false,
         &attempt,
         &format!("implementer:{spec}"),
+        &[],
     )
     .unwrap();
     let lease_id = "a1b2c3d4e5f6".to_string();
@@ -409,6 +410,7 @@ fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
         successor.id(),
         &successor_start,
         agent_registry::SpawnedRow {
+            delegate_seats: Vec::new(),
             role: Some("implementer".into()),
             current_spec: Some("TASK-2254".into()),
             worktree_path: h.worktree.clone(),
@@ -532,6 +534,7 @@ fn story_2254_bg_transfer_before_drop_never_rolls_back() {
         false,
         &attempt,
         "implementer:TASK-2258",
+        &[],
     )
     .unwrap();
     drop(DispatcherGuard {

@@ -2435,11 +2435,19 @@ pub(crate) fn issue_detached_launch_child(
     require_key: bool,
     attempt: &str,
     scope: &str,
+    seats: &[String],
 ) -> Result<(SeatGrant, DetachedLaunchCapability)> {
     let issuer = own_process_token().context(
         "cannot issue a detached launch grant: this launcher's start identity could not be read",
     )?;
-    let grant = issue_child_for(project_root, requested_seat, child_subject, require_key)?;
+    // trace:BUG-2467 | ai:codex — detached grants honour explicit narrowing.
+    let grant = issue_launch_child_with_delegation(
+        project_root,
+        requested_seat,
+        child_subject,
+        require_key,
+        seats,
+    )?;
     if require_key && !has_key_binding(&grant) {
         let _ = revoke_by_id(&grant.id);
         return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(

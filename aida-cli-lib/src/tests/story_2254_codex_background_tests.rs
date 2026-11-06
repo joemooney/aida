@@ -488,6 +488,7 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
     let pid = worker.id();
     let start = aida_core::liveness::process_start_identity(pid).unwrap();
     let row = || agent_registry::SpawnedRow {
+        delegate_seats: Vec::new(),
         role: Some("implementer".into()),
         current_spec: Some("TASK-1".into()),
         worktree_path: root.to_path_buf(),

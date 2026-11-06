@@ -225,3 +225,140 @@ fn bug_2467_revoking_root_invalidates_grandchild_live_and_recorded_authority() {
         &worker.binding
     ));
 }
+
+// Detached Codex uses this issuer, including its one-use launch capability.
+#[test]
+fn bug_2467_detached_delegators_preserve_narrowing_and_refuse_widening() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = EnvVarsGuard::snapshot(&["AIDA_USER", authority::GRANT_ENV]);
+    env.set_key("AIDA_USER", "detached-operator");
+    let parent = authority::test_support::mint_grant_for(
+        tmp.path(),
+        "detached-operator",
+        "advisor",
+        &["advisor", "integrator", "reviewer", "implementer"],
+    );
+    env.set_key(authority::GRANT_ENV, &parent);
+    for role in ["advisor", "integrator"] {
+        let (grant, capability) = authority::issue_detached_launch_child(
+            tmp.path(),
+            role,
+            "detached-child",
+            false,
+            "attempt",
+            "scope",
+            &["reviewer".into()],
+        )
+        .unwrap();
+        assert_eq!(capability.grant_id(), grant.id);
+        assert_eq!(
+            authority::read_grant(&grant.id).unwrap().delegable_seats,
+            ["reviewer"]
+        );
+        assert_eq!(
+            grant.expires_at,
+            authority::read_grant(&parent).unwrap().expires_at
+        );
+        let err = authority::issue_detached_launch_child(
+            tmp.path(),
+            role,
+            "detached-child",
+            false,
+            "attempt",
+            "scope",
+            &["product".into()],
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("does not delegate `product`"));
+    }
+}
+
+#[test]
+fn bug_2467_resume_restores_persisted_narrowing_and_revalidates_parent() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = EnvVarsGuard::snapshot(&[
+        "AIDA_USER",
+        authority::GRANT_ENV,
+        "AIDA_CONTAINED",
+        "AIDA_TEST_HOME",
+        "PATH",
+    ]);
+    env.set_key("AIDA_USER", "resume-operator");
+    env.unset_key("AIDA_CONTAINED");
+    env.set_key("AIDA_TEST_HOME", tmp.path());
+    let parent = authority::test_support::mint_grant_for(
+        tmp.path(),
+        "resume-operator",
+        "advisor",
+        &["advisor", "reviewer", "implementer"],
+    );
+    env.set_key(authority::GRANT_ENV, &parent);
+    let fake = tmp.path().join("claude");
+    crate::test_exec::write_executable(
+        &fake,
+        r#"#!/bin/sh
+case "$1" in --version) echo "2.0.0 (Claude Code)"; exit 0;; esac
+printf '%s' "$AIDA_SESSION_GRANT" > "$AIDA_PROJECT_ROOT/child-grant"
+"#,
+    );
+    let old_path = std::env::var_os("PATH").unwrap_or_default();
+    env.set_key(
+        "PATH",
+        std::env::join_paths(
+            std::iter::once(tmp.path().to_path_buf()).chain(std::env::split_paths(&old_path)),
+        )
+        .unwrap(),
+    );
+    let transcript = session::claude_project_dir(tmp.path())
+        .unwrap()
+        .join("resume-session.jsonl");
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(transcript, "").unwrap();
+    let config = AgentLaunchConfig {
+        delegate_seats: vec!["reviewer".into()],
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: tmp.path().into(),
+        launch_cwd: tmp.path().into(),
+        role: Some("advisor".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "resumed-advisor".into(),
+        lease_id: None,
+        native_session_id: Some("resume-session".into()),
+        resumed_from: None,
+    };
+    run_tracked_agent(&fake, &config, &plan, None, &[], None, false, false).unwrap();
+    let (_, entry) = agent_registry::load_entries(tmp.path())
+        .into_iter()
+        .find(|(_, row)| row.name.as_deref() == Some("resumed-advisor"))
+        .unwrap();
+    assert_eq!(entry.delegate_seats, ["reviewer"]);
+    assert!(entry.ended_at.is_some());
+    agent_resume_ended(tmp.path(), entry.clone()).unwrap();
+    let id = std::fs::read_to_string(tmp.path().join("child-grant")).unwrap();
+    assert_eq!(
+        authority::read_grant(&id).unwrap().delegable_seats,
+        ["reviewer"]
+    );
+    // Resume cannot restore authority the current parent no longer delegates.
+    let less = authority::test_support::mint_grant_for(
+        tmp.path(),
+        "resume-operator",
+        "advisor",
+        &["advisor", "implementer"],
+    );
+    env.set_key(authority::GRANT_ENV, &less);
+    std::fs::remove_file(tmp.path().join("child-grant")).unwrap();
+    let err = agent_resume_ended(tmp.path(), entry).unwrap_err();
+    assert!(format!("{err:#}").contains("does not delegate `reviewer`"));
+    assert!(!tmp.path().join("child-grant").exists());
+}

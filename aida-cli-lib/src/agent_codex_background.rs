@@ -753,6 +753,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         true,
         &attempt,
         &format!("{}:{}", scope.role, scope.spec),
+        &config.delegate_seats,
     )?;
     guard.grant_id = Some(grant.id.clone());
     session::stamp_lease_child_grant_at(&project_root, &lease_id, &grant.id)?;
@@ -1499,6 +1500,8 @@ pub(crate) fn supervise_attempt(
             worker.pid,
             &worker.start,
             agent_registry::SpawnedRow {
+                delegate_seats: crate::gate::seat_authority::read_grant(&init.grant_id)?
+                    .delegable_seats,
                 role: Some(init.role.clone()),
                 current_spec: Some(init.spec.clone()),
                 worktree_path: init.worker.cwd.clone(),

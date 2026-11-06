@@ -1530,12 +1530,15 @@ pub(crate) fn agent_resume_ended(
     // --resume`, the TTY picker, the `--bg` path) funnels through here, so a
     // contained parent is enforced HERE — before the session/binary checks
     // and any side effect. trace:BUG-2151 | ai:claude
-    let config = agent_resume_launch_config(
+    let mut config = agent_resume_launch_config(
         &entry.agent_type,
         &entry.worktree_path,
         native_session_id,
         resume_prompt,
     )?;
+    // trace:BUG-2467 | ai:codex — resume preserves explicit narrowing. The
+    // issuer still validates this selection against the current parent grant.
+    config.delegate_seats = entry.delegate_seats.clone();
     verify_agent_native_session_available(
         &entry.agent_type,
         &entry.worktree_path,
@@ -7447,18 +7450,21 @@ pub(crate) fn run_agent_generation(
         child_pid,
         deferred_warnings,
         || {
-            agent_registry::register_spawned_agent(
+            agent_registry::register_spawned_agent_with_row(
                 &plan.project_root,
                 config.agent_type,
                 child_pid,
-                plan.role.clone(),
-                plan.current_spec.clone(),
-                plan.launch_cwd.clone(),
-                Some(&binary),
-                Some(plan.name.clone()),
-                plan.native_session_id.clone(),
-                plan.resumed_from.clone(),
-                description,
+                agent_registry::SpawnedRow {
+                    role: plan.role.clone(),
+                    current_spec: plan.current_spec.clone(),
+                    worktree_path: plan.launch_cwd.clone(),
+                    binary: Some(&binary),
+                    name: Some(plan.name.clone()),
+                    native_session_id: plan.native_session_id.clone(),
+                    resumed_from: plan.resumed_from.clone(),
+                    description,
+                    delegate_seats: config.delegate_seats.clone(),
+                },
             )
             .map(|entry| {
                 // Stamp the launch's mail wake; a thread the child's
@@ -7847,6 +7853,7 @@ mod task_1806_launch_mandate_tests {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         };
         agent_registry::write_entry(&project, &stale).unwrap();

@@ -82,6 +82,7 @@ fn agent_entry(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats: Vec::new(),
         resumed_from: None,
     }
 }
