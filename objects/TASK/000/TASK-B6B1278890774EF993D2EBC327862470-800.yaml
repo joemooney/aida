@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T23:07:20.454110175Z
+modified_at: 2026-11-06T03:41:42.072604876Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -133,6 +133,12 @@ comments:
   created_at: 2026-11-05T23:07:18.058428262Z
   modified_at: 2026-11-05T23:07:18.058428262Z
   session_id: 01a1ade125b6
+- id: 01a1aef2-ad38-7c13-81e7-a913ce8ab8ec
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-05 20:45 MST: PR-A landed (#3458). Next is PR-B, the COMPLETING PR titled ''(TASK-3074)'', per the 11:50 signoff: the typed send result (persisted message id / sent / queued / refused / uncertain), episode UUID plus exact request-id correlation, and the 30-minute unresolved and persistent escalation via notify::send_direct_bounded, with injected-time tests. v1 alarm state without a message id is reported as ''action unknown'' and closed; there is no recovery command. LIGHT gate.'
+  created_at: 2026-11-06T03:41:42.072604876Z
+  modified_at: 2026-11-06T03:41:42.072604876Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
