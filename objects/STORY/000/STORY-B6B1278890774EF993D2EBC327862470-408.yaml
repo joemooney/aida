@@ -33,12 +33,12 @@ description: |
   - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
 
   Depends on: observation-envelope story (shared aida-intent branch + validator).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T16:07:21.509595386Z
+modified_at: 2026-11-06T16:40:37.595837277Z
 req_type: Story
 relationships:
 - rel_type:
@@ -342,6 +342,15 @@ history:
   timestamp: 2026-11-06T15:44:39.921098118Z
   session_id: 01a1b18688e4
   changes: []
+- id: 01a1b1bb-cddb-7720-9706-c53657d31fe4
+  author: aida-orchestrator
+  timestamp: 2026-11-06T16:40:37.595864283Z
+  session_id: 01a1b1a955a0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -350,3 +359,11 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 3 implements the 15:22 bounded-history ruling correctly (newest-32 cold pass, exact verified-path bitmap checkpoint, unverified-history excluded from status publication, exact attempt/SHA read) and contracts (relay e2e incl. cold-history test) is green, but CI at the head is red on cli-0 (TASK-3096 test still asserts the old checkpoint format) and lib-1. Criteria: acc0579e verified by tests/test_work_ci_relay.py:171 (contracts green); ac0a391b verified by test_work_ci_relay.py:227, ci_relay.rs:1271, ci_receipt.rs:183 + new audit_integrity test; acd204af verified by test_work_ci_relay.py:216 (deliberate refused push); ac0a4b5e verified by test_work_ci_relay.py:171 and task_1945_commit_ci_tests.rs:290 (lib shard red, so unconfirmed at head); acadec5a verified by test_work_ci_relay.py:171 (contracts green at 4680be2); AC6 verified by test_work_ci_relay.py:171. The supplied untraced-criteria list is stale: aida criteria reports all six traced.'
+  recovery_hint: address the review findings, move STORY-2480 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T16:40:37.595837277Z
