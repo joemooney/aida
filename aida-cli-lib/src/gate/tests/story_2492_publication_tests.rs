@@ -303,6 +303,8 @@ fn kind_of(v: Option<rv::CurrentVerdict>) -> Option<rv::VerdictKind> {
         .map(|v| v.kind)
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.acafc49c | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac4d8743 | ai:codex
 #[test]
 fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
     if !available() {
@@ -441,12 +443,12 @@ fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
         .is_none_or(|id| !id.starts_with("publication:"))));
 }
 
-/// Request-changes -> rework -> re-review by another node -> A's train lands
-/// it. A stale refusal at the old head neither blocks the new head nor trips
+/// Request-changes -> rework -> re-review by another node -> A's train approval
+/// decision. This is decision-boundary coverage, not an AC5 train entry test. A stale refusal at the old head neither blocks the new head nor trips
 /// a cross-head disagreement, and a second PR on the same spec is selected
 /// per change (findings 3, 5, 6, 9 of round 2).
 #[test]
-fn rework_cycle_rereviews_on_another_node_and_the_train_lands_the_new_head() {
+fn rework_cycle_rereviews_on_another_node_and_checks_the_train_approval_decision() {
     if !available() {
         return;
     }
@@ -502,7 +504,7 @@ fn rework_cycle_rereviews_on_another_node_and_the_train_lands_the_new_head() {
         "B's stale H1 refusal does not block C's H2 approval"
     );
     assert!(f.candidates(&f.a, &h2).iter().all(|v| v.kind.approves()));
-    // A's train lands H2 over the shared bare hub (AC5).
+    // The approval decision accepts H2; this does not execute a train merge.
     let landed = f.train_decision(&h2);
     assert!(
         matches!(&landed, Ok(Some(pin)) if crate::forge::head_matches_pin(pin, &h2)),
@@ -762,6 +764,7 @@ fn opening_from_a_non_head_checkout_binds_the_branch_tip() {
 }
 
 /// AC3: the disagreement report is produced for the same head only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac596603 | ai:codex
 #[test]
 fn disagreement_is_reported_for_the_same_head_only() {
     let parse = |kind: &str, sha: &str| {
@@ -791,6 +794,7 @@ fn disagreement_is_reported_for_the_same_head_only() {
     assert!(disagreement("PR-7", &parse("approved", &h1), &parse("approved", &h1)).is_none());
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac4d8743 | ai:codex
 #[test]
 fn signed_receipts_refuse_resumed_author_tampering_and_invalid_local_authority() {
     if !available() {
@@ -934,5 +938,52 @@ fn roster_conflict_never_auto_merges_revocation_away() {
     assert!(
         error.to_string().contains("rerun the same command"),
         "{error:#}"
+    );
+}
+
+// trace:STORY-2492 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let record = f.record("request-changes", "reviewer-session");
+        f.collect(&record).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert!(!f.a.join(".aida/review-verdicts").exists());
+    assert_eq!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &f.sha)
+            .unwrap()
+            .as_deref(),
+        Some("head already has a recorded review")
+    );
+    write(
+        &f.a,
+        ".aida/review-verdicts/PR-7.json",
+        serde_json::to_vec(&serde_json::json!({
+            "verdict":"approved", "reviewed_sha":f.sha, "recorded_by":"local cache"
+        }))
+        .unwrap(),
+    );
+    take_reports();
+    assert!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &f.sha)
+            .unwrap()
+            .is_some()
+    );
+    assert!(take_reports()
+        .iter()
+        .any(|report| report.contains("contradictory local watcher history")));
+    assert!(
+        crate::review_watch::synced_history_precheck(&f.a, 7, &"a".repeat(40))
+            .unwrap()
+            .is_none(),
+        "stale publications do not suppress a new head"
     );
 }
