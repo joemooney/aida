@@ -671,6 +671,11 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts one or two reviewers (default two).
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
+Landing PRs with a `train/` head branch are excluded before review probes or
+reservations: their members are reviewed individually. The watcher logs
+`train PR: not reviewed` once per change during a watcher run.
+<!-- trace:BUG-2472 | ai:codex -->
+
 The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
 per-command timeouts; the watcher avoids unbounded version-detection probes.
 Initial root resolution and later probes clear ambient Git routing variables.

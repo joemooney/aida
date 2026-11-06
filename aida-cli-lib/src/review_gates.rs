@@ -1130,6 +1130,14 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     session_id: &str,
     origin: AutoQueueOrigin,
 ) -> AutoQueueOutcome {
+    // A train only lands its already-reviewed members. Refuse before forge,
+    // store or queue access, including the session-end backup path.
+    // trace:BUG-2472 | ai:codex
+    if branch.starts_with(crate::pr_train::BRANCH_PREFIX) {
+        return AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: train branch `{branch}` cannot have a reviewer story — train members are reviewed individually"
+        ));
+    }
     // Both callers (`aida pr auto-queue-review`, `aida session end`) dispatch
     // before the store installs the node-alias map; the trailer parsers need
     // it to file the review story against the canonical id of a

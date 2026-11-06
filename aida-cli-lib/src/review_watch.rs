@@ -2150,6 +2150,7 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         eprintln!("review-watch: removed {swept} leaked probe ref(s)");
     }
     let mut children = Vec::<Dispatcher>::new();
+    let mut reported_trains = BTreeSet::new();
     loop {
         children.retain_mut(|d| match d.child.try_wait() {
             Ok(Some(status)) => {
@@ -2200,7 +2201,7 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
-        for change in changes {
+        for change in reviewable_changes(changes, &mut reported_trains) {
             let key = change.key();
             match watch_change(&root, &repo, &store, args, &mut children, &authors, change) {
                 Ok(()) => {}
@@ -2216,6 +2217,34 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Train members were reviewed at their own heads. Exclude the landing PR
+// before probes, stale-author updates, reservations or reviewer spawning.
+// Keep diagnostics once per change for this watcher, across polling passes.
+// trace:BUG-2472 | ai:codex
+fn reviewable_changes(
+    changes: Vec<forge::Change>,
+    reported_trains: &mut BTreeSet<String>,
+) -> Vec<forge::Change> {
+    changes
+        .into_iter()
+        .filter(|change| {
+            if change
+                .head_branch
+                .as_deref()
+                .is_some_and(|branch| branch.starts_with(crate::pr_train::BRANCH_PREFIX))
+            {
+                let key = change.key();
+                if reported_trains.insert(key.clone()) {
+                    eprintln!("{key}: train PR: not reviewed");
+                }
+                false
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 // A transient synchronization refusal skips only this pass. `--once` retains
