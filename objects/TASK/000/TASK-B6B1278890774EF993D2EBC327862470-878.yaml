@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T22:45:54.769253662Z
+modified_at: 2026-11-06T22:45:58.717904425Z
 req_type: Task
 tags:
 - architecture
@@ -178,6 +178,12 @@ comments:
   created_at: 2026-11-06T17:35:46.793180556Z
   modified_at: 2026-11-06T17:35:46.793180556Z
   session_id: 01a1b1b68af3
+- id: 01a1b30a-4b3d-7cc1-8b37-ca37b9821378
+  author: joe
+  content: 'ADVISOR BRIEF 15:52 (S2 of 4): S1 (coordinator, #3522) has landed. Implement S2 only: the private-PTY interactive Claude launch on the shared contained wrapper, per docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md (signed off 16:19 UTC). Background (S3) and resume (S4) keep refusing. One PR with a Refs TASK-3219 trailer; only S4 completes the task. Targeted cargo test on the wrapper/PTY module plus a live regression (report the actual live count separately from unit tests), plus make check-ci-fast.'
+  created_at: 2026-11-06T22:45:58.717904425Z
+  modified_at: 2026-11-06T22:45:58.717904425Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
