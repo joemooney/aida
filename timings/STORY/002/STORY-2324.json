@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2324",
+  "publishes": [
+    {
+      "at": "2026-11-06T13:48:53.943636577Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T00:22:41.057023791Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T02:12:37.478620244Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T04:50:07.705292973Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-04T07:11:45.069974972Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T08:38:14.873247245Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T11:57:32.215115076Z",
+      "spec": "STORY-2324",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2324",
+        "branch": "origin/story-2324-r0041",
+        "first_seen": "2026-11-06T11:57:32.215062061+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T12:25:52.716014385Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T13:48:27.748667484Z",
+      "spec": "STORY-2324",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3499
+      }
+    },
+    {
+      "ts": "2026-11-06T13:48:53.805880019Z",
+      "spec": "STORY-2324",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f50fa16ae956f2508aa8550cc4efb9915f9db768",
+        "pr": 3499,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
