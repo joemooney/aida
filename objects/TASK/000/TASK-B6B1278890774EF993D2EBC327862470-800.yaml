@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-800
 agreed_id: TASK-3074
 title: Track acted-on request dispositions and unresolved stall escalation
 description: 'Follow-up to STORY-2476 advisor ruling: define and approve explicit acted, declined and deferred dispositions tied to message IDs. Preserve seen/read ACK distinctions. Add authorized receipts and unresolved alarm escalation through the existing operator notifier; reading or wake acceptance never proves action.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-06T04:26:42.083761072Z
+modified_at: 2026-11-06T05:04:56.507015953Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -156,6 +156,12 @@ comments:
   content: 'ADVISOR RESOLUTION 2026-11-05 21:30 MST (loop guard): the ''recurring'' findings belong to an EARLIER slice that has since been approved and merged, so they are stale. The next round is NEW slice work under the latest advisor brief on this spec, not a repeat. Relaunching on a fresh lane. PR-A merged as #3458; PR-B per the 20:45 brief.'
   created_at: 2026-11-06T04:26:42.083761072Z
   modified_at: 2026-11-06T04:26:42.083761072Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af3e-e2bb-7aa0-8ef0-bb1af2231bf6
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-06T05:04:56.507012275Z
+  modified_at: 2026-11-06T05:04:56.507012275Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
@@ -308,6 +314,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1af3e-e2ba-7610-b2d4-5635ae68771e
+  author: joe
+  timestamp: 2026-11-06T05:04:56.507009334Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
