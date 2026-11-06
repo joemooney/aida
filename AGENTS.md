@@ -558,7 +558,10 @@ portable author/reviewer sessions. Grants and human receipts stay local. Synced
 refusals override local approvals. Distributed watchers sync publications before
 discovery and require signed exact-tip admission at the explicit trusted GitHub
 hub/ref before dispatch. GitLab is mirror-only; uncertain claims retain capacity
-and local --release cannot clear them.
+and local --release cannot clear active claims. Admission uses per-PR shards;
+a direct human can re-anchor abandoned or revoked claims at an inspected hub tip
+with `review nodes admission-reconcile` after stopping all watchers/reviewers.
+Hub configuration remains opt-in until every watcher is enrolled and upgraded.
 See [second-node setup](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
 

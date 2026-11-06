@@ -123,6 +123,7 @@ impl Fixture {
         update(root, &self.hub, key, head, token, state, evidence)
     }
 }
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
 #[test]
 fn story2492_admission_two_nodes_race_exactly_one_wins() {
     let f = Fixture::new();
@@ -174,8 +175,28 @@ printf 'spawn\n' >> "$1"
         )
         .unwrap());
     let repo = private_repo().unwrap();
-    let (_, table) = read_table(repo.path(), &f.hub).unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
     assert_eq!(table.changes["PR-7"].len(), 1);
+    // The losing watcher does not probe the hub again on its next poll.
+    let loser = if outcomes[0] { &f.b } else { &f.a };
+    std::fs::rename(
+        f.temp.path().join("hub.git"),
+        f.temp.path().join("offline.git"),
+    )
+    .unwrap();
+    assert!(!crate::review_watch::fixture_admit_dispatch(
+        loser,
+        &"a".repeat(40),
+        &program,
+        &marker
+    )
+    .unwrap());
+    // A new head invalidates the remote hold, attempts admission, and records
+    // its unreachable-hub error locally as Failed instead of leaking a slot.
+    assert!(
+        crate::review_watch::fixture_admit_dispatch(loser, &"c".repeat(40), &program, &marker)
+            .is_err()
+    );
 }
 #[test]
 fn story2492_admission_transitions_fence_tokens_and_terminal_heads() {
@@ -222,9 +243,10 @@ fn story2492_admission_cancellation_preserves_other_changes_and_allows_retry() {
         .step(&f.b, "PR-9", &head, Uuid::new_v4(), State::Reserved)
         .unwrap());
     let repo = private_repo().unwrap();
-    let (_, table) = read_table(repo.path(), &f.hub).unwrap();
-    assert_eq!(table.changes["PR-10"].len(), 1);
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-9").unwrap();
     assert_eq!(table.changes["PR-9"].len(), 3);
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-10").unwrap();
+    assert_eq!(table.changes["PR-10"].len(), 1);
 }
 #[test]
 fn story2492_admission_unreachable_named_and_mirror_refused() {
@@ -285,7 +307,7 @@ fn story2492_admission_rejects_tampering_revocation_and_unknown_versions() {
         )
         .unwrap());
     let repo = private_repo().unwrap();
-    let (_, mut table) = read_table(repo.path(), &f.hub).unwrap();
+    let (_, mut table) = read_table(repo.path(), &f.hub, "PR-11").unwrap();
     let store = f.a.join(".aida-store");
     let mut roster = roster(&store, &super::super::head(&store).unwrap()).unwrap();
     let records = table.changes.get_mut("PR-11").unwrap();
@@ -363,4 +385,304 @@ fn story2492_admission_sync_refreshes_publications_without_shared_fetch_head() {
         ]
     )
     .is_empty());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_admission_recovery_fences_old_tokens_and_recovers_revoked_owner() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let old = Uuid::new_v4();
+    let head = "a".repeat(40);
+    f.step(&f.a, "PR-7", &head, old, State::Reserved).unwrap();
+    f.step(&f.a, "PR-7", &head, old, State::Running).unwrap();
+    assert!(require_released(&f.b, "PR-7").is_err());
+    let repo = private_repo().unwrap();
+    let (tip, _) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let tip = tip.unwrap();
+    assert!(reconcile(&f.b, "PR-7", &tip, "crashed owner stopped", false).is_err());
+    assert!(reconcile(&f.b, "PR-7", &"f".repeat(40), "crashed owner stopped", true).is_err());
+    // Revocation blocks the old chain, but an enrolled operator can re-anchor.
+    let store = f.b.join(".aida-store");
+    let mut r = roster(&store, &super::super::head(&store).unwrap()).unwrap();
+    r.nodes.remove("a");
+    write(&store, ROSTER, serde_json::to_vec(&r).unwrap());
+    ok(&store, &["add", ROSTER]);
+    ok(&store, &["commit", "-qm", "revoke crashed owner"]);
+    assert!(f
+        .step(&f.b, "PR-7", &head, Uuid::new_v4(), State::Reserved)
+        .is_err());
+    reconcile(
+        &f.b,
+        "PR-7",
+        &tip,
+        "all watchers stopped; old owner and descendants stopped",
+        true,
+    )
+    .unwrap();
+    require_released(&f.b, "PR-7").unwrap();
+    let (_, mut anchored) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    validate_anchor(&f.hub, "PR-7", &anchored, &r).unwrap();
+    let anchor = anchored
+        .anchor
+        .as_mut()
+        .expect("reset must carry signed authority");
+    anchor.payload = anchor
+        .payload
+        .replace("all watchers stopped", "unverified replacement");
+    assert!(validate_anchor(&f.hub, "PR-7", &anchored, &r).is_err());
+    assert!(f.step(&f.a, "PR-7", &head, old, State::Terminal).is_err());
+    assert!(f
+        .step(
+            &f.b,
+            "PR-7",
+            &"b".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+    let (current, _) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let names = ok(
+        repo.path(),
+        &["ls-tree", "-r", "--name-only", &current.unwrap()],
+    );
+    let audit = names
+        .lines()
+        .find(|p| p.starts_with("recoveries/"))
+        .unwrap();
+    let current = remote_tip(repo.path(), &f.hub).unwrap().unwrap();
+    let signed: Signed =
+        serde_json::from_slice(&blob(repo.path(), &current, audit).unwrap().unwrap()).unwrap();
+    verify_signature("b", &signed, &r).unwrap();
+    assert!(signed.payload.contains(&tip));
+    // The historical chain is still available for forensic inspection.
+    assert!(blob(repo.path(), &tip, &change_path("PR-7").unwrap())
+        .unwrap()
+        .is_some());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_admission_exit_liveness_and_hub_failure() {
+    for (ambiguous, unclaimed, unreachable) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (false, false, true),
+    ] {
+        let f = Fixture::new();
+        let _env = f.environment();
+        let result =
+            crate::review_watch::fixture_admission_exit(&f.a, ambiguous, unclaimed, || {
+                if unreachable {
+                    std::fs::rename(
+                        f.temp.path().join("hub.git"),
+                        f.temp.path().join("offline.git"),
+                    )
+                    .unwrap();
+                }
+            });
+        if unreachable {
+            assert!(format!("{:#}", result.unwrap_err()).contains("admission_hub_unreachable"));
+            std::fs::rename(
+                f.temp.path().join("offline.git"),
+                f.temp.path().join("hub.git"),
+            )
+            .unwrap();
+        } else {
+            result.unwrap();
+        }
+        let repo = private_repo().unwrap();
+        let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+        let store = f.a.join(".aida-store");
+        let history = chain(
+            &f.hub,
+            "PR-7",
+            &table.changes["PR-7"],
+            &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            history.last().unwrap().state,
+            if unclaimed {
+                State::Cancelled
+            } else if ambiguous || unreachable {
+                State::Running
+            } else {
+                State::Terminal
+            }
+        );
+    }
+}
+
+// A repository with >2000 independently signed shards and >1 MiB of total
+// admission content still admits independently, beyond the old global limits.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_admission_shards_exceed_the_old_global_budgets() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    f.step(
+        &f.a,
+        "PR-7",
+        &"a".repeat(40),
+        Uuid::new_v4(),
+        State::Reserved,
+    )
+    .unwrap();
+    let repo = private_repo().unwrap();
+    let (tip, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let mut transition: Transition =
+        serde_json::from_str(&table.changes["PR-7"][0].payload).unwrap();
+    let config = publisher(&f.a).unwrap().unwrap();
+    git(repo.path(), &["read-tree", tip.as_ref().unwrap()]).unwrap();
+    let path = repo.path().join("shard.json");
+    let mut total = 0;
+    let mut args = vec!["update-index".to_string()];
+    for n in 100..2200 {
+        transition.change = format!("PR-{n}");
+        transition.id = Uuid::new_v4();
+        transition.token = Uuid::new_v4();
+        let shard = Table {
+            version: 1,
+            changes: BTreeMap::from([(
+                transition.change.clone(),
+                vec![sign(&config, &transition).unwrap()],
+            )]),
+            ..Table::default()
+        };
+        let bytes = serde_json::to_vec(&shard).unwrap();
+        total += bytes.len();
+        std::fs::write(&path, bytes).unwrap();
+        let blob = text(git(repo.path(), &["hash-object", "-w", path.to_str().unwrap()]).unwrap())
+            .unwrap();
+        args.extend([
+            "--add".into(),
+            "--cacheinfo".into(),
+            "100644".into(),
+            blob,
+            change_path(&transition.change).unwrap(),
+        ]);
+    }
+    assert!(total > CAP);
+    git(
+        repo.path(),
+        &args.iter().map(String::as_str).collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let tree = text(git(repo.path(), &["write-tree"]).unwrap()).unwrap();
+    let next = ok(
+        repo.path(),
+        &[
+            "commit-tree",
+            &tree,
+            "-p",
+            tip.as_ref().unwrap(),
+            "-m",
+            "many independently signed shards",
+        ],
+    );
+    remote_git(
+        repo.path(),
+        &f.hub.url,
+        &["push", &f.hub.url, &format!("{next}:{}", f.hub.reference)],
+    )
+    .unwrap();
+    assert!(f
+        .step(
+            &f.b,
+            "PR-9",
+            &"b".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+    let (_, selected) = read_table(repo.path(), &f.hub, "PR-9").unwrap();
+    assert_eq!(selected.changes.len(), 1);
+    assert_eq!(selected.changes["PR-9"].len(), 1);
+    let (_, unchanged) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    assert_eq!(unchanged.changes["PR-7"].len(), 1);
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_continuous_watcher_survives_a_sync_refusal() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let b = f.b.join(".aida-store");
+    write(&b, "dirty-marker", "uncommitted store evidence");
+    assert!(crate::review_watch::fixture_sync_pass(&f.b, true).is_err());
+    assert!(!crate::review_watch::fixture_sync_pass(&f.b, false).unwrap());
+    std::fs::remove_file(b.join("dirty-marker")).unwrap();
+    assert!(crate::review_watch::fixture_sync_pass(&f.b, false).unwrap());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.Docs | ai:codex
+#[test]
+fn story2492_documented_recovery_command_parses_and_config_stays_opt_in() {
+    crate::command_registry::try_parse_from([
+        "aida",
+        "review",
+        "nodes",
+        "admission-reconcile",
+        "PR-123",
+        "--expected-tip",
+        &"a".repeat(40),
+        "--all-reviewers-stopped",
+        "--reason",
+        "owner and descendants stopped",
+    ])
+    .unwrap();
+    let config: toml::Value = toml::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../.aida/config.toml"
+    )))
+    .unwrap();
+    assert!(config
+        .get("review")
+        .and_then(|r| r.get("admission_hub"))
+        .is_none());
+    assert!(config
+        .get("review")
+        .and_then(|r| r.get("admission_ref"))
+        .is_none());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_admission_recovery_requires_a_direct_human() {
+    let _agent =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_NAME", Some("fixture-reviewer"))]);
+    let command = NodeCommand::AdmissionReconcile {
+        change: "PR-7".into(),
+        expected_tip: "a".repeat(40),
+        reason: "cannot self-authorize recovery".into(),
+        all_reviewers_stopped: true,
+    };
+    let error = nodes(&command).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("AIDA-managed agent sessions cannot issue direct TTY grants"));
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_failed_hub_cancellation_still_frees_local_capacity() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    crate::review_watch::fixture_admission_spawn_failure(&f.a, || {
+        std::fs::rename(
+            f.temp.path().join("hub.git"),
+            f.temp.path().join("offline.git"),
+        )
+        .unwrap();
+    })
+    .unwrap();
+    std::fs::rename(
+        f.temp.path().join("offline.git"),
+        f.temp.path().join("hub.git"),
+    )
+    .unwrap();
+    // Safety is independent of local capacity: the accepted claim remains.
+    assert!(require_released(&f.a, "PR-7").is_err());
 }

@@ -219,6 +219,8 @@ fn boot_id() -> Result<String> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Phase {
+    // Peer ownership is cached until the head changes or operator recovery.
+    RemoteHeld,
     Reserved,
     Running,
     Completed,
@@ -1143,7 +1145,7 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                         .is_some_and(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
                     // An unclaimed reservation whose dispatcher died exits
                     // without a receipt identity. trace:TASK-1993 | ai:claude
-                    Phase::Failed | Phase::Exited => true,
+                    Phase::RemoteHeld | Phase::Failed | Phase::Exited => true,
                     // Either an unclaimed or a claimed review can be
                     // superseded; the receipt is what matters.
                     // trace:TASK-1945 | ai:claude
@@ -1356,23 +1358,34 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
             return Ok(None);
         };
         if entry.notices.get(head).is_some_and(|n| n.sent) {
-            return Ok(Some(update::STALE_NOTIFIED.to_string()));
+            return Ok(Some((update::STALE_NOTIFIED.to_string(), false)));
         }
         Ok(entry
             .attempts
             .iter()
             .find(|a| {
                 a.head == head
-                    && matches!(a.phase, Phase::Reserved | Phase::Running | Phase::Completed)
+                    && matches!(
+                        a.phase,
+                        Phase::RemoteHeld | Phase::Reserved | Phase::Running | Phase::Completed
+                    )
             })
-            .map(|a| format!("head already reserved ({:?})", a.phase)))
+            .map(|a| {
+                (
+                    format!("head already reserved ({:?})", a.phase),
+                    a.phase == Phase::RemoteHeld,
+                )
+            }))
     })?;
-    if recorded.is_some() {
-        return Ok(recorded);
+    if let Some((reason, false)) = &recorded {
+        return Ok(Some(reason.clone()));
     }
     let history = store.history(&key)?;
     if history.contains(head) {
         return Ok(Some("head already has a recorded review".into()));
+    }
+    if let Some((reason, true)) = recorded {
+        return Ok(Some(reason));
     }
     if history.blocking() >= 2 {
         return Ok(Some(
@@ -1850,21 +1863,7 @@ fn child_with_program(
             // An observed queue exit alone cannot prove an unrecorded reviewer
             // stopped. Ambiguous descendants retain the distributed claim.
             // trace:STORY-2492 | ai:codex
-            let current = store.load()?;
-            let finished = current
-                .entries
-                .get(key)
-                .and_then(|e| e.attempts.iter().find(|a| a.token == token))
-                .context("review attempt disappeared at exit")?;
-            if !finished.unrecorded_descendant()
-                && [&finished.worker, &finished.reviewer]
-                    .into_iter()
-                    .flatten()
-                    .all(|p| p.observable() && !p.alive())
-            {
-                admission::transition(root, key, &attempt.head, token, admission::State::Terminal,
-                    format!("owner observed queue exit {status}; all recorded worker/reviewer identities stopped"))?;
-            }
+            finish_admission(root, &store, key, token, &attempt.head, &status.to_string())?;
             if !status.success() {
                 // trace:TASK-1993 | ai:claude
                 let log = format!("{key}-{token}.log");
@@ -1874,6 +1873,34 @@ fn child_with_program(
             Ok(())
         },
     )
+}
+
+// A failed terminal publication is surfaced and the hub claim remains held.
+// trace:STORY-2492 | ai:codex
+fn finish_admission(
+    root: &Path,
+    store: &Store,
+    key: &str,
+    token: &str,
+    head: &str,
+    status: &str,
+) -> Result<()> {
+    let current = store.load()?;
+    let finished = current
+        .entries
+        .get(key)
+        .and_then(|e| e.attempts.iter().find(|a| a.token == token))
+        .context("review attempt disappeared at exit")?;
+    if !finished.unrecorded_descendant()
+        && [&finished.worker, &finished.reviewer]
+            .into_iter()
+            .flatten()
+            .all(|p| p.observable() && !p.alive())
+    {
+        admission::transition(root, key, head, token, admission::State::Terminal,
+            format!("owner observed queue exit {status}; all recorded worker/reviewer identities stopped"))?;
+    }
+    Ok(())
 }
 
 fn execute_reservation(
@@ -2074,8 +2101,7 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
     let store = Store::open(&root, &repo.identity)?;
     // trace:TASK-1955 | ai:claude (TASK-1-412)
     if let Some(key) = args.release.as_deref() {
-        anyhow::ensure!(admission::Hub::load(&root)?.is_none(),
-            "distributed admission cannot be cleared by local --release; stop admission and reconcile the owner token at the configured hub before recovery");
+        admission::require_released(&root, key)?;
         let released = store.release(key)?;
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(());
@@ -2099,7 +2125,10 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
             _ => true,
         });
         // trace:STORY-2492 | ai:codex
-        admission::sync(&root)?;
+        if !sync_pass(&root, args.once)? {
+            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            continue;
+        }
         let changes = match repo.discover(&root) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
@@ -2149,6 +2178,24 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// A transient synchronization refusal skips only this pass. `--once` retains
+// its nonzero contract; continuous mode will try again after the interval.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn sync_pass(root: &Path, once: bool) -> Result<bool> {
+    match admission::sync(root) {
+        Ok(()) => Ok(true),
+        Err(error) if once => Err(error),
+        Err(error) => {
+            eprintln!("review-watch synchronization refused for this pass: {error:#}");
+            Ok(false)
+        }
+    }
+}
+#[cfg(test)]
+pub(crate) fn fixture_sync_pass(root: &Path, once: bool) -> Result<bool> {
+    sync_pass(root, once)
 }
 
 /// Only whole-state failure stops a continuous watcher; one change's refusal
@@ -2390,15 +2437,7 @@ fn watch_change(
                     eprintln!("{key}: review admitted for {}", change.head);
                 }
                 Err(error) => {
-                    admission::transition(
-                        root,
-                        &key,
-                        &attempt.head,
-                        &attempt.token,
-                        admission::State::Cancelled,
-                        format!("dispatcher spawn failed before creating any process: {error}"),
-                    )?;
-                    mark_spawn_failed(store, &key, &attempt.token)?;
+                    cancel_spawn_failure(root, store, &key, &attempt, &error.to_string())?;
                     return Err(error).context("could not spawn review dispatcher");
                 }
             }
@@ -2407,27 +2446,62 @@ fn watch_change(
     Ok(())
 }
 
+// A hub failure must not prevent recording a proven local pre-spawn failure.
+// trace:STORY-2492 | ai:codex
+fn cancel_spawn_failure(
+    root: &Path,
+    store: &Store,
+    key: &str,
+    attempt: &Attempt,
+    error: &str,
+) -> Result<()> {
+    // Free local capacity first, even if the cancellation loses connectivity.
+    retry_busy(|| mark_spawn_failed(store, key, &attempt.token))?;
+    if let Err(cancel) = admission::transition(
+        root,
+        key,
+        &attempt.head,
+        &attempt.token,
+        admission::State::Cancelled,
+        format!("dispatcher spawn failed before creating any process: {error}"),
+    ) {
+        eprintln!("{key}: hub claim retained; operator recovery required: {cancel:#}");
+    }
+    Ok(())
+}
+
 // One boundary for local process/capacity receipts and distributed admission.
 // trace:STORY-2492 | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-871 | ai:codex
 fn reserve_dispatch(root: &Path, store: &Store, key: &str, attempt: &mut Attempt) -> Result<bool> {
-    attempt.admission_hub = admission::Hub::load(root)?;
-    if let Some(hub) = &attempt.admission_hub {
-        hub.validate_repository(&store.repository)?;
-    }
-    store.transaction(key, |state| {
-        let local = attempt_mut(state, key, &attempt.token)
-            .context("reservation disappeared before hub admission")?;
-        local.admission_hub = attempt.admission_hub.clone();
-        Ok(())
-    })?;
-    match admission::reserve(root, key, &attempt.head, &attempt.token) {
+    let result = (|| {
+        attempt.admission_hub = admission::Hub::load(root)?;
+        if let Some(hub) = &attempt.admission_hub {
+            hub.validate_repository(&store.repository)?;
+        }
+        store.transaction(key, |state| {
+            let local = attempt_mut(state, key, &attempt.token)
+                .context("reservation disappeared before hub admission")?;
+            local.admission_hub = attempt.admission_hub.clone();
+            Ok(())
+        })?;
+        admission::reserve(root, key, &attempt.head, &attempt.token)
+    })();
+    match result {
         Ok(true) => Ok(true),
         Ok(false) => {
-            mark_spawn_failed(store, key, &attempt.token)?;
+            store.transaction(key, |state| {
+                let local =
+                    attempt_mut(state, key, &attempt.token).context("reservation disappeared")?;
+                local.phase = Phase::RemoteHeld;
+                Ok(())
+            })?;
             Ok(false)
         }
         Err(error) => {
-            mark_spawn_failed(store, key, &attempt.token)?;
+            mark_spawn_failed(store, key, &attempt.token).with_context(|| {
+                format!("admission failed: {error:#}; local cleanup also failed")
+            })?;
             Err(error)
         }
     }
@@ -2754,4 +2828,110 @@ mod admission_fixture {
         );
         Ok(true)
     }
+}
+
+// Test entry point into the same exit/cancellation functions used by children.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[cfg(test)]
+pub(crate) fn fixture_admission_exit(
+    root: &Path,
+    ambiguous: bool,
+    unclaimed: bool,
+    before_exit: impl FnOnce(),
+) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
+    };
+    let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("fixture not selected");
+    };
+    anyhow::ensure!(
+        reserve_dispatch(root, &store, "PR-7", &mut attempt)?,
+        "fixture not admitted"
+    );
+    if unclaimed {
+        before_exit();
+        return mark_unclaimed_exit(&store, "PR-7", &attempt.token, "fixture pre-claim exit");
+    }
+    execute_reservation(
+        &store,
+        "PR-7",
+        &attempt.token,
+        |_| {
+            admission::transition(
+                root,
+                "PR-7",
+                &attempt.head,
+                &attempt.token,
+                admission::State::Running,
+                "fixture exact-head preflight".into(),
+            )
+        },
+        |_| {
+            let mut child = Command::new("sleep").arg("0.05").spawn()?;
+            let identity = Identity::of(child.id())?;
+            store.record_worker("PR-7", &attempt.token, Some(identity))?;
+            child.wait()?;
+            if ambiguous {
+                // Reproduce a lost queue-work receipt after it began reviewer
+                // spawn: the dispatcher cannot attest that descendant stopped.
+                store.transaction("PR-7", |state| {
+                    attempt_mut(state, "PR-7", &attempt.token)
+                        .unwrap()
+                        .reviewer_spawning = true;
+                    Ok(())
+                })?;
+            }
+            before_exit();
+            finish_admission(
+                root,
+                &store,
+                "PR-7",
+                &attempt.token,
+                &attempt.head,
+                "fixture observed exit",
+            )
+        },
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_admission_spawn_failure(
+    root: &Path,
+    before_cancel: impl FnOnce(),
+) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
+    };
+    let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("fixture not selected");
+    };
+    anyhow::ensure!(
+        reserve_dispatch(root, &store, "PR-7", &mut attempt)?,
+        "fixture not admitted"
+    );
+    before_cancel();
+    cancel_spawn_failure(root, &store, "PR-7", &attempt, "fixture executable missing")?;
+    let state = store.load()?;
+    anyhow::ensure!(
+        state.entries["PR-7"].attempts[0].phase == Phase::Failed,
+        "local capacity leaked after hub cancellation error"
+    );
+    Ok(())
 }

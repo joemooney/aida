@@ -560,9 +560,3 @@ mode = "report"
 max_files = 20
 # The glossary source is a template master; its .aida/ mirror is regenerated.
 regenerate = ["make sync-templates"]
-
-# Single admission authority; GitLab and reconcile bridges only mirror evidence.
-# trace:STORY-2492 | ai:codex
-[review]
-admission_hub = "https://github.com/joemooney/aida.git"
-admission_ref = "refs/aida/review-admission"

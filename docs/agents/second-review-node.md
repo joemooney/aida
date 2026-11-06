@@ -154,8 +154,11 @@ admission_hub = "https://github.com/joemooney/aida.git"
 admission_ref = "refs/aida/review-admission"
 ```
 
-Upgrade every watcher to the admission-aware binary and stop older watchers
-before enabling this configuration. Old binaries cannot participate in this
+The repository ships with these settings disabled. Enroll and configure every
+watcher host first, upgrade every watcher to the admission-aware binary, and stop
+older watchers before enabling this configuration in a separate reviewed change.
+A host without an enrolled publisher refuses dispatch when the hub is enabled;
+it never silently falls back to local-only admission. Old binaries cannot participate in this
 protocol or read its extended local launch receipts. Every publishing node must
 use the same exact URL and ref. The watcher repository must match that GitHub
 authority; another project cannot share its PR-number admission keys. GitHub is the sole
@@ -176,8 +179,11 @@ successful push and confirms the accepted transition. A losing CAS reloads and
 reconstructs against the winner, for at most three attempts, preserving other
 changes and tree entries. It never rebases a losing claim into an accepted one.
 
-The bounded version-1 `admission.json` table contains signed causal chains per
-change. Each transition binds the repository/forge, hub/ref, GitHub PR, exact head,
+Each bounded version-1 `changes/PR-N.json` blob contains one signed causal chain.
+There is no global change-count or aggregate-blob budget. Legacy `admission.json`
+is read only as a fallback for changes without a shard; the first write migrates
+that change into its own blob and retains the old table as historical evidence.
+Upgrade all admission writers together: old writers cannot see the shards. Each transition binds the repository/forge, hub/ref, GitHub PR, exact head,
 unpredictable UUID token, owner node/session, transition ID and predecessor.
 Signatures use the enrolled node key and the slice-1 OpenSSH namespace. The
 process-bound dispatcher consumes Reserved → Running exactly once after its
@@ -190,20 +196,55 @@ Cancelled admits a fresh token. An active older head fences newer heads.
 A failed or lost push response, crash, uncertain child spawn, unknown process
 identity, revoked signing node or failed terminal write retains capacity safely.
 Clock age, reboot and remote PIDs never release a distributed claim. Local
-`--release` refuses in distributed mode. Recovery requires stopping admission
-on all nodes, explicitly reconciling the owner and verifying that all of its
-children stopped, fencing old tokens, and migrating the admission state under
-operator control before restarting. There is no automatic recovery or process
-termination in the admission layer. Keep the roster stable until outstanding
-claims are reconciled; revoking an owner makes its chain unverifiable and requires
-this stopped-admission recovery.
+`--release` refuses while the hub has an active claim or an unverifiable chain.
+
+### Recover a stopped or revoked claim
+
+Stop admission watchers on **every node**. Independently verify that every
+reviewer and queue-work child for the affected PR has stopped, including children
+on rebooted or disconnected hosts. Recovery does not terminate processes or
+infer safety from age. Inspect the hub tip and the affected chain:
+
+```bash
+git ls-remote https://github.com/joemooney/aida.git refs/aida/review-admission
+```
+
+From a direct human terminal on a still-enrolled publisher, use the exact SHA
+just inspected (replace `HUB_SHA` and the PR number):
+
+```bash
+aida review nodes admission-reconcile PR-123 --expected-tip HUB_SHA \
+  --all-reviewers-stopped --reason "owner rebooted; all reviewers verified stopped"
+```
+
+This command signs an immutable recovery attestation under `recoveries/<uuid>.json`
+and CAS-pushes a new empty anchor for that PR only. It does not require the old
+owner's signature to remain valid, so it can recover revoked owners too. The old
+chain remains reachable in Git history. Old tokens cannot transition into the
+new anchor. A moved tip, missing stopped-process attestation, unenrolled recovery
+publisher or uncertain push refuses; inspect the hub again before retrying.
+The command never retries a raced recovery against a different tip.
+
+On each node, run `aida review watch --release PR-123` to clear stopped local
+attempts. This now checks that the hub no longer has an active claim, and still
+refuses a locally live process. Restart admission only after all nodes finish
+cleanup. A fresh review uses a new token; ordinary synced verdict checks still
+prevent double-review of a completed head. The same operation can compact a
+closed PR's Terminal/Cancelled chain or an unusually long open PR's chain, after
+the same stopped-admission checks. Revocation does not require retaining a node
+in the roster: re-anchor its affected chains from an enrolled operator host.
+
+A losing node caches a remote hold without using a local reviewer slot; it skips
+repeated hub probes for that head until a head change or explicit recovery.
+Admission update network commands have ten-second per-command deadlines and run
+outside the canonical store writer lock. Only the local evidence snapshot is
+read under that lock.
 
 The custom GitHub ref uses client-side CAS, not GitHub ruleset enforcement.
 Only cooperating AIDA writers may update it: no bridge, mirror or operator may
-force-push, delete or rewind it during admission. A topology change uses the
-stopped-admission migration above. Each table is bounded to 1 MiB, 2000 changes
-and 2048 transitions per change; budget exhaustion refuses admission and requires
-operator maintenance with admission stopped. Grants and human receipts remain
-local; this protocol grants no remote role authority.
+force-push, delete or rewind it during admission. Every shard is bounded to
+1 MiB and 2048 transitions; exhaustion affects only its own PR and can be
+recovered with the stopped-admission command above. Grants and human receipts
+remain local; this protocol grants no remote role authority.
 
 Untrusted work-node envelopes are outside this workflow.

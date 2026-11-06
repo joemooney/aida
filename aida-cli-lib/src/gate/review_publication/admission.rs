@@ -2,6 +2,7 @@
 //! checkout, store index or shared FETCH_HEAD. Only an exact accepted CAS admits.
 // mandate-gate
 // trace:STORY-2492 | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-871 | ai:codex
 use super::*;
 
 const REF: &str = "refs/aida/review-admission";
@@ -149,7 +150,40 @@ struct Table {
     version: u32,
     // One causal chain per change; old active heads fence new heads too.
     changes: BTreeMap<String, Vec<Signed>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    anchor: Option<Signed>,
 }
+// A recovery reset is an explicit signed authority transition. Consumers verify
+// it too; an empty shard cannot silently discard a predecessor chain.
+fn validate_anchor(hub: &Hub, key: &str, table: &Table, roster: &Roster) -> Result<()> {
+    if let Some(anchor) = &table.anchor {
+        let value: serde_json::Value = serde_json::from_str(&anchor.payload)?;
+        ensure!(
+            serde_json::to_string(&value)? == anchor.payload
+                && value["version"] == 1
+                && value["kind"] == "review-admission-recovery"
+                && value["change"] == key
+                && value["repository"] == hub.repository
+                && value["hub"] == hub.url
+                && value["reference"] == hub.reference
+                && value["all_reviewers_stopped"] == true
+                && value["predecessor_tip"]
+                    .as_str()
+                    .is_some_and(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+                && value["reason"]
+                    .as_str()
+                    .is_some_and(|s| !s.trim().is_empty() && s.len() <= 4096),
+            "invalid admission recovery anchor"
+        );
+        verify_signature(
+            value["node"].as_str().context("recovery node missing")?,
+            anchor,
+            roster,
+        )?;
+    }
+    Ok(())
+}
+
 fn active(state: &State) -> bool {
     matches!(state, State::Reserved | State::Running)
 }
@@ -244,6 +278,16 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
     Ok(out)
 }
 
+fn change_path(key: &str) -> Result<String> {
+    ensure!(
+        key.strip_prefix("PR-").is_some_and(|id| id
+            .parse::<u64>()
+            .is_ok_and(|n| n > 0 && key == format!("PR-{n}"))),
+        "invalid admission change"
+    );
+    Ok(format!("changes/{key}.json"))
+}
+
 fn remote_tip(repo: &Path, hub: &Hub) -> Result<Option<String>> {
     let output = text(
         remote_git(
@@ -266,7 +310,7 @@ fn remote_tip(repo: &Path, hub: &Hub) -> Result<Option<String>> {
     );
     Ok(Some(parts[0].into()))
 }
-fn read_table(repo: &Path, hub: &Hub) -> Result<(Option<String>, Table)> {
+fn read_table(repo: &Path, hub: &Hub, key: &str) -> Result<(Option<String>, Table)> {
     let tip = remote_tip(repo, hub)?;
     let Some(tip) = tip else {
         return Ok((
@@ -289,7 +333,21 @@ fn read_table(repo: &Path, hub: &Hub) -> Result<(Option<String>, Table)> {
         ],
     )
     .with_context(|| format!("admission_hub_unreachable: {}", hub.url))?;
-    let bytes = blob(repo, &tip, TABLE)?.context("missing admission state table")?;
+    let bytes = match blob(repo, &tip, &change_path(key)?)? {
+        Some(bytes) => bytes,
+        None => match blob(repo, &tip, TABLE)? {
+            Some(bytes) => bytes,
+            None => {
+                return Ok((
+                    Some(tip),
+                    Table {
+                        version: 1,
+                        ..Table::default()
+                    },
+                ))
+            }
+        },
+    };
     let table: Table = serde_json::from_slice(&bytes)?;
     ensure!(
         table.version == 1 && table.changes.len() <= 2000,
@@ -302,7 +360,8 @@ fn private_repo() -> Result<tempfile::TempDir> {
     git(dir.path(), &["init", "--bare", "-q"])?;
     Ok(dir)
 }
-fn commit_table(repo: &Path, tip: Option<&str>, table: &Table) -> Result<String> {
+fn commit_table(repo: &Path, tip: Option<&str>, key: &str, table: &Table) -> Result<String> {
+    let relative = change_path(key)?;
     let path = repo.join(TABLE);
     let bytes = serde_json::to_vec(table)?;
     ensure!(bytes.len() <= CAP, "admission table budget exhausted");
@@ -315,7 +374,7 @@ fn commit_table(repo: &Path, tip: Option<&str>, table: &Table) -> Result<String>
             path.to_str().context("admission path")?,
         ],
     )?)?;
-    // The entire table is one bounded blob. A private index preserves unrelated
+    // Each change is a bounded blob. A private index preserves unrelated
     // entries from the accepted parent without touching either worktree index.
     if let Some(tip) = tip {
         git(repo, &["read-tree", tip])?;
@@ -328,7 +387,7 @@ fn commit_table(repo: &Path, tip: Option<&str>, table: &Table) -> Result<String>
             "--cacheinfo",
             "100644",
             &blob,
-            TABLE,
+            &relative,
         ],
     )?;
     let tree = text(git(repo, &["write-tree"])?)?;
@@ -372,14 +431,19 @@ fn update(
                     .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
             })
         {
-            return Ok(false);
+            return Ok(None);
         }
         let config =
             publisher(root)?.context("review admission requires an enrolled local publisher")?;
-        let roster = roster(&store, &super::head(&store)?)?;
+        let store_tip = super::head(&store)?;
+        let roster = roster(&store, &store_tip)?;
+        Ok(Some((config, roster, store_tip)))
+    })?.map_or(Ok(false), |(config, roster, store_tip)| {
         let repo = private_repo()?;
         for _ in 0..ATTEMPTS {
-            let (tip, mut table) = read_table(repo.path(), hub)?;
+            let (tip, mut table) = read_table(repo.path(), hub, key)?;
+            validate_anchor(hub, key, &table, &roster)?;
+            table.changes.retain(|change, _| change == key);
             let records = table.changes.entry(key.into()).or_default();
             let history = chain(hub, key, records, &roster)?;
             let prior = history.last();
@@ -425,13 +489,15 @@ fn update(
             };
             records.push(sign(&config, &t)?);
             chain(hub, key, records, &roster)?;
-            let next = commit_table(repo.path(), tip.as_deref(), &table)?;
+            let next = commit_table(repo.path(), tip.as_deref(), key, &table)?;
             let lease = format!(
                 "--force-with-lease={}:{}",
                 hub.reference,
                 tip.as_deref().unwrap_or("")
             );
             let target = format!("{next}:{}", hub.reference);
+            require_pinned(root, &Some(hub.clone()))?;
+            ensure!(super::head(&store)? == store_tip, "admission evidence changed; retry");
             if let Err(error) = remote_git(
                 repo.path(),
                 &hub.url,
@@ -445,7 +511,8 @@ fn update(
                 }
                 continue;
             }
-            let (_, accepted) = read_table(repo.path(), hub)?;
+            let (_, accepted) = read_table(repo.path(), hub, key)?;
+            validate_anchor(hub, key, &accepted, &roster)?;
             let accepted = chain(
                 hub,
                 key,
@@ -463,6 +530,138 @@ fn update(
         }
         bail!("admission CAS retry budget exhausted; no dispatch")
     })
+}
+
+/// Explicit stopped-admission recovery. The direct-human gate is enforced by
+/// `nodes`; no watcher, timeout, reboot or remote PID can invoke this implicitly.
+/// Old signatures may be revoked or corrupt: the inspected exact Git tip, not
+/// their validity, is the operator's recovery anchor. History remains in Git.
+// trace:STORY-2492 | ai:codex
+pub(super) fn reconcile(
+    root: &Path,
+    key: &str,
+    expected_tip: &str,
+    reason: &str,
+    stopped: bool,
+) -> Result<()> {
+    ensure!(stopped, "admission recovery requires --all-reviewers-stopped; stop all watchers and verify all reviewers stopped first");
+    ensure!(
+        !reason.trim().is_empty() && reason.len() <= 4096,
+        "admission recovery requires a bounded reason"
+    );
+    change_path(key)?;
+    let hub = Hub::load(root)?.context("admission recovery requires an explicit hub")?;
+    let store = store(root).context("admission recovery requires a canonical store")?;
+    let config =
+        publisher(root)?.context("admission recovery requires an enrolled local publisher")?;
+    let repo = private_repo()?;
+    let (tip, _) = read_table(repo.path(), &hub, key)?;
+    ensure!(
+        tip.as_deref() == Some(expected_tip),
+        "admission recovery tip changed: expected {expected_tip}, observed {tip:?}; inspect again"
+    );
+    let roster = roster(&store, &super::head(&store)?)?;
+    let id = Uuid::new_v4();
+    let record = sign(
+        &config,
+        &serde_json::json!({
+            "version": 1, "kind": "review-admission-recovery", "id": id,
+            "node": config.node, "repository": hub.repository, "hub": hub.url,
+            "reference": hub.reference, "change": key, "predecessor_tip": expected_tip,
+            "all_reviewers_stopped": true, "reason": reason,
+        }),
+    )?;
+    verify_signature(&config.node, &record, &roster)?;
+    // Record the signed attestation in the same tree as the empty new anchor.
+    git(repo.path(), &["read-tree", expected_tip])?;
+    let path = repo.path().join("recovery.json");
+    std::fs::write(&path, serde_json::to_vec(&record)?)?;
+    let blob = text(git(
+        repo.path(),
+        &["hash-object", "-w", path.to_str().context("recovery path")?],
+    )?)?;
+    let rel = format!("recoveries/{id}.json");
+    git(
+        repo.path(),
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "100644",
+            &blob,
+            &rel,
+        ],
+    )?;
+    // commit_table reads the parent tree; first commit the audit as a private
+    // parent, then commit the anchor. Neither is published unless the CAS wins.
+    let tree = text(git(repo.path(), &["write-tree"])?)?;
+    let audit = text(git(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=AIDA review admission",
+            "-c",
+            "user.email=aida@localhost",
+            "commit-tree",
+            &tree,
+            "-p",
+            expected_tip,
+            "-m",
+            "review: operator recovery attestation",
+        ],
+    )?)?;
+    let next = commit_table(
+        repo.path(),
+        Some(&audit),
+        key,
+        &Table {
+            version: 1,
+            anchor: Some(record.clone()),
+            ..Table::default()
+        },
+    )?;
+    require_pinned(root, &Some(hub.clone()))?;
+    let current = super::roster(&store, &super::head(&store)?)?;
+    ensure!(
+        current.nodes == roster.nodes,
+        "admission roster changed; inspect again"
+    );
+    remote_git(
+        repo.path(),
+        &hub.url,
+        &[
+            "push",
+            "--porcelain",
+            &format!("--force-with-lease={}:{expected_tip}", hub.reference),
+            &hub.url,
+            &format!("{next}:{}", hub.reference),
+        ],
+    )
+    .context("admission recovery push uncertain; inspect hub before retrying")?;
+    println!("{key}: admission re-anchored; audit {id}; old tokens cannot transition; reset stopped local watcher attempts before restarting");
+    Ok(())
+}
+
+/// A local release never erases an active remote claim. After operator
+/// re-anchoring, each node can clear its own stopped local receipts normally.
+pub(crate) fn require_released(root: &Path, key: &str) -> Result<()> {
+    let Some(hub) = Hub::load(root)? else {
+        return Ok(());
+    };
+    let store = store(root).context("review admission needs a canonical store")?;
+    let roster = roster(&store, &super::head(&store)?)?;
+    let repo = private_repo()?;
+    let (_, table) = read_table(repo.path(), &hub, key)?;
+    validate_anchor(&hub, key, &table, &roster)?;
+    let history = chain(
+        &hub,
+        key,
+        table.changes.get(key).map(Vec::as_slice).unwrap_or(&[]),
+        &roster,
+    )?;
+    ensure!(!history.last().is_some_and(|t| active(&t.state)),
+        "distributed admission is active; stop watchers/reviewers and use review nodes admission-reconcile before local --release");
+    Ok(())
 }
 
 pub(crate) fn reserve(root: &Path, key: &str, head: &str, token: &str) -> Result<bool> {

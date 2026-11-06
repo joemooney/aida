@@ -1441,8 +1441,13 @@ mirror. Signed Reserved → Running → Terminal transitions and pre-spawn
 Reserved → Cancelled use explicit expected-tip CAS and confirmed unpredictable
 tokens. Active older heads fence newer ones; uncertain pushes/processes retain
 claims without time/PID expiry or failover. Local capacity/process receipts stay
-in force. Recovery stops admission and reconciles owner tokens before migration.
-Untrusted-node envelopes remain separate work. See
+in force. Admission state is sharded into bounded per-PR blobs; historical
+closed PRs cannot exhaust a global table budget. The direct-human
+`review nodes admission-reconcile` command requires stopped reviewers and an
+inspected exact hub tip, signs a recovery anchor, and fences abandoned or revoked
+owner tokens without deleting Git history. Local release is allowed only after
+remote claims are inactive. Hub configuration ships disabled until operators
+enroll and upgrade every watcher. Untrusted-node envelopes remain separate work. See
 [second-node operation](docs/agents/second-review-node.md).
 <!-- trace:STORY-2492 | ai:codex -->
 <!-- trace:STORY-2492 | ai:codex -->
