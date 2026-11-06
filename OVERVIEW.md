@@ -1478,6 +1478,10 @@ receipt-owning headless launch boundary") whatever posture the surface stamped.
 A test-time inventory pins every Codex spawn path.
 <!-- trace:TASK-2708 | ai:claude -->
 
+The shared send broker pins sockets and snapshots arguments, with bounded workers,
+notification-aware blocking waits, socket send timeouts and queued admission.
+<!-- trace:TASK-2708 | ai:codex -->
+
 Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`
 (or the configured AIDA home). A Codex lane gets only its own notice directory;
 canonical session grants and revocation locks remain host-only. Host notice calls
