@@ -215,7 +215,7 @@ fn count_advisor_mail(root: &Path) -> usize {
 
 // trace:STORY-1917 | ai:agy
 #[test]
-fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
+fn story_2326_tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
     let f = ExecFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -318,16 +318,17 @@ fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
     assert!(wt_root.join("take-100").is_dir());
     assert!(wt_root.join("impl-1917").is_dir());
 
-    // Verify the spawned implementer received scrubbed GRANT="" and PURPOSE=""
-    // and ROLE="implementer".
+    // Background handoffs carry no role/grant/purpose. Lane identity is
+    // recovered from the covering worktree lease, not the launcher env.
+    // trace:STORY-2326 | ai:codex
     let env_text = std::fs::read_to_string(&env_dump).unwrap();
     assert!(
-        env_text.contains("GRANT=\nPURPOSE=\nROLE=implementer\nSCOPE=TASK-100"),
-        "implementer env must have empty grant/purpose and role=implementer, got:\n{env_text}"
+        env_text.contains("GRANT=\nPURPOSE=\nROLE=\nSCOPE=TASK-100"),
+        "background env must have empty grant/purpose/role, got:\n{env_text}"
     );
     assert!(
-        env_text.contains("GRANT=\nPURPOSE=\nROLE=implementer\nSCOPE=STORY-1917"),
-        "impl env must have empty grant/purpose and role=implementer, got:\n{env_text}"
+        env_text.contains("GRANT=\nPURPOSE=\nROLE=\nSCOPE=STORY-1917"),
+        "background impl env must have empty grant/purpose/role, got:\n{env_text}"
     );
 
     // Verify `review`, `flow`, and `train` are still Pending ("pending (waiting for serve)").

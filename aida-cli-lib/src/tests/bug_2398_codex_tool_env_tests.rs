@@ -514,7 +514,7 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     ),
     ("autopilot_intake.rs", 3, Finalization::CoordinatorSpawn),
     ("burndown_run.rs", 4, Finalization::CoordinatorSpawn),
-    ("compete_cmd.rs", 1, Finalization::PrepareLaunch(1)),
+    ("compete_cmd.rs", 2, Finalization::PrepareLaunch(1)),
     (
         "containment/supervisor.rs",
         1,
@@ -532,13 +532,13 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "bash running a script-deputy job under the operator's grant; no agent vendor",
         ),
     ),
-    // trace:BUG-2390 | ai:claude — the one marker is the Claude/Agy
+    // trace:STORY-2326 | ai:codex — spawn_agent + assign_seat cover the Claude/Agy
     // implementer builder blanking the grant (Boundary B). A Codex take/impl
     // lane runs `aida agent new codex --bg`, a separate aida process that
     // finalizes in agent_codex_background.rs.
     (
         "dispatch.rs",
-        1,
+        2,
         Finalization::NotACodexLaunch(
             "Claude/Agy implementer lanes blank the grant; Codex lanes launch through \
              `aida agent new codex --bg`, finalized in agent_codex_background.rs",
@@ -553,8 +553,8 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "launch::assign_seat, the seat writer every converted site calls",
         ),
     ),
-    ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
-    ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),
+    ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
+    ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     // Claude-only builders/resumes plus the shared seat-env helper; every
     // Codex spawn in this file (incl. the coordinator spawn) finalizes.
@@ -565,9 +565,10 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // (punt/bg resume), which finalizes before stdio and revokes on refusal.
     // STORY-2326: exec, headless forking, reviewer, advisor and coordinator
     // seat writes moved into launch::assign_seat: 9 grant/coordinator markers
-    // plus 12 launcher calls (6 spawn_agent, 6 assign_seat).
+    // plus 16 launcher calls (8 spawn_agent, 8 assign_seat); PR-B removes
+    // two direct grant writes.
     // trace:STORY-2326 | ai:claude
-    ("session.rs", 21, Finalization::PrepareLaunch(7)),
+    ("session.rs", 23, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
@@ -1765,10 +1766,14 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // assign_seat calls. trace:STORY-2326 | ai:claude
     ("agent_launch.rs", 5, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
+    // PR-B launcher calls are seat routes, even without a literal role write.
+    // trace:STORY-2326 | ai:codex
+    ("compete_cmd.rs", 1, RoleRoute::LaunchInventory),
+    ("phase_driver_trait.rs", 1, RoleRoute::LaunchInventory),
     // trace:BUG-2390 | ai:claude
     (
         "dispatch.rs",
-        1,
+        2,
         RoleRoute::AidaChild(
             "the role site is the Claude/Agy implementer builder; Codex take/impl run \
              `aida agent new codex --bg`, which finalizes in agent_codex_background.rs",
@@ -1781,15 +1786,15 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
         1,
         RoleRoute::AidaChild("reviewer gate runs `aida queue work`, which finalizes in session.rs"),
     ),
-    ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
+    ("phase_driver.rs", 3, RoleRoute::LaunchInventory),
     // BUG-2386 adds two: `finalize_codex_resume` (interactive resume, seat
     // from the delegated grant) and `spawn_vendor_headless_resume_granted`
     // (punt/bg resume); both finalize through `prepare_launch`.
     // trace:BUG-2386 | ai:claude
     // STORY-2326: the headless forking and reviewer writes moved into
-    // launch::assign_seat; 6 literal writes plus 12 launcher calls (6
-    // spawn_agent, 6 assign_seat). trace:STORY-2326 | ai:claude
-    ("session.rs", 18, RoleRoute::LaunchInventory),
+    // launch::assign_seat; 6 literal writes plus 16 launcher calls (8
+    // spawn_agent, 8 assign_seat). trace:STORY-2326 | ai:codex
+    ("session.rs", 22, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 
