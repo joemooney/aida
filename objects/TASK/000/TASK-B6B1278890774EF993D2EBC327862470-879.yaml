@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T20:32:07.916143175Z
+modified_at: 2026-11-06T20:47:25.603606501Z
 req_type: Task
 tags:
 - architecture
@@ -423,6 +423,14 @@ comments:
   created_at: 2026-11-06T20:29:30.018071870Z
   modified_at: 2026-11-06T20:29:30.018071870Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b29d-c1a3-7821-9181-e6e5f4fe41b8
+  author: joe
+  content: |
+    Round 6 advisor-ruling follow-up is ready for host publication; native seat edits remain uncommitted as instructed. F2: argv_writer skips Git/AIDA global options and their known value arguments, recognizes literal/path and AIDA/GIT variable executables, and treats every AIDA subcommand except help/version as a conservative writer candidate. Added refusal mutants for each reproduced form, Python shell=True/os.system literal strings via shlex, and the actual multi-clone harness sh -c/variable-command writes (including lines 429-433). Regenerated inventory adds 105 blocked sites, preserving all prior row policy and operation mappings. F3/F4: docs explicitly name imported subprocess aliases, non-literal argv, symlink/copytree, test-name skips and extensionless hooks as limits; corrected discovery claims and recorded S2 as the enforcement boundary rather than static completeness as a merge gate.
+    Validation: 40 writer-inventory tests plus 8 Git-maintenance tests passed; standalone inventory guard, CI gate audit and git diff --check passed; final make check-ci-fast passed all 40 gates. The first fast run found the Git-maintenance text ratchet matching a literal Python fixture; adding the standard maintenance-disable options to that fixture resolved it, and the full fast rerun passed. No production runtime or Git publication changes. F1 remains for the host: commit/publish this new round and obtain green exact-head CI; existing merge-hold clearance is outside this native implementer seat. Regenerate again if the host merges newer main.
+  created_at: 2026-11-06T20:47:25.603606501Z
+  modified_at: 2026-11-06T20:47:25.603606501Z
+  session_id: 01a1b28fb32a
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
