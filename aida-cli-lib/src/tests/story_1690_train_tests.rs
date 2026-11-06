@@ -3601,3 +3601,59 @@ fn story_2401_positive_during_abort_keeps_landing_credit() {
     assert_eq!(f.landed_members, vec![1]);
     assert!(f.retired.is_empty());
 }
+
+// The legacy gate mixes policy refusals and failed secondary reads. The live
+// adapter deliberately suspends on either until a typed gate can distinguish
+// them; this retains every member and its hold for operator recovery.
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_live_preland_gate_refusal_suspends() {
+    let tmp = repo();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.metadata_state = crate::forge::ChangeState::Open;
+    forge.is_draft = true;
+    crate::gate::merge_hold_core::write_hold(tmp.path(), 42, "new merge hold").unwrap();
+    let mut host = LiveTrainForge {
+        project_root: tmp.path().into(),
+        main_worktree: tmp.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    assert!(
+        matches!(host.observe_gate(42), crate::forge_observed::Observed::Transient(why)
+        if why.contains("it is a draft"))
+    );
+    let r = tmp.path();
+    git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    let base = git(r, &["rev-parse", "main"]);
+    let train = Built {
+        base: base.clone(),
+        tip: base.clone(),
+        dropped: vec![],
+        cars: vec![Car {
+            member: member(42, "approved-head", "member"),
+            commit: base.clone(),
+            patch_id: "patch".into(),
+        }],
+    };
+    let change = crate::forge::ChangeRef {
+        id: 100,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "main".into(),
+        title: None,
+    };
+    let mut rails = ForgeRails::new(&mut host, "live-refusal".into());
+    rails.opened.push((base, change.clone()));
+    rails.live.push(change);
+    let error = rails.land(&train).unwrap_err();
+    assert!(error.downcast_ref::<TrainCiUnavailable>().is_some());
+    assert_eq!(rails.live.len(), 1, "train remains open for recovery");
+    assert!(rails.landed_on_main.is_empty());
+    drop(rails);
+    assert!(forge.closed.lock().unwrap().is_empty());
+    assert!(crate::gate::merge_hold_core::hold_is_open(tmp.path(), 42));
+}

@@ -206,6 +206,7 @@ fn story_2401_wave_mergeable_state_only_conflicts_on_a_settled_github_no() {
 
 /// A forge stub whose `Result` reads drive the default `observe_*` bridges.
 struct StubForge {
+    metadata: std::cell::RefCell<Vec<Observed<Result<crate::forge::ChangeMetadata, String>>>>,
     status: std::cell::RefCell<Vec<anyhow::Result<ChangeStatus>>>,
     rows: Vec<crate::ci_gate::CheckRow>,
     lookup: ChangeLookup,
@@ -248,6 +249,18 @@ impl crate::forge::Forge for StubForge {
     }
     fn change_status(&self, _: &ChangeRef) -> anyhow::Result<ChangeStatus> {
         self.status.borrow_mut().remove(0)
+    }
+    fn observe_change_metadata(
+        &self,
+        _: u64,
+        _: &mut dyn crate::network_retry::RetrySink,
+    ) -> Observed<Result<crate::forge::ChangeMetadata, String>> {
+        let mut metadata = self.metadata.borrow_mut();
+        if metadata.is_empty() {
+            Observed::Transient("no metadata".into())
+        } else {
+            metadata.remove(0)
+        }
     }
     fn change_metadata(
         &self,
@@ -324,6 +337,7 @@ impl crate::forge::Forge for StubForge {
 fn story_2401_default_observe_reads_bridge_result_reads() {
     use crate::forge::Forge;
     let forge = StubForge {
+        metadata: Default::default(),
         status: std::cell::RefCell::new(vec![
             Err(anyhow::anyhow!("dns")),
             Ok(status(Observed::Known(true))),
@@ -353,6 +367,7 @@ fn story_2401_default_observe_reads_bridge_result_reads() {
         Observed::Transient(_)
     ));
     let settled = StubForge {
+        metadata: Default::default(),
         status: std::cell::RefCell::new(Vec::new()),
         rows: Vec::new(),
         lookup: ChangeLookup::NoChange,
@@ -390,6 +405,7 @@ fn story_2401_ship_mergeability_decisions_and_retry_bound() {
         ),
     ] {
         let forge = StubForge {
+            metadata: Default::default(),
             status: std::cell::RefCell::new(reads),
             rows: vec![],
             lookup: ChangeLookup::NoChange,
@@ -410,6 +426,7 @@ fn story_2401_ship_mergeability_decisions_and_retry_bound() {
         assert_eq!(forge.status.borrow().len(), remaining);
     }
     let pending = StubForge {
+        metadata: Default::default(),
         status: std::cell::RefCell::new(
             (0..4)
                 .map(|_| Ok(status(Observed::Pending("UNKNOWN".into()))))
@@ -425,6 +442,7 @@ fn story_2401_ship_mergeability_decisions_and_retry_bound() {
     );
     assert_eq!(pending.status.borrow().len(), 1, "exactly three reads");
     let transient = StubForge {
+        metadata: Default::default(),
         status: std::cell::RefCell::new(
             (0..4)
                 .map(|_| Err(anyhow::anyhow!("DNS unavailable")))
@@ -579,4 +597,167 @@ fn story_2401_metadata_cannot_invent_open_from_unknown_or_partial_reply() {
         crate::forge::parse_github_metadata_observation(&value.to_string()),
         Observed::Transient(_)
     ));
+}
+
+// trace:STORY-2401 | ai:codex
+fn metadata_forge(state: &str, head: &str, copies: usize) -> StubForge {
+    let body = serde_json::json!({"state":state, "headRefOid":head,
+        "baseRefName":"main", "headRefName":"topic"});
+    let meta = crate::forge::parse_github_metadata_observation(&body.to_string())
+        .known()
+        .unwrap();
+    StubForge {
+        metadata: std::cell::RefCell::new(vec![Observed::Known(Ok(meta)); copies]),
+        status: Default::default(),
+        rows: vec![],
+        lookup: ChangeLookup::NoChange,
+    }
+}
+
+#[test]
+fn story_2401_keep_answers_and_refusals_need_one_read_and_no_git() {
+    let root = std::path::Path::new("/no-such-confirmation-repo");
+    for terminal_only in [true, false] {
+        let forge = metadata_forge("OPEN", &"a".repeat(40), 2);
+        let result = crate::forge_confirmation::metadata_for(
+            root,
+            &forge,
+            42,
+            &mut crate::network_retry::NoopSink,
+            |m| {
+                if terminal_only {
+                    m.state != ChangeState::Open
+                } else {
+                    m.state == ChangeState::Merged
+                }
+            },
+        );
+        assert!(matches!(result, Observed::Known(m) if m.state == ChangeState::Open));
+        assert_eq!(forge.metadata.borrow().len(), 1);
+    }
+    let forge = metadata_forge("OPEN", &"a".repeat(40), 0);
+    *forge.metadata.borrow_mut() = vec![
+        Observed::Known(Err("HTTP 404".into())),
+        Observed::Transient("must not read".into()),
+    ];
+    assert_eq!(
+        crate::forge_confirmation::metadata(root, &forge, 42, &mut crate::network_retry::NoopSink),
+        Observed::Pending("HTTP 404".into())
+    );
+    assert_eq!(forge.metadata.borrow().len(), 1);
+}
+
+#[test]
+fn story_2401_metadata_refusals_do_not_retry_and_transients_notify_sink() {
+    #[derive(Default)]
+    struct Sink(Vec<crate::network_retry::RetryEvent>);
+    impl crate::network_retry::RetrySink for Sink {
+        fn on_retry(&mut self, event: &crate::network_retry::RetryEvent) {
+            self.0.push(event.clone());
+        }
+    }
+    let cfg = crate::network_retry::RetryConfig {
+        base_delay: Duration::ZERO,
+        ..Default::default()
+    };
+    for why in [
+        "HTTP 404: Not Found",
+        "authentication failed",
+        "no pull requests found",
+    ] {
+        let mut calls = 0;
+        let mut sink = Sink::default();
+        assert_eq!(
+            crate::forge::observe_metadata_with_retry(42, &cfg, &mut sink, || {
+                calls += 1;
+                Some(output(1, "", why))
+            }),
+            Observed::Known(Err(why.into()))
+        );
+        assert_eq!(calls, 1);
+        assert!(sink.0.is_empty());
+    }
+    let body = serde_json::json!({"state":"OPEN", "headRefOid":"a".repeat(40), "baseRefName":"main", "headRefName":"topic"}).to_string();
+    let mut calls = 0;
+    let mut sink = Sink::default();
+    assert!(matches!(
+        crate::forge::observe_metadata_with_retry(42, &cfg, &mut sink, || {
+            calls += 1;
+            Some(if calls == 1 {
+                output(1, "", "HTTP 503: unavailable")
+            } else {
+                output(0, &body, "")
+            })
+        }),
+        Observed::Known(Ok(_))
+    ));
+    assert_eq!(calls, 2);
+    assert_eq!(sink.0.len(), 1);
+    assert_eq!(sink.0[0].attempt, 1);
+}
+
+fn confirmation_git(root: &std::path::Path, args: &[&str]) -> String {
+    let output = crate::test_git::git_command()
+        .current_dir(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().into()
+}
+
+#[test]
+fn story_2401_closed_train_receipt_and_absent_squash_head_real_git() {
+    use crate::forge_confirmation::{metadata, on_base, train_landed, Sweep};
+    let tmp = tempfile::tempdir().unwrap();
+    let r = tmp.path();
+    confirmation_git(r, &["init", "-b", "main"]);
+    confirmation_git(r, &["config", "user.name", "Confirmation"]);
+    confirmation_git(r, &["config", "user.email", "confirmation@example.com"]);
+    confirmation_git(r, &["config", "commit.gpgsign", "false"]);
+    confirmation_git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    // The forge head was created remotely and was never fetched here.
+    let head = "a".repeat(40);
+    let msg = format!("land member (#42)\n\nAida-Train-Member: #42 at {head}");
+    confirmation_git(r, &["commit", "--allow-empty", "-m", &msg]);
+    assert!(!crate::test_git::git_command()
+        .current_dir(r)
+        .args(["cat-file", "-e", &head])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    let forge = metadata_forge("CLOSED", &head, 2);
+    assert!(
+        matches!(metadata(r, &forge, 42, &mut crate::network_retry::NoopSink), Observed::Known(m) if m.state == ChangeState::Merged)
+    );
+    {
+        let _sweep = Sweep::new();
+        assert_eq!(on_base(r, "main", &head, 42), Observed::Known(true));
+        assert_eq!(train_landed(r, "main", &head, 42), Observed::Known(true));
+        assert_eq!(
+            train_landed(r, "main", &"b".repeat(40), 42),
+            Observed::Known(false)
+        );
+        // Removing origin proves subsequent candidates reuse this sweep's fetch.
+        confirmation_git(r, &["remote", "remove", "origin"]);
+        assert_eq!(on_base(r, "main", &head, 99), Observed::Known(false));
+    }
+    // A later sweep may never borrow the prior successful tip.
+    assert!(matches!(
+        on_base(r, "main", &head, 42),
+        Observed::Transient(_)
+    ));
+    confirmation_git(r, &["remote", "add", "origin", r.to_str().unwrap()]);
+    confirmation_git(r, &["commit", "--allow-empty", "-m", "squash only (#43)"]);
+    assert_eq!(on_base(r, "main", &head, 43), Observed::Known(true));
+    assert_eq!(train_landed(r, "main", &head, 43), Observed::Known(false));
+    let forge = metadata_forge("CLOSED", &head, 2);
+    assert!(
+        matches!(metadata(r, &forge, 43, &mut crate::network_retry::NoopSink), Observed::Known(m) if m.state == ChangeState::Closed)
+    );
 }

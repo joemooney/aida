@@ -1127,14 +1127,15 @@ pub trait Forge {
         Observed::from_result(self.change_status(c)).map(Ok)
     }
 
-    /// [`Forge::change_metadata`] as an observation.
+    /// [`Forge::change_metadata`] as an observation. Definitive provider
+    /// refusals are Known(Err), so callers retain work without retrying them.
     // trace:STORY-2401 | ai:claude
     fn observe_change_metadata(
         &self,
         id: u64,
         sink: &mut dyn crate::network_retry::RetrySink,
-    ) -> Observed<ChangeMetadata> {
-        Observed::from_result(self.change_metadata(id, sink))
+    ) -> Observed<std::result::Result<ChangeMetadata, String>> {
+        Observed::from_result(self.change_metadata(id, sink)).map(Ok)
     }
 
     /// Independent Git evidence used alongside a repeated metadata snapshot.
@@ -2308,21 +2309,20 @@ impl Forge for GitHubForge {
     fn observe_change_metadata(
         &self,
         id: u64,
-        _sink: &mut dyn crate::network_retry::RetrySink,
-    ) -> Observed<ChangeMetadata> {
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Observed<std::result::Result<ChangeMetadata, String>> {
         let Some(gh) = crate::resolve_gh_binary() else {
             return Observed::Transient("gh executable unavailable".into());
         };
-        let mut cmd = Command::new(gh);
-        cmd.current_dir(&self.project_root).args([
-            "pr", "view", &id.to_string(), "--json",
-            "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
-        ]).stdin(std::process::Stdio::null());
-        crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
-            cmd,
-            std::time::Duration::from_secs(15),
-        ))
-        .and_then(|body| parse_github_metadata_observation(&body))
+        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
+        observe_metadata_with_retry(id, &cfg, sink, || {
+            let mut cmd = Command::new(&gh);
+            cmd.current_dir(&self.project_root).args([
+                "pr", "view", &id.to_string(), "--json",
+                "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+            ]).stdin(std::process::Stdio::null());
+            crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
+        })
     }
 
     fn change_metadata(
@@ -2975,7 +2975,7 @@ impl Forge for GitLabForge {
         &self,
         id: u64,
         _sink: &mut dyn crate::network_retry::RetrySink,
-    ) -> Observed<ChangeMetadata> {
+    ) -> Observed<std::result::Result<ChangeMetadata, String>> {
         let result = (|| -> Result<ChangeMetadata> {
             let out = self.glab_api_get(&format!("projects/:id/merge_requests/{id}"), &[])?;
             anyhow::ensure!(out.status.success(), "GitLab metadata unavailable");
@@ -2994,7 +2994,7 @@ impl Forge for GitLabForge {
             );
             Ok(m)
         })();
-        Observed::from_result(result)
+        Observed::from_result(result).map(Ok)
     }
 
     fn change_metadata(
@@ -4124,13 +4124,44 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
 
 // ─────────────────────── change-metadata parsers (TASK-963) ───────────────────────
 
-/// Map a `gh pr view --json state,title,baseRefName,headRefName,headRefOid,
-/// isCrossRepository,headRepository,isDraft` object to [`ChangeMetadata`].
-/// Lenient — missing fields degrade to empty/false (required-field policy
-/// belongs to the caller; the reviewer pre-flight's `PrInfo` adapter enforces
-/// non-empty refs, matching `pr_rebase::parse_pr_info`). Pure so the field
-/// mapping is unit-testable without spawning `gh`.
-// trace:TASK-963 | ai:claude
+// Preserve bounded single reads and emit BUG-286 notices for transport retries.
+// Definitive refusals are settled outcomes and never retried.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn observe_metadata_with_retry(
+    id: u64,
+    cfg: &crate::network_retry::RetryConfig,
+    sink: &mut dyn crate::network_retry::RetrySink,
+    mut read: impl FnMut() -> Option<std::process::Output>,
+) -> Observed<std::result::Result<ChangeMetadata, String>> {
+    for attempt in 1..=cfg.max_attempts.max(1) {
+        let reply = crate::forge_observed::observe_gh(read());
+        match reply {
+            Observed::Known(crate::forge_observed::GhReply::Ok(body)) => {
+                return parse_github_metadata_observation(&body).map(Ok)
+            }
+            Observed::Known(crate::forge_observed::GhReply::Refused(why)) => {
+                return Observed::Known(Err(why))
+            }
+            Observed::Transient(ref why) if attempt < cfg.max_attempts => {
+                let delay = cfg
+                    .base_delay
+                    .saturating_mul(cfg.factor.saturating_pow(attempt - 1));
+                sink.on_retry(&crate::network_retry::RetryEvent {
+                    label: format!("gh pr view {id} --json metadata"),
+                    attempt,
+                    max: cfg.max_attempts,
+                    backoff_ms: delay.as_millis() as u64,
+                    stderr_snippet: why.clone(),
+                });
+                std::thread::sleep(delay);
+            }
+            Observed::Transient(why) | Observed::Pending(why) => return Observed::Transient(why),
+        }
+    }
+    unreachable!()
+}
+
+/// Parse complete, recognized GitHub metadata without inventing defaults.
 // trace:STORY-2401 | ai:codex
 pub(crate) fn parse_github_metadata_observation(body: &str) -> Observed<ChangeMetadata> {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
@@ -4148,6 +4179,14 @@ pub(crate) fn parse_github_metadata_observation(body: &str) -> Observed<ChangeMe
     Observed::Known(parse_gh_change_metadata(&v))
 }
 
+/// Map a `gh pr view --json state,title,baseRefName,headRefName,headRefOid,
+/// isCrossRepository,headRepository,isDraft` object to [`ChangeMetadata`].
+/// Lenient — missing fields degrade to empty/false (required-field policy
+/// belongs to the caller; the reviewer pre-flight's `PrInfo` adapter enforces
+/// non-empty refs, matching `pr_rebase::parse_pr_info`). Pure so the field
+/// mapping is unit-testable without spawning `gh`.
+// trace:TASK-963 | ai:claude
+// trace:STORY-2401 | ai:codex
 fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
     let s = |key: &str| -> String {
         json.get(key)

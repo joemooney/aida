@@ -1104,11 +1104,12 @@ pub(crate) fn review_pr_is_merged_or_closed(
     pr: u32,
     sink: &mut dyn network_retry::RetrySink,
 ) -> Option<bool> {
-    crate::forge_confirmation::metadata(
+    crate::forge_confirmation::metadata_for(
         project_root,
         crate::forge::forge_for(project_root).as_ref(),
         pr as u64,
         sink,
+        |m| m.state != crate::forge::ChangeState::Open,
     )
     .known()
     .map(|m| {
@@ -4219,6 +4220,7 @@ pub(crate) fn handle_queue_command(
                 }
             }
 
+            let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
             if *merged {
                 // TASK-593: a review row ("Review PR-N: …") whose PR has merged
                 // outside the reviewer's `aida queue done` flow lingers because
@@ -4362,6 +4364,7 @@ pub(crate) fn handle_queue_command(
             // step in the sweep; everything upstream and downstream of it
             // (the candidate selection and the removal) is pure and covered
             // by unit tests.
+            let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
             let review_candidates = review_summaries_pending_merge_check(&summaries, &dead_ids);
             let mut merged_pr_by_id: std::collections::HashMap<Uuid, u64> =
                 std::collections::HashMap::new();

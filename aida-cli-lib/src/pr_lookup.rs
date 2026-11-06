@@ -1233,11 +1233,15 @@ pub(crate) fn pr_is_merged_with_sink(
     // BUG-286 retry-with-sink behaviour this site had inline; any provider
     // error (CLI missing / failed / unreachable) maps to None — "cannot
     // confirm", never a silent success. trace:TASK-963 | ai:claude
-    crate::forge_confirmation::metadata(
+    crate::forge_confirmation::metadata_for(
         project_root,
         crate::forge::forge_for(project_root).as_ref(),
         pr as u64,
         sink,
+        |m| {
+            m.state == crate::forge::ChangeState::Merged
+                || m.state == crate::forge::ChangeState::Closed
+        },
     )
     .known()
     .map(|m| m.state == crate::forge::ChangeState::Merged)

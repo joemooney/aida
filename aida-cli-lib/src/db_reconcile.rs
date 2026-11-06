@@ -1952,6 +1952,7 @@ pub(crate) fn collect_stranded_review_pr_resolutions(
     Vec<StrandedReviewPrResolution>,
     Vec<StrandedReviewPrLookupFailure>,
 ) {
+    let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
     let mut out = Vec::new();
     let mut failures = Vec::new();
     let mut sink = network_retry::NoopSink;
@@ -1973,11 +1974,12 @@ pub(crate) fn collect_stranded_review_pr_resolutions(
         let Some(spec_id) = req.spec_id.as_deref() else {
             continue;
         };
-        let metadata = match crate::forge_confirmation::metadata(
+        let metadata = match crate::forge_confirmation::metadata_for(
             project_root,
             crate::forge::forge_for(project_root).as_ref(),
             pr_n,
             &mut sink,
+            |m| m.state != crate::forge::ChangeState::Open,
         ) {
             crate::forge_observed::Observed::Known(metadata) => metadata,
             crate::forge_observed::Observed::Pending(error)

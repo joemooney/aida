@@ -2504,7 +2504,11 @@ impl TrainForge for LiveTrainForge<'_> {
             || {
                 forge
                     .observe_change_metadata(change.id, &mut crate::network_retry::NoopSink)
-                    .and_then(|m| {
+                    .and_then(|value| {
+                        let m = match value {
+                            Ok(m) => m,
+                            Err(why) => return crate::forge_observed::Observed::Pending(why),
+                        };
                         if m.head_sha != train.tip || m.base_ref != self.base {
                             return crate::forge_observed::Observed::Pending(
                                 "train head/base changed".into(),
@@ -2992,7 +2996,9 @@ impl Rails for ForgeRails<'_> {
         // Re-gate every member right before the merge: a hold, a new push or
         // a withdrawn approval since the build ejects that member. BUG-2214:
         // the fresh gate re-runs the mandate cover under the lease, so a
-        // lapsed mandate ejects a held member here with its hold intact.
+        // lapsed mandate is rechecked here with its hold intact. The live gate
+        // currently suspends on an untyped refusal; typed Known(Err) ports
+        // eject the member. See the slice-3 inventory (STORY-2401).
         // trace:BUG-2214 | ai:claude
         let mut refused = Vec::new();
         let mut fresh: Vec<Member> = Vec::new();

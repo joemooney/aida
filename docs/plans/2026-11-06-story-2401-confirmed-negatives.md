@@ -57,7 +57,7 @@ All Rust paths below are under `aida-cli-lib/src/`:
 
 - `forge.rs`, `forge_observed.rs`, new `forge_confirmation.rs`, `lib.rs`
 - `pr_train.rs`, `phase_driver.rs`, `pr_lookup.rs`, `queue_cmd.rs`,
-  `db_reconcile.rs`, `reconcile_evidence.rs`
+  `db_reconcile.rs`, `reconcile_evidence.rs`, `session_reap.rs`
 - `review_watch.rs`, `review_watch_forge.rs`
 - `tests/story_1690_train_tests.rs`, `tests/story_2401_forge_observed_tests.rs`,
   `tests/task_1993_review_watch_tests.rs`, `tests/auto_bump_done_tests.rs`
@@ -93,3 +93,67 @@ No implementation or validation blocker remains; Git metadata/publication belong
 to the host launcher. Existing host-side punt/hold vetoes retain their authority.
 
 <!-- trace:STORY-2401 | ai:codex -->
+
+## Round 3 review corrections
+
+Closed train members are consistent terminal observations. An exact subject
+`(#N)` and parsed `Aida-Train-Member: #N at <pinned head>` trailer on the
+freshly fetched base upgrades that observation to landed for credit consumers.
+A squash subject alone never upgrades a Closed PR to Merged. Missing local head
+objects skip ancestry/tree checks and still permit squash-receipt lookup.
+
+Keep/no-op observations return after one metadata read. Open PRs do not sleep
+or fetch during review GC, session reaping, stranded-review reconciliation or
+merge-credit checks. Closed PRs remain possible train-credit candidates. Sweeps
+share one fetched tip per repository/base; no fetched result survives the sweep.
+Metadata refusals are `Known(Err)` and stop immediately; bounded transport
+retries emit the caller's BUG-286 sink events.
+
+For finding 5 this slice deliberately retains **suspension**, the review's
+permitted alternative: the live member gate still mixes settled local refusals
+with unavailable secondary reads. A newly refused pre-land member (including a
+lapsed mandate) suspends the train with every member, PR and hold intact, instead
+of ejecting that member. The live-path regression exercises a local draft
+refusal through `LiveTrainForge` and `ForgeRails::land`, verifies the typed
+unavailable error and open train, and retains a pre-existing hold. Scripted
+`Known(Err)` gates can still eject. Restoring selective live ejection requires a
+later typed member-gate boundary; no string classification is introduced here.
+This supersedes the older BUG-2214 ejection claim for this live adapter.
+
+Publication must use the non-completing subject above. This native seat cannot
+rewrite historical commit d726665ca8f or create the new round's commit; the host
+must publish the declared Refs subject and correct the historical completing
+subject if retaining it in published history. AC3 and AC4 remain unimplemented.
+
+Round-3 changed files (left uncommitted for the host):
+
+- `aida-cli-lib/src/forge.rs`
+- `aida-cli-lib/src/forge_confirmation.rs`
+- `aida-cli-lib/src/pr_lookup.rs`
+- `aida-cli-lib/src/queue_cmd.rs`
+- `aida-cli-lib/src/db_reconcile.rs`
+- `aida-cli-lib/src/session_reap.rs`
+- `aida-cli-lib/src/pr_train.rs`
+- `aida-cli-lib/src/tests/story_2401_forge_observed_tests.rs`
+- `aida-cli-lib/src/tests/story_1690_train_tests.rs`
+- This plan and handoff inventory.
+
+The native publication declaration was successfully recorded with the exact Refs
+subject above; it creates no commit or PR. Existing merge-hold authority remains.
+
+Round-3 validation logs:
+
+- Targeted command: `cargo test --profile agent -p aida-cli-lib --lib story_2401`.
+  `/tmp/story-2401-round3-tests-final.log` is the corrected rerun; the initial
+  compile found two missing test-fixture fields, which were fixed. The rerun
+  passed: **33 tests, zero failures**, 12,583 unrelated tests filtered out.
+- `make check-ci-fast`: **38 gates passed**, including formatting, the
+  feature-disabled CLI check, and standalone TUI check. Log:
+  `/tmp/story-2401-round3-fast.log`. Some guards attempted a fetch that the
+  native seat refused as read-only; their local-evidence checks still passed.
+- `git diff --check`: passed.
+
+Round-3 validation is complete. No source/test blocker remains. The host owns
+commit creation, historical subject repair and publication; the existing merge
+hold still requires its ordinary authorized clearance. No queue completion,
+merge, review recording, commit or push was performed by this seat.
