@@ -2,6 +2,36 @@
 // trace:STORY-2402 | ai:codex
 use super::*;
 
+// Snapshot-backed facts must not reload canonical objects during a sweep.
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_snapshot_facts_reuse_rows_for_spec_and_query_conditions() {
+    use aida_core::condition::Verdict;
+
+    let fixture = tempfile::tempdir().unwrap();
+    let canonical = fixture.path().join("canonical");
+    let objects = canonical.join("objects/TASK/00");
+    std::fs::create_dir_all(&objects).unwrap();
+    let mut req = aida_core::Requirement::new("fixture".into(), "".into());
+    req.spec_id = Some("TASK-1".into());
+    req.status = RequirementStatus::Completed;
+    std::fs::write(
+        objects.join("TASK-1.yaml"),
+        serde_yaml::to_string(&req).unwrap(),
+    )
+    .unwrap();
+    let snapshot = read_store(fixture.path(), Some(&canonical)).unwrap();
+    let facts = CliConditionFacts::from_store(fixture.path(), snapshot);
+    std::fs::remove_dir_all(&canonical).unwrap();
+
+    for text in ["spec:TASK-1=completed", "query:status=completed count>=1"] {
+        let condition: Condition = text.parse().unwrap();
+        assert_eq!(condition.evaluate(&facts).unwrap().verdict, Verdict::Met);
+    }
+    assert_eq!(facts.store().unwrap().requirements.len(), 1);
+    assert!(!canonical.exists());
+}
+
 #[test]
 fn story2402_store_reads_are_strict_and_do_not_create_missing_stores() {
     let fixture = tempfile::tempdir().unwrap();
