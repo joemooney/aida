@@ -1,0 +1,34 @@
+id: 01a1b27f-c985-79a1-b409-d087aaa1e375
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-511
+agreed_id: STORY-2588
+title: 'Review PR-3537: [AI:codex] chore: Admit AIDA repository size and GitLab templates to work CI relay inventory (TASK-3232)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b257`) for branch `task-b6b1278890774ef993d2ebc327862470-886`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3537>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-886` → `main`
+
+  ## Covers
+
+  - TASK-3232
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3537` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T20:14:41.541297320Z
+modified_at: 2026-11-06T20:14:41.541297320Z
+req_type: Story
+filed_at:
+  code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 01a1b25747e9
