@@ -1485,9 +1485,15 @@ a receipt with the kernel-attested shim PID, start identity, namespaces, identit
 UID map, and pinned policy commit. Rust validates that receipt while exec is
 blocked, finishes host PID binding, then releases the vendor. Configured posture
 and receipt-shaped JSON confer no applied credit. The temporary `ClaudeNative`
-arm preserves existing Claude behavior until its separate migration. Interactive,
-background, resume/fork, Claude migration and OpenCode integration remain later
-slices. The authenticated operator run is still required for acceptance.
+arm preserves existing Claude behavior without the trusted opt-in. Under
+`[contained.vendors] claude = "aida"`, foreground headless phases and
+coordinators use the shared boundary. Coordinators retain quiet or streaming
+output, bind their explicit child grant to the attested worker before release,
+and keep the private state owner until exit. Interactive, background and
+resume/fork launches still refuse under that opt-in; their migration and
+OpenCode integration remain later slices. The authenticated operator run is
+still required for acceptance.
+<!-- trace:TASK-3219 | ai:codex -->
 
 Under `codex = "aida"` every other Codex surface fails closed. This covers
 interactive `aida agent new`, `--bg`, resume, coordinator, phase-driver
