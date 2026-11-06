@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-322
 agreed_id: STORY-2324
 title: Gate decides from one ledger keyed by canonical spec ID (effective gate state = f(head SHA, canonical IDs, ledger))
 description: 'Regroup target 1 (do first), 2026-11-02. Canonicalize spec IDs once where they enter the system. Effective gate state (verdict, hold, mode) is a pure function of the PR head SHA, the canonical ID set and the ledger. Superseded specs inherit the carrier''s mode. Merge-hold markers live in the primary store. Retires the BUG-2403/BUG-2413 bug class, STORY-1392, STORY-1684 and the BUG-2176 workaround. Evidence: BUG-2403, BUG-2413, STORY-1392, TASK-1574, TASK-1259. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T12:21:38.439544247Z
+modified_at: 2026-11-06T12:25:47.504633968Z
 req_type: Story
 tags:
 - architecture
@@ -359,6 +359,12 @@ comments:
   created_at: 2026-11-06T11:56:31.114843314Z
   modified_at: 2026-11-06T11:56:31.114843314Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0d2-7ef0-71e0-8b16-2a42c40dbdb6
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs content is accurate against PR-C code and covers every PR-D brief item, but PR CI is red at head: the gates shard fails ''Documentation landing smoke'' twice (original run + rerun), a pre-existing docs-only CI defect; two minor doc gaps to fix in the same round. No triage reason was given.'
+  created_at: 2026-11-06T12:25:47.504632005Z
+  modified_at: 2026-11-06T12:25:47.504632005Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
@@ -597,6 +603,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b0d2-7ef0-71e0-8b16-2a38bafc74fc
+  author: joe
+  timestamp: 2026-11-06T12:25:47.504621839Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -605,11 +619,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Docs content is accurate against PR-C code and covers every PR-D brief item, but PR CI is red at head: the gates shard fails ''Documentation landing smoke'' twice (original run + rerun), a pre-existing docs-only CI defect; two minor doc gaps to fix in the same round'
-  recovery_hint: address the review findings, move STORY-2324 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T12:21:38.439544247Z
