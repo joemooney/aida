@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:00:12.263463934Z
+modified_at: 2026-11-06T15:10:17.295259018Z
 req_type: Story
 relationships:
 - rel_type:
@@ -151,6 +151,12 @@ comments:
   content: 'Round 2 finding 3 scope: this static protocol slice explicitly does NOT admit AIDA itself (about 48 MiB Rust sources versus 16 MiB cap; GitLab templates/includes/rules unsupported). Requested follow-up filing attempted with aida add --type task --parent STORY-2480, but allocation refused read-only clone-common Git metadata, no object written. Host must file: Admit AIDA repository size and GitLab templates to work CI relay inventory. Acceptance: bounded AIDA-sized multi-SHA inventory; deterministic committed local template/include expansion with remote/escape refusal; intended AIDA jobs and native PR/train gate end-to-end. Exact proposed description retained in docs/plans/2026-11-05-story-2480-work-ci-relay.md round-2 follow-up section. No runner deployment or completion claimed.'
   created_at: 2026-11-06T15:00:12.263463934Z
   modified_at: 2026-11-06T15:00:12.263463934Z
+  session_id: 01a1b159080c
+- id: 01a1b169-18cf-7b20-a43a-cfd9459e3ef5
+  author: joe
+  content: 'Round 2 implementation: fixed CI umask-022 ci-source/config initialization (reproduced from job 127942377121); intake checkpoint reuses unchanged validated CI bytes while one live ref snapshot still requires retained admission; home processing skips published/obsolete results before inventory; explicit observation-only enrollment diagnostics; qualified JUnit names canonicalize to home-derived fn identifiers; expired attempts publish cancellation receipts mapped to native failure; persistent round-robin cursor prevents pending attempt starvation; CI JSON output and command catalog/help audit updated. Existing native-status readers and required train/PR judges now have a relay-context regression. Six criteria traced; malformed Idempotent criterion repaired to AC6. Removed per-change AGENTS/OVERVIEW notes. Tests: 11 relay scenarios passed across full run plus corrected focused multi-SHA assertion (CI-style umask 022); 3 receipt units, 2 inventory units, native status/train/PR regression, host credential ratchet and 8 maintenance ratchet tests pass. Native publication declared with Refs; no commit/push/queue done from seat. Finding 3 uses reviewer-permitted explicit static-only rescope; host must allocate the drafted AIDA-size/template inventory follow-up retained in the plan, since CLI allocation refused read-only common Git metadata. Exhaustive CLI audit validation remains running at this comment.'
+  created_at: 2026-11-06T15:10:17.295259018Z
+  modified_at: 2026-11-06T15:10:17.295259018Z
   session_id: 01a1b159080c
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
