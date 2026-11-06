@@ -399,6 +399,15 @@ source ratchet inventories constructors and protected environment writers outsid
 the launcher. Resource validation grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
+Execution input APIs live in `aida-core::exec_context`: immutable environment,
+explicit home/project/authority roots and tool selections, plus an injected
+wall/monotonic clock. Child projection belongs to `launch_policy::EnvPolicy`
+and its existing owned-key tables. These types confer no authority. Production
+reader migration and vendor env-clear activation are separate, incomplete work;
+the [migration inventory](docs/internal/testing/exec-context-migration.md) defines
+the shrinking legacy ledger and API ownership boundaries.
+<!-- trace:STORY-2538 | ai:codex -->
+
 ### The four layers
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/internal/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
