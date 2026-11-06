@@ -278,11 +278,16 @@ python3 scripts/containment/conformance.py --vendor codex --boundary aida \
 This creates a disposable repository through production `aida init`, commits its
 own trusted policy selecting `codex = "aida"`, and scaffolds roles through
 `aida role scaffold`. It provisions the fixture roster through production
-`aida team allow-seat <user> implementer`, using the CLI's identity precedence
-(`AIDA_USER`, `USER`, `USERNAME`, then `default`). It requests an implementer grant with implementer child
-seat delegation through `aida role enter`, consumes the successful production
-shell eval block (including key adoption), and runs the production requested-seat
-probe. It then creates a fixture task and launches `aida queue work --no-human=both
+`aida team allow-seat <user> advisor` and `aida team allow-seat <user> implementer`,
+using the CLI's identity precedence (`AIDA_USER`, `USER`, `USERNAME`, then `default`).
+It enters a fixture advisor seat and verifies it through the production
+requested-seat probe before creating the approved task and queueing it for
+implementer. Only after queue setup succeeds does it enter a fixture implementer
+seat with implementer child delegation and run the implementer seat probe.
+Each transition consumes the successful production shell eval block, including
+key adoption. Setup and launch grants live only in the disposable authority home;
+the operator's real grants are never used for approval or dispatch. Setup refusal
+prevents implementer entry and launch. It launches `aida queue work --no-human=both
 --sandbox` with an explicit fixture worktree path. Queue pickup creates the real
 lease and worktree; the unchanged contained launcher checks the committed policy,
 seat preflight and host receipt before releasing Codex. No authority or lease
@@ -294,8 +299,11 @@ for interactive input. The separate `aida team allow-seat` and `aida role enter`
 steps deliberately inherit the operator's stdin and stderr for the production
 roster and terminal-grant flows. Role entry's
 stdout remains a private captured eval block. The shell continuation receives
-that block through its own stdin pipe.
-<!-- trace:BUG-2460 | ai:codex -->
+that block through its own stdin pipe, then restores the inherited terminal stdin
+from a passed descriptor before evaluating it. Successful eval blocks never enter
+argv, environment variables, reports or files. Both seat transitions retain the
+operator's terminal session and the supervised timeout cleanup.
+<!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 
 `HOME` and `AIDA_HOME` are isolated together under the experiment directory;
 managed-agent identity is retained. The original `CODEX_HOME` location is
@@ -310,7 +318,9 @@ eval output is never recorded. Roster provisioning failures stop earlier with
 exit status, leaves the receipt digest null, and marks C0–C4 unknown.
 It does not create a TTY, clear agent identity, or fall back
 to a native sandbox. The offline fake-vendor test runs real initialization and
-roster and role commands through this refusal and verifies no vendor execution occurred.
+roster and advisor-role commands through this refusal and verifies no vendor execution occurred.
+Fast regression tests separately pin advisor-only approval/queue setup, the
+implementer transition before launch, and refusal before execution on setup failure.
 `agy` and `claude` explicitly refuse `--boundary aida` in this slice.
 <!-- trace:BUG-2462 | ai:codex -->
 

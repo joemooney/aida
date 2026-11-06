@@ -7,6 +7,7 @@ import io
 import importlib.util
 import json
 import os
+import pty
 from pathlib import Path
 import tempfile
 import time
@@ -85,6 +86,7 @@ class AidaBoundaryTests(unittest.TestCase):
                     report["setup"].append({"stage": stage})
                     return "fixture"
                 results = [c.subprocess.CompletedProcess([], 0, stdout="roster provisioned"),
+                           c.subprocess.CompletedProcess([], 0, stdout="roster provisioned"),
                            c.subprocess.CompletedProcess([], 1, stdout=diagnostic)]
                 with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
                         mock.patch.object(c, "fixture_command", side_effect=fixture), \
@@ -96,7 +98,10 @@ class AidaBoundaryTests(unittest.TestCase):
                         c.run_aida(args)
                 launch.assert_not_called()
                 self.assertEqual(run.call_args_list[0].args[0][-4:],
+                                 ["team", "allow-seat", "fixture-user", "advisor"])
+                self.assertEqual(run.call_args_list[1].args[0][-4:],
                                  ["team", "allow-seat", "fixture-user", "implementer"])
+                self.assertEqual(run.call_args_list[2].args[0][1:4], ["role", "enter", "advisor"])
                 for call in run.call_args_list:
                     self.assertNotIn("stdin", call.kwargs)
                     self.assertNotIn("stderr", call.kwargs)
@@ -106,6 +111,103 @@ class AidaBoundaryTests(unittest.TestCase):
                 self.assertEqual(report["setup"][-1]["diagnostic"], diagnostic)
                 self.assertIsNone(report["containment_receipt_sha256"])
                 self.assertEqual({r["status"] for r in report["checks"].values()}, {"unknown"})
+
+    # trace:BUG-2465 | ai:codex
+    def test_advisor_setup_switches_to_implementer_before_queue_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repository"
+            repo.mkdir()
+            report = {"setup": [], "containment_receipt_sha256": None,
+                      "checks": {"C0": {"status": "unknown"}}}
+            c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 1})
+            stages = []
+            def fixture(argv, cwd, env, report, stage):
+                stages.append(stage)
+                expected = "implementer" if stage == "seat-preflight" else "advisor"
+                self.assertEqual(env["AIDA_SESSION_ROLE"], expected)
+                self.assertEqual(cwd, repo)
+                if stage.endswith("seat-preflight"):
+                    self.assertEqual(argv[-2:], ["--expect", expected])
+                if stage == "spec-add":
+                    self.assertEqual(argv[argv.index("--status") + 1], "approved")
+                if stage == "queue-add":
+                    self.assertEqual(argv, ["fixture", "queue", "add", "TASK-1", "--for", "implementer"])
+                report["setup"].append({"stage": stage, "exit_code": 0})
+                return "TASK-1" if stage == "spec-add" else ""
+            entered = c.subprocess.CompletedProcess([], 0, stdout=
+                "#aida:eval:begin\nexport AIDA_SESSION_ROLE=implementer\n# private-key-adoption\n#aida:eval:end\n")
+            def continuation(script, cwd, env, seconds):
+                self.assertIn("export AIDA_SESSION_ROLE=implementer", script)
+                self.assertIn("--aida-continue", script)
+                self.assertEqual(stages, ["setup-seat-preflight", "spec-add", "queue-add"])
+                self.assertEqual(env["AIDA_SESSION_ROLE"], "advisor")
+                with mock.patch.dict(c.os.environ, {"AIDA_SESSION_ROLE": "implementer"}):
+                    c.continue_aida(root)
+            network = mock.Mock(config={}, receipts=list(range(8)))
+            with mock.patch.dict(c.os.environ, {"AIDA_SESSION_ROLE": "advisor"}), \
+                    mock.patch.object(c, "fixture_command", side_effect=fixture), \
+                    mock.patch.object(c.subprocess, "run", return_value=entered) as role, \
+                    mock.patch.object(c, "launch_aida_continuation", side_effect=continuation), \
+                    mock.patch.object(c, "Network", return_value=network), \
+                    mock.patch.object(c, "network_attempts", return_value={"control": {"result": "allowed"}}), \
+                    mock.patch.object(c, "bounded_launch", side_effect=ValueError("offline-launch-reached")) as launch:
+                with self.assertRaisesRegex(ValueError, "offline-launch-reached"):
+                    c.setup_aida(root)
+            self.assertEqual(role.call_args.args[0][1:6],
+                             ["role", "enter", "implementer", "--delegate-seat", "implementer"])
+            self.assertNotIn("stdin", role.call_args.kwargs)
+            self.assertNotIn("stderr", role.call_args.kwargs)
+            self.assertEqual(launch.call_args.args[0][:7],
+                             ["fixture", "queue", "work", "TASK-1", "--role", "implementer", "--vendor"])
+            self.assertEqual(launch.call_args.args[2]["AIDA_SESSION_ROLE"], "implementer")
+            network.close.assert_called_once()
+            saved = (root / "report.json").read_text() + (root / "aida-state.json").read_text()
+            self.assertNotIn("private-key-adoption", saved)
+            self.assertIn("offline-launch-reached", saved)
+
+    def test_setup_refusal_never_enters_implementer_or_launches(self):
+        for refused in ("setup-seat-preflight", "spec-add", "queue-add"):
+            with self.subTest(stage=refused), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                report = {"setup": [], "containment_receipt_sha256": None,
+                          "checks": {"C0": {"status": "unknown"}}}
+                c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 1})
+                def fixture(argv, cwd, env, report, stage):
+                    report["setup"].append({"stage": stage})
+                    if stage == refused:
+                        raise ValueError("fixture-" + stage + "-refused")
+                    return "TASK-1"
+                with mock.patch.object(c, "fixture_command", side_effect=fixture), \
+                        mock.patch.object(c.subprocess, "run") as role, \
+                        mock.patch.object(c, "launch_aida_continuation") as launch:
+                    with self.assertRaisesRegex(ValueError, "fixture-" + refused + "-refused"):
+                        c.setup_aida(root)
+                role.assert_not_called()
+                launch.assert_not_called()
+                saved = json.loads((root / "report.json").read_text())
+                self.assertEqual(saved["unsupported_reason"], "fixture-" + refused + "-refused")
+
+    def test_continuation_restores_terminal_stdin_without_secret_argv(self):
+        child = mock.MagicMock(returncode=0)
+        child.__enter__.return_value = child
+        with mock.patch.object(c.subprocess, "Popen", return_value=child) as popen:
+            self.assertEqual(c.launch_aida_continuation("private-eval-block", Path("."), {}, 30), 0)
+        self.assertNotIn("private-eval-block", str(popen.call_args))
+        self.assertEqual(popen.call_args.args[0], ["bash", "-c", 'eval "$(cat)"'])
+        fd = popen.call_args.kwargs["pass_fds"][0]
+        self.assertEqual(child.communicate.call_args.args[0],
+                         f"exec 0<&{fd}\nexec {fd}<&-\nprivate-eval-block")
+
+    def test_continuation_preserves_actual_terminal_stdin(self):
+        master, terminal = pty.openpty()
+        duplicate = os.dup
+        try:
+            with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)):
+                self.assertEqual(c.launch_aida_continuation("test -t 0", Path("."), dict(os.environ), 5), 0)
+        finally:
+            os.close(master)
+            os.close(terminal)
 
     # trace:TASK-3194 | ai:codex
     def test_hidden_output_refuses_before_any_setup_or_grant(self):
@@ -157,7 +259,8 @@ class AidaBoundaryTests(unittest.TestCase):
                         child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 10), 0]
                     with mock.patch.object(c.subprocess, "Popen") as popen, \
                             mock.patch.object(c.os, "killpg") as killpg:
-                        popen.return_value.__enter__.return_value = child
+                        popen.return_value = child
+                        child.__enter__.return_value = child
                         with self.assertRaises(type(failure)) as caught:
                             c.launch_aida_continuation("script", Path("."), {}, 30)
                     self.assertIs(caught.exception, failure)
@@ -231,7 +334,7 @@ class AidaBoundaryTests(unittest.TestCase):
             repo.mkdir()
             report = {"setup": [], "containment_receipt_sha256": None,
                       "checks": {"C0": {"status": "unknown"}}}
-            c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 30})
+            c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 30, "spec": "TASK-1"})
             # Run the real continuation, lane launcher and signal cleanup with
             # offline setup/network substitutes. The lane forks a sleeper.
             lane = "import os,time; child=os.fork(); print(os.getpid(),flush=True); time.sleep(30)"
@@ -263,7 +366,19 @@ try:
 except ValueError as error:
     sys.exit(str(error))
 """
-            script = "exec " + c.shlex.join([c.sys.executable, "-c", code]) + "\n"
+            inner = "exec " + c.shlex.join([c.sys.executable, "-c", code]) + "\n"
+            supervisor = f"""
+import importlib.util, os, signal, pathlib
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+signal.signal(signal.SIGTERM, c.continuation_terminated)
+try:
+    c.launch_aida_continuation({inner!r}, pathlib.Path({str(repo)!r}), dict(os.environ), 30)
+except ValueError as error:
+    raise SystemExit(str(error))
+"""
+            script = "exec " + c.shlex.join([c.sys.executable, "-c", supervisor]) + "\n"
             with self.assertRaisesRegex(ValueError, "continuation-timeout"):
                 # Allow fresh interpreters and both forked lane processes to
                 # start even on a loaded CI runner.
@@ -271,7 +386,7 @@ except ValueError as error:
             self.assertTrue((root / "network-closed").is_file())
             saved = json.loads((root / "report.json").read_text())
             self.assertEqual([r["stage"] for r in saved["setup"]],
-                             ["seat-preflight", "spec-add", "queue-add"])
+                             ["seat-preflight"])
             self.assertIn("continuation-timeout", saved["unsupported_reason"])
             pids = (root / "stdout.jsonl").read_text().splitlines()
             self.assertEqual(len(pids), 2, "both lane parent and descendant must start")
