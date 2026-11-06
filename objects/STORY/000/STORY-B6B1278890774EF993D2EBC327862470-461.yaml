@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T21:32:28.733999261Z
+modified_at: 2026-11-06T21:32:41.126567569Z
 req_type: Story
 tags:
 - architecture
@@ -245,6 +245,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 6: prior finding 1 is fixed: one command, check-exec-context.py --write-ledger --base REF, writes a sorted Counter ledger with a computed ceiling and checks growth before writing. A command-level test covers bootstrap, refusal on growth or a changed expression (ledger unchanged), relocation, shrink and a missing base. The docs name the command, the ledger is 1220 sites = ceiling, and the head contains origin/main df76551. Slice-A scope still matches the advisor amendment (no launch/ edits). No code defects remain. The only blocker is still no green CI at the exact head: run 42291371263 has all 7 jobs queued (runner backlog). merge-hold-gate fails by design (human hold).. No triage reason was given.'
   created_at: 2026-11-06T21:32:28.733997677Z
   modified_at: 2026-11-06T21:32:28.733997677Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2c7-243d-7c30-911a-810d497c35bb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ba1a4d1c1006
+    Recorded: 2026-11-06T21:02:37.484857159+00:00
+    Findings:
+    1. BLOCKING (only remaining item; no code change required): no green CI at the exact head ba1a4d1c1006. Run 42291371263 (created 20:47Z) had all 7 jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) still queued at 21:02Z because of runner backlog. So the new --write-ledger test, the golden-key and extern-crate fixtures, and the 1220-site ledger have never passed on the runner's Python. Do NOT push new commits (that restarts CI). Wait for run 42291371263 to go fully green, including the gates 'ExecContext environment ratchet' step, then re-request review citing that run. If gates fails on the ratchet step, run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' after merging main, and push. merge-hold-gate failing is the expected supervised hold (cleared through 'aida merge-hold clear 3515'), not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T21:32:37.821981617Z
+  modified_at: 2026-11-06T21:32:37.821981617Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
