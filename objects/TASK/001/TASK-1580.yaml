@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-11-04T02:33:26.698380789Z
+modified_at: 2026-11-06T00:16:07.408715354Z
 req_type: Task
 tags:
 - operator-held
@@ -31,6 +31,12 @@ comments:
   created_at: 2026-11-04T02:33:26.698380789Z
   modified_at: 2026-11-04T02:33:26.698380789Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1ae36-76f0-7b02-8fde-062961b98d2f
+  author: joe
+  content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 6: stays parked on its named trigger.'
+  created_at: 2026-11-06T00:16:07.408715354Z
+  modified_at: 2026-11-06T00:16:07.408715354Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 deferred: true
 deferred_at: 2026-10-05T04:16:48.441119506Z
 deferred_until: a second human works this repo; seats run on hosts the operator does not control; the product serves external users
