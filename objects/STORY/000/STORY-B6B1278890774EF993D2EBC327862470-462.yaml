@@ -4,12 +4,12 @@ agreed_id: STORY-2539
 title: 'Vendor profile as data beyond spawn: one VendorProfile registry (regroup R5)'
 description: |
   Regroup R5: a VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture including today's agy outer-only ruling, mail-wake support, hint text, resume semantics); vendor-name literals allowed only in vendors/; user hints rendered from the profile. Evidence: about 70 vendor commits in 14 days, 430 non-test "claude" literals, STORY-782 and BUG-2390 (both fold here). Trigger: STORY-2326 PR-B merged (the spawn half and its posture tables exist). Sketch-first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-06T16:09:45.286032575Z
+modified_at: 2026-11-06T16:09:54.169214609Z
 req_type: Story
 tags:
 - architecture
@@ -204,6 +204,14 @@ history:
   timestamp: 2026-11-06T16:07:56.210497951Z
   session_id: 01a1b19d684e
   changes: []
+- id: 01a1b19f-acf9-7f53-bb7d-5d0b16803de6
+  author: joe
+  timestamp: 2026-11-06T16:09:54.169228966Z
+  session_id: 01a1b19d684e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -212,3 +220,9 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only advisor lane complete: full VendorProfile proposal posted on STORY-2539 and saved at docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md. Await advisor signoff on core descriptor/effectful adapter split, PR-C-first ownership and single adapter relocation, production vendor-literal ratchet scope, and preservation of AGY conformance refusal. Advisor explicitly requires no PR; retain publication veto.'
+  lean: Land STORY-2326 PR-C first; extend its single adapter with pure core descriptors and non-spawn capabilities, preserving current admission and wire behavior.
+  raised_by: implementer
+  raised_at: 2026-11-06T16:09:54.169214609Z
