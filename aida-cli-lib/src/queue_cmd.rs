@@ -11466,8 +11466,9 @@ pub(crate) fn preflight_queue_work_branch(
     preflight_queue_work_branch_adopting(root, branch, None)
 }
 
-/// A finished review may leave its disposable checkout after releasing its
-/// lease. Retire only the default review tree, so ordinary occupied branches
+/// A finished or crashed review may leave its disposable checkout. A dead
+/// reviewer lease additionally requires current forge-head coverage.
+/// Retire only the default review tree, so ordinary occupied branches
 /// and explicitly placed worktrees retain the usual refusal.
 // trace:BUG-2457 | ai:codex
 fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u64) -> Result<()> {
@@ -11491,9 +11492,26 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
     if !candidate {
         return Ok(());
     }
-    let leased = list_leases(root)
-        .iter()
-        .any(|l| l.branch == branch || l.worktree_path == path);
+    // A crashed review has no verdict to trigger ordinary lease release.
+    // Only one exact, provably dead reviewer owner can be reclaimed here.
+    // trace:BUG-2469 | ai:codex
+    let leases: Vec<_> = list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == branch || l.worktree_path == path)
+        .collect();
+    let reclaim = match leases.as_slice() {
+        [] => None,
+        [lease]
+            if lease.branch == branch
+                && crate::worktree::canonical_or_self(&lease.worktree_path)
+                    == crate::worktree::canonical_or_self(&path)
+                && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
+                && crate::leases::lease_owner_gone(lease) == Some(true) =>
+        {
+            Some(lease)
+        }
+        _ => return preflight_queue_work_branch(root, Some(&branch)),
+    };
     let locked = inventory.split("\n\n").any(|record| {
         record
             .lines()
@@ -11504,8 +11522,7 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
         .iter()
         .any(|p| !p.stale_cwd && p.cwd.starts_with(&path));
     let inside = std::env::current_dir().is_ok_and(|cwd| cwd.starts_with(&path));
-    if leased
-        || locked
+    if locked
         || live
         || inside
         || working_tree_clean(&path) != Some(true)
@@ -11513,6 +11530,45 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
     {
         return preflight_queue_work_branch(root, Some(&branch));
     }
+    // Require both the recorded review head and every actual seat commit to
+    // survive at the fresh forge head. Force-pushes and local fixes retain it.
+    // trace:BUG-2469 | ai:codex
+    let lease_snapshot = if let Some(lease) = reclaim {
+        let eligible = (|| -> Result<()> {
+            let old = lease
+                .pr_head_sha
+                .as_deref()
+                .context("review lease has no recorded head")?;
+            let head = crate::pr_lease_takeover::fetch_review_head(root, forge, n)?;
+            anyhow::ensure!(
+                crate::pr_lease_takeover::is_ancestor(root, old, &head),
+                "recorded review head is not covered"
+            );
+            anyhow::ensure!(
+                crate::seat_clone::remote_missing_commits_with_review_head(
+                    root,
+                    &path,
+                    false,
+                    &branch,
+                    Some(&head)
+                )? == 0,
+                "review checkout has unpublished commits"
+            );
+            Ok(())
+        })();
+        if eligible.is_err() {
+            return preflight_queue_work_branch(root, Some(&branch));
+        }
+        let snapshot = std::fs::read(crate::lease_path(root, &lease.id))?;
+        let current: SessionLease = toml::from_str(std::str::from_utf8(&snapshot)?)?;
+        anyhow::ensure!(
+            toml::to_string(&current)? == toml::to_string(lease)?,
+            "review lease changed during retirement checks"
+        );
+        Some(snapshot)
+    } else {
+        None
+    };
     // Collect a legacy hold before removal, even if it predates this pickup.
     // Unknown markers and unreadable directories retain the checkout.
     let markers = path.join(".aida/merge-holds");
@@ -11541,6 +11597,25 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
+    // Revalidate the owner and exact lease before tearing down its tree.
+    // trace:BUG-2469 | ai:codex
+    if let Some(lease) = reclaim {
+        anyhow::ensure!(
+            crate::leases::lease_owner_gone(lease) == Some(true)
+                && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
+                && working_tree_clean(&path) == Some(true),
+            "review ownership or working tree changed before retirement"
+        );
+        crate::session_end::guard_remote_commits(root, lease, false)?;
+        let current: Vec<_> = list_leases(root)
+            .into_iter()
+            .filter(|l| l.branch == branch || l.worktree_path == path)
+            .collect();
+        anyhow::ensure!(
+            current.len() == 1 && current[0].id == lease.id,
+            "review lease ownership became ambiguous"
+        );
+    }
     aida_core::worktree_holders::check_worktree_removal(&path)?;
     aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
         root,
@@ -11548,6 +11623,14 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
         false,
         "next-head review pickup",
     )?;
+    if let Some(lease) = reclaim {
+        crate::session_reap::release_lease_files(root, &lease.id);
+        anyhow::ensure!(
+            !crate::lease_path(root, &lease.id).exists(),
+            "retired review tree but could not release lease {}",
+            lease.id
+        );
+    }
     Ok(())
 }
 

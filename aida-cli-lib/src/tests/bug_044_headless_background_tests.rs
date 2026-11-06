@@ -356,6 +356,52 @@ fn the_seat_state_says_whether_a_run_pushed_and_what_it_left() {
     );
 }
 
+// trace:TASK-2938 | ai:codex
+#[test]
+fn unknown_reachability_falls_back_to_moved_and_known_non_push() {
+    let launch_head = Some("a");
+    for (head, origin, expected) in [
+        (Some("b"), at("a"), Some(Unshipped::UnpushedCommits)),
+        (
+            Some("b"),
+            OriginHead::Absent,
+            Some(Unshipped::UnpushedCommits),
+        ),
+        (Some("a"), at("a"), None),
+        (Some("b"), at("b"), None),
+        (Some("b"), OriginHead::Unknown, None),
+        (None, OriginHead::Absent, None),
+    ] {
+        let mut state = seat(head, origin, 0);
+        state.head_has_unpushed = None;
+        assert_eq!(state.unshipped(launch_head), expected, "{state:?}");
+    }
+
+    let launch_pr = (7, Some("a".to_string()));
+    let launch = si::LaunchSeat {
+        pr: Some(&launch_pr),
+        head: launch_head,
+    };
+    let mut state = seat(Some("b"), at("a"), 0);
+    state.head_has_unpushed = None;
+    let (outcome, work) = si::settle_outcome(
+        si::Outcome::PrOpened {
+            pr: 7,
+            head: Some("a".to_string()),
+        },
+        &launch,
+        &state,
+    );
+    assert_eq!(outcome, si::Outcome::NoPr);
+    assert_eq!(
+        si::report(&outcome, Some(0), work.as_ref()),
+        (
+            "implementer: no-pr reason=unpushed-commits".to_string(),
+            si::NO_PR_EXIT_CODE
+        )
+    );
+}
+
 /// BUG-050: a rework round starts with its PR open on the head the seat
 /// launched on (`a`). The forge's PR head is not trusted alone: right after
 /// a push it still reports `a`.
@@ -1198,10 +1244,11 @@ fn bug_2464_fast_forward_to_remote_main_is_not_unpushed_work() {
     assert_eq!(state.unshipped(Some(&launch_head)), None);
     git(&["update-ref", "-d", "refs/remotes/backup/seat"]);
     state.head_has_unpushed = None;
+    // trace:TASK-2938 | ai:codex
     assert_eq!(
         state.unshipped(Some(&launch_head)),
-        None,
-        "unknown evidence cannot establish unpushed commits"
+        Some(Unshipped::UnpushedCommits),
+        "unreadable reachability falls back to the moved, unpushed head"
     );
     assert_eq!(head_has_unpushed_commits(&root.join("missing")), None);
 }

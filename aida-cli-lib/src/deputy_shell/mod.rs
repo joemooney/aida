@@ -323,6 +323,16 @@ pub(crate) struct RunnerInfo {
     pub started_at: DateTime<Utc>,
 }
 
+/// Display evidence only: legacy runners do not attest grants or submit seats.
+// trace:BUG-2468 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RunnerStatus {
+    Live(RunnerInfo),
+    Legacy(u32),
+    NotRunning,
+    Unknown(&'static str),
+}
+
 /// What `status`, `list` and `wait` see of a job.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct JobView {
@@ -632,6 +642,91 @@ impl Queue {
             None => false,
         };
         alive.then_some(info)
+    }
+
+    // trace:BUG-2468 | ai:codex
+    pub(crate) fn runner_status(&self) -> RunnerStatus {
+        self.runner_status_with(
+            Path::new("/proc"),
+            aida_core::pid_observer::PidObserver::current(),
+        )
+    }
+
+    /// Unstamped host PIDs cannot be interpreted in an isolated namespace,
+    /// even if a different local process happens to have the same number.
+    // trace:BUG-2468 | ai:codex
+    pub(super) fn runner_status_with(
+        &self,
+        proc_root: &Path,
+        observer: aida_core::pid_observer::PidObserver,
+    ) -> RunnerStatus {
+        if !observer.can_observe(None) {
+            return RunnerStatus::Unknown("cannot see host processes from this sandbox");
+        }
+        if std::fs::read(proc_root.join("self/stat")).is_err() {
+            return RunnerStatus::Unknown("cannot read process information from /proc");
+        }
+        let native = match std::fs::read(self.runner_json()) {
+            Ok(bytes) => match serde_json::from_slice::<RunnerInfo>(&bytes) {
+                Ok(info) if info.pid_start.is_some() => {
+                    match std::fs::read(proc_root.join(info.pid.to_string()).join("stat")) {
+                        Ok(_) => {
+                            if aida_core::liveness::process_identity_matches_strict(
+                                info.pid,
+                                info.pid_start.as_deref().expect("checked above"),
+                            ) {
+                                return RunnerStatus::Live(info);
+                            }
+                            RunnerStatus::NotRunning
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            RunnerStatus::NotRunning
+                        }
+                        Err(_) => RunnerStatus::Unknown("cannot read runner process information"),
+                    }
+                }
+                _ => RunnerStatus::Unknown("invalid runner.json"),
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => RunnerStatus::NotRunning,
+            Err(_) => RunnerStatus::Unknown("cannot read runner.json"),
+        };
+        // A stale native record must not hide a subsequently started bash runner.
+        let pid_file = match std::fs::read_to_string(self.root.join("runner.pid")) {
+            Ok(pid) => pid,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return native,
+            Err(_) => return RunnerStatus::Unknown("cannot read runner.pid"),
+        };
+        let pid = match pid_file.trim().parse::<u32>() {
+            Ok(pid) if pid > 0 => pid,
+            _ => return RunnerStatus::Unknown("invalid runner.pid"),
+        };
+        let cmdline = match std::fs::read(proc_root.join(pid.to_string()).join("cmdline")) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return native,
+            Err(_) => return RunnerStatus::Unknown("cannot read runner command line"),
+        };
+        let args: Vec<_> = cmdline
+            .split(|b| *b == 0)
+            .filter(|a| !a.is_empty())
+            .collect();
+        fn basename(arg: &[u8]) -> &[u8] {
+            arg.rsplit(|b| *b == b'/').next().unwrap_or(arg)
+        }
+        let script = match args.first() {
+            Some(arg) if basename(arg) == b"aida-deputy-shell" => 0,
+            Some(arg) if matches!(basename(arg), b"bash" | b"sh") => 1,
+            _ => return native,
+        };
+        if args
+            .get(script)
+            .is_some_and(|arg| basename(arg) == b"aida-deputy-shell")
+            && args.get(script + 1) == Some(&b"run".as_slice())
+            && args.get(script + 2) == Some(&self.name.as_bytes())
+        {
+            RunnerStatus::Legacy(pid)
+        } else {
+            native
+        }
     }
 
     /// Retention: remove every finished job directory older than `keep_days`
