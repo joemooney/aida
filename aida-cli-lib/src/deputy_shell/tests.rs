@@ -103,6 +103,101 @@ fn runner_pid_only_detects_a_live_bash_runner_without_grant_authority() {
     );
 }
 
+// trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
+#[test]
+fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
+    use std::process::{Command, Stdio};
+    struct Child(std::process::Child);
+    impl Drop for Child {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let f = Fixture::new("t");
+    let script = f.root().join("aida-deputy-shell");
+    // Keep bash alive without executing a real deputy or changing PATH.
+    std::fs::write(&script, "read -r line\n").unwrap();
+    let file = f.root().join("job.sh");
+    std::fs::write(&file, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    for start in [vec!["run", "t"], vec!["t"]] {
+        let child = Child(
+            Command::new("/bin/bash")
+                .arg(&script)
+                .args(&start)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        std::fs::write(f.q.root.join("runner.pid"), format!("{}\n", child.0.id())).unwrap();
+        assert_eq!(
+            f.q.runner_status_with(Path::new("/proc"), host_observer()),
+            RunnerStatus::Legacy(child.0.id()),
+            "{start:?}"
+        );
+        let err = crate::deputy_shell_cmd::submit_with_runner_status(
+            &f.q,
+            &args,
+            submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+            &["advisor".into()],
+            &mut Vec::new(),
+            || f.q.runner_status_with(Path::new("/proc"), host_observer()),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("legacy bash runner live"), "{err}");
+        assert!(err.contains(&format!("pid {}", child.0.id())), "{err}");
+        assert!(err.contains("aida-deputy-shell submit t <file>"), "{err}");
+        assert!(err.contains("aida deputy shell run --name t"), "{err}");
+        assert!(!err.contains("no script deputy"), "{err}");
+        assert!(f.q.live_runner().is_none());
+        assert!(f.q.queued_ids().is_empty());
+        assert!(!f.q.socket_path().exists());
+        assert!(f.q.job_ids().is_empty());
+    }
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
+#[test]
+fn legacy_runner_bare_names_do_not_match_other_verbs_or_invalid_start_names() {
+    for name in ["t", "submit", "list", "status", "log", "wait", "_t", "-t"] {
+        let f = Fixture::new(name);
+        let proc = f.root().join("proc");
+        std::fs::create_dir_all(proc.join("self")).unwrap();
+        std::fs::create_dir_all(proc.join("4242")).unwrap();
+        std::fs::write(proc.join("self/stat"), "readable").unwrap();
+        std::fs::write(f.q.root.join("runner.pid"), "4242\n").unwrap();
+        for prefix in [
+            "aida-deputy-shell\0",
+            "/bin/bash\0/home/u/aida-deputy-shell\0",
+        ] {
+            std::fs::write(proc.join("4242/cmdline"), format!("{prefix}{name}\0")).unwrap();
+            assert_eq!(
+                f.q.runner_status_with(&proc, host_observer()),
+                if name == "t" {
+                    RunnerStatus::Legacy(4242)
+                } else {
+                    RunnerStatus::NotRunning
+                },
+                "{prefix:?} {name}"
+            );
+            std::fs::write(proc.join("4242/cmdline"), format!("{prefix}run\0{name}\0")).unwrap();
+            assert_eq!(
+                f.q.runner_status_with(&proc, host_observer()),
+                RunnerStatus::Legacy(4242),
+                "explicit run {name}"
+            );
+        }
+    }
+}
+
 // trace:BUG-2468 | ai:codex
 #[test]
 fn runner_status_handles_stale_wrong_name_unrelated_and_hidden_processes() {
@@ -123,6 +218,8 @@ fn runner_status_handles_stale_wrong_name_unrelated_and_hidden_processes() {
         b"/bin/bash\0/home/u/bin/aida-deputy-shell\0run\0other\0".as_slice(),
         b"/bin/sleep\0aida-deputy-shell\0run\0t\0".as_slice(),
         b"/bin/bash\0-c\0aida-deputy-shell run t\0".as_slice(),
+        b"/bin/bash\0/aida-deputy-shell\0other\0".as_slice(),
+        b"/bin/bash\0/aida-deputy-shell\0submit\0t\0job.sh\0".as_slice(),
         b"".as_slice(),
     ] {
         std::fs::write(&cmd, args).unwrap();

@@ -1172,12 +1172,23 @@ fn grant_check_for_at(
     if let Err(reason) = own {
         return rejected(Some(grant.seat), reason);
     }
-    if let Some(parent_id) = &grant.parent_grant_id {
+    // Delegator children can themselves launch workers. Revalidate every ancestor,
+    // bounded and cycle-safe, so revoking the shell grant also revokes grandchildren.
+    // trace:BUG-2467 | ai:codex
+    let mut child = grant.clone();
+    let mut seen = std::collections::HashSet::from([grant.id.clone()]);
+    while let Some(parent_id) = &child.parent_grant_id {
+        if seen.len() >= 64 || !seen.insert(parent_id.clone()) {
+            return rejected(
+                Some(grant.seat),
+                GrantRejection::Parent(Box::new(GrantRejection::Unreadable)),
+            );
+        }
         let parent = read_grant_checked(parent_id)
             .and_then(|parent| check_lifetime(&parent, now).map(|()| parent))
             .map_err(|reason| GrantRejection::Parent(Box::new(reason)))
             .and_then(|parent| {
-                if parent.principal == grant.principal {
+                if parent.principal == child.principal {
                     Ok(parent)
                 } else {
                     Err(GrantRejection::ParentPrincipalMismatch)
@@ -1195,7 +1206,7 @@ fn grant_check_for_at(
         if !parent
             .delegable_seats
             .iter()
-            .any(|seat| seat == &grant.seat)
+            .any(|seat| seat == &child.seat)
         {
             return rejected(
                 Some(grant.seat),
@@ -1204,6 +1215,7 @@ fn grant_check_for_at(
                 },
             );
         }
+        child = parent;
     }
     GrantCheck::Valid(grant)
 }
@@ -2260,6 +2272,69 @@ pub(crate) fn issue_launch_child(
     issue_child_for(project_root, requested_seat, child_subject, contained)
 }
 
+/// Resolve an explicit narrowing against the validated parent's authority.
+/// Empty input means inherit for delegator seats; worker seats never delegate.
+// trace:BUG-2467 | ai:codex
+fn child_delegable_seats(
+    parent: &SeatGrant,
+    requested_seat: &str,
+    seats: &[String],
+) -> Result<Vec<String>> {
+    if !matches!(requested_seat, "advisor" | "integrator") {
+        anyhow::ensure!(
+            seats.is_empty(),
+            "--delegate-seat requires an advisor or integrator child"
+        );
+        return Ok(Vec::new());
+    }
+    if seats.is_empty() {
+        return Ok(parent.delegable_seats.clone());
+    }
+    let mut selected = Vec::new();
+    for seat in seats {
+        let seat = aida_core::team::canonical_role(seat.trim());
+        anyhow::ensure!(
+            parent.delegable_seats.contains(&seat),
+            "the active `{}` grant does not delegate `{seat}` (re-enter the role to include it: `{}`)",
+            parent.seat,
+            widen_delegation_command(&parent.seat, &parent.delegable_seats, &seat)
+        );
+        selected.push(seat);
+    }
+    selected.sort();
+    selected.dedup();
+    Ok(selected)
+}
+
+// trace:BUG-2467 | ai:codex
+pub(crate) fn validate_launch_delegable_seats(
+    project_root: &Path,
+    role: Option<&str>,
+    seats: &[String],
+) -> Result<()> {
+    if seats.is_empty() {
+        return Ok(());
+    }
+    let role = role.context("--delegate-seat requires an advisor or integrator child")?;
+    let seat = aida_core::team::canonical_role(role);
+    let parent = validate_child_delegation(project_root, &seat)?;
+    child_delegable_seats(&parent, &seat, seats)?;
+    Ok(())
+}
+
+// trace:BUG-2467 | ai:codex
+pub(crate) fn issue_launch_child_with_delegation(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+    contained: bool,
+    seats: &[String],
+) -> Result<SeatGrant> {
+    let parent = validate_child_delegation(project_root, requested_seat)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
+    issue_child_from_with_delegation(parent, requested_seat, child_subject, contained, seats)
+}
+
 /// STORY-2254: the one-use authority a detached Codex launch carries from the
 /// gate's issuance of its own child grant to the single acceptance that binds
 /// that grant to the actual worker process. Not `Clone`: it moves from the
@@ -2347,8 +2422,8 @@ impl DetachedLaunchCapability {
 /// STORY-2254: mint the detached worker's OWN child grant and capture the
 /// one-use capability for it, in one gate-owned step. The parent is validated
 /// exactly as [`issue_launch_child`] validates it (delegation, roster,
-/// inline-parent rule) and the grant is minted by the same core: empty
-/// delegable seats, expiry bounded by the parent, keyring key installed
+/// inline-parent rule) and the grant is minted by the same core: worker seats
+/// cannot delegate, expiry bounded by the parent, keyring key installed
 /// before the worker exists. `require_key` makes a keyring failure a refusal:
 /// a native-sandboxed worker's tool shells can present the grant only by its
 /// key, even though native is not AIDA containment.
@@ -2360,11 +2435,19 @@ pub(crate) fn issue_detached_launch_child(
     require_key: bool,
     attempt: &str,
     scope: &str,
+    seats: &[String],
 ) -> Result<(SeatGrant, DetachedLaunchCapability)> {
     let issuer = own_process_token().context(
         "cannot issue a detached launch grant: this launcher's start identity could not be read",
     )?;
-    let grant = issue_child_for(project_root, requested_seat, child_subject, require_key)?;
+    // trace:BUG-2467 | ai:codex — detached grants honour explicit narrowing.
+    let grant = issue_launch_child_with_delegation(
+        project_root,
+        requested_seat,
+        child_subject,
+        require_key,
+        seats,
+    )?;
     if require_key && !has_key_binding(&grant) {
         let _ = revoke_by_id(&grant.id);
         return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
@@ -2567,6 +2650,19 @@ pub(crate) fn issue_child_from(
     child_subject: &str,
     sandboxed: bool,
 ) -> Result<SeatGrant> {
+    issue_child_from_with_delegation(parent, requested_seat, child_subject, sandboxed, &[])
+}
+
+// trace:BUG-2467 | ai:codex
+fn issue_child_from_with_delegation(
+    parent: SeatGrant,
+    requested_seat: &str,
+    child_subject: &str,
+    sandboxed: bool,
+    seats: &[String],
+) -> Result<SeatGrant> {
+    let delegable_seats = child_delegable_seats(&parent, requested_seat, seats)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     // BUG-1934: a child grant is bound to the launcher minting it. An exec'd
     // worker keeps this pid and start; a spawned worker descends from it; a
     // detached worker is stamped with [`bind_grant_to_pid`] after spawn.
@@ -2618,7 +2714,7 @@ pub(crate) fn issue_child_from(
         session_id: Uuid::new_v4().to_string(),
         seat: requested_seat.to_string(),
         tty_issued_at: parent.tty_issued_at,
-        delegable_seats: Vec::new(),
+        delegable_seats,
         parent_grant_id: Some(parent.id),
         issued_at: now,
         expires_at: parent.expires_at,
@@ -2939,14 +3035,26 @@ pub(crate) fn grant_authorized_at(
     {
         return false;
     }
-    match &grant.parent_grant_id {
-        None => true,
-        Some(parent_id) => read_grant(parent_id).is_ok_and(|parent| {
-            valid_at(&parent)
-                && parent.principal == grant.principal
-                && parent.delegable_seats.iter().any(|s| s == &grant.seat)
-        }),
+    // trace:BUG-2467 | ai:codex — recorded authority also follows the full chain.
+    let mut child = grant;
+    let mut seen = std::collections::HashSet::from([child.id.clone()]);
+    while let Some(parent_id) = &child.parent_grant_id {
+        if seen.len() >= 64 || !seen.insert(parent_id.clone()) {
+            return false;
+        }
+        let Ok(parent) = read_grant(parent_id) else {
+            return false;
+        };
+        if !valid_at(&parent)
+            || parent.principal != child.principal
+            || !parent.delegable_seats.contains(&child.seat)
+            || !roster_allows(project_root, &parent.principal, &parent.seat)
+        {
+            return false;
+        }
+        child = parent;
     }
+    true
 }
 
 /// BUG-1934: what `aida role status` reports about the exported grant.

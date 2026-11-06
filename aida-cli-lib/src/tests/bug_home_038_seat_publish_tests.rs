@@ -2618,6 +2618,7 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
     ]);
     let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: crate::codex_native_sandbox::CODEX_NATIVE_POSTURE

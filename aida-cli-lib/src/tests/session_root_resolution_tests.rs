@@ -149,6 +149,7 @@ fn agent_launch_root_preserves_linked_worktree_promotion() {
 fn agent_launch_context_is_rooted_under_submodule_aida_dir() {
     let (_tmp, _super_root, submodule) = fixture_with_aida_submodule();
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
