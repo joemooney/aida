@@ -595,6 +595,41 @@ constituent commit trailers still participate in the landing scan.
 
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
+### Canonical gate ledger
+
+The gate architecture is **effective gate state = f(head SHA, canonical IDs,
+ledger)**. `gate::canon` resolves a change's spec labels against one committed
+store snapshot to immutable requirement UUIDs (`SpecKey`); native, agreed,
+node-local and retired IDs are spellings of that identity. Persisted
+`spec_key` wins over an event's audit label. Unstamped compatibility events use
+the snapshot's exact label mappings; unresolved or ambiguous identity cannot
+grant approval. Superseded specs inherit their carrier's execution mode.
+
+`gate::effective::effective_gate_state` computes verdict, hold, execution mode
+and decision from supplied inputs without reading files, Git, the clock or the
+environment. Evidence loading and reviewer authority checks are separate
+stages: selecting an approval does not establish its grant or independence.
+`aida gate state PR-<N>` exposes this state read-only; `--compare` shows it
+beside the existing merge-gate readers, column by column, and counts
+differences. `--json` provides the machine-readable diagnostic. These commands
+do not clear holds, record reviews or authorize a merge.
+
+The canonical ledger lives in the primary checkout's shared runtime store,
+`<main>/.aida/gate-ledger/PR-<N>.jsonl` (or `MR-<N>.jsonl`). Spec indexes and
+unbound pre-change entries live under `by-spec/`; they do not give a second
+worktree authority over the change. Merge-hold markers and recorded clearances
+belong to this primary store as hold/release events, with forge labels as
+mirrors. BUG-2176's reviewer-worktree marker-copy workaround is retired as an
+architecture: a disposable reviewer worktree must not be the durable owner of
+a hold. The host launcher validates and collects contained reviewer evidence
+into shared state. Retained legacy files are compatibility evidence, not a
+new place to write gate state.
+
+STORY-2324's final documentation slice follows PR-C (#3485, `c09c3a0`). The
+optional monitor consumer is separate: STORY-1392 is re-scoped to consume gate
+state, and its implementation is outside this story's completion scope.
+<!-- trace:STORY-2324 | ai:codex -->
+
 ### Forge observations
 
 `forge_observed::Observed<T>` distinguishes settled `Known` values from

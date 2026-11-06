@@ -844,6 +844,37 @@ Joe sends AIDA bug reports from his work machine to his home Gmail (joe.mooney@g
 
 **How to apply:** On session start (or when Joe says "check mail"), search for messages newer than the high-water mark in `.aida/mail-intake-highwater` (main repo, gitignored), file/annotate specs for anything new, then update the high-water file with the newest message timestamp and a one-line ledger. The Gmail connector is read-mostly — label writes fail on scope, so the local high-water file is the processed-state tracker. Work-report content is employer-adjacent: scrub identifying details (domains, internal model names, project names) before anything lands in the public repo's specs. GitHub CI notification mail also lands in this inbox — check for unread nightly cross-platform failures while there.
 
+### Canonical gate state (STORY-2324)
+
+The gate contract is **effective gate state = f(head SHA, canonical IDs,
+ledger)**. Resolve IDs once through `gate::canon` using a committed store
+snapshot; `SpecKey` is the requirement UUID, while native, agreed, node-local
+and retired labels are display/lookup spellings. Writers stamp that UUID, and
+the pure `gate::effective::effective_gate_state` selects evidence by persisted
+identity before compatibility labels. Superseded specs inherit their carrier's
+mode. Selection is separate from validating reviewer authority and independence.
+
+Use `aida gate state PR-<N>` to inspect verdict, hold, mode and decision;
+`aida gate state PR-<N> --compare` compares the canonical result with the
+existing merge-gate readers and reports differences. Add `--json` for machine
+output. This is a read-only diagnostic, with no review, clearance or merge
+side effects.
+
+Gate state belongs in the primary checkout's shared runtime store:
+`.aida/gate-ledger/PR-<N>.jsonl` (or `MR-<N>.jsonl`), with spec indexes and
+unbound entries under `by-spec/`. Merge-hold markers and clearances are
+primary-store hold/release events; forge labels mirror them. Do not add a
+reviewer-worktree gate store or revive the BUG-2176 marker-copy workaround.
+Contained reviewers supply evidence for their host launcher to validate and
+collect; deleting their worktree must not delete the durable hold. Retained
+legacy compatibility reads do not justify new writers to legacy directories.
+
+PR-C landed as #3485 (`c09c3a0`); PR-D completes STORY-2324 with documentation.
+STORY-1392 is separately re-scoped to consume gate state. Its optional monitor
+consumer is outside PR-D and is not a prerequisite for this story's completion.
+See [the architecture overview](../../../OVERVIEW.md#canonical-gate-ledger).
+<!-- trace:STORY-2324 | ai:codex -->
+
 ### reference_merge_hold_clear_is_human_only
 
 `aida merge-hold clear <pr>` still requires a human at an interactive terminal.
