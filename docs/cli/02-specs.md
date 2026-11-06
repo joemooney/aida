@@ -657,7 +657,7 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-This first slice supplies the language and read-only checker. Deferral write
-gates, migration, scheduled resurfacing and relay/recurrence integration follow
-in separate slices.
+Deferral writes require this language, and the hourly `defer resurface` job
+evaluates stored conditions (see above). Legacy trigger migration and
+relay/recurrence integration remain separate slices.
 <!-- trace:STORY-2402 | ai:codex -->
