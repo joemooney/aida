@@ -637,7 +637,12 @@ mod tests {
     #[test]
     fn bulk_inventory_uses_pinned_blobs_and_refuses_nonregular_and_oversized_sources() {
         let repo = tempfile::tempdir().unwrap();
-        let git = |args: &[&str]| intent_intake::git(repo.path(), args, &[]).unwrap();
+        // trace:TASK-3232 | ai:codex
+        let git = |args: &[&str]| {
+            let mut guarded = aida_core::git_ops::NO_AUTO_MAINTENANCE.to_vec();
+            guarded.extend_from_slice(args);
+            intent_intake::git(repo.path(), &guarded, &[]).unwrap()
+        };
         git(&["init", "-q", "--template=", "-b", "main"]);
         std::fs::write(repo.path().join(".gitlab-ci.yml"), "include: local.yml\n").unwrap();
         std::fs::write(repo.path().join("local.yml"), "job: {script: cargo test}\n").unwrap();
@@ -671,7 +676,11 @@ mod tests {
         use std::os::unix::fs::{symlink, PermissionsExt};
         for gitlab in [false, true] {
             let repo = tempfile::tempdir().unwrap();
-            let git = |args: &[&str]| intent_intake::git(repo.path(), args, &[]).unwrap();
+            let git = |args: &[&str]| {
+                let mut guarded = aida_core::git_ops::NO_AUTO_MAINTENANCE.to_vec();
+                guarded.extend_from_slice(args);
+                intent_intake::git(repo.path(), &guarded, &[]).unwrap()
+            };
             git(&["init", "-q", "--template=", "-b", "main"]);
             if gitlab {
                 std::fs::write(repo.path().join(".gitlab-ci.yml"), "job: {script: test}\n")
