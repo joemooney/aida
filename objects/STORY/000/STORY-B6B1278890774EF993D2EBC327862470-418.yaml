@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T04:22:39.796871233Z
+modified_at: 2026-11-06T04:26:40.734312380Z
 req_type: Story
 tags:
 - docs:impacted
@@ -358,6 +358,12 @@ comments:
   content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
   created_at: 2026-11-06T04:20:49.038765725Z
   modified_at: 2026-11-06T04:20:49.038765725Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af1b-dade-73e0-8768-e6e6f453a680
+  author: joe
+  content: 'ADVISOR RESOLUTION 2026-11-05 21:30 MST (loop guard): the ''recurring'' findings belong to an EARLIER slice that has since been approved and merged, so they are stale. The next round is NEW slice work under the latest advisor brief on this spec, not a repeat. Relaunching on a fresh lane. Slice-1 findings at cb52c33 were superseded by the APPROVED verdict at 42cca13 and the merge as #3411. Slice 2 per the 13:30 brief. Findings 2-5 from that old round, if still live on main, are in scope for slice 2.'
+  created_at: 2026-11-06T04:26:40.734312380Z
+  modified_at: 2026-11-06T04:26:40.734312380Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
