@@ -5,6 +5,7 @@ trace:TASK-3131 | ai:codex
 import json
 import os
 from pathlib import Path
+import pty
 import tempfile
 import unittest
 
@@ -12,7 +13,8 @@ from tests.test_containment_conformance import c
 
 
 class AidaProductionBoundaryTests(unittest.TestCase):
-    def test_production_fixture_refuses_managed_role_enter_before_fake_vendor_exec(self):
+    # trace:BUG-2460 | ai:codex
+    def test_terminal_stdin_fixture_initializes_then_refuses_managed_role_enter(self):
         built = Path(__file__).resolve().parents[1] / "target/debug/aida"
         aida = str(built) if built.is_file() else c.shutil.which("aida")
         self.assertIsNotNone(aida, "production aida binary required (set PATH to a built binary)")
@@ -32,9 +34,17 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             env = dict(os.environ, PATH=os.pathsep.join([str(binaries), str(Path(aida).parent), os.environ["PATH"]]),
                        AIDA_AGENT_TYPE="codex", AIDA_AGENT_NAME="offline-conformance-fixture")
             output = root / "experiment"
-            result = c.subprocess.run([c.sys.executable, str(Path(c.__file__).resolve()),
-                                       "--vendor", "codex", "--boundary", "aida", "--output", str(output)],
-                                      env=env, capture_output=True, text=True, timeout=60)
+            # Keep an idle terminal open: inherited stdin would leave init
+            # waiting for an answer instead of reaching the managed-seat refusal.
+            master, terminal = pty.openpty()
+            try:
+                self.assertTrue(os.isatty(terminal))
+                result = c.subprocess.run([c.sys.executable, str(Path(c.__file__).resolve()),
+                                           "--vendor", "codex", "--boundary", "aida", "--output", str(output)],
+                                          env=env, stdin=terminal, capture_output=True, text=True, timeout=45)
+            finally:
+                os.close(terminal)
+                os.close(master)
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertIn("fixture-role-enter-refused", result.stderr)
             self.assertIn("AIDA-managed agent sessions cannot issue direct TTY grants", result.stderr)
