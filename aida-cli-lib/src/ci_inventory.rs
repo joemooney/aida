@@ -109,12 +109,20 @@ pub(super) fn inventory(root: &Path, sha: &str) -> Result<Inventory> {
     let mut objects = Vec::new();
     let mut total = 0;
     let mut rust_files = 0;
-    // Load only source and YAML blobs. Includes can reference any canonical
-    // repository-relative YAML path, always at this same commit.
+    // Preflight only Rust sources and CI entry points. Keep other YAML tree
+    // metadata for lazy include lookup, without inspecting unrelated blobs.
+    let mut includes = BTreeMap::new();
     for entry in tree.split(|b| *b == 0).filter(|e| !e.is_empty()) {
         let line = std::str::from_utf8(entry).context("Invalid CI source tree")?;
         let (meta, path) = line.split_once('\t').context("Invalid CI source entry")?;
         if !(path.ends_with(".rs") || path.ends_with(".yml") || path.ends_with(".yaml")) {
+            continue;
+        }
+        if !path.ends_with(".rs")
+            && path != ".gitlab-ci.yml"
+            && !path.starts_with(".github/workflows/")
+        {
+            includes.insert(path, meta);
             continue;
         }
         let fields: Vec<_> = meta.split_whitespace().collect();
@@ -186,8 +194,40 @@ pub(super) fn inventory(root: &Path, sha: &str) -> Result<Inventory> {
             bail!("Trailing CI blob data");
         }
     }
+    let mut file_count = objects.len();
     let jobs = if yaml.contains_key(".gitlab-ci.yml") {
-        gitlab_jobs(&yaml)?
+        gitlab_jobs_with(|path| {
+            check_deadline(deadline)?;
+            if let Some(bytes) = yaml.get(path) {
+                return Ok(bytes.clone());
+            }
+            let meta = includes
+                .get(path)
+                .context("CI local include missing from pinned commit")?;
+            let fields: Vec<_> = meta.split_whitespace().collect();
+            if fields.len() != 4 || fields[0] != "100644" || fields[1] != "blob" {
+                bail!("CI inventory requires regular committed files");
+            }
+            let size: usize = fields[3].parse()?;
+            total += size;
+            file_count += 1;
+            if size > FILE_LIMIT || total > SOURCE_LIMIT || file_count > 8192 {
+                bail!("CI source inventory exceeds size or file limits");
+            }
+            let mut command = intent_intake::git_command(root);
+            command.args(["cat-file", "blob", fields[2]]);
+            let (status, bytes) = transport_process::bounded(
+                command,
+                &[],
+                size,
+                deadline.min(Instant::now() + Duration::from_secs(30)),
+            )?;
+            if !status.success() || bytes.len() != size {
+                bail!("CI include blob read refused");
+            }
+            yaml.insert(path.into(), bytes.clone());
+            Ok(bytes)
+        })?
     } else {
         github_jobs(&yaml)?
     };
@@ -227,28 +267,25 @@ fn local_path(path: &str) -> Result<()> {
     }
     Ok(())
 }
-struct Includes<'a> {
-    files: &'a BTreeMap<String, Vec<u8>>,
+struct Includes<F> {
+    read: F,
     stack: BTreeSet<String>,
     count: usize,
     bytes: usize,
 }
-impl Includes<'_> {
+impl<F: FnMut(&str) -> Result<Vec<u8>>> Includes<F> {
     fn load(&mut self, path: &str) -> Result<Value> {
         local_path(path)?;
         self.count += 1;
         if self.count > 64 || self.stack.len() >= 16 || !self.stack.insert(path.into()) {
             bail!("CI include cycle or expansion limit");
         }
-        let bytes = self
-            .files
-            .get(path)
-            .context("CI local include missing from pinned commit")?;
+        let bytes = (self.read)(path)?;
         self.bytes += bytes.len();
         if self.bytes > 4 * 1024 * 1024 {
             bail!("CI include bytes exceed limit");
         }
-        let mut own = parse(bytes)?;
+        let mut own = parse(&bytes)?;
         let mapping = own
             .as_mapping_mut()
             .context("CI config must be a mapping")?;
@@ -391,9 +428,18 @@ fn variables(v: Option<&Value>) -> Result<()> {
     }
     Ok(())
 }
+#[cfg(test)]
 fn gitlab_jobs(files: &BTreeMap<String, Vec<u8>>) -> Result<BTreeSet<String>> {
+    gitlab_jobs_with(|path| {
+        files
+            .get(path)
+            .cloned()
+            .context("CI local include missing from pinned commit")
+    })
+}
+fn gitlab_jobs_with(read: impl FnMut(&str) -> Result<Vec<u8>>) -> Result<BTreeSet<String>> {
     let config = Includes {
-        files,
+        read,
         stack: BTreeSet::new(),
         count: 0,
         bytes: 0,
@@ -619,6 +665,58 @@ mod tests {
         let oversized_sha = String::from_utf8(git(&["rev-parse", "HEAD"])).unwrap();
         assert!(inventory(repo.path(), oversized_sha.trim()).is_err());
     }
+    // trace:TASK-3232 | ai:codex
+    #[test]
+    fn unrelated_yaml_is_ignored_but_included_yaml_is_validated() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        for gitlab in [false, true] {
+            let repo = tempfile::tempdir().unwrap();
+            let git = |args: &[&str]| intent_intake::git(repo.path(), args, &[]).unwrap();
+            git(&["init", "-q", "--template=", "-b", "main"]);
+            if gitlab {
+                std::fs::write(repo.path().join(".gitlab-ci.yml"), "job: {script: test}\n")
+                    .unwrap();
+            } else {
+                std::fs::create_dir_all(repo.path().join(".github/workflows")).unwrap();
+                std::fs::write(
+                    repo.path().join(".github/workflows/test.yml"),
+                    "jobs: {job: {steps: [{run: test}]}}\n",
+                )
+                .unwrap();
+            }
+            std::fs::write(repo.path().join("lib.rs"), "#[test] fn known() {}\n").unwrap();
+            symlink("lib.rs", repo.path().join("mkdocs.yml")).unwrap();
+            std::fs::write(repo.path().join("openapi.yaml"), vec![b' '; FILE_LIMIT + 1]).unwrap();
+            std::fs::write(repo.path().join("executable.yml"), "job: {script: test}\n").unwrap();
+            std::fs::set_permissions(
+                repo.path().join("executable.yml"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            git(&["add", "."]);
+            git(&["commit", "-qm", "unrelated YAML"]);
+            let sha = String::from_utf8(git(&["rev-parse", "HEAD"])).unwrap();
+            let inv = inventory(repo.path(), sha.trim()).unwrap();
+            assert_eq!(inv.jobs, ["job".into()].into());
+            assert_eq!(inv.tests, ["known".into()].into());
+            for path in [
+                "mkdocs.yml",
+                "openapi.yaml",
+                "executable.yml",
+                "missing.yml",
+            ] {
+                std::fs::write(
+                    repo.path().join(".gitlab-ci.yml"),
+                    format!("include: {path}\n"),
+                )
+                .unwrap();
+                git(&["add", ".gitlab-ci.yml"]);
+                git(&["commit", "-qm", "unsafe include"]);
+                let sha = String::from_utf8(git(&["rev-parse", "HEAD"])).unwrap();
+                assert!(inventory(repo.path(), sha.trim()).is_err(), "{path}");
+            }
+        }
+    }
     #[test]
     fn committed_aida_templates_select_only_relay_merge_jobs() {
         let mut files = files(include_str!("../../.gitlab-ci.yml"));
@@ -642,7 +740,7 @@ mod tests {
         files.insert("ci/two.yml".into(), b"job:\n  script: replaced\n".to_vec());
         assert_eq!(gitlab_jobs(&files).unwrap(), ["job".into()].into());
         let config = Includes {
-            files: &files,
+            read: |path: &str| files.get(path).cloned().context("Missing test include"),
             stack: BTreeSet::new(),
             count: 0,
             bytes: 0,

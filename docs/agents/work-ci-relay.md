@@ -179,14 +179,20 @@ non-Rust tests remain unsupported and refuse if returned.
 <!-- trace:TASK-3232 | ai:codex -->
 One inventory has a 60-second wall budget, 4096 Rust files, 8192 combined
 Rust/YAML files, 2 MiB per source blob and 64 MiB combined source bytes.
-`ls-tree -rlz` preflights committed sizes/modes; `cat-file --batch` reads by object
+`ls-tree -rlz` preflights committed sizes/modes only for Rust sources,
+`.gitlab-ci.yml` and `.github/workflows/*.yml`/`*.yaml`. Other YAML is read and
+validated only when referenced by a local include; unrelated YAML does not count
+toward inventory limits. `cat-file --batch` reads eager blobs by object
 ID in at most 8 MiB chunks with bounded output and at most 30 seconds per Git
 call. CI YAML is further capped at 1 MiB/file, 4 MiB expanded includes, 64 include
 loads and depth 16. Extends is capped at depth 11, 16 parents and 1024 total
 expansions. Inventory still caps 256 selected jobs and 100,000 test identifiers.
-The admission snapshot has a 300-second total budget and keeps the newest-32
-attempt rule plus explicit on-demand older validation; deadline exhaustion refuses
-without accepting partial evidence. Intake ancestry/metadata retains its separate
+The admission snapshot checks a 300-second admission cutoff before each uncached
+fetch/inventory pair and after it, retaining the newest-32 attempt rule plus
+explicit on-demand older validation. An in-flight fetch and inventory finish under
+their separate Git-call and 60-second inventory budgets before the next check;
+300 seconds is therefore not a strict total wall-time limit. Deadline exhaustion
+refuses without accepting partial evidence. Intake ancestry/metadata retains its separate
 30-second budget, excluding source-validation time. This is a work bound, not a
 latency guarantee on every machine. The AIDA-sized regression uses real Rust sources padded above
 48 MiB at three distinct commits and repeats validation in a cold home clone.

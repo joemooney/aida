@@ -182,10 +182,6 @@ class WorkCiTests(unittest.TestCase):
         # Real AIDA Rust sources, padded above 48 MiB. Three distinct source
         # commits exercise independent pinned inventories, then a cold validator.
         paths = f.git(ROOT, "ls-files", "*.rs").stdout.splitlines()
-        # Native implementer seats leave newly added sources uncommitted.
-        inventory_source = "aida-cli-lib/src/ci_inventory.rs"
-        if inventory_source not in paths:
-            paths.append(inventory_source)
         total = 0
         for path in paths:
             data = (ROOT / path).read_bytes()
@@ -226,8 +222,7 @@ class WorkCiTests(unittest.TestCase):
         rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
         self.assertEqual(sum(row["verification"] == "verified" for row in rows), 4)
         # Rust gate-contract test consumes actual posted native status bodies.
-        if os.environ.get("AIDA_CI_GATE_EVIDENCE"):
-            Path(os.environ["AIDA_CI_GATE_EVIDENCE"]).write_text(json.dumps(evidence))
+        Path(os.environ["AIDA_CI_GATE_EVIDENCE"]).write_text(json.dumps(evidence))
         print(f"48 MiB / three SHA relay validation seconds: {durations}", flush=True)
 
     # trace:STORY-b6b1278890774ef993d2ebc327862470-408.acc0579e | ai:codex
