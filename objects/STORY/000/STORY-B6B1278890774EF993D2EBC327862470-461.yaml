@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T19:46:03.681200217Z
+modified_at: 2026-11-06T20:09:44.222694796Z
 req_type: Story
 tags:
 - architecture
@@ -343,6 +343,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b27b-401e-7120-b872-426e978bc8d1
+  author: aida-orchestrator
+  timestamp: 2026-11-06T20:09:44.222718383Z
+  session_id: 01a1b27996f7
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -351,3 +360,11 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 4: F1 (ledger refreshed: +3 inherited #3504 sites, sum of multiplicities = ceiling 1220, head contains main 28ff4ec), F2 (docs cite the ceiling field, no literal counts), F3 (OVERVIEW prepend and round-specific AGENTS sentences removed) and F5 (extern crate alias resolved, with mutants, and documented) are fixed. Two blockers remain: the advisor ruling''s one-command ledger regenerate path was never implemented, and exact-head CI is still all queued.'
+  recovery_hint: address the review findings, move STORY-2538 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T20:09:44.222694796Z
