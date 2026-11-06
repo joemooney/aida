@@ -6,6 +6,8 @@
 # allow-listed CONNECT proxy. Holds no model credential of its own; the API
 # key reaches the worker only as its own env var in the exact environment
 # Rust built. trace:TASK-2707 | ai:claude
+import fcntl
+
 ECONNREFUSED_ERR = -errno.ECONNREFUSED
 KEYCTL_JOIN, KEYCTL_SETPERM, KEYCTL_SEARCH, KEYCTL_READ, KEYCTL_TIMEOUT = 1, 5, 10, 11, 15
 SESSION, POSSESSOR_ONLY = -3, 0x3f000000
@@ -174,29 +176,94 @@ class SendHeader(C.Structure):
                 ('control', C.c_void_p), ('controllen', C.c_size_t), ('flags', C.c_int)]
 
 
-def broker_send(listener, n):
+SEND_SLOTS = threading.BoundedSemaphore(16)
+SEND_TIMEOUT = 3
+SEND_BYTES = 1048576
+SEND_IOVS = 64
+
+
+def send_snapshot(listener, ident, sock, buffers, ancillary, flags, address, named, rights,
+                  wait=False):
+    """Use nonblocking attempts without changing the shared descriptor flags.
+    A blocking caller waits off the broker loop, with bounded time and workers.
+    Snapshot memory and rights remain owned until the one send completes.
+    trace:TASK-2708 | ai:codex"""
+    try:
+        deadline = time.monotonic() + SEND_TIMEOUT
+        poll = select.poll()
+        poll.register(sock.fileno(), select.POLLOUT)
+        while True:
+            ioctl(listener, VALID, C.c_ulonglong(ident))
+            try:
+                if address is not None:
+                    rc = LIBC.sendto(sock.fileno(), C.c_char_p(buffers[0]),
+                                     C.c_size_t(len(buffers[0])),
+                                     C.c_int(flags | socket.MSG_DONTWAIT),
+                                     C.c_char_p(address) if named else None,
+                                     C.c_uint(len(address)))
+                    if rc < 0:
+                        raise OSError(C.get_errno(), 'sendto refused')
+                else:
+                    rc = sock.sendmsg(buffers, ancillary, flags | socket.MSG_DONTWAIT)
+                break
+            except BlockingIOError:
+                if not wait:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise OSError(errno.ETIMEDOUT, 'blocking send deadline exceeded')
+                poll.poll(max(1, int(remaining * 1000)))
+        ioctl(listener, SEND, Response(ident, rc, 0, 0))
+    except (OSError, RuntimeError, ValueError) as error:
+        code = error.errno if isinstance(error, OSError) else errno.EACCES
+        try:
+            ioctl(listener, SEND, Response(ident, 0, -code, 0))
+        except RuntimeError:
+            pass
+    finally:
+        sock.close()
+        for fd in rights:
+            os.close(fd)
+        if wait:
+            SEND_SLOTS.release()
+
+
+def broker_send(listener, n, lane_net, lane_user):
     dup, mem, rights = None, None, []
     try:
         dup = target_socket(n.pid, n.data.args[0])
+        stream = sock_type(dup) == socket.SOCK_STREAM
         mem = os.open('/proc/%d/mem' % n.pid, os.O_RDONLY | os.O_CLOEXEC)
         def read(ptr, size):
-            require(size <= 1048576, 'send exceeds bound')
+            require(size <= SEND_BYTES, 'send exceeds bound')
             data = os.pread(mem, size, ptr) if size else b''
             require(len(data) == size, 'short send memory')
             return data
         ioctl(listener, VALID, C.c_ulonglong(n.id))
         if n.data.nr == 44:
             _, buf, size, flags, name, namelen = n.data.args
-            buffers, ancillary = [read(buf, size)], []
+            if not stream and size > SEND_BYTES:
+                raise OSError(errno.EMSGSIZE, 'send payload exceeds bound')
+            buffers, ancillary = [read(buf, min(size, SEND_BYTES))], []
         else:
             flags = n.data.args[2]
             h = SendHeader.from_buffer_copy(read(n.data.args[1], C.sizeof(SendHeader)))
             name, namelen = h.name, h.namelen
-            require(h.iovlen <= 64 and h.controllen <= 4096, 'send header exceeds bound')
-            rows = read(h.iov, h.iovlen * C.sizeof(SendIov))
-            iovs = (SendIov * h.iovlen).from_buffer_copy(rows)
-            require(sum(v.size for v in iovs) <= 1048576, 'send payload exceeds bound')
-            buffers = [read(v.base, v.size) for v in iovs]
+            require(h.controllen <= 4096, 'send header exceeds bound')
+            if not stream and h.iovlen > SEND_IOVS:
+                raise OSError(errno.EMSGSIZE, 'send iov count exceeds bound')
+            count = min(h.iovlen, SEND_IOVS)
+            rows = read(h.iov, count * C.sizeof(SendIov))
+            iovs = (SendIov * count).from_buffer_copy(rows)
+            if not stream and sum(v.size for v in iovs) > SEND_BYTES:
+                raise OSError(errno.EMSGSIZE, 'send payload exceeds bound')
+            buffers, remaining = [], SEND_BYTES
+            for v in iovs:
+                size = min(v.size, remaining)
+                buffers.append(read(v.base, size))
+                remaining -= size
+                if not remaining:
+                    break
             control, ancillary = read(h.control, h.controllen), []
             offset = 0
             while offset < len(control):
@@ -215,23 +282,35 @@ def broker_send(listener, n):
                 offset += (size + 7) & ~7
         require(not flags & 0x20000000, 'FASTOPEN refused')
         require(namelen <= 128, 'send address exceeds bound')
-        with socket.socket(fileno=dup) as sock:
-            dup = None
+        sock = socket.socket(fileno=dup)
+        dup = None
+        try:
             require(not (sock.family == socket.AF_UNIX and name), 'named Unix send refused')
-            # Named sendmsg is conservatively refused; connected sendmsg and
-            # SCM_RIGHTS remain available for anonymous sandbox IPC.
+            # Named network sends require the same kernel provenance as connects.
+            if name and sock.family != socket.AF_UNIX:
+                require(socket_scope(sock.fileno(), lane_net, lane_user) in ('lane', 'nested'),
+                        'foreign named send refused')
             require(n.data.nr == 44 or not name, 'named sendmsg refused')
-            address = read(name, namelen) if name else b''
-            ioctl(listener, VALID, C.c_ulonglong(n.id))
-            if n.data.nr == 44:
-                rc = LIBC.sendto(sock.fileno(), C.c_char_p(buffers[0]), C.c_size_t(len(buffers[0])),
-                                 C.c_int(flags | socket.MSG_DONTWAIT),
-                                 C.c_char_p(address) if name else None, C.c_uint(len(address)))
-                if rc < 0:
-                    raise OSError(C.get_errno(), 'sendto refused')
+            address = (read(name, namelen) if name else b'') if n.data.nr == 44 else None
+            wait = not (fcntl.fcntl(sock.fileno(), fcntl.F_GETFL) & os.O_NONBLOCK or
+                        flags & socket.MSG_DONTWAIT)
+            if wait:
+                if not SEND_SLOTS.acquire(blocking=False):
+                    raise OSError(errno.ENOBUFS, 'send worker capacity exhausted')
+                try:
+                    threading.Thread(target=send_snapshot,
+                                     args=(listener, n.id, sock, buffers, ancillary, flags,
+                                           address, bool(name), rights, True), daemon=True).start()
+                except BaseException:
+                    SEND_SLOTS.release()
+                    raise
             else:
-                rc = sock.sendmsg(buffers, ancillary, flags | socket.MSG_DONTWAIT)
-        ioctl(listener, SEND, Response(n.id, rc, 0, 0))
+                send_snapshot(listener, n.id, sock, buffers, ancillary, flags,
+                              address, bool(name), rights)
+            sock, rights = None, []  # worker (or synchronous send) owns these
+        finally:
+            if sock is not None:
+                sock.close()
     except (OSError, RuntimeError, ValueError) as error:
         code = error.errno if isinstance(error, OSError) else errno.EACCES
         try:
@@ -260,7 +339,7 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port, 
     require(n.data.arch == 0xc000003e and n.data.nr in (42, 44, 46) and n.flags == 0,
             'unexpected socket broker notification')
     if n.data.nr in (44, 46):
-        broker_send(listener, n)
+        broker_send(listener, n, lane_net, lane_user)
         return True
     ident = C.c_ulonglong(n.id)
     answer = -errno.EACCES

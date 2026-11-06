@@ -353,6 +353,9 @@ pub(crate) struct ContainedVendor {
     private_tmp_env: &'static [&'static str],
     fixed_env: &'static [(&'static str, &'static str)],
     auth: VendorAuth,
+    /// Probe support for a vendor that creates its own nested sandbox.
+    // trace:TASK-2708 | ai:codex
+    pub(crate) nested_userns: bool,
 }
 
 pub(crate) const CONTAINED_VENDORS: &[ContainedVendor] = &[
@@ -363,6 +366,7 @@ pub(crate) const CONTAINED_VENDORS: &[ContainedVendor] = &[
         private_tmp_env: &[],
         fixed_env: &[],
         auth: VendorAuth::OpenAiApiKey,
+        nested_userns: false,
     },
     // Ruling item 5 / C7: private writable CLAUDE_CONFIG_DIR, TMPDIR and
     // CLAUDE_CODE_TMPDIR inside the lane state, no self-update.
@@ -373,6 +377,7 @@ pub(crate) const CONTAINED_VENDORS: &[ContainedVendor] = &[
         private_tmp_env: &["TMPDIR", "CLAUDE_CODE_TMPDIR"],
         fixed_env: &[("DISABLE_AUTOUPDATER", "1")],
         auth: VendorAuth::ClaudeCredentialsFile,
+        nested_userns: true,
     },
 ];
 
@@ -912,7 +917,7 @@ impl PreparedLaunch {
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(args);
         let cfg = serde_json::json!({"grant":grant,"ttl":ttl,"mode":"normal","port":port,"allowed":allowed,
-            "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.key == "claude","argv":argv});
+            "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.nested_userns,"argv":argv});
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.credentials = credentials;
         Ok(prepared)

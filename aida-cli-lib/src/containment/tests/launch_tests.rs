@@ -980,10 +980,12 @@ print('lane socket brokered; nested socket passed through')
 fn task_2708_vendor_rows_are_data() {
     let claude = ContainedVendor::for_program(std::ffi::OsStr::new("/opt/bin/claude")).unwrap();
     assert_eq!(claude.key, "claude");
+    assert!(claude.nested_userns);
     assert_eq!(claude.auth, VendorAuth::ClaudeCredentialsFile);
     assert_eq!(claude.private_home_env, ["CLAUDE_CONFIG_DIR"]);
     assert_eq!(claude.private_tmp_env, ["TMPDIR", "CLAUDE_CODE_TMPDIR"]);
     let codex = ContainedVendor::for_program(std::ffi::OsStr::new("codex")).unwrap();
+    assert!(!codex.nested_userns);
     assert_eq!(codex.auth, VendorAuth::OpenAiApiKey);
     assert_eq!(codex.private_home_env, ["CODEX_HOME", "CODEX_SQLITE_HOME"]);
     for other in ["agy", "opencode", "claude-wrapper", ""] {
@@ -1398,7 +1400,9 @@ fn task_2708_claude_prepare_fake_home() {
     let plan = prepare().unwrap_or_else(|e| panic!("prepare: {e:#}"));
     let cfg: serde_json::Value =
         serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
-    assert_eq!(cfg["nested_userns"], true);
+    let vendor = ContainedVendor::for_program(std::ffi::OsStr::new("claude")).unwrap();
+    assert!(vendor.nested_userns);
+    assert_eq!(cfg["nested_userns"], vendor.nested_userns);
     let env: BTreeMap<_, _> = plan
         .command
         .get_envs()
@@ -1606,5 +1610,234 @@ print('ancestry and connect deadline ok')
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A full blocking socket waits for its reader; multi-megabyte sendall and
+/// sendmsg with more than 64 iovecs make progress through bounded short writes.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_live_blocking_stream_sends_and_large_payloads() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,threading,time,errno,signal
+signal.alarm(20)
+x,y=socket.socketpair()
+x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+filled=0
+while True:
+    try: filled+=x.send(b'f'*4096,socket.MSG_DONTWAIT)
+    except BlockingIOError: break
+received=bytearray()
+def drain():
+    time.sleep(0.2)
+    while True:
+        b=y.recv(65536)
+        if not b: break
+        received.extend(b)
+t=threading.Thread(target=drain);t.start()
+started=time.monotonic()
+assert x.send(b'marker')==6
+assert time.monotonic()-started>=0.1
+payload=b'abcd'*(1024*1024)
+x.sendall(payload)
+iovs=[b'v'*16384]*100
+while iovs:
+    n=x.sendmsg(iovs)
+    assert n>0
+    while iovs and n>=len(iovs[0]): n-=len(iovs.pop(0))
+    if iovs: iovs[0]=iovs[0][n:]
+x.shutdown(socket.SHUT_WR);t.join(5);assert not t.is_alive()
+assert received==b'f'*filled+b'marker'+payload+b'v'*(16384*100)
+print('blocking and large stream sends ok')
+"#,
+    );
+    assert!(
+        output.contains("blocking and large stream sends ok"),
+        "{output}"
+    );
+}
+
+/// Invoke the shipped argument-snapshot path on real sockets and process
+/// memory, with only seccomp notification/pidfd transport supplied by the test.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_send_bounds_namespace_and_worker_deadline() {
+    let code = format!(
+        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        r#"
+import tempfile
+responses=[]
+def ioctl(fd,op,response):
+    if op==SEND: responses.append((response.val,response.error))
+def target_socket(pid,fd): return os.dup(fd)
+def notify(sock,buf,name=None,flags=socket.MSG_DONTWAIT):
+    n=Notification();n.id=1;n.pid=os.getpid();n.data.nr=44
+    n.data.args[:]=(sock.fileno(),C.addressof(buf),len(buf.raw)-1,flags,
+                    C.addressof(name) if name else 0,len(name.raw)-1 if name else 0)
+    return n
+def wait_response():
+    deadline=time.monotonic()+2
+    while not responses:
+        assert time.monotonic()<deadline,'send worker did not answer'
+        time.sleep(0.001)
+    return responses.pop(0)
+# A real host UDP socket and destination must not gain lane authority.
+with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as host, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver, tempfile.TemporaryFile() as lane_net, tempfile.TemporaryFile() as lane_user:
+    receiver.bind(('127.0.0.1',0));receiver.setblocking(False)
+    address=C.create_string_buffer(struct.pack('H',socket.AF_INET)+struct.pack('!H',receiver.getsockname()[1])+socket.inet_aton('127.0.0.1')+b'\0'*8)
+    payload=C.create_string_buffer(b'no-host-egress')
+    broker_send(-1,notify(host,payload,address),ns_identity(lane_net.fileno()),ns_identity(lane_user.fileno()))
+    assert wait_response()==(0,-errno.EACCES)
+    try:
+        receiver.recv(1024);raise AssertionError('host named send delivered')
+    except BlockingIOError: pass
+    real_scope=socket_scope
+    for scope in ['foreign','unreadable','lane','nested']:
+        def socket_scope(*args):
+            if scope=='unreadable': raise RuntimeError('SOCKET_NETNS_UNREADABLE')
+            return scope
+        broker_send(-1,notify(host,payload,address),None,None)
+        if scope in ('lane','nested'):
+            assert wait_response()==(len(payload.raw)-1,0)
+            assert receiver.recv(1024)==b'no-host-egress'
+        else: assert wait_response()==(0,-errno.EACCES)
+    socket_scope=real_scope
+# Oversized datagrams retain message boundaries and are never truncated.
+x,y=socket.socketpair(socket.AF_UNIX,socket.SOCK_DGRAM)
+big=C.create_string_buffer(b'x'*(SEND_BYTES+1))
+broker_send(-1,notify(x,big),None,None)
+assert wait_response()==(0,-errno.EMSGSIZE)
+for count,size in [(65,1),(1,SEND_BYTES+1)]:
+    iovs=(SendIov*count)(*[SendIov(C.addressof(big),size) for _ in range(count)])
+    header=SendHeader(None,0,C.addressof(iovs),count,None,0,0)
+    n=Notification();n.id=2;n.pid=os.getpid();n.data.nr=46
+    n.data.args[:]=(x.fileno(),C.addressof(header),socket.MSG_DONTWAIT,0,0,0)
+    broker_send(-1,n,None,None)
+    assert wait_response()==(0,-errno.EMSGSIZE)
+y.setblocking(False)
+try:
+    y.recv(16);raise AssertionError('truncated datagram delivered')
+except BlockingIOError: pass
+x.close();y.close()
+# A perpetually full blocking stream times out, restores capacity, and leaves
+# O_NONBLOCK unchanged. A nonblocking caller still observes EAGAIN immediately.
+x,y=socket.socketpair();x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+while True:
+    try: x.send(b'f'*4096,socket.MSG_DONTWAIT)
+    except BlockingIOError: break
+payload=C.create_string_buffer(b'z')
+broker_send(-1,notify(x,payload),None,None)
+assert wait_response()==(0,-errno.EAGAIN)
+x.setblocking(False)
+broker_send(-1,notify(x,payload,flags=0),None,None)
+assert wait_response()==(0,-errno.EAGAIN)
+x.setblocking(True)
+SEND_TIMEOUT=0.1
+broker_send(-1,notify(x,payload,flags=0),None,None)
+assert wait_response()==(0,-errno.ETIMEDOUT)
+assert not fcntl.fcntl(x.fileno(),fcntl.F_GETFL)&os.O_NONBLOCK
+# Wait for the worker's final cleanup before asserting capacity restoration.
+deadline=time.monotonic()+2
+while SEND_SLOTS._value!=16:
+    assert time.monotonic()<deadline
+    time.sleep(0.001)
+for _ in range(16): assert SEND_SLOTS.acquire(blocking=False)
+broker_send(-1,notify(x,payload,flags=0),None,None)
+assert wait_response()==(0,-errno.ENOBUFS)
+for _ in range(16): SEND_SLOTS.release()
+x.close();y.close()
+print('send bounds namespace and deadline ok')
+"#
+    );
+    let out = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &code])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Even an actual host-network UDP descriptor passed through permitted private
+/// IPC cannot make a named send from the lane.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_live_host_udp_named_send_refused() {
+    if !live_available() {
+        return;
+    }
+    let script = r#"
+import socket,os,array,errno,signal
+signal.alarm(15)
+with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc:
+    ipc.connect(os.environ['HOME']+'/host-fd.sock')
+    port,anc,_,_=ipc.recvmsg(64,socket.CMSG_SPACE(4))
+    assert len(anc)==1
+    level,kind,data=anc[0]
+    assert (level,kind)==(socket.SOL_SOCKET,socket.SCM_RIGHTS)
+    fds=array.array('i');fds.frombytes(data)
+    with socket.socket(fileno=fds[0]) as host:
+        try:
+            host.sendto(b'bypass',('127.0.0.1',int(port)))
+            raise AssertionError('host netns named send allowed')
+        except OSError as e: assert e.errno==errno.EACCES,e
+    ipc.sendall(b'done')
+print('host UDP named send refused')
+"#;
+    let mut plan = fixture(script, "print('seat_grant_valid=true expected_seat=true')");
+    let host = r#"
+import socket,array,sys,signal
+signal.alarm(20)
+with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
+    ipc.bind(sys.argv[1]);ipc.listen(1)
+    receiver.bind(('127.0.0.1',0));receiver.settimeout(0.3)
+    port=receiver.getsockname()[1]
+    sender.sendto(b'control',('127.0.0.1',port));assert receiver.recv(64)==b'control'
+    print('ready',flush=True)
+    conn,_=ipc.accept()
+    with conn:
+        conn.sendmsg([str(port).encode()],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,array.array('i',[sender.fileno()]))])
+        assert conn.recv(64)==b'done'
+    try:
+        receiver.recv(64);raise AssertionError('host received bypass datagram')
+    except socket.timeout: pass
+"#;
+    let mut host = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", host])
+        .arg(plan._state.path().join("host-fd.sock"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    use std::io::BufRead;
+    let mut ready = String::new();
+    std::io::BufReader::new(host.stdout.take().unwrap())
+        .read_line(&mut ready)
+        .unwrap();
+    assert_eq!(ready, "ready\n");
+    let mut output = tempfile::tempfile().unwrap();
+    plan.command.stderr(output.try_clone().unwrap());
+    let mut run = plan.spawn(output.try_clone().unwrap().into()).unwrap();
+    run.release().unwrap();
+    let status = run.child.wait().unwrap();
+    use std::io::{Seek, SeekFrom};
+    output.seek(SeekFrom::Start(0)).unwrap();
+    let mut text = String::new();
+    output.read_to_string(&mut text).unwrap();
+    assert!(status.success(), "{status}: {text}");
+    assert!(text.contains("host UDP named send refused"), "{text}");
+    let result = host.wait_with_output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
     );
 }

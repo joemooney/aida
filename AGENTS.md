@@ -1,3 +1,10 @@
+Shared containment sends preserve blocking callers with at most 16 workers and a
+three-second wait deadline. Streams return bounded short writes; oversized
+messages refuse without truncation. Named network sends require lane or proven
+descendant namespace ownership. Nested-userns probing is vendor-row data.
+See [round 3 evidence](docs/internal/testing/task-2708-round2.md#round-3-review).
+<!-- trace:TASK-2708 | ai:codex -->
+
 Queue completion requires readable branch ownership evidence even with
 `--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
 warns and retains its ledgered override. See OVERVIEW.md.

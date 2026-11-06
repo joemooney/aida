@@ -69,3 +69,63 @@ CI run, publication, review approval, merge-hold clearance or queue completion w
 performed from this native implementer seat. All six changed files are left
 uncommitted for the host launcher. The mechanical bdcec264ee88 merge-resolution
 commit is still an ancestor of HEAD.
+
+## Round 3 review
+
+<!-- trace:TASK-2708 | ai:codex -->
+
+This revision addresses all four findings against PR #3449 at df6bf0e76661.
+The 2026-11-06 binding advisor rulings remain in effect.
+
+* F1: blocking sends run outside the broker event loop, using MSG_DONTWAIT
+  attempts and POLLOUT waits with a three-second monotonic deadline. At most
+  16 send workers retain copied payloads and duplicated descriptors. A full
+  blocking socket retries EAGAIN until progress or ETIMEDOUT; resource
+  saturation returns ENOBUFS. O_NONBLOCK and per-call MSG_DONTWAIT still return
+  EAGAIN immediately. No shared descriptor flags or timeouts are changed.
+* F2: stream snapshots copy the first 1 MiB and at most 64 iovecs, then return
+  the actual partial count. Datagram and seqpacket messages retain their
+  boundaries: excessive payload or iovec counts refuse with EMSGSIZE.
+* F3: named non-Unix sends call the same socket_scope proof as connects.
+  Only lane and proven descendant ownership pass; foreign namespaces and
+  lookup errors refuse. Named Unix sends and named sendmsg remain refused.
+* F4: nested_userns is a field on each CONTAINED_VENDORS row. Shared preparation
+  serializes that field. Vendor-row and fake-HOME prepare tests assert it.
+
+The new live stream regression fills a blocking socket, delays the reader,
+then verifies a successful send, a complete 4 MiB sendall and sendmsg progress
+across 100 iovecs. The live UDP regression passes an actual host-netns socket
+through permitted private Unix IPC with SCM_RIGHTS; its named send must refuse,
+and the host listener must receive no bypass datagram. The host sender has a
+successful pre-lane positive control.
+
+The synthetic broker regression uses real sockets and process memory, replacing
+only notification and pidfd transport. It covers actual host UDP refusal,
+foreign/unreadable proof, lane/nested positive controls, oversized datagram
+refusal for scalar payloads, oversized vectors and vector payloads, nonblocking
+flags, worker timeout, capacity restoration and saturation.
+
+### Round 3 validation
+
+* `make check-ci-fast`: all 38 fast gates passed, including the
+  feature-disabled CLI check and TUI seam check. Optional ref-refresh attempts
+  reported read-only Git metadata; the gates completed successfully.
+* Direct execution of the embedded synthetic send regression passed.
+* Python source compilation, `cargo fmt --all -- --check` and
+  `git diff --check` passed.
+* Initial targeted `cargo test -p aida-cli-lib --lib --profile agent task_2708_`:
+  32 passed, including all new live regressions (no live skips).
+* The compiled targeted binary with both required-live flags, filtered to
+  `task_2707_`: 21 passed. Its separately opt-in installed-Codex native
+  composition arm was not exercised.
+* Final-source `AIDA_REQUIRE_BWRAP_LIVE=1
+  AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib
+  --profile agent task_2708_ -- --nocapture`: 32 passed in 2.18 seconds,
+  with no live skips. This includes blocking backpressure, the complete 4 MiB
+  upload, large-iovec progress, passed host-UDP refusal, and final synthetic
+  scalar/vector bounds and worker checks.
+* Final documentation inventory/link/path checks passed.
+
+The native implementer leaves changes uncommitted for host publication. No
+review verdict, merge-hold clearance, ship, or queue completion is attempted.
+The mechanical bdcec264 CI merge-resolution commit remains an ancestor of HEAD.
