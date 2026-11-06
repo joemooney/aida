@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a19db5-2e75-75f3-a290-1be07eaf1692
+  position: 23000
+  added_by: role:implementer
+  added_at: 2026-11-06T13:03:17.896040402Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
   position: 24000
   added_by: role:implementer
@@ -350,13 +356,6 @@
   added_by: role:implementer
   note: rework brief on spec
   added_at: 2026-11-04T08:36:22.126324116Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19db5-2e75-75f3-a290-1be07eaf1692
-  position: 189000
-  added_by: role:implementer
-  note: r8 rebase+push from recovered/story-2326-r8
-  added_at: 2026-11-04T07:44:32.927368693Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a2ba-58fe-77c2-83f3-359717dd8d38
