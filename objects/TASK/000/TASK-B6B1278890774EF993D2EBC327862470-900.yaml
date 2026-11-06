@@ -1,5 +1,6 @@
 id: 01a1b293-115c-7282-87a7-8afe3cb24ec0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-900
+agreed_id: TASK-2948
 title: retire_idle_review_worktree surfaces why a dead reviewer lease was not reclaimed; add BUG-2469 criterion trace tokens
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2469, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -63,6 +64,10 @@ history:
   author: joe
   timestamp: 2026-11-06T20:55:14.129178037Z
   session_id: 01a1b2a45b41
+  changes: []
+- id: 01a1b2c6-efed-7862-ac44-b386618d817a
+  author: joe
+  timestamp: 2026-11-06T21:32:24.429227423Z
   changes: []
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd

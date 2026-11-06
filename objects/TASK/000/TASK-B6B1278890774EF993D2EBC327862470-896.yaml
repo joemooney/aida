@@ -1,5 +1,6 @@
 id: 01a1b292-dee2-72f1-ae84-596488b08212
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-896
+agreed_id: TASK-2949
 title: 'minor (non-blocking): runner_status_with (deputy_shell/mod.rs) requires a liter…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2468, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-11-06T20:46:44.425955730Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes: []
+- id: 01a1b2c6-f000-7472-bdab-dd6978c5e0b6
+  author: joe
+  timestamp: 2026-11-06T21:32:24.448406005Z
   changes: []
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd

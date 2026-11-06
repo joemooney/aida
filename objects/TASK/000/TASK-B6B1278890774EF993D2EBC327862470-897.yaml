@@ -1,5 +1,6 @@
 id: 01a1b292-e982-7882-a24a-a9081fb01e04
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-897
+agreed_id: TASK-2947
 title: 'deputy shell: legacy bash runner detection also accepts the bare-name start form, and submit agrees with list about a live legacy runner'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2468, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -77,6 +78,10 @@ history:
   author: joe
   timestamp: 2026-11-06T21:30:13.576513075Z
   session_id: 01a1b2a186c1
+  changes: []
+- id: 01a1b2c6-efd6-7180-8067-9e058850498c
+  author: joe
+  timestamp: 2026-11-06T21:32:24.406986675Z
   changes: []
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd

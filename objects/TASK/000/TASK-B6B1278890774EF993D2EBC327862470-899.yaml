@@ -1,5 +1,6 @@
 id: 01a1b293-0435-74a3-99f6-5f0046d5dd19
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-899
+agreed_id: TASK-2945
 title: 'non-blocking/minor: bug_2469_dead_review_reclaimed_only_when_new_head_covers_re…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2469, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-11-06T20:47:10.969051625Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes: []
+- id: 01a1b2c6-ef86-7d23-9163-537257d2a615
+  author: joe
+  timestamp: 2026-11-06T21:32:24.326060476Z
   changes: []
 filed_at:
   code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
