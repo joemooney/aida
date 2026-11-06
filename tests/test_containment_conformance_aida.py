@@ -13,7 +13,7 @@ from tests.test_containment_conformance import c
 
 
 class AidaProductionBoundaryTests(unittest.TestCase):
-    # trace:BUG-2460 | ai:codex
+    # trace:BUG-2460 trace:BUG-2462 | ai:codex
     def test_terminal_stdin_fixture_initializes_then_refuses_managed_role_enter(self):
         built = Path(__file__).resolve().parents[1] / "target/debug/aida"
         aida = str(built) if built.is_file() else c.shutil.which("aida")
@@ -32,7 +32,8 @@ class AidaProductionBoundaryTests(unittest.TestCase):
                               + "touch " + c.shlex.quote(str(marker)) + "\nexit 97\n")
             vendor.chmod(0o755)
             env = dict(os.environ, PATH=os.pathsep.join([str(binaries), str(Path(aida).parent), os.environ["PATH"]]),
-                       AIDA_AGENT_TYPE="codex", AIDA_AGENT_NAME="offline-conformance-fixture")
+                       AIDA_AGENT_TYPE="codex", AIDA_AGENT_NAME="offline-conformance-fixture",
+                       AIDA_USER="fixture-operator")
             output = root / "experiment"
             # Keep an idle terminal open: inherited stdin would leave init
             # waiting for an answer instead of reaching the managed-seat refusal.
@@ -41,13 +42,25 @@ class AidaProductionBoundaryTests(unittest.TestCase):
                 self.assertTrue(os.isatty(terminal))
                 result = c.subprocess.run([c.sys.executable, str(Path(c.__file__).resolve()),
                                            "--vendor", "codex", "--boundary", "aida", "--output", str(output)],
-                                          env=env, stdin=terminal, capture_output=True, text=True, timeout=45)
+                                          env=env, stdin=terminal, stderr=terminal,
+                                          stdout=c.subprocess.PIPE, text=True, timeout=45)
+                os.set_blocking(master, False)
+                diagnostics = bytearray()
+                while True:
+                    try:
+                        chunk = os.read(master, 65536)
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    diagnostics.extend(chunk)
+                stderr = diagnostics.decode(errors="replace")
             finally:
                 os.close(terminal)
                 os.close(master)
-            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            self.assertIn("fixture-role-enter-refused", result.stderr)
-            self.assertIn("AIDA-managed agent sessions cannot issue direct TTY grants", result.stderr)
+            self.assertEqual(result.returncode, 2, result.stdout + stderr)
+            self.assertIn("fixture-role-enter-refused-managed", stderr)
+            self.assertIn("AIDA-managed agent sessions cannot issue direct TTY grants", stderr)
             report = json.loads((output / "report.json").read_text())
             self.assertEqual(report["boundary"], "aida")
             self.assertEqual(report["vendor_version"], "fixture-codex")
@@ -55,7 +68,13 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             self.assertFalse(report["production_launcher_credit"])
             self.assertFalse(report["whole_lane_pass"])
             self.assertEqual({r["status"] for r in report["checks"].values()}, {"unknown"})
-            self.assertEqual([r["stage"] for r in report["setup"]][-2:], ["role-scaffold", "role-enter"])
+            self.assertEqual([r["stage"] for r in report["setup"]][-3:],
+                             ["role-scaffold", "roster-allow-seat", "role-enter"])
+            self.assertEqual(report["setup"][-2]["exit_code"], 0)
+            self.assertEqual(report["setup"][-2]["argv"][-2:], ["fixture-operator", "implementer"])
+            self.assertEqual(report["unsupported_reason"], "fixture-role-enter-refused-managed")
+            self.assertIn("AIDA-managed agent sessions cannot issue direct TTY grants",
+                          report["setup"][-1]["diagnostic"])
             self.assertNotEqual(report["setup"][-1]["exit_code"], 0)
             self.assertFalse(marker.exists())
             repo = output / "repository"
@@ -63,6 +82,9 @@ class AidaProductionBoundaryTests(unittest.TestCase):
                                 report["trusted_policy_sha"] + ":.aida/config.toml"])
             self.assertIn('codex = "aida"', policy)
             self.assertTrue((repo / ".aida-store/objects").is_dir())
+            roster = (repo / ".aida-store/registry/team.toml").read_text()
+            self.assertIn("fixture-operator", roster)
+            self.assertIn("implementer", roster)
             self.assertTrue((output / "authority-home/.aida/roles/implementer.toml").is_file())
             self.assertEqual(report["aida_binary_sha256"], c.hashlib.sha256(Path(aida).resolve().read_bytes()).hexdigest())
 
