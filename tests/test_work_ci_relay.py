@@ -44,7 +44,7 @@ class Api(http.server.BaseHTTPRequestHandler):
             if path.endswith("/pipelines"):
                 self.reply([{"id": state.pipeline, "sha": state.sha, "ref": f"ci/{state.attempt}"}])
             elif path.endswith("/jobs"):
-                self.reply([{"name": "build", "status": state.result, "duration": 1.25}])
+                self.reply([{"name": name, "status": state.result, "duration": 1.25} for name in state.job_names])
             elif path.endswith("/test_report"):
                 self.reply({"test_suites": [{"test_cases": [{"name": "module::checks", "status": "failed"}]}] if state.result == "failed" else []})
             else:
@@ -56,6 +56,7 @@ class Api(http.server.BaseHTTPRequestHandler):
         assert self.headers["PRIVATE-TOKEN"] == "home-only"
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         body["status"] = body["state"]
+        body["sha"] = urlsplit(self.path).path.rsplit("/", 1)[-1]
         state.statuses.append(body)
         self.reply(body)
 
@@ -75,6 +76,8 @@ class Fixture:
         self.git(self.source, "commit", "-qm", "source")
         self.sha = self.git(self.source, "rev-parse", "HEAD").stdout.strip()
         self.attempt, self.pipeline, self.result, self.statuses = 1, 41, "success", []
+        self.job_names = ["build"]
+        self.cli_timeout = 50
         self.home, self.work = self.root / "home.git", self.root / "work.git"
         for repo in (self.home, self.work):
             self.git(self.root, "init", "--bare", "-q", str(repo))
@@ -113,7 +116,7 @@ class Fixture:
         home = clone / "isolated-home"
         home.mkdir(exist_ok=True)
         env = dict(self.env, HOME=str(home), XDG_CONFIG_HOME=str(home / "config"), XDG_CACHE_HOME=str(home / "cache"), AIDA_CI_PRINCIPAL=principal, AIDA_TELEMETRY="0")
-        result = subprocess.run([BINARY, "intent", *args], cwd=clone, env=env, text=True, capture_output=True, timeout=50, umask=0o022)
+        result = subprocess.run([BINARY, "intent", *args], cwd=clone, env=env, text=True, capture_output=True, timeout=self.cli_timeout, umask=0o022)
         if ok and result.returncode:
             raise AssertionError(result.stderr + result.stdout)
         return result
@@ -163,6 +166,69 @@ class WorkCiTests(unittest.TestCase):
     def setUp(self):
         self.f = Fixture()
         self.addCleanup(self.f.close)
+
+    # trace:TASK-3232 | ai:codex
+    @unittest.skipUnless(os.environ.get("AIDA_CI_GATE_EVIDENCE"),
+                         "runs through the Rust native PR/train gate contract")
+    def test_aida_sized_multi_sha_templates_and_native_gate_evidence(self):
+        f = self.f
+        f.cli_timeout = 120
+        f.poll()
+        f.cli(f.home_clone, "ci", "process")
+        (f.source / ".gitlab-ci.yml").write_bytes((ROOT / ".gitlab-ci.yml").read_bytes())
+        include = "aida-core/templates/gitlab-ci-merge-hold-gate.yml"
+        (f.source / include).parent.mkdir(parents=True)
+        (f.source / include).write_bytes((ROOT / include).read_bytes())
+        # Real AIDA Rust sources, padded above 48 MiB. Three distinct source
+        # commits exercise independent pinned inventories, then a cold validator.
+        paths = f.git(ROOT, "ls-files", "*.rs").stdout.splitlines()
+        # Native implementer seats leave newly added sources uncommitted.
+        inventory_source = "aida-cli-lib/src/ci_inventory.rs"
+        if inventory_source not in paths:
+            paths.append(inventory_source)
+        total = 0
+        for path in paths:
+            data = (ROOT / path).read_bytes()
+            target = f.source / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            total += len(data)
+        padding = f.source / "padding"
+        padding.mkdir()
+        while total < 48 * 1024 * 1024:
+            data = b"//" + b"x" * (512 * 1024 - 3) + b"\n"
+            (padding / f"source-{total}.rs").write_bytes(data)
+            total += len(data)
+        f.job_names = ["bwrap-confinement", "test", "verify"]
+        evidence, shas, durations = [], [], []
+        for attempt, result in [(2, "success"), (3, "failed"), (4, "success")]:
+            (f.source / "lib.rs").write_text(f"#[test] fn checks() {{}} // revision {attempt}\n")
+            f.git(f.source, "add", ".")
+            f.git(f.source, "commit", "-qm", f"AIDA-sized revision {attempt}")
+            f.sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
+            # Bootstrap the retained home request before the request command fetches it.
+            f.git(f.source, "push", "-q", str(f.home), f"{f.sha}:refs/aida/ci/{attempt}", principal="request")
+            f.attempt, f.pipeline, f.result = attempt, 40 + attempt, result
+            f.cli(f.home_clone, "ci", "request", "--attempt", str(attempt), "--sha", f.sha, principal="request")
+            evidence.append({"sha": f.sha, "statuses": [dict(f.statuses[-1])]})
+            start = time.monotonic()
+            self.assertIn("published", f.poll().stdout)
+            self.assertEqual(f.git(f.work, "rev-parse", f"refs/heads/ci/{attempt}").stdout.strip(), f.sha)
+            f.cli(f.home_clone, "ci", "process")
+            durations.append(time.monotonic() - start)
+            receipt = f.receipt(attempt)
+            self.assertEqual([job["name"] for job in receipt["jobs"]], f.job_names)
+            self.assertEqual(receipt["failing_tests"], ["checks"] if result == "failed" else [])
+            evidence[-1]["statuses"].append(dict(f.statuses[-1]))
+            shas.append(f.sha)
+        self.assertEqual(len(set(shas)), 3)
+        fresh = f.clone("aida-sized-fresh-home", "home")
+        rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
+        self.assertEqual(sum(row["verification"] == "verified" for row in rows), 4)
+        # Rust gate-contract test consumes actual posted native status bodies.
+        if os.environ.get("AIDA_CI_GATE_EVIDENCE"):
+            Path(os.environ["AIDA_CI_GATE_EVIDENCE"]).write_text(json.dumps(evidence))
+        print(f"48 MiB / three SHA relay validation seconds: {durations}", flush=True)
 
     # trace:STORY-b6b1278890774ef993d2ebc327862470-408.acc0579e | ai:codex
     # trace:STORY-b6b1278890774ef993d2ebc327862470-408.ac0a4b5e | ai:codex

@@ -89,6 +89,9 @@ default:
 .merge-gate:
   interruptible: true
   rules:
+    # Retained relay attempts project to immutable ci/<positive u32> push branches.
+    # trace:TASK-3232 | ai:codex
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/'
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -126,9 +129,25 @@ test:
     # only contends for those cores and lets stateful tests overlap each other.
     # The slot-local target keeps this full-suite job warm without cross-slot
     # Cargo fingerprint invalidation. trace:TASK-1274 | ai:codex
-    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
+    # Remove a prior slot-local report before running this exact revision.
+    # trace:TASK-3232 | ai:codex
+    - mkdir -p ci-results
+    - rm -f "$CARGO_TARGET_DIR/nextest/ci/junit.xml" ci-results/junit.xml ci-results/ready-*
+    - touch "ci-results/ready-$CI_JOB_ID"
+    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --profile ci --no-fail-fast
     - bash tests/test_mcp_stdio.sh
     - bash tests/test_mcp_doc_consistency.sh
+  # GitLab accepts reports inside the checkout. The nextest target directory
+  # stays on the runner cache volume; copy only this run's report, even on red.
+  # trace:TASK-3232 | ai:codex
+  after_script:
+    - mkdir -p ci-results
+    - rm -f ci-results/junit.xml
+    - if test -f "ci-results/ready-$CI_JOB_ID" && test -f "$CARGO_TARGET_DIR/nextest/ci/junit.xml"; then cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" ci-results/junit.xml; fi
+  artifacts:
+    when: always
+    reports:
+      junit: ci-results/junit.xml
 
 # STORY-612 live OS-wrap confinement gate. Security boundary — proves
 # write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs

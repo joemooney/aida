@@ -32,13 +32,16 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# Three real AIDA-sized source commits, cold revalidation and native gate consumption.
+# trace:TASK-3232 | ai:codex
+"aida-cli-lib forge::commit_ci::tests::aida_sized_relay_native_statuses_reach_required_pr_and_train_gates" = 480
 # Signing and storing 2,100 independent shards proves both former global caps
 # (2,000 changes and 1 MiB) stay removed. PR #3479 job 127849628383 measured
 # 26.03s; keep that coverage with x2 headroom rounded up to 5s.
 # trace:TASK-3196 | ai:codex
 "aida-cli-lib gate::review_publication::admission::tests::story2492_admission_shards_exceed_the_old_global_budgets" = 55
 # Round-4 local debug measurements on the loaded host: x2, rounded up to 5s,
-# minimum 15s. Retain larger prior budgets; CI still kills each test at 180s.
+# minimum 15s. Retain larger prior budgets; ordinary CI tests keep a 180s kill.
 # trace:TASK-3096 | ai:codex
 "aida-cli::task_3096_intake_transport concurrent_comments_on_one_target_report_the_losing_operation" = 85  # 42.31s
 "aida-cli::task_3096_intake_transport concurrent_duplicate_publication_serializes_interleaves_and_rewrite_refuses" = 45  # 21.36s
