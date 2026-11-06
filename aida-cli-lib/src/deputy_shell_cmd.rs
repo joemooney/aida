@@ -424,8 +424,27 @@ pub(crate) fn wait_with_grace(
 }
 
 pub(crate) fn status(q: &Queue, id: &str, out: &mut dyn Write) -> Result<()> {
-    let Some(view) = q.locate(id)? else {
-        bail!("no script job {id} in deputy {:?}", q.name);
+    status_with_grace(q, id, CLAIM_GRACE, out)
+}
+
+// Status can race the same accepted -> claimed transition as wait. Bound
+// retries so an interrupted claim still refuses instead of hanging.
+// trace:TASK-2879 | ai:codex
+pub(crate) fn status_with_grace(
+    q: &Queue,
+    id: &str,
+    grace: Duration,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let begun = std::time::Instant::now();
+    let view = loop {
+        if let Some(view) = q.locate(id)? {
+            break view;
+        }
+        if !q.job_dir(id).is_dir() || begun.elapsed() >= grace {
+            bail!("no script job {id} in deputy {:?}", q.name);
+        }
+        std::thread::sleep(Duration::from_millis(10));
     };
     let JobView {
         job,
