@@ -675,6 +675,16 @@ Options:
           (comma-separated, e.g. `--gates well-formed`). Advisory: findings are printed, the spec is
           filed regardless. Without this flag `aida add` is unchanged. See `aida gate list`
 
+      --origin-prompt-file <FILE>
+          Capture a reviewed UTF-8 prompt (64 KiB max) as a separate Git artifact. OFF by default.
+          Review and redact secrets before submission
+
+      --no-origin-prompt
+          Explicitly opt out of originating prompt capture (also the default)
+
+      --origin-prompt-redacted
+          Mark the reviewed prompt as caller-redacted; only reviewed text is stored
+
       --sanitized
           Sanitized intake for a clone with an enabled WORK transport profile: files one generic
           draft (bug by default) with no owner, tags or session context. The complete write is
@@ -1108,6 +1118,9 @@ Options:
           emphasis, lists and tables for the terminal. Rendering only happens in human output at an
           interactive terminal; piped, TOON and JSON output are always raw. `AIDA_MARKDOWN=raw` sets
           this for every invocation
+
+      --origin-prompt
+          Explicitly retrieve the separate originating prompt artifact as historical input
 
   -h, --help
           Print help (see a summary with '-h')
@@ -31674,6 +31687,21 @@ Working on aida itself
         "help": "Force this spec to NOT be human-only even when its type would default to it (use on a Spike that is genuinely heads-down implementation)"
       },
       {
+        "name": "no-origin-prompt",
+        "takes_value": false,
+        "help": "Explicitly opt out of originating prompt capture (also the default)"
+      },
+      {
+        "name": "origin-prompt-file",
+        "takes_value": true,
+        "help": "Capture a reviewed UTF-8 prompt (64 KiB max) as a separate Git artifact. OFF by default. Review and redact secrets before submission"
+      },
+      {
+        "name": "origin-prompt-redacted",
+        "takes_value": false,
+        "help": "Mark the reviewed prompt as caller-redacted; only reviewed text is stored"
+      },
+      {
         "name": "owner",
         "takes_value": true,
         "help": "Owner of the requirement (defaults to AIDA_AUTHOR env var or system user)"
@@ -32068,6 +32096,11 @@ Working on aida itself
         "name": "no-git",
         "takes_value": false,
         "help": "Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only contexts that only need the requirement fields"
+      },
+      {
+        "name": "origin-prompt",
+        "takes_value": false,
+        "help": "Explicitly retrieve the separate originating prompt artifact as historical input"
       },
       {
         "name": "raw",
