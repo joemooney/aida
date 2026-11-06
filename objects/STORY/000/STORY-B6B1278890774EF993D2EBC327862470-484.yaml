@@ -12,12 +12,12 @@ description: |
   (Q3) Three supervised slices: (1) transport, launch-bound identity and an inventory of every store writer; (2) route CLI and MCP writes through the service and cut over the mediated profile; (3) real-vendor C2 evidence.
 
   Acceptance: parent-observed raw-write negatives (terminal AND file tool: create, append, rename) on canonical-equivalent objects with unchanged targets; same-profile mediated positive controls (own claim, comment, edit, queue done) visible to an independent host reader; refusal and concurrency tests from the BUG-2446 sketch v1; Claude behavior preserved. Base the design on BUG-2446 sketch v1.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T13:38:39.738282124Z
-modified_at: 2026-11-06T13:41:06.580460056Z
+modified_at: 2026-11-06T13:41:12.981629034Z
 req_type: Story
 tags:
 - architecture
@@ -66,6 +66,14 @@ history:
   timestamp: 2026-11-06T13:41:00.255508813Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
+- id: 01a1b117-8c95-7ee3-8779-e3a41284cbe7
+  author: joe
+  timestamp: 2026-11-06T13:41:12.981625250Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
