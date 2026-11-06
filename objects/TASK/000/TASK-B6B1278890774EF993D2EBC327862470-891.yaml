@@ -1,5 +1,6 @@
 id: 01a1b225-866b-7603-a9a5-a98dc5236626
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-891
+agreed_id: TASK-2941
 title: 'minor: conformance.py run_aida outer continuation budget is timeout+270, but ne…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2465, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:af135393
 - from-review:PR-3520
 - kind:carried-forward
+history:
+- id: 01a1b24d-334f-7892-81bd-9100adf7b22b
+  author: joe
+  timestamp: 2026-11-06T19:19:26.287879430Z
+  changes: []
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main

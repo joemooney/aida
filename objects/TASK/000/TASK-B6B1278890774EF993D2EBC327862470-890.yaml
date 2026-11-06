@@ -1,5 +1,6 @@
 id: 01a1b225-7526-7d50-b583-c1c99a03b9f3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-890
+agreed_id: TASK-2944
 title: 'AC1 unverified (operator-only): reaching the launch with real C0-C4 pass/fail o…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2465, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:a69100d9
 - from-review:PR-3520
 - kind:carried-forward
+history:
+- id: 01a1b24d-3483-77f3-bec5-37b47c3fee69
+  author: joe
+  timestamp: 2026-11-06T19:19:26.595511466Z
+  changes: []
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main

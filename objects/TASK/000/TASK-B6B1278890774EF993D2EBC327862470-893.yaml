@@ -1,5 +1,6 @@
 id: 01a1b225-9d5f-7251-80ea-98585627d14c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-893
+agreed_id: TASK-2940
 title: 'cosmetic: fixture_role_enter passes --delegate-seat implementer for the advisor…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2465, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:ec842858
 - from-review:PR-3520
 - kind:carried-forward
+history:
+- id: 01a1b24d-3348-7091-bee4-cf5d2dab4542
+  author: joe
+  timestamp: 2026-11-06T19:19:26.280700729Z
+  changes: []
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
