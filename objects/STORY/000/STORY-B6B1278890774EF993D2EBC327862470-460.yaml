@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T03:48:14.323431800Z
+modified_at: 2026-11-06T03:48:28.097278018Z
 req_type: Story
 tags:
 - architecture
@@ -115,6 +115,12 @@ comments:
   created_at: 2026-11-06T03:48:14.323431800Z
   modified_at: 2026-11-06T03:48:14.323431800Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aef8-df41-71d1-93e8-081d666f9d59
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: Round 2 finding 1 remains partially blocked, not disputed: new correction commit 817283ed848 is pushed and PR #3464 is retitled with (Refs STORY-2537), but rewording old completing commit 815153669ded failed because .git/rebase-merge is read-only. Host must reword that old commit to [AI:codex] docs(plan): sketch shared process identity (Refs STORY-2537), preserve the new correction commit, and publish against the exact verified remote head. Finding 2 is fixed and plan/whitespace validation passes; finding 3 is acknowledged with advisor signoff and implementation still pending. See the round-2 evidence comment. No completion or merge authority claimed.. No triage reason was given.'
+  created_at: 2026-11-06T03:48:28.097276767Z
+  modified_at: 2026-11-06T03:48:28.097276767Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
@@ -170,6 +176,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aef8-df41-71d1-93e8-080546408c7a
+  author: joe
+  timestamp: 2026-11-06T03:48:28.097265849Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -178,8 +192,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-attention_reason:
-  category: other
-  detail: 'Round 2 finding 1 remains partially blocked, not disputed: new correction commit 817283ed848 is pushed and PR #3464 is retitled with (Refs STORY-2537), but rewording old completing commit 815153669ded failed because .git/rebase-merge is read-only. Host must reword that old commit to [AI:codex] docs(plan): sketch shared process identity (Refs STORY-2537), preserve the new correction commit, and publish against the exact verified remote head. Finding 2 is fixed and plan/whitespace validation passes; finding 3 is acknowledged with advisor signoff and implementation still pending. See the round-2 evidence comment. No completion or merge authority claimed.'
-  raised_by: implementer
-  raised_at: 2026-11-06T00:39:18.943447556Z
