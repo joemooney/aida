@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-231
 agreed_id: BUG-2465
 title: Shared-boundary conformance fixture setup runs as implementer, so approve and queue add are refused and C0-C4 report unknown
 description: 'Operator run 2026-11-06 09:43 MST (output ~/.aida/conformance-aida-1793983381, after BUG-2462 landed): role enter now succeeds as implementer, but fixture setup step 11 files the probe spec with --status approved, which is downgraded to draft (''requested approved needs advisor authority''), and step 12 ''aida queue add'' fails with ''queuing work for execution needs dispatch authority''. Every check (C0-C4) is unknown with unsupported_reason=fixture-queue-add-refused, and the run ends aida-boundary-launch-refused. Fix: in the disposable fixture, do the spec approval and queue setup under a fixture advisor/dispatch seat in the fixture roster (never the operator''s real grants), then enter implementer only for the contained launch. Acceptance: on the operator''s host the run reaches the launch and reports real C0-C4 pass/fail; a regression test pins that setup authority and launch authority are separate seats. Blocks closing BUG-2447/BUG-2448.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:43:56.504889807Z
-modified_at: 2026-11-06T16:44:29.992703Z
+modified_at: 2026-11-06T17:15:15.148539687Z
 req_type: Bug
 tags:
 - area:containment
@@ -23,6 +23,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b1db-814c-7f00-a78f-75d5cf052594
+  author: aida-session-start
+  timestamp: 2026-11-06T17:15:15.148536206Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
   branch: main
