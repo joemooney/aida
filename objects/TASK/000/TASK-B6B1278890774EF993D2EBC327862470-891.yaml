@@ -9,12 +9,12 @@ description: |-
 
   PR: #3520
   Reviewed sha: a3a1bd5d747cbfc4e23792c47d23daf55b45e9fd
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T18:36:06.123047121Z
-modified_at: 2026-11-06T21:09:44.121314960Z
+modified_at: 2026-11-06T23:27:18.929303212Z
 req_type: Task
 tags:
 - carried-from:BUG-2465
@@ -103,6 +103,20 @@ history:
   timestamp: 2026-11-06T21:09:52.345895916Z
   session_id: 01a1b2a859b5
   changes: []
+- id: 01a1b330-236e-7101-9d7a-cda2b2f93a7a
+  author: aida-auto-bump
+  timestamp: 2026-11-06T23:27:18.894100482Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b330-2391-7041-be29-e10bd3f96f11
+  timestamp: 2026-11-06T23:27:18.929299824Z
+  agent: aida
+  commit_sha: 9584cb93d7aa24c638314f47472a3f41351430ce
+  summary: 'All 4 ruled items met: outer budget timeout+330 (4x30 setup + inner +180 + 30 cleanup), asserted exactly in test; outer cleanup_grace=25 > inner 10s TERM + 5s reap, proven by real TERM-ignoring nested-group regression; closed stdin -> fixture-terminal-stdin-unavailable before Popen (tested); advisor seat no longer requests --delegate-seat (assertNotIn), implementer still does (line 159). Docs match. CI at head still QUEUED (runner backlog) at record time - ship gate must confirm green. Advisor sequencing: land after BUG-2470 #3532 (still OPEN); hunks do not overlap.'
+  review_verdict: approved
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
@@ -110,3 +124,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6fe228acc8b
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T23:27:18.894094066Z
+  completion_sha: 9584cb93d7aa24c638314f47472a3f41351430ce
