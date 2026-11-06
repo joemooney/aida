@@ -11453,8 +11453,10 @@ since generation
 Usage: aida intent [OPTIONS] <ID>
        aida intent <note|validate|export> ...
        aida intent <enroll|publish|pull|list|process> ...
+       aida intent ci <enroll|request|poll|process|read> ...
 
 Commands:
+  ci        Configure or run the restricted work CI return channel
   enroll    Enroll an independent pinned URL and reviewed deny patterns; no store required
   publish   Commit a reviewed envelope and push only aida-intent; never force
   pull      Fetch into quarantine, validate all history, then accept only a fast-forward
@@ -11480,6 +11482,10 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --audience <AUDIENCE>
           Which register to print: `layman` (prose for a human skimmer) or `llm` (denser/structured,
           for an agent loading the spec)
@@ -11487,15 +11493,187 @@ Options:
           [default: layman]
           [possible values: layman, llm]
 
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
       --refresh
           Force regeneration even if a cached comprehension exists and is fresh
 
       --json
           Machine-readable JSON (`{spec, audience, comprehension, generated_at, model, stale}`)
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci
+Configure or run the restricted work CI return channel
+
+Usage: aida intent ci [OPTIONS] <COMMAND>
+
+Commands:
+  enroll   Enroll a reviewed clone-local CI profile and probe return-credential restrictions
+  request  Home only: create retained immutable home/work refs for an explicit attempt
+  poll     Run one bounded work polling pass; invoke periodically from a user timer
+  process  Home only: validate intake and publish native statuses for latest attempts
+  read     Audit retained results, or revalidate one exact attempt/SHA before reading it
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --json
+          Emit a JSON result object
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci enroll
+Enroll a reviewed clone-local CI profile and probe return-credential restrictions
+
+Usage: aida intent ci enroll [OPTIONS] --file <FILE> --reviewed
+
+Options:
+      --file <FILE>
+          Strict profile JSON; copies endpoint policy and credential variable names
+
+      --json
+          Emit a JSON result object
+
+      --reviewed
+          Confirm destination and server-side credential policy review
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci request
+Home only: create retained immutable home/work refs for an explicit attempt
+
+Usage: aida intent ci request [OPTIONS] --attempt <ATTEMPT> --sha <SHA>
+
+Options:
+      --attempt <ATTEMPT>
+          Previously unused home-assigned positive u32; retained forever
+
+      --json
+          Emit a JSON result object
+
+      --sha <SHA>
+          Exact full lowercase commit object ID already available at home
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci poll
+Run one bounded work polling pass; invoke periodically from a user timer
+
+Usage: aida intent ci poll [OPTIONS]
+
+Options:
+      --json
+          Emit a JSON result object
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci process
+Home only: validate intake and publish native statuses for latest attempts
+
+Usage: aida intent ci process [OPTIONS]
+
+Options:
+      --json
+          Emit a JSON result object
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent ci read
+Audit retained results, or revalidate one exact attempt/SHA before reading it
+
+Usage: aida intent ci read [OPTIONS]
+
+Options:
+      --attempt <ATTEMPT>
+          Exact retained attempt to revalidate; requires --sha
+
+      --json
+          Emit a JSON result object
+
+      --sha <SHA>
+          Exact retained source SHA; requires --attempt
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
   -h, --help
           Print help (see a summary with '-h')
@@ -42657,6 +42835,227 @@ Working on aida itself
         "name": "refresh",
         "takes_value": false,
         "help": "Force regeneration even if a cached comprehension exists and is fresh"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci"
+    ],
+    "about": "Configure or run the restricted work CI return channel",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "enroll"
+    ],
+    "about": "Enroll a reviewed clone-local CI profile and probe return-credential restrictions",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Strict profile JSON; copies endpoint policy and credential variable names"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      },
+      {
+        "name": "reviewed",
+        "takes_value": false,
+        "help": "Confirm destination and server-side credential policy review"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "request"
+    ],
+    "about": "Home only: create retained immutable home/work refs for an explicit attempt",
+    "flags": [
+      {
+        "name": "attempt",
+        "takes_value": true,
+        "help": "Previously unused home-assigned positive u32; retained forever"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      },
+      {
+        "name": "sha",
+        "takes_value": true,
+        "help": "Exact full lowercase commit object ID already available at home"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "poll"
+    ],
+    "about": "Run one bounded work polling pass; invoke periodically from a user timer",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "process"
+    ],
+    "about": "Home only: validate intake and publish native statuses for latest attempts",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "ci",
+      "read"
+    ],
+    "about": "Audit retained results, or revalidate one exact attempt/SHA before reading it",
+    "flags": [
+      {
+        "name": "attempt",
+        "takes_value": true,
+        "help": "Exact retained attempt to revalidate; requires --sha"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit a JSON result object"
+      },
+      {
+        "name": "sha",
+        "takes_value": true,
+        "help": "Exact retained source SHA; requires --attempt"
       }
     ],
     "hidden": false

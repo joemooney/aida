@@ -1,0 +1,9 @@
+# trace:STORY-2480 | ai:codex
+[Unit]
+Description=Poll admitted AIDA CI requests
+[Timer]
+OnBootSec=30
+OnUnitInactiveSec=30
+Unit=aida-work-ci.service
+[Install]
+WantedBy=timers.target

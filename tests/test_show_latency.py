@@ -9,6 +9,8 @@ import argparse
 import fcntl
 import json
 import os
+import shlex
+import shutil
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -120,6 +122,34 @@ def check_in(binary, temp):
             print(f"show {flags or handle}, held refresh lock: {elapsed * 1000:.0f}ms", flush=True)
             assert elapsed < 1, (handle, flags, elapsed)
             assert "canonical title" in result.stdout
+    # trace:BUG-2466 | ai:codex
+    # A refresh hint is advisory too: hold its separate lock while show wins
+    # the refresh flock, so delegating work cannot wait behind the hint writer.
+    wait_for_fixture_processes(temp)
+    with sqlite3.connect(cache) as conn:
+        conn.execute("UPDATE cache_meta SET value='' WHERE key='source_head_sha'")
+    with open(str(cache) + ".refresh-request.lock", "a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        for fmt in ("toon", "json", "human"):
+            start = time.monotonic()
+            result = require(run([binary, "show", spec, "--no-git", "--format", fmt], root, env, timeout=6))
+            elapsed = time.monotonic() - start
+            print(f"show {fmt}, held request lock: {elapsed * 1000:.0f}ms", flush=True)
+            assert elapsed < 2, (fmt, elapsed, result.stderr)
+            assert "canonical title" in result.stdout
+            assert "note: showing results cached at" in result.stderr
+            if fmt == "json":
+                assert json.loads(result.stdout)["cache"]["refreshing"] == "deferred"
+    # Legacy HOME clones still open FileDispenser with a blocking exclusive
+    # lock. Reads do not allocate; hold it even with a fresh cache.
+    require(run([binary, "cache", "refresh"], root, env))
+    with open(store / ".aida/dispenser.lock", "a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = require(run([binary, "show", spec, "--no-git", "--json"], root, env, timeout=6))
+        assert json.loads(result.stdout)["title"] == "canonical title"
+    # A strict refresh may have started a worker in its constructor. Let it
+    # finish before creating the next deliberately stale snapshot.
+    wait_for_fixture_processes(temp)
     # A TTY winner with an unusable freshness stamp delegates a full
     # rebuild. Hold only this fixture's SQLite writer so the worker cannot
     # finish before we observe the stale result; release it before strict
@@ -147,6 +177,28 @@ def check_in(binary, temp):
     require(run([binary, "cache", "refresh"], root, env))
     result = require(run([binary, "show", spec, "--no-git", "--json"], root, env))
     assert json.loads(result.stdout)["cache"]["stale"] is False
+    # trace:BUG-2466 | ai:codex — the optional log must not consume the
+    # response budget. Each show subprocess gets its own PATH, leaving the
+    # fixture setup and the parent environment untouched.
+    shim = root / "slow-git"
+    shim.mkdir()
+    real_git = shutil.which("git", path=env["PATH"])
+    assert real_git
+    script = shim / "git"
+    script.write_text("#!/bin/sh\nfor arg in \"$@\"; do\n"
+                      "  case \"$arg\" in log) sleep 3; break ;; esac\ndone\n"
+                      f"exec {shlex.quote(real_git)} \"$@\"\n")
+    script.chmod(0o755)
+    slow_env = dict(env, PATH=str(shim) + os.pathsep + env["PATH"])
+    start = time.monotonic()
+    result = require(run([binary, "show", spec, "--json"], root, slow_env, timeout=6))
+    elapsed = time.monotonic() - start
+    print(f"show json, slow Git log: {elapsed * 1000:.0f}ms", flush=True)
+    assert elapsed < 2, (elapsed, result.stderr)
+    linkage = json.loads(result.stdout)["git_linkage"]
+    assert linkage["complete"] is False, linkage
+    assert linkage["incomplete"], linkage
+    assert linkage["shipped"] is None, linkage
     print("PASS show latency, canonical object, cache labels, strict refresh", flush=True)
 
 
