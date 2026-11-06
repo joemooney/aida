@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T20:26:21.793383068Z
+modified_at: 2026-11-06T20:27:46.872381694Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -87,6 +87,12 @@ comments:
   created_at: 2026-11-06T19:59:46.933521077Z
   modified_at: 2026-11-06T19:59:46.933521077Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b28b-c538-7d52-a14e-c6a112e41abb
+  author: joe
+  content: 'Round 3 approach: add criterion anchors to the existing launch/narrowing/grandchild and rotation tests, add a command-level test parsing and dispatching the exact standing-orders advisor launch through handle_agent_command, and carry the requested delegate-seat selection into detached supervisor registration rather than reading effective grant seats. Add a supervisor regression for persisted selection and resume inheritance. Expected files: agent_codex_background.rs and the BUG-2467, rotation, and detached-supervisor test modules. No acceptance ambiguity or disputed finding.'
+  created_at: 2026-11-06T20:27:46.872381694Z
+  modified_at: 2026-11-06T20:27:46.872381694Z
+  session_id: 01a1b28a6ea7
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
   author: aida-session-start
