@@ -8,9 +8,7 @@ use super::types::{
     Holder, HostFacts, OwnerVerdict, Ownership, Phase, Reclaim, TreeReading, Verdict, Witness,
     WitnessKind, WitnessReading,
 };
-use aida_core::process_probe::{
-    parse_start_identity, Probe, ProcessIdentity, INITIAL_PID_NAMESPACE_INODE,
-};
+use aida_core::process_probe::{parse_start_identity, ProcessIdentity};
 use chrono::{DateTime, Utc};
 
 /// The longest a single tool call may run before its harness kills it
@@ -27,24 +25,20 @@ pub(crate) fn heartbeat_window(every_secs: u64) -> u64 {
     every_secs.saturating_mul(3).max(LONGEST_TOOL_TIMEOUT_SECS)
 }
 
-/// A1: the process witness a writer may record for `id`. Witnesses are
-/// recorded from the host's view only: a writer in any pid namespace other
-/// than the host's initial one (a sandboxed CLI call, a container) records
-/// none, because the pid it sees names nothing a host-side reader can probe.
-/// A process with no readable start identity is not recorded either; it
-/// could never prove anything (A4).
-// trace:STORY-2325 | ai:claude
+/// Build the identity envelope in established PID coordinates. This alone
+/// supplies no holder admission; writers attach cooperative evidence for
+/// generation-bound judgment. Unadmitted process envelopes remain Unknown.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
 pub(crate) fn process_witness(
     writer_pid_ns: Option<u64>,
     host: &str,
     id: ProcessIdentity,
     now: DateTime<Utc>,
 ) -> Option<Witness> {
-    if writer_pid_ns != Some(INITIAL_PID_NAMESPACE_INODE) {
-        return None;
-    }
+    writer_pid_ns.filter(|ns| *ns != 0)?;
     parse_start_identity(&id.start)?;
     Some(Witness {
+        admission: None,
         kind: WitnessKind::Process {
             host: host.to_string(),
             id,
@@ -66,7 +60,26 @@ pub(crate) fn judge_witness(
             host: rec_host,
             id,
             pid_ns,
-        } => judge_process(rec_host, id, *pid_ns, host),
+        } => {
+            let Some(record) = witness.admission.as_ref() else {
+                return WitnessReading::Unknown(
+                    "holder admission unavailable; cooperative rebind required".into(),
+                );
+            };
+            let identity = match record.validate() {
+                Ok(id) => id,
+                Err(why) => return WitnessReading::Unknown(format!("holder refused: {why:?}")),
+            };
+            if !record.matches_node(host.node_id.as_deref()) {
+                return WitnessReading::Unknown("holder runs on another node".into());
+            }
+            if identity.legacy() != *id || Some(identity.pidns_inode) != *pid_ns {
+                return WitnessReading::Unknown(
+                    "holder generation does not match process witness".into(),
+                );
+            }
+            judge_process(rec_host, id, *pid_ns, host)
+        }
         WitnessKind::Heartbeat { at, every_secs } => {
             if *every_secs == 0 {
                 return WitnessReading::Unknown("the heartbeat records no interval".to_string());
@@ -91,37 +104,20 @@ fn judge_process(
     rec_ns: Option<u64>,
     host: &HostFacts<'_>,
 ) -> WitnessReading {
-    if rec_host != host.host {
-        return WitnessReading::Unknown(format!("{id} runs on another host ({rec_host})"));
-    }
-    let Some((rec_boot, _)) = parse_start_identity(&id.start) else {
-        return WitnessReading::Unknown(format!("{id} has no recorded start identity"));
+    use aida_core::proc_identity::{judge, ObserverFacts, ProcIdentity, Verdict};
+    let Some(identity) = ProcIdentity::from_record(id, rec_ns) else {
+        return WitnessReading::Unknown("insufficient process identity".into());
     };
-    let Some(boot) = host.boot.as_deref() else {
-        return WitnessReading::Unknown("this host's boot id cannot be read".to_string());
+    let facts = ObserverFacts {
+        same_node: rec_host == host.host,
+        boot_id: host.boot.as_deref(),
+        pidns_inode: host.pid_ns,
+        complete_procfs: true,
     };
-    // A reboot ends every process on the host, in every namespace.
-    if boot != rec_boot {
-        return WitnessReading::Dead(format!("the host rebooted since {id} was recorded"));
-    }
-    match (rec_ns, host.pid_ns) {
-        (Some(rec), Some(ours)) if rec == ours => {}
-        (None, _) => return WitnessReading::Unknown(format!("{id} has no recorded pid namespace")),
-        (_, None) => {
-            return WitnessReading::Unknown(
-                "this reader's pid namespace cannot be read".to_string(),
-            )
-        }
-        (Some(_), Some(_)) => {
-            return WitnessReading::Unknown(format!(
-                "{id} was recorded in another pid namespace, so it cannot be probed from here"
-            ))
-        }
-    }
-    match (host.probe)(id) {
-        Probe::Alive => WitnessReading::Alive,
-        Probe::Dead(why) => WitnessReading::Dead(why),
-        Probe::Unknown(why) => WitnessReading::Unknown(why),
+    match judge(&identity, &facts, || (host.probe)(id)) {
+        Verdict::Alive => WitnessReading::Alive,
+        Verdict::Dead(why) => WitnessReading::Dead(format!("{why:?}")),
+        Verdict::ForeignUnknown(why) => WitnessReading::Unknown(format!("{why:?}")),
     }
 }
 
@@ -132,41 +128,65 @@ fn describe(witness: &Witness) -> String {
     }
 }
 
-/// A2: combine every witness. An Alive witness wins; otherwise the owner is
-/// Dead when at least one witness is Dead (the Unknown ones abstain);
-/// otherwise Unknown. No witness at all is Unknown.
-// trace:STORY-2325 | ai:claude
+/// Admitted records select one process generation. Legacy rows retain their
+/// heartbeat policy; activity cannot rehabilitate an admitted dead worker.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
 pub(crate) fn judge_owner(
     holder: &Holder,
     host: &HostFacts<'_>,
     now: DateTime<Utc>,
 ) -> OwnerVerdict {
-    let mut dead = Vec::new();
-    let mut unknown = Vec::new();
-    for witness in &holder.witnesses {
-        match judge_witness(witness, host, now) {
-            WitnessReading::Alive => {
-                return OwnerVerdict::Alive {
-                    witness: describe(witness),
+    // Legacy rows keep the existing heartbeat/combined-witness policy until
+    // cutover. Admitted process generations below never borrow activity from
+    // another witness. trace:STORY-2537 trace:BUG-2458 | ai:codex
+    if holder.witnesses.iter().all(|w| w.admission.is_none()) {
+        let mut dead = Vec::new();
+        let mut unknown = Vec::new();
+        for witness in &holder.witnesses {
+            match judge_witness(witness, host, now) {
+                WitnessReading::Alive => {
+                    return OwnerVerdict::Alive {
+                        witness: describe(witness),
+                    }
                 }
+                WitnessReading::Dead(why) => dead.push(why),
+                WitnessReading::Unknown(why) => unknown.push(why),
             }
-            WitnessReading::Dead(why) => dead.push(why),
-            WitnessReading::Unknown(why) => unknown.push(why),
         }
+        return if !dead.is_empty() {
+            OwnerVerdict::Dead {
+                proof: dead.join("; "),
+            }
+        } else {
+            OwnerVerdict::Unknown {
+                why: if unknown.is_empty() {
+                    "the holder records no witness".into()
+                } else {
+                    unknown.join("; ")
+                },
+            }
+        };
     }
-    if !dead.is_empty() {
-        OwnerVerdict::Dead {
-            proof: dead.join("; "),
-        }
-    } else if unknown.is_empty() {
-        OwnerVerdict::Unknown {
-            why: "the holder records no witness".to_string(),
-        }
-    } else {
-        OwnerVerdict::Unknown {
-            why: unknown.join("; "),
-        }
+    // trace:STORY-2537 trace:BUG-2458 | ai:codex
+    let processes: Vec<_> = holder
+        .witnesses
+        .iter()
+        .filter(|w| matches!(w.kind, WitnessKind::Process { .. }))
+        .collect();
+    if processes.len() != 1 {
+        return OwnerVerdict::Unknown {
+            why: "one admitted holder generation is required; operator repair required".into(),
+        };
     }
+    // A heartbeat belongs to activity policy; it never overrides this holder's
+    // death, missing admission or refusal.
+    return match judge_witness(processes[0], host, now) {
+        WitnessReading::Alive => OwnerVerdict::Alive {
+            witness: describe(processes[0]),
+        },
+        WitnessReading::Dead(proof) => OwnerVerdict::Dead { proof },
+        WitnessReading::Unknown(why) => OwnerVerdict::Unknown { why },
+    };
 }
 
 /// The judge. `pr_head` is the head on origin of the PR the work is in (or

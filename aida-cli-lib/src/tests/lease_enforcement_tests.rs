@@ -4,6 +4,7 @@ use aida_core::models::Relationship;
 // trace:STORY-48 | ai:claude
 fn lease(scope: &str, id: &str) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
@@ -428,6 +429,7 @@ fn bug483_peer_lease_sharing_worktree_blocks_removal() {
 fn worktree_occupant_finds_only_live_same_worktree_lease() {
     fn lease(scope: &str, wt: &str, pid: u32) -> SessionLease {
         SessionLease {
+            holder_record: None,
             pid_namespace: crate::agent_registry::current_pid_namespace(),
             tree_kind: Default::default(),
             id: format!("lease-{scope}"),

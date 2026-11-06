@@ -158,6 +158,21 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
             e.1 += 1;
         }
     }
+    // The coordinator adds a Claude-only receipt boundary. Codex still
+    // finalizes first and must not gain access to that Claude arm.
+    // trace:TASK-3219 | ai:codex
+    let session = std::fs::read_to_string(src.join("session.rs")).unwrap();
+    let coordinator = fn_body(&session, "coordinator_status_with_handle_guard");
+    let finalize = coordinator
+        .find("finalize_coordinator_launch(vendor, cmd, project_root)?")
+        .unwrap();
+    let claude = coordinator
+        .find("if vendor == HeadlessVendor::Claude")
+        .unwrap();
+    let receipt = coordinator.find(RECEIPT_CALL).unwrap();
+    assert!(finalize < claude && claude < receipt);
+    assert!(coordinator[receipt..].contains("bind_contained_launch_worker(&grant, run.receipt())?"));
+    expected.get_mut("session.rs").unwrap().1 += 1;
     assert_eq!(
         found, expected,
         "a Codex spawn path was added or removed: audit it for the AIDA posture \

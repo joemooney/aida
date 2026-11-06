@@ -2,6 +2,7 @@ use super::*;
 
 fn claim_lease(id: &str, scope: &str) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
