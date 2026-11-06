@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-06T00:17:49.975708479Z
+modified_at: 2026-11-06T03:48:15.767733545Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -180,6 +180,12 @@ comments:
   content: 'Advisor 2026-11-05 17:25 MST: per the operator''s 2026-11-03 ruling (consume the shared R3 process-identity primitive; do not add new pid/start-time checks), fix the holder through STORY-2537''s ProcIdentity judge. If #3450 already adds a local pid check, the reviewer should flag it. BUG-2458 lands with STORY-2537 slice 1.'
   created_at: 2026-11-06T00:17:49.975708479Z
   modified_at: 2026-11-06T00:17:49.975708479Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aef8-af17-7ac2-bc9d-2c0b40674cbf
+  author: joe
+  content: 'Advisor 21:00 MST: implementation moves into STORY-2537 slice 1 (one PR, ''(Refs STORY-2537) (BUG-2458)''); #3450 is closed as superseded.'
+  created_at: 2026-11-06T03:48:15.767733545Z
+  modified_at: 2026-11-06T03:48:15.767733545Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
