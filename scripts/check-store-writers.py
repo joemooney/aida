@@ -13,6 +13,7 @@ import bisect
 import json
 from pathlib import Path
 import re
+import shlex
 import sys
 import tomllib
 
@@ -35,21 +36,46 @@ SEED = re.compile("|".join(APIS))
 # Sink identity excludes line numbers, argument values and unrelated source text.
 DISPOSITIONS = {"s2_typed", "host_only", "lane_private", "read_only", "blocked"}
 # trace:TASK-3222 | ai:codex
-AIDA_WRITERS = {"add", "edit", "comment", "queue", "claim", "mailbox", "db", "sync",
-                "findings", "session", "review", "punt", "punts", "rework", "merge-hold",
-                "role", "node", "pr"}
+# Reads can refresh persistent caches, so only trivial command families are
+# exempt. Unknown/new subcommands are writer candidates without a vocabulary edit.
+AIDA_READ_ONLY = {"help", "version"}
 GIT_WRITERS = {"add", "commit", "push", "update-ref", "commit-tree", "merge", "rebase"}
+AIDA_VALUE_FLAGS = {"--file", "--project", "-p", "--server", "-s", "--format",
+                    "--cast-out", "--cast-title"}
+GIT_VALUE_FLAGS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
+                   "--config-env", "--exec-path"}
+
+
+def executable_kind(token):
+    token = token.strip("\"'")
+    variable = re.fullmatch(r"\$(?:\{((?:AIDA|GIT)(?:_[A-Z0-9_]+)?)\}|((?:AIDA|GIT)(?:_[A-Z0-9_]+)?))", token)
+    if variable:
+        return (variable.group(1) or variable.group(2)).split("_")[0].lower()
+    return Path(token).name
 
 
 def argv_writer(argv):
     if len(argv) < 2:
         return None
-    executable = Path(argv[0]).name
-    if executable == "aida" and argv[1] in AIDA_WRITERS:
-        return "aida " + argv[1]
-    if executable == "git" and (argv[1] in GIT_WRITERS or
-                                argv[1] == "hash-object" and "-w" in argv[2:]):
-        return "git " + argv[1]
+    executable = executable_kind(argv[0])
+    if executable not in {"aida", "git"}:
+        return None
+    value_flags = AIDA_VALUE_FLAGS if executable == "aida" else GIT_VALUE_FLAGS
+    index = 1
+    while index < len(argv) and argv[index].startswith("-"):
+        flag = argv[index]
+        if flag == "--":
+            index += 1
+            break
+        index += 2 if flag in value_flags else 1
+    if index >= len(argv):
+        return None
+    command = argv[index].strip("\"'")
+    if executable == "aida" and command not in AIDA_READ_ONLY:
+        return "aida " + command
+    if executable == "git" and (command in GIT_WRITERS or
+                                command == "hash-object" and "-w" in argv[index+1:]):
+        return "git " + command
     return None
 
 
@@ -251,6 +277,14 @@ def script_sites(path, source):
                     values = [v.value if isinstance(v, ast.Constant) and isinstance(v.value, str)
                               else "<dynamic>" for v in argv.elts]
                     subprocess_sink = argv_writer(values)
+                elif (isinstance(argv, ast.Constant) and isinstance(argv.value, str)
+                      and any(k.arg == "shell" and isinstance(k.value, ast.Constant)
+                              and k.value.value is True for k in node.keywords)):
+                    subprocess_sink = argv_writer(shlex.split(argv.value))
+            elif name == "os.system" and node.args:
+                command = node.args[0]
+                if isinstance(command, ast.Constant) and isinstance(command.value, str):
+                    subprocess_sink = argv_writer(shlex.split(command.value))
             if kind not in writers and not subprocess_sink:
                 continue
             # open(..., 'r') and open(path) are reads, not write sites.
@@ -291,11 +325,27 @@ def script_sites(path, source):
         for i, token in enumerate(tokens):
             item = "::".join(name for start, end, name in scopes
                              if start <= matches[i].start() < end) or "<script>"
-            if token in {"aida", "git"} and i + 1 < len(tokens):
-                sink = argv_writer(tokens[i:i+8])
+            if executable_kind(token) in {"aida", "git"} and i + 1 < len(tokens):
+                end = i + 1
+                while end < len(tokens) and not re.fullmatch(r"[;&|<>]+|[(){}]", tokens[end]) and "\n" not in source[matches[end-1].end():matches[end].start()]:
+                    end += 1
+                sink = argv_writer(tokens[i:end])
                 if sink:
                     yield item, sink
-            elif token in {"mv", "cp", "rm", "mkdir", "tee", "install", ">", ">>"}:
+            # Audit literal shell payloads used by the multi-clone harness.
+            # Ordinary quoted prose remains opaque; no expansion or execution.
+            elif token in {"sh", "bash"} and tokens[i+1:i+2] == ["-c"] and i + 2 < len(tokens):
+                payload = tokens[i+2]
+                if payload.startswith(("'", '"')):
+                    for _, sink in script_sites(path, shlex.split(payload)[0]):
+                        yield item, sink
+            # Command substitutions inside double quotes are executable shell,
+            # unlike ordinary quoted prose. Nested/dynamic forms remain lexical.
+            if not token.startswith("'"):
+                for substitution in re.finditer(r"\$\((.*)\)", token, re.DOTALL):
+                    for _, sink in script_sites(path, substitution.group(1)):
+                        yield item, sink
+            if token in {"mv", "cp", "rm", "mkdir", "tee", "install", ">", ">>"}:
                 if token in {">", ">>"} and i + 1 < len(tokens) and tokens[i+1].strip("\"'") == "/dev/null":
                     continue
                 yield item, token

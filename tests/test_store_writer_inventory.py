@@ -250,6 +250,83 @@ class WriterInventoryTests(unittest.TestCase):
         self.put('scripts/read.py', 'p.open("r")\np.open()\nopen(path)\nopen(path, "rb")\nio.open(path, "r")\n')
         self.assertEqual([], guard.check(self.root))
 
+    # trace:TASK-3222 | ai:codex
+    def test_global_flags_and_variable_executable_mutants(self):
+        commands = {
+            'git -C .aida-store commit -m change': 'git commit',
+            'git -c user.name=fixture --git-dir=.aida-store/.git --work-tree=.aida-store add objects': 'git add',
+            'git --git-dir .aida-store/.git --work-tree .aida-store commit': 'git commit',
+            'git -C parent -C .aida-store -c user.name=fixture -c user.email=fixture commit': 'git commit',
+            'aida --quiet edit X': 'aida edit',
+            'aida --json edit X': 'aida edit',
+            'aida --file store --format json edit X': 'aida edit',
+            '"$AIDA_BIN" add --title issue': 'aida add',
+            '$AIDA queue add X': 'aida queue',
+            '"${AIDA_BIN}" queue add X': 'aida queue',
+            '"$GIT_BIN" -C .aida-store commit': 'git commit',
+            'aida done X': 'aida done',
+            'aida pull': 'aida pull',
+            'aida future-writer X': 'aida future-writer',
+        }
+        for command, sink in commands.items():
+            with self.subTest(command=command):
+                target = self.root / 'scripts/argv-mutant.sh'
+                target.unlink(missing_ok=True)
+                self.classify()
+                self.put('scripts/argv-mutant.sh', command + '\n')
+                self.assertEqual([('<script>', sink)], list(guard.script_sites(target.name, command)))
+                self.assert_refused_then_classified()
+
+    def test_argv_read_only_allowlist_and_unknown_writers(self):
+        for verb in ('done', 'del', 'pull', 'push', 'ship', 'init', 'import',
+                     'unclaim', 'archive', 'unarchive', 'defer', 'undefer',
+                     'assign', 'unassign', 'triage', 'cache', 'regen', 'rel',
+                     'spec', 'mandate', 'schedule', 'future-writer'):
+            with self.subTest(verb=verb):
+                self.assertEqual('aida ' + verb, guard.argv_writer(['aida', verb, 'X']))
+        for argv in (['aida', 'help'], ['aida', '--quiet', 'version'],
+                     ['git', '-C', '.aida-store', 'status'],
+                     ['git', 'hash-object', 'file'], ['aida', '--json']):
+            with self.subTest(argv=argv):
+                self.assertIsNone(guard.argv_writer(argv))
+
+    def test_python_string_commands_and_global_git_flags_mutants(self):
+        for expression in (
+            "subprocess.run('aida edit X', shell=True)",
+            "subprocess.run(args='aida --json edit X', shell=True)",
+            "os.system('aida edit X')",
+            "subprocess.run(['git', '-C', d, '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit'])",
+        ):
+            with self.subTest(expression=expression):
+                target = self.root / 'scripts/string-mutant.py'
+                target.unlink(missing_ok=True)
+                self.classify()
+                self.put('scripts/string-mutant.py', expression + '\n')
+                self.assert_refused_then_classified()
+        self.assertEqual([], list(guard.script_sites('read.py', "subprocess.run('aida edit X', shell=False)")))
+
+    def test_multi_clone_harness_writer_mutants(self):
+        # Real forms from multi-clone-harness.sh:259,429-433,716.
+        commands = (
+            ('run_in "$CLONE_A" sh -c \'printf "marker: A" >> .aida-store/metadata.yaml \\\n                && git -C .aida-store add metadata.yaml \\\n                && git -C .aida-store commit -q -m "metadata"\' >/dev/null 2>&1', {'git add', 'git commit'}),
+            ('out="$( cd "$dir" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor \\\n                "$AIDA_BIN" add --title "$title" --type "$stype" --status approved 2>&1 || true )"', {'aida add'}),
+            ('"$AIDA_BIN" queue add "$spec"', {'aida queue'}),
+        )
+        for command, expected in commands:
+            with self.subTest(command=command):
+                target = self.root / 'scripts/harness-mutant.sh'
+                target.unlink(missing_ok=True)
+                self.classify()
+                self.put('scripts/harness-mutant.sh', command + '\n')
+                self.assertTrue(expected <= {sink for _, sink in guard.script_sites(target.name, command)})
+                self.assert_refused_then_classified()
+
+        root = Path(__file__).resolve().parents[1]
+        actual = set(guard.script_sites('scripts/multi-clone-harness.sh',
+                                       (root / 'scripts/multi-clone-harness.sh').read_text()))
+        self.assertTrue({('case_MU-203', 'git add'), ('case_MU-203', 'git commit'),
+                         ('add_spec', 'aida add'), ('case_MU-401', 'aida queue')} <= actual)
+
     def test_queue_done_maps_only_concrete_arm(self):
         self.put('aida-cli-lib/src/queue_cmd.rs', '''
             fn handle_queue_command() {

@@ -9,7 +9,10 @@ store grants and Codex native compatibility labeling remain unchanged.
 Transport, identity and lifecycle belong to TASK-3225; mutation routing and
 raw-store denial belong to TASK-3223; real-vendor evidence belongs to TASK-3224.
 A passing inventory guard is neither C2 evidence nor permission to enable a
-mutation verb. S2 still needs separate approval for the recoverable transaction
+mutation verb. Per the advisor's 2026-11-06 20:29 UTC ruling, this inventory is
+a best-effort static ratchet; completeness is not a merge gate. TASK-3223's
+shared boundary denying raw store writes is the enforcement boundary.
+S2 still needs separate approval for the recoverable transaction
 that couples mutation and dedupe outcome.
 
 ## Checked-in contract
@@ -115,13 +118,13 @@ python3 -m unittest tests/test_store_writer_inventory.py
 python3 scripts/check-ci-gates.py --audit
 ```
 
-The scanner covers Rust/Python/shell files in workspace-style `aida-*/src`
-roots, `scripts`, and **all `aida-core/templates`**, including the real
-`aida-core/templates/hooks/*.sh` and terminal Python templates. Optional
-`hooks`/`.githooks` roots are also scanned if introduced. New crate roots are
-discovered automatically. Test/fixture directories and test-named Rust/Python
-files are excluded; only exact `#[cfg(test)]` Rust function/module items are
-masked, preserving production after inline tests.
+The scanner discovers `*.rs`, `*.py` and `*.sh` in workspace-style
+`aida-*/src` roots, and `*.py`/`*.sh` under `scripts`, `aida-core/templates`
+and optional `hooks`/`.githooks` roots. This includes shell hook templates
+ending in `.sh` and terminal Python templates, but excludes extensionless
+hooks. New crate roots are discovered automatically. The test-name and
+directory exclusions are listed under Limits below. Only exact `#[cfg(test)]`
+Rust function/module items are masked, preserving production after inline tests.
 
 Rust comments and string contents are masked before calls are matched. Wrapper
 propagation uses qualified function identities, including enclosing impl types,
@@ -134,11 +137,17 @@ S2 reconciliation; the scanner does not guess their target. Python uses AST
 call nodes; shell uses lexical tokens with comments/quoted payloads opaque.
 Shell function forms `name() {`, `function name {` and `function name() {`
 have separate site identities. Redirects to `/dev/null` do not create writer
-sites. The shell/Python subprocess vocabulary includes `aida findings`, session,
-review, punt(s), rework, merge-hold, role, node and pr commands, as conservative
-candidates even when a particular subcommand only reads. Python distinguishes
-`Path.open(mode)` from `open(path, mode)` and includes remove/touch/move/copy and
-literal argv subprocess writes through git/aida.
+sites. Shell/Python argv classification skips global flags (including value
+arguments for known Git/AIDA options) before finding the subcommand. Literal
+executables and shell variables named `AIDA`/`GIT` or with uppercase suffixes
+such as `AIDA_BIN` are candidates. AIDA uses a read-only allowlist of `help`
+and `version`; every other subcommand, including unknown commands, is a
+conservative writer candidate because even apparent reads can refresh caches.
+Shell scanning also inspects literal `sh -c`/`bash -c` payloads and lexical
+command substitutions. Python distinguishes `Path.open(mode)` from
+`open(path, mode)` and includes remove/touch/move/copy, literal argv subprocess
+writes through git/aida, and literal command strings with `shell=True` or
+`os.system` parsed through `shlex`.
 
 After the host merges **current main**, regenerate against that merged tree:
 
@@ -165,10 +174,27 @@ call graphs, dynamic command construction, generated/extension code behavior,
 foreign-language I/O, or every implicit writer. Direct seed APIs remain conservative lexical candidates, including non-store
 output writes; qualified wrappers do not use same-name receiver inference. A novel write API outside the seed vocabulary needs scanner
 and inventory review; presence of a path/row does not settle that question.
-These are S2 cutover blockers requiring manual reconciliation, not exclusions
-that authorize a bypass. Shell heredocs, expansion and dynamic command construction still require
+These limits require manual reconciliation in TASK-3223 before claiming
+raw-store denial; they do not authorize a bypass or make static completeness
+a merge gate for this inventory. Shell heredocs, expansion and dynamic command construction still require
 manual review; lexical tokens do not establish an executable shell call graph. No lane code/config/hooks are run
 by this audit.
+
+Explicit discovery and Python limits accepted by the advisor:
+
+- Discovery skips directories named `test`, `tests`, `fixtures` and
+  `__pycache__`, files named `tests.rs`, every file starting with `test_`, and
+  files ending in `_tests.rs`. The filename skip applies even without
+  `#[cfg(test)]`; a production module using such a name can escape the ratchet.
+- Extensionless executable hooks, including
+  `aida-core/templates/hooks/aida-commit-msg`, are not scanned. A shebang does
+  not add them to discovery.
+- Python subprocess calls through imported aliases such as
+  `from subprocess import run; run(...)`, non-literal argv/executable values
+  such as `[AIDA, 'edit', spec]`, and filesystem APIs such as `os.symlink`
+  and `shutil.copytree` are not covered. String-command coverage is limited
+  to literal `subprocess.*(..., shell=True)` and `os.system(...)` strings
+  parsed with `shlex`; this does not interpret shell operators or expansion.
 
 **Named Rust Git-plumbing cutover blocker (TASK-3223):** the Rust seed scan
 does not inspect subprocess argument strings. Raw `git(&["update-ref", ...])`,
@@ -194,6 +220,9 @@ Round-3 fixtures additionally cover findings/session hook commands, shell
 function identity with an existing null redirect, Path.open write modes,
 Python subprocess/filesystem writers, explicit MCP inner edges, and concrete
 queue-done arm selection. The three original refusal mutants remain intact.
+Round-6 fixtures cover global Git/AIDA flags, variable executables, done/pull
+and unknown AIDA verbs, Python literal shell strings, and the concrete
+multi-clone harness variable commands and `sh -c` Git writes at lines 429-433.
 
 The CI Build job runs the standalone guard and mutation fixtures. Both steps
 are `fast` in `scripts/ci-gate-tiers.toml`; `make check-ci-fast` derives them
