@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T20:35:45.116593091Z
-modified_at: 2026-11-06T23:27:26.345986088Z
+modified_at: 2026-11-06T23:27:30.872873245Z
 req_type: Task
 tags:
 - carried-from:BUG-2469
@@ -79,16 +79,17 @@ history:
   timestamp: 2026-11-06T21:33:19.273124482Z
   session_id: 01a1b2a45b41
   changes: []
-- id: 01a1b330-4056-7592-8702-692dab26e5a1
+- id: 01a1b330-5214-7d90-95a4-2f6b908caf31
   author: aida-auto-bump
-  timestamp: 2026-11-06T23:27:26.294114446Z
+  timestamp: 2026-11-06T23:27:30.836363469Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
-- id: 01a1b330-4089-7b72-8624-71c6e4a9ea4a
-  timestamp: 2026-11-06T23:27:26.345981139Z
+- id: 01a1b330-5238-78b1-b48a-a7b1b521d6f3
+  timestamp: 2026-11-06T23:27:30.872869819Z
   agent: aida
   commit_sha: 81421a1a64df5a2fbf360b23f337d35003935066
   summary: 'Approved on code: the dead-reviewer-lease eligibility failure is now surfaced verbatim ({reason:#}) in the branch-held refusal, with identical refuse/allow semantics (old preflight path always bailed for this occupied branch); the extended bug_2469 test asserts all 4 reasons plus unchanged lease bytes and HEAD; the BUG-2469 criterion traces resolve (''aida criteria BUG-2469'': untested none, unanchored none). CI at 59d51efed was still queued/in-progress (runner backlog) when recorded, so the ship gate must confirm green CI.'
@@ -102,5 +103,5 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
-  completed_at: 2026-11-06T23:27:26.294109899Z
+  completed_at: 2026-11-06T23:27:30.836358475Z
   completion_sha: 81421a1a64df5a2fbf360b23f337d35003935066
