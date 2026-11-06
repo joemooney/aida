@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T19:30:57.466137455Z
+modified_at: 2026-11-06T20:13:45.352682450Z
 req_type: Task
 tags:
 - from-review
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-11-06T16:05:21.807451357Z
   modified_at: 2026-11-06T16:05:21.807451357Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b27e-ee08-75b1-b77d-2f70695f9621
+  author: joe
+  content: 'Implemented bounded bulk pinned-source inventory (64 MiB total, 60s per inventory), literal Rust declaration scanning, committed local GitLab include/extends expansion and closed relay-push rule selection. AIDA selects verify/test/bwrap-confinement and publishes current-job nextest JUnit reports. Newest-32 plus on-demand revalidation is preserved; inventory source joins the validator fingerprint. Validation: no-default-features CLI build; 6 inventory tests; 2 legacy inventory, 4 receipt and native required-check regression; all 13 smaller relay fixtures; three-SHA >=48 MiB native PR/train gate fixture passed in 329.02s (480s fixture cap). Full-AST vs declaration scan agreed on 15,910 tracked-source test names. Formatting, diff whitespace, Python syntax, nextest config and stale-JUnit collector checks passed. No runner/credential deployment. Native seat leaves edits uncommitted; host publication and queue completion remain pending.'
+  created_at: 2026-11-06T20:13:45.352682450Z
+  modified_at: 2026-11-06T20:13:45.352682450Z
+  session_id: 01a1b25747e9
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
   author: joe
