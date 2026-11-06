@@ -66,6 +66,16 @@ requirement (including existing dashed child variants); an unrelated branch
 cannot gain ownership through an alias in a commit trailer. No branch rename
 or forced completion is needed for an ID remapping.
 
+<!-- trace:TASK-2887 | ai:codex -->
+`aida queue done` refuses before changing the spec or queue when the current
+branch cannot be read, including a seat-clone safety refusal or detached HEAD.
+The diagnostic preserves the Git error. Restore branch lookup access or check
+out the spec's branch and retry. `aida queue done <ID> --force` overrides the
+ownership and PR checks for work known to have shipped another way;
+`aida queue done <ID> --skip-pr-check` bypasses only the PR check and still
+requires readable branch ownership evidence. `aida queue done <ID> --yes` only
+skips confirmation.
+
 ---
 
 ### `aida ship`
@@ -139,6 +149,13 @@ staging, the index is put back as it was.
 - `aida pr review <N|PR-N|MR-N>` — a PR/MR is open and still needs **independent review**. It runs exactly `aida queue work PR-N --auto-complete` (or `MR-N`): a separate reviewer session, rework routed back to the implementer, and merge only where merge is already authorized. A bare number takes the configured forge's prefix (PR on GitHub, MR on GitLab). It grants no extra authority — leases, merge holds and supervised/draft restrictions apply as for `queue work`, and the `queue work` spelling still works. The three finish verbs in order: `aida ship --no-merge` opens the PR, `aida pr review` gets it reviewed, `aida pr ship` lands work that is already approved.
   <!-- trace:TASK-1715 | ai:claude -->
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
+  Branch lookup and push use the invoking directory, including sibling worktrees
+  and their subdirectories. A Git safety refusal or repository lookup error is
+  reported with its original diagnostic; it does not prove the branch is missing.
+  In particular, native seats can encounter the private-clone Git refusal. A
+  refused lookup performs no push and records no hold marker. A direct push alone
+  does not record a hold either.
+  <!-- trace:TASK-2852 | ai:codex -->
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".

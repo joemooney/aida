@@ -30,6 +30,13 @@ const ALLOWED: &[(&str, &str)] = &[
         "aida-cli-lib/src/deputy_shell/runner.rs",
         "a process-GROUP probe (kill(-pgid, 0)), not single-pid liveness",
     ),
+    // trace:TASK-2886 | ai:codex
+    (
+        "aida-cli-lib/src/test_home.rs",
+        "test-home cleanup requires namespace-local ESRCH; ancestor-mounted procfs \
+         cannot establish local PID death. Retain zombies and unknown errors, \
+         and only probe homes with matching boot and PID-namespace identity",
+    ),
 ];
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {

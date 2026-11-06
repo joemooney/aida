@@ -133,7 +133,7 @@ fn queue_done_gate_refuses_when_commits_ahead_is_unresolvable() {
     let result = workflow_hints::queue_done_precheck_diagnose(
         "TASK-5",
         Ok(tmp.path().to_path_buf()),
-        |_| Some("task-5-2".to_string()),
+        |_| Ok("task-5-2".to_string()),
         |_, _| workflow_hints::CommitsAhead::Unknown("origin/main unresolved".to_string()),
         |_, _| panic!("PR lookup must not run once the gate has already refused"),
     );
@@ -163,7 +163,7 @@ fn queue_done_gate_proceeds_silently_on_the_default_branch() {
     let result = workflow_hints::queue_done_precheck_diagnose(
         "TASK-5",
         Ok(tmp.path().to_path_buf()),
-        |_| Some("master".to_string()),
+        |_| Ok("master".to_string()),
         |_, _| workflow_hints::CommitsAhead::OnDefaultBranch,
         |_, _| panic!("PR lookup must not run on the default branch"),
     );

@@ -578,6 +578,60 @@ SessionStart and statusline warnings remain available. See
 <!-- trace:TASK-1744 | ai:antigravity -->
 <!-- trace:TASK-2253 | ai:claude -->
 
+## Headless Codex reworks and exit publication
+
+For a single-spec pickup with an open PR, `queue work` selects that PR's
+head branch even when the spec is Approved and has no Rework hold. Each such
+pickup performs a forge PR lookup unless an explicit branch was selected. Before
+launching an implementer, the host fetches `origin/main` and attempts its
+merge into the seated PR branch. A clean merge is committed with the host's
+identity and pushed to the trusted host's `origin` before the vendor starts.
+Clone commits are imported through the sandboxed bundle boundary; clone Git
+runs inside AIDA's sandbox with hooks disabled. Pre-launch publication requires
+that the seat started at the fetched PR head and produced a new merge whose
+parents are that head and the fetched main tip, in that order. Existing local
+lane commits and unchanged heads skip this push and retain the gated post-exit
+publication path. Temporary import refs are removed on success or refusal.
+Publication failures (including a non-fast-forward rejection) stop
+the launch.
+<!-- trace:BUG-2456 | ai:codex -->
+
+The host never resolves conflicts. It lists the conflicting files, aborts
+the merge, sends the advisor a request, and routes a fresh launch to Claude.
+A conflicting Codex resume refuses with a fresh Claude launch command;
+a Codex thread cannot resume under another vendor. Fetch, merge, abort,
+mail, or vendor-preflight failures stop the launch. A resume with pending
+edits preserves them and skips the merge attempt; an unfinished merge still
+refuses. Clean resumes use the normal merge and conflict checks.
+
+The conflict check runs after session setup has provisioned the seat and minted
+its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
+that reroutes keeps that same seat (including a clone seat) and lease. Before
+launch it installs the Claude vendor override, repeats vendor and containment
+preflight, clears the Codex model selection, and appends the conflict task to
+the prompt. It does not rebuild the seat for Claude. A refusal before spawn
+uses the ordinary setup rollback.
+
+This also applies to interactive implementer pickups without `--no-human`:
+a fresh conflicting pickup launches interactive Claude in the seated tree;
+an existing Codex resume refuses and prints the fresh Claude command. Guided,
+plan-only and `--no-launch` pickups skip this automatic preparation. Current
+automated coverage tests the merge, route/refusal and publication helpers;
+it does not exercise the complete `handle_queue_work` pickup through an
+interactive exec or a Claude launch from a clone provisioned for Codex. That
+integration boundary still needs a manual exercise or a command-level test.
+
+After a contained Codex headless implementer exits, its host commits pending
+seat edits and publishes through `ship --from-seat`, updating the existing
+PR or opening one. Standalone, drain and explicit resume launches share this
+step. Failed exits retain salvage-only `Refs` commit trailers. Explicit
+punts and manual holds veto automatic publication. No-change exits send an
+advisor request, including when an existing PR remains red. Clean seats with
+unpushed commits publish those commits without sending a no-change request.
+Publication failures retain the seat for recovery.
+This host step replaces the advisor's manual auto-publish workaround.
+<!-- trace:STORY-2475 | ai:codex -->
+
 ## Watching for new review heads
 
 `aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and
@@ -861,6 +915,10 @@ sent/queued after quiet hours; it does not prove read or action. This slice
 does not implement repeated unresolved escalation.
 
 This detector never starts work, ends a session, releases a lease or merges.
-Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
-acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
-rework exits are follow-up work; reading or accepting a wake is not action.
+Codex uses the existing armed mailbox wake service. Explicit recipient responses
+use [`aida mailbox disposition`](../mailbox.md#explicit-responses-to-requests),
+independently of read ACKs. Correlating those responses with alarm episodes and
+unresolved escalation remains follow-up work, along with Claude/Antigravity
+wake, under-cap, last-merge age, stale advisor mail and empty rework exits;
+reading or accepting a wake is not action.
+<!-- trace:TASK-3074 | ai:codex -->

@@ -1222,6 +1222,44 @@ pub(crate) fn train_gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
 }
 
+/// Read a condition's PR merge state through the shared forge boundary.
+/// Missing tools, failed reads and malformed states provide no settled answer.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn observe_github_pr_merged(root: &Path, number: u64) -> Observed<bool> {
+    let Some(gh_bin) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh is unavailable".into());
+    };
+    observe_github_pr_merged_with_binary(root, &gh_bin, number, std::time::Duration::from_secs(15))
+}
+
+// Explicit executable and timeout keep adapter tests independent of global PATH.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn observe_github_pr_merged_with_binary(
+    root: &Path,
+    gh_bin: &Path,
+    number: u64,
+    timeout: std::time::Duration,
+) -> Observed<bool> {
+    let mut command = Command::new(gh_bin);
+    command
+        .current_dir(root)
+        .args(["pr", "view", &number.to_string(), "--json", "state"]);
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(command, timeout))
+        .and_then(|stdout| {
+            let value: serde_json::Value = match serde_json::from_str(&stdout) {
+                Ok(value) => value,
+                Err(error) => {
+                    return Observed::Transient(format!("invalid PR state JSON: {error}"))
+                }
+            };
+            match value.get("state").and_then(serde_json::Value::as_str) {
+                Some("MERGED") => Observed::Known(true),
+                Some("OPEN" | "CLOSED") => Observed::Known(false),
+                _ => Observed::Transient("missing or unrecognised PR state".into()),
+            }
+        })
+}
+
 /// How far `head` is behind `base` on GitHub (the compare API's
 /// `behind_by` for `base...head`), bounded by the forge call timeout. Any
 /// failure to run or answer is `Transient`, and a reply that is not a count is
