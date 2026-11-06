@@ -30,11 +30,14 @@ targeted tests, leave the edits uncommitted, then end with a handoff naming
 changed files, validation results and blockers. Do not run `aida queue done`
 from the seat. After the child process exits, the host launcher commits and
 publishes; the host must finish queue completion after publication. An existing
-Refs PR keeps non-completing commit trailers. Publication refuses while another
-live process owns the seat; do not ask a deputy to bypass that refusal. A punt
+Refs PR keeps non-completing commit trailers. For an approved partial slice,
+record its subject with `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`
+before exiting. In a native seat this only records a lease-bound declaration;
+the host commits and publishes after exit. Failed exits always retain Refs.
+Publication refuses while another live process owns the seat; do not ask a deputy to bypass that refusal. A punt
 or manual hold remains a publication veto. Other postures keep the ordinary
 shipping workflow below.
-<!-- trace:TASK-2879 | ai:codex -->
+<!-- trace:TASK-2879 trace:TASK-2902 | ai:codex -->
 
 ## Purpose
 

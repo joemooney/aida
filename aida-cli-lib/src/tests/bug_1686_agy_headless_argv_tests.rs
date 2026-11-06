@@ -46,7 +46,14 @@ fn index_of(argv: &[String], needle: &str) -> usize {
 fn parse_like_go_flags(argv: &[String]) -> (Option<String>, bool, Vec<String>) {
     // `--print`/`--prompt`/`-p` and `--effort`/`--model` take a value; the
     // permission flag is boolean.
-    let value_flags = ["-p", "--print", "--prompt", "--effort", "--model"];
+    let value_flags = [
+        "-p",
+        "--print",
+        "--prompt",
+        "--effort",
+        "--model",
+        "--output-format",
+    ];
     let mut print_value: Option<String> = None;
     let mut saw_permission_flag = false;
     let mut i = 0;
@@ -92,6 +99,8 @@ fn agy_headless_argv_is_permission_flag_then_dash_p_then_prompt() {
         agy_headless_args(prompt),
         vec![
             AGY_PERMISSION_FLAG.to_string(),
+            "--output-format".to_string(),
+            "stream-json".to_string(),
             "-p".to_string(),
             prompt.to_string(),
         ],
@@ -112,6 +121,8 @@ fn agy_headless_argv_keeps_configured_effort_ahead_of_the_prompt_flag() {
         agy_headless_args_with_effort(prompt, Some("high")),
         vec![
             AGY_PERMISSION_FLAG.to_string(),
+            "--output-format".to_string(),
+            "stream-json".to_string(),
             "--effort".to_string(),
             "high".to_string(),
             "-p".to_string(),
@@ -378,13 +389,19 @@ fn spawned_agy_process_receives_the_ordered_argv() {
     );
     crate::test_ambient::replace(outer);
     let status = spawned.expect("spawning the argv-recording fixture must succeed");
-    assert!(status.success(), "fixture exits 0");
+    assert_eq!(
+        status.code(),
+        Some(crate::agy_outcome::INCOMPLETE),
+        "exit 0 without terminal evidence is incomplete"
+    );
 
     let argv = read_captured_argv(&capture);
     assert_eq!(
         argv,
         vec![
             AGY_PERMISSION_FLAG.to_string(),
+            "--output-format".to_string(),
+            "stream-json".to_string(),
             "--effort".to_string(),
             "high".to_string(),
             "-p".to_string(),
@@ -448,6 +465,8 @@ fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
         argv,
         vec![
             AGY_PERMISSION_FLAG.to_string(),
+            "--output-format".to_string(),
+            "stream-json".to_string(),
             "--effort".to_string(),
             "medium".to_string(),
             "-p".to_string(),
@@ -473,7 +492,7 @@ fn deferred_agy_launch_hint_renders_the_ordered_command() {
         None,
     );
     assert_eq!(
-        hint, "AIDA_HEADLESS=1 agy --dangerously-skip-permissions -p '/aida-pickup BUG-1680'",
+        hint, "AIDA_HEADLESS=1 agy --dangerously-skip-permissions --output-format stream-json -p '/aida-pickup BUG-1680'",
         "the pasteable agy command must carry the fixed flag order"
     );
 }

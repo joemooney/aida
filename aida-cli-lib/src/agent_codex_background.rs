@@ -1149,6 +1149,11 @@ fn build_worker_exec(
         command.env("AIDA_SESSION_SCOPE", spec);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    // trace:TASK-2902 | ai:codex
+    if super::native_post_exit_spec(config, plan).is_some() {
+        crate::native_publication::prepare(&plan.project_root, &plan.launch_cwd)?;
+    }
+
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
@@ -2150,3 +2155,24 @@ mod story_2254_codex_background_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/story_2254_codex_bg_supervisor_tests.rs"]
 mod story_2254_codex_bg_supervisor_tests;
+
+// Exercise the real detached-worker builder without spawning a supervisor.
+// trace:TASK-2902 | ai:codex
+#[cfg(test)]
+pub(crate) fn publication_test_worker_exec(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+) -> Result<()> {
+    build_worker_exec(
+        binary,
+        config,
+        plan,
+        &[],
+        None,
+        "implementer",
+        "test",
+        agent_registry::MailWake::Off,
+    )
+    .map(|_| ())
+}
