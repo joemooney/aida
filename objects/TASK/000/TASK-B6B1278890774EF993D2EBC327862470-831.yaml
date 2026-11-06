@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-831
 agreed_id: TASK-3111
 title: 'Nit sweep A: test hygiene findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2833 TASK-2839 TASK-2843 TASK-2845 TASK-2846 TASK-2847 TASK-2855 TASK-2866 TASK-2869'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-06T02:26:34.193325280Z
+modified_at: 2026-11-06T03:32:54.729953851Z
 req_type: Task
 tags:
 - from-advisor
@@ -272,6 +272,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aeea-a125-7810-b152-72b12f122474
+  author: aida-auto-bump
+  timestamp: 2026-11-06T03:32:54.693455117Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1aeea-a149-7b73-b70e-5d43e33b9b16
+  timestamp: 2026-11-06T03:32:54.729950555Z
+  agent: aida
+  commit_sha: 8de632ba2d73afd0efc6dd88965a36b2e2d6f136
+  summary: 'All 9 batched TASK-3111 findings addressed (TASK-2833/2839/2843/2845/2846/2847/2855/2866/2869); round-3 stale fixture fixed to an unresolvable branch base; full PR CI green at ffa010c (lib-0, lib-1, cli-0/1, gates, contracts, rest, build). Only merge-hold-gate is red: the expected supervised hold awaiting human/advisor release, not a code defect.'
+  review_verdict: approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -284,3 +298,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T17:53:37.869990215Z
   implemented_by: joe
+  completed_at: 2026-11-06T03:32:54.693449043Z
+  completion_sha: 8de632ba2d73afd0efc6dd88965a36b2e2d6f136
