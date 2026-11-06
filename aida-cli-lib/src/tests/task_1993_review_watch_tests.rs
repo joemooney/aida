@@ -1231,6 +1231,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             worker: None,
                             reviewer_spawning: false,
                             setup_retry: false,
+                            retryable_fetch: false,
+                            fetch_failures: 0,
                             reviewer: None,
                             pgid: None,
                             supersede: None,
@@ -2321,6 +2323,96 @@ fn task3112_transient_preflight_preserves_pending_setup_retry() {
     .unwrap_err();
     assert!(
         matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason) if reason.contains("second setup exit"))
+    );
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_review_fetch_retries_with_bounded_backoff() {
+    let calls = std::cell::Cell::new(0);
+    let pauses = std::cell::Cell::new(0);
+    forge::retry_fetch(
+        || {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 {
+                return Err(forge::FetchUnavailable("timeout".into()).into());
+            }
+            Ok(())
+        },
+        || pauses.set(pauses.get() + 1),
+    )
+    .unwrap();
+    assert_eq!(calls.get(), 3);
+    assert_eq!(pauses.get(), 2);
+    let error = forge::retry_fetch(|| Err(forge::FetchUnavailable("DNS".into()).into()), || {})
+        .unwrap_err();
+    assert!(error.downcast_ref::<forge::FetchUnavailable>().is_some());
+    let calls = Cell::new(0);
+    let error = forge::retry_fetch(
+        || {
+            calls.set(calls.get() + 1);
+            anyhow::bail!("origin identity changed")
+        },
+        || panic!("trust refusal must not retry"),
+    )
+    .unwrap_err();
+    assert_eq!(calls.get(), 1);
+    assert!(error.downcast_ref::<forge::FetchUnavailable>().is_none());
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_review_exhausted_fetch_is_capped_per_head() {
+    let (_temp, store) = fixture();
+    let c = change(42, 1, false);
+    for iteration in 0..3 {
+        let attempt = dispatch(select(&store, &c, Some("claude".into()), 2).unwrap());
+        if iteration > 0 {
+            assert!(
+                attempt.setup_retry,
+                "a fetch failure must preserve a previously spent setup retry"
+            );
+        }
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                // Even a reservation that inherited the ordinary setup retry
+                // remains retryable when this was only an unavailable fetch.
+                a.setup_retry = true;
+                Ok(())
+            })
+            .unwrap();
+        let result = execute_reservation(
+            &store,
+            &c.key(),
+            &attempt.token,
+            |_| Ok(()),
+            |_| {
+                store.transaction(&c.key(), |state| {
+                    attempt_mut(state, &c.key(), &attempt.token)
+                        .unwrap()
+                        .retryable_fetch = true;
+                    Ok(())
+                })?;
+                anyhow::bail!("fetch unavailable before reviewer spawn")
+            },
+        );
+        assert!(result.is_err());
+        let state = store.load().unwrap();
+        let a = &state.entries[&c.key()].attempts[0];
+        assert_eq!(a.phase, Phase::Failed);
+        assert!(a.diagnostic.is_some(), "retain the failed read diagnostic");
+        assert!(!active(a));
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
+    }
+    assert!(
+        matches!(select(&store, &c, None, 2).unwrap(), Action::Skip(why) if why.contains("three dispatches"))
+    );
+    let next = change(42, 2, false);
+    let attempt = dispatch(select(&store, &next, None, 2).unwrap());
+    assert_eq!(
+        attempt.fetch_failures, 0,
+        "a new head starts a new bounded retry cycle"
     );
 }
 
