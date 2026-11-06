@@ -155,12 +155,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
     // comparing only HEAD to this PR incorrectly refuses a clean pushed seat.
     // trace:BUG-2450 | ai:codex
     if matches!(&seat, SeatReading::Read { dirty, .. } if dirty.is_empty()) {
-        match crate::seat_clone::remote_missing_commits(
-            main,
-            &lease.worktree_path,
-            lease.tree_kind == crate::seat_clone::TreeKind::Clone,
-            &lease.branch,
-        ) {
+        match crate::session_end::remote_missing_commits_for_lease(main, lease) {
             Ok(0) => return PrLeaseCheck::SafeToForceEnd,
             Ok(n) => {
                 return PrLeaseCheck::Refuse(format!(
@@ -299,6 +294,67 @@ pub(crate) fn parse_review_branch(
         return None;
     }
     digits.parse().ok().map(|n| (forge, n))
+}
+
+/// Only a linked, non-claim reviewer lease gets forge-head coverage.
+// trace:BUG-2469 | ai:codex
+pub(crate) fn reviewer_target(
+    lease: &SessionLease,
+) -> Option<(crate::session_start::ReviewForge, u64)> {
+    if !lease.review_verb
+        || lease.claim_verb
+        || lease.tree_kind != crate::seat_clone::TreeKind::Worktree
+    {
+        return None;
+    }
+    parse_review_branch(&lease.branch)
+}
+
+/// Fetch a current PR/MR head without changing the occupied review branch or
+/// shared FETCH_HEAD. Invocation-private refs prevent concurrent fetch races.
+// trace:BUG-2469 | ai:codex
+pub(crate) fn fetch_review_head(
+    main: &Path,
+    forge: crate::session_start::ReviewForge,
+    n: u64,
+) -> anyhow::Result<String> {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let target = format!("refs/aida/review-coverage/{}", uuid::Uuid::new_v4());
+    let refspec = format!("refs/{}:{target}", forge.pr_head_ref(n));
+    let result = (|| {
+        let mut command = aida_core::git_ops::host_git_command(main);
+        command
+            .args([
+                "fetch",
+                "--no-write-fetch-head",
+                "--no-tags",
+                "origin",
+                &refspec,
+            ])
+            .remote_credentials(main, "origin");
+        let out =
+            crate::command_output_with_timeout(command, std::time::Duration::from_secs(20))
+                .ok_or_else(|| anyhow::anyhow!("review-head fetch failed to start or timed out"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "cannot fetch review head: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        git_stdout(
+            main,
+            &["rev-parse", "--verify", &format!("{target}^{{commit}}")],
+        )
+        .ok_or_else(|| anyhow::anyhow!("cannot resolve fetched review head"))
+    })();
+    let cleanup = aida_core::git_ops::host_git_command(main)
+        .args(["update-ref", "-d", &target])
+        .output();
+    let head = result?;
+    anyhow::ensure!(
+        cleanup?.status.success(),
+        "cannot release temporary review-head ref"
+    );
+    Ok(head)
 }
 
 fn owner_liveness(lease: &SessionLease) -> OwnerLiveness {

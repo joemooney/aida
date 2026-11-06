@@ -2668,15 +2668,39 @@ pub(crate) fn guard_remote_commits(
     if discard_unpushed {
         return Ok(());
     }
-    let count = crate::seat_clone::remote_missing_commits(
-        main,
-        &lease.worktree_path,
-        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
-        &lease.branch,
-    )
-    .context("cannot establish remote commit coverage; session was NOT ended")?;
+    let count = remote_missing_commits_for_lease(main, lease)
+        .context("cannot establish remote commit coverage; session was NOT ended")?;
     anyhow::ensure!(count == 0,
         "lease {} at {} holds {} commit(s) reachable from HEAD or local branches that no remote has. The session was NOT ended; push the commits, or explicitly pass --discard-unpushed to discard them (--force does not override this guard)",
         lease.id, lease.worktree_path.display(), count);
     Ok(())
+}
+
+/// Ordinary remote evidence remains sufficient; only reviewer leases may also
+/// count the freshly fetched forge head. Local-only review commits still refuse.
+// trace:BUG-2469 | ai:codex
+pub(crate) fn remote_missing_commits_for_lease(
+    main: &std::path::Path,
+    lease: &SessionLease,
+) -> Result<u64> {
+    let ordinary = crate::seat_clone::remote_missing_commits(
+        main,
+        &lease.worktree_path,
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+        &lease.branch,
+    );
+    if matches!(ordinary, Ok(0)) {
+        return ordinary;
+    }
+    let Some((forge, n)) = crate::pr_lease_takeover::reviewer_target(lease) else {
+        return ordinary;
+    };
+    let head = crate::pr_lease_takeover::fetch_review_head(main, forge, n)?;
+    crate::seat_clone::remote_missing_commits_with_review_head(
+        main,
+        &lease.worktree_path,
+        false,
+        &lease.branch,
+        Some(&head),
+    )
 }
