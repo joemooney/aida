@@ -103,6 +103,7 @@ fn containment_trusted_native_opt_in_survives_branch_edits() {
 
 fn config(agent_type: &'static str) -> crate::AgentLaunchConfig {
     crate::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type,
         binary: agent_type,
         default_args: Vec::new(),

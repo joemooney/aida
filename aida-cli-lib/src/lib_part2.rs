@@ -706,6 +706,8 @@ pub(crate) fn apply_agent_default_flags(
     flag_options: AgentDefaultFlagOptions,
     explicit_permission: bool,
 ) -> Result<()> {
+    // trace:BUG-2467 | ai:codex — carry explicit narrowing through every rotation.
+    config.delegate_seats = flag_options.delegate_seats.clone();
     // BUG-2158: under a contained parent every claude passthrough flag (extra
     // or agents.toml default) must be on the allowlist; checked before the
     // BUG-1699 posture split, so a widening default is refused, not dropped.

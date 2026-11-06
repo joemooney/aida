@@ -8,6 +8,13 @@ on:
     branches: [main]
   merge_group:
 
+# Superseded PR heads must not starve merge-train CI.
+# Non-PR runs have unique groups and are never grouped together or cancelled.
+# trace:TASK-3267 | ai:codex
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
