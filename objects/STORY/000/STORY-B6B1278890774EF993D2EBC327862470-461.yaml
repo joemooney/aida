@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T17:44:44.655690319Z
+modified_at: 2026-11-06T17:53:59.213616936Z
 req_type: Story
 tags:
 - architecture
@@ -143,6 +143,15 @@ comments:
   created_at: 2026-11-06T17:44:44.655690319Z
   modified_at: 2026-11-06T17:44:44.655690319Z
   session_id: 01a1b1f00f15
+- id: 01a1b1fe-f7ad-7331-8b9c-bb22dda281d6
+  author: joe
+  content: |
+    Round 2 FINAL validation supplement to the handoff checkpoint: the cold aida-cli-lib build completed successfully, and test_home::tests::no_direct_home_resolution_in_crate PASSED (1 passed, 0 failed). The core launch_policy suite also PASSED all 7 tests. Thus both HOME guard tests reported failing by the CI launcher now pass locally. ExecContext 8 passed (with its isolated child executed by the parent), scanner suite 14 passed plus final tracked-source fixture passed, all 39 fast gates passed, and fmt/diff/documentation checks passed as recorded above.
+
+    All six source files remain uncommitted for host publication. No source edits followed the checkpoint. The partial publication subject remains [AI:codex] fix(core): close execution-context ratchet review gaps (Refs STORY-2538). Host must create this round's new commit and cite a green exact-head CI run for finding 6 before re-review; this seat cannot supply published CI for uncommitted changes. Existing merge-hold/manual clearance remains active. No queue completion, review recording or merge action was performed; STORY-2538's broader staged migration remains incomplete.
+  created_at: 2026-11-06T17:53:59.213616936Z
+  modified_at: 2026-11-06T17:53:59.213616936Z
+  session_id: 01a1b1d87212
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe

@@ -21,8 +21,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-06T17:43:16.876098555Z
+modified_at: 2026-11-06T17:54:34.557105753Z
 req_type: Bug
+comments:
+- id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
+  author: joe
+  content: |
+    Investigation: the 2026-11-05T18:49:07 usage event attributes 13,067 ms of its 15,876 ms total to backend open. Other ceiling breaches spend about 4 seconds in linkage. Reproduced two independent unbounded open waits in isolated fixtures against the current host binary: a held cache refresh-request.lock and a held legacy .aida/dispenser.lock each leave show blocked until a 6-second watchdog kills it. Existing refresh-flock fixtures still return in roughly 0.1-0.3 seconds.
+
+    Implementation in progress: show skips opening the ID allocator; advisory hint operations use nonblocking flock in fast-fail mode and serve Deferred on contention; optional show linkage uses a shared 1.2-second deadline with existing partial/unknown labels; open.backend/open.location/open.cache sub-spans retain aggregate timing semantics. Added held-lock regression coverage and documentation. Build and targeted validation pending. Acceptance 3 requires the post-deployment 24-hour performance window at the unchanged 2000 ms / 10% / 5000 ms thresholds; this seat cannot attest that future window.
+  created_at: 2026-11-06T17:54:34.557105753Z
+  modified_at: 2026-11-06T17:54:34.557105753Z
+  session_id: 01a1b1f46d3d
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
