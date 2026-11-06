@@ -8,12 +8,12 @@ description: |-
   Acceptance:
   1. A per-PR refusal or setup failure is recorded against that PR (as 'exited without completing' already is) and the watch continues with the other PRs. Only a watch-level failure (grant invalid, state file unusable) exits nonzero.
   2. A test drives two PRs, one refusing at pickup, and asserts the other is admitted in the same tick and the watch keeps running.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T19:33:54.614992431Z
+modified_at: 2026-11-06T19:46:12.226529567Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-11-06T19:27:58.501848465Z
   modified_at: 2026-11-06T19:27:58.501848465Z
   session_id: 01a1b24ab322
+- id: 01a1b265-b482-7293-a6c4-7729f2a228d0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The per-PR isolation is right and both criteria have tests, but persisting the refusal reason tags any record_skip failure (including lock contention past the 5s deadline) as GlobalState, which adds a new way for one PR to stop the whole watch, contrary to AC1. CI was still queued at review time.. No triage reason was given.'
+  created_at: 2026-11-06T19:46:12.226528302Z
+  modified_at: 2026-11-06T19:46:12.226528302Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b24a-bc58-7413-a436-59c9e08b551a
   author: aida-session-start
@@ -56,6 +62,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b265-b482-7293-a6c4-7719e24dc972
+  author: joe
+  timestamp: 2026-11-06T19:46:12.226512301Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
@@ -64,11 +78,3 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: The per-PR isolation is right and both criteria have tests, but persisting the refusal reason tags any record_skip failure (including lock contention past the 5s deadline) as GlobalState, which adds a new way for one PR to stop the whole watch, contrary to AC1. CI was still queued at review time.
-  recovery_hint: address the review findings, move BUG-2471 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T19:33:54.614992431Z
