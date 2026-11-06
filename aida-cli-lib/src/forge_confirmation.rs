@@ -115,12 +115,15 @@ fn base_tip(root: &Path, base: &str) -> Observed<String> {
         let private = format!("refs/aida/confirm/{}", uuid::Uuid::new_v4());
         let spec = format!("+{source}:{private}");
         let result = (|| {
+            // Disable opportunistic tracking-ref updates even when base moved.
+            // trace:BUG-2463 | ai:codex
             let fetched = git(
                 root,
                 &[
                     "fetch",
                     "--no-tags",
                     "--no-write-fetch-head",
+                    "--refmap=",
                     "origin",
                     &spec,
                 ],
@@ -172,6 +175,7 @@ pub(crate) fn rebase_landed(root: &Path, base: &str, head: &str) -> Observed<boo
                             "fetch",
                             "--no-tags",
                             "--no-write-fetch-head",
+                            "--refmap=",
                             "origin",
                             &spec,
                         ],
@@ -194,11 +198,23 @@ pub(crate) fn rebase_landed(root: &Path, base: &str, head: &str) -> Observed<boo
                 let _ = git(root, &["update-ref", "-d", &private], false);
                 result?;
             }
-            // Rebase rewrites commit identity. Require the same full tree as
-            // the independently fetched base; a successful fetch alone is not
-            // evidence of landing. Divergent trees remain unconfirmed.
-            Ok(stdout(root, &["rev-parse", &format!("{head}^{{tree}}")])?
-                == stdout(root, &["rev-parse", &format!("{tip}^{{tree}}")])?)
+            // Rebase rewrites commit identity and can include unrelated base
+            // changes, both before landing and afterwards. Require every PR
+            // patch to have an equivalent on the independently fetched base.
+            // Unrelated histories and merge commits (which cherry omits) do
+            // not supply this receipt. Changed conflict resolutions retain work.
+            stdout(root, &["merge-base", &tip, head])?;
+            let range = format!("{tip}..{head}");
+            if !stdout(root, &["rev-list", "--min-parents=2", &range])?.is_empty() {
+                return Ok(false);
+            }
+            let patches = stdout(root, &["cherry", &tip, head])?;
+            Ok(!patches.is_empty()
+                && patches.lines().all(|line| {
+                    line.strip_prefix("- ").is_some_and(|sha| {
+                        matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+                }))
         })())
     })
 }

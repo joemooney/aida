@@ -1149,8 +1149,9 @@ pub trait Forge {
     ) -> Observed<bool> {
         crate::forge_confirmation::on_base(root, &meta.base_ref, &meta.head_sha, id).and_then(
             |landed| {
-                // Recover absent original heads only for claimed merges. Open
-                // and abandoned changes retain their existing negative checks.
+                // Check patch equivalence for claimed rebase merges, recovering
+                // absent original heads as needed. Open and abandoned changes
+                // retain their existing negative checks.
                 // trace:BUG-2463 | ai:codex
                 if !landed && meta.state == ChangeState::Merged {
                     crate::forge_confirmation::rebase_landed(root, &meta.base_ref, &meta.head_sha)
