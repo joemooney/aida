@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-803
 agreed_id: TASK-2852
 title: PR hold cannot resolve an existing standalone implementer branch
 description: In standalone implementer worktree /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-407, git branch --show-current returned story-b6b1278890774ef993d2ebc327862470-407 and git commit created 6423aace1cf. However aida pr hold --reason ... refused with local branch does not exist. Direct git push -u origin HEAD succeeded for that exact branch. Investigate repository-root resolution for hold in sibling worktrees; no PR was opened and no hold signal was confirmed. STORY-2479 was separately punted for design sign-off.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:52:09.542251339Z
-modified_at: 2026-11-05T20:27:25.851877196Z
+modified_at: 2026-11-06T00:08:22.890563530Z
 req_type: Task
 tags:
 - from-advisor:STORY-2479
@@ -154,6 +154,20 @@ history:
   timestamp: 2026-11-05T20:27:27.009408298Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1ae2f-6047-7120-9b88-68ec3f26ceb6
+  author: aida-auto-bump
+  timestamp: 2026-11-06T00:08:22.855106358Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1ae2f-606a-7490-95d7-7f9814aef572
+  timestamp: 2026-11-06T00:08:22.890561366Z
+  agent: aida
+  commit_sha: 71c43691a10a62c49185808eb45d25b209f987c2
+  summary: 'TASK-2852 PASS: push_and_verify_held_branch reports a missing branch only on rev-parse quiet exit 1 with empty stderr; seat-clone refusals and repo errors keep their diagnostic, say ''PR is not held'', and never push or record a hold. 3 new regressions + deputy_shell race fix; all 7 CI shards green at 41af6f8 (merge-hold-gate red by design). Closed as diagnostic-preserved, not native-seat hold.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: efca74e51a6
@@ -163,3 +177,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T17:05:34.175243065Z
   implemented_by: joe
+  completed_at: 2026-11-06T00:08:22.855101526Z
+  completion_sha: 71c43691a10a62c49185808eb45d25b209f987c2
