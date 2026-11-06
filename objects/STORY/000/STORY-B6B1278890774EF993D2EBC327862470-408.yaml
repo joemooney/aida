@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:42:30.296256929Z
+modified_at: 2026-11-06T15:48:50.771732113Z
 req_type: Story
 relationships:
 - rel_type:
@@ -195,6 +195,12 @@ comments:
   created_at: 2026-11-06T15:31:20.416055849Z
   modified_at: 2026-11-06T15:31:20.416055849Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b18c-65d3-73c0-8173-18a0bf7a43fc
+  author: joe
+  content: 'Round 3 implementation underway under binding 2026-11-06 15:22 UTC ruling: cold/fingerprint-invalidated history validates newest 32 retained attempts only; validator-bound checkpoint records exact verified paths, old results remain unverified-history audit data and cannot publish statuses. Exact attempt/SHA read revalidates only the requested old result on warm history. Follow-up inventory rescope now actually filed as from-review draft TASK-3232 (TASK-b6b1278890774ef993d2ebc327862470-886), parent STORY-2480; advisor promotion pending. Native seat will leave edits uncommitted and declare host publication. CI head-green gate remains required.'
+  created_at: 2026-11-06T15:48:50.771732113Z
+  modified_at: 2026-11-06T15:48:50.771732113Z
+  session_id: 01a1b18688e4
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
