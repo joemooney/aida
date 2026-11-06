@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T14:52:46.788907580Z
+modified_at: 2026-11-06T14:53:40.922012431Z
 req_type: Story
 relationships:
 - rel_type:
@@ -140,6 +140,12 @@ comments:
   created_at: 2026-11-06T14:32:10.186269505Z
   modified_at: 2026-11-06T14:32:10.186269505Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b159-e4ba-7ec3-95bc-f25402c4614e
+  author: joe
+  content: 'Round 2 approach. Acceptance criteria as tests: command-level local bare-repo/fake-API contract for outbound enrollment, restricted pushes, pass/fail native statuses, immutable retries and tamper refusal; unit receipt tests for closed fields and identifiers. Add regression cases for several SHAs with checkpoint reuse, observation-only readers, qualified test names and fair polling. Expected files: ci_relay.rs, ci_receipt.rs, intent_intake.rs, related CLI audit and Python fixtures, relay documentation; remove per-change orientation notes. Ambiguities/conflicts as questions: can the existing complex AIDA GitLab pipeline be admitted without weakening static inventory? If unsupported, explicitly scope this slice and file the requested follow-up rather than silently claim deployment. Native required-check consumption by AIDA PR/train gates needs verification or an explicit punt.'
+  created_at: 2026-11-06T14:53:40.922012431Z
+  modified_at: 2026-11-06T14:53:40.922012431Z
+  session_id: 01a1b159080c
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
