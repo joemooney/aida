@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-870
 agreed_id: TASK-3194
 title: 'Conformance harness hardening: no grant before output refusal, timeout reaps the lane group, named refusal for a missing manifest, pinned receipt line'
 description: 'Carries four non-blocking findings from the #3475 (TASK-3131) review, ruled ONCE by the advisor 2026-11-06 01:05 MST (10-28 ruling). They were first bundled into BUG-2460, but #3482 was approved first, so it ships as is and they land here in ONE PR: (a) TASK-2922: refuse /tmp and /run --output in run_aida() BEFORE any setup, so no grant is minted for a refused output; (b) TASK-2923: on TimeoutExpired kill the whole ''aida queue work'' process group, close Network, never let the stale pre-continuation report overwrite setup evidence, and size the outer timeout to cover continuation setup plus bounded_launch; (c) TASK-2925: --await-payload with an absent manifest yields a named refusal, not a FileNotFoundError traceback; (d) TASK-2924: a Rust test pinning the ''aida-contained-receipt sha256=.. policy_sha=..'' line the harness regex depends on (keep the line; the stderr noise is accepted). LIGHT gate: the harness python tests plus one targeted cargo test for (d).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:00:03.003758314Z
-modified_at: 2026-11-06T08:29:42.736331826Z
+modified_at: 2026-11-06T08:41:02.547048959Z
 req_type: Task
 tags:
 - conformance
@@ -53,6 +53,15 @@ history:
   timestamp: 2026-11-06T08:29:44.041498826Z
   session_id: 01a1aff0cfff
   changes: []
+- id: 01a1b004-bb53-7300-8a40-df6030fb620c
+  author: aida-orchestrator
+  timestamp: 2026-11-06T08:41:02.547073184Z
+  session_id: 01a1b0016745
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
   branch: main
@@ -61,3 +70,11 @@ filed_at:
   aida_build_sha: a8e8311d546
   vendor: claude
   session: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'All four items implemented and tested (a: hidden-output refusal before setup; b: SIGTERM group reap + Network close + evidence preserved + timeout+180; c: named payload refusal; d: pinned receipt line), but the new process group orphans the continuation/lane on any non-timeout interruption, and the evidence handoff reads a non-atomically written report. CI was still queued at the reviewed head.'
+  recovery_hint: address the review findings, move TASK-3194 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T08:41:02.547048959Z
