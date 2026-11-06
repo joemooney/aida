@@ -9,12 +9,12 @@ description: |-
 
   PR: #3478
   Reviewed sha: dbe1eca498edc77f806b362d98807005d38c7832
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:55:16.768119746Z
-modified_at: 2026-11-06T08:26:11.795596610Z
+modified_at: 2026-11-06T10:01:13.371448394Z
 req_type: Task
 tags:
 - carried-from:TASK-3074
@@ -70,6 +70,20 @@ history:
   author: joe
   timestamp: 2026-11-06T08:33:21.889976494Z
   changes: []
+- id: 01a1b04e-2373-7f13-847a-3a69c25b0e92
+  author: aida-auto-bump
+  timestamp: 2026-11-06T10:01:13.331382984Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b04e-239b-7fe2-9731-c1d56be86805
+  timestamp: 2026-11-06T10:01:13.371443799Z
+  agent: aida
+  commit_sha: 7823b3899714cb3bfc5ae3b76d6953bf0a3ed0da
+  summary: Separate once-per-episode _deferral escalation slot with durable pending/sent state; lapsed deferral after unresolved notice now escalates (injected-time test reproduces t=30/60/65/180 scenario); missing until reported unknown with fixed recorded_at+30m fallback; docs updated; CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
   branch: main
@@ -77,3 +91,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a8e8311d546
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T10:01:13.331375293Z
+  completion_sha: 7823b3899714cb3bfc5ae3b76d6953bf0a3ed0da
