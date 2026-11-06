@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T22:05:32.524893971Z
+modified_at: 2026-11-06T22:07:36.883807863Z
 req_type: Task
 tags:
 - architecture
@@ -436,6 +436,12 @@ comments:
   created_at: 2026-11-06T20:47:25.603606501Z
   modified_at: 2026-11-06T20:47:25.603606501Z
   session_id: 01a1b28fb32a
+- id: 01a1b2e7-2bb3-75c0-9f76-f2697e7794d6
+  author: joe
+  content: 'Post-merge native handoff at HEAD 5c3ea8da6d0: round-6 F2 fixes and F3/F4 documentation were already committed and round-7 approved at da5264532ef4. Current merged tree made inventory stale. Changed only scripts/store-writers.toml: regenerated and reviewed three added sites (queue retire_idle_review_worktree -> release_lease_files; review_watch run_with_program -> Store::open; conformance fixture_policy -> write_text) and four stale removals (old review watch wrapper/run sites and conformance run_aida open/write). New rows remain explicitly blocked for TASK-3223. Final inventory guard PASS: 3299 sites, 292 operation mappings. All 40 Python inventory tests PASS; CI gate audit PASS (73 classified gates); git diff --check PASS. No Cargo or make check-ci-fast run, honoring no-Cargo instruction. Native Refs publication declaration recorded; edits left uncommitted for host. Remaining F1: host publish and obtain exact-head green CI, including inventory and mutation fixtures; existing supervised merge hold requires authorized clearance. No new design fork, runtime change, commit/push/PR, queue completion, review record or pr ship from this seat.'
+  created_at: 2026-11-06T22:07:36.883807863Z
+  modified_at: 2026-11-06T22:07:36.883807863Z
+  session_id: 01a1b2e53db9
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
