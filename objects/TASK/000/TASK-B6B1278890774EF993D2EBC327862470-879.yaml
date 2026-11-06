@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T14:49:56.274271861Z
+modified_at: 2026-11-06T14:58:25.575667836Z
 req_type: Task
 tags:
 - architecture
@@ -224,6 +224,12 @@ comments:
   created_at: 2026-11-06T14:49:46.400314487Z
   modified_at: 2026-11-06T14:49:46.400314487Z
   session_id: 01a1b152ec13
+- id: 01a1b15e-3ca7-7151-94c8-230b0a1a40ae
+  author: joe
+  content: 'ADVISOR (supersedes the 06:43 ''sketch-only'' brief, which is now VOID): IMPLEMENT S1a now. Deliver scripts/store-writers.toml, docs/internal/security/store-mutation-writers.md, and scripts/check-store-writers.py with its mutation fixtures (raw fs writer, wrapper caller, cache-on-read writer), wired into make check-ci-fast. Follow the 07:10 signoff amendment 3 for acceptance. Do NOT post another sketch. Open a PR titled ''... (TASK-3222)''. The empty-grant-ID finding from your refresh is moved to TASK-3225.'
+  created_at: 2026-11-06T14:58:25.575667836Z
+  modified_at: 2026-11-06T14:58:25.575667836Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
