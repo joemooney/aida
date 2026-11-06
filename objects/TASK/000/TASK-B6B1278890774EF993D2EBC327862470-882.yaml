@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T16:04:42.406445042Z
+modified_at: 2026-11-06T16:04:46.428535808Z
 req_type: Task
 tags:
 - architecture
@@ -43,6 +43,12 @@ comments:
   content: 'ADVISOR: added scope from the TASK-3222 sketch refresh: bind_contained_launch_worker accepts an empty grant ID. A service-required launch must refuse an absent or empty binding explicitly, with a test.'
   created_at: 2026-11-06T14:58:27.593919203Z
   modified_at: 2026-11-06T14:58:27.593919203Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b19a-fadc-76c1-8b5c-688d37130e63
+  author: joe
+  content: 'ADVISOR RULING (execution mode): guided → drive. The design is already signed off (the TASK-3222 sketch v1 sections 1-4 plus the 07:10 signoff and amendments), so guided would only re-sketch. Drive means the lane implements through CI and the operator merges, which keeps a human gate on this security transport. #3449 has merged, so this slice is unblocked. LIGHT gate plus the new store_mutation tests. Title (TASK-3225).'
+  created_at: 2026-11-06T16:04:46.428535808Z
+  modified_at: 2026-11-06T16:04:46.428535808Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
