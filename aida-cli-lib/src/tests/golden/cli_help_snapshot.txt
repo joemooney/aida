@@ -3608,11 +3608,11 @@ Defer a spec — park it as primed/conditional work, hidden from the default ope
 filed away the way archive is.
 
 Defer is a view-level flag distinct from status (it does not touch the lifecycle state machine). Use
-`--reason` to record why this is an operator hold and `--until` to record the revisit trigger — the
-free-text condition that brings the spec back (e.g. `--until "when a slice verb ships"`). That
-trigger is the one thing distinguishing deferred (prospective, primed) from archived (retrospective,
-filed). Deferred rows are hidden from `aida list`, `aida search`, and `aida history` by default;
-surface them with `--deferred` (only) or `--all` (union).
+`--reason` to record why this is an operator hold and `--until` to record the revisit trigger — a
+typed condition such as `date:2026-12-01` or `pr:123=merged`. Use `manual:<who>` with `--reason` for
+a human decision. That trigger is the one thing distinguishing deferred (prospective, primed) from
+archived (retrospective, filed). Deferred rows are hidden from `aida list`, `aida search`, and `aida
+history` by default; surface them with `--deferred` (only) or `--all` (union).
 
 Usage: aida defer [OPTIONS] <ID>
 
@@ -3622,9 +3622,9 @@ Arguments:
 
 Options:
       --until <CONDITION>
-          The revisit trigger — the condition that brings this spec back (free text). Stored
-          alongside the spec and shown in the deferred view so you can scan what is primed and what
-          returns each item
+          Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>,
+          date:<YYYY-MM-DD>, query:<filters> count<op><n>, or manual:<who> (requires --reason). Free
+          text is refused
 
       --reason <REASON>
           Why the work is being held. Required for a durable operator hold; legacy deferrals may
@@ -34637,7 +34637,7 @@ Working on aida itself
       {
         "name": "until",
         "takes_value": true,
-        "help": "The revisit trigger — the condition that brings this spec back (free text). Stored alongside the spec and shown in the deferred view so you can scan what is primed and what returns each item"
+        "help": "Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>, date:<YYYY-MM-DD>, query:<filters> count<op><n>, or manual:<who> (requires --reason). Free text is refused"
       }
     ],
     "hidden": false

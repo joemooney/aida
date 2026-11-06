@@ -526,10 +526,24 @@ pub(crate) fn apply_resolution_token(
         if req.deferred_at.is_none() {
             req.deferred_at = Some(chrono::Utc::now());
         }
-        let trigger = consequence.trim();
-        if !trigger.is_empty() {
-            req.deferred_until = Some(trigger.to_string());
-        }
+        // Questions may carry prose rather than an executable condition. Keep
+        // that evidence in a comment and name the answering identity as the
+        // manual resolver; never interpret prose as a machine trigger.
+        // trace:STORY-2402 | ai:codex
+        let condition = consequence.parse::<aida_core::condition::Condition>();
+        req.deferred_until = Some(match condition {
+            Ok(condition) => condition.to_string(),
+            Err(_) => {
+                let resolver = current_user_id(None);
+                let mut comment = Comment::new(
+                    resolver.clone(),
+                    format!("Deferred by question resolution ({label}): {consequence}"),
+                );
+                comment.session_id = resolve_current_session_id();
+                req.comments.push(comment);
+                aida_core::condition::Condition::Manual { who: resolver }.to_string()
+            }
+        });
         return ResolutionApplied {
             effects: vec!["deferred — parked out of the queue".to_string()],
             is_disposition: true,
