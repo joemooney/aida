@@ -18,8 +18,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T17:28:41.165015842Z
+modified_at: 2026-11-06T17:58:41.803202574Z
 req_type: Bug
+comments:
+- id: 01a1b203-478b-72a3-9fa5-be3c97038c4e
+  author: joe
+  content: 'Implemented native-seat handoff: advisor/integrator child grants inherit only the validated parent delegation set; repeatable --delegate-seat narrows it before setup and at issuance; worker grants stay non-delegating. Rotation retains the selected set. Live and historical authority readers validate bounded, cycle-safe ancestor chains so revoking the root invalidates grandchildren. Updated CLI docs and related fixture initializers. Validation: all 4 BUG-2467 regressions passed; 149 existing authority/launcher/rotation tests passed; cargo check -p aida-cli --no-default-features --offline, cargo fmt --all -- --check, and git diff --check passed. One existing role=None rotation gap-mail receipt test failed with NotAGitCheckout/unread count mismatch; filed draft observation TASK-b6b1278890774ef993d2ebc327862470-889. Full changed-file list and validation details: /tmp/bug2467-handoff.md. Edits remain uncommitted; no commit, push, PR, ship, review record, or queue completion was performed. BUG-2467 remains In Progress for host publication.'
+  created_at: 2026-11-06T17:58:41.803202574Z
+  modified_at: 2026-11-06T17:58:41.803202574Z
+  session_id: 01a1b1e75574
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
   author: aida-session-start
