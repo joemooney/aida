@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T12:43:24.829390661Z
+modified_at: 2026-11-06T12:46:08.866747944Z
 req_type: Story
 tags:
 - architecture
@@ -511,6 +511,12 @@ comments:
   content: 'PR-B validation update: exact required final story_2326 run passed 19/19, including the repaired process-isolated Claude goldens. The >10-file make test-touched run executed 1833 filtered tests: 1732 passed, 101 failed. Its diagnostics include 12 missing-matching-CLI fixtures, 55 missing path/cwd diagnostics, linked-seat containment refusals, and PID-namespace/liveness limitations; this run is NOT green and is not claimed baseline-equivalent. Three concrete PR-B failures found by that run were fixed: SPAWN_AGENT_BUILDERS now enumerates the converted constructors and retains finalizer ownership; Codex compete preview now includes spawn_agent posture in its tool-env overrides; phase builder argv parameters explicitly retain headless_vendor_args provenance for the existing source guard. The two AIDA finalizer inventory tests and headless argv source guard pass as standalone rustc test probes against current sources. A focused Cargo rerun covers story_2326, codex_compete_native_argv_matches_preview_and_runs, and task_2708_every; compilation is pending. Repeated make check-ci-fast is also running after these fixes. Native Refs declaration remains recorded; edits stay uncommitted for host publication and CI.'
   created_at: 2026-11-06T12:43:24.829390661Z
   modified_at: 2026-11-06T12:43:24.829390661Z
+  session_id: 01a1b0ba49a2
+- id: 01a1b0e5-21e2-7251-812f-311f072d7e64
+  author: joe
+  content: 'PR-B final native-seat handoff: focused Cargo rerun passed 22/22 (cargo test --profile agent -p aida-cli-lib --lib -- story_2326 codex_compete_native_argv_matches_preview_and_runs task_2708_every). Repeated make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check passed. The standalone headless argv source guard also passed. The earlier make test-touched run remains recorded as 1732 passed/101 failed; three specific PR-B source/preview failures were repaired and covered by the focused/source reruns, but the full broader run was not repeated and is not green. Remaining diagnostics require CI/host verification (missing CLI, cwd/path, linked-seat containment and PID-namespace/liveness evidence); no baseline-equivalence claim. Final changes: AGENTS.md, OVERVIEW.md; src/{compete_cmd.rs,dispatch.rs,doctor_cmd.rs,phase_driver.rs,phase_driver_trait.rs,session.rs,launch/mod.rs,launch/resources.rs}; src/tests/{agent_launcher_tests.rs,bug_2133_contained_drain_children_tests.rs,bug_2165_headless_child_grant_isolation_tests.rs,bug_2398_codex_tool_env_tests.rs,story_2326_launch_ratchet_tests.rs,story_2326_launch_tests.rs,task_2708_codex_fail_closed_tests.rs}, all Rust paths under aida-cli-lib. Ratchet ceiling 157. Refs subject remains declared for host publication. All source edits are uncommitted; no push, PR, queue-done or review record from this seat. Story remains partial; resume paths and resource renderers remain later slices.'
+  created_at: 2026-11-06T12:46:08.866747944Z
+  modified_at: 2026-11-06T12:46:08.866747944Z
   session_id: 01a1b0ba49a2
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
