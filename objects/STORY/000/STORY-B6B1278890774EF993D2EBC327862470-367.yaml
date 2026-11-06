@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T21:44:57.510365938Z
+modified_at: 2026-11-06T21:59:55.304413361Z
 req_type: Story
 relationships:
 - rel_type:
@@ -372,6 +372,12 @@ comments:
   content: 'Current slice-4 follow-up after the main integration: existing journal/review repairs are present. Found that GitHubForge::change_metadata, used by the final verified-train gate, still uses unchecked transport retries, so nested metadata retries can bypass the per-call journal checkpoint. Add a checked checkpoint before every metadata attempt and a PATH-isolated production adapter fixture: first request returns a retryable error after making the journal unavailable; no second request may spawn. Expected files: forge.rs, train tests, slice plan and concise orientation docs. Run the binding LIGHT gate; keep slice 5 deferred and use Refs STORY-2401 publication intent.'
   created_at: 2026-11-06T21:44:57.510365938Z
   modified_at: 2026-11-06T21:44:57.510365938Z
+  session_id: 01a1b2d10e25
+- id: 01a1b2e0-20a8-7f43-86eb-92de7abaa32f
+  author: joe
+  content: 'Slice-4 integration follow-up complete: final verified-train metadata reads now checkpoint every transport attempt through run_with_retry_checked. Added a PATH-isolated production GitHub adapter regression proving a failed initial checkpoint prevents all calls and an unavailable journal after a retryable response prevents a second call, retaining pinned Merge evidence. Changed: forge.rs, tests/story_1690_train_tests.rs, AGENTS.md, OVERVIEW.md and docs/plans/2026-11-06-story-2401-confirmed-negatives.md. LIGHT validation: 169 pr_train tests passed (including both SIGKILL recovery cases), all 38 check-ci-fast gates passed, cargo fmt --check and git diff --check passed. Logs /tmp/story2401-current-train.log and /tmp/story2401-current-fast.log. BUG-2463 #3519 already included in the base. Native publication declaration accepted: [AI:codex] fix(train): checkpoint final-gate metadata retries (Refs STORY-2401). Edits left uncommitted for host publication; no commit, push, PR, merge, review record, hold clearance or queue completion. No blocker; slice 5 remains outstanding.'
+  created_at: 2026-11-06T21:59:55.304413361Z
+  modified_at: 2026-11-06T21:59:55.304413361Z
   session_id: 01a1b2d10e25
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
