@@ -142,7 +142,7 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
             "--reason",
             "waiting for operator clearance",
             "--until",
-            "the dependency decision lands",
+            "manual:operator",
         ])
         .output()
         .expect("set operator hold");
@@ -171,7 +171,7 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
         "pickup error omitted hold reason: {pickup_message}"
     );
     assert!(
-        pickup_message.contains("the dependency decision lands"),
+        pickup_message.contains("manual:operator"),
         "pickup error omitted revisit trigger: {pickup_message}"
     );
 
@@ -279,7 +279,7 @@ fn defer_removes_queued_rows_across_queue_identities() {
     );
 
     let defer = aida(&repo, &home)
-        .args(["defer", &spec, "--until", "operator revisits"])
+        .args(["defer", &spec, "--until", "date:2026-12-01"])
         .output()
         .expect("run aida defer");
     let defer_out = format!(

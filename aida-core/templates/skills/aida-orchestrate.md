@@ -140,7 +140,10 @@ For each draft, decide, then record why with
   gate). Queue it only after `ADVISOR SIGNOFF: APPROVED`. Never defer it just
   to clear it.
 - **Needs something that hasn't happened yet** (real data over time, another
-  spec merging first) → `aida defer <ID> --until "<concrete trigger>"`.
+  spec merging first) → use a typed trigger, e.g.
+  `aida defer <ID> --until "date:2026-12-01"` or `--until "spec:<SPEC-ID>=completed"`.
+  For human judgment, use `--until "manual:<who>" --reason "<why>"`
+  with product/advisor/operator authority. Free-text triggers are refused.
 - **Changes authority** (roles, grants, human-at-TTY floors, merge-hold,
   unattended-run enablement, your own permissions) **or sets product direction**
   → leave it as a draft. Record the fork with

@@ -1385,17 +1385,16 @@ fn apply_outcome(
         }
         RunOutcome::Defer { ids, trigger } => {
             // Park each spec off the active view with the captured revisit
-            // trigger via `aida defer <id> --until "<trigger>"` — run async
+            // trigger via `aida defer <id> [--until <condition>]` — run async
             // (BUG-633). trace:TASK-921 trace:BUG-633 | ai:claude
             let label = format!("deferring {} spec(s)…", ids.len());
             start_pending(pending, st, label, move || {
                 let mut deferred = Vec::new();
                 let mut failed = Vec::new();
                 for id in &ids {
-                    if defer_spec(id, &trigger) {
-                        deferred.push(id.clone());
-                    } else {
-                        failed.push(id.clone());
+                    match defer_spec(id, &trigger) {
+                        Ok(()) => deferred.push(id.clone()),
+                        Err(reason) => failed.push(format!("{id}: {reason}")),
                     }
                 }
                 VerbResult {
@@ -2194,17 +2193,37 @@ fn accept_status(accepted: &[String], failed: &[String], skipped: &[String]) -> 
     parts.join(" · ")
 }
 
-/// Park one spec off the active view with a revisit trigger. Returns `true` on
-/// success. Runs `aida defer <id> --until "<trigger>"` — the trigger is passed
-// as a single argument (no shell), so embedded spaces are safe. trace:TASK-921 | ai:claude
-fn defer_spec(id: &str, trigger: &str) -> bool {
+/// Build a bare defer or pass a typed condition as one argument (never a shell).
+// trace:STORY-2402 | ai:codex
+fn defer_args(id: &str, trigger: &str) -> Vec<String> {
+    let mut args = vec!["defer".to_string(), id.to_string()];
+    if !trigger.trim().is_empty() {
+        args.extend(["--until".to_string(), trigger.trim().to_string()]);
+    }
+    args
+}
+
+/// Park a spec and retain CLI refusal diagnostics for the status line.
+// trace:STORY-2402 | ai:codex
+fn defer_spec(id: &str, trigger: &str) -> Result<(), String> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(["defer", id, "--until", trigger]);
+    cmd.args(defer_args(id, trigger));
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
-    matches!(cmd.output(), Ok(out) if out.status.success())
+    let out = cmd.output().map_err(|error| error.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let reason = stderr.split_whitespace().collect::<Vec<_>>().join(" ");
+        Err(if reason.is_empty() {
+            format!("aida defer exited {}", out.status)
+        } else {
+            reason
+        })
+    }
 }
 
 /// The status-line confirmation for a `defer` run: which ids were parked (with
@@ -2213,10 +2232,14 @@ fn defer_spec(id: &str, trigger: &str) -> bool {
 fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String {
     let mut parts = Vec::new();
     if !deferred.is_empty() {
+        let condition = if trigger.is_empty() {
+            String::new()
+        } else {
+            format!(" until \"{trigger}\"")
+        };
         parts.push(format!(
-            "deferred {} until \"{}\": {}",
+            "deferred {}{condition}: {}",
             deferred.len(),
-            trigger,
             deferred.join(", ")
         ));
     }
@@ -3651,7 +3674,7 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
         ));
     let lines = vec![
         Line::from(Span::styled(
-            "Revisit when…  (the --until trigger)",
+            "Condition: date:YYYY-MM-DD, spec:ID=completed, pr:N=merged",
             Style::default().fg(theme.dim),
         )),
         Line::from(""),
@@ -3666,7 +3689,7 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Enter = defer   ·   Esc = cancel",
+            "Blank = bare defer · Enter = defer · Esc = cancel",
             Style::default().fg(theme.dim),
         )),
     ];
@@ -4633,15 +4656,30 @@ mod render_tests {
     }
 
     #[test]
+    fn story2402_defer_default_omits_until() {
+        assert_eq!(defer_args("TASK-1", ""), ["defer", "TASK-1"]);
+        assert_eq!(defer_args("TASK-1", "  "), ["defer", "TASK-1"]);
+        assert_eq!(
+            defer_args("TASK-1", "date:2026-12-01"),
+            ["defer", "TASK-1", "--until", "date:2026-12-01"]
+        );
+        assert_eq!(
+            defer_status(&["TASK-1".into()], &[], ""),
+            "deferred 1: TASK-1"
+        );
+    }
+
+    #[test]
     fn defer_status_lists_deferred_failed_with_trigger() {
         // trace:TASK-921
         let s = defer_status(
             &["TASK-1".to_string(), "TASK-2".to_string()],
-            &["TASK-3".to_string()],
-            "when the shelf grows",
+            &["TASK-3: invalid condition; use date:YYYY-MM-DD".to_string()],
+            "date:2026-12-01",
         );
         assert!(s.contains("deferred 2"));
-        assert!(s.contains("when the shelf grows"));
+        assert!(s.contains("date:2026-12-01"));
+        assert!(s.contains("invalid condition"));
         assert!(s.contains("TASK-1"));
         assert!(s.contains("FAILED"));
         assert!(s.contains("TASK-3"));

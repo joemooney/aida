@@ -620,6 +620,11 @@ evidence.
 
 The condition checker also reads PR merge states through this boundary, with a
 15-second timeout; failed reads and malformed states evaluate to Unknown.
+
+Question parking preserves the existing trigger and shelf timestamp when the
+consequence is empty or whitespace. With no existing trigger, an empty
+consequence defaults to `manual:<resolver>` without adding an empty comment.
+Prose consequences retain their text as a comment and use a manual resolver.
 <!-- trace:STORY-2402 | ai:codex -->
 
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
