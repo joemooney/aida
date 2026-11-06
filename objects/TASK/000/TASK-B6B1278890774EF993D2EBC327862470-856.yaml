@@ -1,0 +1,29 @@
+id: 01a1ae78-68ab-79e3-965f-c470834062ae
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-856
+title: 'minor: when the subject IS generic and the owning spec is a carried-forward fin…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2891, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: when the subject IS generic and the owning spec is a carried-forward finding with a truncated/severity-prefixed title, seat_pr_title (ship_from_seat.rs:1427-1490) still substitutes it, e.g. '[AI:codex] fix: cosmetic: squash title 'fix: address CI failures and review findings' is generi… (TASK-2891)' — truncated, double-prefixed, and embedding the generic phrase the triage forbade. Consider rejecting/cleaning spec titles ending in '…' or starting with a severity prefix (fall back to the full description's first line or refuse).
+
+  PR: #3456
+  Reviewed sha: 2c8fb81de09cebd51a6c621eda65510238ee2026
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T01:28:09.131736850Z
+modified_at: 2026-11-06T01:28:09.131736850Z
+req_type: Task
+tags:
+- carried-from:TASK-2891
+- finding-hash:02c4b47d
+- from-review:PR-3456
+- kind:carried-forward
+filed_at:
+  code_sha: 158725d7dd93185c7140291f8869b81d2652504e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71c43691a10
+  vendor: claude
