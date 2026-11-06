@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T03:52:37.202172915Z
+modified_at: 2026-11-06T04:31:23.187115477Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -50,6 +50,17 @@ comments:
   created_at: 2026-11-06T03:44:55.096741532Z
   modified_at: 2026-11-06T03:44:55.096741532Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af20-2a33-7861-820e-4eb4ac611f4d
+  author: joe
+  content: |-
+    Implemented the approved native publication declaration: native aida ship -m records a lease/spec-bound subject in the seat; fresh host launch tokens and strict declaration/single-live-non-epic scope checks precede publication effects. Standalone, drain/resume, foreground and detached background launches provision/reset the handshake. Clean exits preserve declared Refs/completing form; failed exits always downgrade to Refs; punt/hold veto first. Post-exit commits and queue publication use canonical display IDs. Updated CLI guidance, pickup templates, AGENTS.md and OVERVIEW.md.
+
+    Validation on final source: 47 seat-publication tests, 1 scope test, 5 queue-exit tests and 5 foreground/background post-exit launcher tests passed (58 distinct tests). cargo fmt --all -- --check and git diff --check passed. Fixed a test fixture issue by limiting live-store setup to publication fixtures, preserving existing storeless trailer tests. Lane job runner was unavailable; tests were executed directly (automatic runner evidence: untested=true).
+
+    Native handoff: all source edits remain uncommitted; no project commit, push, PR creation or queue completion performed. BUG-2459 PR #3473 remains open at last check and overlaps ship_from_seat.rs and the seat-publication fixture; host should rebase/integrate over it if it merges first. Suggested canonical host subject: [AI:codex] fix(seat): preserve native publication declarations (TASK-2902).
+  created_at: 2026-11-06T04:31:23.187115477Z
+  modified_at: 2026-11-06T04:31:23.187115477Z
+  session_id: 01a1aefca358
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
