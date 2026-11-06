@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-06T03:58:28.740909179Z
+modified_at: 2026-11-06T04:13:52.582407423Z
 req_type: Task
 tags:
 - area:containment
@@ -116,6 +116,20 @@ comments:
     None. The latest advisor ruling makes managed-session grant refusal an expected offline outcome; no identity clearing, synthetic TTY or authority-file fabrication is permitted.
   created_at: 2026-11-06T03:58:28.740893685Z
   modified_at: 2026-11-06T03:58:28.740893685Z
+- id: 01a1af10-2246-7a71-80d8-ca9a46a96262
+  author: mcp
+  content: |-
+    Implementation handoff for native host publication (edits intentionally uncommitted).
+
+    Implemented --boundary aida with production init, fixture-only committed codex=aida policy, production role scaffold/enter plus eval/key adoption, requested-seat preflight, and production headless queue work creating the lease/worktree. Managed identity is retained; no fabricated authority, synthetic TTY, native fallback, queue completion or publication. Added a host-side digest diagnostic after the existing ContainmentReceipt validation without changing admission/preflight. Reports record boundary, fixture policy commit, AIDA/vendor/harness hashes, receipt digest when available, measured failures and unknowns. Receipt absence withdraws positive credit. Native default retains its invocation/environment/report behavior.
+
+    Changed files: scripts/containment/conformance.py; aida-cli-lib/src/launch/contained.rs; tests/test_containment_conformance.py; tests/test_containment_conformance_aida.py; docs/testing/containment-conformance.md; .github/workflows/ci.yml; scripts/ci-gate-tiers.toml. The binary-dependent real-production fixture test is separate from the existing no-build fast suite and is registered as a full CI gate.
+
+    Validation: 26 fast conformance tests passed; separate offline real-AIDA/fake-Codex test passed through init/policy/scaffold to the exact managed-agent role-enter refusal. Only the fake vendor version probe runs, never its workload; all C0–C4 remain unknown, no receipt or launcher credit. make check-ci-fast passed all 37 gates (log /tmp/task-3131-check-ci-fast.log), including no-default-features compilation. cargo fmt --all -- --check, git diff --check and CI gate classification audit passed. Targeted Rust unit test untested=true: aida lane job run refused because this native standalone seat has no lane job runner; no bypass attempted.
+
+    No live containment run or C0–C4 pass is claimed. Per the binding ruling, deputy 3 runs the operator-terminal live experiment after merge and files its report on BUG-2447/2448. Host publication title/trailer: [AI:codex] feat(containment): add shared-boundary conformance harness (TASK-3131). No new punt was filed; existing punt/hold signals remain host publication vetoes. Task/queue intentionally remain for the host to complete after publication.
+  created_at: 2026-11-06T04:13:52.582400008Z
+  modified_at: 2026-11-06T04:13:52.582400008Z
 history:
 - id: 01a1ad21-f58b-7aa2-8855-03f913ad7538
   author: joe
