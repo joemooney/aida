@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T07:10:05.819016386Z
-modified_at: 2026-11-06T07:10:05.819016386Z
+modified_at: 2026-11-06T07:56:51.566665116Z
 req_type: Task
 tags:
 - carried-from:TASK-3131
 - finding-hash:388fb6e6
 - from-review:PR-3475
 - kind:carried-forward
+comments:
+- id: 01a1afdc-47ee-7fd1-b4ad-db5ee77ce94f
+  author: joe
+  content: 'Advisor 2026-11-06 01:00: bundled into BUG-2460 (PR #3482) per the 10-28 ruling; tracked there.'
+  created_at: 2026-11-06T07:56:51.566665116Z
+  modified_at: 2026-11-06T07:56:51.566665116Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1afda-852e-7271-8370-7d01b7036ba7
   author: joe
