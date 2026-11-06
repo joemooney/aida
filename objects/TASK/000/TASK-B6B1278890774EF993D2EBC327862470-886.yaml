@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-886
 agreed_id: TASK-3232
 title: Admit AIDA repository size and GitLab templates to work CI relay inventory
 description: 'Follow-up from PR #3504 inventory rescope. Acceptance: bounded inventory validation for AIDA-sized (at least 48 MiB Rust sources) multi-SHA fixtures; deterministic committed local GitLab includes/template expansion and intended job selection, refusing remote includes and commit/path escapes; end-to-end native required-check consumption by AIDA PR/train gates. No deployment claimed by the static-only relay slice. See docs/plans/2026-11-05-story-2480-work-ci-relay.md, Round 2 inventory follow-up.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T20:21:38.034356943Z
+modified_at: 2026-11-06T20:39:10.934776121Z
 req_type: Task
 tags:
 - from-review
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-11-06T20:13:45.352682450Z
   modified_at: 2026-11-06T20:13:45.352682450Z
   session_id: 01a1b25747e9
+- id: 01a1b296-3556-7d02-a8aa-de7204ec0f0d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Inventory/template/native-gate work matches TASK-3232 acceptance by code reading (real AIDA tree 46.4 MiB/1594 .rs fits bounds), but unrelated YAML now refuses the whole inventory (regression), plus two doc/test nits; PR CI still queued at 4d2f6e25 so AC1-3 test evidence is unverified.. No triage reason was given.'
+  created_at: 2026-11-06T20:39:10.934773831Z
+  modified_at: 2026-11-06T20:39:10.934773831Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
   author: joe
@@ -83,16 +89,16 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b296-3556-7d02-a8aa-de6e36810227
+  author: joe
+  timestamp: 2026-11-06T20:39:10.934756770Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: f50fa16ae95
   vendor: codex
   session: 01a1b18688e4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Inventory/template/native-gate work matches TASK-3232 acceptance by code reading (real AIDA tree 46.4 MiB/1594 .rs fits bounds), but unrelated YAML now refuses the whole inventory (regression), plus two doc/test nits; PR CI still queued at 4d2f6e25 so AC1-3 test evidence is unverified.
-  recovery_hint: address the review findings, move TASK-3232 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T20:21:38.034356943Z
