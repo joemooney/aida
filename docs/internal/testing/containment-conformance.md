@@ -326,6 +326,16 @@ argv, environment variables, reports or files. Both seat transitions retain the
 operator's terminal session and the supervised timeout cleanup.
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 
+The advisor setup seat requests no child delegation; only the implementer seat
+requests `--delegate-seat implementer`. Closed inherited stdin refuses with
+`fixture-terminal-stdin-unavailable` before starting a continuation. The outer
+continuation budget is the vendor timeout plus 330 seconds: four 30-second setup
+calls, the inner timeout's 180-second overhead, and 30 seconds for inner cleanup
+and reporting. On interruption the outer supervisor allows 25 seconds for setup
+cleanup, exceeding the inner supervisor's 10-second SIGTERM grace and 5-second
+SIGKILL reap budget so the inner group is killed before setup is killed.
+<!-- trace:TASK-2941 | ai:codex -->
+
 `HOME` and `AIDA_HOME` are isolated together under the experiment directory;
 managed-agent identity is retained. The original `CODEX_HOME` location is
 preserved so the production authentication checks still apply; credentials

@@ -529,11 +529,16 @@ def role_enter_refusal(diagnostic):
 # Retain the operator's terminal session, but own a group for continuation
 # setup. SIGTERM unwinds the continuation's lane-group and Network finally
 # blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
-def launch_aida_continuation(script, repo, env, seconds):
+def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
     # Transport secret eval output only through a pipe, then restore the
     # inherited terminal stdin for the later production role-entry call.
     # trace:BUG-2465 | ai:codex
-    terminal = os.dup(0)
+    # A closed inherited stdin is a fixture refusal, before any child starts.
+    # trace:TASK-2941 | ai:codex
+    try:
+        terminal = os.dup(0)
+    except OSError as error:
+        raise ValueError("fixture-terminal-stdin-unavailable") from error
     try:
         child = subprocess.Popen(["bash", "-c", 'eval "$(cat)"'], stdin=subprocess.PIPE,
                                  text=True, cwd=repo, env=env, process_group=0,
@@ -552,7 +557,7 @@ def launch_aida_continuation(script, repo, env, seconds):
             except ProcessLookupError:
                 pass
             try:
-                child.wait(timeout=10)
+                child.wait(timeout=cleanup_grace)
             except subprocess.TimeoutExpired:
                 try:
                     os.killpg(child.pid, signal.SIGKILL)
@@ -660,11 +665,14 @@ def run_aida(args):
         script = continuation_script(block, root, "--aida-setup")
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
-        # Both seat preflights, approval/queue setup, the implementer role
-        # entry (30s each), certificate creation (15s), seven 2s
-        # parent network controls, then bounded_launch and cleanup headroom.
-        # trace:TASK-3194 | ai:codex
-        result = launch_aida_continuation(script, repo, env, args.timeout + 270)
+        # Four setup calls (advisor probe, spec add, queue add, implementer
+        # entry) take up to 4*30s, followed by the inner timeout+180s budget.
+        # Add 30s for inner timeout cleanup (10s TERM + 5s reap) and reporting:
+        # total timeout+330s. On interruption, give the setup supervisor 25s
+        # to kill/reap the inner group and publish before killing its own group.
+        # trace:TASK-2941 | ai:codex
+        result = launch_aida_continuation(script, repo, env, args.timeout + 330,
+                                          cleanup_grace=25)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
     except (ValueError, OSError, subprocess.SubprocessError) as error:
@@ -683,7 +691,12 @@ def run_aida(args):
 # in memory; failed output is displayable diagnostic evidence.
 # trace:BUG-2465 | ai:codex
 def fixture_role_enter(aida, repo, env, root, report, seat):
-    argv = [str(aida), "role", "enter", seat, "--delegate-seat", "implementer", "--no-resume", "--no-title"]
+    # Only the executing seat needs to delegate to the queue-work child.
+    # trace:TASK-2941 | ai:codex
+    argv = [str(aida), "role", "enter", seat]
+    if seat == "implementer":
+        argv += ["--delegate-seat", "implementer"]
+    argv += ["--no-resume", "--no-title"]
     entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
     report["setup"].append({"stage": "role-enter", "argv": argv, "exit_code": entered.returncode})
     if entered.returncode:
