@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T16:07:50.898306186Z
+modified_at: 2026-11-06T18:53:24.250039688Z
 req_type: Story
 tags:
 - architecture
@@ -216,6 +216,12 @@ comments:
   created_at: 2026-11-06T16:07:50.898306186Z
   modified_at: 2026-11-06T16:07:50.898306186Z
   session_id: 01a1b1643ab6
+- id: 01a1b235-5d9a-7fa3-9a6e-c20541fb76ab
+  author: joe
+  content: 'Advisor 11:55: the round-3 fixes (seat commit 4a5a43e5, 09:08) were never pushed. PR #3483''s head 15187f7 only merged main onto the stale e938ac4. I merged 4a5a43e5 onto the PR branch (060a752a; the ratchet CEILING conflict resolved to 158 = main''s 157 plus the one ledgered proc_identity receipt), ended the dead lease 01a1b164, and released the review. The next review should judge round 3 at 060a752a.'
+  created_at: 2026-11-06T18:53:24.250039688Z
+  modified_at: 2026-11-06T18:53:24.250039688Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
