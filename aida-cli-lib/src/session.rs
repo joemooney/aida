@@ -2796,6 +2796,8 @@ pub(crate) fn build_codex_session_command(
         vendor: aida_core::launch_policy::LaunchVendor::Codex,
         kind: aida_core::launch_policy::LaunchKind::Exec,
         program: "codex".into(),
+        // Launcher-owned posture switches; prompt/model are values, not a
+        // default_flags or operator template tail. trace:STORY-2326 | ai:codex
         args: codex_interactive_session_args(initial_prompt, bypass, read_only, model),
         tail: Vec::new(),
         posture: ContainmentPosture::None,
@@ -2863,6 +2865,8 @@ pub fn exec_codex_session(
             vendor: aida_core::launch_policy::LaunchVendor::Codex,
             kind: aida_core::launch_policy::LaunchKind::Exec,
             program: "codex".into(),
+            // Native sandbox/MCP flags and codex_session_args are generated
+            // here by trusted composers; no caller argv tail is accepted.
             args,
             tail: Vec::new(),
             posture,
@@ -13375,7 +13379,10 @@ mod tests {
 
     // trace:BUG-2006 | ai:antigravity
     #[test]
-    fn spawn_reviewer_launch_plan_contains_or_refuses_stale_uncontained_plan() {
+    fn story_2326_spawn_reviewer_launch_plan_contains_or_refuses_stale_uncontained_plan() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -13385,6 +13392,7 @@ mod tests {
             "store_path = \".aida-store\"\n",
         )
         .unwrap();
+        std::env::set_current_dir(&project).unwrap();
         let fake = tmp.path().join("fake-agent");
         let env_out = tmp.path().join("env.txt");
         crate::test_exec::write_executable(
@@ -13427,8 +13435,7 @@ mod tests {
                 program: fake.to_string_lossy().to_string(),
                 args: vec![],
                 contained: true,
-                // Native/None constructors do not cross the AIDA boundary.
-                host_main: None,
+                host_main: crate::seat_clone::launcher_main(),
             };
             let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
             assert!(status.success());

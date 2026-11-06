@@ -2476,6 +2476,10 @@ pub(crate) fn build_phase_driver_advisor_command(
             vendor: crate::launch::context::launch_vendor(vendor),
             kind: aida_core::launch_policy::LaunchKind::Fresh,
             program: program.into(),
+            // Trusted output of session::advisor_tier_program_and_args_with_posture
+            // and contained_child_program_and_args (including
+            // posture flags and a prompt), not a default_flags/template tail.
+            // Caller configuration flags must be validated before this builder.
             args: headless_vendor_args.to_vec(),
             tail: Vec::new(),
             posture,

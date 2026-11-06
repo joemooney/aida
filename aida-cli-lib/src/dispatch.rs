@@ -2580,8 +2580,8 @@ pub(crate) fn prepare_lane_worktree(
 }
 
 /// Build the scrubbed `Command` that launches an implementer worker in `wt_path`
-/// with the session grant and purpose environment variables cleared and
-/// `AIDA_SESSION_ROLE="implementer"`.
+/// with grant and purpose cleared. Claude background handoffs carry no seat
+/// keys; their SessionStart hook recovers identity from the worktree lease.
 // trace:STORY-1917 | ai:agy
 pub(crate) fn build_implementer_launch_command(
     agent_bin: &Path,
@@ -2624,6 +2624,8 @@ pub(crate) fn build_implementer_launch_command(
         vendor: launch_vendor,
         kind,
         program: agent_bin.as_os_str().to_owned(),
+        // Switches above are launcher-owned. The name is a -n operand;
+        // the prompt is positional data, so neither is a flag tail.
         args,
         tail: Vec::new(),
         posture,

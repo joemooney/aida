@@ -392,20 +392,11 @@ create/comment operations to recover confirmed writes without replay. See [the w
 
 ### Agent launch migration
 
-`aida-cli-lib/src/launch/` resolves a `LaunchContext` before constructing a
-vendor command through `spawn_agent`. Converted paths include Claude fresh
-launches, fresh Codex session/exec, compete, dispatch, and Native/None phase
-builders. Codex callers finalize tool environment after assigning child identity
-and grants. Dispatch Codex continues through `aida agent new codex --bg`;
-Claude background handoffs carry no seat keys.
-
-An exact-count source ratchet tracks remaining constructors and protected-key
-writers. Resume paths, legacy AIDA phase builders, resource renderers and the
-per-vendor cleared environment remain separate slices. Resource validation now
-requires pre-existing uid-owned mode-0700 cargo slots, a worktree-local or
-host-recorded clone target, and singly linked host-owned mode-0600 settings
-outside sandbox write roots. These resource checks do not grant write access;
-the following renderer slice consumes them. Sccache remains off.
+`aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and
+constructs vendor processes through `spawn_agent`. Seat assignment is explicit;
+background handoffs recover lane identity from the worktree lease. An exact-count
+source ratchet inventories constructors and protected environment writers outside
+the launcher. Resource validation grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
 ### The four layers

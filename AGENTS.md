@@ -461,13 +461,6 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
-Migrated vendor constructors resolve `launch::LaunchContext` and use
-`launch::spawn_agent`; an exact-count source ratchet inventories remaining
-sites. Codex tool finalization runs after child identity and grant setup.
-See [launch migration](OVERVIEW.md#agent-launch-migration) for current coverage
-and the resource-renderer/environment cutover still to come.
-<!-- trace:STORY-2326 | ai:codex -->
-
 The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
 and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.

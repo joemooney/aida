@@ -4112,6 +4112,9 @@ pub(crate) fn build_phase_driver_ci_fix_command(
             vendor: crate::launch::context::launch_vendor(vendor),
             kind: aida_core::launch_policy::LaunchKind::Fresh,
             program: program.into(),
+            // Trusted output of session::headless_vendor_args (including
+            // posture flags and a prompt), not a default_flags/template tail.
+            // Caller configuration flags must be validated before this builder.
             args: headless_vendor_args.to_vec(),
             tail: Vec::new(),
             posture,

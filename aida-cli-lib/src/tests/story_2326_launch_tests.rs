@@ -1164,3 +1164,135 @@ fn story_2326_pr_b_phase_builders_preserve_none_argv_and_seat() {
         );
     }
 }
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_pr_b_dispatch_background_env_and_refusal() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+    std::fs::write(tmp.path().join(".aida/agents.toml"), "contained = false\n").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &["implementer"],
+        &[("AIDA_CONTAINED", None)],
+    );
+    let build = || {
+        crate::dispatch::build_implementer_launch_command(
+            std::path::Path::new("claude"),
+            tmp.path(),
+            tmp.path(),
+            "STORY-2326",
+            "--settings is prompt text",
+            "lane-test",
+            crate::dispatch::DispatchVendor::Claude,
+        )
+    };
+    let cmd = build().unwrap();
+    let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
+    for key in [
+        "AIDA_SESSION_ROLE",
+        "AIDA_SESSION_GRANT",
+        "AIDA_SESSION_PURPOSE",
+    ] {
+        assert_eq!(env.get(OsStr::new(key)), Some(&None), "{key}");
+    }
+    for (key, value) in [
+        ("AIDA_SESSION_SCOPE", "STORY-2326"),
+        ("AIDA_AGENT_NAME", "lane-test"),
+        ("AIDA_USER", "lane-test"),
+    ] {
+        assert_eq!(env.get(OsStr::new(key)), Some(&Some(OsStr::new(value))));
+    }
+    assert_eq!(
+        cmd.get_args().collect::<Vec<_>>(),
+        ["--bg", "-n", "lane-test", "--settings is prompt text"].map(OsStr::new)
+    );
+    drop(_ambient);
+    let _parent = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &["implementer"],
+        &[("AIDA_CONTAINED", Some("1"))],
+    );
+    assert!(build()
+        .unwrap_err()
+        .to_string()
+        .contains("requires the supervised agent launcher"));
+}
+
+#[test]
+fn story_2326_pr_b_session_and_phase_refuse_weaker_parent() {
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_CONTAINED", Some("1")),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    let err =
+        crate::session::build_codex_session_command("hello", false, false, None, None).unwrap_err();
+    assert!(matches!(
+        err.downcast_ref::<LaunchRefusal>(),
+        Some(LaunchRefusal::WeakerThanParent { .. })
+    ));
+    let tmp = tempfile::tempdir().unwrap();
+    for vendor in [
+        crate::session::HeadlessVendor::Codex,
+        crate::session::HeadlessVendor::Agy,
+    ] {
+        let advisor = crate::phase_driver::build_phase_driver_advisor_command(
+            tmp.path(),
+            vendor.program(),
+            &[],
+            &tmp.path().join("request"),
+            &tmp.path().join("response"),
+            "LIMIT",
+            "1",
+            vendor,
+            false,
+        )
+        .unwrap_err();
+        let fix = crate::phase_driver_trait::build_phase_driver_ci_fix_command(
+            tmp.path(),
+            vendor.program(),
+            &[],
+            "LIMIT",
+            "1",
+            vendor,
+            false,
+            "grant",
+        )
+        .unwrap_err();
+        for err in [advisor, fix] {
+            assert!(
+                matches!(
+                    err.downcast_ref::<LaunchRefusal>(),
+                    Some(LaunchRefusal::WeakerThanParent { .. })
+                ),
+                "{err:#}"
+            );
+        }
+    }
+}
+
+#[test]
+fn story_2326_pr_b_compete_refuses_template_posture_flag() {
+    let tmp = tempfile::tempdir().unwrap();
+    for flag in [
+        "--full-auto",
+        "--settings=host.json",
+        "--sandbox=danger-full-access",
+    ] {
+        let err = crate::compete_cmd::build_compete_arm_command(
+            tmp.path(),
+            tmp.path(),
+            "codex",
+            &[flag.into()],
+            "codex",
+        )
+        .unwrap_err();
+        assert!(
+            err.downcast_ref::<aida_core::launch_policy::PostureFlag>()
+                .is_some(),
+            "{err:#}"
+        );
+    }
+}

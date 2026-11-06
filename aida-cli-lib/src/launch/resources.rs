@@ -117,19 +117,33 @@ pub(crate) fn open_host_settings(
     path: &std::path::Path,
     write_roots: &[PathBuf],
 ) -> anyhow::Result<std::fs::File> {
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     let canonical = path.canonicalize()?;
+    let expected = std::fs::metadata(&canonical)?;
     for root in write_roots {
         anyhow::ensure!(
             !canonical.starts_with(root.canonicalize()?),
             "generated launch settings must be outside sandbox write roots"
         );
     }
+    open_checked_settings(path, &expected)
+}
+
+fn open_checked_settings(
+    path: &std::path::Path,
+    expected: &std::fs::Metadata,
+) -> anyhow::Result<std::fs::File> {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     let file = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)?;
     let metadata = file.metadata()?;
+    // Bind the location check to the opened inode, including parent symlinks.
+    // trace:STORY-2326 | ai:codex
+    anyhow::ensure!(
+        metadata.dev() == expected.dev() && metadata.ino() == expected.ino(),
+        "generated launch settings changed during validation"
+    );
     anyhow::ensure!(
         metadata.is_file()
             && metadata.nlink() == 1
@@ -177,6 +191,31 @@ mod story_2326_resources_tests {
         }
         symlink(other.join("target"), seat.join("alias")).unwrap();
         assert!(CargoResources::resolve(&host, &seat, &seat.join("alias")).is_err());
+    }
+
+    #[test]
+    fn settings_parent_symlink_swap_refuses_different_opened_inode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let host = tmp.path().join("host");
+        let seat = tmp.path().join("seat");
+        for dir in [&host, &seat] {
+            std::fs::create_dir(dir).unwrap();
+            std::fs::write(dir.join("settings"), "{}").unwrap();
+            std::fs::set_permissions(dir.join("settings"), std::fs::Permissions::from_mode(0o600))
+                .unwrap();
+        }
+        let alias = tmp.path().join("parent");
+        symlink(&host, &alias).unwrap();
+        let path = alias.join("settings");
+        let canonical = path.canonicalize().unwrap();
+        let expected = std::fs::metadata(&canonical).unwrap();
+        assert!(!canonical.starts_with(&seat));
+        std::fs::remove_file(&alias).unwrap();
+        symlink(&seat, &alias).unwrap();
+        assert!(open_checked_settings(&path, &expected)
+            .unwrap_err()
+            .to_string()
+            .contains("changed during validation"));
     }
 
     #[test]

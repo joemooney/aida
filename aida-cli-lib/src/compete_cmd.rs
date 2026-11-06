@@ -1114,6 +1114,10 @@ pub(crate) fn build_compete_arm_command(
 ) -> Result<std::process::Command> {
     // trace:BUG-2172 | ai:codex
     // trace:BUG-2393 | ai:claude
+    // Template argv is operator supplied. Validate before adding trusted posture
+    // flags or wrappers; prompt strings are passed separately by the caller.
+    // trace:STORY-2326 | ai:codex
+    aida_core::launch_policy::refuse_posture_flags(argv)?;
     let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
     // Resolve the host main once, here at the entry point; the argv builder
