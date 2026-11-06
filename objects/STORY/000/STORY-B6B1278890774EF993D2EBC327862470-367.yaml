@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T18:07:53.321323762Z
+modified_at: 2026-11-06T18:07:59.469347774Z
 req_type: Story
 relationships:
 - rel_type:
@@ -321,6 +321,12 @@ comments:
   created_at: 2026-11-06T14:53:30.031562882Z
   modified_at: 2026-11-06T14:53:30.031562882Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b20b-c9ed-7853-b69d-d13426fb6d24
+  author: joe
+  content: 'ADVISOR BRIEF 11:10 (slice 4 of 5): slices 1-3 have landed (#3324, #3427, #3493). Implement slice 4 only: the resumable train intent journal. Before each forge call the train writes {pinned head, members, step} to a journal under the train state dir. A crashed or errored train resumes from forge truth plus the journal (re-read, then confirm with forge_confirmation before any destructive step), never by re-running a completed step. Cover the BUG-2412 case (a killed train left its PR open) with a test: kill after merge-call and resume, kill after the eject decision and resume. One PR with a Refs STORY-2401 trailer (slice 5, the CI workflow digest, completes the story later). Expect overlap with BUG-2463 (#3519, forge_confirmation.rs): rebase on main if it lands first. LIGHT gate: cargo test -p aida-cli-lib --lib pr_train plus make check-ci-fast. Read docs/plans/2026-11-06-story-2401-confirmed-negatives.md for the boundary.'
+  created_at: 2026-11-06T18:07:59.469347774Z
+  modified_at: 2026-11-06T18:07:59.469347774Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
