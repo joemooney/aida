@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:03:58.684745675Z
-modified_at: 2026-11-06T02:06:42.962264647Z
+modified_at: 2026-11-06T02:10:17.928209012Z
 req_type: Task
 tags:
 - from-advisor
@@ -134,6 +134,12 @@ comments:
   created_at: 2026-11-06T02:05:26.536368586Z
   modified_at: 2026-11-06T02:05:26.536368586Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae9e-fec8-72c3-ae46-1dafafe6c0ae
+  author: joe
+  content: 'Round 3: corrected the stale fully-uncovered fixture to use unresolved story-b6b1278890774ef993d2ebc327862470-999999-2 after TASK-3112 suffix stripping; lease STORY-2220 and title Refs BUG-2400 are retained. PR #3442 body now explicitly states that the positive retain_admin=true REMOUNT-CONTROL runs only on permitting hosts and may skip on CI, while negative assertions remain required-live. Partially covered policy is unchanged as requested. Formatting and whitespace checks pass. Local lib-0 is compiling; result to follow. Normal aida commit failed creating .git/index.lock (Read-only file system). Per docs/cli/04-git-lifecycle.md native-seat workflow, leave pending changes for launcher post-exit commit; do not bypass the Git boundary. Requested new commit: [AI:codex] test(train): keep uncovered fixture unresolved after rework suffix stripping (TASK-3111).'
+  created_at: 2026-11-06T02:10:17.928209012Z
+  modified_at: 2026-11-06T02:10:17.928209012Z
+  session_id: 01a1ae9baea1
 history:
 - id: 01a1ac74-8aee-7ae2-ac1a-c46e2560e762
   author: joe
