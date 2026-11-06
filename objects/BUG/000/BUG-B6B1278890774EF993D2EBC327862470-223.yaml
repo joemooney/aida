@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:24:45.297488765Z
-modified_at: 2026-11-06T01:31:52.737663588Z
+modified_at: 2026-11-06T01:31:56.271425048Z
 req_type: Bug
 tags:
 - area:review
@@ -32,6 +32,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic meets BUG-2457 acceptance (fail-closed retire of idle default review tree, hold adopted to primary, existing refusal otherwise), but PR CI is red at head: gates (git auto-maintenance ratchet) caused by the new test file, and lib-0 Run tests failed (log unreadable from reviewer sandbox).. No triage reason was given.'
   created_at: 2026-11-06T01:31:52.737662377Z
   modified_at: 2026-11-06T01:31:52.737662377Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae7b-df81-7c31-8815-62fc9dcc75f1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2457):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c188712e8a37
+    Recorded: 2026-11-06T01:30:55.186834927+00:00
+    Findings:
+    1. CI gates red at c188712e8a3 — step 'Test git auto-maintenance ratchet' (tests/test_git_maintenance_ratchet.py). aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs runs write-class git (push at ~L105 and ~L153, commit at ~L151) through git_ok imported via 'use super::tests::{fixture, git_ok}'. The ratchet's Definitions class resolves guards only against fns defined in the same file, so these count as new unguarded sites (file has no baseline entry). Fix: define a local helper over crate::test_git::git_command() (or apply -c maintenance.auto=false -c gc.auto=0 inline) in this file; confirm with 'python3 tests/test_git_maintenance_ratchet.py --print'. Do not raise the baseline.
+    2. CI lib-0 red at c188712e8a3 — job 127644285321 step 'Run tests' exited 1 (the train run 42141464747 on a nearby base had lib-0 green, so it is likely PR-related, possibly the new bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_trees test). The reviewer sandbox could not fetch the job log; the implementer must read the lib-0 log, fix any failure, and get lib-0 green. Acceptance (1)-(3) stay unverified until the new regression test passes in CI.
+    3. Downstream: 'Build (ubuntu-latest) / Require every CI lane' fails because of the two lanes above; it should clear once gates and lib-0 are green.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T01:31:56.161682994Z
+  modified_at: 2026-11-06T01:31:56.161682994Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ace2-fcb8-7df3-bdb6-2dcb17aee41f
