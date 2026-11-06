@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T18:55:56.581338681Z
+modified_at: 2026-11-06T19:12:17.378355903Z
 req_type: Task
 tags:
 - architecture
@@ -79,6 +79,24 @@ comments:
   created_at: 2026-11-06T18:52:37.961042664Z
   modified_at: 2026-11-06T18:52:37.961042664Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b246-a7e2-7f33-a72f-efb0926a5d7e
+  author: joe
+  content: |
+    Round 2 implementation (native seat; changes remain uncommitted for host publication):
+
+    1. Lease selection ignores unreadable records and unresolved/empty/deleted/unrelated worktrees before matching root+role. Matching ownership ambiguity still refuses. Real-owner fixture includes empty, deleted, malformed and sibling leases beside the owned lease.
+    2. Any Python authority timeout/EOF/protocol error shuts down the shared socket endpoint permanently, including the Rust duplicate; Rust bind-worker I/O failures likewise shut it down. A delayed responder computes Y, the caller times out, revocation occurs, and neither subsequent authorization nor the duplicate can consume that stale Y. Receipt-barrier Rust I/O temporarily clears Python's shared O_NONBLOCK flag and restores it before releasing the helper.
+    3. Added owner_tests.rs against Session::prepare and the production responder: missing subject/seat/grant, mismatched subject/seat/project/worktree, invalid/empty grant, missing/ambiguous lease, unresolved spec; live project/worktree/store replacement, roster relocation/removal, lease removal and id/scope/start/role/worktree rewrites, child/parent expiry/revocation, changed parent, and missing worker binding. Grant fixtures use a per-test hermetic AIDA_HOME.
+    4. Full-CI gates shard now requires AIDA_REQUIRE_STORE_MUTATION_LIVE=1 after existing runner namespace setup. Locally, all 20 Python channel tests passed with this flag; both live lifecycle tests and the sibling test ran without skips.
+    5. Two actual user/mount namespace lanes test direct address connection refusal, production connect identity rejection, SCM_RIGHTS transfer of the owned client descriptor (owner succeeds, sibling os.write refuses per packet), and /proc/<pid>/fd reopening refusal.
+    6. Removed the per-change AGENTS.md paragraph, retained/clarified OVERVIEW.md architecture, and updated PR #3516's body with summary and validation.
+
+    Targeted Rust tests remain unrun (untested=true): `aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib store_mutation:: -- --nocapture` refused because lease 01a1b237a885 has no lane job runner. The pickup workflow explicitly requires reporting untested on this refusal. Host/CI must run this filter before merge. No merge-hold clearance, review verdict, queue completion, commit, or push was performed in the seat. Drive-mode human merge review remains required.
+
+    Final validation: make check-ci-fast passed all 39 gates after the last production change (including feature-disabled CLI compile, formatting, containment conformance and all 20 transport tests). Explicit forced-live Python run passed all 20 tests with zero skips. git diff --check and focused rustfmt checks passed. Native publication subject recorded: [AI:codex] fix(containment): close stale authority channels and cover owner refusals (TASK-3225).
+  created_at: 2026-11-06T19:12:17.378355903Z
+  modified_at: 2026-11-06T19:12:17.378355903Z
+  session_id: 01a1b237a885
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
   author: joe
