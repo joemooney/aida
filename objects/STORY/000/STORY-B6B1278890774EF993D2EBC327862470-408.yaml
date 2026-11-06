@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T15:48:50.771732113Z
+modified_at: 2026-11-06T16:07:21.509595386Z
 req_type: Story
 relationships:
 - rel_type:
@@ -200,6 +200,12 @@ comments:
   content: 'Round 3 implementation underway under binding 2026-11-06 15:22 UTC ruling: cold/fingerprint-invalidated history validates newest 32 retained attempts only; validator-bound checkpoint records exact verified paths, old results remain unverified-history audit data and cannot publish statuses. Exact attempt/SHA read revalidates only the requested old result on warm history. Follow-up inventory rescope now actually filed as from-review draft TASK-3232 (TASK-b6b1278890774ef993d2ebc327862470-886), parent STORY-2480; advisor promotion pending. Native seat will leave edits uncommitted and declare host publication. CI head-green gate remains required.'
   created_at: 2026-11-06T15:48:50.771732113Z
   modified_at: 2026-11-06T15:48:50.771732113Z
+  session_id: 01a1b18688e4
+- id: 01a1b19d-58a5-7812-8d9f-1ccab852e1ea
+  author: joe
+  content: 'Round 3 handoff: implemented binding bounded-history ruling. Named CI_HISTORY_REVALIDATION_ATTEMPTS=32 caps cold/fingerprint-invalidated source inventory validation; checkpoint stores a compact exact verification bitmap bound to immutable tip and validator sources. Every CI file still requires retained admission, strict schema/digest/canonical path; older results report unverified-history and cannot publish statuses. Added intent ci read audit listing and exact --attempt/--sha revalidation with persisted proof. Fixed all three useless format! calls. Follow-up inventory rescope actually filed as from-review draft TASK-3232 (canonical TASK-b6b1278890774ef993d2ebc327862470-886), pending advisor promotion. Changed files: aida-cli-lib/src/{ci_receipt,ci_relay,intent_intake,plan_intent}.rs; CLI help golden; tests/test_work_ci_relay.py; relay operation guide; JSON audit; STORY-2480 plan. Validation: final build --no-default-features passed; 12 relay integration scenarios passed in 152.15s, including 35 distinct SHAs and 35 separate result commits, cold pull under 30s with exactly 32 source fetches, warm old read fetching only one SHA, invalid old inventory refusal, and bounded fingerprint invalidation; 4 receipt and 2 inventory units passed; all 802 catalog entries and changed help blocks match golden; exhaustive JSON audit passed (73.83s); cargo fmt and git diff --check passed. Published-head e090be44c03 contracts job and restricted relay step are green (run 42245572665, job 127986783343). These edits remain uncommitted per native-seat instructions. Native publication subject recorded: [AI:codex] fix(ci): bound cold relay history revalidation (Refs STORY-2480). Host must commit/publish this round, require CI green at the resulting head, preserve merge hold until authorized human/advisor clearance, and persist queued store changes. No completion claimed.'
+  created_at: 2026-11-06T16:07:21.509595386Z
+  modified_at: 2026-11-06T16:07:21.509595386Z
   session_id: 01a1b18688e4
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
