@@ -4,6 +4,36 @@
 
 Status: proposed; master/operator sign-off required before implementation.
 This is the guided design checkpoint, not a completed containment change.
+This file is the canonical design; the STORY-2593 comment points here rather
+than maintaining a second copy.
+
+## Round 2: acceptance and approval checkpoint
+
+Review of `058e9899a195` correctly found that all three acceptance criteria
+remain unmet. This revision is documentation only:
+
+| Finding | Current evidence and disposition |
+| --- | --- |
+| 1 / AC1 | `refuse_chatgpt()` still rejects an existing auth.json and the launcher still requires OPENAI_API_KEY. No brokered ChatGPT path is implemented. Deferred behind the design approval below. |
+| 2 / AC2 | No C0-C4 ChatGPT run under `--boundary aida`, credential-visibility probes, or policy/binary/receipt hashes are supplied. They remain required after implementation; absent evidence is unknown. |
+| 3 / AC3 | BUG-2447 and BUG-2448 remain needs-attention and blocked by this story. No new C3/C4 measurement justifies closure or rescoping. |
+| 4 / metadata | The prior feat subject and completion trailer overstate the diff. Keep PR #3544 open and held; it must not complete this story as a sketch. Host follow-up must correct the PR title before any eventual publication. |
+| 5 / guided gate | Queue rework returned the story to Approved without a triage reason; that is not recorded approval of the credential design. Implementation steps 1-5 remain gated. |
+| 6 / references | Both original URLs resolve; the authentication entry point redirects as documented below. Reference reachability does not establish installed CLI compatibility. |
+| 7 / duplication | Maintain the design here; replace the original full-text spec comment with a pointer. |
+
+Suggested docs-only host commit/PR subject, if publication is later authorized:
+`[AI:codex] docs(plans): clarify ChatGPT credential design gate (Refs STORY-2593)`.
+This is a handoff recommendation, not publication authorization. A punt or hold
+remains a publication veto, and the existing historical commit is not rewritten
+from this native seat. The merge-hold CI failure requires the authorized review
+and clearance path; it is not a failing implementation test to bypass.
+
+The master/operator must record explicit sign-off on STORY-2593 for option (a),
+including the residual readable bearer-token risk, the no-in-lane-renewal
+deadline, and the requirement to return to this gate if installed `codex exec`
+cannot consume access-only credentials. No such sign-off is present at this
+checkpoint. Until then, punt findings 1-5 rather than claim story completion.
 
 ## Observed implementation
 
@@ -116,10 +146,16 @@ completion or closing BUG-2447/BUG-2448.
 
 ## Official reference and remaining uncertainty
 
-Checked 2026-11-06: [Codex authentication](https://learn.chatgpt.com/docs/auth)
-documents cached login storage and automatic token refresh.
+Rechecked 2026-11-06 by opening both official pages:
+[Codex authentication](https://developers.openai.com/codex/auth) redirects to
+[Authentication](https://learn.chatgpt.com/docs/auth). Its "Login caching" and
+"Credential storage" sections document file/keyring storage and automatic
+ChatGPT token refresh. The redirect explains the original Learn URL.
 [Codex app-server external OAuth setup](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
-documents an access-token provider flow with host-managed renewal. Neither is
-proof that the installed `codex exec` supports the proposed existing-login
-handoff. That compatibility check and approval of the residual bearer-token
-exposure are prerequisites to implementation.
+also resolves. Its setup supplies an application-owned access token through an
+environment-backed Responses provider, with application-managed renewal and
+process restart. That separate app-server integration does not demonstrate
+reuse of the operator's CLI login. Neither page proves that the installed
+`codex exec` supports the proposed existing-login handoff. That compatibility
+check and approval of the residual bearer-token exposure remain prerequisites
+to implementation.
