@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T17:17:08.421904612Z
+modified_at: 2026-11-06T17:29:33.465314333Z
 req_type: Story
 relationships:
 - rel_type:
@@ -236,6 +236,13 @@ comments:
     Round 4 implementation prepared in the native seat for host publication (Refs STORY-2480). F1: checkpoint regression now parses JSON and supplies a valid JSON stale-validator checkpoint. F2: downloaded job 128000524363 logs; failing test is command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot. The mismatch is an accidental CI-read help string on the unrelated internal codex-bg-supervise --attempt option in the golden fixture; restored its actual empty help rendering. F3: warm incremental validation now applies the same newest-32 retained-attempt cap; extended contract coverage checks a burst after a warm checkpoint, persisted verification bits, audit-only excess, exact old reads, and fingerprint invalidation. F4: docs/agents/work-ci-relay.md now documents 4096 retained-ref/commit limits, shared observation impact, and lack of compaction recovery without violating immutable refs. cargo fmt --all -- --check passed. Rust tests are still compiling in the cold isolated target directory; results will follow. No commit/push/PR/queue completion from this native seat; merge hold and post-publication head CI remain host/advisor gates.
   created_at: 2026-11-06T17:17:08.421904612Z
   modified_at: 2026-11-06T17:17:08.421904612Z
+  session_id: 01a1b1c17890
+- id: 01a1b1e8-9a19-78f0-97dc-ddd074b1ca05
+  author: joe
+  content: |
+    Round 4 validation complete: help_surface_matches_golden_snapshot passed (1 test); task_3096_intake_transport passed all 20 tests including validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits; tests/test_work_ci_relay.py passed all 13 contracts in 258.461s, including both cold >32-attempt and new warm-checkpoint burst/exact-old-read tests; cargo fmt --all -- --check passed. Git diff whitespace check passes excluding the golden fixture, whose intentional indented empty help line is the byte-exact clap rendering verified by its snapshot test. Native publication declaration recorded: [AI:codex] fix(ci): bound incremental receipt validation and repair CI regressions (Refs STORY-2480). Edits remain uncommitted for the host launcher. Remaining external gates: publish a new head, require full CI green there including contracts e2e, and obtain the existing merge-hold clearance through the authorized human/advisor path. No findings disputed; F4 addressed by documenting the retention cap, without deleting retained refs.
+  created_at: 2026-11-06T17:29:33.465314333Z
+  modified_at: 2026-11-06T17:29:33.465314333Z
   session_id: 01a1b1c17890
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
