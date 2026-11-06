@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T12:41:39.910963650Z
+modified_at: 2026-11-06T12:42:07.421362440Z
 req_type: Story
 relationships:
 - rel_type:
@@ -233,6 +233,23 @@ comments:
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
   created_at: 2026-11-06T12:41:39.910958862Z
   modified_at: 2026-11-06T12:41:39.910958862Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0e1-7222-7803-97fe-25f6863a3160
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bca424a8dda4
+    Recorded: 2026-11-06T11:20:42.992102873+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3493#issuecomment-6683643113
+    Findings:
+    1. [major] CI red at bca424a8dda (main 066c1609bf8 green): CI (lib-1) 'Run tests' failed and CI (lib-0), CI (lib-1), CI (cli-0) 'Test time budget' failed (run 42206414979). Job logs could not be read from the review sandbox (log blob host denied), so the failing test names are unverified. The CI annotations show aida-cli::task_1335_reconcile_unavailable_evidence tests at 21-28s against a 15s budget (about 5s on main). Likely cause: forge_confirmation::backoff (forge_confirmation.rs:10) is an unconditional 3s thread::sleep with no injectable or configurable seam, called on production paths that binary-level tests exercise: reconcile_evidence.rs:181 confirm_clear (every Clear search now sleeps 3s), pr_train.rs:1769 abandoned-train owner confirm, :2468 confirm_ci_refusal, :2523 confirm_not_landed, review_watch_forge.rs:335 retry_fetch and forge_confirmation::metadata_for. The new real-git test story_2401_closed_train_receipt_and_absent_squash_head_real_git also calls metadata() twice with the real backoff. Fix: make the confirmation pause configurable (e.g. a config/env knob read by backoff() that the test harness sets to 0), or thread an injectable pause through these call sites. Re-measure, and add budget entries only with measured evidence. Identify and fix the lib-1 Run tests failure, then get every CI shard green at the new head.
+    2. [minor] forge_confirmation::base_tip caches a Transient fetch failure in the Sweep map (forge_confirmation.rs ~95: tips.insert(key, tip.clone()) for any Observed). One transient blip on the first candidate leaves every later candidate in that queue-GC/reap/stranded-review sweep unconfirmed. That is safe but defeats the sweep. Cache only Known tips, or retry once before caching a failure.
+    3. [minor] on_base with an absent local head falls back only to the '(#N)'/(!N) squash-subject receipt (forge_confirmation.rs receipt()). A PR merged by GitHub merge commit ('Merge pull request #N ...') or rebase merge whose head is not fetched locally is then Merged on the forge but Known(false) on Git, so confirm_snapshot reports Pending('forge state conflicts with Git evidence') forever (pr_is_merged_with_sink None, so no credit). aida squash-merges, so impact is low. Either also fetch refs/pull/N/head into the private ref when the head is absent, or match the merge-commit subject, and add a test.
+    4. [cosmetic] The historical content commit d726665ca8f still has the non-descriptive bare-trailer subject 'chore(seat): work native Codex lane ... (STORY-2401)'. The round-2 completion risk is mitigated: the head is a merge commit, so derive_pr_ship_squash_subject_from_message (pr_cmd.rs:5306) yields the PR-title Refs subject for the squash. Rewording it when the branch is next rebuilt is optional.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T12:42:07.266396048Z
+  modified_at: 2026-11-06T12:42:07.266396048Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
