@@ -1,5 +1,6 @@
 id: 01a1add3-e2e4-7000-9ebe-e00b3a8e5460
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-850
+agreed_id: TASK-2906
 title: 'COSMETIC (non-blocking) coverage: publication tests inject run_at and advisor_r…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-2475, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:ea39ad2b
 - from-review:PR-3398
 - kind:carried-forward
+history:
+- id: 01a1ae2f-0325-7102-985e-99f0e451beeb
+  author: joe
+  timestamp: 2026-11-06T00:07:59.013848503Z
+  changes: []
 filed_at:
   code_sha: bdeb8f499786848a3cd0fec9d3e4b9bc6a0c03f0
   branch: main

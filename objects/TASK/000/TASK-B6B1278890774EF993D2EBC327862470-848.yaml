@@ -1,5 +1,6 @@
 id: 01a1add3-cd05-7a02-a39d-0e72b9ed7dc5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-848
+agreed_id: TASK-2905
 title: 'MINOR (non-blocking) noise: rework_conflict_route (queue_cmd.rs ~9060) mails th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-2475, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:fc364c26
 - from-review:PR-3398
 - kind:carried-forward
+history:
+- id: 01a1ae2f-025b-7b42-aa1d-d7c7c676f5df
+  author: joe
+  timestamp: 2026-11-06T00:07:58.811467538Z
+  changes: []
 filed_at:
   code_sha: bdeb8f499786848a3cd0fec9d3e4b9bc6a0c03f0
   branch: main
