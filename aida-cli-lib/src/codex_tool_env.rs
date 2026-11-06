@@ -46,8 +46,16 @@ pub(crate) fn context_digest(mut value: impl FnMut(&str) -> Option<std::ffi::OsS
 /// Only explicit child assignments qualify. Never consult the parent env.
 /// Removed/absent entries stay absent; an explicit empty grant stays empty.
 pub(crate) fn codex_tool_env_overrides(child: &Command) -> Result<Vec<String>> {
+    tool_env_overrides(child.get_envs())
+}
+
+/// Preview explicit metadata without constructing a vendor process.
+// trace:BUG-2439 | ai:codex
+pub(crate) fn tool_env_overrides<'a>(
+    pairs: impl IntoIterator<Item = (&'a std::ffi::OsStr, Option<&'a std::ffi::OsStr>)>,
+) -> Result<Vec<String>> {
     let mut args = Vec::new();
-    for (key, value) in child.get_envs() {
+    for (key, value) in pairs {
         let Some(key) = key.to_str().filter(|key| TOOL_ENV.contains(key)) else {
             continue;
         };

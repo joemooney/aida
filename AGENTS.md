@@ -1,8 +1,19 @@
+Queue completion requires readable branch ownership evidence even with
+`--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
+warns and retains its ledgered override. See OVERVIEW.md.
+<!-- trace:TASK-2887 | ai:codex -->
+
 Trusted default-branch `[contained.vendors] codex = "native"` opts Codex into its workspace-write
 sandbox with approvals disabled, reported as “native sandbox, not AIDA-contained”.
 Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
+
+`aida pr hold` preserves Git lookup diagnostics instead of calling every
+refusal a missing branch. Native-seat publication remains subject to the
+private-clone Git refusal; this fix grants no publication authority. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
 
 The contained Codex permission preset writes an empty extra `writable_roots`
 list, clearing legacy grants to `~/.cargo`, `~/.rustup` and `~/.aida` in either
@@ -550,12 +561,11 @@ See [second-node setup](docs/agents/second-review-node.md).
 
 ## Local observation envelopes
 
-`aida intent note|validate|export` operate on explicitly supplied data before
-identity, telemetry or store setup. The six-field v1 JSON format and hash are
-specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
-Keep these operations independent of store-only transport and spec comprehension.
-Use direct spellings; local observation commands reaching late alias dispatch
-refuse with direct-spelling guidance before performing observation I/O.
+`aida intent note|validate|export` operate on explicitly supplied data through a
+local entry path before identity, telemetry or store setup. The six-field v1
+JSON format and hash are specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+Store-only transport retains its separate authority.
+<!-- trace:TASK-3114 | ai:codex -->
 <!-- trace:STORY-2479 | ai:codex -->
 
 ## Requirements Management

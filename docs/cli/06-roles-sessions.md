@@ -601,7 +601,16 @@ head branch even when the spec is Approved and has no Rework hold. Each such
 pickup performs a forge PR lookup unless an explicit branch was selected. Before
 launching an implementer, the host fetches `origin/main` and attempts its
 merge into the seated PR branch. A clean merge is committed with the host's
-identity. Clone Git runs inside AIDA's sandbox with hooks disabled.
+identity and pushed to the trusted host's `origin` before the vendor starts.
+Clone commits are imported through the sandboxed bundle boundary; clone Git
+runs inside AIDA's sandbox with hooks disabled. Pre-launch publication requires
+that the seat started at the fetched PR head and produced a new merge whose
+parents are that head and the fetched main tip, in that order. Existing local
+lane commits and unchanged heads skip this push and retain the gated post-exit
+publication path. Temporary import refs are removed on success or refusal.
+Publication failures (including a non-fast-forward rejection) stop
+the launch.
+<!-- trace:BUG-2456 | ai:codex -->
 
 The host never resolves conflicts. It lists the conflicting files, aborts
 the merge, sends the advisor a request, and routes a fresh launch to Claude.
@@ -873,14 +882,14 @@ Legacy claims remain readable and are never adopted as rollback authority.
 ### Pipeline stall alarms
 
 <!-- trace:STORY-2476 | ai:codex -->
-`aida supervise stalls --json` previews two independent alarms without writing
+`aida supervise stalls --json` previews six independent alarms without writing
 runtime state, queue data, eligibility caches, mail or notification receipts.
 Run `aida supervise stalls --execute --json` every few minutes from a host job,
 or use the same detector integrated into `aida supervise watch --execute`.
 A watch preview also previews these alarms; watch JSON keeps its objective
 report on stdout and emits the alarm report on stderr.
 
-Each alarm requires `--threshold-mins N` minutes of continuous observations
+The continuous alarms require `--threshold-mins N` minutes of observations
 (default 30, minimum 15), on both `stalls` and `watch`:
 
 - `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
@@ -889,6 +898,31 @@ Each alarm requires `--threshold-mins N` minutes of continuous observations
   Role-less, integrator, advisor and product seats do not count as worker lanes.
 - `ready-without-train`: a PR is ship-ready and no train is running. Worker
   activity does not suppress this kind.
+- `under-cap`: occupied implementer worktrees are below `[queue]
+  standalone_implementer_cap` and project work is queued, continuously for N
+  minutes. Reviewer, train and ready-PR activity do not suppress it.
+- `no-merge-90m`: the most recent actual GitHub PR merge is at least 90 minutes
+  old. It fires on the first conclusive tick, independently of work or lanes.
+  It reads `mergedAt`, never default-branch commit age. Empty, malformed or
+  saturated merge history without a provable maximum stays unknown.
+- `stale-advisor-mail`: a verified live advisor has unread or pending mail at
+  least N minutes old. It fires immediately at that age, without another N-minute
+  delay. Read mail clears the signal; reading does not establish action.
+  Passive inspection neither binds role deliveries nor ACKs mail. Detector
+  requests from `aida-pipeline-detector` labeled `Pipeline stall alarm` are
+  excluded from this predicate; the same subject from another sender counts.
+  With no verified live advisor subject, this kind is explicitly unknown:
+  passive inspection cannot attribute unread role mail to an absent reader.
+  Other due kinds still use the configured operator notification fallback.
+- `empty-rework-exit`: an existing empty-rework retry receipt matches an open
+  PR’s unchanged head and current red CI, conflict or request-changes. It fires
+  immediately and clears when the PR closes, changes head or loses those blockers.
+  Missing/unreadable PR evidence or corrupt receipts stays unknown.
+
+<!-- trace:TASK-3075 | ai:codex -->
+Capacity counts verified live implementer worktrees once across leases and
+registry records, including distinct harness/MCP processes in the same lane.
+An invisible process or missing start identity leaves capacity unknown.
 
 Readiness uses current-head local review, required CI, mergeability, holds and
 reviewer activity, without the eligible-idle display's age filter. The detector
@@ -898,8 +932,16 @@ StatusContext failures without job logs are labeled as unavailable test evidence
 Process identity comes from leases, the registry and train ownership, including PID
 namespace checks. Unsupported forges, failed/partial forge reads and invisible
 processes remain unknown. Unknown predicates, cleared predicates, backwards
-clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
-frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
+clocks and gaps over 15 minutes reset their continuous timer. Age/event kinds
+retain accepted delivery across unknown and false ticks, clock changes and
+observation gaps for the same evidence identity (including pending CI reruns);
+a new merge timestamp, oldest-mail ID or empty-rework head re-arms that kind.
+Empty-rework delivery is tracked separately for each receipt key/head: changes
+to the set of blocked PRs do not resend already accepted heads. Settled episodes
+are pruned when their receipt is removed/replaced, the head changes, or the PR
+closes. Unknown evidence preserves episodes; unresolved delivery reservations
+remain even after the receipt/head clears.
+Schedule ticks more frequently than that gap; `watch --execute` rejects `--interval` above 900 seconds.
 A preview never advances an observation timer.
 
 Execute ticks serialize through the permanent main-worktree
@@ -916,12 +958,17 @@ nudge path: urgent mailbox
 fallback. A delivery reservation is persisted before sending. Known delivery
 failure retains the episode for retry; a crash or failed post-send write leaves
 an unresolved reservation, reported as unknown and suppressed until the
-predicate resets or the operator inspects the inbox and resets the state. An
-accepted kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+continuous predicate resets, an age/event identity changes, or the operator
+inspects the inbox and resets the state. An accepted continuous kind stays quiet
+until its predicate resets; an accepted age/event kind stays quiet until its
+evidence identity changes. One kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
 sent/queued after quiet hours; it does not prove read or action. This slice
 does not implement repeated unresolved escalation.
 
 This detector never starts work, ends a session, releases a lease or merges.
-Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
-acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
-rework exits are follow-up work; reading or accepting a wake is not action.
+Codex uses the existing armed mailbox wake service. Explicit recipient responses
+use [`aida mailbox disposition`](../mailbox.md#explicit-responses-to-requests),
+independently of read ACKs. Correlating those responses with alarm episodes and
+unresolved escalation remains follow-up work, along with Claude/Antigravity
+wake; reading or accepting a wake is not action.
+<!-- trace:TASK-3074 | ai:codex -->

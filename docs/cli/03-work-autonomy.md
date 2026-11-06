@@ -152,6 +152,14 @@ environment and in the Claude settings document it is launched with), since
 no later turn ever comes to collect them.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude -->
 
+Compete uses vendor-specific launch flags. An explicitly opted-in native Codex
+arm runs with `--sandbox workspace-write --ask-for-approval never`; its judge
+keeps `read-only`. Codex previews include the same tool-shell overrides as the
+actual launch. Claude's settings and OS wrapper apply to Claude children.
+On Linux, compete arms and judges receive a parent-death signal so the vendor
+process terminates even when compete is killed with SIGKILL.
+<!-- trace:BUG-2439 | ai:codex -->
+
 A native Codex child leaves tested edits uncommitted and exits with a
 handoff; the host commits and publishes after exit. Native `queue done`
 defers to the host before inspecting committed-only branch/test evidence.

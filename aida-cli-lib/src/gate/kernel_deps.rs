@@ -268,19 +268,35 @@ pub(crate) fn is_hex_sha(value: &str) -> bool {
 // trace:BUG-76 | ai:claude
 // trace:TASK-2053 | ai:claude
 pub(crate) fn current_branch_at(path: &std::path::Path) -> Option<String> {
+    current_branch_at_checked(path).ok()
+}
+
+/// Preserve Git failures (including seat-clone safety refusals) for gates
+/// that must not treat missing branch evidence as permission to proceed.
+// trace:TASK-2887 | ai:codex
+pub(crate) fn current_branch_at_checked(path: &std::path::Path) -> anyhow::Result<String> {
     let o = aida_core::git_ops::host_git_command(path)
         .args(["symbolic-ref", "--short", "HEAD"])
         .output()
-        .ok()?;
-    if !o.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+        .map_err(|e| {
+            anyhow::anyhow!("could not run git symbolic-ref in {}: {e}", path.display())
+        })?;
+    anyhow::ensure!(
+        o.status.success(),
+        "git symbolic-ref failed in {} ({}): {}",
+        path.display(),
+        o.status,
+        String::from_utf8_lossy(&o.stderr).trim()
+    );
+    let branch = String::from_utf8(o.stdout)
+        .map_err(|e| anyhow::anyhow!("invalid branch output in {}: {e}", path.display()))?;
+    let branch = branch.trim();
+    anyhow::ensure!(
+        !branch.is_empty(),
+        "empty branch output in {}",
+        path.display()
+    );
+    Ok(branch.to_string())
 }
 
 /// Full object name for `rev` in `repo`, or `None` when it doesn't resolve to

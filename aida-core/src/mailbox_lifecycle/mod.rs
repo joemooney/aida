@@ -50,6 +50,8 @@
 //! trace:STORY-1843 | ai:claude
 
 pub mod ack;
+// trace:TASK-3074 | ai:codex
+pub mod action;
 pub mod activation;
 pub mod guard;
 pub mod leftovers;

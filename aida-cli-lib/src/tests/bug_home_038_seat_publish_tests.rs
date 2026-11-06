@@ -1776,3 +1776,75 @@ esac
         assert!(calls.contains("--head refs-pr"), "{calls}");
     }
 }
+
+// trace:BUG-2456 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for conflicts in [false, true] {
+        let fx = fixture();
+        let clone = leased_clone(&fx, "rework-merge", "c0ffee245600");
+        git_ok(&fx.main, &["branch", "feat"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+        std::fs::write(
+            clone.join(if conflicts { "README.md" } else { "other" }),
+            "rework\n",
+        )
+        .unwrap();
+        let before = commit_pending(&fx.main, &clone, "feat", "fix: rework (BUG-2456)")
+            .unwrap()
+            .unwrap();
+        publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+        std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+        let sentinel = fx.root.join("hook-ran");
+        plant_hooks(&clone, &sentinel, &fx.root);
+        // The seat's origin cannot choose the publication destination.
+        git_ok(
+            &clone,
+            &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
+        );
+        let files = prepare_rework_merge(&fx.main, &clone, "feat", false).unwrap();
+        let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
+        let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        if conflicts {
+            assert_eq!(files, ["README.md"]);
+            assert_eq!(head, before);
+            assert_eq!(remote, before);
+        } else {
+            assert!(files.is_empty());
+            assert_ne!(head, before);
+            assert_eq!(remote, head);
+            assert!(import_refs(&fx.main).is_empty());
+            // Tip mismatch must clean up the imported ref before refusing.
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &before)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("changed before publication"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+
+            // A concurrent origin update rejects the actual host push. The
+            // clone import must be removed on this failure too.
+            git_ok(&fx.main, &["checkout", "-qb", "racer", &head]);
+            git_ok(
+                &fx.main,
+                &["commit", "--allow-empty", "-qm", "remote advances"],
+            );
+            let raced = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "racer:refs/heads/feat"]);
+            git_ok(&fx.main, &["checkout", "main"]);
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &head)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("rejected"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), raced);
+        }
+        assert!(!sentinel.exists(), "seat hooks must never execute");
+        assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    }
+}

@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[path = "pipeline_stall_signals.rs"]
+mod signals;
+
+pub(super) const ALARM_SENDER: &str = "aida-pipeline-detector";
+
 // An absent observer cannot prove that a predicate held throughout a long gap.
 const MAX_GAP_MS: i64 = 15 * 60 * 1000;
 
@@ -14,13 +19,15 @@ struct State {
     version: u32,
     episodes: BTreeMap<String, Episode>,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Episode {
     first_ms: i64,
     observed_ms: i64,
     accepted: bool,
     #[serde(default)]
     delivery_pending: bool,
+    #[serde(default)]
+    identity: String,
 }
 #[derive(Default, Debug, Serialize)]
 pub(super) struct Report {
@@ -57,10 +64,13 @@ struct Snapshot {
     work_waiting: Option<bool>,
     details: Vec<String>,
     failed_jobs: Vec<(u64, serde_json::Value)>,
+    // trace:TASK-3075 | ai:codex
+    extra: Vec<signals::Alarm>,
+    empty_rework_members: Option<std::collections::BTreeSet<String>>,
 }
 impl Snapshot {
-    fn predicates(&self) -> [(&'static str, Option<bool>); 2] {
-        [
+    fn predicates(&self) -> Vec<(&'static str, Option<bool>)> {
+        let mut predicates = vec![
             (
                 "pipeline-idle",
                 and(&[
@@ -73,7 +83,9 @@ impl Snapshot {
                 "ready-without-train",
                 and(&[self.ready, self.train_running.map(|v| !v)]),
             ),
-        ]
+        ];
+        predicates.extend(self.extra.iter().map(|a| (a.kind, a.active)));
+        predicates
     }
 }
 fn and(values: &[Option<bool>]) -> Option<bool> {
@@ -155,7 +167,7 @@ fn run_with_home(
     } else {
         None
     };
-    let snapshot = observe(root, home);
+    let snapshot = observe(root, home, threshold_mins);
     let report = tick(
         root,
         &snapshot,
@@ -201,6 +213,29 @@ fn tick_with_writer(
         .filter(|s| s.version == 1)
         .unwrap_or_default();
     state.version = 1;
+    // Upgrade the former aggregate receipt episode without losing accepted or
+    // unresolved deliveries. Receipt keys/heads contain no comma separators.
+    // trace:TASK-3075 | ai:codex
+    if let Some(episode) = state.episodes.remove("empty-rework-exit") {
+        for member in episode.identity.split(',').filter(|id| !id.is_empty()) {
+            let mut member_episode = episode.clone();
+            member_episode.identity = member.into();
+            state
+                .episodes
+                .entry(format!("empty-rework-exit:{member}"))
+                .or_insert(member_episode);
+        }
+    }
+    // Retire settled receipt/head episodes only on known evidence. Unresolved
+    // delivery reservations survive even receipt deletion or PR closure.
+    // trace:TASK-3075 | ai:codex
+    if let Some(members) = &snapshot.empty_rework_members {
+        state.episodes.retain(|key, episode| {
+            !key.starts_with("empty-rework-exit:")
+                || episode.delivery_pending
+                || members.contains(&episode.identity)
+        });
+    }
     let mut report = Report {
         execute,
         evidence: snapshot
@@ -211,38 +246,87 @@ fn tick_with_writer(
             .collect(),
         ..Default::default()
     };
-    for (kind, active) in snapshot.predicates() {
+    let mut due_episodes = Vec::new();
+    // Each empty-rework receipt/head owns its delivery state. Adding or removing
+    // another blocked PR must never re-arm an accepted (or unresolved) head.
+    // trace:TASK-3075 | ai:codex
+    let observations = snapshot
+        .predicates()
+        .into_iter()
+        .flat_map(|(kind, active)| {
+            let identity = snapshot
+                .extra
+                .iter()
+                .find(|a| a.kind == kind)
+                .map_or("", |a| a.identity.as_str());
+            if kind == "empty-rework-exit" && active == Some(true) {
+                identity
+                    .split(',')
+                    .filter(|id| !id.is_empty())
+                    .map(|member| (kind, active, member, format!("{kind}:{member}")))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![(kind, active, identity, kind.to_owned())]
+            }
+        });
+    for (kind, active, identity, episode_key) in observations {
+        let alarm = snapshot.extra.iter().find(|a| a.kind == kind);
+        // Age/event delivery belongs to the evidence identity, not a continuous
+        // run of true observations. Preserve accepted and unresolved deliveries
+        // across unknown/false ticks (including CI reruns on an unchanged head).
+        // trace:TASK-3075 | ai:codex
+        let identity_keyed = alarm.is_some_and(|a| a.immediate);
         if active != Some(true) {
-            state.episodes.remove(kind);
+            if !identity_keyed {
+                state.episodes.remove(kind);
+            }
             if active.is_none() {
                 report.unknown.push(kind.into());
             }
             continue;
         }
-        report.active.push(kind.into());
-        let episode = state.episodes.entry(kind.into()).or_insert(Episode {
-            first_ms: now,
-            observed_ms: now,
-            accepted: false,
-            delivery_pending: false,
-        });
-        if now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS {
+        if !report.active.iter().any(|k| k == kind) {
+            report.active.push(kind.into());
+        }
+        // Age/event predicates already include their own threshold. Identity changes
+        // re-arm a new merge/mail/head episode without waiting for a clear tick.
+        // trace:TASK-3075 | ai:codex
+        let delay = if alarm.is_some_and(|a| a.immediate) {
+            0
+        } else {
+            i64::from(threshold_mins) * 60_000
+        };
+        let episode = state
+            .episodes
+            .entry(episode_key.clone())
+            .or_insert(Episode {
+                first_ms: now,
+                observed_ms: now,
+                accepted: false,
+                delivery_pending: false,
+                identity: identity.into(),
+            });
+        if (!identity_keyed
+            && (now < episode.observed_ms || now - episode.observed_ms > MAX_GAP_MS))
+            || episode.identity != identity
+        {
             *episode = Episode {
                 first_ms: now,
                 observed_ms: now,
                 accepted: false,
                 delivery_pending: false,
+                identity: identity.into(),
             };
         }
         episode.observed_ms = now;
         if episode.delivery_pending {
             report.unknown.push(format!("{kind}: prior delivery outcome unresolved; inspect advisor inbox before resetting state"));
         }
-        if now - episode.first_ms >= i64::from(threshold_mins) * 60_000
-            && !episode.accepted
-            && !episode.delivery_pending
-        {
-            report.due.push(kind.into());
+        if now - episode.first_ms >= delay && !episode.accepted && !episode.delivery_pending {
+            due_episodes.push(episode_key);
+            if !report.due.iter().any(|k| k == kind) {
+                report.due.push(kind.into());
+            }
         }
     }
     if execute && !report.due.is_empty() {
@@ -269,23 +353,23 @@ fn tick_with_writer(
             (out.status.success() && out.stdout.len() <= 1024 * 1024)
                 .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
         }));
-        let body = format!("Pipeline needs attention: {} (continuously observed >= {threshold_mins} minutes).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
+        let body = format!("Pipeline needs attention: {} (continuous alarms: >= {threshold_mins} minutes; age/event alarms: see evidence).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
             report.due.join(", "), bounded_digest(&details));
         // Reserve durably before external delivery. A failed post-send write leaves
         // an unresolved reservation, preventing duplicate urgent mail on later ticks.
-        for kind in &report.due {
-            state.episodes.get_mut(kind).unwrap().delivery_pending = true;
+        for key in &due_episodes {
+            state.episodes.get_mut(key).unwrap().delivery_pending = true;
         }
         persist(&path, &serde_json::to_vec_pretty(&state)?)?;
         let delivered = send(&body);
-        for kind in &report.due {
-            state.episodes.get_mut(kind).unwrap().delivery_pending = false;
+        for key in &due_episodes {
+            state.episodes.get_mut(key).unwrap().delivery_pending = false;
         }
         // Known refused/failed deliveries remain retryable after persistence.
         match delivered {
             Ok(true) => {
-                for kind in &report.due {
-                    state.episodes.get_mut(kind).unwrap().accepted = true;
+                for key in &due_episodes {
+                    state.episodes.get_mut(key).unwrap().accepted = true;
                 }
                 report.accepted = report.due.clone();
             }
@@ -338,11 +422,13 @@ fn lane_role(role: Option<&str>) -> bool {
     // Only implementation/review lanes suppress idle; interactive observers do not.
     matches!(role, Some("implementer" | "reviewer"))
 }
-fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
+fn observe(root: &Path, home: Option<&Path>, threshold_mins: u32) -> Snapshot {
     let mut s = Snapshot::default();
     let observer = aida_core::pid_observer::PidObserver::current();
     let leases = crate::leases::list_leases_strict_all(root);
     let entries = registry(root);
+    let implementers =
+        signals::implementer_count(root, leases.as_deref().ok(), entries.as_deref().ok());
     if let (Ok(leases), Ok(entries)) = (&leases, &entries) {
         let mut alive = Vec::new();
         for l in leases.iter().filter(|l| lane_role(l.role.as_deref())) {
@@ -380,9 +466,20 @@ fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
         s.details.push("Worker liveness unknown: unreadable lease/registry data, foreign host/namespace, or missing process identity; run the tick on the host and inspect aida ps".into());
     }
     s.train_running = crate::merge_lock::observed_train_running(root);
-    if let Some((prs, raw)) = forge_snapshot(root) {
-        observe_prs(root, home, &prs, &raw, &mut s);
+    let forge = forge_snapshot(root);
+    if let Some((prs, raw)) = &forge {
+        observe_prs(root, home, prs, raw, &mut s);
     }
+    let now = chrono::Utc::now().timestamp_millis();
+    (s.extra, s.empty_rework_members) = signals::observe(
+        root,
+        forge.as_ref().map(|(prs, _)| prs),
+        implementers,
+        queue_waiting_for(root, home, true),
+        threshold_mins,
+        now,
+        &mut s.details,
+    );
     // A merge train is itself an active pipeline lane even without an agent row.
     s.lanes_running = any(&[s.lanes_running, s.train_running]);
     if s.ready.is_none() {
@@ -441,6 +538,11 @@ fn observe_prs(
 }
 
 fn queue_waiting(root: &Path, home: Option<&Path>) -> Option<bool> {
+    queue_waiting_for(root, home, false)
+}
+
+// trace:TASK-3075 | ai:codex
+fn queue_waiting_for(root: &Path, home: Option<&Path>, implementer_only: bool) -> Option<bool> {
     // Do not shell out to queue list: it opportunistically garbage-collects queues.
     let mut present = Vec::new();
     for path in files(&root.join(".aida-store/registry/queues")).ok()? {
@@ -449,7 +551,12 @@ fn queue_waiting(root: &Path, home: Option<&Path>) -> Option<bool> {
         }
         let bytes = std::fs::read(path).ok()?;
         let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_slice(&bytes).ok()?;
-        present.push(Some(!rows.is_empty()));
+        present.push(Some(rows.iter().any(|r| {
+            !implementer_only
+                || r.for_role
+                    .as_deref()
+                    .is_none_or(|role| role == "implementer")
+        })));
     }
     if let Some(home) = home {
         let path = home.join(".aida/queue/implementer.yaml");
@@ -867,7 +974,7 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert!(parsed[0].role.is_none());
         assert_eq!(
-            observe(t.path(), Some(home.path())).lanes_running,
+            observe(t.path(), Some(home.path()), 30).lanes_running,
             Some(false)
         );
     }
@@ -1341,7 +1448,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("broken.toml"), "broken [").unwrap();
         assert!(registry(t.path()).is_err());
-        assert_eq!(observe(t.path(), Some(t.path())).lanes_running, None);
+        assert_eq!(observe(t.path(), Some(t.path()), 30).lanes_running, None);
         let observer = aida_core::pid_observer::PidObserver {
             namespace: Some(42),
             isolated: false,
