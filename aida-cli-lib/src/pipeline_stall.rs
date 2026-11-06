@@ -86,6 +86,11 @@ struct Episode {
     persistent_escalation_pending: bool,
     #[serde(default)]
     persistent_escalation: Option<SendResult>,
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+    #[serde(default)]
+    deferral_escalation_pending: bool,
+    #[serde(default)]
+    deferral_escalation: Option<SendResult>,
 }
 impl Episode {
     fn new(now: i64, identity: &str) -> Self {
@@ -104,6 +109,39 @@ impl Episode {
             escalation: None,
             persistent_escalation_pending: false,
             persistent_escalation: None,
+            deferral_escalation_pending: false,
+            deferral_escalation: None,
+        }
+    }
+    // Keep each once-per-episode notice independent, including durable reservations.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+    fn escalation_slot(&mut self, kind: EscalationKind) -> (&mut bool, &mut Option<SendResult>) {
+        match kind {
+            EscalationKind::Unresolved => (&mut self.escalation_pending, &mut self.escalation),
+            EscalationKind::Persistent => (
+                &mut self.persistent_escalation_pending,
+                &mut self.persistent_escalation,
+            ),
+            EscalationKind::Deferral => (
+                &mut self.deferral_escalation_pending,
+                &mut self.deferral_escalation,
+            ),
+        }
+    }
+}
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[derive(Clone, Copy)]
+enum EscalationKind {
+    Unresolved,
+    Persistent,
+    Deferral,
+}
+impl EscalationKind {
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Unresolved => "unresolved",
+            Self::Persistent => "persistent",
+            Self::Deferral => "deferral",
         }
     }
 }
@@ -398,6 +436,7 @@ fn tick_with_effects(
                 || episode.delivery_pending
                 || episode.escalation_pending
                 || episode.persistent_escalation_pending
+                || episode.deferral_escalation_pending
                 || members.contains(&episode.identity)
         });
     }
@@ -479,7 +518,10 @@ fn tick_with_effects(
         }
         let continuity = *episode.continuity_ms.get_or_insert(now);
         episode.observed_ms = now;
-        if episode.escalation_pending || episode.persistent_escalation_pending {
+        if episode.escalation_pending
+            || episode.persistent_escalation_pending
+            || episode.deferral_escalation_pending
+        {
             report
                 .unknown
                 .push(format!("{kind}: escalation outcome unresolved"));
@@ -491,24 +533,42 @@ fn tick_with_effects(
         }
         if episode.accepted || episode.delivery_pending {
             let receipt = episode.request.as_ref().map(&mut *inspect).transpose();
-            let (persistent, deadline, description) = match receipt {
+            let (escalation_kind, deadline, description) = match receipt {
                 Ok(Some(Some(receipt))) => {
                     use aida_core::mailbox_lifecycle::action::Outcome;
                     let deadline = match receipt.outcome {
                         Outcome::Deferred => {
-                            receipt.until.unwrap_or(now.saturating_add(ESCALATE_MS))
+                            // A malformed receipt must not move its fallback deadline
+                            // forward on every observation.
+                            // trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+                            if receipt.until.is_none() {
+                                report
+                                    .unknown
+                                    .push(format!("{kind}: deferred action missing deadline"));
+                            }
+                            receipt
+                                .until
+                                .unwrap_or(receipt.recorded_at.saturating_add(ESCALATE_MS))
                         }
                         Outcome::Acted | Outcome::Declined => {
                             receipt.recorded_at.saturating_add(ESCALATE_MS)
                         }
                     };
                     (
-                        receipt.outcome != Outcome::Deferred,
+                        if receipt.outcome == Outcome::Deferred {
+                            EscalationKind::Deferral
+                        } else {
+                            EscalationKind::Persistent
+                        },
                         deadline,
                         format!(
                             "{}; {}",
                             if receipt.outcome == Outcome::Deferred {
-                                "unresolved request; deferral deadline reached"
+                                if receipt.until.is_some() {
+                                    "unresolved request; deferral deadline reached"
+                                } else {
+                                    "unresolved request; deferral deadline missing"
+                                }
                             } else {
                                 "persistent stall"
                             },
@@ -517,7 +577,7 @@ fn tick_with_effects(
                     )
                 }
                 Ok(_) => (
-                    false,
+                    EscalationKind::Unresolved,
                     episode
                         .delivered_ms
                         .unwrap_or(episode.first_ms)
@@ -537,7 +597,7 @@ fn tick_with_effects(
                         .unknown
                         .push(format!("{kind}: action unavailable: {e:#}"));
                     (
-                        false,
+                        EscalationKind::Unresolved,
                         episode
                             .delivered_ms
                             .unwrap_or(episode.first_ms)
@@ -546,20 +606,13 @@ fn tick_with_effects(
                     )
                 }
             };
-            let (pending, sent) = if persistent {
-                (
-                    episode.persistent_escalation_pending,
-                    &episode.persistent_escalation,
-                )
-            } else {
-                (episode.escalation_pending, &episode.escalation)
-            };
-            if !pending
+            let (pending, sent) = episode.escalation_slot(escalation_kind);
+            if !*pending
                 && sent.is_none()
                 && now >= deadline
                 && now.saturating_sub(continuity) >= ESCALATE_MS
             {
-                escalation_due.push((episode_key.clone(), persistent, description));
+                escalation_due.push((episode_key.clone(), escalation_kind, description));
             }
         }
         if now - episode.first_ms >= delay && !episode.accepted && !episode.delivery_pending {
@@ -642,16 +695,12 @@ fn tick_with_effects(
             report.unknown.push(format!("delivery: {delivered:?}"));
         }
     }
-    for (key, persistent, description) in escalation_due {
+    for (key, escalation_kind, description) in escalation_due {
         let episode = state.episodes.get_mut(&key).unwrap();
         let rule = format!(
             "pipeline_escalation_{}_{}",
             episode.uuid,
-            if persistent {
-                "persistent"
-            } else {
-                "unresolved"
-            }
+            escalation_kind.suffix()
         );
         let body = format!(
             "Pipeline episode {} ({key}): {description}. Request: {}.\n{}",
@@ -670,11 +719,7 @@ fn tick_with_effects(
             bounded_digest(&snapshot.details)
         );
         if execute {
-            if persistent {
-                episode.persistent_escalation_pending = true;
-            } else {
-                episode.escalation_pending = true;
-            }
+            *episode.escalation_slot(escalation_kind).0 = true;
             persist(&path, &serde_json::to_vec_pretty(&state)?)?;
             let outcome = match notify(&rule, &body) {
                 Ok(result) => result,
@@ -686,14 +731,7 @@ fn tick_with_effects(
                 }
             };
             let episode = state.episodes.get_mut(&key).unwrap();
-            let (pending, sent) = if persistent {
-                (
-                    &mut episode.persistent_escalation_pending,
-                    &mut episode.persistent_escalation,
-                )
-            } else {
-                (&mut episode.escalation_pending, &mut episode.escalation)
-            };
+            let (pending, sent) = episode.escalation_slot(escalation_kind);
             *pending = outcome == SendResult::Uncertain;
             if matches!(outcome, SendResult::Sent | SendResult::Queued) {
                 *sent = Some(outcome.clone());
