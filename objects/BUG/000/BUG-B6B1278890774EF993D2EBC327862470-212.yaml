@@ -15,13 +15,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-06T13:40:44.860964386Z
+modified_at: 2026-11-06T13:40:55.775218928Z
 req_type: Bug
 tags:
 - area:containment
 - from-implementer:TASK-3046
 - kind:bug-spotted
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a1b115-35fa-7672-a301-b18facd2282a
+  created_at: 2026-11-06T13:40:55.775215557Z
+  created_by: joe
 comments:
 - id: 01a1a9a2-7f1c-7d81-bfb7-ba5362b106c6
   author: mcp
@@ -103,6 +108,11 @@ history:
 - id: 01a1b117-2320-78e3-8448-c3b42bd56e20
   author: joe
   timestamp: 2026-11-06T13:40:45.984132674Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes: []
+- id: 01a1b117-4db5-7310-89e7-6f606d98ea65
+  author: joe
+  timestamp: 2026-11-06T13:40:56.885171097Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 filed_at:
