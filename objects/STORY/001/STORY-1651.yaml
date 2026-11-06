@@ -28,12 +28,12 @@ description: |-
 
   ## Sequencing
   Starts after TASK-1611 merges. It builds on that branch's moves and inventory.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T18:56:20.102568762Z
+modified_at: 2026-11-06T02:12:28.205919698Z
 req_type: Story
 tags:
 - docs
@@ -197,6 +197,12 @@ comments:
   created_at: 2026-11-05T18:56:20.102568762Z
   modified_at: 2026-11-05T18:56:20.102568762Z
   session_id: 01a1ad01974a
+- id: 01a1aea0-fbad-7c63-b2c5-dc4233192eba
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 fixes all land and CI gates was green at 334ba0a, but the merge from origin/main brought in docs/cli/06-roles-sessions.md:954 linking ../mailbox.md (moved to docs/advanced/mailbox.md); ''Documentation audience coverage'' now fails at head and the landing smoke is skipped, so AC3 and AC5 are not met at this head.. It was punted on: blocked-dependency: Round 3 publication and finding 5 (green final-head CI) are blocked by the native seat boundary. Findings 1–4 are accepted and fixed; no finding is disputed. Direct git add refuses because .git is read-only. Supported host deputy job 01a1ad03-f815-7bd2-87bb-237dfe879f21 refused commit-pending while owner PID 587433 is live; nothing was committed or pushed. The launcher must publish after lane exit using the exact aida ship --from-seat --commit-pending command in the latest spec comment, then obtain green final-head CI. Preserve the live-owner check. Also restored frozen replay fixture paths that caused the completed prior-run library failure; 514 historical blob hashes verified. PR #3424 remains open, without this round changes yet.. No triage reason was given.'
+  created_at: 2026-11-06T02:12:28.205918128Z
+  modified_at: 2026-11-06T02:12:28.205918128Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
   author: joe
@@ -314,6 +320,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aea0-ecf9-7d41-a01b-2a25b11dcbac
+  author: joe
+  timestamp: 2026-11-06T02:12:24.441505602Z
+  session_id: 01a1ae9ed3db
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
+- id: 01a1aea0-fbad-7c63-b2c5-dc3567770314
+  author: joe
+  timestamp: 2026-11-06T02:12:28.205899880Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
@@ -322,8 +342,3 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 3 publication and finding 5 (green final-head CI) are blocked by the native seat boundary. Findings 1–4 are accepted and fixed; no finding is disputed. Direct git add refuses because .git is read-only. Supported host deputy job 01a1ad03-f815-7bd2-87bb-237dfe879f21 refused commit-pending while owner PID 587433 is live; nothing was committed or pushed. The launcher must publish after lane exit using the exact aida ship --from-seat --commit-pending command in the latest spec comment, then obtain green final-head CI. Preserve the live-owner check. Also restored frozen replay fixture paths that caused the completed prior-run library failure; 514 historical blob hashes verified. PR #3424 remains open, without this round changes yet.'
-  raised_by: implementer
-  raised_at: 2026-11-05T18:48:31.184736820Z
