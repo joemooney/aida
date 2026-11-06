@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-870
 agreed_id: TASK-3194
 title: 'Conformance harness hardening: no grant before output refusal, timeout reaps the lane group, named refusal for a missing manifest, pinned receipt line'
 description: 'Carries four non-blocking findings from the #3475 (TASK-3131) review, ruled ONCE by the advisor 2026-11-06 01:05 MST (10-28 ruling). They were first bundled into BUG-2460, but #3482 was approved first, so it ships as is and they land here in ONE PR: (a) TASK-2922: refuse /tmp and /run --output in run_aida() BEFORE any setup, so no grant is minted for a refused output; (b) TASK-2923: on TimeoutExpired kill the whole ''aida queue work'' process group, close Network, never let the stale pre-continuation report overwrite setup evidence, and size the outer timeout to cover continuation setup plus bounded_launch; (c) TASK-2925: --await-payload with an absent manifest yields a named refusal, not a FileNotFoundError traceback; (d) TASK-2924: a Rust test pinning the ''aida-contained-receipt sha256=.. policy_sha=..'' line the harness regex depends on (keep the line; the stderr noise is accepted). LIGHT gate: the harness python tests plus one targeted cargo test for (d).'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T08:00:03.003758314Z
-modified_at: 2026-11-06T09:33:50.308692573Z
+modified_at: 2026-11-06T10:43:58.293120907Z
 req_type: Task
 tags:
 - conformance
@@ -106,6 +106,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b075-46ae-7c60-975c-48b14087e9ec
+  author: aida-auto-bump
+  timestamp: 2026-11-06T10:43:58.254551360Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b075-46d5-7d43-9322-769c7afa5e6b
+  timestamp: 2026-11-06T10:43:58.293115175Z
+  agent: aida
+  commit_sha: a511af843ddd40d9f6b0b3e524fdcc9c10443435
+  summary: 'Round 2: all four TASK-3194 items met and all five round-1 findings fixed (BaseException group reap + re-raise, atomic write_json, 10s real-process deadline, /tmp-pinned hidden-output fixture, disappearing-manifest test). CI green at cd2260c7 on all 7 shards (gates ran both conformance suites; lib shards carry the Rust receipt pin). Non-blocking: an operator Ctrl+C is recorded under the ''continuation-timeout'' reason; the new tests assume HOME is not under /tmp.'
+  review_verdict: approved
 filed_at:
   code_sha: 621d9e53f2100820eaf42861e6008b8f040422d8
   branch: main
@@ -114,3 +129,7 @@ filed_at:
   aida_build_sha: a8e8311d546
   vendor: claude
   session: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T10:43:58.254545111Z
+  completion_sha: a511af843ddd40d9f6b0b3e524fdcc9c10443435
