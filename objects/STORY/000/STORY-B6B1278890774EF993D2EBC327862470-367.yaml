@@ -19,12 +19,12 @@ description: |-
   - **Dependencies:** BUG-2433 should land as slice 1. It feeds STORY-2324 (gate inputs must be tri-state, so it must never read "unknown" as "fail") and STORY-2325 (train ownership).
 
   Acceptance: (1) every forge read goes through one Observed<T> = Known|Pending|Transient type, and a ratchet forbids branching on raw gh exit status outside forge.rs; (2) eject, close, mark-failed and spec-state flips require a confirmed negative (re-read after a bounded backoff plus a ground-truth check such as pinned head ancestor of origin/main); (3) the train writes an intent journal before each forge call and resumes from forge truth after an error or crash; (4) CI evidence is keyed by (head SHA, workflow-definition digest). Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T11:20:43.820403388Z
+modified_at: 2026-11-06T11:21:32.991965552Z
 req_type: Story
 relationships:
 - rel_type:
@@ -208,6 +208,12 @@ comments:
   created_at: 2026-11-06T10:53:38.992130771Z
   modified_at: 2026-11-06T10:53:38.992130771Z
   session_id: 01a1b05aed88
+- id: 01a1b097-ae3f-76e2-adad-cd57eff4e821
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 3 (Refs STORY-2401, AC2): all six round-2 findings are addressed in source with tests (closed-train receipt, absent-head squash, one-read keep answers, per-sweep fetch, Known(Err) refusals + sink, live suspend documented), but CI is red at this head: lib-1 Run tests failed and lib-0/lib-1/cli-0 Test time budget failed while main is green; the hard-coded 3s confirmation backoff has no test seam and slows binary tests 4-5x. AC1 landed in #3427 (not regressed); AC3/AC4 are slices 4-5.. No triage reason was given.'
+  created_at: 2026-11-06T11:21:32.991964222Z
+  modified_at: 2026-11-06T11:21:32.991964222Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
@@ -339,6 +345,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b097-ae3f-76e2-adad-cd4dd5e8ae5e
+  author: joe
+  timestamp: 2026-11-06T11:21:32.991948807Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -347,11 +361,3 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Slice 3 (Refs STORY-2401, AC2): all six round-2 findings are addressed in source with tests (closed-train receipt, absent-head squash, one-read keep answers, per-sweep fetch, Known(Err) refusals + sink, live suspend documented), but CI is red at this head: lib-1 Run tests failed and lib-0/lib-1/cli-0 Test time budget failed while main is green; the hard-coded 3s confirmation backoff has no test seam and slows binary tests 4-5x. AC1 landed in #3427 (not regressed); AC3/AC4 are slices 4-5.'
-  recovery_hint: address the review findings, move STORY-2401 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T11:20:43.820403388Z
