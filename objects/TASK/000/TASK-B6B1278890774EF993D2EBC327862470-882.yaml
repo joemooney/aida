@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-882
 agreed_id: TASK-3225
 title: 'STORY-2561 S1b: per-lane SEQPACKET store-mutation channel, launch-bound identity and lifecycle (read-only verbs)'
 description: 'Split from TASK-3222 by the advisor ruling on sketch v1 (2026-11-06). Implement sketch v1 sections 1-4 and the matching section 6 tests: broker-injected per-lane AF_UNIX SEQPACKET channel at an exact synthetic epoch address (no host listener), per-message SCM_CREDENTIALS sender checks against the pinned lane, a closed v1 protocol with ONLY session_probe and request_status, the bounds and retry-key semantics, and lifecycle at PreparedLaunch/ContainedChild with refuse-on-absent. No CLI/MCP routing, no grant change. It extends contained_host.py from PR #3449, so start after #3449 merges.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T18:52:38.114543870Z
+modified_at: 2026-11-06T18:55:56.581338681Z
 req_type: Task
 tags:
 - architecture
@@ -132,6 +132,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b237-b0a5-7b23-86d2-127566c4787c
+  author: aida-session-start
+  timestamp: 2026-11-06T18:55:56.581335863Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: f50fa16ae956f2508aa8550cc4efb9915f9db768
