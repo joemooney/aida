@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T03:48:28.097278018Z
+modified_at: 2026-11-06T03:49:41.405756152Z
 req_type: Story
 tags:
 - architecture
@@ -184,6 +184,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1aef9-fd9d-79d1-8b10-766950f872b1
+  author: aida-loop-guard
+  timestamp: 2026-11-06T03:49:41.405753818Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
