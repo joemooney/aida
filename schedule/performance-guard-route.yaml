@@ -1,27 +1,8 @@
 job: performance-guard-route
-last_run: 2026-11-03T16:01:21.902317604Z
+last_run: 2026-11-06T14:23:01.630614894Z
 last_by:
   seat: advisor
-  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: 'Ruled environmental: the 24h window covers the disk at 99% (11 GB free) and cache writer_busy rebuilds. 305.7 GiB reclaimed at 07:27 MST. File a regression only if it trips again in a window after the reclaim.'
-due_since: 2026-11-03T19:32:24.468360180Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-11-06T08:38:34.889215226Z
-  performance:
-  - command: show
-    budget_ms: 2000
-    over_budget: 108
-    denominator: 680
-    proportion_millipercent: 15882
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 15876
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: true
-  job: performance-guard
-  error: 'exit 1: '
+note: 'Ruled environmental, budget unchanged: aida show breached 2000ms on 108 of 680 calls in a 24h window that included sustained disk saturation (IO pressure 64% avg10 at 06:48 MST; cache-lock holder in state D). Re-evaluate as a real regression if it trips again in a low-IO-pressure window.'
