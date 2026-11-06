@@ -1,13 +1,8 @@
 job: dev-autopromote-route
-last_run: 2026-11-01T07:02:39.874731142Z
+last_run: 2026-11-06T14:22:27.686407390Z
 last_by:
   seat: advisor
-  vendor: codex
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  vendor: claude
 result: done
-note: 'Inspected routed failure: c7170b4 compiled and smoke-tested successfully; promotion refused because main moved to a83e05d. dev status proves a83e05d subsequently live. No compiler/host failure or gate bypass. New build deliberately waits for TASK-2631 merge.'
-due_since: 2026-11-03T20:23:47.691877353Z
-due_reason: on CronJobFailed:dev-autopromote
-due_failure:
-  trip_id: dev-autopromote@2026-11-06T04:44:59.921358614Z
-  job: dev-autopromote
-  error: 'exit 1: build of 44f957f8b8466f6213843fa0c6b882c4d83294b8 failed; log /home/joe/.aida/dev-autopromote/20261106T042305Z-44f957f8b846.log; tail:    Compiling aida-core v0.16.0 (/home/joe/ai/aida/aida-core) |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-tui v0.16.0 (/home/joe/ai/aida/aida-tui) |    Compiling aida-generate-types v0.16.0 (/home/joe/ai/aida/aida-generate-types) |    Compiling aida v0.16.0 (/home/joe/ai/aida/aida-crate) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 4m 42s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha 44f957f8b84, but HEAD is a79a05328a04b2cac9d8fa43034db05291c0fc0e." | help: aida --version'
+note: 'Benign race: main moved during the 04:23 build (staged 44f957f vs HEAD a79a053). The later promotion at 12:48 of dd852f7 succeeded and the live binary is ACTIVE. +dirty comes from the untracked docs/presentation/.'
