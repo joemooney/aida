@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T13:41:14.801418647Z
+modified_at: 2026-11-06T13:43:40.780059938Z
 req_type: Task
 tags:
 - architecture
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a1b116-55e2-7f91-9816-80eb780d2780
   created_at: 2026-11-06T13:40:02.169839244Z
   created_by: joe
+comments:
+- id: 01a1b119-cdec-7043-b7ec-acd166bda75c
+  author: joe
+  content: 'ADVISOR BRIEF (sketch-only lane). Deliverable: a sketch comment on TASK-3222, then punt as design-fork for advisor signoff. NO production code, NO PR. Read STORY-2561''s operator rulings and BUG-2446 sketch v1 first. The sketch must cover: (1) endpoint transport and why it doesn''t widen BUG-2448''s host-IPC surface (scope it to one lane, launch-bound, unreachable from siblings); (2) identity binding: what the host fixes at launch, how a request proves it is from that lane; (3) request/response framing, the closed operation set for S1, size bounds, retry/idempotency keys; (4) lifecycle (start before child tools, teardown with lease, refuse-on-absent); (5) where it hooks into the STORY-2326 LaunchContext/spawn_agent launcher; (6) the store-writer inventory method (rg over CLI/MCP write paths) and its checked-in file format; (7) test plan per the S1 refusal list. Read code freely; run no cargo. Name concrete files and functions.'
+  created_at: 2026-11-06T13:43:40.780059938Z
+  modified_at: 2026-11-06T13:43:40.780059938Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
