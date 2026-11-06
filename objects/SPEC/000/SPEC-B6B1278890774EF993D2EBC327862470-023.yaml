@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-023
 agreed_id: TASK-2903
 title: Local-only mailbox fixture assumes its temporary root has no Git ancestor
 description: 'During TASK-3074 validation, mailbox_lifecycle::ack::tests passed 15 cases but the unchanged story1843_b2c_local_only_project_commits_without_an_anchor fixture refused before the modified ACK code. Its snapshot helper at aida-core/src/mailbox_lifecycle/ack_tests.rs:26 unwraps MailboxContext::resolve_or_local; this environment has /tmp/.git (containing an allocation file), so tempfile::tempdir() creates a directory beneath a .git ancestor and the context correctly refuses NotAGitCheckout. An explicit TMPDIR=/tmp rerun reproduced it. All 15 remaining ACK tests passed when this case was excluded. Follow-up: make the non-Git fixture independent of ambient Git ancestry, or explicitly report the unsupported fixture environment; preserve the production wrong-root refusal. No unrelated fixture or root-validation change was included in PR-A.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T21:21:56.699346580Z
-modified_at: 2026-11-06T02:14:33.825322484Z
+modified_at: 2026-11-06T03:03:20.463042127Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -63,6 +63,24 @@ history:
   timestamp: 2026-11-06T02:14:35.211053867Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1aecf-8e6b-7a32-8a0c-d3ca6a7d0152
+  author: aida-auto-bump
+  timestamp: 2026-11-06T03:03:20.427920890Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1aecf-8e8f-7361-95db-4a89cac5e74f
+  timestamp: 2026-11-06T03:03:20.463038608Z
+  agent: aida
+  commit_sha: 16c9fa6393b2dc0d5bf179273fb93422374c60dd
+  summary: 'Test-only fix: local-only ACK fixture now reports SKIP when its temp root has a .git ancestor (predicate mirrors resolve_or_local''s ancestor check), asserts the local-only context before writes, and a new deterministic test pins the NotAGitCheckout refusal for a malformed .git ancestor; production root validation unchanged; CI run 42148998384 green at head.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T03:03:20.427915484Z
+  completion_sha: 16c9fa6393b2dc0d5bf179273fb93422374c60dd
