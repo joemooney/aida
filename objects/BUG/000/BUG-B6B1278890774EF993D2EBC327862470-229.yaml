@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:59:24.595886026Z
-modified_at: 2026-11-06T15:10:09.657171982Z
+modified_at: 2026-11-06T15:10:17.083369783Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -24,6 +24,12 @@ comments:
   content: 'ADVISOR RULING (10-28 rule, ruled once): approved as a standalone defect and NOT bundled into #3493, which is on round 5 and should not grow. Rebase merges are enabled on this repo and on downstream projects, so the Pending-forever path is reachable. Fix: a bounded private fetch of the PR head, or another independently verified landing receipt. Unavailable or conflicting evidence keeps Pending. Regression test: a rebase merge with no local original-head object. LIGHT gate.'
   created_at: 2026-11-06T14:14:23.070814343Z
   modified_at: 2026-11-06T14:14:23.070814343Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b169-17fb-7010-bf59-fa5065b0d374
+  author: joe
+  content: 'ADVISOR: blocked on PR #3493 (review story STORY-2556). forge_confirmation.rs and metadata_for exist only on that branch. Relaunch after #3493 merges; the lane''s punt was correct.'
+  created_at: 2026-11-06T15:10:17.083369783Z
+  modified_at: 2026-11-06T15:10:17.083369783Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b128-ae31-7223-a86b-105066ff77ba
