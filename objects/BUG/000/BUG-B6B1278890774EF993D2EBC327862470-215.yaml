@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:55:47.844000604Z
-modified_at: 2026-11-06T01:12:24.727537959Z
+modified_at: 2026-11-06T01:23:44.567489991Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -71,6 +71,12 @@ comments:
   created_at: 2026-11-06T01:11:04.099985026Z
   modified_at: 2026-11-06T01:11:04.099985026Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ae74-5f37-7352-9bf5-441e057b9a17
+  author: joe
+  content: 'Round 2 addressed findings 1-4 in d2c2fe898ed, pushed and verified as the open PR #3437 head. Receipt reads now exclude missing/prunable/foreign worktrees under ruling 97, salvage independently readable receipts after message-source failure, and preserve the original source diagnostic. Restored awaiting unread/urgent counts. Inventory gaps retain partial warnings and ACK refusal without blanket unknown receipt state. Added core receipt-salvage and inventory-gap regressions plus an adapter visibility/warning test. Final validation: 161 CLI mailbox tests, exact backlog regression, 24 core logical tests, 14 delivery tests and 15 ACK tests passed (215 total); fmt and diff checks passed. Two existing local-only fixture tests initially failed NotAGitCheckout because available scratch roots have a .git ancestor; final ACK/delivery runs exclude those two. PR body updated. Push succeeded remotely; local origin tracking-ref refresh was refused by the read-only path. No merge-hold clearance, review verdict or merge attempted.'
+  created_at: 2026-11-06T01:23:44.567489991Z
+  modified_at: 2026-11-06T01:23:44.567489991Z
+  session_id: 01a1ae69f7ad
 history:
 - id: 01a1a9a2-d64d-77f3-8930-351f4a298400
   author: joe
