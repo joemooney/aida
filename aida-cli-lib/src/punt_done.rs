@@ -758,7 +758,13 @@ pub(crate) fn print_deferred_triggers(deferred_view: bool, reqs: &[aida_core::Re
     let trigger_of = |r: &aida_core::RequirementSummary| -> Option<String> {
         if let Some(cond) = r.deferred_until.as_deref() {
             if !cond.is_empty() {
-                return Some(cond.to_string());
+                // Canonicalize typed triggers; legacy text remains readable until migration.
+                // trace:STORY-2402 | ai:codex
+                return Some(
+                    cond.parse::<aida_core::condition::Condition>()
+                        .map(|condition| condition.to_string())
+                        .unwrap_or_else(|_| cond.to_string()),
+                );
             }
         }
         r.tags

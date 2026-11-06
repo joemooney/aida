@@ -2,10 +2,9 @@
 //!
 //! The second view-level flag orthogonal to both lifecycle status and archive:
 //! `defer` parks a spec as primed / conditional work (hidden from the default
-//! open-work view but not filed away) and records the free-text revisit trigger
+//! open-work view but not filed away) and records a typed revisit trigger
 //! that distinguishes deferred (prospective) from archived (filed); `undefer`
-//! is the inverse. Extracted verbatim from `main.rs` (SPIKE-78); no behavior
-//! change.
+//! is the inverse.
 
 use anyhow::Result;
 use colored::Colorize;
@@ -20,7 +19,7 @@ use crate::gate::operator_hold::{lift_hold_refusal, set_hold_refusal};
 /// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /
 /// conditional work, hidden from the default open-work view. Mirrors
 /// `archive_single` but sets the parallel defer view-flag and records the
-/// free-text revisit trigger that distinguishes deferred (prospective) from
+/// typed revisit trigger that distinguishes deferred (prospective) from
 /// archived (filed). Defer does NOT touch the lifecycle state machine and
 /// deliberately carries no terminal-status guard — the whole point is to shelf
 /// live, open backlog.
@@ -32,6 +31,8 @@ pub(crate) fn defer_single(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
+    // Validate before any store or queue mutation. trace:STORY-2402 | ai:codex
+    let until = canonical_defer_condition(until, reason)?;
     if let Some(refusal) = set_hold_refusal(reason) {
         anyhow::bail!(refusal);
     }
@@ -59,7 +60,7 @@ pub(crate) fn defer_single(
     // Only overwrite the trigger when one is supplied, so a bare re-defer
     // keeps the existing condition.
     if let Some(cond) = until {
-        req.deferred_until = Some(cond.to_string());
+        req.deferred_until = Some(cond);
     }
     if let Some(reason) = reason.map(str::trim).filter(|reason| !reason.is_empty()) {
         req.deferred_reason = Some(reason.to_string());
@@ -109,6 +110,25 @@ pub(crate) fn defer_single(
         ),
     }
     Ok(())
+}
+
+/// Validate only explicitly supplied triggers. Bare re-deferral retains existing
+/// evidence, including legacy text pending the separate migration slice.
+// trace:STORY-2402 | ai:codex
+fn canonical_defer_condition(until: Option<&str>, reason: Option<&str>) -> Result<Option<String>> {
+    use aida_core::condition::Condition;
+    let Some(raw) = until else { return Ok(None) };
+    let condition: Condition = raw.parse().map_err(|err| {
+        anyhow::anyhow!(
+            "invalid --until condition: {err}. For a human decision use manual:<who> with --reason"
+        )
+    })?;
+    if matches!(condition, Condition::Manual { .. })
+        && reason.is_none_or(|reason| reason.trim().is_empty())
+    {
+        anyhow::bail!("manual conditions require --reason with a non-empty explanation");
+    }
+    Ok(Some(condition.to_string()))
 }
 
 fn remove_deferred_queue_rows(
@@ -196,8 +216,8 @@ pub(crate) fn handle_undefer_command(
 /// Defer is a view-level flag distinct from status (it does not touch the
 /// lifecycle state machine). Use `--reason` to record why this is an
 /// operator hold and `--until` to record the revisit trigger —
-/// the free-text condition that brings the spec back (e.g.
-/// `--until "when a slice verb ships"`). That trigger is the one thing
+/// a typed condition such as `date:2026-12-01` or `pr:123=merged`.
+/// Use `manual:<who>` with `--reason` for a human decision. That trigger is the one thing
 /// distinguishing deferred (prospective, primed) from archived
 /// (retrospective, filed). Deferred rows are hidden from `aida list`,
 /// `aida search`, and `aida history` by default; surface them with
@@ -209,9 +229,9 @@ pub(crate) struct DeferArgs {
     /// SPEC-ID or UUID to defer.
     pub id: String,
 
-    /// The revisit trigger — the condition that brings this spec back
-    /// (free text). Stored alongside the spec and shown in the deferred
-    /// view so you can scan what is primed and what returns each item.
+    /// Typed revisit condition: spec:<ID>=<status>, pr:<N>=merged,
+    /// release:>=<version>, date:<YYYY-MM-DD>, query:<filters> count<op><n>,
+    /// or manual:<who> (requires --reason). Free text is refused.
     // trace:STORY-584 | ai:claude
     // trace:BUG-1294 | ai:claude
     #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
@@ -360,3 +380,7 @@ pub(crate) static UNDEFER: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Store(run_undefer),
     };
+
+#[cfg(test)]
+#[path = "tests/story_2402_defer_tests.rs"]
+mod story2402_s2_tests;

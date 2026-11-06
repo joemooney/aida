@@ -14,8 +14,9 @@ Follow the workflow in `.claude/skills/aida-human-audit/SKILL.md`:
    (reviews-awaiting, needs-attention, findings, mail, verdicts, escalations).
 2. Triage each into exactly one and act:
    - **A — genuinely needs you** → keep it, state the decision + recommendation + consequence.
-   - **B — stale state** → fix the spec (`aida edit --status` / `aida defer --until "<trigger>"` / `aida archive` / add a `blocked-by`/`parent`) so it self-corrects.
+   - **B — stale state** → fix the spec (`aida edit --status` / `aida defer <ID> --until "date:2026-12-01"` / `aida archive` / add a `blocked-by`/`parent`) so it self-corrects.
    - **C — tool false-positive** → file or link the reporter bug (e.g. BUG-722); do **not** edit the spec to paper over it.
+   Use typed triggers; free text is refused. Human judgment uses `--until "manual:<who>" --reason "<why>"` with product/advisor/operator authority.
 3. **Verify each B edit** actually changes the report (re-run `aida human`); if it doesn't, it's really **C** — reclassify + file.
 4. Hand back a ledger: item → verdict → action → `aida human` delta, leading with the A items.
 5. `aida push` any edits.
