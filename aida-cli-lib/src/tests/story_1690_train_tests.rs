@@ -4150,6 +4150,62 @@ esac
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_confirmation_fetches_refuse_when_checkpoint_fails() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = repo();
+    let r = root.path();
+    crate::test_exec::write_executable(
+        &r.join("git"),
+        r#"#!/bin/sh
+for arg in "$@"; do
+    case "$arg" in
+        fetch)
+            printf '%s\n' "$*" >> fetch-calls
+            mv intent intent-saved || exit 2
+            printf 'unavailable' > intent
+            exit 0 ;;
+        rev-parse) printf '%040d\n' 1; exit 0 ;;
+        cat-file) exit 1 ;;
+    esac
+done
+exit 0
+"#,
+    );
+    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    for fail_before_base in [true, false] {
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/fetch-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if fail_before_base {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let observed = crate::forge_confirmation::rebase_landed(r, "main", &"b".repeat(40));
+        assert!(
+            matches!(observed, crate::forge_observed::Observed::Transient(ref why)
+                if why.contains("could not persist train intent")),
+            "{observed:?}"
+        );
+        let calls = std::fs::read_to_string(r.join("fetch-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(!fail_before_base));
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Merge);
+        assert_eq!(saved[0].train.tip, "car1");
+        std::fs::remove_file(&dir).unwrap();
+        std::fs::remove_dir_all(r.join("intent-saved")).unwrap();
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_metadata_retry_refuses_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;

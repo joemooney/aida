@@ -52,6 +52,12 @@ mod pause_tests {
 }
 
 fn git(root: &Path, args: &[&str], remote: bool) -> Result<Output> {
+    // Confirmation fetches are nested train forge calls too. Persist intent
+    // again before each base/head fetch, including absent-head recovery.
+    // trace:STORY-2401 | ai:codex
+    if remote {
+        crate::pr_train::before_train_forge_call("confirmation Git fetch")?;
+    }
     // Retain the private-seat clone refusal even for evidence-only fetches.
     let mut cmd = aida_core::git_ops::host_git_command(root);
     cmd.args(args).stdin(Stdio::null());

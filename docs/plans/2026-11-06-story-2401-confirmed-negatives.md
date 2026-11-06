@@ -447,3 +447,44 @@ All five changed files remain uncommitted for the host. No commit, push, PR
 creation, merge, review record, hold clearance or queue completion was performed.
 No implementation or validation blocker remains. Slice 5 remains outstanding;
 existing punt/hold signals remain publication vetoes. Turn ends with this handoff.
+
+## Slice-4 integration follow-up: confirmation fetch checkpoints (2026-11-06)
+
+The integrated checkout already includes the journal, round-7 recovery repairs,
+metadata retry checkpoints and BUG-2463 (#3519). Independent confirmation still
+issued nested base and absent-head Git fetches without another durable checkpoint.
+The shared confirmation Git runner now persists the active train intent before
+each remote fetch. Outside an active train the checkpoint remains a no-op.
+
+A PATH-isolated production-runner fixture makes the journal unavailable either
+before the base fetch or immediately after it succeeds. Both cases return
+Transient evidence and preserve the pinned Merge entry. The first issues no
+fetch; the second issues only the base fetch and refuses absent-head recovery.
+The existing SIGKILL-after-merge and SIGKILL-after-eject fixtures remain in the
+required `pr_train` filter. Slice 5 is unchanged.
+
+Changed files: `aida-cli-lib/src/forge_confirmation.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, `AGENTS.md`, `OVERVIEW.md`,
+and this plan. Validation and native host handoff results follow below.
+
+Focused validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib
+--lib pr_train` ran **170 tests, zero failures**, with 12,564 unrelated tests
+filtered out. Test runtime: **150.41s**; fresh unoptimized build: **11m 27s**.
+Both SIGKILL recovery seams and the new confirmation-fetch fixture passed.
+Log: `/tmp/story2401-integrated-train.log`.
+`cargo fmt --all -- --check` and `git diff --check` passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint nested confirmation fetches (Refs STORY-2401)`.
+This records host publication intent only; the five changed files remain
+uncommitted. No commit, push, PR creation, merge, review record, hold clearance
+or queue completion was performed by this seat. Slice 5 remains outstanding;
+existing punt/hold signals remain publication vetoes.
+
+Fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast` completed
+**all 38 gates**, including the no-default-features CLI, standalone TUI,
+formatting and documentation checks. Log: `/tmp/story2401-integrated-fast.log`.
+Guards reporting native read-only `.git/FETCH_HEAD` refusals passed through
+their existing local-evidence path. No implementation or validation blocker
+remains. The host owns commit creation and publication of this follow-up with
+the declared Refs subject. Turn ends with the five-file uncommitted handoff.

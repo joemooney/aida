@@ -700,7 +700,8 @@ with a permanent `run.lock` serializing recovery and admission. Atomic replaceme
 file fsync and directory fsync precede forge operations. Each entry pins the tested
 head, base and member heads, records its lifecycle step and completed member cleanup,
 and checkpoints nested forge reads and transport attempts, including the final
-merge gate's legacy metadata retries. A failed write refuses the call. A later
+merge gate's legacy metadata retries and confirmation's independent base/head
+fetches. A failed write refuses the call. A later
 non-dry train invocation reconciles unfinished entries before admitting new riders:
 exact-number metadata and fresh `forge_confirmation` evidence
 recognize completed merges, finish outstanding member closes, or complete a recorded
