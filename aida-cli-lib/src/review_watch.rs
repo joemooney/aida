@@ -2240,15 +2240,23 @@ fn watch_changes(
         let key = change.key();
         match watch(change.clone()) {
             Ok(()) => {}
+            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
             Err(error) if stops_watcher(&error) => {
                 return Err(error.context(format!("{key}: review watch refused")))
             }
-            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
             Err(error) => {
                 let reason = format!("refused: {error:#}");
                 eprintln!("{key}: {reason}");
-                // Failure to persist the diagnostic is a watcher-state failure.
-                retry_busy(|| record_skip(store, &change, Some(&reason))).context(GlobalState)?;
+                // Diagnostic contention or per-change I/O must not stop the pass.
+                // Preserve only the whole-state failures tagged by store.load().
+                match retry_busy(|| record_skip(store, &change, Some(&reason))) {
+                    Ok(()) => {}
+                    Err(error) if is_busy(&error) => {
+                        eprintln!("{key}: could not record refusal: watcher admission is busy")
+                    }
+                    Err(error) if stops_watcher(&error) => return Err(error),
+                    Err(error) => eprintln!("{key}: could not record refusal: {error:#}"),
+                }
             }
         }
     }
