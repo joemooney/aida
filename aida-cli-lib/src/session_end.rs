@@ -2114,6 +2114,8 @@ pub(crate) fn session_end_with_discard_unpushed(
         .filter(|p| p.join(".git").exists())
         .unwrap_or(&project_root);
     crate::ownership::dual::lease_released(ownership_root, &target.id, "session ended");
+    // trace:TASK-2902 | ai:codex
+    crate::native_publication::release(ownership_root, &target.id);
 
     // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
     // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`

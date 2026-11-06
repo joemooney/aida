@@ -2103,29 +2103,52 @@ esac
     for (title, trailer) in [
         ("partial work (Refs BUG-1)", "(Refs BUG-1)"),
         ("complete work (BUG-1)", "(BUG-1)"),
+        ("inconclusive title", "(Refs BUG-1)"),
+        ("lookup failure", "(Refs BUG-1)"),
     ] {
-        std::fs::write(
-            bin.join("response"),
-            format!("77\t{title}\thttps://example.test/pr/77\trefs-pr\n"),
-        )
-        .unwrap();
-        std::fs::write(clone.join("more-work.txt"), title).unwrap();
-        let outcome = crate::ship_from_seat::post_exit_commit(
-            &fx.main,
-            &clone,
-            origin,
-            "lane",
-            true,
-            &test_commit,
-        );
-        assert!(
-            matches!(outcome, crate::ship_from_seat::PostExitCommit::Committed(_)),
-            "{outcome:?}"
-        );
-        let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
-        assert!(subject.ends_with(trailer), "{subject}");
-        let calls = std::fs::read_to_string(bin.join("called")).unwrap();
-        assert!(calls.contains("--head refs-pr"), "{calls}");
+        for declared in [false, true] {
+            crate::native_publication::prepare(&fx.main, &clone).unwrap();
+            if declared {
+                crate::native_publication::declare(
+                    &clone,
+                    None,
+                    "[AI:codex] fix: requested completion (BUG-1)",
+                    false,
+                )
+                .unwrap();
+            }
+            std::fs::write(
+                bin.join("response"),
+                format!("77\t{title}\thttps://example.test/pr/77\trefs-pr\n"),
+            )
+            .unwrap();
+            if title == "lookup failure" {
+                std::fs::remove_file(bin.join("response")).unwrap();
+            }
+            std::fs::write(clone.join("more-work.txt"), format!("{title} {declared}")).unwrap();
+            let outcome = crate::ship_from_seat::post_exit_commit(
+                &fx.main,
+                &clone,
+                origin,
+                "lane",
+                true,
+                &test_commit,
+            );
+            assert!(
+                matches!(outcome, crate::ship_from_seat::PostExitCommit::Committed(_)),
+                "{outcome:?}"
+            );
+            let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+            assert!(subject.ends_with(trailer), "{subject}");
+            let calls = std::fs::read_to_string(bin.join("called")).unwrap();
+            assert!(calls.contains("--head refs-pr"), "{calls}");
+            if declared {
+                assert!(
+                    subject.starts_with("[AI:codex] fix: requested completion"),
+                    "{subject}"
+                );
+            }
+        }
     }
 }
 
@@ -2318,6 +2341,18 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
 // trace:TASK-2902 | ai:codex
 #[test]
 fn task_2902_lease_scope_and_veto_precede_declaration_or_commit() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Native publication vetoed for BUG-1 by punt/hold"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("pending work remains uncommitted"),
+            "{stderr}"
+        );
+        return;
+    }
     let fx = fixture();
     let clone = seat_with_publication_pending(&fx, "bound", "c0ffee290203", "bound");
     crate::native_publication::prepare(&fx.main, &clone).unwrap();
@@ -2470,4 +2505,239 @@ fn task_2902_post_exit_uses_canonical_display_id_for_origin_scope() {
         crate::ship_from_seat::pending_message_check(&fx.main, &subject, Some("BUG-1")).unwrap();
         assert!(!subject.contains("HOME"));
     }
+}
+
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_rotation_retains_intent_and_lease_release_cleans_binding() {
+    for generation in [None, Some(1)] {
+        let fx = fixture();
+        let lease = "c0ffee290206";
+        let clone = seat_with_publication_pending(&fx, "rotation", lease, "rotation");
+        let requested = "[AI:codex] fix: partial rotation (Refs BUG-1)";
+        crate::native_publication::prepare_generation(&fx.main, &clone, generation).unwrap();
+        crate::native_publication::declare(&clone, None, requested, false).unwrap();
+        let expected = fx
+            .main
+            .join(format!(".aida/native-publications/{lease}.json"));
+        let binding = std::fs::read(&expected).unwrap();
+        for generation in [2, 3] {
+            crate::native_publication::prepare_generation(&fx.main, &clone, Some(generation))
+                .unwrap();
+            assert_eq!(std::fs::read(&expected).unwrap(), binding);
+            assert_eq!(
+                crate::native_publication::read(&fx.main, &clone, "BUG-1")
+                    .unwrap()
+                    .as_deref(),
+                Some(requested)
+            );
+        }
+        let result = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "rotation",
+            true,
+            &test_commit,
+        );
+        assert!(
+            matches!(result, crate::ship_from_seat::PostExitCommit::Committed(_)),
+            "{result:?}"
+        );
+        assert_eq!(git_ok(&clone, &["log", "-1", "--format=%s"]), requested);
+        crate::native_publication::prepare_generation(&fx.main, &clone, generation).unwrap();
+        assert!(!clone.join(".aida/native-publication.json").exists());
+        assert_ne!(std::fs::read(&expected).unwrap(), binding);
+        if generation.is_some() {
+            assert!(crate::remove_session_lease_record_only(&fx.main, lease));
+        } else {
+            crate::session_reap::release_lease_files(&fx.main, lease);
+        }
+        assert!(!expected.exists());
+    }
+}
+
+/// Hit each real launch entry point with an unwritable binding destination.
+/// Setup must clear stale seat intent, then refuse before a child can spawn.
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_launch_paths_clear_and_provision_before_spawn() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::agent_launch::{AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle, RotationEnv};
+    use crate::session::HeadlessVendor;
+    let fx = fixture();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[contained.vendors]\ncodex = \"native\"\n",
+    )
+    .unwrap();
+    git_ok(&fx.main, &["add", ".aida/config.toml"]);
+    git_ok(&fx.main, &["commit", "-qm", "native policy"]);
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    let lease = "c0ffee290207";
+    let clone = seat_with_publication_pending(&fx, "launches", lease, "launches");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_AGENT_CMD", Some("/bin/true")),
+        ("AIDA_HOME", Some(fx.root.to_str().unwrap())),
+        ("HOME", Some(fx.root.to_str().unwrap())),
+        ("AIDA_SESSION_GRANT", None),
+        ("AIDA_SESSION_ROLE", None),
+    ]);
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: crate::codex_native_sandbox::CODEX_NATIVE_POSTURE
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: fx.main.clone(),
+        launch_cwd: clone.clone(),
+        role: Some("implementer".into()),
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: Some("BUG-1".into()),
+        name: "publication-test".into(),
+        lease_id: Some(lease.into()),
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let binding = fx
+        .main
+        .join(format!(".aida/native-publications/{lease}.json"));
+    std::fs::create_dir_all(&binding).unwrap();
+    let declaration = clone.join(".aida/native-publication.json");
+    std::fs::create_dir_all(declaration.parent().unwrap()).unwrap();
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    let tee = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+    let binary = Path::new("/bin/true");
+    for path in [
+        "standalone",
+        "drain",
+        "resume",
+        "bg",
+        "worker",
+        "generation",
+        "nonrotating",
+    ] {
+        std::fs::write(&declaration, "stale declaration").unwrap();
+        let error = match path {
+            "standalone" => {
+                crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                    project_root: &fx.main,
+                    vendor: HeadlessVendor::Codex,
+                    prompt: "go",
+                    session_id: "test",
+                    spec: "BUG-1",
+                    lease_id: lease,
+                    branch: "launches",
+                    contained: false,
+                    child_grant: &grant,
+                    host_main: Some(&fx.main),
+                })
+                .err()
+            }
+            "drain" => crate::session::run_vendor_headless_to_exit(
+                Some(&fx.main),
+                HeadlessVendor::Codex,
+                "go",
+                "test",
+                &fx.root.join("log"),
+                &tee,
+                false,
+                Some(lease),
+                "implementer",
+                &grant,
+                Some((&clone, "launches")),
+            )
+            .err(),
+            "resume" => crate::session::spawn_vendor_headless_resume_granted(
+                Some(&fx.main),
+                &crate::session::HeadlessResume {
+                    vendor: HeadlessVendor::Codex,
+                    session_id: "test",
+                    resume_id: "test",
+                },
+                "go",
+                &fx.root.join("log"),
+                &clone,
+                &tee,
+                false,
+                "implementer",
+            )
+            .err(),
+            "bg" => {
+                crate::agent_launch::build_agent_new_bg_command(binary, &config, &plan, &[], None)
+                    .err()
+            }
+            "worker" => crate::agent_launch::agent_codex_background::publication_test_worker_exec(
+                binary, &config, &plan,
+            )
+            .err(),
+            _ => crate::agent_launch::run_agent_generation(
+                binary,
+                &config,
+                &plan,
+                None,
+                &[],
+                None,
+                false,
+                false,
+                None,
+                (path == "generation").then(|| RotationEnv::for_publication_test(1)),
+                || panic!("child spawned before binding refusal"),
+            )
+            .err(),
+        };
+        let error = error.unwrap_or_else(|| panic!("{path} should refuse a binding write failure"));
+        assert_eq!(
+            error
+                .downcast_ref::<std::io::Error>()
+                .and_then(|e| e.raw_os_error()),
+            Some(libc::EISDIR),
+            "{path} must attempt to write its host binding: {error:#}",
+        );
+        assert!(
+            !declaration.exists(),
+            "{path} did not clear stale publication intent: {error:?}"
+        );
+    }
+    // A later generation must reach the ordinary launch checks without
+    // touching intent, even when binding setup would fail. Missing executable
+    // keeps this a launch-boundary test with no real vendor child.
+    std::fs::write(&declaration, "generation-one declaration").unwrap();
+    let result = crate::agent_launch::run_agent_generation(
+        Path::new("/aida-test-missing-codex"),
+        &config,
+        &plan,
+        None,
+        &[],
+        None,
+        false,
+        false,
+        None,
+        Some(RotationEnv::for_publication_test(2)),
+        || panic!("missing vendor must not spawn"),
+    );
+    assert!(result.is_err());
+    assert_eq!(
+        std::fs::read_to_string(&declaration).unwrap(),
+        "generation-one declaration"
+    );
 }

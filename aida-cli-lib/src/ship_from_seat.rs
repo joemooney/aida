@@ -345,6 +345,7 @@ pub(crate) fn post_exit_commit(
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
     if publication_veto(&main, spec) {
+        eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
         return PostExitCommit::Clean;
     }
     let validated = (|| -> Result<(String, Option<String>)> {
@@ -357,17 +358,6 @@ pub(crate) fn post_exit_commit(
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     };
     let spec = spec.as_str();
-    if let Some(mut message) = declared {
-        if !clean_exit {
-            let prefix = message.rsplit_once('(').expect("validated trailer").0;
-            message = format!("{prefix}(Refs {spec})");
-        }
-        return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
-            Ok(Some(tip)) => PostExitCommit::Committed(tip),
-            Ok(None) => PostExitCommit::Clean,
-            Err(e) => PostExitCommit::Failed(format!("{e:#}")),
-        };
-    }
     // Resolve against the host forge, never seat-controlled remote config.
     // trace:TASK-2879 | ai:codex
     let completing = recorded_seat(&main, tree)
@@ -379,6 +369,17 @@ pub(crate) fn post_exit_commit(
                 .ok()
         })
         .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
+    if let Some(mut message) = declared {
+        if !clean_exit || !completing {
+            let prefix = message.rsplit_once('(').expect("validated trailer").0;
+            message = format!("{prefix}(Refs {spec})");
+        }
+        return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
+            Ok(Some(tip)) => PostExitCommit::Committed(tip),
+            Ok(None) => PostExitCommit::Clean,
+            Err(e) => PostExitCommit::Failed(format!("{e:#}")),
+        };
+    }
     // Resolve the lease's origin ID against the host store before formatting.
     // trace:BUG-2459 | ai:codex
     let store = crate::load_store_for_lookup(&main);

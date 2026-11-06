@@ -154,13 +154,16 @@ staging, the index is put back as it was.
 
 The declaration lives at the seat's `.aida/native-publication.json`, bound to
 its host-recorded lease/spec and a fresh launch token. Standalone, drain/resume,
-foreground and background launches clear prior declarations. The host validates
-scope and declaration before any commit or forge probe; stale, mismatched or
-invalid declarations refuse. Clean exits preserve the declared subject and
-Refs form in the commit and PR title. With no declaration, ordinary completion
-and existing Refs-PR protection remain. Failed exits always use Refs. Punt and
-hold signals veto publication before declaration validation. Post-exit trailers
-use the store's canonical display ID, never a friendly node alias.
+foreground and background launches clear prior declarations. Supervised rotation
+retains the same token and declaration after generation one. Lease release removes
+the host binding. The host validates scope and declaration before any commit or
+forge probe; stale, mismatched or invalid declarations refuse. Clean exits retain
+the declared subject, but completing trailers downgrade to Refs when the existing
+PR title is Refs or the forge lookup cannot establish completion eligibility.
+This guard also applies with no declaration. Failed exits always use Refs. Punt
+and hold signals veto publication before declaration validation and report that
+pending work remains uncommitted. Post-exit trailers use the store's canonical
+display ID, never a friendly node alias.
 <!-- trace:TASK-2902 | ai:codex -->
 
 ---

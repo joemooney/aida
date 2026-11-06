@@ -7942,7 +7942,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     };
     let tuning = resolve_agent_tuning(cwd, vendor, agent_seat);
     // trace:TASK-2902 | ai:codex
-    if crate::canonical_role_name(seat) == "implementer" {
+    if vendor == HeadlessVendor::Codex && crate::canonical_role_name(seat) == "implementer" {
         crate::native_publication::prepare(
             &host_main
                 .map(Path::to_path_buf)

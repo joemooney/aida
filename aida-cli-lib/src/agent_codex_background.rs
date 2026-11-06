@@ -2155,3 +2155,24 @@ mod story_2254_codex_background_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/story_2254_codex_bg_supervisor_tests.rs"]
 mod story_2254_codex_bg_supervisor_tests;
+
+// Exercise the real detached-worker builder without spawning a supervisor.
+// trace:TASK-2902 | ai:codex
+#[cfg(test)]
+pub(crate) fn publication_test_worker_exec(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+) -> Result<()> {
+    build_worker_exec(
+        binary,
+        config,
+        plan,
+        &[],
+        None,
+        "implementer",
+        "test",
+        agent_registry::MailWake::Off,
+    )
+    .map(|_| ())
+}

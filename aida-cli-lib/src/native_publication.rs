@@ -101,8 +101,34 @@ fn lease_for_tree(main: &Path, tree: &Path) -> Result<Option<crate::SessionLease
     Ok(lease)
 }
 
+/// A rotation continues the same publication handshake. Only a new launch
+/// (non-rotating or generation one) may replace its binding and intent.
+// trace:TASK-2902 | ai:codex
+pub(crate) fn prepare_generation(main: &Path, tree: &Path, generation: Option<u64>) -> Result<()> {
+    if generation.is_none_or(|generation| generation == 1) {
+        prepare(main, tree)?;
+    }
+    Ok(())
+}
+
+/// Release host-owned publication state with its lease. The seat's declaration
+/// can remain as stale evidence; a fresh launch always clears it.
+// trace:TASK-2902 | ai:codex
+pub(crate) fn release(main: &Path, lease: &str) {
+    let path = expected_path(main, lease);
+    match std::fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => eprintln!(
+            "Warning: cannot remove native publication binding {}: {e}",
+            path.display()
+        ),
+    }
+}
+
 /// Clear the previous declaration and issue a fresh binding for each launch,
-/// including reuse of the same lease. No native write grants are added.
+/// including reuse of the same lease, but not rotation generations.
+/// No native write grants are added.
 pub(crate) fn prepare(main: &Path, tree: &Path) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
     let Some(lease) = lease_for_tree(&main, tree)? else {

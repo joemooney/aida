@@ -6959,6 +6959,18 @@ pub(crate) struct RotationEnv<'a> {
     previous_session: Option<&'a str>,
 }
 
+#[cfg(test)]
+impl RotationEnv<'_> {
+    pub(crate) fn for_publication_test(generation: u64) -> Self {
+        Self {
+            generation,
+            seat: "publication-test",
+            handoff: None,
+            previous_session: None,
+        }
+    }
+}
+
 /// The prompt a relaunched generation starts with: its handoff is already
 /// in context from SessionStart.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
@@ -7228,7 +7240,11 @@ pub(crate) fn run_agent_generation(
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     // trace:TASK-2902 | ai:codex
     if native_post_exit_spec(config, plan).is_some() {
-        crate::native_publication::prepare(&plan.project_root, &plan.launch_cwd)?;
+        crate::native_publication::prepare_generation(
+            &plan.project_root,
+            &plan.launch_cwd,
+            rotation.map(|rotation| rotation.generation),
+        )?;
     }
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
