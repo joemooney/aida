@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1797",
+  "publishes": [
+    {
+      "at": "2026-11-06T06:11:17.642975956Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-06T06:11:17.469057529Z",
+      "spec": "TASK-1797",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-06T06:11:17.497119343Z",
+      "spec": "TASK-1797",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
