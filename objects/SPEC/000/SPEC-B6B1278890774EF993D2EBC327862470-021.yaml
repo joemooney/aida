@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T07:04:46.791532788Z
+modified_at: 2026-11-06T07:40:08.517446854Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -96,6 +96,12 @@ comments:
   created_at: 2026-11-06T06:36:56.736194178Z
   modified_at: 2026-11-06T06:36:56.736194178Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afcc-f9c5-70e0-9ad7-ce9ca513adae
+  author: joe
+  content: 'Round 2: addressed all six review findings. Rotation now provisions publication state only for non-rotating launches or generation one, preserving the same binding and Refs declaration across later generations. Declared completing subjects now pass the host forge-title guard and downgrade to Refs for an existing Refs PR or inconclusive/failed lookup. Added tests through actual standalone, drain, resume, background, worker and generation launch entry points, plus rotation continuity and stale-intent clearing. Resume setup is Codex-gated. Host bindings are removed with session end, reap and lease-record cleanup. Punt/hold vetoes now report pending uncommitted work on stderr, with captured-output coverage. Canonical BUG-2459 trailer handling is retained. Validation: 14 targeted tests passed (8 TASK-2902, fake-gh TASK-2879, 5 publication-exit tests); rustfmt, git diff --check and trace-header guard pass. The optimized cold test build was interrupted for excessive compilation time; successful build used cargo test --profile agent --config profile.agent.package.aida-cli-lib.opt-level=0 -p aida-cli-lib --lib task_2902 -- --test-threads=1, followed by the same built test binary for forge and publication-exit tests. Root-hygiene guard reports the sandbox-provided read-only .aws/ directory. Native-seat edits remain uncommitted for host publication; no commit, push, PR operation, queue completion or merge-hold clearance was performed.'
+  created_at: 2026-11-06T07:40:08.517446854Z
+  modified_at: 2026-11-06T07:40:08.517446854Z
+  session_id: 01a1afaa71a4
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
