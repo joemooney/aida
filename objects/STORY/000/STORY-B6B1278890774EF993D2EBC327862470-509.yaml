@@ -1,0 +1,37 @@
+id: 01a1b25a-f7fc-7052-a05a-d6a3696d33d2
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-509
+agreed_id: STORY-2586
+title: 'Review PR-3534: [train] land #3530, #3529, #3527'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `train/20261106-192652-1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3534>
+  - Branch: `train/20261106-192652-1` → `main`
+
+  ## Covers
+
+  - TASK-2938
+  - BUG-2457
+  - BUG-2469
+  - BUG-2468
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3534` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T19:34:28.604690414Z
+modified_at: 2026-11-06T19:34:28.604690414Z
+req_type: Story
+filed_at:
+  code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
