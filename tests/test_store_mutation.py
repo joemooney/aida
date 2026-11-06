@@ -70,6 +70,59 @@ class StoreMutationTests(unittest.TestCase):
         with self.assertRaisesRegex(Refusal, '^' + error + '$'):
             self.dispatch(request)
 
+    def test_authority_timeout_is_fatal_for_future_checks_and_rust_duplicate(self):
+        helper, host = socket.socketpair()
+        duplicate = socket.socket(fileno=os.dup(helper.fileno()))
+        self.addCleanup(duplicate.close)
+        self.addCleanup(host.close)
+        authority = ns['MutationAuthority'](helper)
+        helper.settimeout(.05)
+        release, revoked, computed = threading.Event(), threading.Event(), threading.Event()
+        replies, requests, errors = [], [], []
+        def responder():
+            try:
+                host.settimeout(2)
+                requests.append(host.recv(1))
+                reply = b'R' if revoked.is_set() else b'Y'
+                computed.set()
+                if not release.wait(2):
+                    raise RuntimeError('responder watchdog')
+                try:
+                    host.sendall(reply)
+                    replies.append(reply)
+                except OSError:
+                    replies.append(b'closed')
+                requests.append(host.recv(1))
+            except BaseException as error:
+                errors.append(error)
+        thread = threading.Thread(target=responder)
+        thread.start()
+        results = []
+        caller = threading.Thread(target=lambda: results.append(authority()))
+        caller.start()
+        try:
+            self.assertTrue(computed.wait(2))
+            caller.join(timeout=3)
+            self.assertFalse(caller.is_alive())
+            self.assertEqual(results, ['Unavailable'])
+            revoked.set()
+            release.set()  # result computed before revocation arrives late
+            thread.join(timeout=3)
+            self.assertFalse(thread.is_alive())
+            self.assertFalse(errors, errors)
+            self.assertEqual(replies, [b'closed'])
+            self.assertEqual(requests, [b'?', b''])
+            self.assertEqual(authority(), 'Unavailable')
+            # shutdown, unlike close, also poisons the Rust owner's duplicate.
+            self.assertEqual(duplicate.recv(1), b'')
+            with self.assertRaises(OSError):
+                duplicate.sendall(b'?')
+            self.assertTrue(authority.failed)
+        finally:
+            release.set()
+            thread.join(timeout=3)
+            caller.join(timeout=3)
+
     def test_closed_operations_and_schemas(self):
         for op in ('own_claim', 'comment_add', 'spec_edit', 'queue_done', 'exec', 'unknown'):
             self.refuses('UnsupportedOperation', self.request(op))
@@ -221,6 +274,88 @@ class StoreMutationTests(unittest.TestCase):
         other.poll()
         self.assertEqual(client2.recv(1), b'')
 
+    def test_real_sibling_namespace_connect_transfer_and_proc_fd_refuse(self):
+        # Two real lane namespaces. Transfer the exact authorized client FD
+        # with SCM_RIGHTS, then use os.write: only per-packet kernel identity
+        # can distinguish that writer from the original lane.
+        code = r"""import array,json,os,socket,sys
+control=socket.socket(fileno=int(sys.argv[1]))
+control.send(b'ready')
+while True:
+    raw,ancillary,_,_=control.recvmsg(65536,socket.CMSG_SPACE(4))
+    if not raw: break
+    command=json.loads(raw)
+    if command['op']=='write':
+        rights=array.array('i')
+        rights.frombytes(ancillary[0][2])
+        client=socket.socket(fileno=rights[0])
+        client.settimeout(3)
+        os.write(client.fileno(),bytes.fromhex(command['packet']))
+        control.send(b'written')
+        control.send(client.recv(65536))
+        client.close()
+    elif command['op']=='connect':
+        with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as client:
+            try: client.connect(command['address'])
+            except OSError: control.send(b'connect-refused')
+            else: control.send(b'UNEXPECTED-CONNECT')
+    elif command['op']=='proc':
+        try: fd=os.open(command['path'],os.O_RDWR)
+        except OSError: control.send(b'proc-refused')
+        else:
+            os.close(fd)
+            control.send(b'UNEXPECTED-PROC-FD')
+"""
+        processes, controls = [], []
+        try:
+            for _ in range(2):
+                host, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+                controls.append(host)
+                host.settimeout(3)
+                process = subprocess.Popen(['unshare', '--user', '--map-current-user', '--mount',
+                                            '--', sys.executable, '-c', code, str(child.fileno())],
+                                           pass_fds=(child.fileno(),), stderr=subprocess.PIPE)
+                processes.append(process)
+                child.close()
+                ready = host.recv(65536)
+                if ready != b'ready':
+                    diagnostic = process.communicate(timeout=3)[1].decode()
+                    if os.environ.get('AIDA_REQUIRE_STORE_MUTATION_LIVE') != '1':
+                        self.skipTest('sibling namespace prerequisite: ' + diagnostic)
+                    self.fail(diagnostic)
+            owner, sibling = processes
+            identity = ns['MutationIdentity'](owner.pid)
+            service = Service(self.binding, identity, lambda: None)
+            self.addCleanup(service.close)
+            self.assertTrue(identity.check(owner.pid, os.getuid(), os.getgid()))
+            self.assertFalse(identity.check(sibling.pid, os.getuid(), os.getgid()))
+            with self.assertRaisesRegex(Refusal, '^Unauthorized$'):
+                service.connect(sibling.pid)
+            controls[1].send(json.dumps(dict(op='connect', address=service.address.decode())).encode())
+            self.assertEqual(controls[1].recv(65536), b'connect-refused')
+            client = service.connect(owner.pid)
+            self.addCleanup(client.close)
+            for control, expected in [(controls[0], 'success'), (controls[1], 'Unauthorized')]:
+                control.sendmsg([json.dumps(dict(op='write', packet=self.wire(self.request()).hex())).encode()],
+                                [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [client.fileno()]))])
+                self.assertEqual(control.recv(65536), b'written')
+                service.poll()
+                reply = json.loads(control.recv(65536))
+                self.assertEqual(reply.get('error', reply['outcome']), expected)
+            self.assertEqual(len(service.accepted), 1)
+            # Linux refuses reopening a socket through procfs even when the
+            # sibling can name the host PID and descriptor.
+            controls[1].send(json.dumps(dict(op='proc', path='/proc/%d/fd/%d' %
+                                             (os.getpid(), client.fileno()))).encode())
+            self.assertEqual(controls[1].recv(65536), b'proc-refused')
+        finally:
+            for control in controls:
+                control.close()
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                process.communicate(timeout=3)
+
     def test_namespace_and_process_handles_are_pinned_and_dead_worker_refuses(self):
         identity = ns['MutationIdentity'](os.getpid())
         self.addCleanup(identity.close)
@@ -269,6 +404,7 @@ class StoreMutationTests(unittest.TestCase):
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
             if result.returncode == 77 and os.environ.get('AIDA_REQUIRE_STORE_MUTATION_LIVE') != '1':
                 self.skipTest(result.stderr.strip())
+            self.assertNotEqual(result.returncode, 77, 'required live fault fixture skipped: ' + fault + result.stderr)
             self.assertNotEqual(result.returncode, 0, fault + result.stdout + result.stderr)
             self.assertNotIn('live-store-channel-ok', result.stdout, fault)
 

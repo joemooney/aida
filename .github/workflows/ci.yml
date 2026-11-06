@@ -311,8 +311,10 @@ jobs:
       # Fixed read-only protocol and kernel-credential channel fixtures.
       # trace:TASK-3225 | ai:codex
       - name: Store mutation channel tests
-        if: matrix.shard == 'gates'
-        run: python3 -m unittest tests/test_store_mutation.py
+        if: matrix.shard == 'gates' && steps.changes.outputs.full_ci == 'true'
+        env:
+          AIDA_REQUIRE_STORE_MUTATION_LIVE: '1'
+        run: python3 -m unittest -v tests/test_store_mutation.py
 
       # Real production setup with fake Codex: stops at the managed-seat refusal.
       # Requires the workspace binary; keep it out of the fast no-build suite.

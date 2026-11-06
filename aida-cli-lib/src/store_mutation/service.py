@@ -73,6 +73,35 @@ def mutation_request(raw):
         raise MutationRefusal('InvalidRequest') from None
 
 
+class MutationAuthority:
+    """A timeout permanently shuts down all copies of the authority endpoint.
+    The Rust receipt-barrier owner shares this socket; close alone would leave
+    its duplicate able to consume an uncorrelated, late preflight reply.
+    """
+    def __init__(self, channel):
+        self.channel = channel
+        self.failed = False
+        channel.settimeout(1)
+
+    def __call__(self):
+        if self.failed:
+            return 'Unavailable'
+        try:
+            self.channel.sendall(b'?')
+            reply = self.channel.recv(1)
+            if reply in (b'Y', b'E', b'R', b'N'):
+                return {b'Y': None, b'E': 'Expired', b'R': 'Revoked', b'N': 'Unauthorized'}[reply]
+        except OSError:
+            pass
+        self.failed = True
+        try:
+            self.channel.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        self.channel.close()
+        return 'Unavailable'
+
+
 class MutationIdentity:
     """Pin namespace handles and a pidfd, not reusable PID/path strings."""
     def __init__(self, worker):

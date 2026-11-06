@@ -1429,8 +1429,13 @@ stamp before releasing tools. Revocation, lease loss or authority-channel
 failure closes the service and stops the helper's child. Normal exit and failed
 setup close channels, then reap the helper; resume creates a fresh epoch.
 The authorization reader has one thread per launch, never one per request.
-External storage stalls return unavailable to the helper within its deadline;
-teardown shuts down its capability immediately and waits at most 200 ms for
+External storage stalls return unavailable to the helper within its deadline.
+An authority timeout permanently shuts down the shared endpoint, including the
+Rust receipt-barrier owner's duplicate, so late replies cannot authorize a later
+request or worker binding. Unreadable leases and leases with unresolved or
+unrelated worktrees are ignored during selection; matching ownership must still
+be unique and remains mandatory throughout the session.
+Teardown shuts down its capability immediately and waits at most 200 ms for
 the reader thread, which may finish later in a long-lived launcher.
 
 `python3 -m unittest tests.test_store_mutation` covers protocol refusals,
@@ -1440,8 +1445,13 @@ bubblewrap/seccomp helper through preflight, receipt and post-exec probes with
 a synthetic authority responder and keyring bypass confined to test code.
 It is transport evidence, not real grant issuance or vendor conformance.
 `AIDA_REQUIRE_STORE_MUTATION_LIVE=1` makes missing live prerequisites fail
-instead of skip. Rust launch tests cover absent/empty bindings and receipt
-mismatches. Native launch labeling and grant behavior remain unchanged.
+instead of skip and is mandatory in the full-CI gates shard after namespace
+setup. Real sibling user/mount namespaces test direct connect refusal,
+SCM_RIGHTS-transferred client descriptors and procfs descriptor reopening.
+Rust owner fixtures exercise prepare refusals and live project/worktree/store,
+roster, lease, child/parent grant and worker-binding changes. Launch tests also
+cover absent/empty bindings and receipt mismatches. Native launch labeling and
+grant behavior remain unchanged.
 <!-- trace:TASK-3225 | ai:codex -->
 
 ### Explicit vendor containment policy

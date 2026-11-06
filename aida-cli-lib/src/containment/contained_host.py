@@ -668,13 +668,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             require(cfg.get('grant'), 'store service requires nonempty grant binding')
             authority = socket.socket(fileno=binding['authority_fd'])
             authority.set_inheritable(False)
-            authority.settimeout(1)
-            def authorize():
-                try:
-                    authority.sendall(b'?')
-                    return {b'Y': None, b'E': 'Expired', b'R': 'Revoked'}.get(authority.recv(1), 'Unauthorized')
-                except OSError:
-                    return 'Unavailable'
+            authorize = MutationAuthority(authority)
             mutation = StoreMutationSession(binding, MutationIdentity(worker), authorize)
             mutation.live()
         os.write(block_w, b'R')

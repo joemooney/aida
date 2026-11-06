@@ -95,16 +95,25 @@ impl Session {
             {
                 continue;
             }
-            let lease = read_lease(&path)?;
+            // Unrelated review/claim and retired-worktree leases carry no
+            // ownership evidence for this root. Refuse only matching ambiguity.
+            let Ok(lease) = read_lease(&path) else {
+                continue;
+            };
+            if lease.role.as_deref() != Some(role.as_str()) {
+                continue;
+            }
+            let Ok(lease_root) = std::fs::canonicalize(&lease.worktree_path) else {
+                continue;
+            };
+            if lease_root != worktree.path {
+                continue;
+            }
             anyhow::ensure!(
                 path == crate::leases::lease_path(&main, &lease.id),
                 "lease identity/path mismatch"
             );
-            if std::fs::canonicalize(&lease.worktree_path)?.as_path() == root
-                && lease.role.as_deref() == Some(role.as_str())
-            {
-                leases.push(lease);
-            }
+            leases.push(lease);
         }
         anyhow::ensure!(
             leases.len() == 1,
@@ -222,14 +231,27 @@ impl Session {
             .lock()
             .map_err(|_| anyhow::anyhow!("service worker lock refused"))? =
             Some(worker_binding_token(pid, start)?);
+        // Python's timeout socket shares O_NONBLOCK with this descriptor.
+        // It is idle at the receipt barrier, so temporarily use blocking I/O
+        // with host deadlines, then restore its timeout-compatible flags.
+        self.helper.set_nonblocking(false)?;
         self.helper.set_read_timeout(Some(Duration::from_secs(5)))?;
         self.helper
             .set_write_timeout(Some(Duration::from_secs(5)))?;
         // The helper is held at the receipt barrier, so no other authority
         // request can race this host-owned check.
-        self.helper.write_all(b"?")?;
         let mut reply = [0u8; 1];
-        self.helper.read_exact(&mut reply)?;
+        if let Err(error) = self
+            .helper
+            .write_all(b"?")
+            .and_then(|()| self.helper.read_exact(&mut reply))
+        {
+            // shutdown affects every duplicated endpoint, including Python's.
+            // A timed-out reply must never satisfy a later authorization.
+            let _ = self.helper.shutdown(std::net::Shutdown::Both);
+            return Err(error.into());
+        }
+        self.helper.set_nonblocking(true)?;
         anyhow::ensure!(reply == [b'Y'], "service worker grant binding refused");
         Ok(())
     }
@@ -334,3 +356,6 @@ mod tests {
         assert_eq!(rejection_code(&GrantRejection::Unreadable), b'N');
     }
 }
+
+#[cfg(test)]
+mod owner_tests;
