@@ -1137,6 +1137,18 @@ pub trait Forge {
         Observed::from_result(self.change_metadata(id, sink))
     }
 
+    /// Independent Git evidence used alongside a repeated metadata snapshot.
+    /// Kept as a typed port so in-memory forges can supply scripted evidence.
+    // trace:STORY-2401 | ai:codex
+    fn observe_change_ground_truth(
+        &self,
+        root: &Path,
+        id: u64,
+        meta: &ChangeMetadata,
+    ) -> Observed<bool> {
+        crate::forge_confirmation::on_base(root, &meta.base_ref, &meta.head_sha, id)
+    }
+
     /// [`Forge::check_rows`] as an observation. An empty rollup is
     /// `Pending`: the forge has not registered the checks yet (BUG-2401,
     /// BUG-2423), which is not the same as "no failing checks".
@@ -1220,6 +1232,30 @@ pub(crate) fn train_gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
+/// Read the train owner/body for abandoned-owner cleanup; not a generic gh runner.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn observe_train_body(root: &Path, id: u64) -> Observed<String> {
+    let Some(gh) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh executable unavailable".into());
+    };
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root)
+        .args([
+            "pr",
+            "view",
+            &id.to_string(),
+            "--json",
+            "body",
+            "--jq",
+            ".body",
+        ])
+        .stdin(std::process::Stdio::null());
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        cmd,
+        std::time::Duration::from_secs(15),
+    ))
 }
 
 /// Read a condition's PR merge state through the shared forge boundary.
@@ -2268,6 +2304,27 @@ impl Forge for GitHubForge {
     }
 
     // trace:TASK-963 | ai:claude
+    // trace:STORY-2401 | ai:codex — lifecycle confirmation owns retries.
+    fn observe_change_metadata(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Observed<ChangeMetadata> {
+        let Some(gh) = crate::resolve_gh_binary() else {
+            return Observed::Transient("gh executable unavailable".into());
+        };
+        let mut cmd = Command::new(gh);
+        cmd.current_dir(&self.project_root).args([
+            "pr", "view", &id.to_string(), "--json",
+            "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+        ]).stdin(std::process::Stdio::null());
+        crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+            cmd,
+            std::time::Duration::from_secs(15),
+        ))
+        .and_then(|body| parse_github_metadata_observation(&body))
+    }
+
     fn change_metadata(
         &self,
         id: u64,
@@ -2913,6 +2970,33 @@ impl Forge for GitLabForge {
     }
 
     // trace:TASK-963 | ai:claude
+    // trace:STORY-2401 | ai:codex
+    fn observe_change_metadata(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Observed<ChangeMetadata> {
+        let result = (|| -> Result<ChangeMetadata> {
+            let out = self.glab_api_get(&format!("projects/:id/merge_requests/{id}"), &[])?;
+            anyhow::ensure!(out.status.success(), "GitLab metadata unavailable");
+            let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+            anyhow::ensure!(
+                matches!(
+                    value["state"].as_str(),
+                    Some("opened" | "closed" | "merged")
+                ),
+                "unrecognized GitLab state"
+            );
+            let m = parse_glab_mr_metadata(&String::from_utf8_lossy(&out.stdout))?;
+            anyhow::ensure!(
+                is_full_commit_sha(&m.head_sha) && !m.base_ref.is_empty() && !m.head_ref.is_empty(),
+                "incomplete GitLab metadata"
+            );
+            Ok(m)
+        })();
+        Observed::from_result(result)
+    }
+
     fn change_metadata(
         &self,
         id: u64,
@@ -4047,6 +4131,23 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
 /// non-empty refs, matching `pr_rebase::parse_pr_info`). Pure so the field
 /// mapping is unit-testable without spawning `gh`.
 // trace:TASK-963 | ai:claude
+// trace:STORY-2401 | ai:codex
+pub(crate) fn parse_github_metadata_observation(body: &str) -> Observed<ChangeMetadata> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
+        return Observed::Transient("metadata read returned malformed JSON".into());
+    };
+    if !matches!(v["state"].as_str(), Some("OPEN" | "CLOSED" | "MERGED"))
+        || !v["headRefOid"].as_str().is_some_and(is_full_commit_sha)
+        || !v["baseRefName"].as_str().is_some_and(|s| !s.is_empty())
+        || !v["headRefName"].as_str().is_some_and(|s| !s.is_empty())
+    {
+        return Observed::Transient(
+            "metadata read returned incomplete or unrecognized evidence".into(),
+        );
+    }
+    Observed::Known(parse_gh_change_metadata(&v))
+}
+
 fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
     let s = |key: &str| -> String {
         json.get(key)
@@ -5103,6 +5204,17 @@ pub(crate) mod fake {
         fn change_status(&self, _: &ChangeRef) -> Result<ChangeStatus> {
             anyhow::bail!("RecordingForge: change_status not scripted")
         }
+        // trace:STORY-2401 | ai:codex — this forge has no Git repository;
+        // its scripted base truth agrees with its scripted terminal state.
+        fn observe_change_ground_truth(
+            &self,
+            _root: &Path,
+            _id: u64,
+            meta: &ChangeMetadata,
+        ) -> Observed<bool> {
+            Observed::Known(meta.state == ChangeState::Merged)
+        }
+
         fn change_metadata(
             &self,
             _: u64,

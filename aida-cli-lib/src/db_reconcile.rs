@@ -1943,6 +1943,7 @@ pub(crate) fn report_stranded_review_pr_lookup_failures(
 // trace:TASK-1296 | ai:claude
 // trace:BUG-1432 | ai:codex
 // trace:BUG-1543 | ai:claude
+// trace:STORY-2401 | ai:codex
 pub(crate) fn collect_stranded_review_pr_resolutions(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
@@ -1972,10 +1973,15 @@ pub(crate) fn collect_stranded_review_pr_resolutions(
         let Some(spec_id) = req.spec_id.as_deref() else {
             continue;
         };
-        let metadata = match crate::forge::forge_for(project_root).change_metadata(pr_n, &mut sink)
-        {
-            Ok(metadata) => metadata,
-            Err(error) => {
+        let metadata = match crate::forge_confirmation::metadata(
+            project_root,
+            crate::forge::forge_for(project_root).as_ref(),
+            pr_n,
+            &mut sink,
+        ) {
+            crate::forge_observed::Observed::Known(metadata) => metadata,
+            crate::forge_observed::Observed::Pending(error)
+            | crate::forge_observed::Observed::Transient(error) => {
                 failures.push(StrandedReviewPrLookupFailure {
                     spec_id: spec_id.to_string(),
                     pr_n,

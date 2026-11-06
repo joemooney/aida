@@ -1222,6 +1222,7 @@ pub(crate) fn detect_merged_pr_for_branch_github(
 /// "cannot confirm." Non-orchestrator callers (none today) can pass
 /// [`network_retry::NoopSink`] to keep the original silent best-effort
 /// semantics. trace:BUG-286 | ai:claude
+// trace:STORY-2401 | ai:codex
 pub(crate) fn pr_is_merged_with_sink(
     project_root: &std::path::Path,
     pr: u32,
@@ -1232,10 +1233,14 @@ pub(crate) fn pr_is_merged_with_sink(
     // BUG-286 retry-with-sink behaviour this site had inline; any provider
     // error (CLI missing / failed / unreachable) maps to None — "cannot
     // confirm", never a silent success. trace:TASK-963 | ai:claude
-    crate::forge::forge_for(project_root)
-        .change_metadata(pr as u64, sink)
-        .ok()
-        .map(|m| m.state == crate::forge::ChangeState::Merged)
+    crate::forge_confirmation::metadata(
+        project_root,
+        crate::forge::forge_for(project_root).as_ref(),
+        pr as u64,
+        sink,
+    )
+    .known()
+    .map(|m| m.state == crate::forge::ChangeState::Merged)
 }
 
 /// BUG-245: which SPEC-ID does the PR's commits actually credit?

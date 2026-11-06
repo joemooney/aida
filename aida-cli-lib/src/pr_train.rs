@@ -288,7 +288,14 @@ pub(crate) trait Rails {
     // trace:BUG-2423 | ai:codex
     fn suspend(&mut self, _error: &str) {}
     /// The run stopped on `error`: release whatever is still open.
-    fn abort(&mut self, _error: &str) {}
+    fn abort(&mut self, _error: &str) -> bool {
+        true
+    }
+    /// Landing receipts discovered while recovering from an error.
+    // trace:STORY-2401 | ai:codex
+    fn reconciled_landed(&self) -> Vec<(u64, String)> {
+        Vec::new()
+    }
 }
 
 /// The result of a train run.
@@ -321,8 +328,11 @@ pub(crate) fn drive(rails: &mut dyn Rails, members: Vec<Member>) -> Result<Outco
         if e.downcast_ref::<TrainCiUnavailable>().is_some() {
             rails.suspend(&error);
         } else {
-            rails.abort(&error);
-            for m in &members {
+            let confirmed = rails.abort(&error);
+            if !confirmed {
+                rails.suspend(&error);
+            }
+            for m in members.iter().filter(|_| confirmed) {
                 let done = out.landed.iter().any(|(pr, _)| *pr == m.pr)
                     || out.ejected.iter().any(|x| x.pr == m.pr);
                 if !done {
@@ -333,7 +343,22 @@ pub(crate) fn drive(rails: &mut dyn Rails, members: Vec<Member>) -> Result<Outco
                 }
             }
         }
-        out.error = Some(error);
+        // Reconciliation during retirement/abort can prove a landing too.
+        // Preserve that positive credit in the ordinary run summary.
+        for (pr, commit) in rails.reconciled_landed() {
+            if !out.landed.iter().any(|(landed, _)| *landed == pr) {
+                out.landed.push((pr, commit));
+            }
+        }
+        if out.ejected.is_empty()
+            && members
+                .iter()
+                .all(|m| out.landed.iter().any(|(pr, _)| *pr == m.pr))
+        {
+            eprintln!("  train step reported an error ({error}), but reconciliation proved every member landed");
+        } else {
+            out.error = Some(error);
+        }
     }
     for e in &out.ejected {
         rails.ejected(e);
@@ -762,19 +787,20 @@ fn wait_train_ci(
         }
         if let TrainCiReadiness::Missing(names) = &waiting {
             let since = *missing_since.get_or_insert(now);
-            anyhow::ensure!(
-                now.saturating_sub(since) < TRAIN_CI_REGISTRATION_SECS,
-                "no CI registered within {TRAIN_CI_REGISTRATION_SECS}s for train PR #{pr} \
-                 after its other checks settled (missing: {})",
-                names.join(", ")
-            );
+            if now.saturating_sub(since) >= TRAIN_CI_REGISTRATION_SECS {
+                return Err(TrainCiUnavailable(format!(
+                    "no CI registered within {TRAIN_CI_REGISTRATION_SECS}s for train PR #{pr} after its other checks settled (missing: {})", names.join(", ")
+                )).into());
+            }
         } else {
             missing_since = None;
         }
-        anyhow::ensure!(
-            settle_limit == 0 || now < settle_limit,
-            "train PR #{pr} CI not ready within {settle_limit}s: {waiting:?}"
-        );
+        if settle_limit != 0 && now >= settle_limit {
+            return Err(TrainCiUnavailable(format!(
+                "train PR #{pr} CI not ready within {settle_limit}s: {waiting:?}"
+            ))
+            .into());
+        }
         sleep();
     }
 }
@@ -1696,8 +1722,8 @@ pub(crate) fn abandoned_train_note(owner: &TrainOwner) -> String {
 }
 
 /// Close abandoned train PR `train` and delete its branch; a dry run only
-/// says it would. Failures warn: the train is already excluded from the
-/// rider gate, so a failed close never blocks this train.
+/// says it would. Unconfirmed cleanup stops admission: the abandoned PR
+/// must not be treated as retired while it may still carry these members.
 // trace:BUG-2412 | ai:claude
 fn close_abandoned_train(
     main_worktree: &Path,
@@ -1705,14 +1731,47 @@ fn close_abandoned_train(
     branch: &str,
     owner: &TrainOwner,
     dry_run: bool,
-) {
+) -> Result<()> {
     if dry_run {
         println!(
             "  train PR #{train} is abandoned (its owner pid {} is gone); \
              a real run closes it",
             owner.pid
         );
-        return;
+        return Ok(());
+    }
+    // trace:STORY-2401 | ai:codex — a listing is not cleanup authority.
+    let forge = crate::forge::forge_for(main_worktree);
+    let observed = crate::forge_confirmation::metadata(
+        main_worktree,
+        forge.as_ref(),
+        train,
+        &mut crate::network_retry::NoopSink,
+    );
+    if !matches!(observed, crate::forge_observed::Observed::Known(ref m)
+        if m.state == crate::forge::ChangeState::Open && m.head_ref == branch)
+    {
+        anyhow::bail!("train PR #{train} cleanup unconfirmed; PR, branch and members retained; inspect before retrying");
+    }
+    let owner_confirmed = crate::forge_observed::confirm_snapshot(
+        || crate::forge::observe_train_body(main_worktree, train),
+        |body| {
+            crate::forge_observed::Observed::Known(
+                train_abandoned(
+                    body,
+                    &crate::coordination::hostname(),
+                    aida_core::liveness::process_identity_is_alive,
+                )
+                .as_ref()
+                    == Some(owner),
+            )
+        },
+        crate::forge_confirmation::backoff,
+    );
+    if !owner_confirmed.is_settled() {
+        anyhow::bail!(
+            "train PR #{train} owner changed or is unconfirmed; cleanup and new admission deferred"
+        );
     }
     let note = abandoned_train_note(owner);
     match gh_stdout(
@@ -1723,12 +1782,17 @@ fn close_abandoned_train(
             "  closed abandoned train PR #{train} (its owner pid {} is gone)",
             owner.pid
         ),
-        Err(e) => eprintln!("  warning: could not close abandoned train PR #{train}: {e:#}"),
+        Err(e) => {
+            return Err(e.context(format!(
+                "abandoned train PR #{train} closure is unconfirmed; branch and members retained"
+            )));
+        }
     }
     let _ = origin_git(
         main_worktree,
         &["push", "--quiet", "origin", "--delete", branch],
     );
+    Ok(())
 }
 
 /// The member gate, live.
@@ -1812,11 +1876,6 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     s
 }
 
-/// BUG-2433: forge reads, `MERGED_RECHECK_PAUSE_SECS` apart, before a
-/// merge-call error is judged.
-const MERGED_RECHECK_READS: u32 = 3;
-const MERGED_RECHECK_PAUSE_SECS: u64 = 3;
-
 /// BUG-2433: marks a train merge error raised by (or after) an issued forge
 /// merge call, the only kind that can hide a merge that took effect. Errors
 /// without it (pre-merge refusals) are never re-read.
@@ -1843,12 +1902,14 @@ pub(crate) enum MergeErrorVerdict {
     /// The train landed at its tested tip: the forge says merged there, or
     /// the forge never answered and main carries the tip's tree.
     Landed,
-    /// Not landed, or not provably: the error stands.
+    /// Confirmed not landed: ordinary cleanup is permitted.
     #[default]
     NotLanded,
     /// The forge still reports the PR open, yet main carries the tip's
     /// tree. Fail closed: not landed; the advisor reconciles it.
     OpenButOnMain,
+    /// The forge or Git evidence cannot confirm a negative. Preserve the train.
+    Unconfirmed,
 }
 
 /// BUG-2433: what a train PR's (state, head) says after its merge call
@@ -1922,11 +1983,38 @@ pub(crate) trait TrainForge {
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built>;
     /// The member gate for `pr`, live.
     fn gate(&mut self, pr: u64) -> std::result::Result<Member, String>;
+    // trace:STORY-2401 | ai:codex
+    fn observe_gate(
+        &mut self,
+        pr: u64,
+    ) -> crate::forge_observed::Observed<std::result::Result<Member, String>> {
+        crate::forge_observed::Observed::Known(self.gate(pr))
+    }
+    fn confirmation_backoff(&self) -> std::time::Duration {
+        std::time::Duration::ZERO
+    }
+    // trace:STORY-2401 | ai:codex
+    fn confirm_member_head(&mut self, _pr: u64, _head: &str) -> bool {
+        false
+    }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
     /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
     /// that is fully explained by admitted held members the mandate covers.
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
+    // trace:STORY-2401 | ai:codex
+    fn confirm_ci_refusal(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> bool {
+        false
+    }
+    /// One bounded CI recheck, not a second full CI wait.
+    // trace:STORY-2401 | ai:codex
+    fn observe_ci(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> crate::forge_observed::Observed<CiVerdict> {
+        crate::forge_observed::Observed::from_result(self.wait_ci(change, train))
+    }
     /// BUG-2214: release `member`'s merge-hold under its mandate cover,
     /// through ship's own release sequence, returning the cleared record for
     /// a re-arm. The default fails closed: a runner that cannot release
@@ -1964,6 +2052,15 @@ pub(crate) trait TrainForge {
     }
     /// Close a train PR that will not merge, and delete its branch.
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str);
+    /// No destructive cleanup on a single negative or an unavailable read.
+    // trace:STORY-2401 | ai:codex
+    fn confirm_not_landed(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _train: &Built,
+    ) -> crate::forge_observed::Confirmed {
+        crate::forge_observed::Confirmed::Unconfirmed
+    }
     /// Rebase-merge the train PR, pinned to `tip`.
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()>;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
@@ -2186,6 +2283,29 @@ impl TrainForge for LiveTrainForge<'_> {
         )
     }
 
+    // Legacy gate errors mix local refusals and unavailable secondary reads.
+    // Conservatively preserve work until that gate can supply typed refusals.
+    // trace:STORY-2401 | ai:codex
+    fn observe_gate(
+        &mut self,
+        pr: u64,
+    ) -> crate::forge_observed::Observed<std::result::Result<Member, String>> {
+        match self.gate(pr) {
+            Ok(member) => crate::forge_observed::Observed::Known(Ok(member)),
+            Err(why) => crate::forge_observed::Observed::Transient(why),
+        }
+    }
+    fn confirmation_backoff(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(3)
+    }
+
+    // trace:STORY-2401 | ai:codex
+    fn confirm_member_head(&mut self, pr: u64, head: &str) -> bool {
+        matches!(crate::forge_confirmation::metadata(
+            &self.main_worktree, self.forge, pr, &mut crate::network_retry::NoopSink,
+        ), crate::forge_observed::Observed::Known(m) if m.head_sha == head)
+    }
+
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
         self.dispatch_check()?;
         origin_git(
@@ -2338,51 +2458,79 @@ impl TrainForge for LiveTrainForge<'_> {
         verified::merge(self, change, train, lease)
     }
 
+    // trace:STORY-2401 | ai:codex
+    fn confirm_ci_refusal(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> bool {
+        let Ok(TrainCiReadiness::Refused(first)) =
+            self.train_ci_snapshot(change, &train.tip, &train.cars)
+        else {
+            return false;
+        };
+        crate::forge_confirmation::backoff();
+        matches!(self.train_ci_snapshot(change, &train.tip, &train.cars), Ok(TrainCiReadiness::Refused(second)) if second == first)
+    }
+
+    // trace:STORY-2401 | ai:codex
+    fn observe_ci(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> crate::forge_observed::Observed<CiVerdict> {
+        crate::forge_observed::Observed::from_result(self.train_ci_snapshot(
+            change,
+            &train.tip,
+            &train.cars,
+        ))
+        .and_then(|state| match state {
+            TrainCiReadiness::Green => crate::forge_observed::Observed::Known(CiVerdict::Green),
+            TrainCiReadiness::Red(why) => {
+                crate::forge_observed::Observed::Known(CiVerdict::Red(why))
+            }
+            other => crate::forge_observed::Observed::Pending(format!(
+                "CI negative not confirmed: {other:?}"
+            )),
+        })
+    }
+
+    // trace:STORY-2401 | ai:codex
+    fn confirm_not_landed(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> crate::forge_observed::Confirmed {
+        let forge = self.forge;
+        let root = self.main_worktree.clone();
+        crate::forge_observed::confirm_negative(
+            3,
+            || {
+                forge
+                    .observe_change_metadata(change.id, &mut crate::network_retry::NoopSink)
+                    .and_then(|m| {
+                        if m.head_sha != train.tip || m.base_ref != self.base {
+                            return crate::forge_observed::Observed::Pending(
+                                "train head/base changed".into(),
+                            );
+                        }
+                        crate::forge_observed::Observed::Known(
+                            m.state == crate::forge::ChangeState::Merged,
+                        )
+                    })
+            },
+            || crate::forge_confirmation::on_base(&root, &change.base, &train.tip, change.id),
+            crate::forge_confirmation::backoff,
+        )
+    }
+
     // trace:BUG-2433 | ai:claude
     fn merged_despite_error(
         &mut self,
         change: &crate::forge::ChangeRef,
         train: &Built,
     ) -> MergeErrorVerdict {
-        // The forge's own answer first, a few reads apart: the error can
-        // race the state the merge wrote. Main's tree is consulted only when
-        // the forge gave no definite answer; whether it may prove a landing
-        // (every read unreadable) or only flag a contradiction (the forge
-        // said open) is `judge_merge_error`'s call.
-        let forge = self.forge;
-        let read = |attempt: u32| {
-            if attempt > 0 {
-                std::thread::sleep(std::time::Duration::from_secs(MERGED_RECHECK_PAUSE_SECS));
-            }
-            forge
-                .change_metadata(change.id, &mut crate::network_retry::NoopSink)
-                .ok()
-                .map(|m| (m.state, m.head_sha))
-        };
-        let on_main = || {
-            let Ok(main) = self.fetch_main() else {
-                return false;
-            };
-            let tree = |rev: &str| {
-                git(
-                    &self.main_worktree,
-                    &[
-                        "rev-parse",
-                        "--verify",
-                        "--quiet",
-                        &format!("{rev}^{{tree}}"),
-                    ],
-                )
-                .ok()
-            };
-            main_carries_tip(
-                &main,
-                &train.base,
-                tree(&main).as_deref(),
-                tree(&train.tip).as_deref(),
-            )
-        };
-        judge_merge_error(MERGED_RECHECK_READS, &train.tip, read, on_main)
+        match self.confirm_not_landed(change, train) {
+            crate::forge_observed::Confirmed::Positive => MergeErrorVerdict::Landed,
+            crate::forge_observed::Confirmed::Negative => MergeErrorVerdict::NotLanded,
+            crate::forge_observed::Confirmed::Unconfirmed => MergeErrorVerdict::Unconfirmed,
+        }
     }
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
@@ -2583,6 +2731,9 @@ pub(crate) struct ForgeRails<'a> {
     pub warnings: Vec<String>,
     /// Train PRs opened and neither retired nor merged yet.
     live: Vec<crate::forge::ChangeRef>,
+    // trace:STORY-2401 | ai:codex
+    built: std::collections::HashMap<u64, Built>,
+    reconciled: std::collections::HashSet<u64>,
 }
 
 impl<'a> ForgeRails<'a> {
@@ -2595,12 +2746,37 @@ impl<'a> ForgeRails<'a> {
             landed_on_main: Vec::new(),
             warnings: Vec::new(),
             live: Vec::new(),
+            built: std::collections::HashMap::new(),
+            reconciled: std::collections::HashSet::new(),
         }
     }
 
-    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
-        self.live.retain(|c| c.id != change.id);
-        self.ports.retire(change, why);
+    // trace:STORY-2401 | ai:codex
+    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) -> Result<()> {
+        let train = self
+            .built
+            .get(&change.id)
+            .cloned()
+            .ok_or_else(|| TrainCiUnavailable("missing pinned train evidence".into()))?;
+        match self.ports.confirm_not_landed(change, &train) {
+            crate::forge_observed::Confirmed::Negative => {
+                self.live.retain(|c| c.id != change.id);
+                self.ports.retire(change, why);
+                Ok(())
+            }
+            crate::forge_observed::Confirmed::Positive => {
+                self.finish_landed(change, &train)?;
+                Err(TrainCiUnavailable(
+                    "train landed during reconciliation; stop and refresh members".into(),
+                )
+                .into())
+            }
+            crate::forge_observed::Confirmed::Unconfirmed => Err(TrainCiUnavailable(format!(
+                "train PR #{} cleanup is unconfirmed; members retained",
+                change.id
+            ))
+            .into()),
+        }
     }
 
     fn change_for(&self, tip: &str) -> Result<crate::forge::ChangeRef> {
@@ -2612,283 +2788,12 @@ impl<'a> ForgeRails<'a> {
             .with_context(|| format!("no train PR is open for {}", short(tip)))
     }
 
-    fn warn(&mut self, line: String) {
-        eprintln!("  warning: {line}");
-        self.warnings.push(line);
-    }
-
-    /// BUG-2214: re-arm every hold released during a landing that then
-    /// failed; the returned text (empty when nothing was released) appends to
-    /// the ejection reason or warning that caused it.
-    // trace:BUG-2214 | ai:claude
-    fn rearm_released(
+    // trace:STORY-2401 | ai:codex
+    fn finish_landed(
         &mut self,
-        released: &[crate::gate::merge_hold_core::MergeHoldRecord],
-    ) -> String {
-        released
-            .iter()
-            .map(|record| self.ports.rearm_hold(record))
-            .collect()
-    }
-}
-
-impl Rails for ForgeRails<'_> {
-    fn main_tip(&mut self) -> Result<String> {
-        self.ports.fetch_main()
-    }
-
-    fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
-        self.ports.build(base, members)
-    }
-
-    fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
-        let mut changes = Vec::new();
-        for t in trains {
-            self.count += 1;
-            let branch = format!("{BRANCH_PREFIX}{}-{}", self.stamp, self.count);
-            let change = self.ports.open(t, &branch)?;
-            self.live.push(change.clone());
-            let prs: Vec<String> = t.cars.iter().map(|c| format!("#{}", c.member.pr)).collect();
-            println!(
-                "  train PR #{} opened for {} ({branch} at {})",
-                change.id,
-                prs.join(", "),
-                short(&t.tip)
-            );
-            self.opened.push((t.tip.clone(), change.clone()));
-            changes.push(change);
-        }
-        // Every train's CI runs at once; wait for each in turn.
-        let mut verdicts = Vec::new();
-        for (change, train) in changes.iter().zip(trains) {
-            // A CI that cannot be read (none registered, an API error) is not
-            // a red verdict: bisecting it would spend CI runs and eject every
-            // member as "red alone". Only a transient read failure
-            // (`TrainCiReadError`: gh/API error, checks never registered)
-            // pauses the run and retains this train. Authority revocation, a
-            // refusal (skipped required check), a changed head/base/state and
-            // the missing-required-check bound keep the ordinary abort path,
-            // which ejects the members with the real reason.
-            // trace:BUG-2423 | ai:claude
-            let v = match self.ports.wait_ci(change, train) {
-                Ok(v) => v,
-                Err(e)
-                    if self.ports.dispatch_abort().is_some()
-                        || e.downcast_ref::<TrainCiReadError>().is_none() =>
-                {
-                    return Err(e)
-                }
-                Err(e) => return Err(TrainCiUnavailable(format!(
-                    "train PR #{}'s CI could not be read: {e:#}; train PR remains open; retry the same members",
-                    change.id
-                )).into()),
-            };
-            if let CiVerdict::Red(why) = &v {
-                println!("  train PR #{} is red: {why}", change.id);
-                self.retire(
-                    change,
-                    &format!("Train CI red ({why}); the train reruns or bisects."),
-                );
-            } else {
-                println!("  train PR #{} is green", change.id);
-            }
-            verdicts.push(v);
-        }
-        Ok(verdicts)
-    }
-
-    fn land(&mut self, train: &Built) -> Result<Landing> {
-        let change = self.change_for(&train.tip)?;
-        // Another merger holding the lease is about to move main: rebuild on
-        // it rather than abort the run with open train PRs and no summary.
-        let _lease = match self.ports.lease(change.id) {
-            Ok(lease) => lease,
-            Err(holder) => {
-                println!("  the merge lease is held ({holder}); the train rebuilds");
-                self.retire(
-                    &change,
-                    "Another merger holds the merge lease; the train rebuilds.",
-                );
-                return Ok(Landing::Stale);
-            }
-        };
-        if self.ports.fetch_main()? != train.base {
-            self.retire(
-                &change,
-                "Main moved after this train was built; the train rebuilds.",
-            );
-            return Ok(Landing::Stale);
-        }
-        // Re-gate every member right before the merge: a hold, a new push or
-        // a withdrawn approval since the build ejects that member. BUG-2214:
-        // the fresh gate re-runs the mandate cover under the lease, so a
-        // lapsed mandate ejects a held member here with its hold intact.
-        // trace:BUG-2214 | ai:claude
-        let mut refused = Vec::new();
-        let mut fresh: Vec<Member> = Vec::new();
-        for car in &train.cars {
-            let pr = car.member.pr;
-            match self.ports.gate(pr) {
-                Ok(m) if m.head == car.member.head => fresh.push(m),
-                Ok(m) => refused.push(Ejected {
-                    pr,
-                    reason: format!(
-                        "its head moved from {} to {} after the train was built; re-train",
-                        short(&car.member.head),
-                        short(&m.head)
-                    ),
-                }),
-                Err(why) => {
-                    if self.ports.dispatch_abort().is_some() {
-                        self.retire(
-                            &change,
-                            "Dispatch authority was revoked before landing; the train aborts.",
-                        );
-                        return Err(dispatch_aborted(&why));
-                    }
-                    refused.push(Ejected { pr, reason: why });
-                }
-            }
-        }
-        if !refused.is_empty() {
-            self.retire(
-                &change,
-                "A member failed its pre-land recheck; the train rebuilds.",
-            );
-            return Ok(Landing::Refused(refused));
-        }
-        // BUG-2214: release each admitted held member exactly as ship would —
-        // under the lease, after the fresh cover — then the train PR's
-        // merge-hold-gate must re-run green before the merge. Any failure
-        // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
-        let mut released: Vec<crate::gate::merge_hold_core::MergeHoldRecord> = Vec::new();
-        for member in fresh.iter().filter(|m| m.release.is_some()) {
-            match self.ports.release_hold(member) {
-                Ok(record) => released.push(record),
-                Err(why) => {
-                    let rearm = self.rearm_released(&released);
-                    if self.ports.dispatch_abort().is_some() {
-                        self.retire(
-                            &change,
-                            "Dispatch authority was revoked during hold release; the train aborts.",
-                        );
-                        if !rearm.is_empty() {
-                            self.warn(format!("{why}.{rearm}"));
-                        }
-                        return Err(dispatch_aborted(&format!("{why}{rearm}")));
-                    }
-                    self.retire(
-                        &change,
-                        "A member's merge-hold was not released; the train rebuilds.",
-                    );
-                    return Ok(Landing::Refused(vec![Ejected {
-                        pr: member.pr,
-                        reason: format!("its merge-hold was not released ({why}); re-train{rearm}"),
-                    }]));
-                }
-            }
-        }
-        if !released.is_empty() {
-            let covers: Vec<String> = fresh
-                .iter()
-                .filter_map(|m| m.release.as_ref().map(|c| c.id.clone()))
-                .collect();
-            match self.ports.hold_gate_green_after_release(&change, &covers) {
-                Ok(true) => {}
-                Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
-                    let rearm = self.rearm_released(&released);
-                    self.retire(
-                        &change,
-                        "Dispatch authority was revoked during the hold-gate wait; the train aborts.",
-                    );
-                    if !rearm.is_empty() {
-                        self.warn(format!("{e:#}.{rearm}"));
-                    }
-                    return Err(e);
-                }
-                outcome => {
-                    let why = match outcome {
-                        Ok(_) => "the train PR's merge-hold-gate did not re-run green in time, \
-                                  or the mandate lapsed"
-                            .to_string(),
-                        Err(e) => {
-                            format!("the train PR's merge-hold-gate could not be read ({e:#})")
-                        }
-                    };
-                    let rearm = self.rearm_released(&released);
-                    self.retire(
-                        &change,
-                        &format!(
-                            "{why}; the released member holds are re-armed; the train rebuilds."
-                        ),
-                    );
-                    self.warn(format!("{why}.{rearm}"));
-                    return Ok(Landing::Stale);
-                }
-            }
-        }
-        // The re-gate took several forge round trips, and a merge that does
-        // not take the lease (the web UI, a raw `gh pr merge`) could have
-        // moved main meanwhile; strict is off, so the forge would rebase the
-        // train onto an untested main. Look again right before merging.
-        if self.ports.fetch_main()? != train.base {
-            let rearm = self.rearm_released(&released);
-            if !rearm.is_empty() {
-                self.warn(format!("main moved after the hold release.{rearm}"));
-            }
-            self.retire(
-                &change,
-                "Main moved while the train was re-checked; the train rebuilds.",
-            );
-            return Ok(Landing::Stale);
-        }
-        // Keep the exact under-lease release covers through the final gate
-        // and retries, including after the markers have been released.
-        // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
-        let mut checked = train.clone();
-        for (car, member) in checked.cars.iter_mut().zip(&fresh) {
-            car.member.release = member.release.clone();
-        }
-        if let Err(e) = self
-            .ports
-            .merge_verified(&change, &checked, _lease.as_ref())
-            .with_context(|| format!("train PR #{} was not merged", change.id))
-        {
-            // BUG-2433: an error from the forge merge call itself may have
-            // come after the merge took effect (GitHub answered a GraphQL
-            // error but rebase-merged the train). Re-read before deciding: a
-            // merged train takes the landed path, so its members close with
-            // pointers instead of being ejected. A pre-merge refusal never
-            // reached the forge, so it surfaces at once.
-            // trace:BUG-2433 | ai:claude
-            let verdict = if is_forge_merge_call_error(&e) {
-                self.ports.merged_despite_error(&change, &checked)
-            } else {
-                MergeErrorVerdict::NotLanded
-            };
-            if verdict == MergeErrorVerdict::Landed {
-                self.warn(format!(
-                    "the merge call for train PR #{} reported an error ({e:#}), but the forge \
-                     merged it at the tested head; the train landed",
-                    change.id
-                ));
-            } else {
-                // trace:BUG-2214 | ai:claude
-                let rearm = self.rearm_released(&released);
-                if !rearm.is_empty() {
-                    self.warn(format!("the merge failed after the hold release.{rearm}"));
-                }
-                if verdict == MergeErrorVerdict::OpenButOnMain {
-                    return Err(e.context(format!(
-                        "the forge still reports train PR #{} open, yet main carries its \
-                         tested tree: the two disagree, so the train is not counted as \
-                         landed and its members stay open for the advisor to reconcile",
-                        change.id
-                    )));
-                }
-                return Err(e);
-            }
-        }
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> Result<Landing> {
         self.live.retain(|c| c.id != change.id);
         let main = match self.ports.fetch_main() {
             Ok(main) => main,
@@ -2929,12 +2834,359 @@ impl Rails for ForgeRails<'_> {
             ));
         }
         for (car, sha) in train.cars.iter().zip(&landed) {
-            self.ports
-                .member_landed(&change, train, car, sha.as_deref());
+            self.ports.member_landed(change, train, car, sha.as_deref());
             self.landed_on_main
                 .push((car.member.pr, sha.clone().unwrap_or_default()));
         }
         Ok(Landing::Landed(main))
+    }
+    fn warn(&mut self, line: String) {
+        eprintln!("  warning: {line}");
+        self.warnings.push(line);
+    }
+
+    /// BUG-2214: re-arm every hold released during a landing that then
+    /// failed; the returned text (empty when nothing was released) appends to
+    /// the ejection reason or warning that caused it.
+    // trace:BUG-2214 | ai:claude
+    fn rearm_released(
+        &mut self,
+        released: &[crate::gate::merge_hold_core::MergeHoldRecord],
+    ) -> String {
+        released
+            .iter()
+            .map(|record| self.ports.rearm_hold(record))
+            .collect()
+    }
+}
+
+impl Rails for ForgeRails<'_> {
+    fn main_tip(&mut self) -> Result<String> {
+        self.ports.fetch_main().map_err(|e| {
+            TrainCiUnavailable(format!(
+                "train base could not be read: {e:#}; members retained"
+            ))
+            .into()
+        })
+    }
+
+    fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
+        self.ports.build(base, members)
+    }
+
+    fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
+        let mut changes = Vec::new();
+        for t in trains {
+            self.count += 1;
+            let branch = format!("{BRANCH_PREFIX}{}-{}", self.stamp, self.count);
+            // trace:STORY-2401 | ai:codex — an opening error can arrive
+            // after publication. Until the journal slice can resume it,
+            // preserve members and report the exact branch for inspection.
+            let change = self.ports.open(t, &branch).map_err(|e| TrainCiUnavailable(format!(
+                "train opening result is unconfirmed for `{branch}`: {e:#}; inspect the branch before retrying; members retained"
+            )))?;
+            self.live.push(change.clone());
+            self.built.insert(change.id, t.clone());
+            let prs: Vec<String> = t.cars.iter().map(|c| format!("#{}", c.member.pr)).collect();
+            println!(
+                "  train PR #{} opened for {} ({branch} at {})",
+                change.id,
+                prs.join(", "),
+                short(&t.tip)
+            );
+            self.opened.push((t.tip.clone(), change.clone()));
+            changes.push(change);
+        }
+        // Every train's CI runs at once; wait for each in turn.
+        let mut verdicts = Vec::new();
+        for (change, train) in changes.iter().zip(trains) {
+            // trace:STORY-2401 | ai:codex — a failed read never proves a
+            // red train. Reconcile a possible landing, otherwise preserve it.
+            let mut v = match self.ports.wait_ci(change, train) {
+                Ok(v) => v,
+                Err(e) if e.downcast_ref::<TrainCiReadError>().is_some() => {
+                    match self.ports.confirm_not_landed(change, train) {
+                        crate::forge_observed::Confirmed::Positive => {
+                            self.reconciled.insert(change.id);
+                            CiVerdict::Green
+                        }
+                        _ => {
+                            return Err(TrainCiUnavailable(format!(
+                                "train PR #{} CI unavailable: {e:#}; members retained",
+                                change.id
+                            ))
+                            .into())
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Retire/abort additionally requires the independent
+                    // not-landed gate; unavailable refusals suspend here.
+                    if e.downcast_ref::<TrainCiUnavailable>().is_some()
+                        || !self.ports.confirm_ci_refusal(change, train)
+                    {
+                        return Err(TrainCiUnavailable(format!(
+                            "train PR #{} CI refusal is unconfirmed: {e:#}",
+                            change.id
+                        ))
+                        .into());
+                    }
+                    return Err(e);
+                }
+            };
+            // trace:STORY-2401 | ai:codex — confirm the CI negative itself,
+            // then retirement independently proves the pinned tip did not land.
+            if matches!(v, CiVerdict::Red(_)) {
+                std::thread::sleep(self.ports.confirmation_backoff());
+                v = match self.ports.observe_ci(change, train) {
+                    crate::forge_observed::Observed::Known(verdict) => verdict,
+                    crate::forge_observed::Observed::Pending(why)
+                    | crate::forge_observed::Observed::Transient(why) => {
+                        return Err(TrainCiUnavailable(format!(
+                            "train PR #{} red CI could not be confirmed: {why}",
+                            change.id
+                        ))
+                        .into())
+                    }
+                };
+            }
+            if let CiVerdict::Red(why) = &v {
+                println!("  train PR #{} is red: {why}", change.id);
+                self.retire(
+                    change,
+                    &format!("Train CI red ({why}); the train reruns or bisects."),
+                )?;
+            } else {
+                println!("  train PR #{} is green", change.id);
+            }
+            verdicts.push(v);
+        }
+        Ok(verdicts)
+    }
+
+    fn land(&mut self, train: &Built) -> Result<Landing> {
+        let change = self.change_for(&train.tip)?;
+        if self.reconciled.remove(&change.id) {
+            return self.finish_landed(&change, train);
+        }
+        // Another merger holding the lease is about to move main: rebuild on
+        // it rather than abort the run with open train PRs and no summary.
+        let _lease = match self.ports.lease(change.id) {
+            Ok(lease) => lease,
+            Err(holder) => {
+                println!("  the merge lease is held ({holder}); the train rebuilds");
+                self.retire(
+                    &change,
+                    "Another merger holds the merge lease; the train rebuilds.",
+                )?;
+                return Ok(Landing::Stale);
+            }
+        };
+        if self.ports.fetch_main()? != train.base {
+            self.retire(
+                &change,
+                "Main moved after this train was built; the train rebuilds.",
+            )?;
+            return Ok(Landing::Stale);
+        }
+        // Re-gate every member right before the merge: a hold, a new push or
+        // a withdrawn approval since the build ejects that member. BUG-2214:
+        // the fresh gate re-runs the mandate cover under the lease, so a
+        // lapsed mandate ejects a held member here with its hold intact.
+        // trace:BUG-2214 | ai:claude
+        let mut refused = Vec::new();
+        let mut fresh: Vec<Member> = Vec::new();
+        for car in &train.cars {
+            let pr = car.member.pr;
+            let first = self.ports.observe_gate(pr);
+            let gate = if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
+            {
+                first
+            } else {
+                let backoff = self.ports.confirmation_backoff();
+                let mut first = Some(first);
+                crate::forge_observed::confirm_snapshot(
+                    || first.take().unwrap_or_else(|| self.ports.observe_gate(pr)),
+                    |_| crate::forge_observed::Observed::Known(true),
+                    || std::thread::sleep(backoff),
+                )
+            };
+            match gate {
+                crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
+                    fresh.push(m)
+                }
+                crate::forge_observed::Observed::Known(Ok(m)) => {
+                    if !self.ports.confirm_member_head(pr, &m.head) {
+                        return Err(TrainCiUnavailable(format!(
+                            "member PR #{pr} head change is unconfirmed"
+                        ))
+                        .into());
+                    }
+                    refused.push(Ejected {
+                        pr,
+                        reason: format!(
+                            "its head moved from {} to {} after the train was built; re-train",
+                            short(&car.member.head),
+                            short(&m.head)
+                        ),
+                    });
+                }
+                crate::forge_observed::Observed::Known(Err(why)) => {
+                    refused.push(Ejected { pr, reason: why })
+                }
+                crate::forge_observed::Observed::Pending(why)
+                | crate::forge_observed::Observed::Transient(why) => {
+                    return Err(TrainCiUnavailable(format!(
+                        "member PR #{pr} gate could not be confirmed ({why}); members retained"
+                    ))
+                    .into());
+                }
+            }
+        }
+
+        if !refused.is_empty() {
+            self.retire(
+                &change,
+                "A member failed its pre-land recheck; the train rebuilds.",
+            )?;
+            return Ok(Landing::Refused(refused));
+        }
+        // BUG-2214: release each admitted held member exactly as ship would —
+        // under the lease, after the fresh cover — then the train PR's
+        // merge-hold-gate must re-run green before the merge. Any failure
+        // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
+        let mut released: Vec<crate::gate::merge_hold_core::MergeHoldRecord> = Vec::new();
+        for member in fresh.iter().filter(|m| m.release.is_some()) {
+            match self.ports.release_hold(member) {
+                Ok(record) => released.push(record),
+                Err(why) => {
+                    let rearm = self.rearm_released(&released);
+                    if self.ports.dispatch_abort().is_some() {
+                        self.retire(
+                            &change,
+                            "Dispatch authority was revoked during hold release; the train aborts.",
+                        )?;
+                        if !rearm.is_empty() {
+                            self.warn(format!("{why}.{rearm}"));
+                        }
+                        return Err(dispatch_aborted(&format!("{why}{rearm}")));
+                    }
+                    self.retire(
+                        &change,
+                        "A member's merge-hold was not released; the train rebuilds.",
+                    )?;
+                    return Ok(Landing::Refused(vec![Ejected {
+                        pr: member.pr,
+                        reason: format!("its merge-hold was not released ({why}); re-train{rearm}"),
+                    }]));
+                }
+            }
+        }
+        if !released.is_empty() {
+            let covers: Vec<String> = fresh
+                .iter()
+                .filter_map(|m| m.release.as_ref().map(|c| c.id.clone()))
+                .collect();
+            match self.ports.hold_gate_green_after_release(&change, &covers) {
+                Ok(true) => {}
+                Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
+                    let rearm = self.rearm_released(&released);
+                    self.retire(
+                        &change,
+                        "Dispatch authority was revoked during the hold-gate wait; the train aborts.",
+                    )?;
+                    if !rearm.is_empty() {
+                        self.warn(format!("{e:#}.{rearm}"));
+                    }
+                    return Err(e);
+                }
+                outcome => {
+                    let why = match outcome {
+                        Ok(_) => "the train PR's merge-hold-gate did not re-run green in time, \
+                                  or the mandate lapsed"
+                            .to_string(),
+                        Err(e) => {
+                            format!("the train PR's merge-hold-gate could not be read ({e:#})")
+                        }
+                    };
+                    let rearm = self.rearm_released(&released);
+                    self.retire(
+                        &change,
+                        &format!(
+                            "{why}; the released member holds are re-armed; the train rebuilds."
+                        ),
+                    )?;
+                    self.warn(format!("{why}.{rearm}"));
+                    return Ok(Landing::Stale);
+                }
+            }
+        }
+        // The re-gate took several forge round trips, and a merge that does
+        // not take the lease (the web UI, a raw `gh pr merge`) could have
+        // moved main meanwhile; strict is off, so the forge would rebase the
+        // train onto an untested main. Look again right before merging.
+        if self.ports.fetch_main()? != train.base {
+            let rearm = self.rearm_released(&released);
+            if !rearm.is_empty() {
+                self.warn(format!("main moved after the hold release.{rearm}"));
+            }
+            self.retire(
+                &change,
+                "Main moved while the train was re-checked; the train rebuilds.",
+            )?;
+            return Ok(Landing::Stale);
+        }
+        // Keep the exact under-lease release covers through the final gate
+        // and retries, including after the markers have been released.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+        let mut checked = train.clone();
+        for (car, member) in checked.cars.iter_mut().zip(&fresh) {
+            car.member.release = member.release.clone();
+        }
+        if let Err(e) = self
+            .ports
+            .merge_verified(&change, &checked, _lease.as_ref())
+            .with_context(|| format!("train PR #{} was not merged", change.id))
+        {
+            // BUG-2433: an error from the forge merge call itself may have
+            // come after the merge took effect (GitHub answered a GraphQL
+            // error but rebase-merged the train). Re-read before deciding: a
+            // merged train takes the landed path, so its members close with
+            // pointers instead of being ejected. A pre-merge refusal never
+            // reached the forge, so it surfaces at once.
+            // trace:BUG-2433 | ai:claude
+            let verdict = if is_forge_merge_call_error(&e) {
+                self.ports.merged_despite_error(&change, &checked)
+            } else {
+                MergeErrorVerdict::NotLanded
+            };
+            if verdict == MergeErrorVerdict::Landed {
+                self.warn(format!(
+                    "the merge call for train PR #{} reported an error ({e:#}), but the forge \
+                     merged it at the tested head; the train landed",
+                    change.id
+                ));
+            } else {
+                // trace:BUG-2214 | ai:claude
+                let rearm = self.rearm_released(&released);
+                if !rearm.is_empty() {
+                    self.warn(format!("the merge failed after the hold release.{rearm}"));
+                }
+                if matches!(
+                    verdict,
+                    MergeErrorVerdict::OpenButOnMain | MergeErrorVerdict::Unconfirmed
+                ) {
+                    return Err(TrainCiUnavailable(format!(
+                        "merge result unconfirmed ({e:#}); the forge still reports train PR #{} open, yet main carries its \
+                         tested tree: the two disagree, so the train is not counted as \
+                         landed and its members stay open for the advisor to reconcile",
+                        change.id
+                    )).into());
+                }
+                return Err(e);
+            }
+        }
+        self.finish_landed(&change, train)
     }
 
     fn ejected(&mut self, e: &Ejected) {
@@ -2955,13 +3207,47 @@ impl Rails for ForgeRails<'_> {
         }
     }
 
-    fn abort(&mut self, error: &str) {
+    // trace:STORY-2401 | ai:codex
+    fn reconciled_landed(&self) -> Vec<(u64, String)> {
+        self.landed_on_main
+            .iter()
+            .filter_map(|(pr, _)| {
+                self.opened.iter().rev().find_map(|(_, change)| {
+                    self.built
+                        .get(&change.id)?
+                        .cars
+                        .iter()
+                        .find(|car| car.member.pr == *pr)
+                        .map(|car| (*pr, car.commit.clone()))
+                })
+            })
+            .collect()
+    }
+
+    // trace:STORY-2401 | ai:codex
+    fn abort(&mut self, error: &str) -> bool {
+        // Preflight every live train before any cleanup. One unconfirmed
+        // train preserves all still-pending members and open PRs.
+        for change in self.live.clone() {
+            let Some(train) = self.built.get(&change.id).cloned() else {
+                return false;
+            };
+            match self.ports.confirm_not_landed(&change, &train) {
+                crate::forge_observed::Confirmed::Negative => {}
+                crate::forge_observed::Confirmed::Positive => {
+                    let _ = self.finish_landed(&change, &train);
+                    return false;
+                }
+                crate::forge_observed::Confirmed::Unconfirmed => return false,
+            }
+        }
         for change in std::mem::take(&mut self.live) {
             self.ports.retire(
                 &change,
                 &format!("The train run stopped ({error}); re-train the members."),
             );
         }
+        true
     }
 }
 
@@ -3132,7 +3418,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     // `aida pr train`) would otherwise block its riders forever. Close it so
     // its members ride this train. trace:BUG-2412 | ai:claude
     for (train, branch, owner) in &abandoned {
-        close_abandoned_train(&main_worktree, *train, branch, owner, opts.dry_run);
+        close_abandoned_train(&main_worktree, *train, branch, owner, opts.dry_run)?;
     }
     let mut members = Vec::new();
     let mut refused = Vec::new();

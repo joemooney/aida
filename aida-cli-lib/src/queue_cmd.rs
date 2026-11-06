@@ -1098,20 +1098,25 @@ pub(crate) fn merged_pr_review_entries<'a>(
 /// failure (gh missing/unreachable, no forge configured), never a silent
 /// collect.
 // trace:BUG-1512 | ai:claude
+// trace:STORY-2401 | ai:codex
 pub(crate) fn review_pr_is_merged_or_closed(
     project_root: &std::path::Path,
     pr: u32,
     sink: &mut dyn network_retry::RetrySink,
 ) -> Option<bool> {
-    crate::forge::forge_for(project_root)
-        .change_metadata(pr as u64, sink)
-        .ok()
-        .map(|m| {
-            matches!(
-                m.state,
-                crate::forge::ChangeState::Merged | crate::forge::ChangeState::Closed
-            )
-        })
+    crate::forge_confirmation::metadata(
+        project_root,
+        crate::forge::forge_for(project_root).as_ref(),
+        pr as u64,
+        sink,
+    )
+    .known()
+    .map(|m| {
+        matches!(
+            m.state,
+            crate::forge::ChangeState::Merged | crate::forge::ChangeState::Closed
+        )
+    })
 }
 
 /// BUG-772: the UNSATISFIED `BlockedBy` predecessors of `req`, as the

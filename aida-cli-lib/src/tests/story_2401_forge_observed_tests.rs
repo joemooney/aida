@@ -469,3 +469,114 @@ fn story_2401_status_refusals_are_settled_and_not_retried() {
         Observed::Known(Ok(status(Observed::Known(true))))
     );
 }
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_negative_needs_second_read_and_git_truth() {
+    use Confirmed::*;
+    let cases = [
+        (
+            vec![Observed::Known(false), Observed::Known(false)],
+            Observed::Known(false),
+            Negative,
+            2,
+        ),
+        (
+            vec![Observed::Known(false), Observed::Known(false)],
+            Observed::Known(true),
+            Unconfirmed,
+            2,
+        ),
+        (
+            vec![Observed::Known(false), Observed::Known(false)],
+            Observed::Transient("fetch failed".into()),
+            Unconfirmed,
+            2,
+        ),
+        (
+            vec![Observed::Transient("DNS".into()), Observed::Known(true)],
+            Observed::Known(false),
+            Positive,
+            2,
+        ),
+        (
+            vec![Observed::Transient("DNS".into()); 3],
+            Observed::Known(false),
+            Unconfirmed,
+            3,
+        ),
+        (
+            vec![
+                Observed::Known(false),
+                Observed::Pending("index".into()),
+                Observed::Known(false),
+            ],
+            Observed::Known(false),
+            Unconfirmed,
+            3,
+        ),
+    ];
+    for (reads, git, expected, count) in cases {
+        let mut reads = std::collections::VecDeque::from(reads);
+        let calls = Cell::new(0);
+        let pauses = Cell::new(0);
+        assert_eq!(
+            confirm_negative(
+                3,
+                || {
+                    calls.set(calls.get() + 1);
+                    reads.pop_front().unwrap()
+                },
+                || git,
+                || pauses.set(pauses.get() + 1)
+            ),
+            expected
+        );
+        assert_eq!(calls.get(), count);
+        assert_eq!(pauses.get(), count - 1);
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_snapshot_requires_matching_head_and_independent_evidence() {
+    for (values, git, known) in [
+        (vec!["closed@a", "closed@a"], true, true),
+        (vec!["closed@a", "closed@b", "closed@c"], true, false),
+        (vec!["closed@a", "closed@a"], false, false),
+    ] {
+        let mut values = values.into_iter();
+        let reads = Cell::new(0);
+        let observed = confirm_snapshot(
+            || {
+                reads.set(reads.get() + 1);
+                Observed::Known(values.next().unwrap())
+            },
+            |_| Observed::Known(git),
+            || {},
+        );
+        assert_eq!(observed.is_settled(), known);
+        assert!(reads.get() >= 2);
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_metadata_cannot_invent_open_from_unknown_or_partial_reply() {
+    let mut value = serde_json::json!({"state": "CLOSED", "headRefOid": "a".repeat(40),
+        "baseRefName": "main", "headRefName": "topic"});
+    assert!(
+        matches!(crate::forge::parse_github_metadata_observation(&value.to_string()), Observed::Known(m) if m.state == ChangeState::Closed)
+    );
+    value["state"] = "UNKNOWN".into();
+    assert!(matches!(
+        crate::forge::parse_github_metadata_observation(&value.to_string()),
+        Observed::Transient(_)
+    ));
+    value["state"] = "OPEN".into();
+    value["headRefOid"] = "".into();
+    assert!(matches!(
+        crate::forge::parse_github_metadata_observation(&value.to_string()),
+        Observed::Transient(_)
+    ));
+}

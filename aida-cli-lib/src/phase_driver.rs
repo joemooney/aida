@@ -768,10 +768,17 @@ impl RealPhaseDriver {
             // and match before applying this destructive lifecycle action.
             let forge = self.project_forge();
             let mut sink = crate::network_retry::NoopSink;
-            let metadata = forge.change_metadata(pr.number, &mut sink);
+            let metadata = crate::forge_confirmation::metadata(
+                &self.project_root,
+                forge.as_ref(),
+                pr.number,
+                &mut sink,
+            );
             let owner = forge.authenticated_user_login();
             let ownership = match (metadata, owner) {
-                (Ok(meta), Ok(owner)) if meta.state == crate::forge::ChangeState::Open => {
+                (crate::forge_observed::Observed::Known(meta), Ok(owner))
+                    if meta.state == crate::forge::ChangeState::Open =>
+                {
                     match meta.author.as_deref() {
                         Some(author) if author.eq_ignore_ascii_case(&owner) => {
                             RetractionOwnership::Ours
@@ -782,7 +789,9 @@ impl RealPhaseDriver {
                 }
                 // A change that is no longer open needs no retraction, and the
                 // AlreadyMerged path owns the merged case.
-                (Ok(_), Ok(_)) => RetractionOwnership::NoLongerOpen,
+                (crate::forge_observed::Observed::Known(_), Ok(_)) => {
+                    RetractionOwnership::NoLongerOpen
+                }
                 _ => RetractionOwnership::Unverified,
             };
             let change = crate::forge::ChangeRef {
@@ -1934,6 +1943,13 @@ impl RealPhaseDriver {
             .map(|b| detect_merged_pr_for_branch_via_forge(&self.project_root, b))
         {
             Some(PrLookup::Found(pr)) => {
+                // trace:STORY-2401 | ai:codex — a branch search is discovery,
+                // not completion evidence. Confirm the exact change first.
+                if pr_is_merged_with_sink(&self.project_root, pr.number as u32, &mut sink)
+                    != Some(true)
+                {
+                    return None;
+                }
                 if !self.merged_pr_satisfies_latest_reopen(
                     pr.number as u32,
                     latest_reopen_at,
