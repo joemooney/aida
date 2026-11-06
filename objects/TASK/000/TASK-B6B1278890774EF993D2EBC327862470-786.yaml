@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T16:04:13.604602957Z
+modified_at: 2026-11-06T16:04:34.171737115Z
 req_type: Task
 tags:
 - area:containment
@@ -166,6 +166,12 @@ comments:
   created_at: 2026-11-05T19:13:07.582561825Z
   modified_at: 2026-11-05T19:13:07.582561825Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b19a-cafb-7981-8f06-89a568fdb1ad
+  author: joe
+  content: 'ADVISOR: the blocker is narrowed from TASK-2708 (which stays open for TASK-3219 and the AC2/AC3 evidence) to PR #3449 (review story STORY-2528, merged at 20a33ba). The agy adapter needs only the shared contained wrapper now on main. Per TASK-2708 AC1, vendor additions are DATA on the common wrapper, not new containment code. The four accepted AC1 deltas apply unchanged.'
+  created_at: 2026-11-06T16:04:34.171737115Z
+  modified_at: 2026-11-06T16:04:34.171737115Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
