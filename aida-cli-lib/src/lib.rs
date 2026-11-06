@@ -417,6 +417,7 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 mod forge;
+mod forge_confirmation;
 mod forge_observed;
 mod forge_profiles;
 mod gate_cmd;

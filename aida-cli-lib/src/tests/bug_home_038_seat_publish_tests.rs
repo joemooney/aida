@@ -1795,6 +1795,8 @@ fn story_2475_final_seat_state_reads_recorded_clone_through_its_host() {
             assert!(!facts.dirty.is_empty());
             assert_eq!(state.head, facts.head);
             assert_eq!(state.uncommitted, Some(facts.dirty.len()));
+            // trace:BUG-2464 | ai:codex
+            assert_eq!(state.head_has_unpushed, Some(false));
         }
         Probe::Unknown(_) | Probe::HasSubmodules(_) => {
             assert_eq!(state.head, None);
