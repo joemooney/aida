@@ -7,7 +7,7 @@
 //! Claude Code's `statusLine` integration but for Antigravity's own runtime
 //! (model, context usage, activity, VCS). **No Agy payload shape is
 //! recorded anywhere in this repo** — checked `docs/agents/antigravity-*`,
-//! `docs/competitive-analysis/**/*agy*`, and the SPIKE-27 architecture
+//! `docs/internal/competitive-analysis/**/*agy*`, and the SPIKE-27 architecture
 //! inventory (`14-agy-architecture.md`) at TASK-1479 authoring time; none
 //! of them capture an actual statusline JSON sample. This adapter is
 //! therefore SPECULATIVE and TOLERANT by design:

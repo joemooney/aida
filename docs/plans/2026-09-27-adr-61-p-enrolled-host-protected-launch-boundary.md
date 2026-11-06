@@ -599,9 +599,9 @@ deployment evidence — which does not exist.
 * SPIKE-91 — protected broker/worker boundary and disposable proof plan.
 * TASK-1550 — host-wide AIDA launch admission and cutover inventory.
 * BUG-1679 / PR #2226 — protected binary identity and admission dependency.
-* `docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md` — the
+* `docs/internal/architecture/control-plane-vs-durable-execution-and-merge-queues.md` — the
   existing merge-hold and verdict gating layers this boundary does not replace.
-* `docs/architecture/autonomy-and-escalation.md` — the autonomy ladder whose
+* `docs/internal/architecture/autonomy-and-escalation.md` — the autonomy ladder whose
   unattended modes gate 4 would interrupt.
 
 <!-- trace:ADR-61 | ai:claude -->

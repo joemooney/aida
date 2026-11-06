@@ -22,7 +22,7 @@
 //! (non-Git) project binds into its one mailbox with the same create-new
 //! rule. Sidecars and bindings stay private: canonical publication does not
 //! carry them (a canonical-only clone sees a cohort message as legacy role
-//! mail; documented in docs/mailbox.md).
+//! mail; documented in docs/advanced/mailbox.md).
 // trace:STORY-1843 | ai:claude
 
 use serde::{Deserialize, Deserializer, Serialize};

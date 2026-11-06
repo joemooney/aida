@@ -964,7 +964,7 @@ mod tests {
     /// because a drift in our serializer breaks every external tool's
     /// byte-identical writes (and makes `write_object_if_changed` see spurious
     /// diffs). This guards the four write-conformance properties from
-    /// docs/architecture/spike-46-store-interop/FINDINGS.md plus
+    /// docs/internal/architecture/spike-46-store-interop/FINDINGS.md plus
     /// serialize→deserialize→serialize idempotence. If a struct/serde change
     /// alters the on-disk shape, this fails on purpose — update it deliberately
     /// and note the format change for downstream consumers. trace:SPIKE-46 | ai:claude

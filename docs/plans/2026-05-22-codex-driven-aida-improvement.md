@@ -405,8 +405,8 @@ module. Non-goal: no diff-scoped validation yet.
 
 - `docs/plans/2026-03-17-codex-cli-support.md` — older Codex support plan,
   partially implemented and now stale in places.
-- `docs/architecture/mcp-coordination-surface.md` — current MCP coordination
+- `docs/internal/architecture/mcp-coordination-surface.md` — current MCP coordination
   design.
 - `docs/archive/PROJECT_EVALUATION_2026-02-28.md` — prior project evaluation.
-- `docs/autonomous-drain.md` — no-human / advisor / drain behavior.
-- `docs/storage-modes.md` — git-canonical storage model.
+- `docs/advanced/autonomous-drain.md` — no-human / advisor / drain behavior.
+- `docs/advanced/storage-modes.md` — git-canonical storage model.

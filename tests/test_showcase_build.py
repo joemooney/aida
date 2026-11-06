@@ -43,6 +43,23 @@ class ShowcaseBuildTests(unittest.TestCase):
     def snapshot(self):
         return {p.relative_to(self.site): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.site.rglob('*') if p.is_file()}
 
+    # trace:STORY-1651 | ai:codex
+    def test_moved_advanced_guide_resolves_figures_from_source_directory(self):
+        advanced = self.root / 'docs/advanced'
+        advanced.mkdir()
+        self.source.rename(advanced / 'guide.md')
+        self.source = advanced / 'guide.md'
+        self.source.write_text('# Moved guide\n\n![Diagram](../showcase/assets/example.svg)\n')
+        assets = self.site / 'assets'
+        assets.mkdir()
+        (assets / 'example.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>Example</title></svg>')
+        self.manifest['pages'][0]['source'] = 'advanced/guide.md'
+        self.save_manifest()
+        self.git('add', '.')
+        self.build()
+        self.assertIn('src="assets/example.svg"', (self.site / 'guide.html').read_text())
+        self.build('--check')
+
     def test_clean_check_and_rebuild_are_stable(self):
         before = self.snapshot()
         self.build('--check')

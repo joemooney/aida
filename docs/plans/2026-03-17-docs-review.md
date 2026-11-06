@@ -1,7 +1,7 @@
 # Documentation Review Report
 
 **Date**: 2026-03-17
-**Scope**: All user-facing documentation (README.md, CLAUDE.md, OVERVIEW.md, docs/getting-started.md, docs/storage-modes.md, docs/multi-user-setup.md, docs/WHY-AIDA.md)
+**Scope**: All user-facing documentation (README.md, CLAUDE.md, OVERVIEW.md, docs/getting-started.md, docs/advanced/storage-modes.md, docs/advanced/multi-user-setup.md, docs/WHY-AIDA.md)
 
 ---
 
@@ -65,7 +65,7 @@ The documentation set is comprehensive and covers the system well, but suffers f
 
 5. **gRPC server port**: Line 397 says `--port 50051` for the gRPC server. This is separate from the REST port 8080. The relationship between these ports is unclear. Some documents imply both are always running; others imply you choose one.
 
-6. **Dead/incorrect references**: Line 722 says `docs/user-guide.md: Comprehensive user documentation`. This is accurate. Line 723 says `docs/admin-guide.md: Storage administration...` -- this file exists but says the system supports only "two storage backends" (YAML and SQLite), which is stale now that PostgreSQL, Git Worktree, and Git Sibling exist.
+6. **Dead/incorrect references**: Line 722 says `docs/user-guide.md: Comprehensive user documentation`. This is accurate. Line 723 says `docs/advanced/admin-guide.md: Storage administration...` -- this file exists but says the system supports only "two storage backends" (YAML and SQLite), which is stale now that PostgreSQL, Git Worktree, and Git Sibling exist.
 
 ---
 
@@ -87,7 +87,7 @@ The documentation set is comprehensive and covers the system well, but suffers f
 
 ---
 
-### docs/storage-modes.md
+### docs/advanced/storage-modes.md
 
 **This is the best-written document in the set.** Clear, well-structured, with good decision flowchart and comparison matrix.
 
@@ -103,7 +103,7 @@ The documentation set is comprehensive and covers the system well, but suffers f
 
 ---
 
-### docs/multi-user-setup.md
+### docs/advanced/multi-user-setup.md
 
 1. **Build features flag** (line 13): Says `cargo build --features postgres,gitlab,github`. If GitHub integration is behind a feature flag, this is important information that should also appear in getting-started.md and README.md.
 

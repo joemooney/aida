@@ -20,7 +20,7 @@
 | What each requirement type is for | [requirement-types.md](requirement-types.md) |
 | The spec lifecycle (Draft → … → Released) | [lifecycle.md](lifecycle.md) |
 | The terminal shell (`aida tui`) | [tui/README.md](tui/README.md) |
-| Project administration & configuration | [admin-guide.md](admin-guide.md) |
+| Project administration & configuration | [admin-guide.md](advanced/admin-guide.md) |
 | Every `AIDA_*` environment variable | [environment-variables.md](environment-variables.md) |
 
 For the project overview start at the [AIDA README](../README.md) or [OVERVIEW.md](../OVERVIEW.md).

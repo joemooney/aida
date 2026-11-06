@@ -55,6 +55,6 @@ AIDA already concedes the DB advantages **by design**: it builds a **SQLite cach
 2. **Cognee / memory-lib git-export watch** — any move toward git-sync would further erode the (already narrow) "they avoid git" claim.
 3. **`AGENTS.md` convergence trajectory** — if vendors standardize a richer structured `AGENTS.md`, does it commoditize part of AIDA's prose layer?
 4. **Linear/Jira repo-native moves** — any SaaS PM shift toward git-backed specs changes the map.
-5. **Internal honesty audit** — sweep positioning docs (`docs/positioning/`, I3 framing) to remove "git vs DB purity" language; replace with the git-canonical + cache + structure + multi-vendor line above.
+5. **Internal honesty audit** — sweep positioning docs (`docs/internal/positioning/`, I3 framing) to remove "git vs DB purity" language; replace with the git-canonical + cache + structure + multi-vendor line above.
 
 **Bottom line:** Reframe the wedge from *"competitors avoid git, we ride it"* to **"the ecosystem is converging on files-in-git as the neutral substrate — AIDA is the only one putting a stable-ID, typed-relationship, trace-enforced, MCP-queryable knowledge graph on top of it, which is also what makes it genuinely multi-vendor while app-local memory stays vendor-locked."**

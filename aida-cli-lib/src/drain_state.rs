@@ -2162,7 +2162,7 @@ mod tests {
     #[test]
     // trace:BUG-1585 | ai:codex
     fn autonomous_drain_guide_matches_pipeline_depth_default() {
-        let guide = include_str!("../../docs/autonomous-drain.md");
+        let guide = include_str!("../../docs/advanced/autonomous-drain.md");
         let source = include_str!("drain_state.rs");
         let default = default_pipeline_depth();
         let field_docs = source

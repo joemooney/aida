@@ -1,7 +1,7 @@
 # SPIKE-28: Antigravity Multi-Agent and Skill Surface — Comparison with Claude Code and Codex
 
 **Date**: 2026-06-04
-**Source-verified**: Yes — validated `agy plugin` subcommand capabilities (`import`, `list`, `install`, `validate`) on host system; cross-referenced `docs/agents/session-communication.md`, `docs/agents/cross-agent-onboarding.md`, and comparative analysis reports `01-dynamic-workflows.md` and `02-agent-view.md`.
+**Source-verified**: Yes — validated `agy plugin` subcommand capabilities (`import`, `list`, `install`, `validate`) on host system; cross-referenced `docs/advanced/session-communication.md`, `docs/agents/cross-agent-onboarding.md`, and comparative analysis reports `01-dynamic-workflows.md` and `02-agent-view.md`.
 **Verdict**: **COMPOSE + ABSTRACT** — Antigravity lacks Claude Code's native background daemon supervisor and concurrent dynamic workflow runtime. Instead of implementing parallel execution internally, it relies entirely on AIDA's workspace-level worktree isolation and coordination primitives. AIDA should abstract the multi-agent orchestration layer, treating Antigravity as a specialized single-agent executor in the fleet.
 
 ---

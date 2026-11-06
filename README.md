@@ -114,16 +114,11 @@ Useful starting points:
 
 ## Documentation
 
-- [OVERVIEW.md](OVERVIEW.md): vision, architecture, and feature surface in depth
-- [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; a self-contained `what-is-aida.html` beside it is for offline reading)
-- [docs/getting-started.md](docs/getting-started.md): conversational development and one-time operator setup
-- [docs/cli/](docs/cli/README.md): CLI reference
-- [docs/lifecycle.md](docs/lifecycle.md): the spec lifecycle
-- [docs/autonomous-drain.md](docs/autonomous-drain.md): unattended queue drains
-- [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md): autonomy and escalation
-- [docs/agents/aida-mcp-install-matrix.md](docs/agents/aida-mcp-install-matrix.md): MCP and client setup
-- [docs/commit-trailer-convention.md](docs/commit-trailer-convention.md): commit message convention
-- [CLAUDE.md](CLAUDE.md): working on AIDA itself
+Start with the [adopter documentation](docs/README.md#im-using-aida) for installation,
+your first project, agent setup and everyday commands.
+
+To contribute to AIDA itself, see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[OVERVIEW.md](OVERVIEW.md).
 
 ## License
 

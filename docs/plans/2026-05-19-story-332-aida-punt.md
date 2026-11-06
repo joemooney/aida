@@ -162,7 +162,7 @@ a NeedsAttention spec is a punt awaiting advisor triage.
 
 ### Docs
 
-- `aida-core/templates/docs/aida-discipline/lifecycle-vocabulary.md`,
+- `aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`,
   `docs/lifecycle.md`, `README.md` "Spec lifecycle": add NeedsAttention.
 - `CLAUDE.md`: "31 skills" → "32 skills".
 
@@ -180,7 +180,7 @@ a NeedsAttention spec is a punt awaiting advisor triage.
 - `aida-cli/src/mcp.rs`, `prompts.rs`, `session.rs`
 - `aida-server/src/convert.rs`, `rest.rs`
 - `aida-core/templates/skills/aida-punt.md`, `commands/aida-punt.md`
-- `docs/lifecycle.md`, `aida-core/templates/docs/aida-discipline/lifecycle-vocabulary.md`
+- `docs/lifecycle.md`, `aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`
 
 ## Reusable helpers (do not reimplement)
 
@@ -256,4 +256,4 @@ aida punt "$DID" --category other --reason "x" && echo "BUG: punt should have fa
 
 - Blocks: STORY-276, STORY-306
 - Composes with: STORY-287, STORY-325, EPIC-28, TASK-338
-- See also: `docs/lifecycle.md`, `docs/autonomous-drain.md`
+- See also: `docs/lifecycle.md`, `docs/advanced/autonomous-drain.md`
