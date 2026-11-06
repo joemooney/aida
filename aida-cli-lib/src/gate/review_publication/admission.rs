@@ -1,5 +1,6 @@
 //! Single-hub admission. Temporary Git object databases never change the code
 //! checkout, store index or shared FETCH_HEAD. Only an exact accepted CAS admits.
+// mandate-gate
 // trace:STORY-2492 | ai:codex
 use super::*;
 
@@ -7,13 +8,13 @@ const REF: &str = "refs/aida/review-admission";
 const TABLE: &str = "admission.json";
 const ATTEMPTS: usize = 3;
 
-fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
+fn command(root: &Path) -> Command {
     let mut cmd = aida_core::git_ops::host_git_command(root);
     if !aida_core::git_ops::is_store_tree(root) {
         // The invocation-private bare object DB never runs caller templates.
         cmd.args(["-c", "core.hooksPath=/dev/null"]);
     }
-    cmd.args(args).stdin(Stdio::null());
+    cmd.stdin(Stdio::null());
     for key in [
         "GIT_DIR",
         "GIT_WORK_TREE",
@@ -27,6 +28,22 @@ fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
     ] {
         cmd.env_remove(key);
     }
+    cmd
+}
+
+fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    let mut cmd = command(root);
+    cmd.args(args);
+    run(cmd)
+}
+
+// Route credentials after clearing inherited Git configuration so routing's
+// private config environment survives, including for explicit hub URLs.
+// trace:STORY-2492 | ai:codex
+fn remote_git(root: &Path, remote: &str, args: &[&str]) -> Result<Vec<u8>> {
+    let mut cmd = command(root);
+    cmd.args(args);
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, root, remote);
     run(cmd)
 }
 
@@ -229,8 +246,12 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
 
 fn remote_tip(repo: &Path, hub: &Hub) -> Result<Option<String>> {
     let output = text(
-        git(repo, &["ls-remote", "--refs", &hub.url, &hub.reference])
-            .with_context(|| format!("admission_hub_unreachable: {} {}", hub.url, hub.reference))?,
+        remote_git(
+            repo,
+            &hub.url,
+            &["ls-remote", "--refs", &hub.url, &hub.reference],
+        )
+        .with_context(|| format!("admission_hub_unreachable: {} {}", hub.url, hub.reference))?,
     )?;
     if output.is_empty() {
         return Ok(None);
@@ -256,8 +277,9 @@ fn read_table(repo: &Path, hub: &Hub) -> Result<(Option<String>, Table)> {
             },
         ));
     };
-    git(
+    remote_git(
         repo,
+        &hub.url,
         &[
             "fetch",
             "--no-tags",
@@ -410,8 +432,9 @@ fn update(
                 tip.as_deref().unwrap_or("")
             );
             let target = format!("{next}:{}", hub.reference);
-            if let Err(error) = git(
+            if let Err(error) = remote_git(
                 repo.path(),
+                &hub.url,
                 &["push", "--porcelain", &lease, &hub.url, &target],
             ) {
                 let observed = remote_tip(repo.path(), hub)?;
@@ -499,8 +522,9 @@ pub(crate) fn sync(root: &Path) -> Result<()> {
         // Invocation-private ref; shared FETCH_HEAD and remote tracking refs
         // never become coordination state. Existing evidence gate owns FF.
         let reference = format!("refs/aida/review-sync/{}", Uuid::new_v4());
-        let fetched = git(
+        let fetched = remote_git(
             &store,
+            "origin",
             &[
                 "fetch",
                 "--no-tags",

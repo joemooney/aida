@@ -2715,35 +2715,43 @@ pub(crate) fn synced_history_precheck(root: &Path, id: u64, head: &str) -> Resul
     )
 }
 
-// The real selection/reserve boundary with a harmless fixture dispatcher.
-// trace:STORY-2492 | ai:codex
 #[cfg(test)]
-pub(crate) fn fixture_admit_dispatch(
-    root: &Path,
-    head: &str,
-    program: &Path,
-    marker: &Path,
-) -> Result<bool> {
-    let store = Store::open(root, "github:github.com/fixture/review")?;
-    let change = forge::Change {
-        id: 7,
-        head: head.into(),
-        base: "main".into(),
-        author: "fixture-author".into(),
-        gitlab: false,
-        overlap: Some(false),
-        behind: Some(0),
-        head_branch: None,
-    };
-    let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
-        return Ok(false);
-    };
-    if !reserve_dispatch(root, &store, "PR-7", &mut attempt)? {
-        return Ok(false);
+pub(crate) use admission_fixture::fixture_admit_dispatch;
+
+#[cfg(test)]
+mod admission_fixture {
+    use super::*;
+
+    // The real selection/reserve boundary with a harmless fixture dispatcher.
+    // trace:STORY-2492 | ai:codex
+    #[cfg(test)]
+    pub(crate) fn fixture_admit_dispatch(
+        root: &Path,
+        head: &str,
+        program: &Path,
+        marker: &Path,
+    ) -> Result<bool> {
+        let store = Store::open(root, "github:github.com/fixture/review")?;
+        let change = forge::Change {
+            id: 7,
+            head: head.into(),
+            base: "main".into(),
+            author: "fixture-author".into(),
+            gitlab: false,
+            overlap: Some(false),
+            behind: Some(0),
+            head_branch: None,
+        };
+        let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+            return Ok(false);
+        };
+        if !reserve_dispatch(root, &store, "PR-7", &mut attempt)? {
+            return Ok(false);
+        }
+        anyhow::ensure!(
+            Command::new(program).arg(marker).status()?.success(),
+            "fixture dispatcher failed"
+        );
+        Ok(true)
     }
-    anyhow::ensure!(
-        Command::new(program).arg(marker).status()?.success(),
-        "fixture dispatcher failed"
-    );
-    Ok(true)
 }
