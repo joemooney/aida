@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T21:02:41.249170258Z
-modified_at: 2026-11-06T02:21:30.172909832Z
+modified_at: 2026-11-06T02:21:44.393879702Z
 req_type: Task
 tags:
 - from-implementer:TASK-2889
@@ -26,6 +26,12 @@ comments:
   content: 'Implemented test-only fixture repair: sample_lease stamps current pid_namespace; GC regression also checks unobservable namespace refusal. Mixed legacy/exact review-token check uses an RAII-reaped live /bin/sleep child PID above 2, with strict live identity assertions and explicit unqualified PID 1/2 refusal checks. Tokens intentionally remain unqualified for this historical compatibility check: namespace-qualified tokens require exact start equality, so qualifying mixed formats would change the contract being tested. Validation: preserved /tmp/task-2889-baseline/deps/test-lib reproduces both original failures via direct exec in the native sandbox; freshly built cargo test -p aida-cli-lib --lib bug_2130_liveness_identity_tests -- --test-threads=1 passes 7/7; both affected fresh tests pass individually via direct exec as PID 2. cargo fmt --all -- --check and git diff --check pass. Publication attempt aida ship TASK-2904 --no-merge refused: native Codex sandbox keeps this clone Git directory read-only. Pending edits remain for the documented host-side launcher commit/publication handoff; suggested subject: [AI:codex] test(liveness): make compatibility fixtures namespace aware (TASK-2904). No production code changes.'
   created_at: 2026-11-06T02:21:30.172909832Z
   modified_at: 2026-11-06T02:21:30.172909832Z
+  session_id: 01a1aea103f5
+- id: 01a1aea9-7849-72a1-a2a1-fa627d5bb3c4
+  author: joe
+  content: Queue completion attempted with validation steps and --no-interface-change, without bypass flags. It refused before mutation because branch lookup refuses the contained seat private clone. Task remains In Progress and queued for host completion after commit/publication. Implementation and validation are complete; pending diff is confined to aida-cli-lib/src/tests/bug_2130_liveness_identity_tests.rs.
+  created_at: 2026-11-06T02:21:44.393879702Z
+  modified_at: 2026-11-06T02:21:44.393879702Z
   session_id: 01a1aea103f5
 history:
 - id: 01a1add3-42dc-7060-8755-c164ecf5d293
