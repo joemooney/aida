@@ -11556,8 +11556,17 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
             );
             Ok(())
         })();
-        if eligible.is_err() {
-            return preflight_queue_work_branch(root, Some(&branch));
+        // Preserve the failed evidence check in the operator-facing refusal,
+        // including nested fetch/coverage diagnostics. No retirement is safe.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-900 | ai:codex
+        if let Err(reason) = eligible {
+            anyhow::bail!(
+                "branch `{branch}` is held by worktree {} before pickup setup. \
+                 Dead reviewer lease {} was not reclaimed: {reason:#}. \
+                 Keep this checkout; inspect its review head and unpublished commits, then retry pickup.",
+                path.display(),
+                lease.id
+            );
         }
         let snapshot = std::fs::read(crate::lease_path(root, &lease.id))?;
         let current: SessionLease = toml::from_str(std::str::from_utf8(&snapshot)?)?;
