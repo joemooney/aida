@@ -451,6 +451,8 @@ mod goal_cmd;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude — resume a lane parked on its own background run.
 mod headless_background;
 mod headless_linger;
+// trace:TASK-2838 | ai:codex
+mod agy_outcome;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;

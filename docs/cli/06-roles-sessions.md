@@ -171,6 +171,19 @@ does not authorize coexistence.
 
 **One line** — launch and track real agent processes (Claude / Codex / Antigravity) on a spec.
 
+AGY headless launches request `stream-json` so AIDA can distinguish process
+exit from execution evidence. Exit 0 with denied actions, an unresolved tool
+error, or missing/malformed terminal evidence reports `AGY outcome: incomplete`
+and returns 65. Explicit terminal failure and nonzero process exits remain
+failures. A later successful retry of the same tool clears its error; historical
+errors remain visible as diagnostics, including with headless tee disabled.
+The existing trusted PR/verdict handshake may establish phase completion despite
+incomplete execution evidence. A tool's `DONE` state or response prose does not
+establish phase completion. Direct/coordinator launches have no such handshake
+and fail closed. Quiet coordinators still print the final response; streaming
+coordinators retain JSONL output. This evidence grants no sandbox conformance.
+<!-- trace:TASK-2838 | ai:codex -->
+
 **Mental model.** `aida agent new <tool>` spawns a *one-shot* agent with project-correct cwd/env, a role, registry tracking, and a startup **context snapshot** — the supervised way to put an agent on work instead of opening a terminal and pasting a prompt. The critical framing in its own help: this lane *does its work, ships a PR, and exits* — it is **not** the orchestrated pipeline. It does not run CI, the reviewer phase, or the merge. For a supervised end-to-end drain (implementer → CI → reviewer → merge → pull), that's `aida queue work <SPEC> --auto-complete` ([Chapter 3](03-work-autonomy.md)), not this.
 
 **Reach for it when** — you want to *dispatch* a bounded agent run: `aida agent new claude --role implementer --spec <spec-id>` spins the worktree+lease and launches Claude already pointed at the work. `aida agent list` (aliases `ls` and `status`) to see what's running; `pause` / `resume` to mark an agent budget-exhausted/rate-limited so brief-time dispatch and `aida status` flag it (without stopping the process).
