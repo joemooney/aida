@@ -67,7 +67,7 @@ pub(crate) fn handle_supervise_command(
             let root = store_path.parent().context("missing project root")?;
             let root = crate::main_worktree_root_from(root);
             let report = pipeline_stall::run(&root, *execute, *threshold_mins, &mut |body| {
-                nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
+                deliver_pipeline_alarm(&root, body)
             })?;
             if *json {
                 println!("{}", serde_json::to_string(&report)?);
@@ -116,7 +116,7 @@ pub(crate) fn handle_supervise_command(
 }
 
 fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<()> {
-    if let Some(line) = nudge_pass(backend, store_path, None)? {
+    if let Some(line) = nudge_pass(backend, store_path)? {
         println!("{line}");
     }
     Ok(())
@@ -125,18 +125,10 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
 /// One nudge pass. Returns the one-line outcome for the caller to print
 /// (`None` when nothing was due), so `watch --json` can keep it off stdout.
 // trace:BUG-1623 | ai:claude
-fn nudge_pass(
-    backend: &aida_core::CachedGitBackend,
-    store_path: &Path,
-    alarm_body: Option<&str>,
-) -> Result<Option<String>> {
+fn nudge_pass(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<Option<String>> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
-    // trace:STORY-2476 | ai:codex — alarms share the existing request delivery.
-    if let Some(body) = alarm_body {
-        return deliver_pipeline_alarm(project_root, body);
-    }
     let store = backend.load()?;
     let titles = store
         .requirements
@@ -205,31 +197,24 @@ fn display_id(req: &aida_core::Requirement) -> Option<String> {
 
 // All alarm kinds use the same advisor/operator delivery policy.
 // trace:TASK-3075 | ai:codex
-fn deliver_pipeline_alarm(project_root: &Path, body: &str) -> Result<Option<String>> {
+// trace:TASK-3074 | ai:codex
+fn deliver_pipeline_alarm(project_root: &Path, body: &str) -> Result<pipeline_stall::SendResult> {
     let root = crate::main_worktree_root_from(project_root);
     if let Some(advisor) = live_advisor_recipient(&root) {
-        send_advisor_body(&root, &advisor, body.to_owned())?;
-        return Ok(Some(format!("pipeline alarm delivered to {advisor}")));
+        return send_advisor_request(&root, &advisor, body.to_owned());
     }
     // Separate alarm sets do not consume the parked-work notification cooldown.
     let rule = format!(
         "supervise_pipeline_{}",
         body.lines().next().unwrap_or("alarm")
     );
-    let outcome = notify::send_direct_bounded(
+    pipeline_stall::operator_delivery(notify::send_direct_bounded(
         &root,
         &rule,
         "aida: pipeline needs advisor",
         body,
         Some(std::time::Duration::from_secs(10)),
-    )?;
-    Ok(match outcome.delivery() {
-        notify::DirectDelivery::Sent => Some("pipeline alarm delivered to operator".into()),
-        notify::DirectDelivery::Deferred => {
-            Some("pipeline alarm queued for operator after quiet hours".into())
-        }
-        _ => None,
-    })
+    ))
 }
 
 fn nudge_state_path(project_root: &Path) -> PathBuf {
@@ -367,6 +352,20 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
 }
 
 fn send_advisor_body(project_root: &Path, advisor: &str, body: String) -> Result<()> {
+    let result = send_advisor_request(project_root, advisor, body)?;
+    anyhow::ensure!(
+        matches!(result, pipeline_stall::SendResult::Persisted { .. }),
+        "advisor request delivery: {result:?}"
+    );
+    Ok(())
+}
+
+// trace:TASK-3074 | ai:codex
+fn send_advisor_request(
+    project_root: &Path,
+    advisor: &str,
+    body: String,
+) -> Result<pipeline_stall::SendResult> {
     use aida_core::mailbox::{Intent, Message, Recipient};
     let id = uuid::Uuid::new_v4().to_string();
     // trace:BUG-1533 | ai:claude
@@ -403,8 +402,37 @@ fn send_advisor_body(project_root: &Path, advisor: &str, body: String) -> Result
         from_role,
         relayed_from: None,
     };
-    crate::mailbox_store::write_message(project_root, &msg)?;
-    Ok(())
+    persist_advisor_request(
+        project_root,
+        &msg,
+        &mut aida_core::mailbox_lifecycle::action::fingerprint,
+        &mut crate::mailbox_store::write_message,
+    )
+}
+
+// Fingerprinting precedes the only potentially publishing effect.
+// trace:TASK-3074 | ai:codex
+fn persist_advisor_request(
+    project_root: &Path,
+    msg: &aida_core::mailbox::Message,
+    fingerprint: &mut dyn FnMut(&aida_core::mailbox::Message) -> Result<String>,
+    write: &mut dyn FnMut(&Path, &aida_core::mailbox::Message) -> Result<()>,
+) -> Result<pipeline_stall::SendResult> {
+    let fingerprint = match fingerprint(msg) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("pipeline advisor request refused before publication: {error:#}");
+            return Ok(pipeline_stall::SendResult::Refused);
+        }
+    };
+    let request = pipeline_stall::RequestIdentity {
+        message_id: msg.id.clone(),
+        fingerprint,
+    };
+    // A writer error may follow atomic publication; the alarm caller retains
+    // its reservation and records uncertainty, preserving this diagnostic.
+    write(project_root, msg)?;
+    Ok(pipeline_stall::SendResult::Persisted { request })
 }
 
 fn format_nudge_body(items: &[StuckItem]) -> String {
@@ -567,7 +595,7 @@ fn run_watch_pass(
     // trace:STORY-2476 | ai:codex
     let root = crate::main_worktree_root_from(project_root);
     let stalls = pipeline_stall::run_for_watch(&root, execute, threshold_mins, &mut |body| {
-        nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
+        deliver_pipeline_alarm(&root, body)
     });
     if json {
         eprintln!("{}", serde_json::to_string(&stalls)?);
@@ -578,7 +606,7 @@ fn run_watch_pass(
         &report,
         execute,
         json,
-        &mut || nudge_pass(backend, store_path, None).ok().flatten(),
+        &mut || nudge_pass(backend, store_path).ok().flatten(),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
     )?;
@@ -969,7 +997,7 @@ mod pipeline_delivery_tests {
     #[test]
     fn pipeline_digest_uses_existing_urgent_request_mail_writer() {
         let root = tempfile::tempdir().unwrap();
-        send_advisor_body(
+        let delivered = send_advisor_request(
             root.path(),
             "advisor-test",
             "Pipeline needs attention: pipeline-idle".into(),
@@ -977,6 +1005,35 @@ mod pipeline_delivery_tests {
         .unwrap();
         let rows = crate::mailbox_store::read_local_messages(root.path()).unwrap();
         assert_eq!(rows.len(), 1);
+        assert_eq!(
+            delivered,
+            pipeline_stall::SendResult::Persisted {
+                request: pipeline_stall::RequestIdentity {
+                    message_id: rows[0].id.clone(),
+                    fingerprint: aida_core::mailbox_lifecycle::action::fingerprint(&rows[0])
+                        .unwrap(),
+                }
+            }
+        );
+        // A fingerprint error is known to precede the mailbox writer.
+        assert_eq!(
+            persist_advisor_request(
+                root.path(),
+                &rows[0],
+                &mut |_| anyhow::bail!("injected fingerprint refusal"),
+                &mut |_, _| panic!("must not publish after fingerprint refusal")
+            )
+            .unwrap(),
+            pipeline_stall::SendResult::Refused
+        );
+        // Once the writer runs, errors can follow atomic publication.
+        assert!(persist_advisor_request(
+            root.path(),
+            &rows[0],
+            &mut aida_core::mailbox_lifecycle::action::fingerprint,
+            &mut |_, _| anyhow::bail!("injected error after publication")
+        )
+        .is_err());
         assert_eq!(rows[0].intent, aida_core::mailbox::Intent::Request);
         assert!(rows[0].urgent);
         assert_eq!(
