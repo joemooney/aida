@@ -25,6 +25,11 @@ fn sample_lease(creator_pid: Option<u32>, creator_start: Option<&str>) -> Sessio
     if let Some(start) = creator_start {
         raw.push_str(&format!("creator_pid_start_time = {start:?}\n"));
     }
+    // These fixture PIDs belong to the observing test's namespace.
+    // trace:TASK-2904 | ai:codex
+    if let Some(ns) = crate::agent_registry::current_pid_namespace() {
+        raw.push_str(&format!("pid_namespace = {ns}\n"));
+    }
     toml::from_str(&raw).expect("valid SessionLease TOML")
 }
 
@@ -63,6 +68,27 @@ fn bug_2130_worktree_gc_owner_is_caller_matches_legacy_lease_and_exact_caller() 
         !wrong_facts.owner_is_caller,
         "mismatched creator_pid_start_time must not match caller"
     );
+
+    // Matching start identities cannot replace namespace evidence.
+    // trace:TASK-2904 | ai:codex
+    let observer = aida_core::pid_observer::PidObserver::current();
+    for recorded in [None, observer.namespace.map(|ns| ns ^ 1)] {
+        if observer.can_observe(recorded) {
+            continue; // Host observers may still read unstamped legacy leases.
+        }
+        let mut unobservable = lease.clone();
+        unobservable.pid_namespace = recorded;
+        assert!(
+            !crate::worktree_gc::probe_lease_death_facts(
+                &unobservable,
+                "testhost",
+                Some((me, Some(exact.as_str()))),
+                &HashSet::new(),
+            )
+            .owner_is_caller,
+            "unobservable namespace {recorded:?} must not match caller"
+        );
+    }
 }
 
 // trace:BUG-2130 | ai:agy
@@ -97,6 +123,12 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
 
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
+    // Both live and recycled PIDs below belong to this observer's namespace.
+    // An unstamped legacy lease is deliberately unobservable in a sandbox.
+    // trace:TASK-2889 | ai:codex
+    let namespace = crate::agent_registry::current_pid_namespace()
+        .map(|ns| format!("pid_namespace = {ns}\n"))
+        .unwrap_or_default();
     let lease_path = sessions_dir.join("lease-2130.toml");
 
     // 1. Recycled active_pid (mismatched active_pid_start_time) -> subagent adopts the lease.
@@ -109,7 +141,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
          branch = \"claude/bug-2130\"\n\
          started_at = \"2026-10-18T00:00:00Z\"\n\
          hostname = \"testhost\"\n\
-         active_pid = {me}\n\
+         {namespace}active_pid = {me}\n\
          active_pid_start_time = \"1999-01-01T00:00:00+00:00\"\n",
         worktree.to_string_lossy()
     );
@@ -149,7 +181,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
          branch = \"claude/bug-2130\"\n\
          started_at = \"2026-10-18T00:00:00Z\"\n\
          hostname = \"testhost\"\n\
-         active_pid = {me}\n\
+         {namespace}active_pid = {me}\n\
          active_pid_start_time = {legacy:?}\n",
         worktree.to_string_lossy()
     );
@@ -159,6 +191,27 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
         None,
         "live active_pid with matching legacy RFC3339 identity must block adoption"
     );
+
+    // Namespace evidence remains mandatory even when the PID looks recycled.
+    // trace:TASK-2889 | ai:codex
+    let observer = aida_core::pid_observer::PidObserver::current();
+    for recorded in [None, observer.namespace.map(|ns| ns ^ 1)] {
+        if observer.can_observe(recorded) {
+            continue; // A host observer can still read unstamped legacy leases.
+        }
+        let mut lease: toml::Value = toml::from_str(&recycled_toml).unwrap();
+        let table = lease.as_table_mut().unwrap();
+        table.remove("pid_namespace");
+        if let Some(ns) = recorded {
+            table.insert("pid_namespace".into(), toml::Value::Integer(ns as i64));
+        }
+        std::fs::write(&lease_path, toml::to_string(&lease).unwrap()).unwrap();
+        assert_eq!(
+            crate::leases::adopt_spec_lease_for_subagent(root, &worktree, Some(me)),
+            None,
+            "an unobservable namespace {recorded:?} must block adoption"
+        );
+    }
 }
 
 // trace:BUG-2130 | ai:agy
@@ -242,10 +295,45 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
         |_, _| true,
     ));
 
-    // 4. End-to-end against our own live process:
-    let me = std::process::id();
-    let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
-    let exact = aida_core::liveness::process_start_identity(me).expect("own exact start");
+    // 4. Unqualified PIDs 1/2 remain refused even with matching live evidence.
+    // trace:TASK-2904 | ai:codex
+    for pid in [1, 2] {
+        assert!(!crate::gate::review_authority::tokens_match_with(
+            &format!("proc:{pid}@2026-10-18T00:00:00+00:00"),
+            &format!("shell:{pid}@linux-starttime:987654"),
+            |_, _| true,
+        ));
+    }
+
+    // 5. A child supplies a live PID above 2 even when this runner is PID 2.
+    // Keep tokens unqualified: namespaced tokens intentionally require exact
+    // start equality and do not support this legacy/exact compatibility check.
+    // Reap the child on success and on assertion failure.
+    // trace:TASK-2904 | ai:codex
+    struct LiveChild(std::process::Child);
+    impl Drop for LiveChild {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let child = LiveChild(
+        std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn live process for token comparison"),
+    );
+    let me = child.0.id();
+    assert!(me > 2, "child must have an ordinary process PID");
+    let legacy =
+        aida_core::liveness::process_start_identity_legacy(me).expect("child legacy start");
+    let exact = aida_core::liveness::process_start_identity(me).expect("child exact start");
+    assert!(aida_core::liveness::process_identity_matches_strict(
+        me, &legacy
+    ));
+    assert!(aida_core::liveness::process_identity_matches_strict(
+        me, &exact
+    ));
     assert!(crate::gate::review_authority::tokens_match(
         &format!("proc:{me}@{legacy}"),
         &format!("shell:{me}@{exact}"),

@@ -2369,6 +2369,21 @@ pub(crate) fn print_status_presence_consumers(
         return;
     }
     let presence_now = presence::current_presence(chrono::Utc::now());
+    write_status_presence_consumers(backend, &cfg, presence_now, &mut std::io::stdout())
+        .expect("failed printing presence status");
+}
+
+// Exercise the actual section with deterministic presence and captured output.
+// trace:TASK-3112 | ai:codex
+pub(crate) fn write_status_presence_consumers(
+    backend: &aida_core::CachedGitBackend,
+    cfg: &presence::PresenceConfig,
+    presence_now: presence::Presence,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    if cfg.consumers == presence::ConsumersMode::Off {
+        return Ok(());
+    }
 
     // (c) decision inbox — pending DecisionRequests awaiting the operator.
     // `[presence] questions` (TASK-1059) decides whether the nudge shows while
@@ -2383,21 +2398,22 @@ pub(crate) fn print_status_presence_consumers(
     if presence::surface_questions(presence_now, &cfg) {
         let pending = backend.pending_decision_count().unwrap_or(0);
         if pending > 0 {
-            println!(
+            writeln!(
+                out,
                 "  {} {} decision{} await your call — {}",
                 "Decisions:".bold().yellow(),
                 pending,
                 if pending == 1 { "" } else { "s" },
                 "aida questions".cyan()
-            );
-            println!();
+            )?;
+            writeln!(out)?;
         }
     }
 
     // Quiet accumulation when away — the home-side keystone offer below never
     // nags an absent operator.
     if matches!(presence_now, presence::Presence::Away) {
-        return;
+        return Ok(());
     }
 
     // (d) home_offer = surface: the keystone cohort, ready for the at-keyboard
@@ -2432,7 +2448,8 @@ pub(crate) fn print_status_presence_consumers(
                 } else {
                     String::new()
                 };
-                println!(
+                writeln!(
+                    out,
                     "  {} {} keystone spec{} ready for {} — {}{}",
                     "At keyboard:".bold().green(),
                     ready.len(),
@@ -2440,11 +2457,12 @@ pub(crate) fn print_status_presence_consumers(
                     "--zen".cyan(),
                     shown,
                     tail
-                );
-                println!();
+                )?;
+                writeln!(out)?;
             }
         }
     }
+    Ok(())
 }
 
 pub(crate) fn print_status_session_section(ctx: &UserStatusContext) {

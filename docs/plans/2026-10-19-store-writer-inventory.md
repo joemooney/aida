@@ -103,7 +103,7 @@ rg -n '\.(save_reporting|save_reporting_with_origin|save_imported|save_unstamped
 | `aida-cli-lib/src/relationship_cmd.rs` | `run_rel` (`aida-cli-lib/src/relationship_cmd.rs:322`; write/lock sites at :466, :495, :543, :573) | `backend.update_requirement` | Protected (`store-write.lock`) |
 | `aida-cli-lib/src/requeue.rs` | `return_to_flight_in_backend` (`aida-cli-lib/src/requeue.rs:357`; write/lock sites at :368), `return_to_flight_in_storage` (`aida-cli-lib/src/requeue.rs:379`; write/lock sites at :391) | `update_spec_atomically`, `update_atomically` | Protected (`store-write.lock`) |
 | `aida-cli-lib/src/requirements_cli.rs` | `run_del` (`aida-cli-lib/src/requirements_cli.rs:8980`; write/lock sites at :9016) | `backend.delete_requirement` | Protected (`store-write.lock`) |
-| `aida-cli-lib/src/review_marker.rs` | `merge_gate` (`aida-cli-lib/src/review_marker.rs:286`) | `git_ops::merge_gate` (`with_store_write_lock`) | Protected (`store-write.lock`) |
+| `aida-cli-lib/src/gate/review_marker.rs` | `merge_gate` (`aida-cli-lib/src/gate/review_marker.rs:286`) | `git_ops::merge_gate` (`with_store_write_lock`) | Protected (`store-write.lock`) |
 | `aida-cli-lib/src/scaffold_init.rs` | `queue_spec_entry_for_role` (`aida-cli-lib/src/scaffold_init.rs:48`; write/lock sites at :71) | `storage.queue_add` | Protected (`store-write.lock`) |
 | `aida-cli-lib/src/shift.rs` | `tag_specs` (`aida-cli-lib/src/shift.rs:785`; write/lock sites at :797) | `backend.update_requirement` | Protected (`store-write.lock`) |
 | `aida-cli-lib/src/supervisor.rs` | `apply_requeue_with` (`aida-cli-lib/src/supervisor.rs:377`; write/lock sites at :432), `apply_cap` (`aida-cli-lib/src/supervisor.rs:461`; write/lock sites at :484), `reclassify_needs_human_atomically` (`aida-cli-lib/src/supervisor.rs:598`; write/lock sites at :607) | `queue_add`, `add_requirement`, `update_spec_atomically` | Protected (`store-write.lock`) |
@@ -213,3 +213,15 @@ retain their own storage behavior.
 ## 7. Category E — Read-Only Store Consumers (No Store Lock Required)
 
 Read-only store consumers (`load` (`aida-core/src/db/git_backend.rs:2285`), `CachedGitBackend` snapshot readers, `TeamRoster` `load` (`aida-core/src/team.rs:92`), `NodeRegistry` `load` (`aida-core/src/registry.rs:26`), `BlockRegistry` `load` (`aida-core/src/node.rs:834`), `read_canonical_messages` (`aida-cli-lib/src/mailbox_store.rs:113`), `load_published` (`aida-cli-lib/src/timing_record.rs:292`), `read_committed_trials` (`aida-cli-lib/src/regen/score.rs:972`), `doctor_scrub_collisions` (`aida-cli-lib/src/doctor_cmd.rs:13362`), `doctor_fsck` (`aida-cli-lib/src/doctor_cmd.rs:13527`), and `doctor_contradictions` (`aida-cli-lib/src/doctor_cmd.rs:14206`)) only read committed git objects or atomic-write files (`crate::write_atomic`) and never mutate the store worktree or git index.
+
+## Trusted review publications
+
+`gate/review_publication.rs` writes `reviews/v1/nodes.json`, immutable review
+publications and immutable author-session publications. The operator roster's
+read/modify/write uses a pinned-head compare under the existing store writer
+lock. Evidence creation, staging and commit also use that lock; exact-ref pushes
+run after it is released. Rejected immutable pushes re-enter the (reentrant)
+writer lock, run the existing private-ref pull/rebase helper inside it, and
+validate the preserved receipt before retrying. No reset,
+rollback, authority-grant export or second object writer is introduced.
+<!-- trace:STORY-2492 | ai:codex -->

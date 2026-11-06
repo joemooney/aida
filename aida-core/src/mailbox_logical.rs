@@ -227,6 +227,9 @@ impl MailboxContext {
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResolvedAudience {
+    // Shared-inbox action assertions require more than an unbound role hint.
+    // trace:TASK-3074 | ai:codex
+    verified_binding: bool,
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
@@ -259,6 +262,7 @@ impl ResolvedAudience {
         // Callers of this constructor name roles only; `from_facts` splits
         // the vendor group out.
         Ok(Self {
+            verified_binding: false,
             private,
             human,
             roles: shared.clone(),
@@ -291,6 +295,7 @@ impl ResolvedAudience {
         }
         let mut audience = Self::from_identity_policy(private, human, shared)
             .expect("every key was checked as a bounded mailbox identity");
+        audience.verified_binding = facts.own_handle().is_some();
         audience.recipient = facts.own_recipient().cloned();
         let role = facts
             .role()
@@ -299,6 +304,11 @@ impl ResolvedAudience {
             .roles
             .retain(|k| role.as_deref().is_some_and(|r| r == k));
         audience
+    }
+
+    // trace:TASK-3074 | ai:codex
+    pub(crate) fn has_verified_binding(&self) -> bool {
+        self.verified_binding
     }
 
     /// This session's recipient UUID, when its handle reservation names it.
@@ -358,6 +368,7 @@ impl ResolvedAudience {
                 .collect()
         };
         let narrowed = Self {
+            verified_binding: self.verified_binding,
             private: pick(&self.private),
             human: pick(&self.human),
             shared: pick(&self.shared),
@@ -842,8 +853,10 @@ pub struct LogicalSnapshot {
     pub anchor_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
-    /// Diagnostic-only local unknowns. These preserve the established own-reader
-    /// complete/ACK contract; inspection must not treat them as cleared mail.
+    /// Records whose delivery or receipt evidence could not be determined.
+    /// Readers must not project these as unread or cleared mail. The raw
+    /// records remain available for explicit ID resolution; coverage and ACK
+    /// eligibility still follow the source errors.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
     pub inspection_unknown_ids: Vec<String>,
 }
@@ -862,9 +875,24 @@ impl LogicalSnapshot {
             && self.conflicts.is_empty()
     }
 
-    /// Records with no read evidence (archived records excluded).
+    /// Records confirmed to have no read evidence (archived and unknown
+    /// records excluded). An incomplete receipt read never proves unread.
+    // trace:BUG-2449 | ai:codex
     pub fn unread_ids(&self) -> Vec<&str> {
-        self.ids_where(|read| *read == ReadEvidence::Unread)
+        let unknown: HashSet<&str> = self
+            .inspection_unknown_ids
+            .iter()
+            .map(String::as_str)
+            .collect();
+        self.records
+            .iter()
+            .filter(|r| {
+                !r.message.archived
+                    && r.read == ReadEvidence::Unread
+                    && !unknown.contains(r.message.id.as_str())
+            })
+            .map(|r| r.message.id.as_str())
+            .collect()
     }
 
     /// Records covered only by a legacy watermark (archived records
@@ -1094,6 +1122,9 @@ fn snapshot_for_policy(
                 .map(str::to_string)
                 .collect(),
         };
+        // Inventory gaps make the view partial and prevent ACK, but do not
+        // establish a failed receipt read for independently observed mail.
+        // trace:BUG-2449 | ai:codex
         let mut receipt_unknown = false;
         let read = read_evidence(
             &message,
@@ -2702,22 +2733,61 @@ fn read_evidence(
     let holders: BTreeSet<usize> = provenance.iter().map(|p| p.source).collect();
     let mut legacy = None;
     for (index, source) in observed.iter().enumerate().take(local_count) {
-        let Some(source) = source else { continue };
+        // Missing/prunable worktrees and foreign repositories are not live
+        // receipt sources (ruling 97). A message-row failure, however, does
+        // not imply that this source's receipts are unreadable.
+        // trace:BUG-2449 | ai:codex
+        if source.is_none()
+            && matches!(
+                sources[index].status,
+                SourceStatus::Absent
+                    | SourceStatus::Error(
+                        SourceErrorCode::WorktreeMissing
+                            | SourceErrorCode::WorktreePrunable
+                            | SourceErrorCode::CommonGitMismatch
+                    )
+            )
+        {
+            continue;
+        }
         for key in &keys {
             if budget.expired() {
                 *unknown = true;
-                sources[index].status = SourceStatus::Error(SourceErrorCode::OverBudget);
+                if source.is_some() {
+                    sources[index].status = SourceStatus::Error(SourceErrorCode::OverBudget);
+                }
                 return legacy.unwrap_or(ReadEvidence::Unread);
             }
             let evidence = cache
                 .by_source_key
                 .entry((index, key.to_string()))
-                .or_insert_with(|| key_evidence(&source.mailbox, key, budget));
+                .or_insert_with(|| {
+                    if let Some(source) = source {
+                        return key_evidence(&source.mailbox, key, budget);
+                    }
+                    let SourceKind::Local(root) = &sources[index].kind else {
+                        unreachable!("only local sources hold compatibility receipts");
+                    };
+                    let root = PinnedDir::open_root(root)?;
+                    let mailbox = match root.child_dir(".aida")? {
+                        Some(dir) => dir.child_dir("mailbox")?,
+                        None => None,
+                    };
+                    match mailbox {
+                        Some(dir) => key_evidence(&dir, key, budget),
+                        None => Ok(KeyEvidence {
+                            receipts: None,
+                            watermark: None,
+                        }),
+                    }
+                });
             let evidence = match evidence {
                 Ok(evidence) => evidence,
                 Err(code) => {
                     *unknown = true;
-                    sources[index].status = SourceStatus::Error(*code);
+                    if source.is_some() {
+                        sources[index].status = SourceStatus::Error(*code);
+                    }
                     continue;
                 }
             };
@@ -2733,7 +2803,9 @@ fn read_evidence(
                     Ok(None) => {}
                     Err(code) => {
                         *unknown = true;
-                        sources[index].status = SourceStatus::Error(code);
+                        if source.is_some() {
+                            sources[index].status = SourceStatus::Error(code);
+                        }
                     }
                 }
             }

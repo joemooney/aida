@@ -99,6 +99,18 @@ to whoever started it, and a separate reviewer and the merge seat take it from t
 a design fork, run `aida punt`; to push the branch but hold the PR for a manual gate, run \
 `aida pr hold`.";
 
+/// Native seats finish through the host after the child exits, while the
+/// recorded lease still vouches for the work. This overrides the ordinary
+/// pickup shipping unit without weakening the live-owner check.
+// trace:TASK-2879 | ai:codex
+pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
+Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
+and write a final handoff listing changed files, validation results and blockers, then exit. \
+Do not commit, push, open a PR or run `aida queue done` from this seat. After your process \
+exits, the host launcher commits and publishes the PR; queue completion follows publication. \
+Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
+run `aida punt`; existing punt or hold signals remain publication vetoes.";
+
 /// BUG-2383: how a standalone implementer runs its local tests. Appended to
 /// its prompt when the launcher's lane job runner is up.
 // trace:BUG-2383 | ai:claude
@@ -654,8 +666,16 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:BUG-2434 | ai:claude
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
-        "{}{STOP_CONTRACT}{}",
+        "{}{}{}",
         launch.prompt,
+        if launch.vendor == crate::session::HeadlessVendor::Codex
+            && crate::session::containment_posture(launch.vendor, launch.contained)?
+                == crate::session::ContainmentPosture::Native
+        {
+            NATIVE_STOP_CONTRACT
+        } else {
+            STOP_CONTRACT
+        },
         if lane_jobs.is_some() {
             LANE_JOB_CONTRACT
         } else {
@@ -796,6 +816,24 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         log: run_log,
     } = finished?;
     store_commit.commit();
+
+    // Publish before reading the final seat state or ending its lease. A punt
+    // or manual hold is an explicit instruction to leave publication alone.
+    // trace:STORY-2475 | ai:codex
+    let mut outcome = outcome;
+    if launch.vendor == crate::session::HeadlessVendor::Codex
+        && launch.contained
+        && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. })
+    {
+        crate::ship_from_seat::publish_queue_exit(
+            &main_root,
+            &worktree,
+            launch.spec,
+            launch.lease_id,
+            status.success(),
+        )?;
+        outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
+    }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude

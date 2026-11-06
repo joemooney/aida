@@ -131,7 +131,7 @@ A change touches, in order:
 3. **VIS-1** (the vision spec — `aida edit VIS-1 --title/--description`).
 4. A light pass on `first-project.md`'s closing "index" sentence (optional —
    Option A leaves it valid).
-5. The `docs/positioning/` framing (these pages already lead with "lifecycle /
+5. The `docs/internal/positioning/` framing (these pages already lead with "lifecycle /
    graph," so they need little change).
 
 This recommendation is filed as a change-request against VIS-1 so it doesn't get

@@ -1,8 +1,19 @@
+Queue completion requires readable branch ownership evidence even with
+`--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
+warns and retains its ledgered override. See OVERVIEW.md.
+<!-- trace:TASK-2887 | ai:codex -->
+
 Trusted default-branch `[contained.vendors] codex = "native"` opts Codex into its workspace-write
 sandbox with approvals disabled, reported as “native sandbox, not AIDA-contained”.
 Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
+
+`aida pr hold` preserves Git lookup diagnostics instead of calling every
+refusal a missing branch. Native-seat publication remains subject to the
+private-clone Git refusal; this fix grants no publication authority. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
 
 The contained Codex permission preset writes an empty extra `writable_roots`
 list, clearing legacy grants to `~/.cargo`, `~/.rustup` and `~/.aida` in either
@@ -10,7 +21,7 @@ project or user scope. Fetch new Cargo dependencies on the host outside the lane
 <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex -->
 
 A host-side Codex mail adapter can queue notifications to one existing thread
-without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
+without model polling. Read [setup and recovery](docs/advanced/codex-mail-wake.md);
 queue acceptance and inbox acknowledgement remain distinct.
 <!-- trace:TASK-2347 | ai:codex -->
 
@@ -57,7 +68,7 @@ set; counter migration refuses newly active unconfirmed blocks. See the
 CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
 `Build (ubuntu-latest)` remains the required check. CLI halves use committed
 main-run timings; each shard keeps its timing budget and root hygiene check.
-See [CI fan-out](docs/testing/ci-test-shards.md).
+See [CI fan-out](docs/internal/testing/ci-test-shards.md).
 <!-- trace:TASK-1949 | ai:codex -->
 
 Rust mandate exclusions also add module comments outside fn/impl ranges and
@@ -246,7 +257,7 @@ informational grant expiry context at the 2h, 30m and expired crossings. The
 hook skips the CLI without a grant and caps it below 2s; a grant-local locked
 ledger deduplicates notices. Ledger failures produce no context (`{}` for
 Antigravity) and leave SessionStart/statusline as fallback. See
-[expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
+[expiry notice evidence](docs/internal/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
 
@@ -277,7 +288,7 @@ PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
 fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
 the guards require an exact one-test child. The ignored 15-round PATH/history
 stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
-per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+per-PR CI. See [PATH isolation](docs/internal/testing/bug-1994-path-isolation.md).
 <!-- trace:BUG-1994 | ai:codex -->
 
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
@@ -356,7 +367,7 @@ concurrent admission and cleanup retain sibling membership and tokens.
 
 Reconstitution can fail before vendor spawn when its empty scratch cwd cannot
 resolve the seat roster. Store-probe failures now also print to stderr; command
-exit 0 does not establish vendor success. See [launch investigation](docs/testing/task-1327-reconstitution-launch.md)
+exit 0 does not establish vendor success. See [launch investigation](docs/internal/testing/task-1327-reconstitution-launch.md)
 and TASK-1-224 for the authority-root repair awaiting triage.
 <!-- trace:TASK-1327 | ai:codex -->
 
@@ -370,7 +381,7 @@ there are no Windows/macOS PR legs, schedules, release artifacts, cross-target
 checks, or triage reminders, and releases do not require any cross-platform run.
 `cross-platform.yml` is kept as a manual-only workflow so a future reversal is
 cheap. Ubuntu Build plus merge-hold-gate remain the required checks.
-See [CI policy](docs/agents/aida-repository-guide.md).
+See [CI policy](docs/internal/agents/aida-repository-guide.md).
 <!-- trace:TASK-1723 | ai:claude -->
 
 Ship ownership refusals exit non-zero. Direct human terminals get owning
@@ -443,7 +454,7 @@ queue/orchestrator, and an MCP server that exposes the same graph to
 non-Claude agents. Use `OVERVIEW.md` for product and architecture
 context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
-context, and `docs/agents/session-communication.md` for Claude/Codex/
+context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
 The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
@@ -457,10 +468,12 @@ Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup
 <!-- trace:TASK-2705 TASK-2707 | ai:codex -->
 
 Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
-evidence. GitHub UNKNOWN mergeability stays pending; new raw GitHub spawns outside
+evidence. Condition PR probes use this boundary with a 15-second timeout and
+preserve failed or malformed observations as Unknown. GitHub UNKNOWN mergeability
+stays pending; new raw GitHub spawns outside
 `forge.rs` are guarded by a per-file ratchet. Legacy reads and later destructive
 transition migration remain; see [forge observations](OVERVIEW.md#forge-observations).
-<!-- trace:STORY-2401 | ai:codex -->
+<!-- trace:STORY-2401 STORY-2402 | ai:codex -->
 
 ## Child launch containment
 
@@ -536,6 +549,16 @@ atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
 snapshot-save writer. Corrupt queues fail closed on mutation; position
 placement is still computed by callers outside the lock. See OVERVIEW.md.
 
+## Trusted cross-node review publications
+
+Configured host recorders publish immutable OpenSSH-signed review receipts to
+`reviews/v1/` in the shared store after local authority validation. Consumers use
+the current operator-enrolled node roster, exact PR head, canonical spec keys and
+portable author/reviewer sessions. Grants and human receipts stay local. Synced
+refusals override local approvals; watcher reservation sync remains deferred.
+See [second-node setup](docs/agents/second-review-node.md).
+<!-- trace:STORY-2492 | ai:codex -->
+
 ## Local observation envelopes
 
 `aida intent note|validate|export` operate on explicitly supplied data before
@@ -543,8 +566,13 @@ identity, telemetry or store setup. The six-field v1 JSON format and hash are
 specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
 Keep these operations independent of store-only transport and spec comprehension.
 Use direct spellings; local observation commands reaching late alias dispatch
-refuse with direct-spelling guidance before performing observation I/O.
-<!-- trace:STORY-2479 | ai:codex -->
+refuse with direct-spelling guidance before performing observation I/O. Enrolled
+`intent enroll|publish|pull|list|process` uses an independent repository, worktree,
+index, refs and lock under the clone-common `aida-intake/` directory. Full history
+validation precedes fast-forward acceptance; create/comment processing uses
+ordinary authorized CLI writers with durable operation journals and receipts.
+<!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
+<!-- trace:TASK-3114 | ai:codex -->
 
 ## Requirements Management
 
@@ -590,7 +618,7 @@ tests/test_mcp_doc_consistency.sh
 ```
 
 External dashboards consume the versioned, read-only field subset documented
-in `docs/monitor-contract.md`. `aida contract --json` advertises it and
+in `docs/internal/monitor-contract.md`. `aida contract --json` advertises it and
 `aida watch --all --json` is its local JSONL follow feed; consumers must not
 parse human output or read `.aida-store` directly.
 
@@ -618,7 +646,7 @@ For Antigravity's AIDA-aware footer/title setup, run
 `aida statusline setup --client antigravity --install` (or omit `--install` to
 print the settings fragment).
 Before publishing AIDA through a marketplace or registry, run
-`docs/security/marketplace-publication-checklist.md`.
+`docs/internal/security/marketplace-publication-checklist.md`.
 
 Prefer `aida agent new <type>` for supervised agent launches. It
 registers the spawned process, writes a point-in-time launch context to
@@ -671,7 +699,7 @@ brief, follow this path (the same one used for TASK-132 and BUG-406):
 Local drain locks use PID/start identity, never launch age, to retain a live
 holder. Integration takes the main worktree's lock even from a sibling checkout.
 `AIDA_DRAIN_LOCK_STALE_SECS` controls shared claims only; see
-[lock regression coverage](docs/testing/bug-1683-drain-lock.md) for scope and limits.
+[lock regression coverage](docs/internal/testing/bug-1683-drain-lock.md) for scope and limits.
 
 ## Code Traceability
 
@@ -729,7 +757,7 @@ runtime behavior contradicts current source.
 
 For hook-level pause/abort/resume semantics, especially Claude Code
 `PreToolUse` / `PostToolUse`, `continue: false`, `ask`, and `defer`, use
-`docs/agents/session-communication.md`. Do not assume a later hook can ask
+`docs/advanced/session-communication.md`. Do not assume a later hook can ask
 whether to continue after an earlier hook has halted the run.
 
 ## Known Codex Pitfalls

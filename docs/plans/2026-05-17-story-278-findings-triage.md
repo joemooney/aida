@@ -104,7 +104,7 @@ and one workflow line in Step 1: if that block emitted a line, surface it to the
 `n=$(aida findings list --count 2>/dev/null || echo 0)` and, if `n > 0`, append
 `N findings from recent merges awaiting triage (use \`aida findings list\` to review)` to `$body`. Fold the findings line into the line-84 "is `$body` worth emitting" guard so a dialog session with the line but no `purpose`/`system_prompt` still emits.
 
-**`docs/autonomous-drain.md`** — short subsection: how headless-reviewer findings reach the advisor (`AIDA_HEADLESS` → step 7b → `aida findings list`).
+**`docs/advanced/autonomous-drain.md`** — short subsection: how headless-reviewer findings reach the advisor (`AIDA_HEADLESS` → step 7b → `aida findings list`).
 
 Then run `make sync-templates` to verify the `.claude/` symlinks.
 
@@ -207,4 +207,4 @@ Plus: `cargo test -p aida-cli findings` (the `findings.rs` unit tests) and `carg
 
 - **Builds on:** STORY-263 (headless reviewer + verdict-file pattern — exposed the gap), STORY-246 (verdict file handshake).
 - **Composes with:** STORY-276 (headless implementer — same gap, same fix), TASK-298 (stream-json watchdog — shares the headless-output path).
-- **See also:** `feedback_dialog_role_responsibilities.md` (filing is dialog's job — preserved here under headless), `feedback_pushback_on_overengineering.md` (option 3 = smallest valuable slice), `docs/autonomous-drain.md`.
+- **See also:** `feedback_dialog_role_responsibilities.md` (filing is dialog's job — preserved here under headless), `feedback_pushback_on_overengineering.md` (option 3 = smallest valuable slice), `docs/advanced/autonomous-drain.md`.

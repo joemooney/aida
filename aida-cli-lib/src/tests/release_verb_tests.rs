@@ -110,7 +110,7 @@ fn release_pr_flow_fixture_passes() {
 // trace:TASK-1721.ac0d9d77 trace:TASK-1951 | ai:claude
 #[test]
 fn release_runbook_names_the_branch_rule_and_the_direct_push_probe() {
-    let guide = include_str!("../../../docs/agents/aida-repository-guide.md");
+    let guide = include_str!("../../../docs/internal/agents/aida-repository-guide.md");
     let start = guide
         .find("**Release runbook: operator, once")
         .expect("the release runbook is in the repository guide");

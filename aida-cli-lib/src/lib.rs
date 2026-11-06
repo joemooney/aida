@@ -82,6 +82,8 @@ mod commit;
 mod compete;
 mod compete_cmd;
 mod complexity_calibration;
+// trace:STORY-2402 | ai:claude
+mod condition_cmd;
 mod config_cmd;
 mod spec_arg;
 // trace:BUG-1938 | ai:claude
@@ -492,6 +494,7 @@ mod harvest;
 mod integrate_checkout;
 mod integrate_view;
 mod intent;
+mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
@@ -499,6 +502,8 @@ mod mail_retention;
 mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1843 | ai:claude
+// trace:TASK-3074 | ai:codex
+mod mailbox_action;
 mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mail_wake;

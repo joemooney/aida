@@ -125,7 +125,7 @@ cargo test -p aida-core seat_wait
 
 ## SPIKE-92 findings (2026-09-27)
 
-Research report: [2026-09-27-spike-92-research.md](../research/2026-09-27-spike-92-research.md).
+Research report: [2026-09-27-spike-92-research.md](../internal/research/2026-09-27-spike-92-research.md).
 
 - TUI input during a held hook, Ctrl+C/Esc behavior, actual timeout ceilings, and live continuation dialects were **not measured** on any harness. Do not treat the vendor contract table above as runtime verification.
 - Pending direct interactive probes, recommendation for CR-7 item 6 is `hold=0` for human-present seats; longer holds are headless-only and still need bounded, vendor-specific measurements.

@@ -258,12 +258,17 @@ fn sensitive_patterns_cover_decoded_text_and_do_not_echo_it() {
         "--category",
         "question",
         "--title",
-        "private title",
+        "private CanaryTitle",
         "--deny-pattern",
         "private",
     ]);
     assert!(!refused.status.success());
     assert!(refused.stdout.is_empty());
+    // trace:TASK-3111 trace:TASK-2866 | ai:codex
+    let diagnostic = String::from_utf8_lossy(&refused.stderr);
+    assert!(diagnostic.contains("rule 1"), "{diagnostic}");
+    assert!(!diagnostic.contains("private"), "{diagnostic}");
+    assert!(!diagnostic.contains("CanaryTitle"), "{diagnostic}");
     let invalid = fixture.run(&[
         "intent",
         "validate",
@@ -339,6 +344,8 @@ fn spec_comprehension_cli_remains_available() {
     assert!(text.contains("note"));
     assert!(text.contains("aida intent [OPTIONS] <ID>"));
     assert!(text.contains("aida intent <note|validate|export> ..."));
+    // trace:TASK-3096 | ai:codex
+    assert!(text.contains("aida intent <enroll|publish|pull|list|process> ..."));
     assert!(!fixture.run(&["intent"]).status.success());
     fs::write(fixture.root().join("note.md"), b"body").unwrap();
     assert!(!fixture

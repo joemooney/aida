@@ -277,6 +277,9 @@ thread_local! {
     /// What [`fresh_scan_admits`] answers in this test thread.
     // trace:BUG-2411 | ai:claude
     pub(crate) static FRESH_SCAN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static PROMOTION_PROC_ROOT: std::cell::RefCell<Option<PathBuf>> = const {
+        std::cell::RefCell::new(None)
+    };
 }
 
 /// Record the activation under `project_root`'s anchor. A fresh scan runs
@@ -336,6 +339,13 @@ pub fn rerecord_for_promoted_build(
         digest: None,
         permit_marker: scan_file_for_marker(promoted_exe) == Some(true),
     };
+    // The test-only root keeps promotion admission independent of host writers.
+    // trace:TASK-3111 trace:TASK-2833 | ai:codex
+    #[cfg(test)]
+    let proc_root = PROMOTION_PROC_ROOT.with(|root| root.borrow().clone());
+    #[cfg(test)]
+    let proc = proc_root.as_deref().unwrap_or(Path::new("/proc"));
+    #[cfg(not(test))]
     let proc = Path::new("/proc");
     let (mut processes, incomplete) = scan_proc(proc, std::process::id());
     let me = fill_digests(proc, &mut processes, me, promoted_exe);
@@ -448,7 +458,41 @@ fn inspect_writer(exe_link: &Path, expected: (u64, u64), hash: bool) -> Option<I
     if (meta.dev(), meta.ino()) != expected {
         return None;
     }
-    inspect_reader(&mut file, hash)
+    if hash {
+        return inspect_reader(&mut file, true);
+    }
+    // Deleted executables cannot be rewritten while running. Keep a bounded
+    // cache with pinned inodes so repeated retirement scans do not reread old,
+    // unmarked debug builds to EOF, nor confuse a recycled inode with one.
+    // Metadata also invalidates entries for ordinary mutable test files.
+    // trace:TASK-3112 | ai:codex
+    type Stamp = (u64, u64, u64, i64, i64, i64, i64);
+    static MARKERS: std::sync::Mutex<Vec<(Stamp, std::fs::File, Inspection)>> =
+        std::sync::Mutex::new(Vec::new());
+    let stamp = (
+        meta.dev(),
+        meta.ino(),
+        meta.len(),
+        meta.mtime(),
+        meta.mtime_nsec(),
+        meta.ctime(),
+        meta.ctime_nsec(),
+    );
+    if let Some(found) = MARKERS
+        .lock()
+        .ok()?
+        .iter()
+        .find(|(key, _, _)| *key == stamp)
+    {
+        return Some(found.2.clone());
+    }
+    let inspection = inspect_reader(&mut file, false)?;
+    let mut cache = MARKERS.lock().ok()?;
+    if cache.len() == 16 {
+        cache.remove(0);
+    }
+    cache.push((stamp, file, inspection.clone()));
+    Some(inspection)
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
@@ -841,6 +885,77 @@ mod tests {
         assert!(!classify(&procs, Some(&other_protocol), 1, None, false).would_record);
     }
 
+    // Exercise the public promotion entry with real executable bytes and a
+    // private proc tree. An unreadable executable is a directory: metadata
+    // succeeds, but marker/digest reads fail even when tests run as root.
+    // trace:TASK-3111 trace:TASK-2833 | ai:codex
+    #[test]
+    fn promotion_uses_the_promoted_executables_marker() {
+        struct ResetProc;
+        impl Drop for ResetProc {
+            fn drop(&mut self) {
+                PROMOTION_PROC_ROOT.with(|root| *root.borrow_mut() = None);
+            }
+        }
+        let _reset = ResetProc;
+        for kind in ["marked", "unmarked", "unreadable"] {
+            for same_exe in [true, false] {
+                let repo = super::super::tests::repo();
+                super::super::tests::activate(repo.path());
+                let anchor = super::super::tests::source(repo.path()).anchor;
+                let activation = anchor.join(super::super::ACTIVATION_FILE);
+                let before = std::fs::read(&activation).unwrap();
+                let files = tempfile::tempdir().unwrap();
+                let promoted = files.path().join("promoted/aida");
+                std::fs::create_dir_all(promoted.parent().unwrap()).unwrap();
+                if kind == "unreadable" {
+                    std::fs::create_dir(&promoted).unwrap();
+                } else {
+                    let mut bytes = b"promoted build".to_vec();
+                    if kind == "marked" {
+                        bytes.extend_from_slice(WRITE_PERMIT_MARKER);
+                    }
+                    std::fs::write(&promoted, bytes).unwrap();
+                }
+                let writer = if same_exe {
+                    promoted.clone()
+                } else {
+                    let writer = files.path().join("older/aida");
+                    std::fs::create_dir_all(writer.parent().unwrap()).unwrap();
+                    let mut bytes = b"different older build".to_vec();
+                    bytes.extend_from_slice(WRITE_PERMIT_MARKER);
+                    std::fs::write(&writer, bytes).unwrap();
+                    writer
+                };
+                let pid = std::process::id();
+                let proc = fake_proc(pid, "pid:[4026531836]");
+                let other = proc.path().join((pid + 1).to_string());
+                std::fs::create_dir(&other).unwrap();
+                std::fs::write(other.join("cmdline"), b"aida\0mailbox\0").unwrap();
+                std::os::unix::fs::symlink(&writer, other.join("exe")).unwrap();
+                PROMOTION_PROC_ROOT.with(|root| *root.borrow_mut() = Some(proc.path().into()));
+                let report = rerecord_for_promoted_build(repo.path(), &promoted, "promoted-source")
+                    .unwrap()
+                    .unwrap();
+                let admitted = same_exe || kind == "marked";
+                assert_eq!(report.scan_incomplete, None, "{report:?}");
+                assert_eq!(report.hosts.len(), 1, "{report:?}");
+                assert_eq!(
+                    report.would_record, admitted,
+                    "{kind}/{same_exe}: {report:?}"
+                );
+                assert_eq!(report.recorded, admitted, "{report:?}");
+                if admitted {
+                    let written: super::super::Activation =
+                        serde_json::from_slice(&std::fs::read(&activation).unwrap()).unwrap();
+                    assert_eq!(written.source_build.as_deref(), Some("promoted-source"));
+                } else {
+                    assert_eq!(std::fs::read(&activation).unwrap(), before);
+                }
+            }
+        }
+    }
+
     /// The marker is found wherever it sits, including across two reads, and
     /// the digest is the plain SHA-256 of the bytes.
     // trace:BUG-2437 | ai:claude
@@ -901,6 +1016,30 @@ mod tests {
     /// and records its marker, without hashing it: a replaced binary's digest
     /// could not admit it.
     // trace:BUG-2437 | ai:claude
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_marker_cache_invalidates_changed_content_and_checks_identity() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), b"old unmarked build").unwrap();
+        let meta = file.as_file().metadata().unwrap();
+        let id = (meta.dev(), meta.ino());
+        for _ in 0..2 {
+            assert_eq!(
+                inspect_writer(file.path(), id, false)
+                    .unwrap()
+                    .permit_marker,
+                false
+            );
+        }
+        std::fs::write(file.path(), WRITE_PERMIT_MARKER).unwrap();
+        assert!(
+            inspect_writer(file.path(), id, false)
+                .unwrap()
+                .permit_marker
+        );
+        assert!(inspect_writer(file.path(), (id.0, id.1 + 1), false).is_none());
+    }
+
     #[test]
     fn fill_digests_reads_the_marker_of_a_replaced_writer() {
         let (proc, exe, id) = proc_with_writer(5);

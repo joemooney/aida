@@ -1022,6 +1022,89 @@ fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
     assert!(!subject.contains(" (BUG-1)"), "{subject}");
 }
 
+/// Origin-scoped native lanes must publish canonical trailers even when HOME
+/// aliases are installed. Exercise both completion and failed-exit salvage,
+/// with and without an agreed display ID, through the real trailer guard/push.
+// trace:BUG-2459 | ai:codex
+#[test]
+fn bug_2459_post_exit_origin_scope_publishes_without_home_alias_trailers() {
+    use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
+    use aida_core::node_alias::{install_for_thread, NodeAliasBinding, NodeAliasMap};
+    let node = "b6b1278890774ef993d2ebc327862470";
+    let origin = format!("BUG-{node}-225");
+    let _aliases = install_for_thread(NodeAliasMap {
+        bindings: vec![NodeAliasBinding {
+            label: "HOME".into(),
+            node: node.into(),
+            retired: false,
+        }],
+        ..Default::default()
+    });
+    assert_eq!(
+        aida_core::node_alias::display_spec_id(&origin),
+        "BUG-HOME-225"
+    );
+    for agreed in [Some("BUG-2459"), None] {
+        for clean_exit in [true, false] {
+            let fx = fixture();
+            let clone = seat_with_pending(&fx, "alias", "c0ffee245900", "alias-publish");
+            let lease = crate::lease_path(&fx.main, "c0ffee245900");
+            let text = std::fs::read_to_string(&lease).unwrap();
+            std::fs::write(&lease, text.replace("TASK-2053", &origin)).unwrap();
+            let mut req = title_spec("Publish native lane work");
+            req.spec_id = Some(origin.clone());
+            req.agreed_id = agreed.map(str::to_string);
+            let mut store = aida_core::RequirementsStore::new();
+            store.requirements.push(req);
+            aida_core::Storage::new(fx.main.join("requirements.yaml"))
+                .save(&store)
+                .unwrap();
+            let outcome = post_exit_commit(
+                &fx.main,
+                &clone,
+                &origin,
+                "lane-alias",
+                clean_exit,
+                &test_commit,
+            );
+            let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+            assert_eq!(outcome, PostExitCommit::Committed(tip.clone()));
+            let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+            let id = agreed.unwrap_or(&origin);
+            let trailer = if clean_exit {
+                format!("({id})")
+            } else {
+                format!("(Refs {id})")
+            };
+            assert!(subject.ends_with(&trailer), "{subject}");
+            assert!(!subject.contains("HOME"), "{subject}");
+            let mut options = opts(&clone, false, false);
+            options.spec = Some(origin.clone());
+            let forge = crate::forge::fake::RecordingForge {
+                opens_as: Some(77),
+                ..crate::forge::fake::RecordingForge::new()
+            };
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                options,
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| Box::new(forge.clone()),
+                    after_open: &|_, _| {},
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", "refs/heads/alias-publish"]),
+                tip
+            );
+            assert!(forge.opened.lock().unwrap()[0].title.ends_with(&trailer));
+            assert!(import_refs(&fx.main).is_empty());
+        }
+    }
+}
+
 /// Advisor F5: the index is rolled back only while HEAD has not moved.
 // trace:TASK-2712 | ai:claude
 #[test]
@@ -1139,9 +1222,9 @@ fn bug_home_038_from_seat_explicit_spec_must_match_trailers() {
     assert_eq!(import_refs(&fx.main), "", "the refused import kept its ref");
 
     let ids = vec!["BUG-2".to_string(), "TASK-7".to_string()];
-    crate::ship_from_seat::explicit_spec_check("bug-2", &ids).unwrap();
-    crate::ship_from_seat::explicit_spec_check("TASK-7", &ids).unwrap();
-    assert!(crate::ship_from_seat::explicit_spec_check("BUG-3", &ids).is_err());
+    crate::ship_from_seat::explicit_spec_check(None, "bug-2", &ids).unwrap();
+    crate::ship_from_seat::explicit_spec_check(None, "TASK-7", &ids).unwrap();
+    assert!(crate::ship_from_seat::explicit_spec_check(None, "BUG-3", &ids).is_err());
 }
 
 /// `--from-seat` run from inside a seat clone is refused before anything.
@@ -1244,7 +1327,7 @@ fn bug_2431_from_seat_accepts_refs_only_trailer() {
     })
     .unwrap();
     assert_eq!(ids, vec!["BUG-1".to_string()]);
-    crate::ship_from_seat::explicit_spec_check("bug-1", &ids).unwrap();
+    crate::ship_from_seat::explicit_spec_check(None, "bug-1", &ids).unwrap();
     let err = crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
         crate::trace::SpecResolution::Missing
     })
@@ -1418,4 +1501,682 @@ fn bug_home_038_seat_pr_body_notes_the_seat() {
         body.contains("Published from seat `aida-seat-aida-x`"),
         "{body}"
     );
+}
+
+// trace:TASK-2891 | ai:codex
+fn title_spec(title: &str) -> aida_core::Requirement {
+    let mut req = aida_core::Requirement::new(title.into(), String::new());
+    req.spec_id = Some("BUG-1".into());
+    req.req_type = aida_core::RequirementType::Bug;
+    req.feature = "Regeneration Controls".into();
+    req
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_spec_title_preserves_attribution_and_authority() {
+    use crate::ship_from_seat::seat_pr_title;
+    let req = title_spec("Validate committed fractional aggregates");
+    for trailer in [
+        "(BUG-1)",
+        "(BUG-1 TASK-2)",
+        "(Refs BUG-1)",
+        "(Refs BUG-1) (TASK-2)",
+    ] {
+        let subject = format!("[AI:codex] fix: address CI failures and review findings {trailer}");
+        let title = seat_pr_title(Some(&req), &subject).unwrap();
+        assert_eq!(
+            title,
+            format!("[AI:codex] fix: Validate committed fractional aggregates {trailer}")
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&title),
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject)
+        );
+        assert_eq!(
+            crate::pr_ship::refs_spec_ids_in_text(&title),
+            crate::pr_ship::refs_spec_ids_in_text(&subject)
+        );
+    }
+    let title = seat_pr_title(
+        Some(&req),
+        "fix: (Refs BUG-1) salvage leftovers (BUG-1 TASK-2)",
+    )
+    .unwrap();
+    assert_eq!(crate::pr_ship::refs_spec_ids_in_text(&title), vec!["BUG-1"]);
+    let req = title_spec("fix(regen): validate committed fractional aggregates");
+    assert_eq!(
+        seat_pr_title(
+            Some(&req),
+            "[AI:claude] chore(seat): address CI failures and review findings (BUG-1)"
+        )
+        .unwrap(),
+        "[AI:claude] fix(regen): validate committed fractional aggregates (BUG-1)"
+    );
+    assert!(seat_pr_title(
+        Some(&title_spec("Validate aggregates (TASK-99)")),
+        "fix: address CI failures and review findings"
+    )
+    .is_err());
+    assert!(seat_pr_title(
+        Some(&title_spec("Validate (Refs TASK-99) aggregates")),
+        "fix: address CI failures and review findings (BUG-1)"
+    )
+    .is_err());
+    let req = title_spec("Validate aggregates");
+    assert_eq!(
+        seat_pr_title(Some(&req), "fix: address CI failures and review findings").unwrap(),
+        "fix: Validate aggregates"
+    );
+    assert!(seat_pr_title(None, "fix: address CI failures and review findings (BUG-1)").is_err());
+    assert_eq!(
+        seat_pr_title(None, "fix(regen): validate aggregates (BUG-1)").unwrap(),
+        "fix(regen): validate aggregates (BUG-1)"
+    );
+    assert!(seat_pr_title(
+        Some(&title_spec("  ")),
+        "fix: address CI failures and review findings (BUG-1)"
+    )
+    .is_err());
+}
+
+/// Drive real bundle publication with a spec-backed title, then the rework
+/// path against an existing generic PR. Failed retitles must not report a
+/// successful review handoff; descriptive author titles remain untouched.
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_publication_opens_and_repairs_spec_titles() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "titles",
+        "c0ffee289100",
+        "seat-titles",
+        "[AI:codex] fix: address CI failures and review findings (BUG-1)",
+    );
+    let mut store = aida_core::RequirementsStore::new();
+    store.requirements.push(title_spec(
+        "fix(regen): validate committed fractional aggregates",
+    ));
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    let mut forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let handoffs = std::cell::Cell::new(0);
+    let run = |forge: &crate::forge::fake::RecordingForge| {
+        crate::ship_from_seat::run_from(
+            &fx.main,
+            opts(&clone, false, false),
+            &crate::ship_from_seat::Deps {
+                bundle: &test_bundle,
+                commit: &no_commit,
+                forge: &|_| Box::new(forge.clone()),
+                after_open: &|_, _| handoffs.set(handoffs.get() + 1),
+            },
+        )
+    };
+    let expected = "[AI:codex] fix(regen): validate committed fractional aggregates (BUG-1)";
+    run(&forge).unwrap();
+    assert_eq!(forge.opened.lock().unwrap()[0].title, expected);
+    forge.open_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 77,
+        url: "https://example.test/pull/77".into(),
+        branch: "seat-titles".into(),
+        base: "main".into(),
+        title: Some(
+            "[AI:codex] fix: Address CI failures and review findings   (BUG-1 TASK-2)".into(),
+        ),
+    });
+    std::fs::remove_file(fx.main.join("requirements.yaml")).unwrap();
+    let err = run(&forge).unwrap_err().to_string();
+    assert!(
+        err.contains("the owning spec is unavailable; restore store access and retry"),
+        "{err}"
+    );
+    assert_eq!(
+        handoffs.get(),
+        1,
+        "unavailable spec must prevent after_open"
+    );
+    assert!(forge.retitled.lock().unwrap().is_empty());
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    forge.retitle_error = Some("forge edit refused".into());
+    assert!(run(&forge)
+        .unwrap_err()
+        .to_string()
+        .contains("forge edit refused"));
+    assert_eq!(handoffs.get(), 1);
+    forge.retitle_error = None;
+    run(&forge).unwrap();
+    assert_eq!(
+        *forge.retitled.lock().unwrap(),
+        vec![(77, expected.replace(" (BUG-1)", "   (BUG-1 TASK-2)"))]
+    );
+    if let crate::forge::ChangeLookup::Found(change) = &mut forge.open_for_branch {
+        change.title = Some("fix(regen): author-selected descriptive summary (BUG-1)".into());
+    }
+    run(&forge).unwrap();
+    assert_eq!(forge.retitled.lock().unwrap().len(), 1);
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+    assert_eq!(handoffs.get(), 3);
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_default_type_scope_and_single_line_summary() {
+    use aida_core::RequirementType;
+    for (kind, prefix) in [
+        (RequirementType::Bug, "fix"),
+        (RequirementType::Task, "chore"),
+        (RequirementType::Story, "feat"),
+        (RequirementType::Doc, "docs"),
+    ] {
+        let mut req = title_spec("Repair\n   publication titles");
+        req.req_type = kind;
+        req.feature = "Uncategorized".into();
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(
+                Some(&req),
+                "[AI:codex] address CI failures and review findings (BUG-1)"
+            )
+            .unwrap(),
+            format!("[AI:codex] {prefix}: Repair publication titles (BUG-1)")
+        );
+    }
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_descriptive_subject_survives_truncated_finding_title() {
+    let mut req = title_spec(
+        "cosmetic: squash title 'fix: address CI failures and review findings' is generi…",
+    );
+    req.req_type = aida_core::RequirementType::Task;
+    for subject in [
+        "[AI:codex] fix(ship): derive seat PR titles from owning specs (TASK-2891)",
+        "fix: foo(BUG-1)",
+    ] {
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(Some(&req), subject).unwrap(),
+            subject
+        );
+    }
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_generic_subject_normalization_and_adjacent_credit() {
+    let mut req = title_spec("Repair publication titles");
+    req.req_type = aida_core::RequirementType::Task;
+    for (subject, suffix) in [
+        (
+            "[AI:codex] fix(ship): Address CI failures and review findings(BUG-1)",
+            "(BUG-1)",
+        ),
+        (
+            "[AI:codex] fix(ship): ADDRESS CI FAILURES AND REVIEW FINDINGS   (BUG-1)",
+            "   (BUG-1)",
+        ),
+    ] {
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(Some(&req), subject).unwrap(),
+            format!("[AI:codex] fix(ship): Repair publication titles{suffix}")
+        );
+        let err = crate::ship_from_seat::seat_pr_title(None, subject)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("the owning spec is unavailable"), "{err}");
+    }
+}
+
+/// The final lane-state reader uses clone facts and the recorded host's
+/// origin, even though ordinary host Git is forbidden in the clone.
+// trace:STORY-2475 | ai:codex
+#[test]
+fn story_2475_final_seat_state_reads_recorded_clone_through_its_host() {
+    let fx = fixture();
+    let clone = leased_clone(&fx, "final-state", "c0ffee247500");
+    std::fs::write(clone.join("pending"), "unfinished edit").unwrap();
+    let expected = crate::seat_clone::probe(&fx.main, &clone);
+    let state = crate::headless_background::SeatState::read(&clone, "main");
+    assert_eq!(
+        state.origin,
+        crate::headless_background::OriginHead::At(git_ok(&fx.main, &["rev-parse", "HEAD"]))
+    );
+    match expected {
+        Probe::Known(facts) => {
+            assert!(!facts.dirty.is_empty());
+            assert_eq!(state.head, facts.head);
+            assert_eq!(state.uncommitted, Some(facts.dirty.len()));
+        }
+        Probe::Unknown(_) | Probe::HasSubmodules(_) => {
+            assert_eq!(state.head, None);
+            assert_eq!(state.uncommitted, None);
+        }
+    }
+}
+
+// trace:TASK-2879 | ai:codex
+#[test]
+fn task_2879_native_queue_done_uses_lease_branch_before_diagnostics() {
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "native-done", "c0ffee287901", "pending");
+    let branch = git_ok(&clone, &["branch", "--show-current"]);
+    let why = crate::queue_misc::refuse_native_queue_done(&clone)
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains(&format!("branch `{branch}`")), "{why}");
+    assert!(why.contains("no status or queue entry was changed"));
+    assert!(!why.contains("current_branch_at returned None"));
+    assert!(!why.contains("no test file"));
+    assert!(clone.join("native-done.txt").exists());
+    crate::queue_misc::refuse_native_queue_done(&fx.main).unwrap();
+}
+
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_publication_merge_uses_host_identity_without_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "publish-merge", "c0ffee287902", "publish-merge");
+    test_commit(&fx.main, &clone, "publish-merge", "lane work (Refs BUG-1)").unwrap();
+    let lane_head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("remote.txt"), "remote change\n").unwrap();
+    git_ok(&fx.main, &["add", "remote.txt"]);
+    git_ok(&fx.main, &["commit", "-qm", "remote work"]);
+    let remote = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let sentinel = fx.root.join("merge-hook-ran");
+    plant_hooks(&clone, &sentinel, &fx.root);
+    let message = "merge remote PR head (Refs BUG-1)";
+    let pinned =
+        crate::ship_from_seat::pending_commit_preflight(&fx.main, &clone, Some("BUG-1"), message)
+            .unwrap();
+    crate::seat_clone::merge_publication_head(
+        &fx.main,
+        &clone,
+        "publish-merge",
+        &remote,
+        message,
+        pinned.pinned,
+    )
+    .unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^1"]), lane_head);
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+    assert_eq!(
+        git_ok(&clone, &["log", "-1", "--format=%an <%ae>"]),
+        git_ok(&fx.main, &["log", "-1", "--format=%an <%ae>"])
+    );
+    assert!(
+        !sentinel.exists(),
+        "a seat hook ran during publication merge"
+    );
+}
+
+// Exercise the production host/sandbox/bundle/push path, including an
+// explicitly supplied spec on a branch and scope which name no spec.
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for case in [
+        "merge",
+        "live",
+        "conflict",
+        "bad-trailer",
+        "wrong-spec",
+        "push-refused",
+    ] {
+        let fx = fixture();
+        let branch = "publication";
+        let id = "c0ffee287910";
+        let subject = match case {
+            "bad-trailer" => "local work without trailer",
+            "wrong-spec" => "local work (Refs BUG-2)",
+            _ => "local work (Refs BUG-1)",
+        };
+        let (clone, _) = seat_with_commit(&fx, "moved", id, branch, subject);
+        let lease = crate::lease_path(&fx.main, id);
+        let text = std::fs::read_to_string(&lease)
+            .unwrap()
+            .replace("TASK-2053", "publication");
+        std::fs::write(&lease, &text).unwrap();
+        if case == "conflict" {
+            std::fs::write(clone.join("README.md"), "local conflict\n").unwrap();
+            git_ok(&clone, &["add", "README.md"]);
+            git_ok(
+                &clone,
+                &["commit", "-qm", "conflicting local work (Refs BUG-1)"],
+            );
+        }
+        let local = git_ok(&clone, &["rev-parse", "HEAD"]);
+        let remote_file = if case == "conflict" {
+            "README.md"
+        } else {
+            "remote.txt"
+        };
+        std::fs::write(fx.main.join(remote_file), "remote change\n").unwrap();
+        git_ok(&fx.main, &["add", remote_file]);
+        git_ok(&fx.main, &["commit", "-qm", "remote work (Refs BUG-1)"]);
+        let remote = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        git_ok(
+            &fx.main,
+            &["push", "-q", "origin", &format!("HEAD:refs/heads/{branch}")],
+        );
+        std::fs::write(fx.main.join(".git/FETCH_HEAD"), "preserve fetch head\n").unwrap();
+        let sentinel = fx.root.join("seat-hook-ran");
+        plant_hooks(&clone, &sentinel, &fx.root);
+        let mut owner = if case == "live" {
+            let owner = std::process::Command::new("sleep")
+                .arg("60")
+                .spawn()
+                .unwrap();
+            let start = aida_core::liveness::process_start_identity(owner.id()).unwrap();
+            std::fs::write(
+                &lease,
+                format!(
+                    "{text}active_pid = {}\nactive_pid_start_time = {}\n",
+                    owner.id(),
+                    aida_core::toml_quote::toml_string(&start)
+                ),
+            )
+            .unwrap();
+            Some(owner)
+        } else {
+            None
+        };
+        if case == "push-refused" {
+            let hook = fx.origin.join("hooks/pre-receive");
+            crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+        }
+        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        if let Some(owner) = &mut owner {
+            let _ = owner.kill();
+            let _ = owner.wait();
+        }
+        if case == "merge" {
+            result.unwrap();
+            let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+                head
+            );
+            assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^1"]), local);
+            assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+            assert_eq!(
+                git_ok(&clone, &["log", "-1", "--format=%s"]),
+                "[host] chore(seat): merge remote PR head (Refs BUG-1)"
+            );
+        } else {
+            let why = format!("{:#}", result.unwrap_err());
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+                remote
+            );
+            if case == "push-refused" {
+                assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), local);
+                assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+                assert!(
+                    why.contains("git push")
+                        && why.contains("reconciled commit remains in the seat"),
+                    "{why}"
+                );
+            } else {
+                assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), local);
+                assert!(import_refs(&fx.main).is_empty());
+                let expected = match case {
+                    "live" => "refusing to merge the remote PR head",
+                    "conflict" => "could not merge the remote PR head",
+                    "bad-trailer" => "no seat commit",
+                    "wrong-spec" => "you named BUG-1",
+                    _ => unreachable!(),
+                };
+                assert!(why.contains(expected), "{case}: {why}");
+            }
+            assert!(!clone.join(".git/MERGE_HEAD").exists());
+        }
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join(".git/FETCH_HEAD")).unwrap(),
+            "preserve fetch head\n"
+        );
+        assert!(git_ok(
+            &fx.main,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/aida/publication/"
+            ]
+        )
+        .is_empty());
+        assert!(!sentinel.exists(), "seat hook ran for {case}");
+    }
+}
+
+// A lane can publish already-committed work while still running, including
+// when it has unrelated untracked scratch files. No merge means no seat write.
+// trace:TASK-2879 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2879_run_at_publishes_live_dirty_seat_without_unneeded_merge() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for remote_exists in [false, true] {
+        let fx = fixture();
+        let branch = "already-committed";
+        let (clone, tip) = seat_with_commit(
+            &fx,
+            "committed",
+            "c0ffee287911",
+            branch,
+            "work (Refs BUG-1)",
+        );
+        if remote_exists {
+            git_ok(
+                &fx.main,
+                &[
+                    "push",
+                    "-q",
+                    "origin",
+                    &format!("origin/main:refs/heads/{branch}"),
+                ],
+            );
+        }
+        std::fs::write(clone.join("scratch.txt"), "scratch\n").unwrap();
+        let mut owner = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let lease = crate::lease_path(&fx.main, "c0ffee287911");
+        let text = std::fs::read_to_string(&lease).unwrap();
+        let start = aida_core::liveness::process_start_identity(owner.id()).unwrap();
+        std::fs::write(
+            &lease,
+            format!(
+                "{text}active_pid = {}\nactive_pid_start_time = {}\n",
+                owner.id(),
+                aida_core::toml_quote::toml_string(&start)
+            ),
+        )
+        .unwrap();
+        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        let _ = owner.kill();
+        let _ = owner.wait();
+        result.unwrap();
+        assert_eq!(
+            git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+            tip
+        );
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip);
+        assert_eq!(
+            std::fs::read_to_string(clone.join("scratch.txt")).unwrap(),
+            "scratch\n"
+        );
+    }
+}
+
+// Test the actual forge constructor/lookup used by post_exit_commit, not just
+// title parsing: fake gh sees the recorded branch and returns a Refs PR.
+// trace:TASK-2879 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_2879_post_exit_commit_looks_up_refs_pr() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // trace:BUG-2459 | ai:codex
+    let _aliases = aida_core::node_alias::install_for_thread(aida_core::node_alias::NodeAliasMap {
+        bindings: vec![aida_core::node_alias::NodeAliasBinding {
+            label: "HOME".into(),
+            node: "b6b1278890774ef993d2ebc327862470".into(),
+            retired: false,
+        }],
+        ..Default::default()
+    });
+    let origin = "BUG-b6b1278890774ef993d2ebc327862470-225";
+    let fx = fixture();
+    let mut req = title_spec("Preserve partial work");
+    req.spec_id = Some(origin.into());
+    req.agreed_id = Some("BUG-1".into());
+    let mut store = aida_core::RequirementsStore::new();
+    store.requirements.push(req);
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    let clone = seat_with_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
+    let bin = fx.root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r##"#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/called"
+case "$*" in
+  --version) printf '%s\n' 'gh version 2.0.0' ;;
+  *"--head refs-pr"*) /bin/cat "$(dirname "$0")/response" ;;
+  *) exit 23 ;;
+esac
+"##,
+    );
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _env = crate::test_env::EnvVarGuard::set("PATH", &path);
+    for (title, trailer) in [
+        ("partial work (Refs BUG-1)", "(Refs BUG-1)"),
+        ("complete work (BUG-1)", "(BUG-1)"),
+    ] {
+        std::fs::write(
+            bin.join("response"),
+            format!("77\t{title}\thttps://example.test/pr/77\trefs-pr\n"),
+        )
+        .unwrap();
+        std::fs::write(clone.join("more-work.txt"), title).unwrap();
+        let outcome = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            origin,
+            "lane",
+            true,
+            &test_commit,
+        );
+        assert!(
+            matches!(outcome, crate::ship_from_seat::PostExitCommit::Committed(_)),
+            "{outcome:?}"
+        );
+        let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+        assert!(subject.ends_with(trailer), "{subject}");
+        let calls = std::fs::read_to_string(bin.join("called")).unwrap();
+        assert!(calls.contains("--head refs-pr"), "{calls}");
+    }
+}
+
+// trace:BUG-2456 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for conflicts in [false, true] {
+        let fx = fixture();
+        let clone = leased_clone(&fx, "rework-merge", "c0ffee245600");
+        git_ok(&fx.main, &["branch", "feat"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+        std::fs::write(
+            clone.join(if conflicts { "README.md" } else { "other" }),
+            "rework\n",
+        )
+        .unwrap();
+        let before = commit_pending(&fx.main, &clone, "feat", "fix: rework (BUG-2456)")
+            .unwrap()
+            .unwrap();
+        publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+        std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+        let sentinel = fx.root.join("hook-ran");
+        plant_hooks(&clone, &sentinel, &fx.root);
+        // The seat's origin cannot choose the publication destination.
+        git_ok(
+            &clone,
+            &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
+        );
+        let files = prepare_rework_merge(&fx.main, &clone, "feat", false).unwrap();
+        let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
+        let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        if conflicts {
+            assert_eq!(files, ["README.md"]);
+            assert_eq!(head, before);
+            assert_eq!(remote, before);
+        } else {
+            assert!(files.is_empty());
+            assert_ne!(head, before);
+            assert_eq!(remote, head);
+            assert!(import_refs(&fx.main).is_empty());
+            // Tip mismatch must clean up the imported ref before refusing.
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &before)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("changed before publication"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+
+            // A concurrent origin update rejects the actual host push. The
+            // clone import must be removed on this failure too.
+            git_ok(&fx.main, &["checkout", "-qb", "racer", &head]);
+            git_ok(
+                &fx.main,
+                &["commit", "--allow-empty", "-qm", "remote advances"],
+            );
+            let raced = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "racer:refs/heads/feat"]);
+            git_ok(&fx.main, &["checkout", "main"]);
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &head)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("rejected"), "{why}");
+            assert!(import_refs(&fx.main).is_empty());
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), raced);
+        }
+        assert!(!sentinel.exists(), "seat hooks must never execute");
+        assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    }
 }

@@ -7,7 +7,7 @@
 # a programmatic GATE, not just a RULE stated in CLAUDE.md. Invariant I1 = the AIDA
 # commit-message format `[AI:tool] type(scope): desc (REQ-ID)`.
 #
-# Design doc: docs/research/ablations/2026-06-17-gate-vs-rule.md
+# Design doc: docs/internal/research/ablations/2026-06-17-gate-vs-rule.md
 #
 # Two arms, differing by exactly ONE thing — whether the gate is armed:
 #   Arm R (rule-only): commit-msg hook installed but AIDA_COMMIT_STRICT unset →
@@ -98,7 +98,7 @@ fi
 
 # Default CSV destination (timestamped under the design doc's results area).
 if [ -z "$OUT" ]; then
-    RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
+    RESULTS_DIR="$REPO_ROOT/docs/internal/research/ablations/results"
     mkdir -p "$RESULTS_DIR"
     OUT="$RESULTS_DIR/gate-vs-rule-$(date +%Y%m%d-%H%M%S).csv"
 fi

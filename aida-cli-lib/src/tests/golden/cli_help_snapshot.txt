@@ -433,6 +433,8 @@ Commands:
   dispatch      Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`,
                 `train`) from a sandboxed advisor seat for unsandboxed execution
   relay-mail    Relay mail lifetime: one recipient per relay run, across its sessions
+  condition     Typed conditions: the machine-checkable form of "when does this come back" for
+                deferrals, relay handoffs and recurrence escalation
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -4993,6 +4995,7 @@ Inter-agent mailbox: peer↔peer messaging (send / inbox / thread)
 Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
+  disposition    Record a recipient's explicit response to a request (does not mark it read)
   wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
   wake-run       Watch every session armed for mail wake and wake its Codex thread when its own
                  inbox has new mail (the service `wake-service` installs)
@@ -5028,6 +5031,47 @@ Commands:
   help           Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox disposition
+Record a recipient's explicit response to a request (does not mark it read)
+
+Usage: aida mailbox disposition [OPTIONS] --reason <REASON> <MESSAGE_ID> <OUTCOME>
+
+Arguments:
+  <MESSAGE_ID>
+          Complete message ID; prefixes and thread references are refused
+
+  <OUTCOME>
+          [possible values: acted, declined, deferred]
+
+Options:
+      --reason <REASON>
+          Explanation for this response (1..4096 bytes)
+
+      --evidence <EVIDENCE>
+          Reference supporting acted (an assertion, not verified completion)
+
+      --until <UNTIL>
+          Deferred deadline in RFC3339, at most 24 hours from now
+
+      --json
+          Print the versioned action receipt as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -5544,6 +5588,9 @@ Arguments:
           Message id or unique id prefix to read
 
 Options:
+      --json
+          Print the message and separate action disposition as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -11357,8 +11404,14 @@ since generation
 
 Usage: aida intent [OPTIONS] <ID>
        aida intent <note|validate|export> ...
+       aida intent <enroll|publish|pull|list|process> ...
 
 Commands:
+  enroll    Enroll an independent pinned URL and reviewed deny patterns; no store required
+  publish   Commit a reviewed envelope and push only aida-intent; never force
+  pull      Fetch into quarantine, validate all history, then accept only a fast-forward
+  list      List pending observations, or include processed observations with --all
+  process   Explicitly keep pending, dismiss, create a draft task, or comment on a spec
   note      Generate an observation envelope on stdout, without a spec or store
   validate  Validate an envelope without creating a requirement. Does not certify sanitization
   export    Validate and emit a self-contained JSON attachment on stdout for manual email
@@ -11369,6 +11422,16 @@ Arguments:
           The SPEC-ID to comprehend (any story/task/bug/feature id)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
       --audience <AUDIENCE>
           Which register to print: `layman` (prose for a human skimmer) or `llm` (denser/structured,
           for an agent loading the spec)
@@ -11376,11 +11439,159 @@ Options:
           [default: layman]
           [possible values: layman, llm]
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --refresh
           Force regeneration even if a cached comprehension exists and is fresh
 
       --json
           Machine-readable JSON (`{spec, audience, comprehension, generated_at, model, stale}`)
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent enroll
+Enroll an independent pinned URL and reviewed deny patterns; no store required
+
+Usage: aida intent enroll [OPTIONS] --remote <REMOTE> --reviewed
+
+Options:
+      --remote <REMOTE>
+          Explicit absolute local path, HTTPS URL, or SSH URL
+
+      --reviewed
+          Confirm review of the destination and policy, including an empty policy
+
+      --deny-pattern <DENY_PATTERN>
+          Reviewed regex refusing matching title or body text (repeatable)
+
+      --json
+          Emit machine-readable JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent publish
+Commit a reviewed envelope and push only aida-intent; never force
+
+Usage: aida intent publish [OPTIONS]
+
+Options:
+      --file <FILE>
+          Exact envelope JSON; omit to publish retained commits and receipts
+
+      --reviewed
+          Required when adding an envelope. Omit --file to retry a pending push
+
+      --json
+          Emit machine-readable JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent pull
+Fetch into quarantine, validate all history, then accept only a fast-forward
+
+Usage: aida intent pull [OPTIONS]
+
+Options:
+      --json
+          Emit machine-readable JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent list
+List pending observations, or include processed observations with --all
+
+Usage: aida intent list [OPTIONS]
+
+Options:
+      --all
+          Include processed observations
+
+      --json
+          Emit machine-readable JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent process
+Explicitly keep pending, dismiss, create a draft task, or comment on a spec
+
+Usage: aida intent process [OPTIONS] --action <ACTION> <CHECKSUM>
+
+Arguments:
+  <CHECKSUM>
+          Full SHA-256 digest (not the abbreviated human label)
+
+Options:
+      --action <ACTION>
+          Explicit processing decision
+          
+          [possible values: pending, dismiss, create, comment]
+
+      --target <TARGET>
+          Existing destination spec for --action comment
+
+      --reconcile
+          Confirm the prior writer has stopped; reconcile its journal with store evidence
+
+      --json
+          Emit machine-readable JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -18125,7 +18336,7 @@ Options:
           unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY
           (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no
           data waiting), this degrades to the AIDA-only segment rather than blocking. See
-          docs/agents/statusline-contract.md
+          docs/internal/agents/statusline-contract.md
           
           [possible values: claude, antigravity, agy]
 
@@ -20782,6 +20993,9 @@ The `prompt` / `assemble` subcommands are the review-prompt helpers.
 Usage: aida review [OPTIONS] [SPEC] [COMMAND]
 
 Commands:
+  publish         Publish validated local review evidence, optionally naming filed findings
+  authorship      Publish author sessions for the change at the current checked-out head
+  nodes           Manage explicitly trusted review publishers (operator only)
   watch           Discover new heads and dispatch attested reviews without waiting for CI
   prompt          Generate a markdown review prompt from a set of linked requirements' acceptance
                   criteria. Specs come either from an explicit `--specs` list (CSV) or from the
@@ -20829,6 +21043,177 @@ Options:
           GitLab project's default branch became the feature branch itself because remote `main` was
           never pushed
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review publish
+Publish validated local review evidence, optionally naming filed findings
+
+Usage: aida review publish [OPTIONS] --pr <PR> --specs <SPECS>
+
+Options:
+      --pr <PR>
+          Pull request whose existing local verdict should be published
+
+      --specs <SPECS>
+          Covered spec IDs, separated by commas
+
+      --blocking-findings <BLOCKING_FINDINGS>
+          Native origin IDs of filed blocking findings, separated by commas
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review authorship
+Publish author sessions for the change at the current checked-out head
+
+Usage: aida review authorship [OPTIONS] --pr <PR> --specs <SPECS>
+
+Options:
+      --pr <PR>
+          Pull request to bind to the current checked-out head
+
+      --specs <SPECS>
+          Specs whose recorded author sessions belong to this head (CSV)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes
+Manage explicitly trusted review publishers (operator only)
+
+Usage: aida review nodes [OPTIONS] <COMMAND>
+
+Commands:
+  enroll     Enroll a node's public ed25519 key in the shared roster
+  revoke     Remove a node; all of its publications immediately lose credit after sync
+  publisher  Configure this host recorder's node and private key path. Keys stay local
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes enroll
+Enroll a node's public ed25519 key in the shared roster
+
+Usage: aida review nodes enroll [OPTIONS] <NODE> <PUBLIC_KEY>
+
+Arguments:
+  <NODE>
+          Stable publishing node ID (letters, digits, hyphens and underscores)
+
+  <PUBLIC_KEY>
+          File containing the node's ed25519 public key
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes revoke
+Remove a node; all of its publications immediately lose credit after sync
+
+Usage: aida review nodes revoke [OPTIONS] <NODE>
+
+Arguments:
+  <NODE>
+          Publishing node to remove from the shared roster
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review nodes publisher
+Configure this host recorder's node and private key path. Keys stay local
+
+Usage: aida review nodes publisher [OPTIONS] <NODE> <PRIVATE_KEY>
+
+Arguments:
+  <NODE>
+          This host's enrolled publishing node ID
+
+  <PRIVATE_KEY>
+          Path to the local ed25519 signing key
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -30974,6 +31359,66 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida condition
+Typed conditions: the machine-checkable form of "when does this come back" for deferrals, relay
+handoffs and recurrence escalation
+
+Usage: aida condition [OPTIONS] <COMMAND>
+
+Commands:
+  check  Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now)
+         or manual (a person decides). Read-only
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida condition check
+Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now) or manual
+(a person decides). Read-only
+
+Usage: aida condition check [OPTIONS] <CONDITION>
+
+Arguments:
+  <CONDITION>
+          The condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>, date:<YYYY-MM-DD>,
+          query:<key>=<value>[,...] count<op><n> (keys: tag, status, type, feature; counts
+          non-archived specs) or manual:<who>. Quote it when it contains a space or `>`
+
+Options:
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== help all (command groups)
 Getting started
   why            Ask your code why it exists — the decision behind any line
@@ -30995,6 +31440,7 @@ Specs
   unarchive      Restore an archived requirement
   defer          Park a spec as primed/conditional work
   undefer        Restore a deferred spec to the active view
+  condition      Check a typed condition (deferral trigger) now
   lint           EARS-style requirement quality lens
 Work & autonomy
   queue          Personal work queue
@@ -35674,6 +36120,52 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "disposition"
+    ],
+    "about": "Record a recipient's explicit response to a request (does not mark it read)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "evidence",
+        "takes_value": true,
+        "help": "Reference supporting acted (an assertion, not verified completion)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the versioned action receipt as JSON"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for this response (1..4096 bytes)"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Deferred deadline in RFC3339, at most 24 hours from now"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "wake-snapshot"
     ],
     "about": "Read bounded unread message IDs without bodies or acknowledgement",
@@ -36247,6 +36739,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the message and separate action disposition as JSON"
       }
     ],
     "hidden": false
@@ -42019,6 +42516,206 @@ Working on aida itself
         "name": "refresh",
         "takes_value": false,
         "help": "Force regeneration even if a cached comprehension exists and is fresh"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "enroll"
+    ],
+    "about": "Enroll an independent pinned URL and reviewed deny patterns; no store required",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "deny-pattern",
+        "takes_value": true,
+        "help": "Reviewed regex refusing matching title or body text (repeatable)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "remote",
+        "takes_value": true,
+        "help": "Explicit absolute local path, HTTPS URL, or SSH URL"
+      },
+      {
+        "name": "reviewed",
+        "takes_value": false,
+        "help": "Confirm review of the destination and policy, including an empty policy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "publish"
+    ],
+    "about": "Commit a reviewed envelope and push only aida-intent; never force",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Exact envelope JSON; omit to publish retained commits and receipts"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "reviewed",
+        "takes_value": false,
+        "help": "Required when adding an envelope. Omit --file to retry a pending push"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "pull"
+    ],
+    "about": "Fetch into quarantine, validate all history, then accept only a fast-forward",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "list"
+    ],
+    "about": "List pending observations, or include processed observations with --all",
+    "flags": [
+      {
+        "name": "all",
+        "takes_value": false,
+        "help": "Include processed observations"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
+      "process"
+    ],
+    "about": "Explicitly keep pending, dismiss, create a draft task, or comment on a spec",
+    "flags": [
+      {
+        "name": "action",
+        "takes_value": true,
+        "help": "Explicit processing decision"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "reconcile",
+        "takes_value": false,
+        "help": "Confirm the prior writer has stopped; reconcile its journal with store evidence"
+      },
+      {
+        "name": "target",
+        "takes_value": true,
+        "help": "Existing destination spec for --action comment"
       }
     ],
     "hidden": false
@@ -48798,7 +49495,7 @@ Working on aida itself
       {
         "name": "client",
         "takes_value": true,
-        "help": "Merge live fields from a client's stdin JSON payload into the AIDA segment: model, context-window usage, activity, and VCS branch where the client sends them. `claude` parses Claude Code's statusLine JSON; `antigravity` (alias `agy`) parses Antigravity's live agent-state JSON. Omit for the default, AIDA-only segment — this never reads stdin unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no data waiting), this degrades to the AIDA-only segment rather than blocking. See docs/agents/statusline-contract.md"
+        "help": "Merge live fields from a client's stdin JSON payload into the AIDA segment: model, context-window usage, activity, and VCS branch where the client sends them. `claude` parses Claude Code's statusLine JSON; `antigravity` (alias `agy`) parses Antigravity's live agent-state JSON. Omit for the default, AIDA-only segment — this never reads stdin unless a client is named, so plain `aida statusline` is unaffected. When stdin is a TTY (no payload piped), or a piped read doesn't finish within ~200ms (an open pipe with no data waiting), this degrades to the AIDA-only segment rather than blocking. See docs/internal/agents/statusline-contract.md"
       },
       {
         "name": "color",
@@ -51676,6 +52373,190 @@ Working on aida itself
         "name": "target-branch",
         "takes_value": true,
         "help": "Explicit base branch to target when AC-5 offers to open a change from a branch with no open PR/MR. Always wins over any base saved from a previous offer (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a GitLab project's default branch became the feature branch itself because remote `main` was never pushed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "publish"
+    ],
+    "about": "Publish validated local review evidence, optionally naming filed findings",
+    "flags": [
+      {
+        "name": "blocking-findings",
+        "takes_value": true,
+        "help": "Native origin IDs of filed blocking findings, separated by commas"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Pull request whose existing local verdict should be published"
+      },
+      {
+        "name": "specs",
+        "takes_value": true,
+        "help": "Covered spec IDs, separated by commas"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "authorship"
+    ],
+    "about": "Publish author sessions for the change at the current checked-out head",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Pull request to bind to the current checked-out head"
+      },
+      {
+        "name": "specs",
+        "takes_value": true,
+        "help": "Specs whose recorded author sessions belong to this head (CSV)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes"
+    ],
+    "about": "Manage explicitly trusted review publishers (operator only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes",
+      "enroll"
+    ],
+    "about": "Enroll a node's public ed25519 key in the shared roster",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes",
+      "revoke"
+    ],
+    "about": "Remove a node; all of its publications immediately lose credit after sync",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "nodes",
+      "publisher"
+    ],
+    "about": "Configure this host recorder's node and private key path. Keys stay local",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -61843,6 +62724,62 @@ Working on aida itself
         "name": "run",
         "takes_value": true,
         "help": "The run id `bind` printed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "condition"
+    ],
+    "about": "Typed conditions: the machine-checkable form of \"when does this come back\" for deferrals, relay handoffs and recurrence escalation",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "condition",
+      "check"
+    ],
+    "about": "Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now) or manual (a person decides). Read-only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false

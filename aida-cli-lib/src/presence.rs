@@ -230,7 +230,7 @@ pub(crate) fn statusline_away_remaining(now: DateTime<Utc>) -> Option<String> {
 // Solo mode (STORY-624) — a visible work-state flag, sibling to presence.
 //
 // `aida solo` marks this session as advisor+integrator working the SAFE backlog
-// end-to-end with maximum discretion (EPIC-43 / docs/solo-mode.md). Like
+// end-to-end with maximum discretion (EPIC-43 / docs/advanced/solo-mode.md). Like
 // presence it is a timestamped `~/.aida/solo.toml` file (no daemon) and is
 // COMPUTED through a TTL so a forgotten solo flag self-clears — a solo session
 // should not run forever. The statusline surfaces it; honoring it as a drain
@@ -350,7 +350,7 @@ pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
 //
 // STORY-624 shipped solo as a visible FLAG; this folds that flag into the
 // escalate-vs-proceed decision the `--no-human=both` drain makes on a punted
-// design-fork. The contract (docs/solo-mode.md):
+// design-fork. The contract (docs/advanced/solo-mode.md):
 //
 //   solo active + SAFE work     → PROCEED on the defensible default
 //                                 (max-discretion safe-backlog mode)
@@ -1606,7 +1606,8 @@ mod tests {
         assert_eq!(cfg.consumers, ConsumersMode::Off); // parsed
     }
 
-    // trace:TASK-1059 | ai:claude
+    // trace:TASK-3111 | ai:codex
+    // trace:TASK-1059.Presence | ai:codex
     #[test]
     fn presence_config_parses_questions_knob() {
         // Missing → quiet-when-away default.
@@ -1649,7 +1650,8 @@ mod tests {
         );
     }
 
-    // trace:TASK-1059 | ai:claude
+    // trace:TASK-3111 | ai:codex
+    // trace:TASK-1059.acd37b11 | ai:codex
     #[test]
     fn surface_questions_quiet_when_away_by_default() {
         let quiet = PresenceConfig::default();
@@ -1666,7 +1668,8 @@ mod tests {
 
     /// Acceptance #3: the explicit `aida questions` read is never gated by
     /// presence — the questions module must not consult the presence state.
-    /// trace:TASK-1059 | ai:claude
+    /// trace:TASK-3111 | ai:codex
+    /// trace:TASK-1059.ac4014a2 | ai:codex
     #[test]
     fn questions_read_path_is_presence_blind() {
         let src = include_str!("questions.rs");

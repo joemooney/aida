@@ -89,5 +89,5 @@ cargo build -p aida-cli && cargo fmt --all -- --check && bash tests/test_mcp_doc
 ## Related
 
 - Parent: SPIKE-45 (P3). Siblings: STORY-489 (P2 graph-query, shipped), STORY-490/492 (P5/P1).
-- Architecture: round-1 thesis (`docs/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md`) — git-canonical-writer + cache/handshake, the model this mirrors; round-2 (`...round2-moat-gaps-moves.md`) — P3 = "git-canonical + replayable inter-agent comms" differentiator.
+- Architecture: round-1 thesis (`docs/archive/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md`) — git-canonical-writer + cache/handshake, the model this mirrors; round-2 (`...round2-moat-gaps-moves.md`) — P3 = "git-canonical + replayable inter-agent comms" differentiator.
 - Adjacent: SPIKE-10 (multi-advisor — the eventual consumer); the brief + directive channels (distinct semantics to preserve).

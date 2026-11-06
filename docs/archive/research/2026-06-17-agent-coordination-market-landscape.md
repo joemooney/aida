@@ -169,4 +169,4 @@ Multi-agent *execution* (spawn N agents, isolate in worktrees/containers, show a
 - Self-reported benchmarks (Claude Flow, Devin, Qodo) — never quote as pure agent capability; SWE-bench reflects model+scaffold and is contamination-prone.
 - Funding/valuation figures and star counts are point-in-time; financial figures intentionally minimized (kept academic).
 
-*Living document — promote the durable entries into `docs/competitive-analysis/marketplace-roster.md` on a cadence; re-verify the 🟡/⚠️ items before any external citation.*
+*Living document — promote the durable entries into `docs/internal/competitive-analysis/marketplace-roster.md` on a cadence; re-verify the 🟡/⚠️ items before any external citation.*

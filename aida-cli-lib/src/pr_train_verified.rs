@@ -312,6 +312,11 @@ fn collect(
             Some(fresh.pr),
             ids.clone(),
         );
+        // trace:TASK-3111 trace:TASK-2843 | ai:codex
+        anyhow::ensure!(
+            ids.is_empty() || !covered.is_empty(),
+            "train source specs are uncovered by the branch/lease coverage filter"
+        );
         let ids = aliases(&live.project_root, &covered)?;
         let mut policy_specs =
             crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());
@@ -540,16 +545,36 @@ fn resolved_member_spec_ids(
     }
     let mut out = Vec::new();
     for id in ids {
-        if explicit_resolves
-            && !explicit.contains(&id)
+        if !explicit.contains(&id)
             && store
                 .get_requirement_unambiguous(&id)
                 .map_err(anyhow::Error::msg)?
                 .is_none()
         {
-            continue;
+            // Queue-work appends a numeric rework suffix. Preserve the owning
+            // spec's policy gates when that exact stripped hint resolves.
+            // trace:TASK-3112 | ai:codex
+            if let Some((base, suffix)) = id.rsplit_once('-') {
+                if !suffix.is_empty()
+                    && suffix.bytes().all(|b| b.is_ascii_digit())
+                    && store
+                        .get_requirement_unambiguous(base)
+                        .map_err(anyhow::Error::msg)?
+                        .is_some()
+                {
+                    if !out.iter().any(|s: &String| s.eq_ignore_ascii_case(base)) {
+                        out.push(base.to_string());
+                    }
+                    continue;
+                }
+            }
+            if explicit_resolves {
+                continue;
+            }
         }
-        out.push(id);
+        if !out.contains(&id) {
+            out.push(id);
+        }
     }
     Ok(out)
 }

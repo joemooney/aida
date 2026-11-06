@@ -3,8 +3,8 @@
 A comprehensive guide for developers maintaining and extending the AIDA (AI Design Assistant) requirements management system.
 
 **Related Documentation:**
-- [User Guide](user-guide.md) - End-user documentation for using AIDA
-- [Administrator's Guide](admin-guide.md) - For project configuration and administration
+- [User Guide](../user-guide.md) - End-user documentation for using AIDA
+- [Administrator's Guide](../advanced/admin-guide.md) - For project configuration and administration
 
 ## Table of Contents
 

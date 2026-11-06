@@ -419,6 +419,173 @@ Generated/exported JSON has no trailing newline so a maximum-size attachment
 round-trips. `validate --json` reports the label, full checksum and
 `sanitization_certified: false`, without repeating imported text.
 
-Intake-branch publication, policy enrollment, processing receipts and backup
-comment recovery are planned separately; these local commands do not publish.
+These local commands do not publish. Enrolled intake transport is described
+below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
+
+### `aida intent enroll`, `publish`, `pull`, `list`, and `process`
+
+Intake transport uses a separately enrolled destination and policy. It works in a
+Git clone without a requirement store. Enroll an explicit absolute local path,
+HTTPS URL, or SSH URL (remote nicknames and helper protocols refuse):
+
+```bash
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed --deny-pattern 'private-project-name'
+aida intent publish --file observation.json --reviewed
+aida intent pull
+aida intent list --json
+aida intent process <full-sha256> --action pending
+aida intent process <full-sha256> --action dismiss
+aida intent process <full-sha256> --action create
+aida intent process <full-sha256> --action comment --target <spec-id>
+aida intent list --all --json
+aida intent publish
+```
+
+Enrollment copies the reviewed regex policy, including an intentionally empty
+list, into owner-only clone-local state. Re-enrollment is idempotent only for the
+same destination and policy; use a separate clone to change either. HTTPS supports
+anonymous destinations only: credential helpers and askpass are disabled, and
+HTTPS URLs containing userinfo (including embedded tokens) refuse before being
+persisted. Authenticated destinations must use `ssh://` with SSH keys or an SSH
+agent; SSH runs in batch mode. Configure branch restrictions at the remote
+independently. Local validation does not certify sanitization or restrict raw Git
+clients.
+
+The clone's common Git directory contains `aida-intake/profile.json`, a permanent
+lock, and `aida-intake/worktree/` with its own `.git`, index, objects and refs.
+Linked product worktrees share this one intake boundary. No product/store index,
+ref, checkout, hooks, sync routine, or baseline participates. Commits use a fixed
+intake identity and message; imported text is never executed or passed to an LLM.
+Only the explicit `refs/heads/aida-intent` push/fetch mapping is used, with no tags,
+force push, rebase, or implicit additional refs. Fetches stage into a private ref
+and validate before moving the accepted branch; they do not write `FETCH_HEAD`.
+
+Publication requires `--reviewed` when adding a file. It retains the exact
+validated bytes at `observations/<sha256>.json`; an exact duplicate is a no-op,
+while different serialization with the same digest refuses. Full reachable
+history must be orphaned, linear and additive, containing only non-executable
+observation JSON and receipt JSON. Unknown paths, empty trees, foreign commit
+metadata, links, tampering, rewritten/deleted files, invalid receipts and denied
+text refuse, including in intermediate commits. Validation is bounded to 4096
+commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
+between commits and blobs. An owner-only `validated-tip` checkpoint skips
+previously validated intermediate trees when its exact commit remains an ancestor
+and the compiled validator sources match;
+unrelated history receives full validation. Only accepted tips advance the
+checkpoint; unpublished candidates and rejected incoming history do not. The checkpoint tree and all its live
+files are checked again, and blobs are reused within one command. Removing the
+checkpoint triggers full validation. Each Git call has a 30-second timeout and bounded
+output.
+
+These are **lifetime limits per intake repository**, not a rolling window. Rotate
+before reaching 4096 commits, 8192 files or 32 MiB; maximum-size envelopes can
+exhaust the byte limit in about 256 observations. Monitor the independent
+repository with `git -C <clone-common>/aida-intake/worktree rev-list --count HEAD`
+and `aida intent list --all --json`. There is no automatic compaction.
+
+For planned rotation, stop publishers and processors, publish outstanding receipts,
+and have every enrolled clone pull successfully. Archive the old remote and keep
+the old clones, receipts, store markers and operation journals intact. Resolve all
+journals before rotation. Create a new empty bare intake repository and new product
+clones; enroll each against that new destination with its reviewed policy. Publish
+only still-pending envelopes from the archived validated worktree, with explicit
+review for each. Never republish processed envelopes or recreate their specs. Keep
+the archive available for receipt lookup; do not delete it or force-rewrite its
+history. If a cap or divergence has already prevented synchronization, stop and
+reconcile both histories and store markers with an advisor before moving data;
+starting over without receipts can duplicate spec writes.
+
+Every write publishes before it becomes local history. `publish --file` and
+`process` (dismiss, create or comment) first pull and validate the remote, build
+one new commit on that tip, and push it; the accepted local branch moves only
+after the remote accepts the push. If another clone published in between, the
+push is refused as a non-fast-forward. The command then pulls again and builds a
+fresh commit on the new tip (up to four attempts). A failed push is retried only
+when a fresh remote-tip probe confirms that the tip moved. Other failures stop
+immediately and show bounded Git stderr, including hook or authentication errors.
+Accepted commits are never
+rewritten, and the tool never forces, merges or rebases. So sender and receiver
+sites can interleave publications and receipts freely, and nobody needs to pull
+before writing.
+
+Because of that, `process` needs the intake destination to be reachable
+(`pending` does not, unless `--reconcile` is supplied). If the receipt cannot be
+published after a create or comment, the operation journal stays. Rerun the same
+`process` command: it finds the confirmed spec write by its marker and publishes
+the receipt without writing again. `aida intent publish` without `--file` pulls and then pushes the accepted
+tip, which is a no-op when the remote already has it. Divergence is only possible
+when the remote history was rewritten outside AIDA (for example a force push).
+`pull` and every write then refuse and leave the accepted branch unchanged.
+Review both histories with an advisor.
+
+`list` defaults to pending; `--all` includes processed entries. Pending performs
+no spec write and creates no receipt. Dismiss creates a receipt only. Create
+explicitly creates a draft task, while comment appends the title and body to an
+existing spec. Both require an attached git-canonical home store and use the
+ordinary authorized CLI writers. Receipts contain exactly `version: 1`, the full
+`checksum`, `action`, `operation` (a UUID), and a destination UUID for create/comment
+under `receipts/<sha256>.json`. Receipts are immutable and never enter envelopes.
+Processing writes a private durable operation journal before crossing into the
+store; the task tag or comment marker records its random operation identity.
+Retry recovers a confirmed successful write without repeating it. After a writer
+fails to spawn, exits, or is killed on timeout, a fresh canonical scan checks the
+operation marker. If absent, the journal is removed and retry is available; writer
+stderr is bounded and shown on failure. If evidence cannot be read or is ambiguous,
+the journal remains and automatic replay refuses. If a receipt already exists,
+retry compares any retained local journal's store evidence with the receipt's
+operation UUID, action and destination. A match clears the journal left after a
+successful push. A different operation reports the orphaned duplicate write
+(including comments on the same target) for operator reconciliation and retains
+the journal; it never silently adopts another clone's receipt after a local spec
+write.
+
+For a journal left by a crashed parent, first independently confirm that the old
+writer and its helpers have stopped. Then run
+`aida intent process <checksum> --action pending --reconcile` to check current
+store evidence and clear only an unconfirmed journal. `--reconcile` is the explicit
+assertion that the old writer has stopped. It also clears an unconfirmed journal
+when another clone has already published a receipt, returning that receipt without
+a new store write. If a marker exists, use the original create/comment action and
+target to recover its receipt instead. Different-store or ambiguous markers refuse.
+Never remove journals manually and blindly repeat a store write.
+
+All intake commands honor `--json` and global `--format json`; otherwise they
+print human-readable results. Receipt destination UUIDs remain stable in the wire
+files. CLI receipt views resolve them to spec IDs when the home store is available,
+and keep the UUID when listing from an observation-only clone.
+<!-- doc-intent: shaped by TASK-3096 -->
+
+### `aida condition check`
+
+Check a typed condition without changing requirements:
+
+```bash
+aida condition check 'spec:<spec-id>=completed'
+aida condition check 'pr:2577=merged' --json
+aida condition check 'release:>=0.17'
+aida condition check 'date:2026-12-01'
+aida condition check 'query:tag=operator-held,status=approved count>=5'
+aida condition check 'manual:joe'
+```
+
+The result is `met`, `not-met`, `unknown`, or `manual`. All four exit zero;
+malformed conditions and unreadable or missing spec data exit nonzero.
+`unknown` means the PR or release could not be observed and must not trigger
+a handoff or resurface a spec. `manual` always waits for the named person.
+`--format json` and `--json` emit the same condition, verdict and observation.
+
+Dates use UTC. Releases compare the highest local dotted numeric Git tag,
+ignoring prerelease and non-version tags; this does not fetch remote tags.
+With no release tags, every release comparison is `not-met`, including `<`
+and `<=`; no implicit zero version is assumed.
+Queries combine tag, status, type and feature filters with AND and count only
+non-archived specs. Comparisons accept `>=`, `>`, `<=`, `<`, and `=`.
+Spec and query checks read canonical objects strictly (or an explicit YAML
+store selected with the top-level `aida --file` option); archived SQLite stores
+must be migrated first.
+
+This first slice supplies the language and read-only checker. Deferral write
+gates, migration, scheduled resurfacing and relay/recurrence integration follow
+in separate slices.
+<!-- trace:STORY-2402 | ai:codex -->

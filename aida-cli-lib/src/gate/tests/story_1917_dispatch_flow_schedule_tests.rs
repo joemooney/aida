@@ -2875,6 +2875,20 @@ fn story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its
 // trace:BUG-2398 | ai:codex
 #[test]
 fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // The real CLI child qualifies its presenter by its actual PID namespace.
+    // Mint fixture grants in that same namespace instead of the unit-test
+    // default host namespace; keep production validation intact.
+    // trace:TASK-2861 | ai:codex
+    let ns = aida_core::local_pid_ns();
+    crate::gate::review_authority::with_pid_namespace(ns.as_deref(), || {
+        ungranted_artifact_requires_fresh_authorized_review_in_namespace();
+    });
+}
+
+fn ungranted_artifact_requires_fresh_authorized_review_in_namespace() {
     use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
     let mut f = FlowFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
@@ -2908,6 +2922,18 @@ fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() 
     let ungranted = rv::current_verdict(&f.root, "TASK-100").unwrap().body;
     std::fs::create_dir_all(rv::verdict_path(&f.root, "PR-601").parent().unwrap()).unwrap();
     let reviewer = sa::test_support::mint_grant_for(&f.root, &f.principal, "reviewer", &[]);
+    // The matching CLI uses the live namespace, whereas in-process unit checks
+    // default to host tokens. Pin this fixture contract before spawning it.
+    // trace:TASK-2889 | ai:codex
+    let reviewer_grant = sa::read_grant(&reviewer).unwrap();
+    let start = aida_core::liveness::process_start_identity(std::process::id()).unwrap();
+    let expected = ra::qualify_with_pid_ns(
+        ra::process_token("proc", std::process::id(), Some(&start)),
+        aida_core::local_pid_ns()
+            .as_deref()
+            .filter(|ns| *ns != "4026531836"),
+    );
+    assert_eq!(reviewer_grant.binding, vec![expected]);
     f.ambient.set_key(sa::GRANT_ENV, &parent);
     f.ambient.unset_key("AIDA_SESSION_ID");
     let gh_body = serde_json::json!({"headRefOid":head, "headRefName":"feature-2398", "baseRefName":"main", "state":"OPEN", "mergeStateStatus":"CLEAN", "title":"fixture (TASK-100)"});
@@ -2966,7 +2992,9 @@ fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() 
             } else {
                 DispatchStatus::Failed
             },
-            "{result:?}"
+            "{result:?}\n{}",
+            std::fs::read_to_string(f.root.join(".aida/dispatch").join(&result.log_path))
+                .unwrap_or_else(|err| format!("dispatch log unavailable: {err}"))
         );
         if pr != 603 {
             assert!(!result.summary.contains("with green CI"), "{result:?}");

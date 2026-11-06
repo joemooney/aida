@@ -943,16 +943,17 @@ impl Store {
             // attempt. Retry this head at most once for a transient lease/setup blocker.
             // An ambiguous or still-live child retains the terminal refusal.
             // trace:BUG-2450 | ai:codex
-            attempt.phase = if phase == Phase::Exited
+            let setup_failed = phase == Phase::Exited
                 && !attempt.setup_retry
                 && !attempt.reviewer_spawning
-                && attempt.descendants_gone()
-            {
-                Phase::Failed
-            } else {
-                phase
-            };
-            attempt.diagnostic = diagnostic.map(|d| bounded_diagnostic(&d));
+                && attempt.descendants_gone();
+            attempt.phase = if setup_failed { Phase::Failed } else { phase };
+            // This diagnostic also identifies the setup conversion on the next
+            // tick; ordinary Failed transitions remain freely retryable.
+            // trace:TASK-3112 | ai:codex
+            attempt.diagnostic = diagnostic.map(|d| bounded_diagnostic(&d)).or_else(|| {
+                setup_failed.then(|| "queue setup exited without a diagnostic".to_string())
+            });
             Ok(attempt.clone())
         })
     }
@@ -1260,7 +1261,7 @@ fn select(
             anyhow::ensure!(known, "notification identity changed; pending message retained");
             return Ok(Action::Notify(notice.clone()));
         }
-        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry))) {
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))) {
             // trace:TASK-1993 | ai:claude
             return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head, route it to the advisor, or retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
         }
@@ -1276,7 +1277,10 @@ fn select(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed);
+        // Only Exited->Failed setup conversions carry a diagnostic. Preflight
+        // and spawn failures do not consume a retry; preserve an inherited one.
+        // trace:TASK-3112 | ai:codex
+        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.diagnostic.is_some() || a.setup_retry));
         let attempt = Attempt { setup_retry, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude

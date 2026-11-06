@@ -96,7 +96,7 @@ pub(crate) fn chain_guard_into(hook: &str) -> Result<String> {
         anyhow::bail!(
             "the pre-push hook starts with `{first}`, which is not a shell script — the main \
              guard chains in as sh code, so it cannot go in front of it. Add the guard call \
-             to that hook yourself (docs/multi-hub-sync.md)"
+             to that hook yourself (docs/advanced/multi-hub-sync.md)"
         );
     }
     Ok(format!("{first}\n{}{rest}", guard_chain_block()))
@@ -131,7 +131,7 @@ pub fn install_main_guard(project_root: &Path, force: bool) -> Result<()> {
         Some(_) => anyhow::bail!(
             "a custom pre-push hook exists at {} — not changing it. Re-run with --force to \
              chain the main guard in front of it, or add the guard call to it yourself \
-             (docs/multi-hub-sync.md)",
+             (docs/advanced/multi-hub-sync.md)",
             pre_push.display()
         ),
     };

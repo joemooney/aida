@@ -863,6 +863,12 @@ pub trait Forge {
     /// `gh pr create` / `glab mr create` (or push-options) / pure-git no-op.
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef>;
 
+    /// Update only the title of an existing change; unsupported providers refuse.
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, _id: u64, _title: &str) -> Result<()> {
+        anyhow::bail!("this forge cannot update a change title")
+    }
+
     /// `gh pr view` for the branch's open change. Returns a [`ChangeLookup`]
     /// (STORY-516) so callers keep the BUG-257 transient-vs-definitive
     /// distinction the orchestrator's phase-1 verdict depends on.
@@ -1216,6 +1222,44 @@ pub(crate) fn train_gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
 }
 
+/// Read a condition's PR merge state through the shared forge boundary.
+/// Missing tools, failed reads and malformed states provide no settled answer.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn observe_github_pr_merged(root: &Path, number: u64) -> Observed<bool> {
+    let Some(gh_bin) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh is unavailable".into());
+    };
+    observe_github_pr_merged_with_binary(root, &gh_bin, number, std::time::Duration::from_secs(15))
+}
+
+// Explicit executable and timeout keep adapter tests independent of global PATH.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn observe_github_pr_merged_with_binary(
+    root: &Path,
+    gh_bin: &Path,
+    number: u64,
+    timeout: std::time::Duration,
+) -> Observed<bool> {
+    let mut command = Command::new(gh_bin);
+    command
+        .current_dir(root)
+        .args(["pr", "view", &number.to_string(), "--json", "state"]);
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(command, timeout))
+        .and_then(|stdout| {
+            let value: serde_json::Value = match serde_json::from_str(&stdout) {
+                Ok(value) => value,
+                Err(error) => {
+                    return Observed::Transient(format!("invalid PR state JSON: {error}"))
+                }
+            };
+            match value.get("state").and_then(serde_json::Value::as_str) {
+                Some("MERGED") => Observed::Known(true),
+                Some("OPEN" | "CLOSED") => Observed::Known(false),
+                _ => Observed::Transient("missing or unrecognised PR state".into()),
+            }
+        })
+}
+
 /// How far `head` is behind `base` on GitHub (the compare API's
 /// `behind_by` for `base...head`), bounded by the forge call timeout. Any
 /// failure to run or answer is `Transient`, and a reply that is not a count is
@@ -1237,6 +1281,32 @@ pub(crate) fn github_compare_behind_by(root: &Path, base: &str, head: &str) -> O
         crate::FORGE_CLI_CALL_TIMEOUT,
     ))
     .and_then(|s| parse_behind_by(&s))
+}
+
+/// Bounded merge-history read for pipeline alarms. Callers validate the
+/// updated-order completeness bound before treating this as last-merge evidence.
+// trace:TASK-3075 | ai:codex
+pub(crate) fn github_recent_merge_rows(root: &Path) -> Observed<String> {
+    let Some(gh) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh is unavailable".into());
+    };
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root).args([
+        "pr",
+        "list",
+        "--state",
+        "merged",
+        "--search",
+        "sort:updated-desc",
+        "--limit",
+        "100",
+        "--json",
+        "mergedAt,updatedAt",
+    ]);
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        cmd,
+        std::time::Duration::from_secs(10),
+    ))
 }
 
 /// The compare API's `behind_by` field: a count is settled, anything else
@@ -1978,6 +2048,17 @@ impl Forge for GitHubForge {
         ForgeKind::GitHub
     }
 
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        let out = self.gh(&["pr", "edit", &id.to_string(), "--title", title])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "could not update change {id} title: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
         let mut args = vec![
             "pr".to_string(),
@@ -2712,6 +2793,17 @@ impl Forge for GitLabForge {
     }
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
+    }
+
+    // trace:TASK-2891 | ai:codex
+    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        let out = self.glab(&["mr", "update", &id.to_string(), "--title", title])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "could not update change {id} title: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
@@ -4913,6 +5005,9 @@ pub(crate) mod fake {
         /// Every `open_change` request.
         // trace:BUG-HOME-038 | ai:claude
         pub(crate) opened: Arc<Mutex<Vec<OpenChange>>>,
+        // trace:TASK-2891 | ai:codex
+        pub(crate) retitled: Arc<Mutex<Vec<(u64, String)>>>,
+        pub(crate) retitle_error: Option<String>,
     }
 
     impl RecordingForge {
@@ -4932,6 +5027,8 @@ pub(crate) mod fake {
                 readied: Arc::new(Mutex::new(Vec::new())),
                 opens_as: None,
                 opened: Arc::new(Mutex::new(Vec::new())),
+                retitled: Arc::new(Mutex::new(Vec::new())),
+                retitle_error: None,
             }
         }
 
@@ -4962,6 +5059,14 @@ pub(crate) mod fake {
         }
         fn kind(&self) -> ForgeKind {
             ForgeKind::GitHub
+        }
+        // trace:TASK-2891 | ai:codex
+        fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+            if let Some(error) = &self.retitle_error {
+                anyhow::bail!("{error}");
+            }
+            self.retitled.lock().unwrap().push((id, title.to_string()));
+            Ok(())
         }
         fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
             self.opened.lock().unwrap().push(req.clone());
