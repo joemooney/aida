@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T15:31:11.005407227Z
+modified_at: 2026-11-06T15:31:17.212354482Z
 req_type: Task
 tags:
 - architecture
@@ -312,6 +312,12 @@ comments:
   created_at: 2026-11-06T15:21:49.756091819Z
   modified_at: 2026-11-06T15:21:49.756091819Z
   session_id: 01a1b170d4e7
+- id: 01a1b17c-525c-7d32-aa5b-5efda5796e43
+  author: joe
+  content: 'ADVISOR RULING (execution mode): guided → drain for S1a only. Reason: guided made every headless lane sketch-only (three punts), and S1a is an inventory plus guard with no runtime or authority change, still gated by independent review and CI. S1b, S2 and S3 (TASK-3225, 3223, 3224) stay guided. The lane IMPLEMENTS S1a per the 07:10 signoff; no more sketches.'
+  created_at: 2026-11-06T15:31:17.212354482Z
+  modified_at: 2026-11-06T15:31:17.212354482Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
