@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T19:35:03.801537826Z
+modified_at: 2026-11-06T19:35:17.347034715Z
 req_type: Story
 tags:
 - architecture
@@ -178,6 +178,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings (Python digest stability, golden keys) are fixed in source and the slice-A API still matches the signed-off sketch and amendment, but the head merge of main (28ff4ec, #3504) brought 3 ambient-env sites the ledger does not record, so the PR''s own ratchet gate will fail at 19139c4; CI was still queued at review time.. No triage reason was given.'
   created_at: 2026-11-06T19:35:03.801536321Z
   modified_at: 2026-11-06T19:35:03.801536321Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b25b-9ca3-7a03-93b4-5561f5a9a317
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 19139c41d4b7
+    Recorded: 2026-11-06T19:32:04.516026622+00:00
+    Findings:
+    1. BLOCKING: the ledger is stale at head 19139c41d4b. Merge 19139c4 pulled in main's #3504 (28ff4ec), which adds 3 ambient-environment sites that scripts/exec-context-legacy.json does not record. The ledger is byte-identical between 1652c42 and 19139c4. The 3 sites: aida-cli-lib/src/ci_relay.rs:518 'std::env::var(&e.token_env)'; tests/test_work_ci_relay.py:21 'os.environ.get("AIDA_TEST_BIN", ...)'; tests/test_work_ci_relay.py:67 'os.environ.items()'. All 3 files are git-tracked and inside the scan roots, so check(scan(), ledger) raises 'new sites (forbidden)' and the 'ExecContext environment ratchet' step in CI (gates) fails at this head. Fix: rescan at the current head and add the 3 entries to the bootstrap ledger. This is legitimate because origin/main still has no ledger, so check_growth is skipped. Update the ceiling, then re-run python3 scripts/check-exec-context.py --base origin/main. Expect this to recur: each main merge before landing can add sites, so regenerate the ledger right after every update-branch or merge from main, before re-requesting review.
+    2. Docs carry hard-coded counts that the fix above makes wrong: OVERVIEW.md:4 and docs/internal/testing/exec-context-migration.md (inventory table, which says aida-cli-lib 890, tests 91, total 1,217, plus the '86 keys, 91 occurrences' and 'current inventory to 1,217 sites' prose) must match the regenerated ledger. The doc should name the ledger's ceiling field as the source of truth rather than restating numbers that every main merge invalidates.
+    3. Repo-rule violation (CLAUDE.md: per-change notes go in the PR body and an aida comment, not AGENTS.md or OVERVIEW.md). The paragraph prepended at OVERVIEW.md:1-7 (Python AST encoding, golden keys, '1,217 exact legacy sites') and the last 2 sentences of the new AGENTS.md 'Execution inputs' section (about the ast.dump-independent encoding and golden keys) are round-specific implementation notes. A prepended paragraph conflicts with every open PR. Remove them, and keep only the architecture paragraph at OVERVIEW.md:410-417 and the first part of the AGENTS.md section.
+    4. Round-1 F6 / round-2 F2 is still unmet: there is no green exact-head CI. At review time run 42278870466 (head 19139c4) was still queued for all 7 CI jobs and merge-hold-gate. The new python_expression() normalizer and golden-key tests (tests/test_exec_context_ratchet.py: test_python_site_golden_keys, test_python_encoding_ignores_absent_optional_fields, test_rust_site_golden_key) have never passed on the CI runner's Python, which is the interpreter that broke round 2. Re-review must cite a fully green CI run at the new head, including the gates job's ExecContext ratchet step.
+    5. Hardening (non-blocking): rust_sites does not handle 'extern crate std as s;', so a site written as 's::env::var("X")' evades the zero-new-sites gate. The 'Limits' paragraph of the migration doc does not list this gap. Either resolve 'extern crate <x> as <alias>' into the alias table, with a mutant fixture, or document it next to the reexport/macro limits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:35:10.755144555Z
+  modified_at: 2026-11-06T19:35:10.755144555Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
