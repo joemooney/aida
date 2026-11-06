@@ -1,0 +1,29 @@
+id: 01a1b04e-6308-76e1-a1e9-95646366652e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-873
+title: 'non-blocking (cosmetic): scripts/test-time-budget.toml header calibrates from 9…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2020, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): scripts/test-time-budget.toml header calibrates from 9 runs, not the brief's 10; the data dir holds only 9 (disclosed in the header). Add a tenth run on a later recalibration if wanted.
+
+  PR: #3488
+  Reviewed sha: 346b7b4b04cc1ba841daf476ec03628653bbe14c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T10:01:29.608642844Z
+modified_at: 2026-11-06T10:01:29.608642844Z
+req_type: Task
+tags:
+- carried-from:TASK-2020
+- finding-hash:a627a254
+- from-review:PR-3488
+- kind:carried-forward
+filed_at:
+  code_sha: 7823b3899714cb3bfc5ae3b76d6953bf0a3ed0da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2aeb7cc34b1
+  vendor: claude
