@@ -232,6 +232,14 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID>` already renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
 
+`show` reads the requested spec from canonical YAML without opening the ID
+allocator. Cache-refresh hints use a nonblocking lock on this path; contention
+serves the committed snapshot with a `deferred` stale label. Optional Git linkage
+has a shared 1.2-second deadline and reports partial or unknown evidence when it
+expires. Usage events split backend opening into `open.backend`, `open.location`
+and `open.cache` sub-spans for diagnosing remaining latency.
+<!-- trace:BUG-2466 | ai:codex -->
+
 **How `aida show` keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first `show` runs the full search as before and, if it finds nothing, notes that. The next `show` runs the full search once more, this time recording exactly which commits it covered. Later shows only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
 
 **Linked documentation in `aida show`.** The human view lists a **Documentation** section when any Doc entry is linked to the spec, whether the spec references the Doc or the Doc was filed about the spec with `aida doc add --about`; archived, Rejected and Superseded Docs are omitted. Each entry shows its ID, title, audience, scenario and tags, how it is linked, and the `aida doc show <DOC-ID>` command that prints it. Entries are grouped by authorship as recorded in their tags: `human` marks a human-authored explanation, `generated` or `ai-generated` marks generated prose, and anything else is listed as documentation whose authorship is not recorded. Nothing is written to the spec, and the TOON and JSON output are unchanged. The section is absent when no eligible Doc is linked. <!-- trace:TASK-1471 | ai:claude ai:codex -->
@@ -520,7 +528,7 @@ Publication requires `--reviewed` when adding a file. It retains the exact
 validated bytes at `observations/<sha256>.json`; an exact duplicate is a no-op,
 while different serialization with the same digest refuses. Full reachable
 history must be orphaned, linear and additive, containing only non-executable
-observation JSON and receipt JSON. Unknown paths, empty trees, foreign commit
+observation JSON, processing-receipt JSON, and enrolled CI-result JSON. Unknown paths, empty trees, foreign commit
 metadata, links, tampering, rewritten/deleted files, invalid receipts and denied
 text refuse, including in intermediate commits. Validation is bounded to 4096
 commits, 8192 files and 32 MiB of blob data, with a 30-second deadline checked
@@ -644,3 +652,21 @@ This first slice supplies the language and read-only checker. Deferral write
 gates, migration, scheduled resurfacing and relay/recurrence integration follow
 in separate slices.
 <!-- trace:STORY-2402 | ai:codex -->
+
+
+### `aida intent ci` — restricted work CI return channel
+
+<!-- trace:STORY-2480 | ai:codex -->
+
+`intent ci enroll --file <profile.json> --reviewed` enrolls a clone-local CI
+profile after live forbidden branch/tag push probes. Home alone creates retained
+requests with `intent ci request --attempt <positive-u32> --sha <full-sha>`.
+`intent ci poll` performs one bounded outbound work polling pass;
+`intent ci process` validates returned receipts at home and publishes the stable
+native check `aida/work-ci`. Home assigns attempts, retaining immutable exact-SHA
+`refs/aida/ci/<attempt>` refs; work pipeline IDs never grant admission.
+
+Read [setup, server enforcement, supported inventory and crash recovery](../agents/work-ci-relay.md)
+before enrollment. Unsupported dynamic job/test inventory refuses. Work receives
+no home status/API credential. CI results share the existing isolated intake
+transport and lock; there is no separate request registry or automatic rollout.
