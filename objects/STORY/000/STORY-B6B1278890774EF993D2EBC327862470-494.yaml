@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-06T17:28:00.167095902Z
+modified_at: 2026-11-06T17:28:10.497307056Z
 req_type: Story
 tags:
 - area:advisor
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-11-06T16:51:28.048937370Z
   modified_at: 2026-11-06T16:51:28.048937370Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1e7-5601-7260-8508-8965a021bab4
+  author: joe
+  content: 'Advisor 10:31: guided mode, so the first lane writes the sketch only (an architecture change needs a sketch on the spec plus advisor signoff). The sketch must cover: (1) a review-watch/auto-rework/auto-train rebind that survives an advisor grant rotation without operator acts; (2) lane dispatch as an aida command, replacing advisor-scripts/fill-slots3.sh plus deputy run 3; (3) host-merge of conflicting Codex PRs as an aida command; (4) liveness that is correct from a sandboxed PID namespace (see BUG-2468); (5) it depends on BUG-2467, so an advisor launched by agent new keeps its delegations. Name each script it retires.'
+  created_at: 2026-11-06T17:28:10.497307056Z
+  modified_at: 2026-11-06T17:28:10.497307056Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
