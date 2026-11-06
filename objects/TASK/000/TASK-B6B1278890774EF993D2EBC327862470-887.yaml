@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T16:52:13.853812178Z
-modified_at: 2026-11-06T17:24:49.537003910Z
+modified_at: 2026-11-06T17:24:51.851749038Z
 req_type: Task
 tags:
 - carried-from:BUG-2464
 - finding-hash:41510bb2
 - from-review:PR-3510
 - kind:carried-forward
+comments:
+- id: 01a1b1e4-4e0b-7b02-8da6-e221f89ff346
+  author: joe
+  content: 'Advisor ruling 10:26: approved, and TASK-2937 is folded in. Scope: (1) when head_has_unpushed is None (probe timeout or bwrap failure), unshipped() falls back to the prior moved && pushed_since==Some(false) signal, so a seat with real local commits reports no-pr reason=unpushed-commits. (2) In the host_recorded_clone branch (headless_background.rs ~502), skip head_has_unpushed_commits when facts is None. LIGHT gate: one targeted cargo test on headless_background plus make check-ci-fast. Add a unit test for the None-probe fallback.'
+  created_at: 2026-11-06T17:24:51.851749038Z
+  modified_at: 2026-11-06T17:24:51.851749038Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1de-81d1-7d93-9528-12065eae7989
   author: joe
