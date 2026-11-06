@@ -1,14 +1,8 @@
 job: mail-backlog-guard-route-advisor
-last_run: 2026-11-03T16:01:42.946877031Z
+last_run: 2026-11-06T14:22:41.394630919Z
 last_by:
   seat: advisor
-  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-watch, 17h30m old: PR-3424 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 17h07m old: Review blocked by retained lease 01a1ad03267f; advisor: unread [request] from review-watch, 14h25m old: PR-3449 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 11h21m old: PR-3424 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from implementer, 4h02m old: Queue-work lane exited without changes'
-due_since: 2026-11-04T05:14:44.203881337Z
-due_reason: on CronJobFired:mail-backlog-guard-route-advisor
-due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-06T12:55:23Z
-  job: mail-backlog
-  error: 'advisor: unread [request] from review-watch, 17h30m old: PR-3424 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 17h07m old: Review blocked by retained lease 01a1ad03267f; advisor: unread [request] from review-watch, 14h25m old: PR-3449 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 11h21m old: PR-3424 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from implementer, 4h02m old: Queue-work lane exited without changes'
+note: Read all 5. Four were stale (PR-3424 merged, PR-3449 host-merged, lease 01a1ad03267f gone). The fifth (lease 01a1b0e3d4fa blocking PR-3493) was ended after verifying the seat commit is an ancestor of the PR head.
