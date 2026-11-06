@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T20:28:52.910927707Z
+modified_at: 2026-11-06T20:28:55.507363651Z
 req_type: Task
 tags:
 - architecture
@@ -400,6 +400,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3: every 16:22 ruling item and round-2 findings 3-6 are met with mutants; CI at head is unverified (all 8 jobs QUEUED behind a 20+ run backlog), and the script argv sink scan still misses global-option and variable-indirected writers, including real ''git -C .aida-store commit''. Defects 2-4 are minor follow-ups; under the 2-round cap the advisor may rule merge-plus-follow-up once Gates is green.. No triage reason was given.'
   created_at: 2026-11-06T20:28:52.910926366Z
   modified_at: 2026-11-06T20:28:52.910926366Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b28c-d0db-7b80-a6ff-364eb18bf466
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 996c0c2bf43b
+    Recorded: 2026-11-06T19:42:52.970481927+00:00
+    Findings:
+    1. 1. UNVERIFIED (CI): at 996c0c2bf43b all 8 PR jobs (gates, lib-0/1, cli-0/1, rest, contracts, merge-hold-gate) are QUEUED since 19:27Z behind a runner backlog (20+ queued runs, 1 in progress), so there is no remote evidence for the 'Store writer inventory ratchet' or 'Store writer inventory mutation fixtures' steps. These are the steps that were red or skipped at 467799d. Head is 0 behind main 28ff4ec9ac7. Required: Gates shard green at this head, including both new steps. If main moves first, regenerate.
+    2. 2. MAJOR (script writer coverage, round-2 finding 2 not fully closed): argv_writer() (scripts/check-store-writers.py:44-53) checks only argv[1], and the shell scan (:294) fires only on a literal 'aida'/'git' token. Reproduced in memory against script_sites(): 'git -C .aida-store commit', 'aida --quiet edit X', '"$AIDA_BIN" queue add', 'aida done X' and 'aida pull' all yield no site. Real instances: scripts/multi-clone-harness.sh:429-433 (git -C .aida-store add/commit, which writes the canonical store directly) and :259,:716 ("$AIDA_BIN" add / queue add). AIDA_WRITERS also omits clear store writers: done, del, pull, push, ship, init, import, unclaim, archive/unarchive, defer/undefer, assign/unassign, triage, cache, regen, rel, spec, mandate, schedule. Fix: skip git global options (-C <dir>, -c k=v, --git-dir=, --work-tree=) and aida global flags before reading the subcommand; treat a variable executable whose name matches AIDA/GIT conservatively as aida/git; invert the aida vocabulary to a read-only allowlist (unknown subcommand = writer candidate). Add mutants for 'git -C .aida-store commit', 'aida --json edit', '"$AIDA_BIN" add' and 'aida done'.
+    3. 3. MINOR (Python writer coverage): script_sites() (scripts/check-store-writers.py:246-253) only inspects subprocess.* calls with a literal list argv. Reproduced misses: subprocess.run('aida edit X', shell=True), os.system('aida edit X'), 'from subprocess import run; run(["aida","edit",x])', subprocess.run([AIDA,'edit',x]), subprocess.run(['git','-C',d,'commit',...]), os.symlink and shutil.copytree. Either cover these (string commands via shlex, imported run/call/Popen names, symlink/link/copytree/truncate kinds, the same global-option skip as finding 2) or name them explicitly in the doc's Limits section as TASK-3223 cutover blockers.
+    4. 4. MINOR (discovery fail-open and doc accuracy): sources() (scripts/check-store-writers.py:142) skips every file named test_*.py/rs or *_tests.rs, whatever its cfg(test) gating, so a new production module with such a name escapes the ratchet. Today's test_home/test_exec/... are cfg(test)-gated, so this is latent. Extensionless executable hooks are never scanned (only *.py/*.sh): aida-core/templates/hooks/aida-commit-msg is missed, yet docs/internal/security/store-mutation-writers.md:118-120 says the scanner covers all aida-core/templates. Fix: include shebang-detected extensionless scripts under SCRIPT_ROOTS, and for Rust rely on the cfg(test) mod declaration rather than file names (or name the residual in Limits). Correct the doc.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:28:55.387004028Z
+  modified_at: 2026-11-06T20:28:55.387004028Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
