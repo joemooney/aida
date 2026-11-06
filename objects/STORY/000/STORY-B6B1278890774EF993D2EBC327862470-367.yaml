@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T10:23:43.099228497Z
+modified_at: 2026-11-06T10:53:38.992130771Z
 req_type: Story
 relationships:
 - rel_type:
@@ -195,6 +195,18 @@ comments:
   content: 'PR #3493 round 3: fixing train-closed confirmation with an exact member/head receipt, missing-local-head squash lookup, one-read Open keep answers, per-sweep base fetch reuse, and settled metadata refusals with retry notices. Finding 5 uses the review-permitted suspend alternative: the untyped live member gate suspends all members on any pre-land refusal (including a lapsed mandate), retaining the open train and holds, until the gate has typed refusal/read-error outcomes. Added a live adapter/land regression and documented this deliberate limitation in docs/plans/2026-11-06-story-2401-confirmed-negatives.md. AC3 train journal and AC4 workflow digest remain unimplemented; publication must use (Refs STORY-2401). Native seat cannot reword d726665ca8f or create commits; host publication must correct its completing subject.'
   created_at: 2026-11-06T10:23:43.099228497Z
   modified_at: 2026-11-06T10:23:43.099228497Z
+  session_id: 01a1b05aed88
+- id: 01a1b07c-28fd-7e60-908a-4d83709b12f8
+  author: joe
+  content: 'Round-3 targeted validation passed: cargo test --profile agent -p aida-cli-lib --lib story_2401: 33 passed, zero failed (12583 unrelated tests filtered out). Covers real-Git closed train receipt with matching head, absent local squash head, sweep fetch reuse/lifetime, one-read keep/refusal answers, retry notices and live pre-land suspension with the train/hold retained. Native Refs publication declaration recorded successfully; edits remain uncommitted. make check-ci-fast remains in its final guards; result will follow.'
+  created_at: 2026-11-06T10:51:29.405598029Z
+  modified_at: 2026-11-06T10:51:29.405598029Z
+  session_id: 01a1b05aed88
+- id: 01a1b07e-2330-7fc1-8c31-8ee2734f1fc9
+  author: joe
+  content: 'Round-3 validation complete: 33 targeted story_2401 tests passed, make check-ci-fast passed all 38 gates, and git diff --check passed. Logs and the ten-file handoff inventory are in docs/plans/2026-11-06-story-2401-confirmed-negatives.md. Refs publication declaration recorded. No source/test blocker remains; host must create the new round commit, correct the historical completing subject if retaining it, and publish with the declared Refs subject. Existing merge hold remains authoritative. No commit, push, PR creation, merge, review recording or queue completion performed in this native seat.'
+  created_at: 2026-11-06T10:53:38.992130771Z
+  modified_at: 2026-11-06T10:53:38.992130771Z
   session_id: 01a1b05aed88
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
