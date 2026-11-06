@@ -293,6 +293,13 @@ jobs:
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
 
+      # Real production setup with fake Codex: stops at the managed-seat refusal.
+      # Requires the workspace binary; keep it out of the fast no-build suite.
+      # trace:TASK-3131 | ai:codex
+      - name: Shared-boundary production fixture refusal
+        if: matrix.shard == 'gates' && steps.changes.outputs.full_ci == 'true'
+        run: python3 -m unittest tests/test_containment_conformance_aida.py
+
       # Test-timing parser, budget gate and local test-profile reshape: pure
       # Python, no cargo. trace:STORY-1853 | ai:claude
       - name: STORY-1853 test-speed tooling tests
