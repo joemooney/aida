@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T13:57:59.379722929Z
+modified_at: 2026-11-06T14:01:51.930709837Z
 req_type: Task
 tags:
 - architecture
@@ -587,6 +587,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 8 F1 (PR #3449 reviewed e64a75816810): explicit advisor acceptance is still absent for handled SIGINT/SIGALRM/SIGTERM/Go SIGURG deferral after broker RECV (possibly indefinite for a blocking send without SO_SNDTIMEO), the Linux 5.19+ NEW_LISTENER|WAIT_KILLABLE_RECV floor for every vendor including Codex, and SCM_CREDENTIALS/non-SCM_RIGHTS EACCES plus SO_PASSCRED broker credentials (PID 0 in lane pidns). Please accept all three AC1 deltas explicitly on TASK-2708 or direct exactly-once/credential-forwarding redesign. Round 8 F2 takes the review-permitted acceptance-request option: also explicitly accept connected UDP sendmmsg EACCES and all named network sendmsg EACCES, with DNS A/AAAA/resolver/QUIC/mDNS impact, or direct scoped sendmmsg/named sendmsg brokering. Added exact-errno synthetic coverage and reachable nested-UDP live assertions; direct synthetic regressions pass, but Rust/live tests are untested=true because this lease has no lane job runner. Round 8 F4 additionally needs advisor confirmation of opt-in headless rollout and filing of interactive/background follow-up before AC2. No finding is disputed and no acceptance/completion is claimed. Round 8 F3 remains an exact-publication-head CI gate: e64a758 had three shards running; current head 75eb8ca95841 has queued/running CI and expected supervised hold. Two uncommitted files hold tests and evidence. Mechanical bdcec264 remains. This punt and the existing hold retain publication vetoes; native seat does not commit/push, clear holds, record verdicts or complete the queue.. No triage reason was given.'
   created_at: 2026-11-06T13:47:32.319555289Z
   modified_at: 2026-11-06T13:47:32.319555289Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b12a-73b9-7601-a5b6-66574351addd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3449):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 47307ed82396
+    Recorded: 2026-11-06T13:57:59.186869695+00:00
+    Findings:
+    1. GATE (blocking): the advisor ruling requires exact-head CI green on all shards plus Build, the required-live bwrap count, and lib-1's task_2708_target_socket_old_kernel_thread_file_tables. At 47307ed82396 run 42228832072 was still queued (all 7 shards) at 14:00Z, behind the in-progress run for 333b9c33. merge-hold-gate fails as the expected supervised hold. The next reviewer must confirm green at the head; no code change is needed for this item.
+    2. GATE (likely to recur): CI(gates) step 'Help golden snapshot co-change guard' failed with exit 2 at e64a75816810 (job 127910912617, which also failed Build) and again at 333b9c330633 (job 127922033412). Exit 2 in scripts/check-help-golden-cochange.sh:20-22 means git merge-base found nothing after the guard's --deepen=200 fetch (.github/workflows/ci.yml:818-824). This is the same failure as 2d054799. It is infra-shaped, not containment code, but the many main-merge commits on this branch make it likely to recur at 47307ed8. If it does, the operator needs to rerun the job or fix the guard's depth; don't paper over it in this PR.
+    3. GATE (unexplained): CI(lib-1) failed step 18 'Test time budget' at 333b9c330633 (job 127922033443, annotation: 'no parent commit to diff; every test is held to its strict limit'). This seat could not read the job log (results-receiver host denied), so the over-budget test is unknown. Confirm it does not recur at the head. If it is one of the new task_2708_ tests, add a budget entry with the measured time.
+    4. COSMETIC: docs/internal/testing/task-2708-round2.md cites the ruling as '2026-11-06 06:30 MST', but spec comment 62 was recorded at 13:27:46Z (06:27 MST). Optionally correct the timestamp the next time the doc changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T14:01:51.801776740Z
+  modified_at: 2026-11-06T14:01:51.801776740Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
