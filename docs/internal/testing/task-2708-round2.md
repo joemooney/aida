@@ -24,7 +24,10 @@ The binding 2026-11-06 advisor rulings govern this revision of PR #3449.
   arguments are copied and executed on the pinned socket, never checked then
   continued against mutable memory. Anonymous connected IPC and SCM_RIGHTS
   remain supported. Named sendmsg destinations of every family and sendmmsg
-  are conservatively refused. Ancillary messages other than SOL_SOCKET/SCM_RIGHTS
+  return EACCES, including connected UDP sendmmsg and named UDP sendmsg to a
+  reachable lane/descendant resolver. These are AC1 compatibility deviations
+  requiring advisor acceptance (Round 8 F2 below), not just unreachable-network
+  refusals. Ancillary messages other than SOL_SOCKET/SCM_RIGHTS
   (including explicit SCM_CREDENTIALS) now refuse with EACCES. An SO_PASSCRED
   receiver sees the host broker's credentials rather than the trapped sender's
   (the broker PID appears as 0 in the lane PID namespace). These additional
@@ -246,6 +249,17 @@ b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
   These are additional AC1 compatibility deviations, not evidence of sender
   impersonation support. The Round 7 punt requests an explicit acceptance or a
   direction to implement sender-credential forwarding with regression coverage.
+* UDP API compatibility (Round 8 F2): **advisor acceptance pending** alongside
+  F2 and ancillary credentials. The filter refuses every sendmmsg with EACCES,
+  including unnamed messages on connected UDP sockets. The broker also refuses
+  named sendmsg for every address family, even when socket_scope proves lane or
+  descendant ownership. This can break glibc parallel A/AAAA resolution using
+  connected sendmmsg, plus resolvers, QUIC and mDNS callers using named sendmsg,
+  even with a reachable resolver in a nested network namespace. The Round 8
+  request asks the advisor to accept both API restrictions explicitly or direct
+  sendmmsg brokering and scope-proven named network sendmsg support. Named
+  AF_UNIX sends must still refuse under the binding F4 ruling. Refusal tests
+  pin EACCES; they do not establish compatibility or advisor acceptance.
 
 
 ### Round 5 validation and handoff
@@ -336,3 +350,67 @@ Native-seat edits remain uncommitted; the host must honor the punt and existing
 merge hold. No source commit/push, review approval, hold clearance or queue
 completion was performed. Publication-head CI remains required after any
 future host publication.
+
+## Round 8 review
+
+<!-- trace:TASK-2708 | ai:codex -->
+
+This revision addresses the findings against `e64a75816810`. The seat starts at
+`75eb8ca95841`, which includes the host's main merge. The mechanical
+`bdcec264ee88` CI merge remains an ancestor. No production containment code is
+changed in this round.
+
+* F1: the three compatibility decisions remain **advisor acceptance pending**:
+  handled-signal deferral (possibly indefinite without SO_SNDTIMEO), Linux 5.19+
+  for every lane, and ancillary credential rejection/broker identity. The
+  current spec comments include the Round 7 punt and Round 8 review/rework,
+  with no new acceptance ruling. Round 5 F2 and Round 7 F3 above therefore
+  retain their pending labels. The new punt explicitly requests acceptance or
+  an exactly-once/credential-forwarding redesign; this finding is not disputed.
+* F2: take the review's acceptance-request option. The Round 5 list now also
+  names connected UDP sendmmsg and named network sendmsg, their EACCES results,
+  and their resolver/QUIC/mDNS impact. The existing nested-netns live regression
+  now uses reachable UDP sockets: connected send and unnamed sendmsg succeed,
+  a two-message connected sendmmsg returns EACCES without delivery, and named
+  sendto succeeds while named sendmsg returns EACCES on both connected and
+  unconnected sockets. The filter regression pins the exact seccomp EACCES
+  encoding. The synthetic broker regression pins named sendmsg EACCES with
+  lane/nested as well as foreign/unreadable scope evidence. These extend
+  existing tests, preserving the required-live count of nine. Acceptance of
+  both API restrictions is still requested, not assumed.
+* F3: no green-head claim. At inspection, reviewed head `e64a75816810` had
+  successful cli-0, cli-1, contracts and lib-1 checks, with lib-0, rest and gates
+  still running. The current PR head `75eb8ca95841` had contracts running and
+  the other six shards queued. Both heads had the expected supervised hold
+  failure. See the [reviewed-head CI run](https://github.com/joemooney/aida/actions/runs/42223458416)
+  and [current-head CI run](https://github.com/joemooney/aida/actions/runs/42224903365).
+  Neither establishes the required all-shards/Build result for a future
+  publication head. The next reviewer must check the required-live count,
+  fake-HOME result/diagnostic and old-kernel testcase evidence there.
+* F4: AC1 remains partial. Only two headless paths use the opt-in shared Claude
+  wrapper; interactive, background, coordinator and resume launches still
+  refuse under that opt-in. Advisor confirmation of the rollout gate and an
+  interactive/background follow-up slice remain required before AC2 evidence
+  work. This implementer does not claim that rollout decision or completion.
+
+### Round 8 validation and handoff
+
+* Direct execution of the edited embedded filter and synthetic broker Python
+  regressions passed (52 filter decisions; send bounds/namespace/queue suite).
+* An unfiltered positive control using the live regression's ctypes structures
+  delivered both sendmmsg datagrams, validating the two-message fixture layout.
+* All three edited embedded Python scripts compile; the live test count is nine.
+* `cargo fmt --all -- --check` and `git diff --check` passed.
+* `make check-ci-fast`: all 38 gates passed, including feature-disabled CLI,
+  TUI seam, containment conformance fixtures, formatting and documentation
+  checks. Optional Git ref refreshes reported read-only metadata; the gates
+  completed successfully.
+* Targeted `aida lane job run --wait 1 -- cargo test --profile agent -p
+  aida-cli-lib --lib task_2708_ -- --nocapture` was refused: lease
+  `01a1b105b8bf` has no lane job runner. No alternative Cargo test launch was
+  used. **untested=true** for the Rust harness and edited live assertions;
+  the two direct synthetic executions are not live-boundary evidence.
+
+The native seat leaves the two changed files uncommitted. The design-fork punt
+and supervised hold remain publication/merge vetoes. No source commit/push,
+review verdict, hold clearance or queue completion is performed.

@@ -829,6 +829,7 @@ cases += [('netlink_%d_denied' % proto, S, (socket.AF_NETLINK, socket.SOCK_RAW, 
 for name, nr, args, want in cases:
     got = run(ops, nr, args)
     assert got == want, '%s: %#x != %#x' % (name, got, want)
+assert run(ops,307,(3,0,1,0)) == (0x50000 | errno.EACCES)
 print('filter decisions ok: %d' % len(cases))
 "#
     );
@@ -931,6 +932,9 @@ print('udp to relay gets nothing')
 /// into a nested user+net namespace is still brokered (refused for a
 /// non-relay loopback port). Positive control: a socket made in the nested
 /// netns reaches a listener there, so the pass-through is real.
+/// Round 8 F2: reachable UDP still refuses sendmmsg and named sendmsg with
+/// EACCES; these compatibility deltas require advisor acceptance.
+// trace:TASK-2708 | ai:codex
 #[test]
 fn task_2708_live_lane_socket_connected_from_nested_netns_is_still_brokered() {
     if !live_available() {
@@ -963,11 +967,51 @@ flags=struct.unpack_from('H',fcntl.ioctl(d.fileno(),0x8913,struct.pack('16sH22x'
 fcntl.ioctl(d.fileno(),0x8914,struct.pack('16sH22x',b'lo',flags|1))
 n=socket.socket();n.bind(('127.0.0.1',0));n.listen()
 c=socket.socket();c.connect(n.getsockname());n.accept()[0].close()
+# Reachability controls distinguish deliberate API refusals from no route.
+receiver=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+receiver.bind(('127.0.0.1',0));receiver.settimeout(0.2)
+udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+udp.connect(receiver.getsockname())
+assert udp.send(b'connected-control')==17
+assert receiver.recv(64)==b'connected-control'
+assert udp.sendmsg([b'unnamed-control'])==15
+assert receiver.recv(64)==b'unnamed-control'
+class Iov(C.Structure):
+    _fields_=[('base',C.c_void_p),('size',C.c_size_t)]
+class Header(C.Structure):
+    _fields_=[('name',C.c_void_p),('namelen',C.c_uint),('iov',C.c_void_p),
+              ('iovlen',C.c_size_t),('control',C.c_void_p),
+              ('controllen',C.c_size_t),('flags',C.c_int)]
+class Mmsg(C.Structure):
+    _fields_=[('header',Header),('length',C.c_uint)]
+payload=C.create_string_buffer(b'blocked-query')
+iov=Iov(C.addressof(payload),len(payload.raw)-1)
+batch=(Mmsg*2)(*[Mmsg(Header(None,0,C.addressof(iov),1,None,0,0),0) for _ in range(2)])
+C.set_errno(0)
+rc=lib.sendmmsg(udp.fileno(),C.byref(batch),2,0)
+assert rc==-1 and C.get_errno()==errno.EACCES,(rc,C.get_errno())
+assert [msg.length for msg in batch]==[0,0]
+unconnected=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+for sender in (udp,unconnected):
+    assert sender.sendto(b'named-control',receiver.getsockname())==13
+    assert receiver.recv(64)==b'named-control'
+    try:
+        sender.sendmsg([b'blocked-query'],[],0,receiver.getsockname())
+        raise AssertionError('named UDP sendmsg allowed')
+    except OSError as e: assert e.errno==errno.EACCES,e
+try:
+    receiver.recv(64);raise AssertionError('refused UDP query delivered')
+except socket.timeout: pass
+print('UDP sendmmsg and named sendmsg refused with EACCES')
 print('lane socket brokered; nested socket passed through')
 "#,
     );
     assert!(
         output.contains("lane socket brokered; nested socket passed through"),
+        "{output}"
+    );
+    assert!(
+        output.contains("UDP sendmmsg and named sendmsg refused with EACCES"),
         "{output}"
     );
 }
@@ -1741,6 +1785,18 @@ with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as host, socket.socket(sock
             assert wait_response()==(len(payload.raw)-1,0)
             assert receiver.recv(1024)==b'no-host-egress'
         else: assert wait_response()==(0,-errno.EACCES)
+        # Named sendmsg refuses even with proven lane/descendant ownership.
+        # Pin that extra AC1 deviation separately from foreign-socket refusal.
+        iov=SendIov(C.addressof(payload),len(payload.raw)-1)
+        header=SendHeader(C.addressof(address),len(address.raw)-1,
+                          C.addressof(iov),1,None,0,0)
+        msg=Notification();msg.id=2;msg.pid=os.getpid();msg.data.nr=46
+        msg.data.args[:]=(host.fileno(),C.addressof(header),socket.MSG_DONTWAIT,0,0,0)
+        broker_send(-1,msg,None,None)
+        assert wait_response()==(0,-errno.EACCES),scope
+        try:
+            receiver.recv(1024);raise AssertionError('named sendmsg delivered')
+        except BlockingIOError: pass
     socket_scope=real_scope
 # Oversized datagrams retain message boundaries and are never truncated.
 x,y=socket.socketpair(socket.AF_UNIX,socket.SOCK_DGRAM)
