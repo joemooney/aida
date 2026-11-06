@@ -205,6 +205,10 @@ fn show_phase_accounting_preserves_aggregate_semantics() {
     );
     for sub in [
         "argv",
+        // trace:BUG-2466 | ai:codex
+        "open.backend",
+        "open.location",
+        "open.cache",
         "linkage.log",
         "linkage.enum",
         "linkage.content",
@@ -228,6 +232,10 @@ fn show_phase_accounting_preserves_aggregate_semantics() {
     // Sub-spans of the parallel linkage section each fit inside the
     // aggregate (a structural relation, not a timing threshold); the 1 ms
     // slack absorbs independent millisecond truncation.
+    // trace:BUG-2466 | ai:codex — open sub-spans preserve aggregate accounting.
+    for sub in ["open.backend", "open.location", "open.cache"] {
+        assert!(ms(sub) <= ms("open") + 1, "`{sub}` exceeds open: {record}");
+    }
     for sub in ["linkage.log", "linkage.enum", "linkage.content"] {
         assert!(
             ms(sub) <= ms("linkage") + 1,

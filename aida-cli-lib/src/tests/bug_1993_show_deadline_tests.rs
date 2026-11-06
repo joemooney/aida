@@ -213,7 +213,8 @@ fn show_linkage_phase_runs_under_one_deadline() {
     );
 
     let started = Instant::now();
-    let show = collect_git_linkage_until(&repo, &ids, Instant::now() + Duration::from_millis(1200));
+    // trace:BUG-2466 | ai:codex — exercise the production show budget.
+    let show = collect_git_linkage_until(&repo, &ids, Instant::now() + SHOW_LINKAGE_DEADLINE);
     let elapsed = started.elapsed();
     assert!(
         elapsed < Duration::from_millis(2000),
