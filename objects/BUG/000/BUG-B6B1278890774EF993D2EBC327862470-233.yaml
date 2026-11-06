@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T19:59:43.504463138Z
+modified_at: 2026-11-06T19:59:47.077611983Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -71,6 +71,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Delegation inheritance/narrowing, rotation, resume, detached and chain revalidation look correct and are tested, but none of the 5 acceptance criteria is traced (aida criteria: all untraced) and the detached Codex registry row records the effective set as an explicit selection; CI at head still queued.. No triage reason was given.'
   created_at: 2026-11-06T19:59:43.504461483Z
   modified_at: 2026-11-06T19:59:43.504461483Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b272-22f5-77a2-9399-83f96150e555
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2467):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 58a3c63ae01f
+    Recorded: 2026-11-06T19:49:30.455871737+00:00
+    Findings:
+    1. Traceability: all five acceptance criteria of BUG-b6b1278890774ef993d2ebc327862470-233 (ac70d987, acb17271, ac958507, ac32bf6b, ac63c1c5) report 'untraced no traced tests' in 'aida criteria'. Tests exist (aida-cli-lib/src/tests/bug_2467_delegator_launch_tests.rs: bug_2467_launched_delegators_mint_workers_without_widening covers ac70d987/acb17271/ac32bf6b; story_101_rotation_launch_tests.rs:bug_2467_rotation_retains_explicit_delegation_in_every_generation covers ac958507) but carry only 'trace:BUG-2467', not the criterion IDs. Add criterion trace anchors so 'aida criteria' shows them traced.
+    2. ac63c1c5 has no test: nothing asserts that the documented launch line 'aida agent new claude --role advisor --permission-mode auto' (no --delegate-seat) parses, passes validate_launch_delegable_seats/preflight and yields a child that inherits the parent set end to end through dispatch_agent_new. The existing tests call run_tracked_agent/apply_agent_default_flags directly and skip handle_agent_command/dispatch_agent_new. Add a dispatch-level test (or trace an existing one) for the exact standing-orders line.
+    3. agent_codex_background.rs:1503 (supervise_attempt) stamps the registry row's delegate_seats from read_grant(&init.grant_id).delegable_seats, i.e. the EFFECTIVE inherited set, not the operator's explicit --delegate-seat selection. agent_registry.rs:159 documents the field as 'explicit launcher narrowing; empty/legacy rows inherit the current validated parent', and docs/cli/06-roles-sessions.md says records without a selection inherit. For a detached Codex advisor launched without --delegate-seat the row records the full parent set as explicit, so agent_resume_ended (agent_launch.rs:1541) later refuses ('does not delegate X') if the parent was re-entered with fewer seats, instead of inheriting. Carry the requested selection (config.delegate_seats) into the supervisor init and record that; also avoid making the row registration fail on a grant read error via '?'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:59:46.933521077Z
+  modified_at: 2026-11-06T19:59:46.933521077Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
