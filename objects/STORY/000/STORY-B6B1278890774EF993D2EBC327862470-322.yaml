@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T12:25:47.504633968Z
+modified_at: 2026-11-06T12:25:54.706374922Z
 req_type: Story
 tags:
 - architecture
@@ -364,6 +364,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs content is accurate against PR-C code and covers every PR-D brief item, but PR CI is red at head: the gates shard fails ''Documentation landing smoke'' twice (original run + rerun), a pre-existing docs-only CI defect; two minor doc gaps to fix in the same round. No triage reason was given.'
   created_at: 2026-11-06T12:25:47.504632005Z
   modified_at: 2026-11-06T12:25:47.504632005Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b0d2-9a75-7810-983a-ee5bbf81e09c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2324):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 105a7c81d7d0
+    Recorded: 2026-11-06T12:21:37.481234972+00:00
+    Findings:
+    1. BLOCKING (CI red at 105a7c81d7d0): CI (gates) failed 'Documentation landing smoke' on run 42215812705, attempt 1 and the reviewer-triggered rerun (job 127888373895). The cause is not this PR's content: on docs-only PRs (full_ci != true) target/debug/aida is built only in the contracts shard ('Minimal aida-cli build for docs-only guards', .github/workflows/ci.yml:668-675; the gates build at ci.yml:144 requires full_ci), but the landing smoke step (ci.yml:707-710) runs in the gates shard with no full_ci guard and points AIDA_TEST_BIN at target/debug/aida, which does not exist there. Main at c09c3a0 (full_ci) passed the same step. Fix: make the landing smoke build or skip consistently, e.g. extend the minimal build's if: to include matrix.shard == 'gates', or run the smoke in the contracts shard. Land it here or as a separate spec merged first, then rerun gates on this head. The PR's markdown needs no change for this finding.
+    2. MINOR (doc gap): neither new section mentions 'aida gate migrate' (gate_cmd_args.rs:63-80, ledger/migrate.rs), the one-time rewrite that stamps every existing gate-ledger event with its requirement's canonical spec_key, with --dry-run/--execute/--rollback and an interactive host-terminal requirement. Both sections say 'Unstamped compatibility events use the snapshot's exact label mappings' but not how an operator removes them. Add one sentence to OVERVIEW.md#canonical-gate-ledger and the repository guide section.
+    3. MINOR (doc accuracy): both sections say BUG-2176's reviewer-worktree marker copy is retired ('retired as an architecture' / 'do not ... revive the BUG-2176 marker-copy workaround'), but the code still has the transitional collection path: merge_hold.rs:82-112 adopt_worktree_hold and gate/dispatch_reviewer_hold.rs:20-60 preserve_reviewer_worktree_hold collect a legacy worktree marker onto the primary ledger before removal. State that this one-way collection remains for markers older than M1 slice 2, and that no current writer creates a worktree marker, so readers do not conclude the code is dead or the doc is wrong.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T12:25:54.549468139Z
+  modified_at: 2026-11-06T12:25:54.549468139Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
