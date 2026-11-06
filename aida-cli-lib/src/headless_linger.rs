@@ -53,6 +53,16 @@ pub(crate) fn parse_final_result(line: &str) -> Option<FinalResult> {
         return None;
     }
     let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    // AGY uses a nested terminal event. This only starts the reap grace;
+    // agy_outcome separately checks the full stream after the wait.
+    // trace:TASK-2838 | ai:codex
+    if value.get("event").and_then(|e| e.as_str()) == Some("result") {
+        return match value["result"]["status"].as_str()? {
+            "SUCCESS" => Some(FinalResult { is_error: false }),
+            "ERROR" | "FAILURE" | "FAILED" | "CANCELLED" => Some(FinalResult { is_error: true }),
+            _ => None,
+        };
+    }
     if value.get("type").and_then(|t| t.as_str()) != Some("result") {
         return None;
     }
