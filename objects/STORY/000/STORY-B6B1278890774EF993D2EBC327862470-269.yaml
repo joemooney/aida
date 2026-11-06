@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-05T18:23:22.985164371Z
+modified_at: 2026-11-06T13:41:08.563363965Z
 req_type: Story
 tags:
 - architecture
@@ -525,6 +525,12 @@ comments:
   created_at: 2026-11-05T18:23:22.985164371Z
   modified_at: 2026-11-05T18:23:22.985164371Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b117-7b53-7783-ab7d-a8397a5d10b2
+  author: joe
+  content: 'Known cross-vendor limitation (operator ruling 2026-11-06): contained lanes on every vendor still hold a writable .aida-store/cache-db grant, so raw store-object writes are possible (BUG-2446 C2). This does NOT gate STORY-2238. The fix is keystone STORY-2561. Record the limitation in the STORY-2238 completion evidence and docs.'
+  created_at: 2026-11-06T13:41:08.563363965Z
+  modified_at: 2026-11-06T13:41:08.563363965Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
