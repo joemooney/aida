@@ -1,0 +1,29 @@
+id: 01a1b293-0435-74a3-99f6-5f0046d5dd19
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-899
+title: 'non-blocking/minor: bug_2469_dead_review_reclaimed_only_when_new_head_covers_re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2469, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_heads (aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs:191) carries only 'trace:BUG-2469'; add criterion tokens trace:BUG-2469.acec8dd7 / .ac5829b2 / .ac77bc7f so 'aida criteria BUG-2469' stops reporting all three criteria untraced (behavior is tested)
+
+  PR: #3529
+  Reviewed sha: a9888e0265ba8a9907b3151e5e5ffb95addbba2b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T20:35:41.749729667Z
+modified_at: 2026-11-06T20:35:41.749729667Z
+req_type: Task
+tags:
+- carried-from:BUG-2469
+- finding-hash:34f0f70e
+- from-review:PR-3529
+- kind:carried-forward
+filed_at:
+  code_sha: df7655109ef77636e0c3d39c5bf1595041f17cbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b34755f19c7
+  vendor: claude
