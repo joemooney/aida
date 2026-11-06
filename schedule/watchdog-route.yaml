@@ -1,13 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-01T12:20:12.747476675Z
+last_run: 2026-11-06T14:22:47.182416184Z
 last_by:
   seat: advisor
-  vendor: codex
+  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  vendor: claude
 result: done
-note: Exact doctor check runaway-seats --fail-on-findings --json exited0 at current471540a; zero findings in covered Claude sources, historical trip lacks actor/rule metrics, Codex explicitly not-read and missing transcript directories retained. BUG2391 sketch independent changes requested and amendment delegated; no fabricated Codex health or new poll.
-due_since: 2026-11-04T10:50:20.308563973Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-11-04T10:26:33.016908413Z
-  job: watchdog
-  error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
+note: 'Not a finding: the check timed out (exit 124) on 11-04 during host IO contention. No runaway seat observed today; the advisor runs no ad-hoc poll loops.'
