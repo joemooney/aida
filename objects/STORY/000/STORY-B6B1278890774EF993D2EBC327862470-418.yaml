@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T16:12:22.910449298Z
+modified_at: 2026-11-06T16:39:48.510421201Z
 req_type: Story
 tags:
 - docs:impacted
@@ -470,6 +470,12 @@ comments:
   content: 'Round 5 approach: reproduce the exact CI gate-mount failure and use the job timing for the command-entry budget; mount the entry test directly under the protected gate, assert the blocking verdict refusal, resolve fixture interpreters/tools from PATH, and explicitly document the non-TTY human-receipt substitution. Keep the cosmetic reviewer-authorship initialization follow-up documented. Validate the targeted command-entry regression, mount guard, formatting and make check-ci-fast. AC5 remains unverified until hosted CI is green.'
   created_at: 2026-11-06T16:12:22.910449298Z
   modified_at: 2026-11-06T16:12:22.910449298Z
+  session_id: 01a1b1a00827
+- id: 01a1b1bb-0e1e-7a72-bc48-a245aed5edcc
+  author: joe
+  content: 'Round 5 validation: fetched CI job 127977356781. Run-tests failure was the unmounted gate/tests/story_2492_entry_tests.rs; budget failure was the otherwise-passing end-to-end test at 76.412s. Fixed direct protected-floor mounting, renamed its child filter and added a 155s CI-measured budget (2x, rounded to 5s). End-to-end test now passes locally in 102.62s and asserts the exact PR-7 no-approval-at-head refusal plus synced RequestChanges and blocking finding origin. The failed CI mount guard passes in 0.21s; make check-ci-fast passes all 38 gates; formatting and diff checks pass. Documented the synthetic non-TTY human-receipt substitute in code and operator guide; fixture Git and Python resolve through PATH. Finding 4 remains the permitted cosmetic follow-up: setup does not initialize the known-empty reviewer authorship ledger; manual setup is documented, preserving fail-closed history semantics. AC5 remains unverified until hosted CI is green. Native-seat changes remain uncommitted for host publication; merge holds unchanged.'
+  created_at: 2026-11-06T16:39:48.510421201Z
+  modified_at: 2026-11-06T16:39:48.510421201Z
   session_id: 01a1b1a00827
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
