@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T21:21:56.699346580Z
-modified_at: 2026-11-06T02:09:49.551019732Z
+modified_at: 2026-11-06T02:13:27.148822306Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -21,6 +21,12 @@ comments:
   created_at: 2026-11-06T02:03:56.587566377Z
   modified_at: 2026-11-06T02:03:56.587566377Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1aea1-e1ec-7d63-9c2d-e5ff5dddacc4
+  author: joe
+  content: 'Implemented the explicitly reported unsupported-environment option in ack_tests.rs: canonicalize the temporary fixture root, detect any ancestor .git entry before mailbox writes, and print a SKIP diagnostic with TMPDIR/--nocapture rerun guidance. Added a deterministic malformed-.git-ancestor refusal regression; production root validation is unchanged. Validation: cargo test -p aida-core mailbox_lifecycle::ack::tests -- --nocapture passed 17 tests; explicit TMPDIR=/tmp rerun passed 17 with the local-only case reporting SKIP, and its exact-test rerun confirmed that diagnostic. cargo fmt --all -- --check and git diff --check passed. Native sandbox blocks git commit (read-only index.lock) and aida ship TASK-2903 --no-merge explicitly refuses commit/publication and directs leaving edits for the lane host-side exit step. No PR opened, no ship/merge or review verdict performed.'
+  created_at: 2026-11-06T02:13:27.148822306Z
+  modified_at: 2026-11-06T02:13:27.148822306Z
+  session_id: 01a1ae9e25ad
 history:
 - id: 01a1add3-42db-7d42-ba13-f132f3b09167
   author: joe
