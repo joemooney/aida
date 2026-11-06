@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:11:02.348332640Z
-modified_at: 2026-11-06T15:33:08.573450807Z
+modified_at: 2026-11-06T15:42:00.298936867Z
 req_type: Bug
 tags:
 - area:lanes
@@ -25,6 +25,12 @@ comments:
   content: 'Implemented reachability-based final seat reporting: moved HEAD alone no longer implies unpushed commits. Ordinary worktrees use a bounded git rev-list HEAD --not --remotes probe; private clones use the existing read-only probe sandbox. Regression covers clean fast-forward to remote main, genuine local commits, a second remote, unknown evidence, and preserved punt reporting. Formatting/whitespace and Git-maintenance guard pass; targeted Rust test build is in progress. Native seat edits remain uncommitted for host publication.'
   created_at: 2026-11-06T15:33:08.573450807Z
   modified_at: 2026-11-06T15:33:08.573450807Z
+  session_id: 01a1b176e0aa
+- id: 01a1b186-226a-78b3-8e0c-4752638d93f5
+  author: joe
+  content: 'Final validation passed: cargo test -p aida-cli-lib --lib bug_044_headless_background_tests --offline (26 tests, including BUG-2464 regression); compiled test binary filters bug_2436_finished_lane_lease_tests (4), bug_2452 (9), and story_2475_final_seat_state_reads_recorded_clone_through_its_host (1). Total 40 Rust tests passed. python3 tests/test_git_maintenance_ratchet.py: 8 passed. cargo fmt --all -- --check and git diff --check passed. No blockers. Six source/test files remain uncommitted under the standalone native implementer contract; host launcher owns commit/publication and queue completion.'
+  created_at: 2026-11-06T15:42:00.298936867Z
+  modified_at: 2026-11-06T15:42:00.298936867Z
   session_id: 01a1b176e0aa
 history:
 - id: 01a1b16a-43ac-7732-831f-a6050dd4f64f
