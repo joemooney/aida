@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-06T16:44:35.399913278Z
+modified_at: 2026-11-06T18:50:48.053592280Z
 req_type: Bug
 tags:
 - area:containment
@@ -84,6 +84,12 @@ comments:
   created_at: 2026-11-06T16:44:35.399913278Z
   modified_at: 2026-11-06T16:44:35.399913278Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b232-fb75-7303-be49-bc002dfae79e
+  author: joe
+  content: 'Advisor 11:52: same as BUG-2447. Blocked on BUG-2470 (harness duplicate [contained] table). Re-run C3/C4 after it lands.'
+  created_at: 2026-11-06T18:50:48.053592280Z
+  modified_at: 2026-11-06T18:50:48.053592280Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
