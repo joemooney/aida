@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:59:24.595886026Z
-modified_at: 2026-11-06T17:10:21.065670543Z
+modified_at: 2026-11-06T17:11:20.611326945Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -17,6 +17,11 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a1b04a-5285-7431-b9ed-8b4718bf7e51
   created_at: 2026-11-06T15:10:09.657168269Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1b1d7-a676-7c52-889f-89217e28ac65
+  created_at: 2026-11-06T17:11:20.611323434Z
   created_by: joe
 comments:
 - id: 01a1b135-ea5e-75e3-b20a-dd90ea3cb3f6
@@ -92,6 +97,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b1d7-f26d-7d70-9c8f-e55d46db12ee
+  author: joe
+  timestamp: 2026-11-06T17:11:21.965262751Z
+  session_id: 01a1b1d29929
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: dd852f74c3b
