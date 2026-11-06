@@ -1,0 +1,29 @@
+id: 01a1b028-38dd-77e2-9112-cde8d44adbfa
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-872
+title: 'MINOR (test robustness, non-blocking): aida-cli-lib/src/tests/task_2838_agy_out…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2838, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MINOR (test robustness, non-blocking): aida-cli-lib/src/tests/task_2838_agy_outcome_tests.rs:367 re-execs the libtest binary through crate::resolve_aida_exe(). That resolver goes through aida_bin::process(), which honors AIDA_BIN whenever an aida ancestor exists (aida_bin.rs:57-66, decide_override), and export_coordinating_bin_env sets AIDA_BIN for every aida child. So when cargo test runs inside an aida-launched lane, the child is the production aida CLI given '--exact agy_outcome::tests::... --nocapture', and the test fails. CI passes only because it has no aida ancestor. The sanctioned exact-test re-exec helper is crate::aida_bin::current_executable_path() (aida_bin.rs:311-316, BUG-1994; used by test_env.rs:65 and test_exec.rs:73). It is not counted by the ratchet, which matches only the literal raw-lookup token. Fix: Command::new(crate::aida_bin::current_executable_path().expect("test executable")).
+
+  PR: #3448
+  Reviewed sha: fb00c75f8ed36da82e29c4631ae31d7327ef71c8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T09:19:48.445221673Z
+modified_at: 2026-11-06T09:19:48.445221673Z
+req_type: Task
+tags:
+- carried-from:TASK-2838
+- finding-hash:0ccecee5
+- from-review:PR-3448
+- kind:carried-forward
+filed_at:
+  code_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 621d9e53f21
+  vendor: claude
