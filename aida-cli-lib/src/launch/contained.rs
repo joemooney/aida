@@ -1181,6 +1181,16 @@ impl PreparedLaunch {
             serde_json::from_slice(&bytes).context("invalid containment receipt")?;
         receipt.validate(&self.policy_sha)?;
         receipt.accepted = true;
+        // Host-side evidence only: never export the private receipt or grant.
+        // trace:TASK-3131 | ai:codex
+        {
+            use sha2::{Digest, Sha256};
+            let digest = Sha256::digest(serde_json::to_vec(&receipt)?);
+            eprintln!(
+                "aida-contained-receipt sha256={digest:x} policy_sha={}",
+                self.policy_sha
+            );
+        }
         run.receipt = Some(receipt);
         run.acceptance = Some(self.accept_writer);
         Ok(run)
