@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T05:55:00.515052853Z
+modified_at: 2026-11-06T06:21:00.268611871Z
 req_type: Story
 tags:
 - docs:impacted
@@ -668,6 +668,15 @@ history:
   timestamp: 2026-11-06T05:55:01.664947906Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1af84-85ec-7ea1-9694-7b0abba53762
+  author: aida-orchestrator
+  timestamp: 2026-11-06T06:21:00.268634683Z
+  session_id: 01a1af80c6cf
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -676,3 +685,11 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Slice-2 admission design (signed CAS chain on GitHub ref, watcher reserve/Running/Terminal) is sound in shape and the race test is real, but CI lib-1 is red from three ratchets this diff trips, and the completing PR enables distributed admission repo-wide with watcher-killing sync errors, a 1 MiB never-compacted global table, and no recovery tool for a wedged claim.
+  recovery_hint: address the review findings, move STORY-2492 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T06:21:00.268611871Z
