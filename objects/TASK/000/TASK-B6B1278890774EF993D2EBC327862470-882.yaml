@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T20:26:57.038473990Z
+modified_at: 2026-11-06T20:27:01.232145640Z
 req_type: Task
 tags:
 - architecture
@@ -102,6 +102,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 code addresses all 6 prior findings and matches sketch v1 sections 1-4 and the 07:10 signoff, but there is no green CI evidence: lib-0 ''Run tests'' FAILED at round-2 commit 69171ae (main green), the new Rust tests were never run, the forced-live gates step has never run in CI, and head CI is still queued.. No triage reason was given.'
   created_at: 2026-11-06T20:26:57.038472202Z
   modified_at: 2026-11-06T20:26:57.038472202Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b28b-1253-7b21-a0b6-160618992542
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3225):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5f3b1918a3a4
+    Recorded: 2026-11-06T20:18:09.993763924+00:00
+    Findings:
+    1. [major] CI: lib-0 'Run tests' FAILED at round-2 commit 69171ae14a57 (run 42277641290, job 128098033035) while main CI is green (b34755f19c). The implementer never ran the new Rust tests (untested=true): store_mutation/owner_tests.rs (4 tests), store_mutation/mod.rs tests (2), containment/tests/launch_tests.rs task_3225_* (3). Head 5f3b1918 CI is still queued with no lib-0 result. Find the failing test with 'gh run view 42277641290 --log-failed', fix it, run 'cargo test --profile agent -p aida-cli-lib --lib -- store_mutation:: task_3225', and get lib-0 green at the new head. The reviewer's sandbox could not fetch job logs.
+    2. [minor] Prior finding 4 is still unverified in CI: the 'Store mutation channel tests' step (AIDA_REQUIRE_STORE_MUTATION_LIVE=1, gates shard) has never run. Gates at 69171ae was cancelled (step 25 skipped) and is queued at head. The PR needs a gates run where that step shows 'success' (live lifecycle and sibling-namespace tests passing, not skipped) before approval.
+    3. [minor] session.rs:7269 adds require_store_service_surface only to run_vendor_headless_child. spawn_vendor_headless_forking (session.rs ~2195-2232) has no such guard: when wrapper is false it runs the child natively via reviewer_status_with_handle_guard, so an explicit AIDA_STORE_MUTATION_REQUIRED=1 on that Command silently downgrades to native instead of refusing, against sketch section 4 refuse-on-absent ('vendor paths lacking the required shared-broker/receipt ownership refuse an explicitly service-required launch'). Call the guard before 'if wrapper' there too, and add a test at the session path level; task_3225_required_service_refuses_unwrapped_launch only tests the helper function.
+    4. [minor] contained_host.py exec loop calls mutation.live() every 200 ms, and service.py MutationAuthority uses settimeout(1). Any timeout permanently fails the channel, MutationRefusal propagates out of host_contained, and the vendor child is killed. A single grant_check_for/read_lease stall over 1 s (e.g. disk contention from a cargo build inside the lane) therefore kills a long-running lane. That deadline is tighter than the sketch's approved 5-second bounded I/O/lock admission. Raise the authority deadline to the sketch bound (or justify 1 s on the spec), and add a test that a slow-but-under-bound authority reply does not tear down the post-exec lane.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:27:01.075195497Z
+  modified_at: 2026-11-06T20:27:01.075195497Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
