@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-06T16:20:04.094623124Z
+modified_at: 2026-11-06T16:36:51.362981822Z
 req_type: Story
 relationships:
 - rel_type:
@@ -351,6 +351,12 @@ comments:
   created_at: 2026-11-06T16:11:01.449857592Z
   modified_at: 2026-11-06T16:11:01.449857592Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b1b8-5a22-7792-8f5d-e2ba0276380e
+  author: joe
+  content: 'Round 6 implements advisor option (b): the hourly job and failure route remain enabled; free-text and unparseable triggers are Unknown, stay parked unchanged, and contribute only to the informational typed-condition migration count. Real evaluation/store errors still fail. Resurfacing now uses per-spec update_spec_atomically. Added canonical read_store/run coverage proving a met row is undeferred and a legacy-only store succeeds unchanged with the migration count. Documented and tested re-routing unchanged holds after human queue removal. CI lib-1 had 7511 passing tests but failed its timing budget for a duplicate full help snapshot wrapper; removed the duplicate while retaining and running the original snapshot test. Validation: 6 focused sweep/schedule tests, all 16 STORY-2402 tests, and the retained help snapshot passed; cargo fmt and git diff --check passed. Native seat leaves these edits uncommitted for host publication with Refs STORY-2402. Host must gate on green CI at the new head and handle the existing human merge hold.'
+  created_at: 2026-11-06T16:36:51.362981822Z
+  modified_at: 2026-11-06T16:36:51.362981822Z
+  session_id: 01a1b1a8ef00
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
