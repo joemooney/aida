@@ -345,6 +345,7 @@ fn story1843_every_listed_id_resolves_in_the_follow_up_verbs() {
         &r.store,
         MailboxCommand::Read {
             message_id: "sib-only".into(),
+            json: false,
         },
     )
     .unwrap();
@@ -352,6 +353,7 @@ fn story1843_every_listed_id_resolves_in_the_follow_up_verbs() {
         &r.store,
         MailboxCommand::Read {
             message_id: "sib-o".into(),
+            json: false,
         },
     )
     .unwrap();
@@ -411,6 +413,7 @@ fn story1843_every_listed_id_resolves_in_the_follow_up_verbs() {
         &r.store,
         MailboxCommand::Read {
             message_id: "nope".into(),
+            json: false,
         },
     )
     .unwrap_err();

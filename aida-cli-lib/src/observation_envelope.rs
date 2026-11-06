@@ -122,7 +122,15 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
-        .map_err(|_| anyhow::anyhow!("Cannot open input as a non-symlink regular file"))?;
+        .map_err(|e| {
+            // Keep imported paths out of diagnostics. trace:TASK-3112 | ai:codex
+            anyhow::anyhow!(match e.kind() {
+                std::io::ErrorKind::NotFound => "Input file not found",
+                std::io::ErrorKind::PermissionDenied => "Permission denied opening input file",
+                _ if e.raw_os_error() == Some(libc::ELOOP) => "Input must not be a symlink",
+                _ => "Cannot open input file",
+            })
+        })?;
     if !file.metadata()?.is_file() {
         bail!("Input must be a regular file");
     }
@@ -299,4 +307,23 @@ pub(crate) fn local_entry() -> Option<Result<()>> {
                     && std::env::var("AIDA_OUTPUT_FORMAT").as_deref() == Ok("json")),
         )
     })
+}
+
+#[cfg(test)]
+mod task3112_tests {
+    use super::*;
+    // trace:TASK-3112 | ai:codex
+    #[test]
+    fn task3112_open_errors_distinguish_missing_and_symlink_without_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("private-name");
+        let error = read_bounded(&missing, 10).unwrap_err().to_string();
+        assert_eq!(error, "Input file not found");
+        let link = dir.path().join("private-link");
+        std::os::unix::fs::symlink(&missing, &link).unwrap();
+        assert_eq!(
+            read_bounded(&link, 10).unwrap_err().to_string(),
+            "Input must not be a symlink"
+        );
+    }
 }
