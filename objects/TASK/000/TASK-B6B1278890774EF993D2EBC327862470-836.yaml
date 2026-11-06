@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-05T20:37:27.195398003Z
+modified_at: 2026-11-06T03:43:36.690928933Z
 req_type: Task
 tags:
 - area:containment
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-11-05T20:37:25.601267223Z
   modified_at: 2026-11-05T20:37:25.601267223Z
   session_id: 01a1ad6bdb34
+- id: 01a1aef4-6cf2-78e2-810d-69f1361a6d3f
+  author: joe
+  content: 'ADVISOR RULING 2026-11-05 20:50 MST: the ''aida role enter'' refusal inside an AIDA-managed agent session is EXPECTED: agent sessions must not mint seat grants, so this is not a defect to work around. Scope the lane to: (1) the harness code for --boundary aida, with fixture creation through the production commands, and (2) an offline test with a fake vendor binary that exercises the full path up to the role-enter step and asserts a named refusal when no operator-context grant exists. The LIVE run is advisor host work via deputy 3 (operator terminal context) after merge, and its report goes on BUG-2447/2448. Open the PR as ''(TASK-3131)''.'
+  created_at: 2026-11-06T03:43:36.690928933Z
+  modified_at: 2026-11-06T03:43:36.690928933Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad21-f58b-7aa2-8855-03f913ad7538
   author: joe
