@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-227
 agreed_id: BUG-2461
 title: 'Native lane host post-exit commit uses a generic ''chore(seat): work native Codex lane ... left uncommitted'' subject for completing PRs'
 description: 'Observed 2026-11-06: every native Codex lane PR opens titled ''[AI:codex] chore(seat): work native Codex lane <lane> left uncommitted (<SPEC>)'' (#3482 #3483 #3485 #3486 #3487 #3488 #3491 #3492). This is true even on live 2aeb7cc, which includes TASK-2902 (#3492''s lane launched 02:38, after the 02:29 promote), because TASK-2902 preserves only a DECLARED subject, and aida-pickup asks only partial slices to declare one. The advisor retitled each PR by hand, since the squash subject becomes the main commit and the spec record. Fix: (1) post_exit_message (aida-cli-lib/src/ship_from_seat.rs ~:272) builds a clean exit''s fallback subject from the owning spec the way TASK-2891 (#3456) derives seat PR titles: ''[AI:codex] <type>: <spec title> (<display ID>)'', still a completing trailer only on a clean exit, still Refs on failure; it uses the display ID, not the origin ID (#3492 shows TASK-b6b...-872); (2) aida-pickup (template master aida-core/templates/skills/aida-pickup.md:34) tells EVERY native lane to declare its subject with aida ship -m before exit, completing or Refs. Acceptance: a clean-exit lane with no declaration opens a PR whose title is derived from the spec; a declared subject still wins; failed exits keep Refs; tests in the ship_from_seat test module; make sync-templates and make check-templates. LIGHT gate.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T09:52:01.406015582Z
-modified_at: 2026-11-06T10:46:14.952831331Z
+modified_at: 2026-11-06T12:38:55.898569493Z
 req_type: Bug
 tags:
 - from-advisor
@@ -46,6 +46,20 @@ history:
   timestamp: 2026-11-06T10:46:21.709391970Z
   session_id: 01a1b0484cc6
   changes: []
+- id: 01a1b0de-8676-7af2-85a2-d4db5a669d0c
+  author: aida-auto-bump
+  timestamp: 2026-11-06T12:38:55.862104148Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b0de-869a-7150-8fe6-2ad02e5eadc6
+  timestamp: 2026-11-06T12:38:55.898566139Z
+  agent: aida
+  commit_sha: 1a5d83c338ffe5c220a4721a8c0068cc4657f774
+  summary: 'BUG-2461 PASS: a clean exit with no declaration now derives the subject from the spec through seat_pr_title, using the display-ID trailer; declared subjects still win (TASK-2902 path unchanged); failed exits keep Refs; tests in ship_from_seat queue_exit_tests plus the bug_2459 forge-title assertion; aida-pickup template master edited (.claude mirror is a symlink); bug protocol ''PR touches a test file'': met; CI run 42205050963 green at head'
+  review_verdict: approved
 filed_at:
   code_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
   branch: main
@@ -54,3 +68,7 @@ filed_at:
   aida_build_sha: 2aeb7cc34b1
   vendor: claude
   session: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-06T12:38:55.862097907Z
+  completion_sha: 1a5d83c338ffe5c220a4721a8c0068cc4657f774
