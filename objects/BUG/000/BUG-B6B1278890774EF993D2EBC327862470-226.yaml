@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:26:45.721586405Z
-modified_at: 2026-11-06T07:34:34.531172669Z
+modified_at: 2026-11-06T07:35:06.548247271Z
 req_type: Bug
 tags:
 - conformance
@@ -31,6 +31,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1afc8-5f00-7831-9b6c-17b61d40a832
+  author: joe
+  timestamp: 2026-11-06T07:35:06.752945901Z
+  session_id: 01a1afc7d877
+  changes: []
 filed_at:
   code_sha: a8e8311d54671600c1a362f8c1b814b512749adc
   branch: main
