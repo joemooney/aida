@@ -20,12 +20,12 @@ description: |-
   NEAR-TERM SLICE: L1 only. L2-L4 are gated on evidence and on the vendor adapter being wired (EPIC-35 plumbed-not-wired). NOT for the current stabilization / bugs-first phase; architecture-class -> operator sign-off before any PR.
 
   Related: PRIN-2 (configurability discipline), EPIC-57 (compete = L3 seed), SPIKE-75 (advisor tool = L1 per-vendor detail), the vendor-neutrality standing rule (own the contract, ride vendor execution).
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:49:50.135214184Z
-modified_at: 2026-11-06T00:16:48.669450794Z
+modified_at: 2026-11-06T00:16:51.865422190Z
 req_type: Epic
 tags:
 - from-advisor
@@ -64,3 +64,11 @@ history:
   timestamp: 2026-11-06T00:16:48.742555169Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
+- id: 01a1ae37-2499-75e2-80c9-15228d7efc14
+  author: joe
+  timestamp: 2026-11-06T00:16:51.865420212Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
