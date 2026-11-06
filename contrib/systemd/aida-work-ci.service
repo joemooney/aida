@@ -1,0 +1,11 @@
+# trace:STORY-2480 | ai:codex
+[Unit]
+Description=AIDA bounded outbound work CI relay
+[Service]
+Type=oneshot
+WorkingDirectory=%h/aida-ci
+EnvironmentFile=%h/.config/aida/work-ci.env
+ExecStart=%h/.local/bin/aida intent ci poll
+TimeoutStartSec=180
+UMask=0077
+NoNewPrivileges=true
