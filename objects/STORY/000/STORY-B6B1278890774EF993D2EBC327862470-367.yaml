@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T10:15:17.235136491Z
+modified_at: 2026-11-06T10:23:43.099228497Z
 req_type: Story
 relationships:
 - rel_type:
@@ -190,6 +190,12 @@ comments:
   created_at: 2026-11-06T10:13:03.798723175Z
   modified_at: 2026-11-06T10:13:03.798723175Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b062-bbfb-7670-bf1d-ac67ed6bbf16
+  author: joe
+  content: 'PR #3493 round 3: fixing train-closed confirmation with an exact member/head receipt, missing-local-head squash lookup, one-read Open keep answers, per-sweep base fetch reuse, and settled metadata refusals with retry notices. Finding 5 uses the review-permitted suspend alternative: the untyped live member gate suspends all members on any pre-land refusal (including a lapsed mandate), retaining the open train and holds, until the gate has typed refusal/read-error outcomes. Added a live adapter/land regression and documented this deliberate limitation in docs/plans/2026-11-06-story-2401-confirmed-negatives.md. AC3 train journal and AC4 workflow digest remain unimplemented; publication must use (Refs STORY-2401). Native seat cannot reword d726665ca8f or create commits; host publication must correct its completing subject.'
+  created_at: 2026-11-06T10:23:43.099228497Z
+  modified_at: 2026-11-06T10:23:43.099228497Z
+  session_id: 01a1b05aed88
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
