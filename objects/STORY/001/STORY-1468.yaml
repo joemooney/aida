@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-06T01:14:21.147150342Z
+modified_at: 2026-11-06T01:18:24.865880271Z
 req_type: Story
 relationships:
 - rel_type:
@@ -88,6 +88,12 @@ comments:
   created_at: 2026-11-05T20:32:44.900842069Z
   modified_at: 2026-11-05T20:32:44.900842069Z
   session_id: 01a1ad20639a
+- id: 01a1ae6f-7e61-7c32-8370-3e2ad1c26876
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and every STORY-1468/signoff acceptance criterion are implemented and tested, but the PR breaks CI: CI (contracts) step ''CLI-manual drift-guard'' fails on a bare spec ID added to docs/cli/02-specs.md:17. Plus minor MCP robustness gaps. Other jobs: cli-1 and rest passed; cli-0, lib-0, lib-1 and gates were still pending at review time.. No triage reason was given.'
+  created_at: 2026-11-06T01:18:24.865878902Z
+  modified_at: 2026-11-06T01:18:24.865878902Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
   author: joe
@@ -218,16 +224,16 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ae6f-7e61-7c32-8370-3e19f78fe0ab
+  author: joe
+  timestamp: 2026-11-06T01:18:24.865870099Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-05T20:32:30.974468575Z
   implemented_by: joe
   reopened_at_sha: 0b0f8a6b701d61070c28481226836b48cb257fe4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design and every STORY-1468/signoff acceptance criterion are implemented and tested, but the PR breaks CI: CI (contracts) step ''CLI-manual drift-guard'' fails on a bare spec ID added to docs/cli/02-specs.md:17. Plus minor MCP robustness gaps. Other jobs: cli-1 and rest passed; cli-0, lib-0, lib-1 and gates were still pending at review time.'
-  recovery_hint: address the review findings, move STORY-1468 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T01:14:21.147150342Z
