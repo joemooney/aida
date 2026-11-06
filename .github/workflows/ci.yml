@@ -420,7 +420,9 @@ jobs:
           expected_2708=$(grep -rhoE 'fn task_2708_live_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
           ran_2708=$(grep -hE '^ok ' "$lib_results" | grep -oE 'task_2708_live_[a-z0-9_]+$' | sort -u | wc -l)
           echo "task_2708 F-a amendment live tests: $ran_2708 of $expected_2708 ran ok"
-          grep -q '^ok launch::contained::tests::task_2708_claude_prepare_fake_home$' "$lib_results"
+          if ! grep -q '^ok launch::contained::tests::task_2708_claude_prepare_fake_home$' "$lib_results"; then
+            echo "::error::required-live test task_2708_claude_prepare_fake_home did not report ok"; exit 1
+          fi
           if [ "$expected_2708" -eq 0 ] || [ "$ran_2708" -ne "$expected_2708" ]; then echo "::error::only $ran_2708 of $expected_2708 task_2708_live_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.

@@ -24,7 +24,12 @@ The binding 2026-11-06 advisor rulings govern this revision of PR #3449.
   arguments are copied and executed on the pinned socket, never checked then
   continued against mutable memory. Anonymous connected IPC and SCM_RIGHTS
   remain supported. Named sendmsg destinations of every family and sendmmsg
-  are conservatively refused. Sends are bounded to 64 iovecs, 1 MiB payload,
+  are conservatively refused. Ancillary messages other than SOL_SOCKET/SCM_RIGHTS
+  (including explicit SCM_CREDENTIALS) now refuse with EACCES. An SO_PASSCRED
+  receiver sees the host broker's credentials rather than the trapped sender's
+  (the broker PID appears as 0 in the lane PID namespace). These additional
+  behavior deviations require advisor acceptance alongside Round 5 F2; this
+  implementer does not claim that acceptance. Sends are bounded to 64 iovecs, 1 MiB payload,
   4 KiB ancillary data, and use MSG_DONTWAIT so they cannot block the broker.
   A live Unix datagram test checks delivery refusal and connected positive controls.
 * F5: both host `.claude.json` and `.claude.json.backup` receive empty read-only
@@ -233,6 +238,14 @@ b29dacfa45b4. The mechanical bdcec264ee88 CI merge remains in branch history.
   an "accepted price" is recorded here as advisor signoff. A named F2 punt asks
   the advisor to accept these two deviations on TASK-2708 or direct a redesign.
   No acceptance is claimed by this implementer.
+* Ancillary credentials (Round 7 F3): **advisor acceptance pending** alongside
+  F2. The broker accepts only SOL_SOCKET/SCM_RIGHTS control messages; explicit
+  SCM_CREDENTIALS and other ancillary types return EACCES. For implicit
+  SO_PASSCRED delivery the receiver sees the broker's credentials, including PID
+  0 when viewed from the lane PID namespace, rather than the trapped task's PID.
+  These are additional AC1 compatibility deviations, not evidence of sender
+  impersonation support. The Round 7 punt requests an explicit acceptance or a
+  direction to implement sender-credential forwarding with regression coverage.
 
 
 ### Round 5 validation and handoff
@@ -261,3 +274,65 @@ The three changed files are contained_host.py, containment/tests/launch_tests.rs
 and this testing note. Edits remain uncommitted for the native-seat host handoff.
 The punt and existing supervised merge hold remain publication vetoes; this
 seat performs no commit/push, review recording, hold clearance or queue completion.
+
+
+## Round 7 review
+
+<!-- trace:TASK-2708 | ai:codex -->
+
+Reviewed base: `aede2be58b3e9d17bd61db0d532f6eef3669b8f5`, PR #3449.
+The mechanical `bdcec264ee88` merge remains an ancestor of HEAD.
+
+* F1: no explicit advisor acceptance of Round 5 F2 is present in TASK-2708
+  comments 1–58 or in the supplied ruling. The Linux 5.19+ floor and deferred
+  handled signals remain acceptance pending above. Removing WAIT_KILLABLE_RECV
+  would restore the duplicate-send race; no implementer acceptance or redesign
+  is substituted for the requested advisor decision.
+* F2: the earlier `2d054799c40715d859ed7c1295c7c4b4d9cfdbf8` failure is now
+  diagnosed from [run 42216248331](https://github.com/joemooney/aida/actions/runs/42216248331).
+  All six test shards passed. The gates job passed its required-live bwrap step,
+  then failed the help-golden co-change guard because it could not resolve a
+  merge base with `origin/main` after deepening the shallow checkout by 200.
+  The aggregate Build failure followed that gates failure. This was not a
+  containment test failure; exact-head CI must still establish non-recurrence.
+* F3: the earlier summary and the section next to Round 5 F2 now explicitly
+  describe EACCES for ancillary types other than SOL_SOCKET/SCM_RIGHTS,
+  including SCM_CREDENTIALS, and broker identity for SO_PASSCRED receivers.
+  Acceptance is pending, and the named punt includes this compatibility delta.
+* F4: the required-live fake-HOME result check now emits an explicit GitHub
+  `::error::` annotation naming `task_2708_claude_prepare_fake_home` before
+  exiting nonzero when that test does not report ok.
+
+### Round 7 CI evidence at the reviewed base
+
+At `aede2be58b3e`, the [gates job](https://github.com/joemooney/aida/actions/runs/42220164171/job/127899913579)
+passed, including the required-live bwrap gate (`9 of 9` TASK-2708 live tests
+reported ok) and the help-golden guard that failed at `2d054799`. The uploaded
+`test-timings-lib-1` JUnit artifact records
+`launch::contained::tests::task_2708_target_socket_old_kernel_thread_file_tables`
+as a passing testcase. All seven shards and the required `Build (ubuntu-latest)` passed by
+2026-11-06 13:10 UTC; only the supervised merge-hold gate failed.
+These are reviewed-base results; this round's edits still require host
+publication and CI at the resulting head. The supervised merge hold remains.
+
+### Round 7 local validation
+
+* `make check-ci-fast`: all 38 gates passed, including feature-disabled CLI,
+  TUI seam, formatting, documentation guards and trace checks.
+* `python3 -m unittest tests/test_ci_test_shards.py`: 25 passed.
+* Executed the edited fake-HOME check from the parsed workflow with an empty
+  result file and a passing row: absence exited 1 with the named annotation;
+  the passing row exited 0.
+* CI YAML parsing and `git diff --check` passed.
+* `AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test
+  -p aida-cli-lib --lib --profile agent task_2708_ -- --nocapture`: 34 passed,
+  no failures, ignored tests or live skips. This includes fake-HOME preparation,
+  the old-kernel thread-file-table shim and all nine live regressions.
+
+Round 7 F1 and the acceptance part of F3 are explicitly punted on TASK-2708
+as a design fork; neither finding is disputed. No acceptance is claimed.
+The two edited files are `.github/workflows/ci.yml` and this testing note.
+Native-seat edits remain uncommitted; the host must honor the punt and existing
+merge hold. No source commit/push, review approval, hold clearance or queue
+completion was performed. Publication-head CI remains required after any
+future host publication.
