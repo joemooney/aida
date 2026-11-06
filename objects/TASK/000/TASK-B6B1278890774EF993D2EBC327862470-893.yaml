@@ -1,0 +1,29 @@
+id: 01a1b225-9d5f-7251-80ea-98585627d14c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-893
+title: 'cosmetic: fixture_role_enter passes --delegate-seat implementer for the advisor…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2465, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: fixture_role_enter passes --delegate-seat implementer for the advisor setup seat too; setup only needs approval/dispatch, so the advisor grant is broader than the docs describe.
+
+  PR: #3520
+  Reviewed sha: a3a1bd5d747cbfc4e23792c47d23daf55b45e9fd
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T18:36:11.999869150Z
+modified_at: 2026-11-06T18:36:11.999869150Z
+req_type: Task
+tags:
+- carried-from:BUG-2465
+- finding-hash:ec842858
+- from-review:PR-3520
+- kind:carried-forward
+filed_at:
+  code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6fe228acc8b
+  vendor: claude
