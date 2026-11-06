@@ -61,6 +61,42 @@ class PolicyRevisionTests(unittest.TestCase):
                 c.trusted_policy_sha()
 
 
+# trace:TASK-3131 | ai:codex
+class AidaBoundaryTests(unittest.TestCase):
+    def test_missing_production_receipt_withdraws_passes_but_keeps_violations(self):
+        report = {"containment_receipt_sha256": None,
+                  "checks": {"C0": {"status": "pass", "terminal_status": "pass"},
+                             "C1": {"status": "fail"}}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "receipt-unavailable"):
+                c.aida_refuse(root, report, "receipt-unavailable")
+            saved = json.loads((root / "report.json").read_text())
+        self.assertEqual(saved["checks"]["C0"]["status"], "unknown")
+        self.assertEqual(saved["checks"]["C0"]["terminal_status"], "unknown")
+        self.assertEqual(saved["checks"]["C1"]["status"], "fail")
+
+    def test_unsupported_shared_vendors_never_fall_back(self):
+        for vendor in ("agy", "claude"):
+            args = type("Args", (), {"vendor": vendor, "boundary": "aida"})()
+            with mock.patch.object(c, "prepare") as prepare:
+                with self.assertRaisesRegex(ValueError, "aida-boundary-unsupported-vendor: " + vendor):
+                    c.run(args)
+                prepare.assert_not_called()
+
+    def test_production_launch_retains_terminal_session_but_owns_cleanup_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            c.bounded_launch([c.sys.executable, "-c",
+                              "import json, os; print(json.dumps([os.getpid(), os.getpgrp(), os.getsid(0)]))"],
+                             root, dict(os.environ), root, 1, preserve_session=True)
+            pid, group, session = json.loads((root / "stdout.jsonl").read_text())
+            self.assertEqual(group, pid)
+            self.assertEqual(session, os.getsid(0))
+            self.assertNotEqual(session, pid)
+
+
+
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
