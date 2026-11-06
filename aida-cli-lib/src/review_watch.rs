@@ -1,6 +1,7 @@
 //! Review discovery, dispatch, head-change supersede, and the report-only
 //! ship-readiness verdict with its once-only advisor wake.
 // trace:TASK-1945 trace:TASK-1993 | ai:codex
+use crate::gate::review_publication::{self, admission};
 use anyhow::{Context, Result};
 use clap::Args;
 use fs2::FileExt;
@@ -218,6 +219,8 @@ fn boot_id() -> Result<String> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Phase {
+    // Peer ownership is cached until the head changes or operator recovery.
+    RemoteHeld,
     Reserved,
     Running,
     Completed,
@@ -254,6 +257,10 @@ struct Supersede {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Attempt {
+    // Pin distributed mode through child launch, even if configuration vanishes.
+    // trace:STORY-2492 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    admission_hub: Option<admission::Hub>,
     head: String,
     token: String,
     vendor: Option<String>,
@@ -762,6 +769,32 @@ impl Store {
             keys: self.retained(key)?,
             ..History::default()
         };
+        // trace:STORY-2492 | ai:codex
+        for (body, publication) in review_publication::watcher_history(&self.root, key)? {
+            history.add(body.as_bytes(), &publication)?;
+            let synced = crate::gate::review_verdict::parse_recorded_verdict(&body)
+                .and_then(|v| v.reviewed_sha)
+                .context("missing synced review head")?;
+            if history.keys.iter().any(|k| {
+                k.0.as_deref() == Some(&synced)
+                    && !history
+                        .files
+                        .get(k)
+                        .is_some_and(|f| f.contains(&publication))
+            }) {
+                review_publication::report(format!(
+                    "synced review overrides retained local watcher history for {key} at {synced}"
+                ));
+            }
+            history.keys.retain(|k| {
+                k.0.as_deref() != Some(synced.as_str())
+                    || history
+                        .files
+                        .get(k)
+                        .is_some_and(|f| f.contains(&publication))
+            });
+            history.synced_heads.insert(synced);
+        }
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
         };
@@ -967,9 +1000,11 @@ impl Store {
 // trace:TASK-1993 | ai:codex
 #[derive(Default)]
 struct History {
+    // Current synced evidence takes precedence over local cache/archives.
+    synced_heads: BTreeSet<String>,
     keys: BTreeSet<crate::gate::review_verdict::RecordingKey>,
-    // The verdict files each recording was read from, relative to
-    // `.aida/review-verdicts/`, for the findings mail. trace:TASK-1945 | ai:claude
+    // Sources for findings mail: local paths relative to `.aida/review-verdicts/`,
+    // or explicit `.aida-store/` publication paths. trace:TASK-1945 | ai:claude
     files: BTreeMap<crate::gate::review_verdict::RecordingKey, Vec<String>>,
 }
 impl History {
@@ -998,6 +1033,23 @@ impl History {
                 valid_recording_key(&key),
                 "unidentifiable historical review requires advisor reconciliation"
             );
+            if !file.starts_with(".aida-store/")
+                && key
+                    .0
+                    .as_ref()
+                    .is_some_and(|h| self.synced_heads.contains(h))
+            {
+                if self
+                    .keys
+                    .iter()
+                    .any(|synced| synced.0 == key.0 && synced.2 != key.2)
+                {
+                    review_publication::report(format!(
+                        "synced review overrides contradictory local watcher history in {file}"
+                    ));
+                }
+                continue;
+            }
             let files = self.files.entry(key.clone()).or_default();
             if !files.iter().any(|f| f == file) {
                 files.push(file.to_string());
@@ -1096,7 +1148,7 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                         .is_some_and(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
                     // An unclaimed reservation whose dispatcher died exits
                     // without a receipt identity. trace:TASK-1993 | ai:claude
-                    Phase::Failed | Phase::Exited => true,
+                    Phase::RemoteHeld | Phase::Failed | Phase::Exited => true,
                     // Either an unclaimed or a claimed review can be
                     // superseded; the receipt is what matters.
                     // trace:TASK-1945 | ai:claude
@@ -1284,7 +1336,7 @@ fn select(
         // and spawn failures do not consume a retry; preserve an inherited one.
         // trace:TASK-3112 | ai:codex
         let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
-        let attempt = Attempt { setup_retry, retryable_fetch: false, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let attempt = Attempt { admission_hub: None, setup_retry, retryable_fetch: false, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -1309,23 +1361,34 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
             return Ok(None);
         };
         if entry.notices.get(head).is_some_and(|n| n.sent) {
-            return Ok(Some(update::STALE_NOTIFIED.to_string()));
+            return Ok(Some((update::STALE_NOTIFIED.to_string(), false)));
         }
         Ok(entry
             .attempts
             .iter()
             .find(|a| {
                 a.head == head
-                    && matches!(a.phase, Phase::Reserved | Phase::Running | Phase::Completed)
+                    && matches!(
+                        a.phase,
+                        Phase::RemoteHeld | Phase::Reserved | Phase::Running | Phase::Completed
+                    )
             })
-            .map(|a| format!("head already reserved ({:?})", a.phase)))
+            .map(|a| {
+                (
+                    format!("head already reserved ({:?})", a.phase),
+                    a.phase == Phase::RemoteHeld,
+                )
+            }))
     })?;
-    if recorded.is_some() {
-        return Ok(recorded);
+    if let Some((reason, false)) = &recorded {
+        return Ok(Some(reason.clone()));
     }
     let history = store.history(&key)?;
     if history.contains(head) {
         return Ok(Some("head already has a recorded review".into()));
+    }
+    if let Some((reason, true)) = recorded {
+        return Ok(Some(reason));
     }
     if history.blocking() >= 2 {
         return Ok(Some(
@@ -1737,15 +1800,48 @@ fn child_with_program(
         key,
         token,
         |attempt| {
-            let mut current = repo.change(root, id)?;
-            repo.probe(root, &mut current)?;
-            anyhow::ensure!(
-                current.head == attempt.head
-                    && current.key() == key
-                    && current.overlap == Some(false),
-                "head changed before review dispatch"
-            );
-            round.set(store.round_for(key, attempt)?);
+            admission::require_pinned(root, &attempt.admission_hub)?;
+            let checked = (|| {
+                let mut current = repo.change(root, id)?;
+                repo.probe(root, &mut current)?;
+                anyhow::ensure!(
+                    current.head == attempt.head
+                        && current.key() == key
+                        && current.overlap == Some(false),
+                    "head changed before review dispatch"
+                );
+                round.set(store.round_for(key, attempt)?);
+                Ok::<_, anyhow::Error>(())
+            })();
+            if let Err(error) = checked {
+                if let Err(cancel) = admission::transition(
+                    root,
+                    key,
+                    &attempt.head,
+                    token,
+                    admission::State::Cancelled,
+                    format!("pre-spawn preflight failed: {error:#}"),
+                ) {
+                    eprintln!("{key}: hub claim retained: {cancel:#}");
+                }
+                return Err(error);
+            }
+            // The local receipt is process-bound; the hub token is consumed
+            // exactly once before any queue-work/reviewer process is started.
+            // trace:STORY-2492 | ai:codex
+            admission::transition(
+                root,
+                key,
+                &attempt.head,
+                token,
+                admission::State::Running,
+                format!(
+                    "dispatcher {}:{}:{} passed exact-head preflight",
+                    boot_id()?,
+                    std::process::id(),
+                    Identity::current()?.start
+                ),
+            )?;
             Ok(())
         },
         |attempt| {
@@ -1767,6 +1863,10 @@ fn child_with_program(
                 Err(error) => eprintln!("{key}: queue-work child identity unavailable; the attempt stays held as ambiguous: {error:#}"),
             }
             let status = child.wait()?;
+            // An observed queue exit alone cannot prove an unrecorded reviewer
+            // stopped. Ambiguous descendants retain the distributed claim.
+            // trace:STORY-2492 | ai:codex
+            finish_admission(root, &store, key, token, &attempt.head, &status.to_string())?;
             if !status.success() {
                 // trace:TASK-1993 | ai:claude
                 let log = format!("{key}-{token}.log");
@@ -1776,6 +1876,34 @@ fn child_with_program(
             Ok(())
         },
     )
+}
+
+// A failed terminal publication is surfaced and the hub claim remains held.
+// trace:STORY-2492 | ai:codex
+fn finish_admission(
+    root: &Path,
+    store: &Store,
+    key: &str,
+    token: &str,
+    head: &str,
+    status: &str,
+) -> Result<()> {
+    let current = store.load()?;
+    let finished = current
+        .entries
+        .get(key)
+        .and_then(|e| e.attempts.iter().find(|a| a.token == token))
+        .context("review attempt disappeared at exit")?;
+    if !finished.unrecorded_descendant()
+        && [&finished.worker, &finished.reviewer]
+            .into_iter()
+            .flatten()
+            .all(|p| p.observable() && !p.alive())
+    {
+        admission::transition(root, key, head, token, admission::State::Terminal,
+            format!("owner observed queue exit {status}; all recorded worker/reviewer identities stopped"))?;
+    }
+    Ok(())
 }
 
 fn execute_reservation(
@@ -2000,6 +2128,7 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
     let store = Store::open(&root, &repo.identity)?;
     // trace:TASK-1955 | ai:claude (TASK-1-412)
     if let Some(key) = args.release.as_deref() {
+        admission::require_released(&root, key)?;
         let released = store.release(key)?;
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(());
@@ -2022,6 +2151,11 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
             }
             _ => true,
         });
+        // trace:STORY-2492 | ai:codex
+        if !sync_pass(&root, args.once)? {
+            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            continue;
+        }
         let changes = match repo.discover(&root) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
@@ -2073,6 +2207,24 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
     }
 }
 
+// A transient synchronization refusal skips only this pass. `--once` retains
+// its nonzero contract; continuous mode will try again after the interval.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn sync_pass(root: &Path, once: bool) -> Result<bool> {
+    match admission::sync(root) {
+        Ok(()) => Ok(true),
+        Err(error) if once => Err(error),
+        Err(error) => {
+            eprintln!("review-watch synchronization refused for this pass: {error:#}");
+            Ok(false)
+        }
+    }
+}
+#[cfg(test)]
+pub(crate) fn fixture_sync_pass(root: &Path, once: bool) -> Result<bool> {
+    sync_pass(root, once)
+}
+
 /// Only whole-state failure stops a continuous watcher; one change's refusal
 /// must not stall every other change. `--once` reports any refusal.
 // trace:TASK-1993 | ai:claude
@@ -2091,34 +2243,47 @@ struct Dispatcher {
 // trace:TASK-1993 | ai:claude
 fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> Result<()> {
     let tail = log_tail(store, &format!("{key}-{token}.log"));
-    store.transaction(key, |state| {
-        if let Some(a) = state
+    let cancelled = store.transaction(key, |state| {
+        let Some(a) = state
             .entries
             .get_mut(key)
             .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
             .filter(|a| a.identity.is_none())
-        {
-            let diagnostic = bounded_diagnostic(&format!(
-                "dispatcher exited {status} before claiming its launch receipt: {}",
-                tail.as_deref().unwrap_or("no log output")
-            ));
-            match a.phase {
-                Phase::Reserved => {
-                    a.phase = Phase::Exited;
-                    a.diagnostic = Some(diagnostic);
-                }
-                // Superseded before it claimed: an unclaimed dispatcher can
-                // start nothing, and this one is reaped, so nothing runs.
-                // trace:TASK-1945 | ai:claude (TASK-2150)
-                Phase::Superseding => {
-                    a.phase = Phase::Superseded;
-                    a.diagnostic = Some(diagnostic);
-                }
-                _ => {}
+        else {
+            return Ok(None);
+        };
+        // Only the parent observing its Child exit can prove this pre-spawn
+        // failure. Background PID/age reconciliation never cancels hub claims.
+        // trace:STORY-2492 | ai:codex
+        let can_cancel = a.admission_hub.is_some()
+            && matches!(a.phase, Phase::Reserved | Phase::Superseding)
+            && !a.spawning
+            && !a.reviewer_spawning
+            && a.worker.is_none()
+            && a.reviewer.is_none();
+        let diagnostic = bounded_diagnostic(&format!(
+            "dispatcher exited {status} before claiming its launch receipt: {}",
+            tail.as_deref().unwrap_or("no log output")
+        ));
+        match a.phase {
+            Phase::Reserved => {
+                a.phase = Phase::Exited;
+                a.diagnostic = Some(diagnostic);
             }
+            Phase::Superseding => {
+                a.phase = Phase::Superseded;
+                a.diagnostic = Some(diagnostic);
+            }
+            _ => {}
         }
-        Ok(())
-    })
+        Ok(can_cancel.then(|| a.clone()))
+    })?;
+    if let Some(a) = cancelled {
+        admission::require_pinned(&store.root, &a.admission_hub)?;
+        admission::transition(&store.root, key, &a.head, token, admission::State::Cancelled,
+            format!("owner reaped dispatcher exit {status} before any process-bound claim or worker spawn"))?;
+    }
+    Ok(())
 }
 
 /// The dispatcher for this reservation could not be spawned, so nothing of
@@ -2226,7 +2391,14 @@ fn watch_change(
             );
             report(root, store, &change, &live)?;
         }
-        Action::Dispatch(attempt) => {
+        Action::Dispatch(mut attempt) => {
+            // Reserve at the sole authority before spawning even the dispatcher.
+            // A refused/uncertain claim never authorizes a child.
+            // trace:STORY-2492 | ai:codex
+            if !reserve_dispatch(root, store, &key, &mut attempt)? {
+                eprintln!("{key}: head/change already reserved or reviewed at admission hub");
+                return Ok(());
+            }
             use std::os::unix::process::CommandExt;
             let spawned = (|| {
                 let logs = Directory::open(&store.dir.path().join("logs"))?;
@@ -2292,13 +2464,74 @@ fn watch_change(
                     eprintln!("{key}: review admitted for {}", change.head);
                 }
                 Err(error) => {
-                    mark_spawn_failed(store, &key, &attempt.token)?;
+                    cancel_spawn_failure(root, store, &key, &attempt, &error.to_string())?;
                     return Err(error).context("could not spawn review dispatcher");
                 }
             }
         }
     }
     Ok(())
+}
+
+// A hub failure must not prevent recording a proven local pre-spawn failure.
+// trace:STORY-2492 | ai:codex
+fn cancel_spawn_failure(
+    root: &Path,
+    store: &Store,
+    key: &str,
+    attempt: &Attempt,
+    error: &str,
+) -> Result<()> {
+    // Free local capacity first, even if the cancellation loses connectivity.
+    retry_busy(|| mark_spawn_failed(store, key, &attempt.token))?;
+    if let Err(cancel) = admission::transition(
+        root,
+        key,
+        &attempt.head,
+        &attempt.token,
+        admission::State::Cancelled,
+        format!("dispatcher spawn failed before creating any process: {error}"),
+    ) {
+        eprintln!("{key}: hub claim retained; operator recovery required: {cancel:#}");
+    }
+    Ok(())
+}
+
+// One boundary for local process/capacity receipts and distributed admission.
+// trace:STORY-2492 | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-871 | ai:codex
+fn reserve_dispatch(root: &Path, store: &Store, key: &str, attempt: &mut Attempt) -> Result<bool> {
+    let result = (|| {
+        attempt.admission_hub = admission::Hub::load(root)?;
+        if let Some(hub) = &attempt.admission_hub {
+            hub.validate_repository(&store.repository)?;
+        }
+        store.transaction(key, |state| {
+            let local = attempt_mut(state, key, &attempt.token)
+                .context("reservation disappeared before hub admission")?;
+            local.admission_hub = attempt.admission_hub.clone();
+            Ok(())
+        })?;
+        admission::reserve(root, key, &attempt.head, &attempt.token)
+    })();
+    match result {
+        Ok(true) => Ok(true),
+        Ok(false) => {
+            store.transaction(key, |state| {
+                let local =
+                    attempt_mut(state, key, &attempt.token).context("reservation disappeared")?;
+                local.phase = Phase::RemoteHeld;
+                Ok(())
+            })?;
+            Ok(false)
+        }
+        Err(error) => {
+            mark_spawn_failed(store, key, &attempt.token).with_context(|| {
+                format!("admission failed: {error:#}; local cleanup also failed")
+            })?;
+            Err(error)
+        }
+    }
 }
 
 /// Whether a skip reason parks the head: it is not reviewed and nothing in
@@ -2557,3 +2790,185 @@ mod notice_tests;
 #[cfg(test)]
 #[path = "tests/bug_2426_review_watch_update_tests.rs"]
 mod update_tests;
+
+// Exercise the real history/admission precheck from the two-clone publication
+// fixture without exposing watcher runtime internals to production callers.
+// trace:STORY-2492 | ai:codex
+#[cfg(test)]
+pub(crate) fn synced_history_precheck(root: &Path, id: u64, head: &str) -> Result<Option<String>> {
+    let repo = forge::Repository::load(root);
+    let identity = repo
+        .map(|r| r.identity)
+        .unwrap_or_else(|_| "fixture".into());
+    let store = Store::open(root, &identity)?;
+    probe_unneeded(
+        &store,
+        &forge::Change {
+            id,
+            head: head.into(),
+            base: "main".into(),
+            author: "fixture-author".into(),
+            gitlab: false,
+            overlap: None,
+            behind: None,
+            head_branch: None,
+        },
+    )
+}
+
+#[cfg(test)]
+pub(crate) use admission_fixture::{assert_failed_admission, fixture_admit_dispatch};
+
+#[cfg(test)]
+mod admission_fixture {
+    use super::*;
+
+    // The real selection/reserve boundary with a harmless fixture dispatcher.
+    // trace:STORY-2492 | ai:codex
+    #[cfg(test)]
+    pub(crate) fn fixture_admit_dispatch(
+        root: &Path,
+        head: &str,
+        program: &Path,
+        marker: &Path,
+    ) -> Result<bool> {
+        let store = Store::open(root, "github:github.com/fixture/review")?;
+        let change = forge::Change {
+            id: 7,
+            head: head.into(),
+            base: "main".into(),
+            author: "fixture-author".into(),
+            gitlab: false,
+            overlap: Some(false),
+            behind: Some(0),
+            head_branch: None,
+        };
+        let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+            return Ok(false);
+        };
+        if !reserve_dispatch(root, &store, "PR-7", &mut attempt)? {
+            return Ok(false);
+        }
+        anyhow::ensure!(
+            Command::new(program).arg(marker).status()?.success(),
+            "fixture dispatcher failed"
+        );
+        Ok(true)
+    }
+
+    // trace:TASK-3196 | ai:codex
+    pub(crate) fn assert_failed_admission(root: &Path, head: &str) {
+        let store = Store::open(root, "github:github.com/fixture/review").unwrap();
+        let state = store.load().unwrap();
+        let attempt = state.entries["PR-7"].attempts.last().unwrap();
+        assert_eq!(attempt.head, head);
+        assert_eq!(attempt.phase, Phase::Failed);
+    }
+}
+
+// Test entry point into the same exit/cancellation functions used by children.
+// trace:TASK-3196 | ai:codex
+#[cfg(test)]
+pub(crate) fn fixture_admission_exit(
+    root: &Path,
+    ambiguous: bool,
+    unclaimed: bool,
+    before_exit: impl FnOnce(),
+) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
+    };
+    let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("fixture not selected");
+    };
+    anyhow::ensure!(
+        reserve_dispatch(root, &store, "PR-7", &mut attempt)?,
+        "fixture not admitted"
+    );
+    if unclaimed {
+        before_exit();
+        return mark_unclaimed_exit(&store, "PR-7", &attempt.token, "fixture pre-claim exit");
+    }
+    execute_reservation(
+        &store,
+        "PR-7",
+        &attempt.token,
+        |_| {
+            admission::transition(
+                root,
+                "PR-7",
+                &attempt.head,
+                &attempt.token,
+                admission::State::Running,
+                "fixture exact-head preflight".into(),
+            )
+        },
+        |_| {
+            let mut child = Command::new("sleep").arg("0.05").spawn()?;
+            let identity = Identity::of(child.id())?;
+            store.record_worker("PR-7", &attempt.token, Some(identity))?;
+            child.wait()?;
+            if ambiguous {
+                // Reproduce a lost queue-work receipt after it began reviewer
+                // spawn: the dispatcher cannot attest that descendant stopped.
+                store.transaction("PR-7", |state| {
+                    attempt_mut(state, "PR-7", &attempt.token)
+                        .unwrap()
+                        .reviewer_spawning = true;
+                    Ok(())
+                })?;
+            }
+            before_exit();
+            finish_admission(
+                root,
+                &store,
+                "PR-7",
+                &attempt.token,
+                &attempt.head,
+                "fixture observed exit",
+            )
+        },
+    )
+}
+
+#[cfg(test)]
+// trace:TASK-3196 | ai:codex
+pub(crate) fn fixture_admission_spawn_failure(
+    root: &Path,
+    before_cancel: impl FnOnce(),
+) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
+    };
+    let Action::Dispatch(mut attempt) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("fixture not selected");
+    };
+    anyhow::ensure!(
+        reserve_dispatch(root, &store, "PR-7", &mut attempt)?,
+        "fixture not admitted"
+    );
+    before_cancel();
+    cancel_spawn_failure(root, &store, "PR-7", &attempt, "fixture executable missing")?;
+    let state = store.load()?;
+    anyhow::ensure!(
+        state.entries["PR-7"].attempts[0].phase == Phase::Failed,
+        "local capacity leaked after hub cancellation error"
+    );
+    Ok(())
+}

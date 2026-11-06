@@ -1219,6 +1219,7 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                     format!("PR-{id}"),
                     Entry {
                         attempts: vec![Attempt {
+                            admission_hub: None,
                             head: format!("{id:040x}"),
                             token: uuid::Uuid::new_v4().to_string(),
                             vendor: None,
@@ -2403,4 +2404,23 @@ fn story_2401_review_exhausted_fetch_never_consumes_terminal_setup_retry() {
         assert!(!active(a));
         assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
     }
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+#[test]
+fn story2492_early_admission_error_frees_the_local_reservation() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    std::fs::write(
+        temp.path().join(".aida/review-publisher.json"),
+        "invalid publisher JSON",
+    )
+    .unwrap();
+    assert!(reserve_dispatch(temp.path(), &store, "PR-1", &mut attempt).is_err());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Failed
+    );
+    dispatch(select(&store, &c, None, 2).unwrap());
 }

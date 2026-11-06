@@ -895,6 +895,8 @@ smoke_check = "command" # accepted alternate section spelling
 confirm_bypass = "policy" # can only tighten; malformed means "on"
 
 [keys.trusted.review]
+admission_hub = "command" # Git transport endpoint: only the reviewed GitHub authority
+admission_ref = "policy"
 run_acceptance_commands = "policy" # presence probed for a display note
 acceptance_command_allow = "policy"
 solo_human_self_approval = "policy" # STORY-1655: presence probed for an "ignored" warning

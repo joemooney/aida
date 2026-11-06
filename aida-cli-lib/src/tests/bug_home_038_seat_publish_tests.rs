@@ -1009,7 +1009,18 @@ fn task_2712_lane_post_exit_commits_pending_seat_work() {
     assert_ne!(tip, base, "the host made no commit");
     assert_eq!(outcome, PostExitCommit::Committed(tip));
     let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
-    assert_eq!(subject, post_exit_message("BUG-1", "lane-7", true));
+    assert_eq!(
+        subject,
+        post_exit_message(
+            crate::load_store_for_lookup(&fx.main)
+                .as_ref()
+                .and_then(|store| store.get_requirement_by_spec_id("BUG-1")),
+            "BUG-1",
+            "lane-7",
+            true
+        )
+        .unwrap()
+    );
     assert!(subject.ends_with("(BUG-1)"), "{subject}");
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
     // Nothing pending now.
@@ -1036,7 +1047,10 @@ fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
     let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
     assert_eq!(outcome, PostExitCommit::Committed(tip));
     let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
-    assert_eq!(subject, post_exit_message("BUG-1", "lane-9", false));
+    assert_eq!(
+        subject,
+        post_exit_message(None, "BUG-1", "lane-9", false).unwrap()
+    );
     assert!(subject.ends_with("(Refs BUG-1)"), "{subject}");
     assert!(!subject.contains(" (BUG-1)"), "{subject}");
 }
@@ -1096,6 +1110,14 @@ fn bug_2459_post_exit_origin_scope_publishes_without_home_alias_trailers() {
                 format!("(Refs {id})")
             };
             assert!(subject.ends_with(&trailer), "{subject}");
+            // trace:BUG-2461 | ai:codex
+            if clean_exit {
+                assert!(subject.starts_with("[AI:codex] fix("), "{subject}");
+                assert!(
+                    subject.ends_with(&format!(": Publish native lane work {trailer}")),
+                    "{subject}"
+                );
+            }
             assert!(!subject.contains("HOME"), "{subject}");
             let mut options = opts(&clone, false, false);
             options.spec = Some(origin.clone());
@@ -1118,7 +1140,8 @@ fn bug_2459_post_exit_origin_scope_publishes_without_home_alias_trailers() {
                 git_ok(&fx.origin, &["rev-parse", "refs/heads/alias-publish"]),
                 tip
             );
-            assert!(forge.opened.lock().unwrap()[0].title.ends_with(&trailer));
+            // trace:BUG-2461 | ai:codex
+            assert_eq!(forge.opened.lock().unwrap()[0].title, subject);
             assert!(import_refs(&fx.main).is_empty());
         }
     }
