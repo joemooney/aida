@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T22:52:54.574714664Z
+modified_at: 2026-11-06T23:00:00.996415961Z
 req_type: Task
 tags:
 - architecture
@@ -462,6 +462,11 @@ comments:
   created_at: 2026-11-06T22:51:52.165452637Z
   modified_at: 2026-11-06T22:51:52.165452637Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b317-2564-7520-b226-2aae1b248d39
+  author: mcp
+  content: 'Round-5 rework on merged HEAD 582daacbd0dd: regenerated scripts/store-writers.toml and reviewed all four additions/four stale removals. leases.rs now records adopt_spec_lease_for_subagent''s with_lease_write_lock wrapper and adopt_spec_lease_unlocked''s write_atomic; session.rs moves the atomic sinks to stamp_lease_holder_at and stamp_lease_detached_worker_with_holder_at. Removed the obsolete standalone_implementer wrapper row after the callee became a bare-name forwarding wrapper (documented static-analysis limit). All four new sites remain blocked for TASK-3223; retained policies and all 292 operation mappings are byte-for-byte unchanged as parsed. Prior F2 fixes/fixtures and accepted Limits documentation already exist at this head and were verified. Validation: standalone guard PASS (3299 sink sites / 292 operations), 40 mutation fixtures PASS, CI gate audit PASS (73 classified), git diff --check PASS. make check-ci-fast: no-default-features check PASS; stopped with exit 130 while subsequent TUI seam guard waited for a shared build slot. Aggregate fast result incomplete, not green. Exact-head remote Gates/contracts/full CI remains unverified until host commits/publishes this native-seat change; supervised merge hold requires its separate human/advisor path. Only scripts/store-writers.toml changed, left uncommitted per native-seat instructions.'
+  created_at: 2026-11-06T23:00:00.996396446Z
+  modified_at: 2026-11-06T23:00:00.996396446Z
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
