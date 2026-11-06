@@ -83,7 +83,7 @@ fn resolve_scope_in(store: &aida_core::RequirementsStore, scope: &str) -> Result
         !req.archived && req.status != aida_core::RequirementStatus::Rejected,
         "publication scope `{scope}` is not live"
     );
-    Ok(req.display_id())
+    Ok(req.display_id()) // canonical-id: persisted publication scope and commit trailer
 }
 
 fn lease_for_tree(main: &Path, tree: &Path) -> Result<Option<crate::SessionLease>> {

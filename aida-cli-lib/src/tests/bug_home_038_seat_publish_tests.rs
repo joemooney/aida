@@ -2064,6 +2064,8 @@ fn task_2879_post_exit_commit_looks_up_refs_pr() {
     });
     let origin = "BUG-b6b1278890774ef993d2ebc327862470-225";
     let fx = fixture();
+    // trace:TASK-2902 | ai:codex — create the seat before installing its origin mapping.
+    let clone = seat_with_publication_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
     let mut req = title_spec("Preserve partial work");
     req.spec_id = Some(origin.into());
     req.agreed_id = Some("BUG-1".into());
@@ -2072,7 +2074,6 @@ fn task_2879_post_exit_commit_looks_up_refs_pr() {
     aida_core::Storage::new(fx.main.join("requirements.yaml"))
         .save(&store)
         .unwrap();
-    let clone = seat_with_publication_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
     let bin = fx.root.join("bin");
     std::fs::create_dir(&bin).unwrap();
     let gh = bin.join("gh");

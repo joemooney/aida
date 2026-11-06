@@ -134,7 +134,7 @@ subject remains usable, but the generic rework subject refuses publication.
 <!-- trace:TASK-2891 | ai:codex -->
 
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
-inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): partial work (Refs TASK-123)'`
+inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): partial work (Refs <spec-id>)'`
 records a publication declaration without committing or publishing. Supply the
 complete subject and exactly one live non-epic lease spec; `(ID)` declares
 completion and `(Refs ID)` declares a partial slice. `--dry-run` validates without
