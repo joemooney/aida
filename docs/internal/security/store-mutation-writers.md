@@ -25,7 +25,7 @@ a removed site makes its row stale. Policy schema validation remains strict.
 
 | Field | Meaning |
 |---|---|
-| `id`, `path`, `item`, `sink` | Stable site identity; item includes enclosing Rust module/impl/function or Python class/function |
+| `id`, `path`, `item`, `sink` | Stable site identity; item includes enclosing Rust module/impl/function, Python class/function, or shell function (`<script>` only at top level) |
 | `lock`, `gate` | Observed lock and operation policy, or explicit caller-owned/unresolved cutover requirement |
 | `disposition`, `blocker` | Reviewed disposition and outstanding TASK-3223 work; no present authority |
 | `proposed_operation` | Candidate typed operation or explicit unresolved/refusal |
@@ -41,6 +41,14 @@ remain blocked for S2 until receiver/trait, alias, legacy dispatch and deferred
 child edges and host authority are reviewed. Per-operation lock/gate notes
 preserve the concrete known routes for spec edits, comments, claims, completion,
 findings and mail. The inventory does not forward generic CLI/MCP requests.
+Each operation also carries a checked `resolution_note` explaining its route or
+its specific unresolved entrypoint. MCP queue add/rework include their reviewed
+inner receiver handlers, and punt resolve/escalate include their imported core
+handlers. MCP queue work, db sync, pull, session start/end and role enter/end
+are PEEK tools returning CLI commands; their rows explicitly retain the CLI
+cutover blocker. `queue done` selects sinks and qualified calls from the concrete
+`QueueCommand::Done` arm, rather than all arms of the dispatcher. Its sink rows
+still use the enclosing function identity required by the inventory contract.
 
 Print unresolved operations without touching a live store:
 
@@ -124,6 +132,13 @@ become writers. Explicit `crate::writer::add` remains detectable. Unresolved
 imports, bare free-function calls, receiver methods and trait dispatch require
 S2 reconciliation; the scanner does not guess their target. Python uses AST
 call nodes; shell uses lexical tokens with comments/quoted payloads opaque.
+Shell function forms `name() {`, `function name {` and `function name() {`
+have separate site identities. Redirects to `/dev/null` do not create writer
+sites. The shell/Python subprocess vocabulary includes `aida findings`, session,
+review, punt(s), rework, merge-hold, role, node and pr commands, as conservative
+candidates even when a particular subcommand only reads. Python distinguishes
+`Path.open(mode)` from `open(path, mode)` and includes remove/touch/move/copy and
+literal argv subprocess writes through git/aida.
 
 After the host merges **current main**, regenerate against that merged tree:
 
@@ -155,6 +170,16 @@ that authorize a bypass. Shell heredocs, expansion and dynamic command construct
 manual review; lexical tokens do not establish an executable shell call graph. No lane code/config/hooks are run
 by this audit.
 
+**Named Rust Git-plumbing cutover blocker (TASK-3223):** the Rust seed scan
+does not inspect subprocess argument strings. Raw `git(&["update-ref", ...])`,
+`commit-tree`, `hash-object -w`, `push`, and `commit`, or
+`Command::new("git"/"aida")` writes may therefore have no sink row when the
+enclosing item has no other seed. In particular, manually reconcile
+`aida-core/src/git_ops.rs::fetch_rebase_target` and all raw Git/AIDA command
+constructors before cutover. An incidental lock/helper row does not establish
+coverage of that subprocess. This is the explicit blocker alternative accepted
+by round-3 finding 5; it must be closed before claiming raw-store denial.
+
 `tests/test_store_writer_inventory.py` uses disposable source trees. Required
 mutants each refuse **before** classification and pass only after an explicit
 fixture inventory update: a raw filesystem writer, a caller of an existing
@@ -165,6 +190,10 @@ new sink kinds inserted in an existing item,
 missing sink/lock/gate/disposition, stale/duplicate rows, source symlinks,
 comments/raw strings, production following inline tests, Python/shell writes,
 and actual CI fast-tier wiring.
+Round-3 fixtures additionally cover findings/session hook commands, shell
+function identity with an existing null redirect, Path.open write modes,
+Python subprocess/filesystem writers, explicit MCP inner edges, and concrete
+queue-done arm selection. The three original refusal mutants remain intact.
 
 The CI Build job runs the standalone guard and mutation fixtures. Both steps
 are `fast` in `scripts/ci-gate-tiers.toml`; `make check-ci-fast` derives them

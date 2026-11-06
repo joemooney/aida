@@ -34,6 +34,23 @@ APIS = (
 SEED = re.compile("|".join(APIS))
 # Sink identity excludes line numbers, argument values and unrelated source text.
 DISPOSITIONS = {"s2_typed", "host_only", "lane_private", "read_only", "blocked"}
+# trace:TASK-3222 | ai:codex
+AIDA_WRITERS = {"add", "edit", "comment", "queue", "claim", "mailbox", "db", "sync",
+                "findings", "session", "review", "punt", "punts", "rework", "merge-hold",
+                "role", "node", "pr"}
+GIT_WRITERS = {"add", "commit", "push", "update-ref", "commit-tree", "merge", "rebase"}
+
+
+def argv_writer(argv):
+    if len(argv) < 2:
+        return None
+    executable = Path(argv[0]).name
+    if executable == "aida" and argv[1] in AIDA_WRITERS:
+        return "aida " + argv[1]
+    if executable == "git" and (argv[1] in GIT_WRITERS or
+                                argv[1] == "hash-object" and "-w" in argv[2:]):
+        return "git " + argv[1]
+    return None
 
 
 def blank(text: str) -> str:
@@ -218,18 +235,30 @@ def script_sites(path, source):
             for child in ast.iter_child_nodes(parent):
                 parents[child] = parent
         writers = {"write_text", "write_bytes", "write", "rename", "replace", "unlink",
-                   "mkdir", "makedirs", "rmtree", "copyfile", "copy2", "execute",
+                   "mkdir", "makedirs", "rmtree", "remove", "touch", "move", "copy", "copyfile", "copy2", "execute",
                    "executemany", "commit", "open", "dump", "safe_dump"}
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             name = ast.unparse(node.func)
-            if name.rsplit(".", 1)[-1] not in writers:
+            kind = name.rsplit(".", 1)[-1]
+            subprocess_sink = None
+            if name in {"subprocess.run", "subprocess.call", "subprocess.check_call",
+                        "subprocess.check_output", "subprocess.Popen"}:
+                argv = next((k.value for k in node.keywords if k.arg == "args"),
+                            node.args[0] if node.args else None)
+                if isinstance(argv, (ast.List, ast.Tuple)):
+                    values = [v.value if isinstance(v, ast.Constant) and isinstance(v.value, str)
+                              else "<dynamic>" for v in argv.elts]
+                    subprocess_sink = argv_writer(values)
+            if kind not in writers and not subprocess_sink:
                 continue
             # open(..., 'r') and open(path) are reads, not write sites.
             if name.rsplit(".", 1)[-1] == "open":
+                # Path.open(mode) differs from builtins/io.open(path, mode).
+                mode_index = 1 if name in {"open", "io.open", "builtins.open", "os.open"} else 0
                 mode = next((k.value for k in node.keywords if k.arg == "mode"),
-                            node.args[1] if len(node.args) > 1 else ast.Constant("r"))
+                            node.args[mode_index] if len(node.args) > mode_index else ast.Constant("r"))
                 if isinstance(mode, ast.Constant) and isinstance(mode.value, str) and not set(mode.value) & set("wax+"):
                     continue
             chain, parent = [], parents.get(node)
@@ -237,22 +266,39 @@ def script_sites(path, source):
                 if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     chain.append(parent.name)
                 parent = parents.get(parent)
-            yield "::".join(reversed(chain)) or "<module>", "python:" + name.rsplit(".", 1)[-1]
+            yield "::".join(reversed(chain)) or "<module>", "python:" + ("subprocess:" + subprocess_sink if subprocess_sink else kind)
     else:
         # Shell lexical tokens keep quotes/comments opaque without expanding
         # variables or treating embedded heredoc payloads as executable Python.
-        token_pattern = r"\"(?:\\.|[^\"\\])*\"|'[^']*'|#[^\n]*|[;&|<>()]+|[^\s;&|<>()]+"
-        tokens = [m.group() for m in re.finditer(token_pattern, source)
+        token_pattern = r"\"(?:\\.|[^\"\\])*\"|'[^']*'|#[^\n]*|\$\{[^}]*\}|[;&|<>]+|[(){}]|[^\s;&|<>(){}]+"
+        matches = [m for m in re.finditer(token_pattern, source)
                   if not m.group().startswith("#")]
+        tokens = [m.group() for m in matches]
+        scopes, stack = [], []
         for i, token in enumerate(tokens):
+            if token == "{":
+                label = None
+                if i >= 3 and tokens[i-2:i] == ["(", ")"]:
+                    label = tokens[i-3]
+                elif i >= 2 and tokens[i-2] == "function":
+                    label = tokens[i-1]
+                stack.append((matches[i].end(), label))
+            elif token == "}" and stack:
+                start, label = stack.pop()
+                if label and re.fullmatch(r"[\w-]+", label):
+                    scopes.append((start, matches[i].start(), label))
+        scopes.sort()
+        for i, token in enumerate(tokens):
+            item = "::".join(name for start, end, name in scopes
+                             if start <= matches[i].start() < end) or "<script>"
             if token in {"aida", "git"} and i + 1 < len(tokens):
-                command = tokens[i + 1]
-                if token == "aida" and command in {"add", "edit", "comment", "queue", "claim", "mailbox", "db", "sync", "finding"}:
-                    yield "<script>", "aida " + command
-                if token == "git" and command in {"add", "commit", "push", "update-ref", "merge", "rebase"}:
-                    yield "<script>", "git " + command
+                sink = argv_writer(tokens[i:i+8])
+                if sink:
+                    yield item, sink
             elif token in {"mv", "cp", "rm", "mkdir", "tee", "install", ">", ">>"}:
-                yield "<script>", token
+                if token in {">", ">>"} and i + 1 < len(tokens) and tokens[i+1].strip("\"'") == "/dev/null":
+                    continue
+                yield item, token
 
 
 def site_id(path, item, sink):
@@ -322,7 +368,7 @@ def operations(root, scanned=None):
         if site["path"].endswith(".rs"):
             by_function.setdefault(function_identity(site["path"], site["item"]), set()).add(key)
 
-    def resolve(surface, selector, entrypoints):
+    def resolve(surface, selector, entrypoints, note=None):
         visited, pending, found = set(), list(entrypoints), set()
         while pending:
             name = pending.pop()
@@ -332,7 +378,9 @@ def operations(root, scanned=None):
             found.update(by_function.get(name, ()))
             pending.extend(edges.get(name, set()) - visited)
         result[surface + ":" + selector] = dict(surface=surface, selector=selector,
-            entrypoints=entrypoints, sites=sorted(found))
+            entrypoints=entrypoints, sites=sorted(found),
+            resolution_note=note or ("Qualified lexical sink routes; receiver/trait and child edges still require review."
+                if found else f"No qualified sink route from {', '.join(entrypoints)}; reconcile this operation's receiver/import/child calls before cutover."))
 
     for path, (source, masked) in files.items():
         if not path.endswith(".rs"):
@@ -385,7 +433,6 @@ def operations(root, scanned=None):
         "comment edit": ("comment_cmd", "edit_comment_interactive"),
         "comment delete": ("comment_cmd", "delete_comment"),
         "comment add": ("comment_cmd", "add_comment_cli_relayed"),
-        "queue done": ("queue_cmd", "handle_queue_command"),
         "findings add": ("findings_gate", "handle_findings_add"),
         "session handoff": ("seat_rotation", "write_handoff_by"),
         "session handoff standing-orders add": ("seat_rotation", "add_standing_order"),
@@ -395,6 +442,47 @@ def operations(root, scanned=None):
     for selector, (module, function) in explicit.items():
         if (root / f"aida-cli-lib/src/{module}.rs").exists():
             resolve("cli", selector, [f"aida_cli_lib::{module}::{function}"])
+    # Explicit reviewed receiver/import edges, never global bare-name propagation.
+    mcp_path = "aida-cli-lib/src/mcp.rs"
+    if mcp_path in files:
+        for selector in ("queue_add", "queue_rework"):
+            if "mcp:" + selector not in result:
+                continue
+            names = ["tool_" + selector, "tool_" + selector + "_inner"]
+            entries = [function_identity(mcp_path, item) for _, _, item in parsed[mcp_path]
+                       if item.split("::")[-1] in names]
+            resolve("mcp", selector, entries,
+                    "Reviewed self.tool_*_inner receiver edge; outer authority checks remain required; backend receiver dispatch is a cutover blocker.")
+        for selector in ("resolve_punt", "escalate_punt"):
+            key = "mcp:" + selector
+            if key in result:
+                resolve("mcp", selector, result[key]["entrypoints"] +
+                        [f"aida_cli_lib::punt::{function}" for function in
+                         (selector + "_core", "write_punt_response", "close_open_records")],
+                        "Reviewed punt module import and core calls to write_punt_response/close_open_records; response/ledger writers need operation-specific host authority.")
+        for selector in ("queue_work", "db_sync", "pull", "session_start", "session_end", "role_enter", "role_end"):
+            key = "mcp:" + selector
+            if key in result:
+                result[key]["resolution_note"] = (f"tool_{selector} is PEEK-only: returns a CLI invocation without performing that mutation. "
+                    "Keep blocked until the corresponding CLI operation and any incidental reads/cache effects are reconciled.")
+    queue_path = "aida-cli-lib/src/queue_cmd.rs"
+    if queue_path in files:
+        source, masked = files[queue_path]
+        arm = re.search(r"QueueCommand::Done\s*\{[^}]*\}\s*=>\s*\{", masked)
+        if arm:
+            start, end = arm.end(), block_end(masked, arm.end()-1)-1
+            item = enclosing(parsed[queue_path], start)
+            entry = function_identity(queue_path, item) + "::arm QueueCommand::Done"
+            kinds = {re.sub(r"\s+", "", h.group()) for h in SEED.finditer(masked[start:end])}
+            targets = {qualified(h.group(), queue_path, item) for h in CALL.finditer(masked[start:end])}
+            by_function[entry] = {key for key, site in sites.items() if site["path"] == queue_path
+                                 and site["item"] == item and (site["sink"] in kinds or
+                                 site["sink"].removeprefix("wrapper:") in targets)}
+            # Do not reuse the whole dispatcher's outgoing edges.
+            edges = dict(edges)
+            edges[entry] = targets - {None}
+            resolve("cli", "queue done", [entry],
+                    "Concrete QueueCommand::Done arm only; sink IDs retain their enclosing function identity. Receiver writes and shared pre-match effects require cutover review.")
     return result
 
 
@@ -440,7 +528,7 @@ def check(root: Path, inventory: Path | None = None, scanned=None) -> list[str]:
         if any(not row.get(f) for f in ("lock", "gate", "proposed_operation", "evidence_tests", "blocker")) or row.get("disposition") != "blocked":
             errors.append(f"operation needs explicit cutover blocker: {key}")
     for key in sorted(expected.keys() | registered.keys()):
-        if key not in expected or key not in registered or any(registered[key].get(f) != expected[key][f] for f in ("entrypoints", "sites")):
+        if key not in expected or key not in registered or any(registered[key].get(f) != expected[key][f] for f in ("entrypoints", "sites", "resolution_note")):
             errors.append(f"operation mapping changed: {key}")
     return errors
 

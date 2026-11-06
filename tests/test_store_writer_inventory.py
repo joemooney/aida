@@ -197,6 +197,85 @@ class WriterInventoryTests(unittest.TestCase):
         self.put("aida-core/templates/hooks/new-hook.sh", '# aida edit TASK-1\necho "aida edit TASK-1"\naida comment add TASK-1 "persist"\n')
         self.assert_refused_then_classified()
 
+    def test_hook_findings_and_session_mutants(self):
+        for command in ('findings add --title issue', 'session harness-worktree-release'):
+            with self.subTest(command=command):
+                self.put("aida-core/templates/hooks/new-hook.sh", 'aida ' + command + '\n')
+                self.assert_refused_then_classified()
+
+    def test_shell_function_identity_and_null_redirect(self):
+        path = "scripts/existing.sh"
+        original = 'existing() { echo ignored >/dev/null; aida edit TASK-1; git commit -m old; }\n'
+        self.put(path, original)
+        self.classify()
+        self.assertFalse(any(r['sink'] == '>' for r in guard.discover(self.root).values()))
+        self.put(path, original + 'function new_writer { echo x > "$store/f"; aida edit TASK-2; git commit -m new; }\n')
+        errors = guard.check(self.root)
+        for kind in ('>', 'aida edit', 'git commit'):
+            self.assertTrue(any('new_writer|' + kind in e for e in errors), errors)
+        self.assert_refused_then_classified()
+
+    def test_shell_function_declaration_forms(self):
+        self.put('scripts/functions.sh', '''
+            one() { aida edit TASK-1; }
+            function two { aida edit TASK-1; }
+            function three() { aida edit TASK-1; }
+        ''')
+        rows = guard.discover(self.root).values()
+        self.assertEqual({'one', 'two', 'three'}, {r['item'] for r in rows if r['path'].endswith('functions.sh')})
+
+    def test_python_path_open_modes_mutants(self):
+        for mode in ('w', 'a', 'wb', 'r+'):
+            with self.subTest(mode=mode):
+                # Remove any previous classification for this same site.
+                (self.root / 'scripts/path_mode.py').unlink(missing_ok=True)
+                self.classify()
+                self.put('scripts/path_mode.py', f'def only_writer(p):\n    with p.open({mode!r}) as f:\n        pass\n')
+                self.assert_refused_then_classified()
+
+    def test_python_subprocess_and_filesystem_mutants(self):
+        for expression in ("subprocess.run(['aida', 'edit', spec])",
+                           "subprocess.run(['git', 'add', path])",
+                           "subprocess.run(args=['git', 'hash-object', '-w', path])",
+                           "os.open('store', os.O_WRONLY | os.O_CREAT)",
+                           "os.remove(path)", "path.touch()", "shutil.move(a, b)", "shutil.copy(a, b)"):
+            with self.subTest(expression=expression):
+                target = self.root / 'scripts/python_writer.py'
+                target.unlink(missing_ok=True)
+                self.classify()
+                self.put('scripts/python_writer.py', 'def only_writer():\n    ' + expression + '\n')
+                self.assert_refused_then_classified()
+
+    def test_python_open_reads_are_not_sinks(self):
+        self.put('scripts/read.py', 'p.open("r")\np.open()\nopen(path)\nopen(path, "rb")\nio.open(path, "r")\n')
+        self.assertEqual([], guard.check(self.root))
+
+    def test_queue_done_maps_only_concrete_arm(self):
+        self.put('aida-cli-lib/src/queue_cmd.rs', '''
+            fn handle_queue_command() {
+                match cmd {
+                    QueueCommand::Add { id } => { std::fs::rename(a, b); },
+                    QueueCommand::Done { id } => { std::fs::write(a, b); },
+                }
+            }
+        ''')
+        row = guard.operations(self.root)['cli:queue done']
+        self.assertIn('arm QueueCommand::Done', row['entrypoints'][0])
+        self.assertTrue(any(s.endswith('|fs::write') for s in row['sites']))
+        self.assertFalse(any(s.endswith('|fs::rename') for s in row['sites']))
+
+    def test_mcp_queue_inner_receiver_edges_are_explicit(self):
+        self.put('aida-cli-lib/src/mcp.rs', '''
+            impl Server {
+                fn dispatch() { match tool_name { "queue_add" => self.tool_queue_add(args), } }
+                fn tool_queue_add() { self.tool_queue_add_inner(args); }
+                fn tool_queue_add_inner() { storage.queue_add(entry); }
+            }
+        ''')
+        row = guard.operations(self.root)['mcp:queue_add']
+        self.assertTrue(any(s.endswith('|queue_add') for s in row['sites']))
+        self.assertIn('inner', row['resolution_note'])
+
     def test_script_comments_and_strings_are_not_sites(self):
         self.put("scripts/pure.py", '# cache.write_bytes(data)\nx = "cache.write_bytes(data)"\nopen("input", "r")\n')
         self.put("scripts/pure.sh", '# aida edit TASK-1\necho "aida comment add TASK-1"\n')
