@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-06T18:52:34.527624644Z
+modified_at: 2026-11-06T18:52:38.114543870Z
 req_type: Task
 tags:
 - architecture
@@ -60,6 +60,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Transport, closed protocol, bounds, per-packet kernel identity and receipt gating match sketch v1 and the 07:10 signoff, but Session::prepare refuses every service-required launch when any unrelated lease has an empty or deleted worktree (3 such leases exist in the primary now), the host authority channel has no request correlation so a late reply answers the next check, and the Rust grant/lease/root refusal paths have no tests.. No triage reason was given.'
   created_at: 2026-11-06T18:52:34.527623410Z
   modified_at: 2026-11-06T18:52:34.527623410Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b234-a8c9-75a3-b873-2eed04bb5723
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3225):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bcc07540313d
+    Recorded: 2026-11-06T17:28:05.224833975+00:00
+    Findings:
+    1. [major] aida-cli-lib/src/store_mutation/mod.rs:647-669: Session::prepare reads EVERY *.toml lease in .aida/sessions and propagates errors with ? from read_lease(&path) and std::fs::canonicalize(&lease.worktree_path) before filtering by role/worktree. Review and claim leases use an empty worktree_path (TASK-474/BUG-511/TASK-957 convention), and stale leases can name deleted worktrees. canonicalize("") fails with ENOENT, so any such unrelated lease makes every AIDA_STORE_MUTATION_REQUIRED launch refuse. The primary checkout has 3 empty-worktree leases right now. Fix: skip leases that are unreadable or can't be canonicalized (they can't name this root), and keep ambiguity refusal only for leases that do match root+role. Add a Rust test with an empty-worktree lease and a deleted-worktree lease next to the owned lease.
+    2. [major] contained_host.py:671-676 + store_mutation/mod.rs:707-768: the private authority channel is an uncorrelated 1-byte '?'/'Y|E|R|N' stream. The Python side gives up after 1s (settimeout(1) -> 'Unavailable'), but the Rust responder's grant_check_for/read_lease/load paths are unbounded. A late reply stays queued and the NEXT authorize() reads it, so every later check returns the previous check's answer. Example: a stale 'Y' is accepted after revocation. ContainedChild::bind_worker can also read a leftover preflight reply instead of its own. The connect/dispatch paths catch the refusal and keep using the desynced channel. Fix: correlate replies (sequence number/nonce echoed back) or treat any authority timeout as fatal channel closure. Add a test where the responder answers late and then revokes.
+    3. [minor] Refusal paths in the Rust authority owner are untested (strict-tier Probe 5). Nothing exercises Session::prepare refusals: missing subject/seat, grant seat mismatch, invalid or expired grant, zero or ambiguous leases, unresolved spec. Nothing exercises the live valid() closure: project/worktree/store root identity change, roster store moved, lease removed or rewritten (id/scope/started_at/role/worktree), grant expired/revoked, parent grant changed, worker token not in grant.binding. The Python tests use a synthetic authority responder, and the Rust tests cover only rejection_code and the token format. Sketch section 6's identity list (wrong project/store/spec/role, expired/revoked child AND parent grant, roster removal, lease removal, authority changed after the initial check) needs tests against the real owner.
+    4. [minor] The only end-to-end lifecycle evidence is tests/test_store_mutation.py test_live_broker_preflight_receipt_and_post_exec_probe and test_live_required_launch_refuses_absence_stale_epoch_empty_grant_and_revocation. Both self-skip (exit 77) when bwrap/unprivileged userns is unavailable, and the new ci.yml step does not set AIDA_REQUIRE_STORE_MUTATION_LIVE=1. ubuntu-latest commonly restricts unprivileged userns, so CI can pass with the refusal-before-release evidence skipped. Either set the env var in the 'Store mutation channel tests' step (and make the runner capable), or show in the PR that the live tests ran rather than skipped in CI run 42256519219. The reviewer could not fetch the job log.
+    5. [minor] Sketch section 1/6 sibling-isolation fixtures are missing: no test has a second lane/namespace connecting to this epoch's address, using a copied or transferred client FD, or going through /proc/<pid>/fd, with the per-packet check refusing it. test_namespace_and_process_handles_are_pinned_and_dead_worker_refuses covers pinning, and the broker test covers address spellings, but 'a copied client FD used by a sibling must still fail per-message sender checks' has no direct test.
+    6. [cosmetic] AGENTS.md:1-7 prepends a per-change paragraph, which repo CLAUDE.md forbids (TASK-1954/TASK-2015: put per-change notes in the PR body and an aida comment on the spec, because each prepended paragraph conflicts with every open PR). Drop the AGENTS.md hunk and keep the OVERVIEW.md architecture section. The PR body has no change notes either (only the seat-publication line), so move the summary there.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T18:52:37.961042664Z
+  modified_at: 2026-11-06T18:52:37.961042664Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b130-46b9-7b91-a615-b06946481d47
