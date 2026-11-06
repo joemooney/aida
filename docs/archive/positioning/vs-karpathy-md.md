@@ -74,7 +74,7 @@ In this repo:
 - [CLAUDE.md](../../../CLAUDE.md) — orientation prose for new sessions. Not in the graph.
 - [OVERVIEW.md](../../../OVERVIEW.md) — vision document. Not in the graph.
 - `aida-store` orphan branch — the graph. Source of truth for *which specs exist*, *how they relate*, *what status they're in*.
-- `docs/positioning/` (this directory) — narrative built from `aida doc` entries; renders the graph's "why" into prose.
+- `docs/internal/positioning/` (this directory) — narrative built from `aida doc` entries; renders the graph's "why" into prose.
 - `aida docs build` — projects the graph into a layered docs tree (constitution / vision / decisions / quality / glossary) for human reading.
 
 The boundary is: **markdown for prose humans read top-to-bottom; the graph for records agents query selectively.** Neither replaces the other.

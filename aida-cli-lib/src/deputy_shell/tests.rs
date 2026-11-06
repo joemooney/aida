@@ -1412,11 +1412,11 @@ fn the_advisor_standing_orders_deputy_line_submits_and_links_the_page() {
     );
     assert!(
         line.contains(
-            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/deputies.md)"
+            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/advanced/deputies.md)"
         ),
         "the link must resolve from the template master, the generated mirror and an installed project alike: {line}"
     );
-    let page = include_str!("../../../docs/deputies.md");
+    let page = include_str!("../../../docs/advanced/deputies.md");
     assert!(page.starts_with("# Deputies: command vs script"));
 }
 
@@ -1875,4 +1875,36 @@ fn a_client_that_never_finishes_its_request_does_not_stall_other_requests() {
     drop(more);
     drop(silent);
     drop(server);
+}
+
+// trace:TASK-2879 | ai:codex
+#[test]
+fn status_recovers_claim_window_and_bounds_interrupted_claims() {
+    let f = Fixture::new("t");
+    let j = f.submit("true");
+    let state = f.q.locate(&j.id).unwrap().unwrap().state;
+    std::fs::create_dir(f.q.job_dir(&j.id)).unwrap();
+    std::fs::rename(f.q.accepted_job(&j.id), f.q.job_json(&j.id)).unwrap();
+    let mut out = Vec::new();
+    assert!(crate::deputy_shell_cmd::status_with_grace(
+        &f.q,
+        &j.id,
+        Duration::from_millis(30),
+        &mut out
+    )
+    .is_err());
+    let q = f.q.clone();
+    let id = j.id.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        let result =
+            crate::deputy_shell_cmd::status_with_grace(&q, &id, Duration::from_secs(2), &mut out);
+        tx.send((result, out)).unwrap();
+    });
+    assert!(rx.recv_timeout(Duration::from_millis(100)).is_err());
+    f.q.write_state(&j.id, &state).unwrap();
+    let (result, out) = rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    reader.join().unwrap();
+    result.unwrap();
+    assert!(String::from_utf8(out).unwrap().contains(": queued"));
 }

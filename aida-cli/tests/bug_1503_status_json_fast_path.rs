@@ -208,7 +208,7 @@ fn status_format_json_uses_fast_snapshot_shape_not_heavy_report() {
     assert!(value["counts"]["open"].is_u64());
     assert!(value["counts"]["total"].is_u64());
     assert!(value["queue"]["depth"].is_u64());
-    // Monitor contract (monitor_contract.rs / docs/monitor-contract-fixtures/
+    // Monitor contract (monitor_contract.rs / docs/internal/monitor-contract-fixtures/
     // status.json) promises `requirements.total` (integer) and
     // `requirements.by_status` (object) from `aida status --json`; the fast
     // path must not drop `by_status` the way it once did. trace:BUG-1503

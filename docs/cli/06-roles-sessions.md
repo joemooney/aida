@@ -177,6 +177,22 @@ does not authorize coexistence.
 
 **Bare `aida` is a shortcut.** Typing `aida` with no arguments at an interactive terminal inside an initialized AIDA project (one with `.aida/config.toml`, a legacy `requirements.db`, or a `.aida-store` worktree) opens the same agent picker as `aida agent new`. When output goes to an agent or a pipe, bare `aida` prints the `aida status` snapshot instead; outside a project, or when stdin is not a terminal, it shows the getting-started menu. `aida status`, `aida help`, and `aida agent new` themselves are unchanged. <!-- trace:TASK-1472 | ai:claude -->
 
+**Native Codex finish.** Git metadata is read-only in a native seat. The
+implementer leaves tested edits uncommitted and exits with a handoff listing
+changed files, test results and blockers. For standalone `queue work`, the host
+publication step runs after the child and test runner exit, while the seat lease
+still exists. It commits pending work, merges an updated remote PR head inside
+the Git sandbox, and pushes and opens the PR. Conflicts abort the merge and
+refuse publication; a concurrent remote update can still make the ordinary
+non-force push refuse. A Refs PR retains non-completing commit trailers; unknown
+title evidence also uses Refs. Punts and manual holds veto publication. Native
+`queue done` reports the branch recorded in the seat lease and defers completion
+to the host before committed-only checks. The host must publish before running
+queue completion. Operator recovery, after the lane exits, remains
+`aida ship <SPEC> --from-seat <clone> --commit-pending '<message> (Refs <SPEC>)'`;
+the live-owner check still refuses a competing process.
+<!-- trace:TASK-2879 | ai:codex -->
+
 **Don't reach for it when** — you want the full lifecycle driven for you (CI, review, merge) — that's `aida queue work --auto-complete`, not `agent new`. And `pause` does **not** stop a process — it's a *status marker* for dispatch logic; use `aida agent stop` to actually terminate one.
 
 **Cwd and failed setup.** An explicit `--cwd` is used for the child and the
@@ -239,7 +255,7 @@ than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
 - `new claude --verbose` — for a launch that actually executes (unlike `--no-exec`, which previews and exits), print launch-time diagnostics before/around spawn: the resolved contract shared with `--no-exec` (agent/client, role, spec/session/name, working directory, prompt source, whether context was injected, guidance files discovered, generated child argv), plus process registration and child exit/result information once the process is running. The initial prompt text and any secret-shaped argv value are always redacted — never printed, with or without `--verbose`. Diagnostics go to stderr; normal (non-verbose) output is unchanged. <!-- trace:TASK-1498 | ai:claude -->
 - `new` initial prompt — every launch gets a short **role-aware** first message: with `--spec`, that role's contract for the spec (implementer builds, reviewer evaluates and records a verdict, advisor judges and gates, product grooms and orders, integrator lands the PR mechanically); without `--spec`, an orientation naming the role, its boundary and where to find work. A role file can replace the embedded body with `launch_prompt` / `launch_prompt_spec` (placeholders `{role}`, `{agent}`, `{spec}`). `--prompt` still wins; `--no-prompt` suppresses only this automatic message — `AIDA_SESSION_ROLE` and the launch-context snapshot are unaffected. <!-- trace:STORY-1471 | ai:claude -->
 - `new <vendor> --prompt-file <PATH>` — read the initial message from a file instead of the command line, mutually exclusive with `--prompt` and `--no-prompt`. This is the flag an orchestrator should use: a brief passed as `--prompt "$(cat brief.txt)"` through a nested `bash -lc` can lose its quoting, and the launcher would then spawn an interactive agent that sits idle at an empty prompt while the caller blocks on it. An empty or whitespace-only prompt — from either source — now refuses the launch rather than producing that silent idle seat. <!-- trace:BUG-1696 | ai:claude -->
-- `new codex --no-mail-wake` — do not wake this session's thread when its own inbox has mail. By default `aida agent new codex` arms the [mail wake](../agents/codex-mail-wake.md) once the session's SessionStart hook records its thread. `[agents.codex] mail_wake = false` in `agents.toml` makes off the default, and Codex older than 0.164.0 degrades to a warning. `aida agent list` shows the state in its `WAKE` column. <!-- trace:STORY-HOME-096 | ai:claude -->
+- `new codex --no-mail-wake` — do not wake this session's thread when its own inbox has mail. By default `aida agent new codex` arms the [mail wake](../advanced/codex-mail-wake.md) once the session's SessionStart hook records its thread. `[agents.codex] mail_wake = false` in `agents.toml` makes off the default, and Codex older than 0.164.0 degrades to a warning. `aida agent list` shows the state in its `WAKE` column. <!-- trace:STORY-HOME-096 | ai:claude -->
 - `new <vendor> --role implementer` (no `--spec`) — launches another member of the **implementer pool**: any number of generic implementers, of any vendor, may run per repo, each with its own handle and mail inbox. Exclusivity applies only where it matters — the spec claim/lease when a member picks up work, so two members never hold the same spec. Mail addressed to the role (`--to implementer`) is taken by exactly one member; mail to a handle reaches only that agent. `aida agent list` lists the pool (handle, role, spec — `(none)` while idle). Advisor, product, integrator and reviewer stay one per scope; their refusal is checked before the bypass and resume prompts and names the fix (`--spec <ID>` for a spec-scoped role). At a terminal, a refused spec-scoped launch (a reviewer, or an implementer whose `--spec` is already held) offers the approved, unclaimed specs queued for its role and launches on the one you pick; headless or piped launches just refuse. `--resume <id|latest>` reopens the ended agent in its own scope and skips this check. <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude -->
 - `new <vendor> --no-duplicate-check` — skip the same-vendor/same-role singleton check entirely, including on the new-launch path. The escape hatch when the live holder of a role is itself wedged and you need a second seat anyway. `--allow-duplicate` is the narrower flag: it drops the confirmation prompt but still lets the check refuse. <!-- trace:BUG-1697 | ai:claude -->
 - `[agents] mcp` in `agents.toml` — which AIDA surface a supervised seat gets: `off` (the default — no MCP servers, the `aida` CLI is the surface), `aida` (attach only AIDA's own `aida mcp-serve` definition), or `native` (inject nothing; the vendor's own MCP configuration applies). The default is `off` because a controlled 72-cell measurement put MCP at ~1.8–2x the CLI's token cost for identical or worse task success, and traced the overhead to the protocol's per-call structure rather than a one-off upfront-schema tax. `off` and `aida` both suppress Claude Code's project-MCP trust prompt, since neither consults the repository's `.mcp.json` — so a checkout cannot smuggle a command in under the name `aida`. Same user-base-then-project precedence as `bypass`/`contained`; an unrecognised value fails the launch rather than falling back. Only Claude Code exposes launch-time MCP flags, so for codex and antigravity MCP stays configured in their own files and this knob cannot enforce a surface at launch. <!-- trace:TASK-1558 | ai:claude -->
@@ -443,7 +459,7 @@ resolves); it narrows and never widens. `partial: true` (with safe
 `partial_codes`) means some source was not fully read, so more mail may exist.
 `pending` counts queued role mail no reader has taken; the snapshot never takes
 it. It never acknowledges mail. `--local-root` selects the checkout the view is
-read from. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
+read from. See the [Codex mail wake adapter](../advanced/codex-mail-wake.md)
 for opt-in setup, deduplication, and uncertain-delivery recovery.
 
 `--recipient <handle>` naming a registered agent reads that agent's own inbox
@@ -451,7 +467,7 @@ for opt-in setup, deduplication, and uncertain-delivery recovery.
 still live. `aida mailbox wake-run` watches every armed Codex agent of the
 project and wakes its thread; `aida mailbox wake-service install|uninstall|status`
 manages the one user service that runs it. Both are described in the
-[Codex mail wake adapter](../agents/codex-mail-wake.md).
+[Codex mail wake adapter](../advanced/codex-mail-wake.md).
 <!-- trace:STORY-1843 | ai:claude -->
 <!-- trace:TASK-2347 | ai:codex -->
 
@@ -505,13 +521,13 @@ Sessions submit work with `aida deputy submit -- <command…>`, which prints a j
 
 ### `aida deputy shell`
 
-**One line** — the script deputy: runs whole bash scripts that advisor sessions submit, one at a time, in your terminal and as you. See [Deputies: command vs script](../deputies.md) for when to use it instead of `aida deputy`.
+**One line** — the script deputy: runs whole bash scripts that advisor sessions submit, one at a time, in your terminal and as you. See [Deputies: command vs script](../advanced/deputies.md) for when to use it instead of `aida deputy`.
 
 Start it in your terminal, through the `aida()` shell function, holding an advisor grant: `aida deputy shell run [--name N] [--allow-seat SEAT] [--refresh 12h] [--keep-days D] [--keep-after-mandate]`. It refuses where `aida deputy` refuses, and without an advisor grant. Every job it runs counts as you at the keyboard.
 
 Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
 
-- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../deputies.md#letting-a-sandboxed-advisor-submit).
+- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../advanced/deputies.md#letting-a-sandboxed-advisor-submit).
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
@@ -549,7 +565,7 @@ You now own the seat model and the coordination substrates: who's wearing which 
 - **[Chapter 7 — Project setup](07-project-setup.md)**: `node` (per-clone identity, the writer-of-record this chapter's leases and mailbox sync assume) and the rest of the machine-global setup.
 - **[Chapter 8 — Reporting](08-reporting.md)**: `aida status` — the unified "what's going on here?" view that the advisor dashboard complements.
 - [`docs/review-process.md`](../review-process.md) — **who reviews by mode**, and the precise reviewer-vs-advisor-tier distinction (the reviewer gates code in every mode; the cold-boot advisor tier fires only on a punt). The authoritative source for the seat/review lore in this chapter.
-- The autonomy + escalation architecture in full — the three-mode ladder, the implementer→advisor→human cascade, the file-based handshake substrate — is [`docs/architecture/autonomy-and-escalation.md`](../architecture/autonomy-and-escalation.md).
+- The autonomy + escalation architecture in full — the three-mode ladder, the implementer→advisor→human cascade, the file-based handshake substrate — is [`docs/internal/architecture/autonomy-and-escalation.md`](../internal/architecture/autonomy-and-escalation.md).
 
 ### Mid-session expiry notices in Claude Code, Codex, and Antigravity
 
@@ -573,7 +589,7 @@ Runtime notice ledgers live beside grant records and use permanent lock sidecars
 plus atomic replacement. Unreadable, corrupt or unwritable ledgers yield no
 context (`{}` for Antigravity), one stderr diagnostic and exit 0. Existing
 SessionStart and statusline warnings remain available. See
-[verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
+[verified hook delivery](../internal/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
 <!-- trace:TASK-2253 | ai:claude -->
@@ -951,7 +967,7 @@ does not implement repeated unresolved escalation.
 
 This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Explicit recipient responses
-use [`aida mailbox disposition`](../mailbox.md#explicit-responses-to-requests),
+use [`aida mailbox disposition`](../advanced/mailbox.md#explicit-responses-to-requests),
 independently of read ACKs. Correlating those responses with alarm episodes and
 unresolved escalation remains follow-up work, along with Claude/Antigravity
 wake; reading or accepting a wake is not action.

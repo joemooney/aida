@@ -9,7 +9,7 @@ pinned squash-merged PR heads, which CI's clone does not have.
 ## What it holds
 
 For each of the 18 cases in
-[`docs/testing/task-1800-semantic-audit.json`](../../../docs/testing/task-1800-semantic-audit.json)
+[`docs/internal/testing/task-1800-semantic-audit.json`](../../../docs/internal/testing/task-1800-semantic-audit.json)
 the bundle has two refs, `refs/task-1800/<pr>/base` and
 `refs/task-1800/<pr>/head`. Each is a root commit whose tree holds only the
 paths the real `base..head` diff changes, with the real blobs and modes. A
@@ -21,7 +21,7 @@ Commit metadata is fixed, so each commit ID depends only on the real diff.
 (`aida-cli-lib/src/tests/task_1800_trace_replay_tests.rs`) fetches the bundle
 into a temporary repository and runs the production collector once, with
 `diff.renames` unset. It checks each case's scoped digest, fallback set and
-changed paths against `docs/testing/task-1800-trace-exclusions.json` and the
+changed paths against `docs/internal/testing/task-1800-trace-exclusions.json` and the
 audit, re-hashes every audited blob, and fails if any true-touch or unresolved
 pair is lost. Under `diff.renames` `false` and `copies` it re-runs only the
 collector's one git diff call (`diff_tree_args`) and requires the same bytes,

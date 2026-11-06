@@ -1624,7 +1624,10 @@ fn bug_046_padded_ids_dedup_numerically() {
     assert!(crate::queue_cmd::spec_matches(&padded, "TASK-418"));
     assert!(crate::queue_cmd::spec_matches(&padded, "task-00418"));
     assert!(!crate::queue_cmd::spec_matches(&padded, "TASK-4180"));
-    assert!(
-        crate::ship_from_seat::explicit_spec_check("TASK-418", &["TASK-0418".to_string()]).is_ok()
-    );
+    assert!(crate::ship_from_seat::explicit_spec_check(
+        None,
+        "TASK-418",
+        &["TASK-0418".to_string()]
+    )
+    .is_ok());
 }

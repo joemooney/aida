@@ -107,8 +107,31 @@ the main checkout with `aida ship --from-seat <clone>`. The seat's branch is
 bundled inside the seat sandbox, verified, and fetched into a quarantine ref,
 never run as host git in the clone. The command prints the diff stat and the
 clone's git config and hooks, checks commit trailers, pushes, and opens the
-PR. It never merges; `--dry-run` imports and pushes nothing.
+PR. It never merges the PR; `--dry-run` imports and pushes nothing.
+
+After checking the original bundle's diff and trailers, publication pins the
+remote branch head. If that head is already an ancestor of the seat's committed
+branch (or no remote branch exists), publication leaves the seat untouched;
+a live lane or untracked scratch file does not prevent publishing those commits.
+Otherwise the host first requires an idle, clean seat and merges the pinned
+remote head inside the sandbox, with hooks off and a neutral host commit subject.
+Conflicts abort without pushing. The reconciled bundle is checked again before
+the ordinary non-force push. A later refusal or push failure retains the
+reconciled commit in the seat for inspection and retry; it does not imply that
+anything was published. A remote update after the pin can still refuse the push.
+<!-- trace:TASK-2879 | ai:codex -->
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
+
+Seat publication derives the PR summary from the owning spec. A conventional
+`type(scope): summary` spec title is retained; otherwise the requirement type
+supplies `fix` for bugs, `docs` for docs/FAQs, `chore` for tasks, spikes,
+decisions and meta items, and `feat` for other types. A categorized feature
+supplies the scope. The commit's AI attribution and completing/reference trailers
+are preserved. Rework publication repairs the old generic “address CI failures
+and review findings” PR title while retaining its existing trailers; descriptive
+author titles remain unchanged. If the spec cannot be read, a descriptive commit
+subject remains usable, but the generic rework subject refuses publication.
+<!-- trace:TASK-2891 | ai:codex -->
 
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
 inside its sandbox, and `aida ship` there refuses with the way out. The seat
@@ -628,7 +651,7 @@ shows the current mandate; the statusline shows `MANDATE <time left>` while one
 is active.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
-PR comment as "released under mandate <id> by advisor"; start and stop are
+PR comment as `released under mandate <id> by advisor`; start and stop are
 recorded in `.aida/events.jsonl`. The authority record lives only in the
 user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
 Each record is re-validated on every read (24h cap, no future issue time,

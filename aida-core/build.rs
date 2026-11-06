@@ -84,6 +84,7 @@ fn main() {
     // `Last updated` line to verify the ecosystem review is recent enough
     // for a major/minor release; scaffolding the file at init time keeps
     // a fresh project's first release path clean. trace:TASK-126
+    // trace:STORY-1651 | ai:codex — master location stays stable; output belongs to contributors.
     embed_file(
         &mut code,
         "templates/docs/competitive-analysis/ecosystem-watch.md",

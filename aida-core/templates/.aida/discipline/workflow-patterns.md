@@ -741,7 +741,7 @@ We missed **Beads (~24.5k★) and Gas Town (~15.9k★)** — AIDA's *nearest* su
 - **Star-velocity / trending / HN front page**; the "X vs Y vs Z 2026" blog genre.
 - **YouTube/podcast** (titles, descriptions' "tools mentioned", comments — readable without watching) + **snowball** from each found tool's README and comparison posts.
 
-Fold this into `docs/archive/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
+Fold this into `docs/archive/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/internal/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
 
 ### feedback_confirming_a_mechanism_is_not_explaining_an_event
 
@@ -2671,8 +2671,8 @@ classification. Treating "autonomy" as a single on/off switch misses it.
 questions separately — presence and consultation-appetite. Tag prompts by
 kind so the runtime can route by mode. Make the first option of every
 prompt the smallest-valuable-slice / safe default, since auto-resolve
-picks option 1. See `docs/aida-discipline/skill-prompt-kinds.md`,
-`docs/autonomous-drain.md`, STORY-287. Related:
+picks option 1. See `.aida/discipline/skill-prompt-kinds.md`,
+`docs/advanced/autonomous-drain.md`, STORY-287. Related:
 [[feedback_pause_for_design_input]], [[feedback_pushback_on_overengineering]].
 
 ### feedback_tier_a_gate_transitively_not_by_its_body
@@ -2680,7 +2680,7 @@ picks option 1. See `docs/aida-discipline/skill-prompt-kinds.md`,
 When deciding whether a CI gate can run without a build (TASK-1555's tiering),
 grepping the gate's own `run:` body for `cargo build|target/(debug|release)|
 AIDA_BIN` is **not enough**. `Monitor contract drift guard` reads as a pure
-script gate — its body runs only `docs/monitor-contract-fixtures/verify.py` —
+script gate — its body runs only `docs/internal/monitor-contract-fixtures/verify.py` —
 and that script execs `target/debug/aida contract --json`. It was classified
 `fast` and failed on the first real run with `FileNotFoundError`.
 

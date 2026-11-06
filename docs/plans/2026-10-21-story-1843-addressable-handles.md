@@ -61,4 +61,4 @@ PR1 boundary ruling accepted (advisor mail 81b4a4f8). Agy 1.4.2 native SessionSt
 
 ## Related
 
-STORY-1843 sketch/signoff comments; BUG-2204; TASK-1766; docs/agents/session-communication.md.
+STORY-1843 sketch/signoff comments; BUG-2204; TASK-1766; docs/advanced/session-communication.md.

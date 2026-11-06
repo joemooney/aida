@@ -12,7 +12,7 @@
 //!   trace tokens the SPIKE-86 scripts print;
 //! - (d) the count of `trace:<SPEC>` comments in tracked source.
 //!
-//! The figures mirror `docs/positioning/spike-86-scripts/` (`report.py`
+//! The figures mirror `docs/internal/positioning/spike-86-scripts/` (`report.py`
 //! `coverage`, `corpus.py` machine/authored split and criteria parse) so a
 //! run at the same pinned commit and window can be compared against them.
 //! Reachable as `aida criteria coverage` (alias `aida criteria gap`); the

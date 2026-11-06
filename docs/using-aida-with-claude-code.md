@@ -1,6 +1,6 @@
 # Using AIDA with Claude Code
 
-*Last updated: 2026-06-01. Claude Code's surfaces move fast — if a primitive named here has changed, re-verify against the current Claude Code docs and update this page. Per-neighbour deep dives live in [`docs/positioning/`](positioning/).*
+*Last updated: 2026-06-01. Claude Code's surfaces move fast — if a primitive named here has changed, re-verify against the current Claude Code docs and update this page. Per-neighbour deep dives live in [`docs/internal/positioning/`](internal/positioning).*
 
 **If you already know Claude Code, here is AIDA in one breath:**
 
@@ -104,7 +104,7 @@ A persistent project memory is only an asset if it doesn't drown every session i
 | **Across compaction** | sticky — re-injected into each fresh context window | transient — can be summarized away, re-read only if needed again |
 | **Cost model** | a fixed floor every session pays | pay-per-use; **zero in the sessions that never open it** |
 
-A project scaffolded by `aida init` auto-loads a deliberately small set every session: the generated `CLAUDE.md` stub, `@.claude/AIDA.md` (the conventions an agent needs every turn — trace + commit format, daily commands, capture rules, lifecycle vocabulary), and `@docs/aida/discipline/README.md` (a ~3k pointer-table). The deep discipline pack behind that README — the dozen-plus per-topic guides — is reached through **plain links, not `@`-imports**, so it never auto-expands. It's deep on disk, lean in context.
+A project scaffolded by `aida init` auto-loads a deliberately small set every session: the generated `CLAUDE.md` stub, `@.claude/AIDA.md` (the conventions an agent needs every turn — trace + commit format, daily commands, capture rules, lifecycle vocabulary), and `@.aida/discipline/README.md` (a ~3k pointer-table). The deep discipline pack behind that README — the dozen-plus per-topic guides — is reached through **plain links, not `@`-imports**, so it never auto-expands. It's deep on disk, lean in context.
 
 One honest caveat on "read on demand": once a guide *is* read, its contents sit in the transcript for the rest of that session — within a session that opens it, it's no cheaper than an import. The saving is across the *other* sessions: a typical session reads zero or one of those guides, not all of them, so the pack's **expected** per-session cost is near zero even though its on-disk size is large. Read-on-demand optimizes the average case; `@`-import pays the worst case every time.
 
@@ -129,6 +129,6 @@ AIDA owns the layer those tools structurally don't: the **persistent, vendor-neu
 - [vs-claude-code-subagents.md](archive/positioning/vs-claude-code-subagents.md) — roles vs subagents (the *position* vs the *callable*).
 - [vs-claude-code-workflows.md](archive/positioning/vs-claude-code-workflows.md) — the spec-lifecycle vs within-task distinction + the commoditization read.
 - [docs/agents/aida-mcp-install-matrix.md](agents/aida-mcp-install-matrix.md) — connecting AIDA's MCP server to Claude Code, Codex, Cursor, Windsurf, and the rest.
-- [docs/agents/claude-plugin-package.md](agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
+- [docs/internal/agents/claude-plugin-package.md](internal/agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
 - [OVERVIEW.md](../OVERVIEW.md) — the Trojan-horse framing and the full vision.
 - [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the 2026-05-31 moat / commoditization synthesis (archived dated snapshot).

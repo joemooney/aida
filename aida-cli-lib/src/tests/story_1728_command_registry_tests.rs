@@ -1034,11 +1034,23 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
     let rename = regex::Regex::new(r"\b(\w+)\s+as\s+(\w+)\b").unwrap();
     let fn_open = regex::Regex::new(r"\bfn\s+(\w+)\s*(<[^>]*>)?\s*\(").unwrap();
     let param_type = regex::Regex::new(r":\s*&?(?:mut\s+)?(?:[\w:]*::)?(\w+)").unwrap();
-    // A whole arm pattern that is `_` or a binding, optionally guarded.
-    let catch_all = regex::Regex::new(
-        r"(?s)^\s*\|?\s*(?:ref\s+)?(?:mut\s+)?(_|[a-z_]\w*)\s*(?:@\s*_\s*)?(?:if\b.*)?$",
-    )
-    .unwrap();
+    // A guarded wildcard can still require editing this match for a new verb.
+    // trace:TASK-3111 trace:TASK-2855 | ai:codex
+    // Only an unconditional wildcard or binding covers every new verb.
+    let catch_all =
+        regex::Regex::new(r"(?s)^\s*\|?\s*(?:ref\s+)?(?:mut\s+)?(_|[a-z_]\w*)\s*(?:@\s*_\s*)?$")
+            .unwrap();
+    for pattern in [
+        "_ if cond",
+        "value if cond",
+        "ref value if cond",
+        "value @ _ if cond",
+    ] {
+        assert!(!catch_all.is_match(pattern), "{pattern}");
+    }
+    for pattern in ["_", "value", "ref value", "mut value", "value @ _"] {
+        assert!(catch_all.is_match(pattern), "{pattern}");
+    }
     let arm_follow = regex::Regex::new(r"^\s*(=>|\||if\s)").unwrap();
     let match_kw = regex::Regex::new(r"\bmatch\b").unwrap();
     let mut violations = Vec::new();

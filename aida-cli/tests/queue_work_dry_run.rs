@@ -1597,3 +1597,41 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
         );
     }
 }
+
+// A real queue-work gate must survive the alias: a review envelope with no
+// queued review story refuses before falling back to implementation.
+// trace:TASK-3111 trace:TASK-2869 trace:TASK-1715.ac6152c7 | ai:codex
+#[test]
+fn pr_review_preserves_the_missing_review_story_refusal() {
+    let base = tempfile::tempdir().unwrap();
+    let (repo, home, _) = init_codex_only_project(base.path());
+    let grant = advisor_grant(&repo, &home);
+    for args in [
+        vec!["queue", "work", "PR-42", "--auto-complete"],
+        vec!["pr", "review", "PR-42"],
+    ] {
+        let out = aida(&repo, &home)
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", &grant)
+            .env("AIDA_FROM_PR_REVIEW", "1")
+            .env("AIDA_FROM_PR_NUMBER", "42")
+            .args(&args)
+            .output()
+            .unwrap();
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!out.status.success(), "{args:?}: {message}");
+        assert!(
+            message.contains("no pickable review story"),
+            "{args:?}: {message}"
+        );
+        assert!(
+            message.contains("refusing to fall back to an implementer pickup"),
+            "{args:?}: {message}"
+        );
+        assert!(!repo.join(".aida/sessions").exists());
+    }
+}
