@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T21:35:48.549086914Z
+modified_at: 2026-11-06T21:37:24.985540674Z
 req_type: Story
 tags:
 - architecture
@@ -436,6 +436,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b2cb-85f9-7b53-925f-b4efa86b925b
+  author: joe
+  timestamp: 2026-11-06T21:37:24.985568079Z
+  session_id: 01a1b2ca03ab
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -444,3 +452,8 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 6 finding 1 (exact-head green CI) remains blocked. The instruction to wait for run 42291371263 at ba1a4d1c1006 is no longer executable: before this native seat started, the host merged origin/main 0ab91ad23e8 and published head 75fd2d6dd8c1; old-run gates and lib-1 are cancelled. Current-head run 42298061869 still has all seven CI jobs queued. No dispute that exact-head green CI including ExecContext is required. Dispute only the now-impossible resolution of waiting for the superseded run, and the demand for another commit while round 6 explicitly says not to push. Per binding post-main-merge regeneration rule, ran python3 scripts/check-exec-context.py --write-ledger --base origin/main: four inherited STORY-2492 test reads added; only scripts/exec-context-legacy.json is modified and uncommitted. All 19 Python ratchet tests and git diff --check pass. No commit, push, review recording, hold clearance or completion performed. Host/advisor must reconcile the no-push instruction with required ledger publication; preserve this punt publication veto until resolved. No code defect finding disputed.'
+  raised_by: implementer
+  raised_at: 2026-11-06T21:37:24.985540674Z
