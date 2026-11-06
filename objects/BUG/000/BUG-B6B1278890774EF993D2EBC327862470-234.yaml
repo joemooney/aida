@@ -1,0 +1,26 @@
+id: 01a1b1df-48e0-7080-9974-1455a802f981
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-234
+agreed_id: BUG-2468
+title: 'aida deputy shell list reports ''runner: NOT running'' for a live ~/bin/aida-deputy-shell runner, and agents then report live deputies as down'
+description: |-
+  Both read the same store (~/.aida/deputy-shell/<name>/). The bash runner (~/bin/aida-deputy-shell run 2|3) writes only runner.pid. The Rust side (deputy_shell/mod.rs live_runner -> runner_info) reads runner.json and needs pid_start, so it returns None for every bash-run deputy. On 2026-11-06 at 10:12, deputies 2 (pid 2588943) and 3 (pid 2590854) were live and running train job 20261106T095908-460c95, yet an advisor told the operator 'both script deputies are down' and asked them to restart them. Separately, a sandboxed agent Bash runs in its own PID namespace, so pgrep and /proc liveness checks see nothing and report false negatives there.
+
+  Acceptance:
+  1. 'aida deputy shell list --name N' reports a live runner started by either implementation. Either the bash runner writes runner.json with pid and pid_start, or the Rust check falls back to runner.pid plus a cmdline match.
+  2. When liveness cannot be determined (no /proc visibility, as in a sandboxed PID namespace), list says 'runner: UNKNOWN (cannot see host processes from this sandbox)' instead of 'NOT running'.
+  3. A test covers a runner.pid-only store with a live pid.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T17:19:22.848648683Z
+modified_at: 2026-11-06T17:19:22.848648683Z
+req_type: Bug
+filed_at:
+  code_sha: 6fe228acc8ba529a71396d2a8236545d2d009d1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dcb86ca85d
+  vendor: claude
+  session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
