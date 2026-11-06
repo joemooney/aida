@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T18:36:01.702527563Z
-modified_at: 2026-11-06T18:36:01.702527563Z
+modified_at: 2026-11-06T20:46:22.658646621Z
 req_type: Task
 tags:
 - carried-from:BUG-2465
 - finding-hash:a69100d9
 - from-review:PR-3520
 - kind:carried-forward
+comments:
+- id: 01a1b29c-cbc2-7012-8e95-cd4fe618baf1
+  author: joe
+  content: 'Advisor 13:46: rejected as a duplicate. The live C0-C4 operator run is tracked on BUG-2447/BUG-2448; the advisor runs it through the script deputy after BUG-2470 lands.'
+  created_at: 2026-11-06T20:46:22.658646621Z
+  modified_at: 2026-11-06T20:46:22.658646621Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b24d-3483-77f3-bec5-37b47c3fee69
   author: joe
