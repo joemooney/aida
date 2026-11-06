@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T14:32:06.236299971Z
+modified_at: 2026-11-06T14:32:10.516192422Z
 req_type: Story
 relationships:
 - rel_type:
@@ -118,6 +118,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Receipt codec, hub hook and relay journals are careful and fail closed, but the PR''s own e2e contract step is red in CI at the head, history revalidation grows without bound and will brick the shared intake, and the inventory cannot admit AIDA''s own repository.. No triage reason was given.'
   created_at: 2026-11-06T14:32:06.236298360Z
   modified_at: 2026-11-06T14:32:06.236298360Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b146-32ca-7e63-85d0-dcf49ba78fb1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3504):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: da81e93dfb3f
+    Recorded: 2026-11-06T14:30:16.435457942+00:00
+    Findings:
+    1. BLOCKING: CI (contracts) at da81e93 fails on the new step 'Run restricted work CI relay contract' (run 42232715552, job 127942377121). The e2e acceptance test (acadec5a) is red. Reproduce with AIDA_TEST_BIN=target/debug/aida python3 tests/test_work_ci_relay.py and fix.
+    2. MAJOR: Historical revalidation is unbounded. Intake::history revalidates every live ci-results file on every sync/pull/publish/process. Each distinct SHA triggers a network fetch from home_remote plus a full syn inventory parse inside one 30s Snapshot deadline (ci_relay.rs:438-469, called from intent_intake.rs:521 ci_validate). Results are kept forever and the hook forbids rewriting them, so after enough distinct SHAs the whole aida-intent channel fails permanently, observations included, with no recovery path. Cache per-SHA inventory proof (for example bound into the validated-tip checkpoint) or validate CI files only in new commits. Add a test with several distinct SHAs.
+    3. MAJOR: The inventory cannot admit AIDA's own repository, which is the operator's stated goal. Tracked .rs sources are about 48 MB against the 16 MiB total cap (ci_relay.rs:316). AIDA's .gitlab-ci.yml also uses workflow/include/default and a hidden .merge-gate template, which ci_relay.rs:351-355 refuses. The docs' 'separate supported pipeline configuration' caveat does not cover the source-size cap. Raise or redesign the bounds (e.g. scope test inventory to test-bearing crates or paths), or explicitly re-scope and file a follow-up spec.
+    4. MINOR: Observation-only intake clones break once any ci-results/ file exists. history() -> ci_validate -> Snapshot::load -> profile() fails with 'Enroll CI with intent ci enroll first' (intent_intake.rs:357-368, ci_relay.rs:123-129). This is documented, but it is a behaviour change for TASK-3096 consumers, the error does not explain the cause, and no test covers it (every fixture clone is CI-enrolled).
+    5. MINOR: Real failures become invisible. The inventory stores bare fn idents (ci_relay.rs:271), but GitLab JUnit reports from cargo-nextest or cargo2junit carry qualified names. Any real failing test then hits 'unknown test identifier' on every poll (ci_relay.rs:655-660) until the attempt expires. Expiry publishes nothing home (ci_relay.rs:718-724), so the native check stays 'pending' forever with no failure signal. Map qualified names or publish a terminal no-result status.
+    6. MINOR: Head-of-line blocking in poll. The lowest undone attempt consumes every timer tick until its deadline or max_polls (up to 24h) before any later attempt is looked at (ci_relay.rs:700-790).
+    7. MINOR: Criterion ac0a4b5e ('trains can treat them as a required check') is only met by documenting forge-level required-check setup. There is no AIDA train or 'aida pr' CI-source integration and no test, though the spec says receipts surface to 'aida pr' and the trains as a CI source.
+    8. MINOR: Traceability. 'aida criteria STORY-2480' reports all 6 criteria untraced, so tests need criterion-level trace anchors (the Python e2e test and ci_receipt/ci_relay unit tests cover most of them). The sixth criterion's id is malformed ('...-408.Idempotent'); repair it on the spec.
+    9. COSMETIC: The criterion acc0579e says the config names the ref filter, but it is hard-coded to refs/aida/ci/* (approved by the ruling; say so in the profile docs). 'intent ci' ignores --json (intent_intake.rs:1131). AGENTS.md and OVERVIEW.md got per-change paragraphs, but the repo rule puts per-change notes in the PR body and a spec comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T14:32:10.186269505Z
+  modified_at: 2026-11-06T14:32:10.186269505Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
