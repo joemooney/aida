@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T14:32:45.478814874Z
+modified_at: 2026-11-06T15:00:05.767722974Z
 req_type: Task
 tags:
 - architecture
@@ -616,6 +616,15 @@ comments:
   created_at: 2026-11-06T14:26:02.911180671Z
   modified_at: 2026-11-06T14:26:02.911180671Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b15f-c407-7140-8907-b9b9b6f4dd81
+  author: joe
+  content: |-
+    Advisor 2026-11-06 14:26 UTC rework implemented in native seat, left uncommitted for host publication. Slow step: resolve_claude_new_posture eagerly called tool_contained_flags -> claude_contained_flags_for_roots -> claude_uses_contained_wrapper -> trusted vendor config read, before apply_agent_default_flags could reject widening passthroughs. The added trusted lookup performs Git symbolic-ref/rev-parse/show; no broker/Python launch is needed to reject these flags. Posture resolution now records contained intent only; apply_agent_default_flags validates extra flags and configured defaults before policy lookup or contained settings composition. Successful launches retain the Git floor and existing wrapper refusal. Updated the host-main entry-point ratchet and added an old-Git ordering regression, including the valid-flags refusal control.
+    Validation: cargo test -p aida-cli-lib --lib bug_2157_2158 -- --nocapture: 17 passed, 0.30s. Each unchanged 27-case widening test also passed individually: extra flags 0.0185s process wall/0.00s libtest; agents.toml defaults 0.0236s process wall/0.01s libtest. strace process traces for both contain only the initial test executable and no child execs. BUG-2151 group including the new regression: 24 passed from /tmp; one unchanged resume test initially refused this native seat's unregistered .git layout when run from the seat cwd, then passed from /tmp. Both TASK-2032 host-main ratchets passed. make check-ci-fast rerun: all 38 gates passed. Initial fast run caught one included-source line-wrap formatting issue; corrected and verified with CI's rustfmt command before the successful rerun. git diff --check passes.
+    No test-time-budget entry, accepted AC1 deviation, or ruling citation was changed. Native publication declaration recorded: [AI:codex] fix(containment): refuse widening flags before boundary setup (Refs TASK-2708). Host commit/push and exact-head CI/delta review remain; TASK-2708 stays open as a Refs slice.
+  created_at: 2026-11-06T15:00:05.767722974Z
+  modified_at: 2026-11-06T15:00:05.767722974Z
+  session_id: 01a1b146ae69
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
