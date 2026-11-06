@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:21:29.287594158Z
-modified_at: 2026-11-06T00:16:14.336554323Z
+modified_at: 2026-11-06T06:11:13.084482231Z
 req_type: Task
 tags:
 - operator-held
@@ -24,6 +24,12 @@ comments:
   content: 'OPERATOR RULING 2026-11-05 17:20 MST (regroup decisions, relayed by advisor), ruling 6: approved as an operator action, adding a v* tag ruleset on GitHub (about 5 minutes, repo settings). Waiting on the operator.'
   created_at: 2026-11-06T00:16:14.336554323Z
   modified_at: 2026-11-06T00:16:14.336554323Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1af7b-903c-7031-b00e-02363567f2a9
+  author: joe
+  content: 'Done 2026-11-05 23:12 MST (operator-approved; advisor ran it via gh): GitHub tag ruleset ''protect-release-tags'' (id 26674914), active, targets refs/tags/v*, restricts creation, update and deletion, with an EMPTY bypass list, because seats push with the operator''s GitHub identity. Verified: pushing v0.0.0-ruleset-test was rejected (''push declined due to repository rule violations''). To release, set the ruleset to Disabled, push the tag, then set it back to Active (repo Settings, Rules, Rulesets).'
+  created_at: 2026-11-06T06:11:13.084482231Z
+  modified_at: 2026-11-06T06:11:13.084482231Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a15d01-40d1-7a43-adec-7707074a8246
