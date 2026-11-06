@@ -226,3 +226,45 @@ validation blocker remains. The host must create the new round's commit and
 publish the recorded Refs subject; existing merge-hold clearance remains a
 separate authorized review action. No commit, push, merge, review record or
 queue completion was performed by this seat.
+
+## Round 6 review repairs (2026-11-06)
+
+- Finding 1: the launcher identified the lib-1 failure as
+  `gate_orchestrators_reach_outside_only_through_their_frozen_inventory`.
+  Round 5 added direct `forge_observed::Observed` type/variant references in
+  `gate/approval.rs` without listing them in `gate/orchestrator_leaves.rs`.
+  The inventory now explicitly lists that typed read dependency. The ratchet
+  remains unchanged; this protected inventory change retains human merge review.
+- Finding 2: OVERVIEW now distinguishes unavailable CI reads (suspend)
+  from required-check registration/settlement deadlines and settled
+  member-gate refusals (eject/retire after negative landing confirmation).
+- Finding 3: approval base-read diagnostics render the inner reason as prose
+  for known refusals, pending observations and transient failures, preserving
+  the unavailable classification without exposing Debug wrappers.
+
+The initial targeted and fast commands stalled in the Cargo wrapper's slot
+queue while `cargo ps --long` reported both slots free. Both were interrupted;
+validation was restarted with the wrapper's documented `AIDA_CARGO_NO_SLOT=1`
+option. No queue lock or other build process was modified. Results follow below.
+
+This native seat leaves changes uncommitted for the host launcher. Publication
+must use a new, non-completing Refs commit; the active merge hold remains in force.
+
+Round-6 fast validation: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast` passed
+**all 38 gates**, including feature-disabled CLI, TUI, formatting and guard
+fixtures. Log: `/tmp/story2401-round6-fast-final.log`. `git diff --check` passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(gate): declare typed approval reads and refresh train docs (Refs STORY-2401)`.
+The host must create this round's new commit and publish it. No commit, push,
+merge, hold clearance, review recording or queue completion occurred in this seat.
+
+Round-6 targeted validation: `AIDA_CARGO_NO_SLOT=1 cargo test --profile agent
+-p aida-cli-lib --lib gate_orchestrators_reach_outside_only_through_their_frozen_inventory
+-- --nocapture` passed **1 test, zero failures**, 12,661 unrelated tests filtered
+out. The fresh optimized test build took 25m 50s; the test itself took 0.09s.
+Log: `/tmp/story2401-round6-inventory.log`. No unfiltered or workspace test run
+was performed. All requested round-6 repairs are implemented and validation is
+complete. Changed files: `OVERVIEW.md`, `aida-cli-lib/src/gate/approval.rs`,
+`aida-cli-lib/src/gate/orchestrator_leaves.rs`, and this plan. The remaining
+publication and active human merge-hold gates belong to the host/reviewer.

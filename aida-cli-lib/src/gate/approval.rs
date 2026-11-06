@@ -346,9 +346,11 @@ pub(crate) fn observe_merge_path_approval_gate(
             .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
         {
             crate::forge_observed::Observed::Known(Ok(m)) => Some(m.base_ref),
-            other => {
+            crate::forge_observed::Observed::Known(Err(why))
+            | crate::forge_observed::Observed::Pending(why)
+            | crate::forge_observed::Observed::Transient(why) => {
                 *unavailable.borrow_mut() =
-                    Some(format!("approval base evidence unavailable: {other:?}"));
+                    Some(format!("approval base evidence unavailable: {why}"));
                 None
             }
         },

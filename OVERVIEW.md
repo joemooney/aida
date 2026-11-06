@@ -673,9 +673,12 @@ or unknown states. Publication retraction also preserves its ownership check.
 
 Train retirement/abort share the same confirmed-negative gate, pinned to the
 tested head and base. A confirmed landing takes the member-landing path; unknown
-evidence suspends without ejection or closure. Red CI is re-read before retiring;
-missing aggregates and exhausted CI reads suspend. Legacy member-gate errors
-that cannot distinguish refusal from unavailable evidence suspend conservatively.
+evidence suspends without ejection or closure. Red CI is re-read before retiring.
+Unavailable CI reads suspend; required-check registration (including missing
+aggregates) and explicit settlement timeouts fail deterministically. Typed
+member-gate errors distinguish settled policy refusals from unavailable evidence: confirmed
+refusals and deterministic CI failures eject members and retire the train only
+after negative landing confirmation, while unavailable reads suspend.
 Abandoned-train cleanup rechecks the body owner, stops new admission on unknown
 evidence and preserves the branch when closure fails. Review-watch fetches retry three times with three-second backoff;
 a failed pre-review fetch carries a process-bound retry marker through the
