@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T17:37:44.970298341Z
+modified_at: 2026-11-06T18:55:52.701373694Z
 req_type: Story
 tags:
 - architecture
@@ -596,6 +596,56 @@ comments:
   created_at: 2026-11-06T15:30:14.304738796Z
   modified_at: 2026-11-06T15:30:14.304738796Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1b237-a17d-7f23-bb3f-100ad3c3065f
+  author: joe
+  content: |
+    PR-C native-seat handoff (Refs STORY-2326). Implemented the advisor's round-3 F5/F7 scope: Codex prepare_launch is private to launch/profile.rs, with every inventoried finalizer routed through that profile after final metadata and before stdio/hooks. All production grant issuance converges through launch::issue_launch_child, including headless/detached paths; intake/questions now pass the sandboxed-key requirement. Checked control_child and core control_env forward only the caller selector to the canonical current AIDA image; phase/orchestrator/zen and the twelve TUI role overrides migrate. Requested phase roles travel in argv. Queue exec assigns the selected child seat explicitly and no longer exports the role process-wide. The shared exec boundary is in launch/. Source ratchet shrinks 157 -> 133, with no new legacy sites. Existing Codex/role inventories count exec callers; AIDA-posture guards track the private profile and guided builder. Unit phase fixtures reuse their existing injected executable through a cfg(test)-only constructor; the ordinary constructor still rejects fakes and accepts only the real current image. R4/STORY-2538 and R5/STORY-2539 received ownership/API coordination comments. AGENTS/OVERVIEW changes describe architecture rather than slice progress.
+
+    Validation: required cargo test --profile agent -p aida-cli-lib --lib story_2326 passed 34/34. Matching cargo build --profile agent -p aida-cli --bin aida passed. Expanded library selection (story_2326, bug_2398, bug_2395, bug_2416, bug_2428, task_2708, real_phase_driver_wiring_tests) passed 155 and failed 1 live-environment case: bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording. Its native requested-seat preflight reports: app-server socket directory must be a user-owned directory with mode 0700. Direct codex sandbox -P :workspace -- true reproduces the same refusal outside AIDA, including private 0700 CODEX_HOME/TMPDIR/XDG_RUNTIME_DIR probes. The production refusal remains intact; this live case needs host/outside-seat or CI validation. untested=true for that blocked live native-Codex case only. Full aida-tui story_2326 cargo test passed 1/1 on retry (the initial dependency-target read-only failure did not recur). All 38 make check-ci-fast gates passed on the final tree, including formatting, Linux test annotations and trace headers; git diff --check passed. Standalone source inventories, core policy and focused TUI control fixtures also passed.
+
+    This remains a partial story: resource renderers, environment allowlist/cutover, and remaining legacy posture/resume work are not claimed complete. Native declaration: [AI:codex] feat(launch): centralize profiles, grants and control children in PR-C (Refs STORY-2326). Leave all source edits uncommitted for host commit/push/new-PR publication after exit. No commit, push, PR creation, queue completion, pr ship or review record performed from this seat. Logs: /tmp/prc-regressions-final.log, /tmp/prc-tui-test-final.log, /tmp/prc-fast-verified.log, /tmp/prc-cli-build.log, /tmp/prc-native-regression.log.
+
+    Changed files (37):
+    - AGENTS.md
+    - OVERVIEW.md
+    - aida-cli-lib/src/agent_codex_background.rs
+    - aida-cli-lib/src/agent_launch.rs
+    - aida-cli-lib/src/autopilot_intake.rs
+    - aida-cli-lib/src/codex_tool_env.rs
+    - aida-cli-lib/src/compete_cmd.rs
+    - aida-cli-lib/src/containment/tests.rs
+    - aida-cli-lib/src/containment/tests/launch_tests.rs
+    - aida-cli-lib/src/criteria_red_run.rs
+    - aida-cli-lib/src/gate/ledger/tests.rs
+    - aida-cli-lib/src/gate/seat_authority.rs
+    - aida-cli-lib/src/gate/tests/bug_1934_keyring_tests.rs
+    - aida-cli-lib/src/gate/tests/seat_authority_tests.rs
+    - aida-cli-lib/src/launch/control.rs
+    - aida-cli-lib/src/launch/grant.rs
+    - aida-cli-lib/src/launch/mod.rs
+    - aida-cli-lib/src/launch/profile.rs
+    - aida-cli-lib/src/launch/spawn.rs
+    - aida-cli-lib/src/orchestrator_leases.rs
+    - aida-cli-lib/src/phase_driver.rs
+    - aida-cli-lib/src/phase_driver_trait.rs
+    - aida-cli-lib/src/questions.rs
+    - aida-cli-lib/src/queue_cmd.rs
+    - aida-cli-lib/src/session.rs
+    - aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs
+    - aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs
+    - aida-cli-lib/src/tests/bug_2428_launch_rollback_tests.rs
+    - aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs
+    - aida-cli-lib/src/tests/story_2254_codex_background_tests.rs
+    - aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs
+    - aida-cli-lib/src/tests/story_2326_launch_tests.rs
+    - aida-cli-lib/src/tests/story_2326_profile_tests.rs
+    - aida-cli-lib/src/tests/task_2708_codex_fail_closed_tests.rs
+    - aida-cli-lib/src/zen_drive_root.rs
+    - aida-core/src/launch_policy.rs
+    - aida-tui/src/redesign/mod.rs
+  created_at: 2026-11-06T18:55:52.701373694Z
+  modified_at: 2026-11-06T18:55:52.701373694Z
+  session_id: 01a1b1f00f15
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
