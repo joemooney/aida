@@ -74,11 +74,26 @@ fn require_execution(
     );
     let passed = record.checks.iter().filter(|c| c.passed).count();
     let total = record.checks.len();
+    // The redundant JSON rate may drift during decimal parsing. Counts remain
+    // exact authority; endpoints remain exact, and interior rates get only a
+    // two-ULP consistency allowance. Never normalize the stored evidence or
+    // reuse optional display/consensus validation here.
+    // trace:TASK-2842 | ai:codex
+    let rate_matches = |rate: f64| {
+        let expected = passed as f64 / total as f64;
+        rate.is_finite()
+            && (0.0..=1.0).contains(&rate)
+            && if passed == 0 || passed == total {
+                rate == expected
+            } else {
+                rate.to_bits().abs_diff(expected.to_bits()) <= 2
+            }
+    };
     anyhow::ensure!(
         record.aggregate.as_ref().is_some_and(|a| a.passed == passed
             && a.total == total
             && total > 0
-            && a.pass_rate == passed as f64 / total as f64),
+            && rate_matches(a.pass_rate)),
         "{label} control aggregate does not match checks"
     );
     Ok(())
@@ -624,6 +639,75 @@ mod tests {
             assert!(crate::command_registry::try_parse_from(argv).is_err());
         }
     }
+    // trace:TASK-2842 | ai:codex
+    #[test]
+    fn strict_aggregate_rate_boundaries_and_invalid_evidence() {
+        for (passed, total) in [(0, 11), (11, 11), (1, 11), (43, 44), (1, 512)] {
+            let names: Vec<_> = (0..total).map(|i| format!("check-{i}")).collect();
+            let values: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.as_str(), i < passed))
+                .collect();
+            // Exercise the shared validator for reference, stub and ordinary evidence.
+            for (label, control) in [("reference", true), ("stub", true), ("trial", false)] {
+                let expected = passed as f64 / total as f64;
+                let check = |rate: f64, accepted: bool| {
+                    let mut row = record("trial", Uuid::new_v4(), 1, &values);
+                    row.aggregate.as_mut().unwrap().pass_rate = rate;
+                    let result = require_execution(&row, label, control, "guards");
+                    assert_eq!(
+                        result.is_ok(),
+                        accepted,
+                        "{label} {passed}/{total}: {rate:?}: {result:?}"
+                    );
+                };
+                check(expected, true);
+                for distance in 1..=3 {
+                    for bits in [
+                        expected.to_bits().checked_sub(distance),
+                        expected.to_bits().checked_add(distance),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        check(
+                            f64::from_bits(bits),
+                            passed > 0 && passed < total && distance <= 2,
+                        );
+                    }
+                }
+                if passed == 0 {
+                    check(-0.0, true);
+                }
+                for rate in [
+                    f64::NAN,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    -0.1,
+                    1.1,
+                    if passed == 0 { 0.5 } else { 0.0 },
+                ] {
+                    check(rate, false);
+                }
+                for mutation in 0..3 {
+                    let mut row = record("trial", Uuid::new_v4(), 1, &values);
+                    match mutation {
+                        0 => row.aggregate = None,
+                        1 => row.aggregate.as_mut().unwrap().passed += 1,
+                        _ => row.aggregate.as_mut().unwrap().total += 1,
+                    }
+                    assert!(require_execution(&row, label, control, "guards")
+                        .unwrap_err()
+                        .to_string()
+                        .contains("aggregate does not match"));
+                }
+            }
+        }
+        let empty = record("trial", Uuid::new_v4(), 1, &[]);
+        assert!(require_execution(&empty, "trial", false, "guards").is_err());
+    }
+
     // Survey redundant-rate parsing independently of the committed fixtures.
     // This bounds the proposed repair against many small-denominator ratios;
     // it does not establish a universal serde_json error bound. Enabling
@@ -649,11 +733,10 @@ mod tests {
         assert!(max_ulps <= 2);
     }
 
-    // Characterization of the remaining strict-gate defect, not permission to
-    // weaken eligibility. Replace the refusal assertions when its repair lands.
-    // trace:SPEC-447 | ai:codex
+    // Synthetic execution evidence in real Git; not a live confined run.
+    // trace:SPEC-447 TASK-2842 | ai:codex
     #[test]
-    fn committed_json_fraction_characterizes_control_and_trial_refusal() {
+    fn committed_json_fraction_accepts_controls_and_trials() {
         for (passed, total, drifts) in [
             (1, 11, true),
             (43, 44, true),
@@ -755,24 +838,33 @@ mod tests {
             assert!((original - parsed).abs() <= f64::EPSILON);
             assert_eq!(read_trial.aggregate.as_ref().unwrap().passed, passed);
             assert_eq!(read_trial.aggregate.as_ref().unwrap().total, total);
-            if drifts {
-                refused(committed, "stub control aggregate does not match checks");
-            } else {
-                gate(committed).unwrap();
-            }
+            gate(committed).unwrap();
+            let bundle = OracleBundle {
+                root: store.path().to_owned(),
+                sha: "oracle".into(),
+                hash: "bundle".into(),
+            };
+            let manifest = Manifest {
+                format_version: 1,
+                store_sha: "store".into(),
+                corpus_file: "corpus.json".into(),
+                content_sha256: "corpus".into(),
+                row_count: 0,
+                dirty: false,
+            };
+            ControlGate::load(store.path(), &bundle, &manifest, 3, "guards").unwrap();
             // Isolate apply from stub loading with a zero-pass, exact-rate stub.
             let mut exact_controls = rows.drain(..3).collect::<Vec<_>>();
             exact_controls.push(record("control-stub", Uuid::new_v4(), 1, &values(0)));
             let exact_gate = gate(exact_controls).unwrap();
-            let result = exact_gate.apply(&mut read_trial);
-            if drifts {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("trial control aggregate does not match checks"));
-            } else {
-                result.unwrap();
-            }
+            exact_gate.apply(&mut read_trial).unwrap();
+            assert_eq!(read_trial.aggregate.as_ref().unwrap().pass_rate, parsed);
+            let discriminating = read_trial.discriminating.as_ref().unwrap();
+            assert_eq!(
+                (discriminating.passed, discriminating.total),
+                (passed, total)
+            );
+            assert_eq!(discriminating.pass_rate, original);
         }
     }
 

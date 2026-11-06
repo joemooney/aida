@@ -308,8 +308,14 @@ def snapshot(writes):
 
 
 def trusted_policy_sha():
-    """The policy revision the run is measured against (origin/main tip)."""
-    return command(["git", "rev-parse", "origin/main"])
+    """Pin this script repository's locally available origin/main commit."""
+    # trace:TASK-3114 | ai:codex
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        return command(["git", "-C", str(repo), "rev-parse", "--verify", "origin/main^{commit}"])
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("cannot resolve the harness repository's origin/main; "
+                         "fetch origin main in that repository before running conformance") from error
 
 
 def evaluate(writes, before, after, nonce, results, receipts, terminal_receipt=False):

@@ -235,7 +235,10 @@ ID and the stored origin ID from the resolved requirement. Remapping an ID
 mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
-commit-evidence and ledgered `--force` rules.
+commit-evidence and ledgered `--force` rules. Branch lookup failures,
+including seat-clone refusals and detached HEAD, refuse before mutation even
+with `--skip-pr-check`; `--force` warns and retains the ledgered override.
+<!-- trace:TASK-2887 | ai:codex -->
 
 **Drain launch ownership.** A single, batch, or nextN member publishes its
 run UUID and zen provenance before the phase-1 status bump and phase-child
@@ -370,16 +373,12 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 ## Architecture
 
 **Store-independent observations.** `aida intent note`, `validate`, and `export`
-produce or inspect an explicit six-field JSON envelope without requirements,
-identity discovery, telemetry, store setup or network calls. A dedicated entry
-path precedes shared CLI startup; late alias dispatch refuses and directs the
-caller to the direct spelling. SHA-256 covers ordered compact JSON of the five
-payload fields; the full digest is the identity, with a 12-hex display label.
-Reads and serialized size are bounded, imported prose is data, and optional
-explicit regex rules refuse sensitive content without certifying sanitization.
-Manual-email export is a self-contained JSON attachment. Store-only transport
-retains its separate authority; enrolled intake transport and processing are
-future slices. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+produce or inspect an explicit six-field JSON envelope through a dedicated local
+entry path before shared CLI startup, without identity discovery, telemetry or
+store setup. Store-only transport retains its separate authority. See
+[the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export)
+for envelope fields, hashing and validation rules.
+<!-- trace:TASK-3114 | ai:codex -->
 <!-- trace:STORY-2479 | ai:codex -->
 
 ### The four layers
@@ -600,6 +599,10 @@ retries unsettled mergeability three times, two seconds apart, and refuses
 mergeability only on a settled false; the forge still enforces conflicts at
 merge time. The wave gate distinguishes a settled GitHub conflict from unknown
 evidence.
+
+The condition checker also reads PR merge states through this boundary, with a
+15-second timeout; failed reads and malformed states evaluate to Unknown.
+<!-- trace:STORY-2402 | ai:codex -->
 
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
 ratchet freezes remaining raw GitHub reads outside that boundary and catches
@@ -1120,6 +1123,14 @@ Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
 
+`aida pr hold` retains Git safety refusals and repository lookup errors and
+explicitly reports that no hold was recorded. Only Git's quiet missing-ref
+result reports a missing branch. This preserves diagnostics; it does not
+enable native-seat publication. Regression fixtures isolate Git discovery
+from `TMPDIR` and retain the existing seat-refusal coverage. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
+
 GitHub `aida pr ship` waits on classified CI rows for up to 20 minutes. The
 `[ci]` informational allow-list applies to pending as well as failed jobs;
 branch-protection-required checks always take precedence. Unlisted failures
@@ -1399,3 +1410,21 @@ remove legacy notice files once, without migrating them. A marker in the
 grant-notices base then skips the session-grants scan on every later per-tool-call
 hook. One duplicate notice after upgrade is accepted.
 <!-- trace:TASK-2707 | ai:codex -->
+
+## Trusted review publication between hosts
+
+An operator-enrolled public-key roster in `aida-store` authorizes configured host
+recorders to publish version-1 review receipts after ordinary local authority
+validation. OpenSSH signs canonical JSON in the `aida-review-receipt` namespace;
+private keys, role grants and human-review receipts stay on their original host.
+Signed author-session evidence binds the PR head to its author sessions, allowing
+consumers to check reviewer independence after a conversation resumes elsewhere.
+The shared publication overrides a contradictory local verdict view, while exact
+head checks and current-roster signature validation remain mandatory. Revocation
+removes a roster entry and affects future credit without undoing merges.
+Publications use node-qualified UUID identity and signed per-node supersession;
+an independent concurrent refusal cannot be overwritten by another node's approval.
+The bounded committed-blob readers refuse malformed or unverifiable evidence.
+Watcher reservation synchronization and untrusted-node envelopes remain separate
+work. See [second-node operation](docs/agents/second-review-node.md).
+<!-- trace:STORY-2492 | ai:codex -->

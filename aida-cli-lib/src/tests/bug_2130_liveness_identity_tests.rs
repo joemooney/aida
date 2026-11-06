@@ -97,6 +97,12 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
 
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
+    // Both live and recycled PIDs below belong to this observer's namespace.
+    // An unstamped legacy lease is deliberately unobservable in a sandbox.
+    // trace:TASK-2889 | ai:codex
+    let namespace = crate::agent_registry::current_pid_namespace()
+        .map(|ns| format!("pid_namespace = {ns}\n"))
+        .unwrap_or_default();
     let lease_path = sessions_dir.join("lease-2130.toml");
 
     // 1. Recycled active_pid (mismatched active_pid_start_time) -> subagent adopts the lease.
@@ -109,7 +115,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
          branch = \"claude/bug-2130\"\n\
          started_at = \"2026-10-18T00:00:00Z\"\n\
          hostname = \"testhost\"\n\
-         active_pid = {me}\n\
+         {namespace}active_pid = {me}\n\
          active_pid_start_time = \"1999-01-01T00:00:00+00:00\"\n",
         worktree.to_string_lossy()
     );
@@ -149,7 +155,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
          branch = \"claude/bug-2130\"\n\
          started_at = \"2026-10-18T00:00:00Z\"\n\
          hostname = \"testhost\"\n\
-         active_pid = {me}\n\
+         {namespace}active_pid = {me}\n\
          active_pid_start_time = {legacy:?}\n",
         worktree.to_string_lossy()
     );
@@ -159,6 +165,27 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
         None,
         "live active_pid with matching legacy RFC3339 identity must block adoption"
     );
+
+    // Namespace evidence remains mandatory even when the PID looks recycled.
+    // trace:TASK-2889 | ai:codex
+    let observer = aida_core::pid_observer::PidObserver::current();
+    for recorded in [None, observer.namespace.map(|ns| ns ^ 1)] {
+        if observer.can_observe(recorded) {
+            continue; // A host observer can still read unstamped legacy leases.
+        }
+        let mut lease: toml::Value = toml::from_str(&recycled_toml).unwrap();
+        let table = lease.as_table_mut().unwrap();
+        table.remove("pid_namespace");
+        if let Some(ns) = recorded {
+            table.insert("pid_namespace".into(), toml::Value::Integer(ns as i64));
+        }
+        std::fs::write(&lease_path, toml::to_string(&lease).unwrap()).unwrap();
+        assert_eq!(
+            crate::leases::adopt_spec_lease_for_subagent(root, &worktree, Some(me)),
+            None,
+            "an unobservable namespace {recorded:?} must block adoption"
+        );
+    }
 }
 
 // trace:BUG-2130 | ai:agy

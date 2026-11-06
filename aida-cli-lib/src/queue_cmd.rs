@@ -5100,7 +5100,12 @@ pub(crate) fn handle_queue_command(
             // `--force` remains the explicit, ledgered recovery escape hatch.
             // trace:BUG-1244 | ai:codex
             if let Ok(root) = find_project_root() {
-                if let Some(branch) = current_branch_at(&root) {
+                // trace:TASK-2887 | ai:codex
+                if let Some(branch) = workflow_hints::queue_done_ownership_branch(
+                    &root,
+                    *force,
+                    crate::gate::kernel_deps::current_branch_at_checked,
+                )? {
                     let commit_evidence = queue_done_commit_evidence(&root, &branch);
                     // BUG-1629: the same configured prefixes auto-complete
                     // phase 1 checks with. trace:BUG-1629 | ai:claude
@@ -5144,9 +5149,8 @@ pub(crate) fn handle_queue_command(
             // different already-merged branch) and when the BUG-232 hint
             // detector itself can't decide (gh missing / unauthenticated /
             // network failure) — proceeding is the safe default when we
-            // can't prove "no PR." Likewise skip when commits_ahead
-            // resolution fails (None) so a missing origin/main never blocks
-            // a legitimate done. `--yes` does NOT bypass — it's the
+            // can't prove "no PR." Branch lookup and commits-ahead failures
+            // refuse before mutation. `--yes` does NOT bypass — it's the
             // confirmation-skip for the prompt below, not a gate override.
             // trace:BUG-269 BUG-285 | ai:claude
             let bypass_pr_check =
@@ -5165,7 +5169,8 @@ pub(crate) fn handle_queue_command(
                 let diagnose = workflow_hints::queue_done_precheck_diagnose(
                     display_id,
                     find_project_root(),
-                    |root| current_branch_at(root),
+                    // trace:TASK-2887 | ai:codex
+                    crate::gate::kernel_deps::current_branch_at_checked,
                     // BUG-775: the tri-state form — the gate must be able to
                     // tell "on the default branch" from "comparison failed".
                     |root, branch| branch_commits_ahead_default(root, branch),
@@ -9018,6 +9023,132 @@ pub(crate) fn preclaim_collision_check(
     PreclaimDecision::Proceed
 }
 
+/// Explicit queue resumes must publish before returning control to the
+/// launcher's process exit, under the same vendor/role gate as fresh lanes.
+// trace:STORY-2475 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_queue_resume_to_exit(
+    host_main: Option<&std::path::Path>,
+    target: &session::HeadlessResume<'_>,
+    prompt: &str,
+    log: &std::path::Path,
+    tree: &std::path::Path,
+    tee: &headless_tee::TeeOptions,
+    contained: bool,
+    role: &str,
+    publication: (&std::path::Path, &str, &str),
+) -> Result<std::process::ExitStatus> {
+    let status = session::spawn_vendor_headless_resume(
+        host_main, target, prompt, log, tree, tee, contained, role,
+    )?;
+    if target.vendor == session::HeadlessVendor::Codex
+        && contained
+        && crate::canonical_role_name(role) == "implementer"
+    {
+        crate::ship_from_seat::publish_queue_exit(
+            publication.0,
+            tree,
+            publication.1,
+            publication.2,
+            status.success(),
+        )?;
+    }
+    Ok(status)
+}
+
+/// Resolve the host merge result before any vendor is launched. Successful
+/// conflicts require advisor delivery; an existing non-Claude thread refuses.
+// trace:STORY-2475 | ai:codex
+pub(crate) fn rework_conflict_route(
+    prepared: Result<Vec<String>>,
+    vendor: session::HeadlessVendor,
+    resume: bool,
+    scope: &str,
+    pr: u64,
+    branch: &str,
+    notify: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<(session::HeadlessVendor, Vec<String>)> {
+    let files = prepared?;
+    if files.is_empty() {
+        return Ok((vendor, files));
+    }
+    notify(
+        "Rework merge conflicts require Claude",
+        &format!(
+            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
+         Conflict resolution requires Claude on branch {branch}. Fresh route: \
+         aida queue work {scope} --vendor claude --fresh --no-human.",
+            files.join(", ")
+        ),
+    )?;
+    if resume && vendor != session::HeadlessVendor::Claude {
+        anyhow::bail!(
+            "conflicting rework requires a fresh Claude lane: \
+            aida queue work {scope} --vendor claude --fresh --no-human"
+        );
+    }
+    Ok((session::HeadlessVendor::Claude, files))
+}
+
+/// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
+// trace:STORY-2475 | ai:claude
+pub(crate) struct ReworkConflictLaunch<'a> {
+    pub(crate) vendor: session::HeadlessVendor,
+    pub(crate) resume: bool,
+    pub(crate) interactive: bool,
+    pub(crate) contained: bool,
+    pub(crate) scope: &'a str,
+    pub(crate) pr: u64,
+    pub(crate) branch: &'a str,
+}
+
+/// Apply the host merge result to a pickup whose seat (linked worktree or
+/// clone) and lease already exist. A clean merge keeps the planned vendor,
+/// model and prompt. A conflict reroutes the launch to Claude in the same
+/// seat: the override is installed, the vendor is resolved and preflighted
+/// again (binary, `[agents] enabled`, containment), the vendor-specific model
+/// pin is dropped, and the conflict task is appended to the prompt. An
+/// interactive pickup (`!no_human`) gets the same reroute: the launch below
+/// starts interactive Claude, not Codex. Any refusal returns before
+/// `agent.starting()`, so the BUG-2428 setup rollback releases the seat.
+// trace:STORY-2475 | ai:claude
+pub(crate) fn apply_rework_conflict_route(
+    project_root: &Path,
+    prepared: Result<Vec<String>>,
+    launch: ReworkConflictLaunch<'_>,
+    prompt: &mut String,
+    resolved_model: &mut Option<String>,
+    notify: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<session::HeadlessVendor> {
+    let (route_vendor, files) = rework_conflict_route(
+        prepared,
+        launch.vendor,
+        launch.resume,
+        launch.scope,
+        launch.pr,
+        launch.branch,
+        notify,
+    )?;
+    if files.is_empty() {
+        return Ok(launch.vendor);
+    }
+    session::install_headless_vendor_override(route_vendor.as_str());
+    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
+    session::preflight_launch_vendor(vendor, launch.interactive)?;
+    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
+    std::env::remove_var("AIDA_AGENT_MODEL");
+    *resolved_model = None;
+    prompt.push_str(&format!(
+        "\n\n{}",
+        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+            pr: launch.pr,
+            base: "main".into(),
+            files,
+        })
+    ));
+    Ok(vendor)
+}
+
 // trace:BUG-2451 | ai:codex
 pub(crate) fn rework_pr_head_branch_override(
     forge: &dyn crate::forge::Forge,
@@ -12054,7 +12185,6 @@ pub(crate) fn handle_queue_work(
     if let Some(model) = &resolved_model {
         std::env::set_var("AIDA_AGENT_MODEL", model);
     }
-    let headless_vendor = no_human.then_some(launch_vendor);
 
     // trace:TASK-1337 | ai:codex
     // Resolve role, branch, and delegation before calibration, cleanup, pull,
@@ -12079,17 +12209,9 @@ pub(crate) fn handle_queue_work(
              this pickup must keep the existing PR branch"
         );
     }
-    // BUG-057: a rework PR that conflicts with main makes the merge the
-    // lane's first task. trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
-    let rework_conflict = rework_pr
-        .as_ref()
-        .filter(|_| !list_sessions && !plan_only && !guided)
-        .and_then(|(pr, branch)| {
-            crate::rework_direction::detect_main_conflict(&project_root, *pr, branch)
-        });
     let resolved_pickup_pr =
         (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
-    let rework_branch_override = rework_pr.map(|(_, branch)| branch);
+    let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
     // --path or --branch naming another one refuses rather than guess.
@@ -12477,7 +12599,7 @@ pub(crate) fn handle_queue_work(
             guided,
             review_findings: review_findings.as_deref(),
             spec_comments: &spec_comments,
-            conflict: rework_conflict.as_ref(),
+            conflict: None, // Host prepares the merge before launch (STORY-2475).
             ci_failures: ci_failures.as_deref(),
         });
     // Interactive implementers and every headless phase receive the same
@@ -13555,6 +13677,41 @@ pub(crate) fn handle_queue_work(
             )
         })?;
         minted_lease_id = Some(lease.id.clone());
+        // The PR branch has been seated by session_start. Prepare it before
+        // any vendor, red run, child grant or resume is started.
+        // trace:STORY-2475 | ai:codex
+        let mut launch_vendor = launch_vendor;
+        let mut resolved_model = resolved_model.clone();
+        let mut prompt = prompt.clone();
+        if !no_launch && !plan_only && !guided && role == "implementer" {
+            if let Some((pr, branch)) = rework_pr.as_ref() {
+                let files = crate::seat_clone::prepare_rework_merge(
+                    &project_root,
+                    &lease.worktree_path,
+                    branch,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                );
+                launch_vendor = apply_rework_conflict_route(
+                    &project_root,
+                    files,
+                    ReworkConflictLaunch {
+                        vendor: launch_vendor,
+                        resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        interactive: !no_human,
+                        contained,
+                        scope: &plan.scope,
+                        pr: *pr,
+                        branch,
+                    },
+                    &mut prompt,
+                    &mut resolved_model,
+                    |subject, body| {
+                        crate::ship_from_seat::advisor_request(&project_root, subject, body)
+                    },
+                )?;
+            }
+        }
+        let headless_vendor = no_human.then_some(launch_vendor);
 
         // STORY-1386: opt-in pre-implementation red run, in this lane's own
         // freshly created worktree and BEFORE the implementer agent launches.
@@ -14105,7 +14262,7 @@ pub(crate) fn handle_queue_work(
                     };
                     // Counted by `AgentLaunchMark` once the child spawned:
                     // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
-                    let status = session::spawn_vendor_headless_resume(
+                    let status = run_queue_resume_to_exit(
                         host_main.as_deref(),
                         &session::HeadlessResume {
                             vendor,
@@ -14119,6 +14276,7 @@ pub(crate) fn handle_queue_work(
                         contained,
                         // trace:BUG-1808 | ai:claude — the seat the preflight validated.
                         &crate::canonical_role_name(&role),
+                        (&project_root, &plan.scope, &lease.id),
                     )?;
                     std::process::exit(status.code().unwrap_or(1));
                 }
