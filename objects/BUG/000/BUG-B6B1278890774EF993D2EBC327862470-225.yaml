@@ -16,11 +16,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T03:06:54.662965941Z
-modified_at: 2026-11-06T03:43:49.595467766Z
+modified_at: 2026-11-06T03:53:09.647081777Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2475
 - vendor:codex
+comments:
+- id: 01a1aefd-2b0f-70c1-bc1c-e1b45edccab8
+  author: joe
+  content: 'Implemented native post-exit canonical trailer resolution against the host store, with origin-ID fallback and no friendly HOME aliases. Explicit seat attribution now compares origin/agreed identities through the same store. Audited all display_spec_id call sites: the two post-exit builders were the only persisted commit/PR-trailer producers; remaining uses are display/diagnostic fields. Regression covers origin-scoped HOME-mapped leases, completing and salvage Refs trailers, agreed-ID and origin fallback, real fixture commit/push/PR opening, plus existing Refs PR rework preservation. Validation: 43 seat-publication tests, 5 queue-exit tests, padded-ID test and 2 display ratchet tests passed (51 total); cargo fmt --all -- --check and git diff --check passed. Native implementer seat: source edits left uncommitted for host launcher publication; no queue completion performed.'
+  created_at: 2026-11-06T03:53:09.647081777Z
+  modified_at: 2026-11-06T03:53:09.647081777Z
+  session_id: 01a1aef43839
 history:
 - id: 01a1aef4-40b9-7820-ab7c-0fb8a051dd7c
   author: aida-session-start
