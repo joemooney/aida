@@ -604,6 +604,11 @@ node-local and retired IDs are spellings of that identity. Persisted
 `spec_key` wins over an event's audit label. Unstamped compatibility events use
 the snapshot's exact label mappings; unresolved or ambiguous identity cannot
 grant approval. Superseded specs inherit their carrier's execution mode.
+Operators can stamp existing compatibility events with the one-time
+`aida gate migrate` rewrite, which stamps each event with its requirement's
+canonical `spec_key`: `--dry-run` previews, `--execute` applies and `--rollback`
+unstamps the current tree while preserving later events; execution and rollback
+require an interactive host terminal outside a sandbox, with no drain running.
 
 `gate::effective::effective_gate_state` computes verdict, hold, execution mode
 and decision from supplied inputs without reading files, Git, the clock or the
@@ -621,7 +626,9 @@ worktree authority over the change. Merge-hold markers and recorded clearances
 belong to this primary store as hold/release events, with forge labels as
 mirrors. BUG-2176's reviewer-worktree marker-copy workaround is retired as an
 architecture: a disposable reviewer worktree must not be the durable owner of
-a hold. The host launcher validates and collects contained reviewer evidence
+a hold. One-way collection onto the primary ledger remains for legacy worktree
+markers older than M1 slice 2; no current writer creates a worktree marker.
+The host launcher validates and collects contained reviewer evidence
 into shared state. Retained legacy files are compatibility evidence, not a
 new place to write gate state.
 

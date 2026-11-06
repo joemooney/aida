@@ -666,7 +666,9 @@ jobs:
       # covers that path, keeping this guard live on docs-only PRs too.
       # trace:TASK-1447 | ai:claude
       - name: Minimal aida-cli build for docs-only guards
-        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci != 'true') }}
+        if: ${{ (matrix.shard == 'contracts' || matrix.shard == 'gates') && (steps.changes.outputs.full_ci != 'true') }}
+        # The gates shard's Documentation landing smoke also needs this
+        # binary on docs-only PRs. trace:STORY-2324 | ai:codex
         # aida-cli-lib defaults exclude the `remote`/postgres features, so
         # this needs neither protoc nor libgtk/libssl (no "Install Linux
         # dependencies" step) — building just the `aida` binary crate is far

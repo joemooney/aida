@@ -853,6 +853,11 @@ and retired labels are display/lookup spellings. Writers stamp that UUID, and
 the pure `gate::effective::effective_gate_state` selects evidence by persisted
 identity before compatibility labels. Superseded specs inherit their carrier's
 mode. Selection is separate from validating reviewer authority and independence.
+Operators can stamp existing compatibility events with the one-time
+`aida gate migrate` rewrite, which stamps each event with its requirement's
+canonical `spec_key`: `--dry-run` previews, `--execute` applies and `--rollback`
+unstamps the current tree while preserving later events; execution and rollback
+require an interactive host terminal outside a sandbox, with no drain running.
 
 Use `aida gate state PR-<N>` to inspect verdict, hold, mode and decision;
 `aida gate state PR-<N> --compare` compares the canonical result with the
@@ -864,7 +869,9 @@ Gate state belongs in the primary checkout's shared runtime store:
 `.aida/gate-ledger/PR-<N>.jsonl` (or `MR-<N>.jsonl`), with spec indexes and
 unbound entries under `by-spec/`. Merge-hold markers and clearances are
 primary-store hold/release events; forge labels mirror them. Do not add a
-reviewer-worktree gate store or revive the BUG-2176 marker-copy workaround.
+reviewer-worktree gate store: BUG-2176's marker-copy architecture is retired.
+One-way collection onto the primary ledger remains for legacy worktree markers
+older than M1 slice 2; no current writer creates a worktree marker.
 Contained reviewers supply evidence for their host launcher to validate and
 collect; deleting their worktree must not delete the durable hold. Retained
 legacy compatibility reads do not justify new writers to legacy directories.
