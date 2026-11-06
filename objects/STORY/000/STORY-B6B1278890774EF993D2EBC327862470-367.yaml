@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T18:55:15.032474555Z
+modified_at: 2026-11-06T19:19:27.924349441Z
 req_type: Story
 relationships:
 - rel_type:
@@ -332,6 +332,12 @@ comments:
   content: 'Slice 4 approach under the binding advisor brief: add a versioned, atomic and fsynced intent journal in .aida/train, serialized by a permanent run lock. pr_train.rs ForgeRails records pinned Built/member evidence and lifecycle steps before port calls; production ports checkpoint nested forge calls. Startup recovers journaled trains before abandoned-train cleanup/admission, re-reads exact forge state and uses the existing forge_confirmation boundary before destructive cleanup; completed merges and member closes are reconciled instead of replayed. Persisted mandate covers are excluded and live gates remain authoritative. Expected files: pr_train.rs, new pr_train_journal.rs, train tests, AGENTS.md, OVERVIEW.md, slice plan. Tests: killed-child recovery after merge call and retirement/eject decision, unknown evidence/write failures and completed-step replay protection; LIGHT gate only. Slice 5 workflow digest remains deferred. No edits to forge_confirmation.rs, preserving BUG-2463 overlap.'
   created_at: 2026-11-06T18:55:15.032474555Z
   modified_at: 2026-11-06T18:55:15.032474555Z
+  session_id: 01a1b23500ad
+- id: 01a1b24d-39b4-7a32-b27c-b43b9e11058a
+  author: joe
+  content: 'Slice 4 complete, left uncommitted for the native host. Added atomic/fsynced .aida/train intent entries and permanent run lock, checkpoints before train/adapter calls and retries, startup recovery from exact forge metadata plus existing forge_confirmation, completed-merge/member-close replay protection, revalidated ejection decisions and checked retirement failures. Persisted mandate covers are excluded; ordinary live gates and merge leases remain required. Both real SIGKILL fixtures (after merge call and after eject decision) pass. LIGHT validation: cargo test -p aida-cli-lib --lib pr_train: 163 passed, zero failures; make check-ci-fast: all 38 gates passed; git diff --check passed. Logs /tmp/story2401-slice4-tests-pass.log and /tmp/story2401-slice4-fast-final.log. Details and changed-file inventory appended to docs/plans/2026-11-06-story-2401-confirmed-negatives.md. Native publication declaration accepted: [AI:codex] feat(train): resume journaled intent from forge truth (Refs STORY-2401). No commit/push/PR/queue-done/merge/review record performed. #3519 remains open; host must rebase if it lands before publication. Slice 5 remains outstanding; story stays In Progress. No implementation or validation blocker.'
+  created_at: 2026-11-06T19:19:27.924349441Z
+  modified_at: 2026-11-06T19:19:27.924349441Z
   session_id: 01a1b23500ad
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
