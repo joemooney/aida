@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-805
 agreed_id: TASK-2860
 title: Cross-node review needs portable authority and authorship evidence
 description: 'STORY-2492 design review: synced verdict JSON cannot currently authorize shipping on a second machine. verified_authority_keys requires local grant/parent or human-receipt evidence, while author-session evidence is local too. The proposed portable validated publication receipt and distributed reservation protocol need master sign-off under AGENTS.md Sketch-First Protocol. See docs/plans/2026-11-04-story-2492-cross-machine-review.md; no approval gate has been weakened.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T20:59:42.275875045Z
+modified_at: 2026-11-06T00:08:24.744923671Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -303,6 +303,20 @@ history:
   author: joe
   timestamp: 2026-11-05T20:59:43.669821641Z
   changes: []
+- id: 01a1ae2f-6785-7ba0-8f4d-7b6dee6afe13
+  author: aida-auto-bump
+  timestamp: 2026-11-06T00:08:24.709533588Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ae2f-67a8-7000-91fc-efa531fcf8c0
+  timestamp: 2026-11-06T00:08:24.744921015Z
+  agent: aida
+  commit_sha: d436b7582abe8b37ac25c3fa2b98ad1223b9d02a
+  summary: 'Docs-only plan (1 file, +201). The 12:00 MST advisor ruling is incorporated (explicit GitHub hub/ref config, GitLab and bridge mirror-only, named unreachable refusal with no failover, stopped-admission migration). All 4 round-1 findings are addressed: approved status text, landed slice-1 paths verified on main, client-side force-with-lease CAS with its trust assumption stated. diff --check clean. CI run 42106952810 was still QUEUED at review time (no runner); ship must gate on green CI.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1fc3f06903
@@ -313,13 +327,7 @@ implementation_info:
   test_coverage_notes: git diff HEAD^ HEAD --check; source inspection of gate authority and watcher history; checked STORY-2492 recorded rulings
   implemented_at: 2026-11-05T18:22:09.922862530Z
   implemented_by: joe
+  completed_at: 2026-11-06T00:08:24.709528047Z
+  completion_sha: d436b7582abe8b37ac25c3fa2b98ad1223b9d02a
   reopened_at_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Sketch content is sound and matches the approved design, but the advisor's 2026-11-05 12:00 MST topology ruling is not incorporated in the plan doc (an explicit signoff deliverable), and the doc's baseline claims are stale now that slice 1 (#3411) is on main.
-  recovery_hint: address the review findings, move TASK-2860 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T20:42:35.919135037Z
 interface_changes: {}
