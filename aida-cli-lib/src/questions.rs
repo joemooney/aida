@@ -546,7 +546,17 @@ pub(crate) fn apply_resolution_token(
                         comment.session_id = resolve_current_session_id();
                         req.comments.push(comment);
                     }
-                    aida_core::condition::Condition::Manual { who: resolver }.to_string()
+                    // Environment identities may be empty or contain whitespace.
+                    // Keep the stored trigger parseable while preserving comment authorship.
+                    // trace:STORY-2402 | ai:codex
+                    let manual = aida_core::condition::Condition::Manual { who: resolver };
+                    manual
+                        .to_string()
+                        .parse::<aida_core::condition::Condition>()
+                        .unwrap_or(aida_core::condition::Condition::Manual {
+                            who: "operator".into(),
+                        })
+                        .to_string()
                 }
             });
         }

@@ -132,6 +132,9 @@ fn story2402_s2_question_parking_records_typed_or_manual_evidence() {
             if consequence.starts_with("spec:") {
                 assert_eq!(parsed.to_string(), "spec:STORY-12=completed");
                 assert!(req.comments.is_empty());
+            } else if consequence.is_empty() {
+                assert_eq!(parsed.to_string(), "date:2026-01-01");
+                assert!(req.comments.is_empty());
             } else {
                 assert_eq!(
                     parsed,
@@ -141,6 +144,28 @@ fn story2402_s2_question_parking_records_typed_or_manual_evidence() {
                 );
                 assert!(req.comments[0].content.ends_with(consequence));
                 assert_eq!(req.comments[0].author, crate::current_user_id(None));
+            }
+        }
+    }
+}
+
+#[test]
+fn story2402_s2_question_parking_invalid_identity_uses_parseable_manual() {
+    for identity in ["Joe Mooney", ""] {
+        let _identity = crate::test_env::EnvVarGuard::set("AIDA_USER", identity);
+        for consequence in ["", "wait for demand"] {
+            let mut req = Requirement::new("question fixture".into(), "".into());
+            crate::questions::apply_resolution_token(&mut req, "park", "Park", consequence);
+            let parsed = req
+                .deferred_until
+                .as_ref()
+                .unwrap()
+                .parse::<aida_core::condition::Condition>()
+                .unwrap();
+            assert_eq!(parsed.to_string(), "manual:operator");
+            assert_eq!(req.comments.len(), usize::from(!consequence.is_empty()));
+            if let Some(comment) = req.comments.first() {
+                assert_eq!(comment.author, identity);
             }
         }
     }
