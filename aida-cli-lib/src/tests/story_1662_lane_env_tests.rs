@@ -495,3 +495,19 @@ fn the_doctor_daemon_scan_reads_an_injected_proc_root() {
             .unwrap();
     assert!(default.is_empty(), "{default:?}");
 }
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_background_without_seat_keys_recovers_implementer_from_lease() {
+    let (_tmp, root, lane) = lane_fixture();
+    write_lease(&root, LANE, &lane, Some("implementer"), false);
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_SESSION_GRANT", None),
+        ("AIDA_SESSION_PURPOSE", None),
+    ]);
+    let fix = fix_at(&root, &lane.join("src")).unwrap().unwrap();
+    assert_eq!(fix.role, "implementer");
+    assert_eq!(fix.grant, GrantFix::Keep); // An absent grant stays absent.
+    assert!(render(&fix).contains("export AIDA_SESSION_ROLE='implementer'"));
+}
