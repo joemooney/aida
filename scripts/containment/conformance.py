@@ -490,8 +490,11 @@ def aida_refuse(root, report, reason):
 
 def fixture_command(argv, cwd, env, report, stage):
     try:
+        # Setup is noninteractive even under an operator TTY. Role entry uses
+        # its separate terminal-preserving call below.
+        # trace:BUG-2460 | ai:codex
         result = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
-                                text=True, timeout=30)
+                                stdin=subprocess.DEVNULL, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as error:
         report["setup"].append({"stage": stage, "argv": argv, "error": str(error)})
         raise ValueError(f"fixture-{stage}-unavailable") from error

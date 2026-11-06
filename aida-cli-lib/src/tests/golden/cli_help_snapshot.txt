@@ -15591,7 +15591,8 @@ Options:
   -m, --message <MSG>
           Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is
           appended automatically. When omitted, a conventional default is used. Ignored when the
-          worktree is clean
+          worktree is clean. In a native seat, records a lease-bound host publication declaration
+          instead; supply the complete subject including `(ID)` or `(Refs ID)`
 
       --no-merge
           Stop after opening the PR — do not watch CI or merge. The PR is left open for a human to
@@ -46806,7 +46807,7 @@ Working on aida itself
       {
         "name": "message",
         "takes_value": true,
-        "help": "Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is appended automatically. When omitted, a conventional default is used. Ignored when the worktree is clean"
+        "help": "Commit subject to use when committing uncommitted work. The `(SPEC-ID)` trailer is appended automatically. When omitted, a conventional default is used. Ignored when the worktree is clean. In a native seat, records a lease-bound host publication declaration instead; supply the complete subject including `(ID)` or `(Refs ID)`"
       },
       {
         "name": "no-merge",
