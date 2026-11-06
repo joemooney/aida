@@ -5,10 +5,10 @@ last_by:
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   vendor: claude
 result: done
-note: 'advisor: unread [request] from implementer, 64m old: Queue-work lane exited without changes'
+note: 'advisor: unread [request] from review-watch, 9h54m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 7h38m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 6h14m old: PR-3522 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from implementer, 2h16m old: Queue-work lane exited without changes; advisor: unread [request] from claude-reviewer-1942, 101m old: Review of PR-3533 (STORY-2401 slice 4) at b24dd4cd: APPROVED, recorded in the wo…; advisor: unread [request] from implementer, 99m old: Queue-work lane exited without changes; advisor: unread [request] from implementer, 75m old: Rework merge conflicts require Claude; advisor: unread [request] from review-launch, 68m old: Review blocked by retained lease 01a1b301a034'
 due_since: 2026-11-06T19:39:55.719072645Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-06T22:40:31Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-06T23:52:28Z
   job: mail-backlog
-  error: 'advisor: unread [request] from implementer, 64m old: Queue-work lane exited without changes'
+  error: 'advisor: unread [request] from review-watch, 9h54m old: PR-3504 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-launch, 7h38m old: Review blocked by retained lease 01a1b1643ab6; advisor: unread [request] from review-watch, 6h14m old: PR-3522 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from implementer, 2h16m old: Queue-work lane exited without changes; advisor: unread [request] from claude-reviewer-1942, 101m old: Review of PR-3533 (STORY-2401 slice 4) at b24dd4cd: APPROVED, recorded in the wo…; advisor: unread [request] from implementer, 99m old: Queue-work lane exited without changes; advisor: unread [request] from implementer, 75m old: Rework merge conflicts require Claude; advisor: unread [request] from review-launch, 68m old: Review blocked by retained lease 01a1b301a034'
