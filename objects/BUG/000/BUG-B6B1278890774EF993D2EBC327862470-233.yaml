@@ -13,12 +13,12 @@ description: |-
   3. The rotate relay's relaunch carries the same set.
   4. A test asserts that an advisor child launched via agent new can mint a reviewer grandchild (review watch admits one) and an implementer grandchild.
   5. The standing orders and handoff launch line ('aida agent new claude --role advisor --permission-mode auto') then work as written, with no bypass needed (feeds STORY-2571).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T18:00:05.876773494Z
+modified_at: 2026-11-06T18:06:32.118872411Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,15 @@ history:
   timestamp: 2026-11-06T18:00:07.901308476Z
   session_id: 01a1b1e75574
   changes: []
+- id: 01a1b20a-74b6-7582-8e37-0fe07d67b18b
+  author: aida-orchestrator
+  timestamp: 2026-11-06T18:06:32.118895809Z
+  session_id: 01a1b2083d2b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6fe228acc8ba529a71396d2a8236545d2d009d1a
   branch: main
@@ -59,3 +68,11 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Foreground claude/codex/agy and rotation paths carry delegable seats correctly and the ancestor-chain revalidation is sound, but the detached codex --bg path validates --delegate-seat and then drops it, so a requested narrowing comes out as the full parent set. CI was still pending at review time.
+  recovery_hint: address the review findings, move BUG-2467 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T18:06:32.118872411Z
