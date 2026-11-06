@@ -971,9 +971,11 @@ While a predicate remains continuously true, its request escalates after 30
 minutes without an authorized disposition. An `acted` or `declined` response
 closes the response obligation, but a stall persisting another 30 minutes after
 the response escalates with the actor, reason and evidence. `deferred` postpones
-the unresolved escalation until its deadline. An unresolved or deferral-deadline
-notice does not consume the later persistent-stall notice. Operator-direct initial
-delivery has no advisor request to disposition; its notice says the stall persists
+escalation until its deadline. Deferral expiry has a separate notice even if an
+unresolved notice was already sent before the deferral. A malformed deferral
+without a deadline is reported as unknown and uses 30 minutes after its receipt
+timestamp as a fixed fallback. Neither notice consumes the later persistent-stall
+notice. Operator-direct initial delivery has no advisor request to disposition; its notice says the stall persists
 with no advisor request. Only the latest authorized revision matching the
 exact request ID and fingerprint counts. Unknown observations, backwards clocks
 and gaps over 15 minutes restart escalation continuity without resending the
@@ -981,11 +983,12 @@ request. Known predicate recovery closes continuous episodes; age/event kinds
 retain their per-evidence delivery suppression as described above.
 
 Escalation uses the existing operator notifier with distinct episode-specific
-`_unresolved` and `_persistent` rules and a ten-second command timeout. Quiet hours
-queue it; operator opt-out is respected. Each escalation kind is sent or queued at
+`_unresolved`, `_deferral` and `_persistent` rules and a ten-second command timeout.
+Quiet hours queue it; operator opt-out is respected. Each escalation kind is sent or queued at
 most once per episode. Refusal retries on a later tick; uncertainty retains a
 reservation and reports unknown.
 Previews report due escalation without writes, notification calls or receipts.
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex -->
 
 This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Explicit recipient responses

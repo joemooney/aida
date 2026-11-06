@@ -576,3 +576,198 @@ fn initial_known_refusal_retries_but_publication_uncertainty_reserves() {
         }
     }
 }
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[test]
+fn late_deferral_expiry_has_its_own_once_per_episode_notice() {
+    let t = tempfile::tempdir().unwrap();
+    start(t.path());
+    let mut notices = Vec::new();
+    let mut notify = |rule: &str, body: &str| {
+        notices.push((rule.to_owned(), body.to_owned()));
+        Ok(SendResult::Sent)
+    };
+    for m in [40, 50, 60] {
+        step(t.path(), &active(), m, true, None, &mut notify);
+    }
+    let action = receipt(Outcome::Deferred, 65, Some(180));
+    for m in (65..180).step_by(10).chain([179, 180, 181, 191]) {
+        let report = step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(action.clone()),
+            &mut notify,
+        );
+        assert_eq!(report.escalations.len(), usize::from(m == 180));
+    }
+    // A later revised deferral still belongs to the same episode.
+    for m in [200, 210, 220] {
+        step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(receipt(Outcome::Deferred, 192, Some(210))),
+            &mut notify,
+        );
+    }
+    // The independent persistent-stall notice remains available after action.
+    for m in [221, 231, 241, 250, 251, 261] {
+        let report = step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(receipt(Outcome::Acted, 221, None)),
+            &mut notify,
+        );
+        assert_eq!(report.escalations.len(), usize::from(m == 251));
+    }
+    assert_eq!(notices.len(), 3);
+    assert!(notices[0].0.ends_with("_unresolved"));
+    assert!(notices[1].0.ends_with("_deferral"));
+    assert!(notices[2].0.ends_with("_persistent"));
+    assert!(notices[1].1.contains("deferral deadline reached"));
+    assert!(notices[1].1.contains("exact-request"));
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[test]
+fn missing_deferral_deadline_is_reported_and_uses_fixed_fallback() {
+    let t = tempfile::tempdir().unwrap();
+    start(t.path());
+    let action = receipt(Outcome::Deferred, 35, None);
+    for m in [40, 50, 60, 64, 65, 75] {
+        let report = step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(action.clone()),
+            &mut |rule, body| {
+                assert_eq!(m, 65);
+                assert!(rule.ends_with("_deferral"));
+                assert!(body.contains("deferral deadline missing"));
+                Ok(SendResult::Sent)
+            },
+        );
+        assert!(report
+            .unknown
+            .iter()
+            .any(|s| s.contains("deferred action missing deadline")));
+        assert_eq!(report.escalations.len(), usize::from(m == 65));
+    }
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[test]
+fn deferral_preview_refusal_retry_and_uncertainty_preserve_dedup() {
+    let t = tempfile::tempdir().unwrap();
+    start(t.path());
+    let action = receipt(Outcome::Deferred, 35, Some(60));
+    for m in [40, 50, 59] {
+        step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(action.clone()),
+            &mut |_, _| panic!("early"),
+        );
+    }
+    let path = t.path().join(".aida/pipeline-stalls.json");
+    let bytes = std::fs::read(&path).unwrap();
+    let report = step(
+        t.path(),
+        &active(),
+        60,
+        false,
+        Some(action.clone()),
+        &mut |_, _| panic!("preview"),
+    );
+    assert!(report
+        .evidence
+        .iter()
+        .any(|s| s.contains("deferral deadline reached")));
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    for (m, outcome) in [(60, SendResult::Refused), (61, SendResult::Uncertain)] {
+        let report = step(
+            t.path(),
+            &active(),
+            m,
+            true,
+            Some(action.clone()),
+            &mut |rule, _| {
+                assert!(rule.ends_with("_deferral"));
+                Ok(outcome.clone())
+            },
+        );
+        assert_eq!(report.escalations["pipeline-idle"], outcome);
+    }
+    let report = step(t.path(), &active(), 62, true, Some(action), &mut |_, _| {
+        panic!("reserved")
+    });
+    assert!(report.escalations.is_empty());
+    assert!(report
+        .unknown
+        .iter()
+        .any(|s| s.contains("escalation outcome unresolved")));
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-868 | ai:codex
+#[test]
+fn deferral_pre_and_post_send_write_failures_preserve_reservation() {
+    for fail_at in [1, 2] {
+        let t = tempfile::tempdir().unwrap();
+        start(t.path());
+        let action = receipt(Outcome::Deferred, 35, Some(60));
+        for m in [40, 50, 59] {
+            step(
+                t.path(),
+                &active(),
+                m,
+                true,
+                Some(action.clone()),
+                &mut |_, _| panic!("early"),
+            );
+        }
+        let mut writes = 0;
+        let mut sent = 0;
+        assert!(tick_with_effects(
+            t.path(),
+            &active(),
+            60 * MIN,
+            true,
+            30,
+            &mut |_| panic!("no second advisor mail"),
+            &mut |_| Ok(Some(action.clone())),
+            &mut |rule, _| {
+                assert!(rule.ends_with("_deferral"));
+                sent += 1;
+                Ok(SendResult::Sent)
+            },
+            &mut |path, bytes| {
+                writes += 1;
+                if writes == fail_at {
+                    anyhow::bail!("injected write failure");
+                }
+                Ok(aida_core::write_atomic(path, bytes)?)
+            },
+        )
+        .is_err());
+        assert_eq!(sent, usize::from(fail_at == 2));
+        let report = step(t.path(), &active(), 61, true, Some(action), &mut |_, _| {
+            assert_eq!(fail_at, 1);
+            Ok(SendResult::Sent)
+        });
+        assert_eq!(report.escalations.len(), usize::from(fail_at == 1));
+        if fail_at == 2 {
+            assert!(report
+                .unknown
+                .iter()
+                .any(|s| s.contains("escalation outcome unresolved")));
+        }
+    }
+}
