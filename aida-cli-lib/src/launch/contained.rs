@@ -1168,19 +1168,22 @@ impl PreparedLaunch {
         receipt.accepted = true;
         // Host-side evidence only: never export the private receipt or grant.
         // trace:TASK-3131 | ai:codex
-        {
-            use sha2::{Digest, Sha256};
-            let digest = Sha256::digest(serde_json::to_vec(&receipt)?);
-            eprintln!(
-                "aida-contained-receipt sha256={digest:x} policy_sha={}",
-                self.policy_sha
-            );
-        }
+        eprintln!("{}", receipt_diagnostic(&receipt, &self.policy_sha)?);
         run.receipt = Some(receipt);
         run.acceptance = Some(self.accept_writer);
         Ok(run)
     }
 }
+// The conformance harness consumes this standalone stderr line.
+// trace:TASK-3194 | ai:codex
+fn receipt_diagnostic(receipt: &ContainmentReceipt, policy_sha: &str) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(serde_json::to_vec(receipt)?);
+    Ok(format!(
+        "aida-contained-receipt sha256={digest:x} policy_sha={policy_sha}"
+    ))
+}
+
 trait PolicyVendor {
     fn pointer_vendor(&self, vendor: &str) -> Option<&str>;
 }
