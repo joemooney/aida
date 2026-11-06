@@ -75,6 +75,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/zen_drive_root.rs", 3, "slice C: control child"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
     ("aida-core/src/db/refresh_worker.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-core/src/proc_identity.rs", 1, "not a vendor launch: shared cooperative pre_exec self-check receipt; does not construct or spawn a command"),
     ("aida-tui/src/actions.rs", 1, "generic helper: TUI action argv"),
     ("aida-tui/src/dispatch.rs", 1, "generic helper: TUI run_child"),
     ("aida-tui/src/redesign/mod.rs", 12, "slice C: control_env"),
@@ -90,7 +91,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // PR-B removes 13 markers: compete (-3), dispatch (-3), phase builders
 // (their legacy Aida markers remain), fresh Codex session/exec (-7).
 // trace:STORY-2326 | ai:codex
-const CEILING: usize = 157;
+// Shared cooperative identity capture adds one pre_exec self-check receipt,
+// not a vendor command/spawn; the exact file/count/reason is ledgered above.
+// trace:STORY-2537 trace:BUG-2458 | ai:codex
+const CEILING: usize = 158;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
