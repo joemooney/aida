@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T14:39:53.711023124Z
-modified_at: 2026-11-06T14:39:53.711023124Z
+modified_at: 2026-11-06T14:59:46.488874365Z
 req_type: Task
 tags:
 - carried-from:BUG-2462
 - finding-hash:ceb3d198
 - from-review:PR-3503
 - kind:carried-forward
+comments:
+- id: 01a1b15f-78b8-7222-98e3-5102d4b5fe07
+  author: joe
+  content: 'ADVISOR (10-28 rule, ruled once): accepted as-is, rejected. One overlong line in an internal testing doc. No reader impact and no doc gate fails on it.'
+  created_at: 2026-11-06T14:59:46.488874365Z
+  modified_at: 2026-11-06T14:59:46.488874365Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 filed_at:
   code_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
   branch: main
