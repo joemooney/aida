@@ -41,6 +41,7 @@ fn task_2707_directory_leaf_refuses_session_grants() {
 // trace:TASK-2708 | ai:claude
 fn live_required() -> bool {
     std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1")
+        || std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
 }
 /// The installed-Codex native-composition test has its own opt-in: the
 /// required-live CI gate installs bwrap but not Codex, so that gate must
@@ -114,15 +115,25 @@ fn fixture(script: &str, preflight: &str) -> PreparedLaunch {
 }
 fn run_script(script: &str) -> String {
     use std::io::{Seek, SeekFrom};
-    let plan = fixture(script, "print('seat_grant_valid=true expected_seat=true')");
+    let mut plan = fixture(script, "print('seat_grant_valid=true expected_seat=true')");
     let mut output = tempfile::tempfile().unwrap();
-    let mut run = plan.spawn(output.try_clone().unwrap().into()).unwrap();
+    plan.command.stderr(output.try_clone().unwrap());
+    let mut run = match plan.spawn(output.try_clone().unwrap().into()) {
+        Ok(run) => run,
+        Err(error) => {
+            output.seek(SeekFrom::Start(0)).unwrap();
+            let mut text = String::new();
+            output.read_to_string(&mut text).unwrap();
+            panic!("lane preparation failed: {error:#}\n{text}");
+        }
+    };
     assert!(run.receipt().is_accepted());
     run.release().unwrap();
-    assert!(run.child.wait().unwrap().success());
+    let status = run.child.wait().unwrap();
     output.seek(SeekFrom::Start(0)).unwrap();
     let mut text = String::new();
     output.read_to_string(&mut text).unwrap();
+    assert!(status.success(), "lane exited {status}:\n{text}");
     text
 }
 #[test]
@@ -809,6 +820,9 @@ cases = [
     ('netlink_route_raw', S, (socket.AF_NETLINK, socket.SOCK_RAW, 0), ALLOW),
     ('netlink_route_dgram', S, (socket.AF_NETLINK, socket.SOCK_DGRAM | CLOEXEC, 0), ALLOW),
     ('connect_notifies', 42, (3, 0, 16), NOTIFY),
+    ('sendto_notifies', 44, (3, 0, 1, 0, 0, 0), NOTIFY),
+    ('sendmsg_notifies', 46, (3, 0, 0), NOTIFY),
+    ('sendmmsg_denied', 307, (3, 0, 0), DENY),
 ]
 cases += [('netlink_%d_denied' % proto, S, (socket.AF_NETLINK, socket.SOCK_RAW, proto), DENY)
           for proto in range(1, 32)]
@@ -824,7 +838,7 @@ print('filter decisions ok: %d' % len(cases))
         .unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
-        out.status.success() && text.contains("filter decisions ok: 49"),
+        out.status.success() && text.contains("filter decisions ok: 52"),
         "{text}{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -924,12 +938,20 @@ fn task_2708_live_lane_socket_connected_from_nested_netns_is_still_brokered() {
     }
     let output = run_script(
         r#"
-import ctypes as C,socket,errno,struct,fcntl
+import ctypes as C,socket,errno,struct,fcntl,os
+probe=os.fork()
+if probe==0:
+    lib=C.CDLL(None,use_errno=True)
+    rc=lib.unshare(0x10000000|0x40000000)
+    os._exit(C.get_errno() if rc<0 else 0)
+_,status=os.waitpid(probe,0)
+assert os.WIFEXITED(status) and os.WEXITSTATUS(status)==0,'NESTED_USERNS_UNAVAILABLE: under-filter probe errno/status=%d' % status
 lib=C.CDLL(None,use_errno=True)
 lane=socket.socket()
 other=socket.socket();other.bind(('127.0.0.1',0));other.listen();other.setblocking(False)
 target=other.getsockname()
-assert lib.unshare(0x10000000|0x40000000)==0,C.get_errno()
+rc=lib.unshare(0x10000000|0x40000000)
+assert rc==0,'NESTED_USERNS_UNAVAILABLE: lane unshare(CLONE_NEWUSER|CLONE_NEWNET) errno=%d; host must enable nested user namespaces' % C.get_errno()
 try:
     lane.connect(target);raise AssertionError('lane socket connected unbrokered')
 except OSError as e: assert e.errno==errno.ECONNREFUSED,e
@@ -1067,49 +1089,36 @@ fn credentials_expiring_in(dir: &Path, secs: i64) -> PathBuf {
     path
 }
 
-/// 05:47 ruling: a token that outlives the grant launches without a refresh;
-/// one that would not gets ONE host refresh; if that does not help, or the
-/// credentials are missing or not OAuth, the launch refuses by name.
+/// Insufficient token lifetime fails fast with an operator remedy, never an
+/// unproven `auth status` refresh. Unreadable/invalid leaves have distinct errors.
+// trace:TASK-2708 | ai:codex
 #[test]
 fn task_2708_claude_credentials_must_outlive_the_grant() {
     let dir = tempfile::tempdir().unwrap();
-    let fresh = credentials_expiring_in(dir.path(), 8 * 3600);
-    ensure_claude_credentials_outlive(&fresh, 4 * 3600, || panic!("no refresh needed")).unwrap();
-
-    let stale = credentials_expiring_in(dir.path(), 600);
-    let refreshes = std::cell::Cell::new(0);
-    let error = ensure_claude_credentials_outlive(&stale, 4 * 3600, || {
-        refreshes.set(refreshes.get() + 1);
-        Ok(())
-    })
-    .unwrap_err()
-    .to_string();
-    assert_eq!(refreshes.get(), 1);
-    assert!(error.contains("claude credentials expire in"), "{error}");
-    assert!(error.contains("relaunch"), "{error}");
-
-    let renewed = ensure_claude_credentials_outlive(&stale, 4 * 3600, || {
-        credentials_expiring_in(dir.path(), 8 * 3600);
-        Ok(())
-    });
-    assert!(renewed.is_ok(), "{renewed:?}");
-
-    // A baseline (grant-less, ttl 0) lane still needs an hour of token.
-    credentials_expiring_in(dir.path(), 60);
-    let failed = ensure_claude_credentials_outlive(&stale, 0, || anyhow::bail!("offline"));
+    let path = credentials_expiring_in(dir.path(), 8 * 3600);
+    let expiry = claude_credentials_expiry_ms(&open_credentials_leaf(&path).unwrap()).unwrap();
+    ensure_claude_credentials_outlive(expiry, 4 * 3600).unwrap();
+    for ttl in [0, 4 * 3600] {
+        let error =
+            ensure_claude_credentials_outlive(chrono::Utc::now().timestamp_millis() + 60000, ttl)
+                .unwrap_err()
+                .to_string();
+        assert!(
+            error.contains("CLAUDE_EXPIRED") && error.contains("claude /login"),
+            "{error}"
+        );
+    }
+    std::fs::write(&path, "invalid").unwrap();
+    let error = claude_credentials_expiry_ms(&open_credentials_leaf(&path).unwrap()).unwrap_err();
     assert!(
-        format!("{:#}", failed.unwrap_err()).contains("host-side Claude credential refresh failed")
-    );
-
-    let missing = dir.path().join("absent").join(CLAUDE_CREDENTIALS);
-    let error = ensure_claude_credentials_outlive(&missing, 60, || Ok(())).unwrap_err();
-    assert!(
-        error.to_string().contains("subscription credentials"),
+        error.to_string().contains("CLAUDE_CREDENTIALS_INVALID"),
         "{error}"
     );
-    std::fs::write(&stale, r#"{"apiKey":"x"}"#).unwrap();
-    let error = ensure_claude_credentials_outlive(&stale, 60, || Ok(())).unwrap_err();
-    assert!(error.to_string().contains("claudeAiOauth"), "{error}");
+    let error = claude_credentials_expiry_ms(&File::open(dir.path()).unwrap()).unwrap_err();
+    assert!(
+        error.to_string().contains("CLAUDE_CREDENTIALS_UNREADABLE"),
+        "{error}"
+    );
 }
 
 /// The credentials leaf is pinned by descriptor: never a symlink or a
@@ -1132,7 +1141,7 @@ fn task_2708_claude_credentials_leaf_identity() {
 #[test]
 fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
     let dir = tempfile::tempdir().unwrap();
-    let child = |credentials: Option<PathBuf>| ContainedChild {
+    let child = |credentials: Option<i64>| ContainedChild {
         child: Command::new("/bin/true").spawn().unwrap(),
         receipt: None,
         acceptance: None,
@@ -1142,14 +1151,28 @@ fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
     let failed = Command::new("/bin/false").status().unwrap();
     let ok = Command::new("/bin/true").status().unwrap();
     let expired = credentials_expiring_in(dir.path(), -60);
-    let run = child(Some(expired));
+    let captured = claude_credentials_expiry_ms(&open_credentials_leaf(&expired).unwrap()).unwrap();
+    let run = child(Some(captured));
     assert_eq!(
         run.vendor_exit(failed).unwrap_err().to_string(),
         CLAUDE_EXPIRED_IN_LANE
     );
     assert!(run.vendor_exit(ok).unwrap().success());
-    credentials_expiring_in(dir.path(), 3600);
-    assert!(!run.vendor_exit(failed).unwrap().success());
+    let replacement = tempfile::tempdir().unwrap();
+    let renewed = credentials_expiring_in(replacement.path(), 3600);
+    std::fs::rename(renewed, &expired).unwrap();
+    assert_eq!(
+        run.vendor_exit(failed).unwrap_err().to_string(),
+        CLAUDE_EXPIRED_IN_LANE
+    );
+    let fresh = claude_credentials_expiry_ms(&open_credentials_leaf(&expired).unwrap()).unwrap();
+    assert!(!child(Some(fresh)).vendor_exit(failed).unwrap().success());
+    std::fs::remove_file(&expired).unwrap();
+    assert_eq!(
+        run.vendor_exit(failed).unwrap_err().to_string(),
+        CLAUDE_EXPIRED_IN_LANE
+    );
+    assert!(!child(Some(fresh)).vendor_exit(failed).unwrap().success());
     assert!(!child(None).vendor_exit(failed).unwrap().success());
 }
 
@@ -1253,4 +1276,335 @@ fn task_2708_claude_wrapper_selection_and_unwired_surfaces_refuse() {
         true,
         None
     ));
+}
+
+/// Anonymous datagram IPC remains usable; naming any host Unix path via
+/// sendto/sendmsg fails before delivery, including a non-existent name.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_live_unix_datagram_named_sends_refused() {
+    if !live_available() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("host-dgram");
+    let listener = std::os::unix::net::UnixDatagram::bind(&path).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let output = run_script(&format!(
+        r#"
+import socket,errno
+x,y=socket.socketpair(socket.AF_UNIX,socket.SOCK_DGRAM)
+x.send(b'pair');assert y.recv(4)==b'pair'
+x.sendmsg([b'ipc']);assert y.recv(3)==b'ipc'
+for path in [{path:?},'/no-such-host-socket']:
+    for send in [lambda: x.sendto(b'bypass',path),lambda: x.sendmsg([b'bypass'],[],0,path)]:
+        try:
+            send();raise AssertionError('named Unix send allowed')
+        except OSError as e: assert e.errno==errno.EACCES,e
+print('named Unix sends refused')
+"#,
+        path = path.to_str().unwrap()
+    ));
+    assert!(output.contains("named Unix sends refused"), "{output}");
+    let mut buf = [0; 16];
+    assert_eq!(
+        listener.recv(&mut buf).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+/// A socket installed by the relay is lane-owned; re-connect to any other
+/// endpoint remains refused. Host-owned sockets fail ancestry proof as well.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_live_relay_reconnect_refused() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,os,errno
+port=int(os.environ['HTTP_PROXY'].rsplit(':',1)[1])
+s=socket.socket();s.connect(('127.0.0.1',port))
+try:
+    s.connect(('127.0.0.1',1));raise AssertionError('relay reconnect allowed')
+except OSError as e: assert e.errno==errno.ECONNREFUSED,e
+s.sendall(b'GET / HTTP/1.1\r\n\r\n');assert b'405' in s.recv(4096)
+print('relay reconnect refused')
+"#,
+    );
+    assert!(output.contains("relay reconnect refused"), "{output}");
+}
+
+/// Exercise the real prepare path with only synthetic host state. Live QA
+/// runs the prepared mount vector, with no real vendor or credentials.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_claude_prepare_fake_home() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !Path::new("/usr/bin/bwrap").exists() {
+        skip_under(live_required(), "Claude prepare requires bwrap");
+        return;
+    }
+    if let Err(error) = host_prerequisites() {
+        skip_under(live_required(), &format!("{error:#}"));
+        return;
+    }
+    let home = crate::home_dir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    for p in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    let config = home.join("relocated-claude");
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(home.join(".claude/host-secret"), "secret").unwrap();
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(config.join("host-secret"), "secret").unwrap();
+    for name in [".claude.json", ".claude.json.backup"] {
+        std::fs::write(home.join(name), "host-secret").unwrap();
+    }
+    let path = credentials_expiring_in(&config, 8 * 3600);
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("CLAUDE_CONFIG_DIR", config.to_str().unwrap()),
+        ("CODEX_HOME", home.join(".codex").to_str().unwrap()),
+    ]);
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("claude");
+    std::fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut child = Command::new(&program);
+    child
+        .args(["-p", "--settings", "{}", "synthetic"])
+        .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_GRANT", "")
+        .env("AIDA_SESSION_ROLE", "companion");
+    let prepare = || PreparedLaunch::prepare(&child, root.path(), None);
+    // Synthetic foreign-owner seam: exercise the same prepare path with a
+    // mismatching issuer uid, without requiring host chown authority.
+    assert!(PreparedLaunch::prepare_for_owner(
+        &child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() } + 1
+    )
+    .err()
+    .unwrap()
+    .to_string()
+    .contains("credentials identity refused"));
+    let plan = prepare().unwrap_or_else(|e| panic!("prepare: {e:#}"));
+    let cfg: serde_json::Value =
+        serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
+    assert_eq!(cfg["nested_userns"], true);
+    let env: BTreeMap<_, _> = plan
+        .command
+        .get_envs()
+        .filter_map(|(k, v)| {
+            v.map(|v| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.to_string_lossy().into_owned(),
+                )
+            })
+        })
+        .collect();
+    let private = PathBuf::from(&env["CLAUDE_CONFIG_DIR"]);
+    let bound = plan
+        .profile
+        .mounts
+        .iter()
+        .find(|m| m.path == private.join(CLAUDE_CREDENTIALS))
+        .unwrap();
+    assert!(!bound.writable);
+    assert_eq!(
+        claude_credentials_expiry_ms(&bound.file).unwrap(),
+        plan.credentials.unwrap()
+    );
+    for name in ["TMPDIR", "CLAUDE_CODE_TMPDIR"] {
+        assert!(Path::new(&env[name]).starts_with(plan._state.path()));
+    }
+    assert_eq!(env["DISABLE_AUTOUPDATER"], "1");
+    for name in [
+        ".claude",
+        "relocated-claude",
+        ".claude.json",
+        ".claude.json.backup",
+    ] {
+        let m = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == home.join(name))
+            .unwrap();
+        assert!(!m.writable);
+        if m.file.metadata().unwrap().is_file() {
+            assert_eq!(m.file.metadata().unwrap().len(), 0);
+        }
+    }
+    // Use the prepared bwrap vector directly: fake vendor/seat authority
+    // cannot manufacture an accepted production receipt.
+    if live_available() {
+        let script = format!(
+            r#"
+import os,json,errno
+from pathlib import Path
+home=Path({home:?})
+assert not (home/'.claude/host-secret').exists()
+assert not (home/'relocated-claude/host-secret').exists()
+for name in ['.claude.json','.claude.json.backup']: assert (home/name).read_text()==''
+p=Path(os.environ['CLAUDE_CONFIG_DIR'])/'.credentials.json'
+assert json.loads(p.read_text())['claudeAiOauth']['accessToken']=='synthetic-2708'
+try:
+    p.write_text('changed');raise AssertionError('credential writable')
+except OSError as e: assert e.errno in [errno.EROFS,errno.EACCES],e
+print('Claude prepare live mounts ok')
+"#,
+            home = home.to_str().unwrap()
+        );
+        let mut command = Command::new("/usr/bin/bwrap");
+        command
+            .args(
+                cfg["bwrap"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_str().unwrap()),
+            )
+            .args(["--", "/usr/bin/python3", "-I", "-S", "-c", &script])
+            .env_clear()
+            .envs(&env);
+        let fds: Vec<_> = plan
+            .profile
+            .mounts
+            .iter()
+            .map(|m| m.file.as_raw_fd())
+            .collect();
+        unsafe {
+            command.pre_exec(move || {
+                for fd in &fds {
+                    libc::fcntl(*fd, libc::F_SETFD, 0);
+                }
+                Ok(())
+            });
+        }
+        let out = command.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    drop(plan);
+    let saved = config.join("saved");
+    std::fs::rename(&path, &saved).unwrap();
+    std::os::unix::fs::symlink(&saved, &path).unwrap();
+    assert!(prepare()
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("credentials identity refused"));
+    std::fs::remove_file(&path).unwrap();
+    std::fs::rename(&saved, &path).unwrap();
+    std::fs::hard_link(&path, &saved).unwrap();
+    assert!(prepare()
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("credentials identity refused"));
+    std::fs::remove_file(&saved).unwrap();
+    std::fs::write(&path, "not json").unwrap();
+    assert!(prepare()
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("CLAUDE_CREDENTIALS_INVALID"));
+    credentials_expiring_in(&config, -60);
+    assert!(prepare()
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("CLAUDE_EXPIRED"));
+}
+
+/// Kernel-evidence branches, host/foreign socket rejection, bounded admission,
+/// and a connect that never returns. No bubblewrap or external network needed.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_socket_ancestry_and_connect_deadline() {
+    let code = format!(
+        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        r#"
+import tempfile
+with tempfile.TemporaryDirectory() as root:
+    handles=[]
+    for name in ['lane-net','child-net','host-net','foreign-net','lane-user','child-user','host-user','foreign-user']:
+        f=open(root+'/'+name,'w+');handles.append(f)
+    ids=[ns_identity(f.fileno()) for f in handles]
+    owner={ids[1]:5,ids[2]:6,ids[3]:7}
+    parents={ids[5]:4}
+    real=LIBC
+    class Kernel:
+        def ioctl(self,fd,op,*args):
+            op=getattr(op,'value',op)
+            if op==SIOCGSKNS: return os.dup(fd)
+            mapping=owner if op==NS_GET_USERNS else parents
+            key=ns_identity(fd)
+            if key not in mapping:
+                C.set_errno(errno.EPERM);return -1
+            return os.dup(handles[mapping[key]].fileno())
+    LIBC=Kernel()
+    assert socket_scope(handles[0].fileno(),ids[0],ids[4])=='lane'
+    assert socket_scope(handles[1].fileno(),ids[0],ids[4])=='nested'
+    for index in [2,3]:
+        try:
+            scope=socket_scope(handles[index].fileno(),ids[0],ids[4])
+            assert scope=='foreign',scope
+        except RuntimeError as error:
+            assert 'NOT_DESCENDANT' in str(error),error
+    LIBC=real
+    # An actual host-netns socket must never receive nested authority.
+    with socket.socket() as host_socket:
+        try:
+            assert socket_scope(host_socket.fileno(),ids[0],ids[4])=='foreign'
+        except RuntimeError as error:
+            assert any(word in str(error) for word in ['UNREADABLE','NOT_DESCENDANT']),error
+    for _ in range(16): assert CONNECT_SLOTS.acquire(blocking=False)
+    assert not CONNECT_SLOTS.acquire(blocking=False)
+    for _ in range(16): CONNECT_SLOTS.release()
+    NESTED_CONNECT_PROGRAM='import time; time.sleep(30)'
+    responses=[]
+    def ioctl(fd,op,response): responses.append(response.error)
+    CONNECT_TIMEOUT=0.1
+    assert CONNECT_SLOTS.acquire(blocking=False)
+    started=time.monotonic()
+    connect_nested(-1,1,os.dup(handles[0].fileno()),b'xx')
+    assert responses==[-errno.ETIMEDOUT],responses
+    assert time.monotonic()-started<2
+    for _ in range(16): assert CONNECT_SLOTS.acquire(blocking=False)
+    assert not CONNECT_SLOTS.acquire(blocking=False)
+    for _ in range(16): CONNECT_SLOTS.release()
+class Denied:
+    def unshare(self,*args): C.set_errno(errno.EPERM);return -1
+LIBC=Denied()
+try:
+    probe_nested_userns();raise AssertionError('probe accepted denied userns')
+except RuntimeError as error:
+    assert 'NESTED_USERNS_UNAVAILABLE' in str(error) and '1' in str(error),error
+print('ancestry and connect deadline ok')
+"#
+    );
+    let out = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &code])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

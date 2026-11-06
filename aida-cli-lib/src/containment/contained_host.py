@@ -77,18 +77,37 @@ def target_socket(pid, target_fd):
     return fd
 
 
-def socket_netns(fd):
-    """(st_dev, st_ino) of the netns the SOCKET belongs to (SIOCGSKNS). The
-    caller's /proc/<pid>/ns/net is not the socket's: a socket made in the
-    lane netns stays there after its thread unshares. trace:TASK-2708 | ai:claude"""
-    ns = LIBC.ioctl(fd, C.c_ulong(SIOCGSKNS), C.c_ulong(0))
-    if ns < 0:
-        raise OSError(C.get_errno(), 'socket netns unavailable')
+# Kernel namespace ancestry, never a caller's namespace claim.
+# trace:TASK-2708 | ai:codex
+NS_GET_USERNS, NS_GET_PARENT = 0xb701, 0xb702
+CONNECT_SLOTS = threading.BoundedSemaphore(16)
+CONNECT_TIMEOUT = 3
+
+
+def ns_identity(fd):
+    md = os.fstat(fd)
+    return (md.st_dev, md.st_ino)
+
+
+def socket_scope(fd, lane_net, lane_user):
+    ns = checked(LIBC.ioctl(fd, C.c_ulong(SIOCGSKNS), 0), 'SOCKET_NETNS_UNREADABLE')
+    owner = None
     try:
-        md = os.fstat(ns)
-        return (md.st_dev, md.st_ino)
+        if ns_identity(ns) == lane_net:
+            return 'lane'
+        owner = checked(LIBC.ioctl(ns, NS_GET_USERNS, 0), 'SOCKET_USERNS_UNREADABLE')
+        # Linux bounds user-namespace nesting at 32; retain a separate bound.
+        for _ in range(64):
+            if ns_identity(owner) == lane_user:
+                return 'nested'
+            parent = checked(LIBC.ioctl(owner, NS_GET_PARENT, 0), 'SOCKET_USERNS_NOT_DESCENDANT')
+            os.close(owner)
+            owner = parent
+        return 'foreign'
     finally:
         os.close(ns)
+        if owner is not None:
+            os.close(owner)
 
 
 def sock_type(fd):
@@ -98,23 +117,133 @@ def sock_type(fd):
     return value.value
 
 
+NESTED_CONNECT_PROGRAM = r"""
+import ctypes as C,errno,os,sys
+lib=C.CDLL(None,use_errno=True)
+if lib.prctl(1,9,0,0,0)!=0 or os.getppid()!=int(sys.argv[3]):
+    os._exit(errno.EIO)
+address=bytes.fromhex(sys.argv[2])
+rc=lib.connect(int(sys.argv[1]),C.c_char_p(address),C.c_uint(len(address)))
+os._exit(0 if rc==0 else min(C.get_errno(),255))
+"""
+
+
 def connect_nested(listener, ident, dup, address):
-    """Connect the inspected nested-netns socket itself, with the address read
-    once, and answer with the kernel's result. Never CONTINUE: the trapped
-    task re-resolving its fd number could reach a swapped-in lane socket.
-    The connect runs in the socket's own netns, which is not the lane's."""
+    """Bound each pinned connect with a disposable process and a deadline.
+    Socket flags/timeouts are shared with the lane: a sibling could clear
+    SO_SNDTIMEO. A fresh interpreter avoids Python-after-threaded-fork work.
+    Never CONTINUE, and never change the shared O_NONBLOCK flags.
+    trace:TASK-2708 | ai:codex"""
+    child = None
     try:
+        child = subprocess.Popen(['/usr/bin/python3', '-I', '-S', '-c',
+                                  NESTED_CONNECT_PROGRAM, str(dup), address.hex(), str(os.getpid())],
+                                 pass_fds=(dup,), env={}, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
-            rc = LIBC.connect(dup, C.c_char_p(address), C.c_uint(len(address)))
-            error = 0 if rc == 0 else -C.get_errno()
-        finally:
-            os.close(dup)
+            code = child.wait(timeout=CONNECT_TIMEOUT)
+            error = -code if code >= 0 else -errno.EIO
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+            error = -errno.ETIMEDOUT
         ioctl(listener, SEND, Response(ident, 0, error, 0))
     except (OSError, RuntimeError):
-        pass  # the trapped task died or was interrupted; nothing to answer
+        try:
+            ioctl(listener, SEND, Response(ident, 0, -errno.EIO, 0))
+        except RuntimeError:
+            pass
+    finally:
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait()
+        os.close(dup)
+        CONNECT_SLOTS.release()
 
 
-def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net):
+# Snapshot send arguments and execute on the duplicated socket. Inspecting a
+# mutable msghdr then CONTINUE would allow a sibling to swap msg_name.
+# trace:TASK-2708 | ai:codex
+class SendIov(C.Structure):
+    _fields_ = [('base', C.c_void_p), ('size', C.c_size_t)]
+
+
+class SendHeader(C.Structure):
+    _fields_ = [('name', C.c_void_p), ('namelen', C.c_uint),
+                ('iov', C.c_void_p), ('iovlen', C.c_size_t),
+                ('control', C.c_void_p), ('controllen', C.c_size_t), ('flags', C.c_int)]
+
+
+def broker_send(listener, n):
+    dup, mem, rights = None, None, []
+    try:
+        dup = target_socket(n.pid, n.data.args[0])
+        mem = os.open('/proc/%d/mem' % n.pid, os.O_RDONLY | os.O_CLOEXEC)
+        def read(ptr, size):
+            require(size <= 1048576, 'send exceeds bound')
+            data = os.pread(mem, size, ptr) if size else b''
+            require(len(data) == size, 'short send memory')
+            return data
+        ioctl(listener, VALID, C.c_ulonglong(n.id))
+        if n.data.nr == 44:
+            _, buf, size, flags, name, namelen = n.data.args
+            buffers, ancillary = [read(buf, size)], []
+        else:
+            flags = n.data.args[2]
+            h = SendHeader.from_buffer_copy(read(n.data.args[1], C.sizeof(SendHeader)))
+            name, namelen = h.name, h.namelen
+            require(h.iovlen <= 64 and h.controllen <= 4096, 'send header exceeds bound')
+            rows = read(h.iov, h.iovlen * C.sizeof(SendIov))
+            iovs = (SendIov * h.iovlen).from_buffer_copy(rows)
+            require(sum(v.size for v in iovs) <= 1048576, 'send payload exceeds bound')
+            buffers = [read(v.base, v.size) for v in iovs]
+            control, ancillary = read(h.control, h.controllen), []
+            offset = 0
+            while offset < len(control):
+                require(len(control) - offset >= 16, 'short send control')
+                size, level, kind = struct.unpack_from('Qii', control, offset)
+                require(16 <= size <= len(control) - offset and
+                        level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS,
+                        'send control refused')
+                data = control[offset + 16:offset + size]
+                require(len(data) % 4 == 0, 'invalid rights')
+                copied = array.array('i')
+                for fd in array.array('i', data):
+                    copied.append(target_socket(n.pid, fd))
+                    rights.append(copied[-1])
+                ancillary.append((level, kind, copied))
+                offset += (size + 7) & ~7
+        require(not flags & 0x20000000, 'FASTOPEN refused')
+        require(namelen <= 128, 'send address exceeds bound')
+        with socket.socket(fileno=dup) as sock:
+            dup = None
+            require(not (sock.family == socket.AF_UNIX and name), 'named Unix send refused')
+            # Named sendmsg is conservatively refused; connected sendmsg and
+            # SCM_RIGHTS remain available for anonymous sandbox IPC.
+            require(n.data.nr == 44 or not name, 'named sendmsg refused')
+            address = read(name, namelen) if name else b''
+            ioctl(listener, VALID, C.c_ulonglong(n.id))
+            if n.data.nr == 44:
+                rc = LIBC.sendto(sock.fileno(), C.c_char_p(buffers[0]), C.c_size_t(len(buffers[0])),
+                                 C.c_int(flags | socket.MSG_DONTWAIT),
+                                 C.c_char_p(address) if name else None, C.c_uint(len(address)))
+                if rc < 0:
+                    raise OSError(C.get_errno(), 'sendto refused')
+            else:
+                rc = sock.sendmsg(buffers, ancillary, flags | socket.MSG_DONTWAIT)
+        ioctl(listener, SEND, Response(n.id, rc, 0, 0))
+    except (OSError, RuntimeError, ValueError) as error:
+        code = error.errno if isinstance(error, OSError) else errno.EACCES
+        try:
+            ioctl(listener, SEND, Response(n.id, 0, -code, 0))
+        except RuntimeError:
+            pass
+    finally:
+        for fd in rights + ([dup] if dup is not None else []) + ([mem] if mem is not None else []):
+            os.close(fd)
+
+
+def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net, lane_user):
     """F-a broker: read the sockaddr ONCE, never CONTINUE. A lane-netns
     stream socket naming the relay port on 127.0.0.1 gets a relay-connected
     socket; a pathname beneath the private state root gets the pinned private
@@ -128,8 +257,11 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port, 
         require(C.get_errno() in (errno.ENOENT, errno.EINTR),
                 'seccomp notification facility unavailable')
         return False
-    require(n.data.arch == 0xc000003e and n.data.nr == 42 and n.flags == 0,
+    require(n.data.arch == 0xc000003e and n.data.nr in (42, 44, 46) and n.flags == 0,
             'unexpected socket broker notification')
+    if n.data.nr in (44, 46):
+        broker_send(listener, n)
+        return True
     ident = C.c_ulonglong(n.id)
     answer = -errno.EACCES
     try:
@@ -158,16 +290,24 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port, 
                 try:
                     ioctl(listener, VALID, ident)
                     kind = sock_type(dup)
-                    nested = socket_netns(dup) != lane_net
-                except OSError:
+                    scope = socket_scope(dup, lane_net, lane_user)
+                    nested = scope == 'nested' if scope != 'foreign' else None
+                except (OSError, RuntimeError):
                     kind = nested = None
                 except BaseException:
                     os.close(dup)
                     raise
                 if nested:
-                    threading.Thread(target=connect_nested,
-                                     args=(listener, n.id, dup, address), daemon=True).start()
-                    return True
+                    if CONNECT_SLOTS.acquire(blocking=False):
+                        try:
+                            threading.Thread(target=connect_nested,
+                                             args=(listener, n.id, dup, address), daemon=True).start()
+                        except BaseException:
+                            CONNECT_SLOTS.release()
+                            os.close(dup)
+                            raise
+                        return True
+                    answer = -errno.EAGAIN
                 os.close(dup)
             if family == socket.AF_INET and kind == socket.SOCK_STREAM and nested is False:
                 require(length >= 8, 'short inet address')
@@ -294,7 +434,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         '--', '/usr/bin/python3', '-I', '-S', '-c',
         SOURCE + '\ncontained_main(*lane_args(sys.argv))',
         str(broker_child.fileno() if broker_mode else -1), str(proxy_child.fileno()),
-        str(connector_child.fileno()), str(port), json.dumps(cfg['preflight'])] + cfg['argv']
+        str(connector_child.fileno()), str(port), json.dumps(cfg['preflight']), json.dumps(cfg.get('nested_userns', False))] + cfg['argv']
     # The exact allow-listed environment Rust built for this helper, unchanged.
     process = subprocess.Popen(command, pass_fds=tuple(fds), env=dict(os.environ))
     for fd in (info_w, block_r):
@@ -337,6 +477,8 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         # compares each connecting socket's own netns (SIOCGSKNS) against.
         lane_md = os.stat('/proc/%d/ns/net' % worker)
         lane_net = (lane_md.st_dev, lane_md.st_ino)
+        user_md = os.stat('/proc/%d/ns/user' % worker)
+        lane_user = (user_md.st_dev, user_md.st_ino)
         os.write(block_w, b'R')
         os.close(block_w)
         block_w = None
@@ -358,7 +500,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             ready, _, _ = select.select([broker, notification, proxy], [], [], 0.1)
             if notification in ready:
                 broker_connect_contained(notification, state_fd, state_prefix, connector, port,
-                                         lane_net)
+                                         lane_net, lane_user)
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
@@ -395,7 +537,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         while process.poll() is None:
             ready, _, _ = select.select(watch, [], [], 0.2)
             if notification in ready and not broker_connect_contained(
-                    notification, state_fd, state_prefix, connector, port, lane_net):
+                    notification, state_fd, state_prefix, connector, port, lane_net, lane_user):
                 if select.poll and _hung_up(notification):
                     watch.remove(notification)
             if proxy in ready:

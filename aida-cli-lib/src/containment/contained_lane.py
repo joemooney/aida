@@ -28,10 +28,10 @@ def lane_filter():
     DGRAM reaches nothing: the lane netns has only lo and no route.
     NETLINK_ROUTE lets a nested netns bring up its own lo (the lane netns
     itself is cap-dropped). RAW inet and every other netlink protocol stay
-    denied. socketpair(): AF_UNIX, any type: an anonymous connected pair
-    reaches no path. trace:TASK-2708 | ai:claude
-    sendto/sendmsg/sendmmsg with
-    MSG_FASTOPEN (an implicit connect) are refused. ptrace and cross-process
+    denied. socketpair(): AF_UNIX, any type. sendto/sendmsg are brokered
+    with copied arguments, refusing named AF_UNIX destinations and FASTOPEN;
+    sendmmsg is refused. A mutable msghdr is never continued.
+    trace:TASK-2708 | ai:codex ptrace and cross-process
     memory/fd access are refused so a worker cannot drive the unfiltered
     relay helper. io_uring and setns are refused (connect/namespace bypass).
     """
@@ -51,20 +51,13 @@ def lane_filter():
     emit(LD, 0)
     emit(JSET, 0x40000000, 'deny', 'nr_ok')  # x32 ABI
     label('nr_ok')
-    for nr in (425, 426, 427, 308, 438, 101, 310, 311, 312):
+    for nr in (425, 426, 427, 308, 438, 101, 310, 311, 312, 307):
         emit(JEQ, nr, 'deny', None)
     emit(JEQ, 42, 'notify', None)
     emit(JEQ, 41, 'sock', None)
     emit(JEQ, 53, 'pair', None)
-    emit(JEQ, 44, 'fo3', None)
-    emit(JEQ, 307, 'fo3', None)
-    emit(JEQ, 46, 'fo2', 'allow')
-    label('fo3')
-    emit(LD, 16 + 8 * 3)
-    emit(JSET, 0x20000000, 'deny', 'allow')
-    label('fo2')
-    emit(LD, 16 + 8 * 2)
-    emit(JSET, 0x20000000, 'deny', 'allow')
+    emit(JEQ, 44, 'notify', None)
+    emit(JEQ, 46, 'notify', 'allow')
     label('sock')
     emit(LD, 16)
     emit(JEQ, socket.AF_UNIX, 'local_type', None)
@@ -238,12 +231,28 @@ def seat_preflight(argv):
             'contained requested-seat preflight refused')
 
 
+# A passing outer bwrap does not prove Claude can start its own sandbox.
+# Probe under the installed lane filter/capability floor, in a disposable child.
+# trace:TASK-2708 | ai:codex
+def probe_nested_userns():
+    pid = os.fork()
+    if pid == 0:
+        rc = LIBC.unshare(0x10000000 | 0x40000000)
+        code = C.get_errno() if rc < 0 else 0
+        os._exit(min(code, 255))
+    _, status = os.waitpid(pid, 0)
+    require(os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0,
+            'NESTED_USERNS_UNAVAILABLE: lane unshare(CLONE_NEWUSER|CLONE_NEWNET) '
+            'refused (errno/status %d); host must enable nested user namespaces' %
+            (os.WEXITSTATUS(status) if os.WIFEXITED(status) else status))
+
+
 def lane_args(argv):
     return (int(argv[1]), int(argv[2]), int(argv[3]), int(argv[4]),
-            json.loads(argv[5]), argv[6:])
+            json.loads(argv[5]), json.loads(argv[6]), argv[7:])
 
 
-def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, argv):
+def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, nested_userns, argv):
     # broker_fd < 0 exists only for the test-only positive-control lane, which
     # Rust can request solely under cfg(test). trace:TASK-2707 | ai:claude
     broker = socket.socket(fileno=broker_fd) if broker_fd >= 0 else None
@@ -270,16 +279,33 @@ def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, argv):
     os.close(proxy_fd)
     os.close(connector_fd)
     if broker is not None:
+        # Transfer the new listener from a trusted bootstrap thread created
+        # before filtering. Otherwise the very first sendmsg would trap before
+        # the host could receive the listener. Join it before any worker exec.
+        # trace:TASK-2708 | ai:codex
+        ready = threading.Event()
+        handoff = []
+        def transfer_listener():
+            ready.wait()
+            send_fd(broker, b'listener-v1', handoff[0])
+        transfer = threading.Thread(target=transfer_listener)
+        transfer.start()
         notification = install_lane_filter()
-        send_fd(broker, b'listener-v1', notification)
+        handoff.append(notification)
+        ready.set()
+        transfer.join()
         os.close(notification)
         broker.settimeout(20)
         require(broker.recv(32) == b'ready-v1', 'broker readiness refused')
+    if nested_userns:
+        probe_nested_userns()
     if preflight:
         seat_preflight(preflight)
     # trace:TASK-2707 | ai:codex — no vendor exec before host acceptance.
     require(broker is not None, 'production receipt requires broker')
-    broker.send(b'preflight-v1')
+    # write(2) preserves the shim's SCM_CREDENTIALS; brokered sendto would
+    # instead attach the host supervisor's identity.
+    os.write(broker.fileno(), b'preflight-v1')
     require(broker.recv(32) == b'exec-v1', 'receipt acceptance refused')
     broker.close()
     os.execve(argv[0], argv, dict(os.environ))

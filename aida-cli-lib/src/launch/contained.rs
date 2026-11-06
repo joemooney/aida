@@ -405,89 +405,57 @@ pub(crate) const CLAUDE_EXPIRED_IN_LANE: &str =
 /// Seconds a baseline (grant-less) Claude lane must still have on its token.
 const CLAUDE_BASELINE_LIFETIME_SECS: i64 = 3600;
 
-/// Unix-millisecond expiry of the Claude OAuth token in `credentials`.
-// trace:TASK-2708 | ai:claude
-pub(crate) fn claude_credentials_expiry_ms(credentials: &Path) -> Result<i64> {
-    let body = std::fs::read_to_string(credentials).with_context(|| {
-        format!(
-            "contained Claude requires its subscription credentials at {}",
-            credentials.display()
-        )
-    })?;
+/// Read the expiry from the exact leaf descriptor later bound into the lane.
+// trace:TASK-2708 | ai:codex
+fn claude_credentials_expiry_ms(file: &File) -> Result<i64> {
+    use std::os::unix::fs::FileExt;
+    let mut bytes = vec![0; 65537];
+    let n = file
+        .read_at(&mut bytes, 0)
+        .context("CLAUDE_CREDENTIALS_UNREADABLE")?;
+    anyhow::ensure!(n <= 65536, "CLAUDE_CREDENTIALS_INVALID: file exceeds bound");
     let value: serde_json::Value =
-        serde_json::from_str(&body).context("Claude credentials are not JSON")?;
+        serde_json::from_slice(&bytes[..n]).context("CLAUDE_CREDENTIALS_INVALID: not JSON")?;
     value
         .pointer("/claudeAiOauth/expiresAt")
         .and_then(serde_json::Value::as_i64)
-        .context("contained Claude requires Claude OAuth credentials (claudeAiOauth.expiresAt)")
+        .context("CLAUDE_CREDENTIALS_INVALID: missing claudeAiOauth.expiresAt")
 }
 
-/// 05:47 ruling: the token must outlive the lane's grant. When it would
-/// not, the host refreshes ONCE before launch; if it still would not, the
-/// launch refuses by name. Never a writable credential bind.
-// trace:TASK-2708 | ai:claude
-pub(crate) fn ensure_claude_credentials_outlive(
-    credentials: &Path,
-    ttl_secs: i64,
-    refresh: impl FnOnce() -> Result<()>,
-) -> Result<()> {
+// No evidence establishes that `claude auth status` refreshes OAuth. Refuse
+// immediately; only the operator's login may replace host credentials.
+// trace:TASK-2708 | ai:codex
+fn ensure_claude_credentials_outlive(expires_at: i64, ttl_secs: i64) -> Result<()> {
     let needed = ttl_secs.max(CLAUDE_BASELINE_LIFETIME_SECS);
-    let remaining = |path: &Path| -> Result<i64> {
-        Ok((claude_credentials_expiry_ms(path)? - chrono::Utc::now().timestamp_millis()) / 1000)
-    };
-    if remaining(credentials)? >= needed {
-        return Ok(());
-    }
-    refresh().context("host-side Claude credential refresh failed")?;
-    let left = remaining(credentials)?;
-    anyhow::ensure!(
-        left >= needed,
-        "claude credentials expire in {left}s, before this contained lane's {needed}s grant; \
-         refresh Claude auth on the host (`claude auth login`) and relaunch"
-    );
+    let left = expires_at.saturating_sub(chrono::Utc::now().timestamp_millis()) / 1000;
+    anyhow::ensure!(left >= needed,
+        "CLAUDE_EXPIRED: credentials expire in {left}s, before this lane's {needed}s grant; operator runs `claude /login` on the host, then relaunch");
     Ok(())
-}
-
-/// One host-side refresh: the host's own `claude auth status`, which renews
-/// an expiring OAuth token with the host's (writable) credential store. It
-/// runs as the launcher, before any lane exists, with no prompt and no model
-/// call, and is bounded.
-// trace:TASK-2708 | ai:claude
-fn refresh_host_claude_credentials(child: &Command) -> Result<()> {
-    let mut refresh = Command::new(child.get_program());
-    refresh
-        .args(["auth", "status"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    let mut process = refresh.spawn().context("host claude unavailable")?;
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Some(status) = process.try_wait()? {
-            anyhow::ensure!(status.success(), "host `claude auth status` failed");
-            return Ok(());
-        }
-        if Instant::now() >= deadline {
-            let _ = process.kill();
-            let _ = process.wait();
-            anyhow::bail!("host `claude auth status` timed out");
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 /// The host credentials leaf, pinned by descriptor for a read-only bind: a
 /// regular, single-link file owned by this user, never a symlink.
 // trace:TASK-2708 | ai:claude
+#[cfg(test)]
 fn open_credentials_leaf(credentials: &Path) -> Result<File> {
+    open_credentials_leaf_for_owner(credentials, unsafe { libc::getuid() })
+}
+fn open_credentials_leaf_for_owner(credentials: &Path, owner: u32) -> Result<File> {
     let file = std::fs::OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_PATH | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(credentials)
-        .context("Claude credentials unavailable")?;
+        .map_err(|error| {
+            if error.raw_os_error() == Some(libc::ELOOP) {
+                anyhow::anyhow!("Claude credentials identity refused: symlink")
+            } else {
+                anyhow::Error::new(error)
+                    .context("CLAUDE_CREDENTIALS_UNREADABLE: Claude credentials unavailable")
+            }
+        })?;
     let md = file.metadata()?;
     anyhow::ensure!(
-        md.is_file() && md.nlink() == 1 && md.uid() == unsafe { libc::getuid() },
+        md.is_file() && md.nlink() == 1 && md.uid() == owner,
         "Claude credentials identity refused"
     );
     Ok(file)
@@ -516,6 +484,8 @@ fn host_vendor_state_masks(
     let candidates = [
         Some(host_home.join(".codex")),
         Some(host_home.join(".claude")),
+        Some(host_home.join(".claude.json")),
+        Some(host_home.join(".claude.json.backup")),
         Some(codex_home.to_path_buf()),
         sqlite_home.map(Path::to_path_buf),
     ];
@@ -583,8 +553,8 @@ pub(crate) struct PreparedLaunch {
     writer: File,
     accept_reader: File,
     accept_writer: File,
-    /// The host Claude credentials leaf whose expiry names a mid-lane failure.
-    credentials: Option<PathBuf>,
+    /// Expiry captured from the exact read-only bound Claude leaf.
+    credentials: Option<i64>,
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
@@ -592,6 +562,14 @@ impl PreparedLaunch {
     /// launch entry point (TASK-2032); `None` recognises no seat clone.
     // trace:TASK-2708 TASK-2032 | ai:claude
     pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
+        Self::prepare_for_owner(child, root, host_main, unsafe { libc::getuid() })
+    }
+    fn prepare_for_owner(
+        child: &Command,
+        root: &Path,
+        host_main: Option<&Path>,
+        credential_owner: u32,
+    ) -> Result<Self> {
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
         let vendor = ContainedVendor::for_program(child.get_program())?;
@@ -700,9 +678,6 @@ impl PreparedLaunch {
             }
             VendorAuth::ClaudeCredentialsFile => {
                 let credentials = claude_home.join(CLAUDE_CREDENTIALS);
-                ensure_claude_credentials_outlive(&credentials, ttl, || {
-                    refresh_host_claude_credentials(child)
-                })?;
                 Auth::File(credentials)
             }
         };
@@ -735,8 +710,10 @@ impl PreparedLaunch {
                 masks.push(relocated);
             }
         }
+        let empty_file = state.path().join("empty-file");
+        std::fs::write(&empty_file, "")?;
         for p in masks {
-            let file = File::open(&empty)?;
+            let file = File::open(if p.is_dir() { &empty } else { &empty_file })?;
             profile.mounts.push(Mount {
                 file,
                 path: p,
@@ -832,14 +809,17 @@ impl PreparedLaunch {
             // the private config dir; host ~/.claude is masked above, and no
             // writable credential root exists in the lane.
             Auth::File(credentials) => {
+                let file = open_credentials_leaf_for_owner(credentials, credential_owner)?;
+                let expires_at = claude_credentials_expiry_ms(&file)?;
+                ensure_claude_credentials_outlive(expires_at, ttl)?;
                 let leaf = private_home.join(CLAUDE_CREDENTIALS);
                 std::fs::write(&leaf, "")?;
                 profile.mounts.push(Mount {
-                    file: open_credentials_leaf(credentials)?,
+                    file: file.try_clone()?,
                     path: leaf,
                     writable: false,
                 });
-                Some(credentials.clone())
+                Some(expires_at)
             }
         };
         let mut env = selected_environment(child);
@@ -932,7 +912,7 @@ impl PreparedLaunch {
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(args);
         let cfg = serde_json::json!({"grant":grant,"ttl":ttl,"mode":"normal","port":port,"allowed":allowed,
-            "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"argv":argv});
+            "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.key == "claude","argv":argv});
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.credentials = credentials;
         Ok(prepared)
@@ -1099,7 +1079,7 @@ impl PreparedLaunch {
         let (accept_reader, accept_writer) = pipe()?;
         let source = format!("{COMMON}\n{LANE}");
         let mut command = Command::new("/usr/bin/python3");
-        command.args(["-I","-S","-c"]).arg(format!("{COMMON}\n{LANE}\n{HOST}\nSOURCE = sys.argv[1]\ntry:\n    sys.exit(host_contained(json.loads(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))\nexcept Exception:\n    print('contained launch refused (namespace, broker, or requested-seat preflight)', file=sys.stderr)\n    sys.exit(1)"))
+        command.args(["-I","-S","-c"]).arg(format!("{COMMON}\n{LANE}\n{HOST}\nSOURCE = sys.argv[1]\ntry:\n    sys.exit(host_contained(json.loads(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))\nexcept Exception as error:\n    print('contained launch refused: ' + str(error), file=sys.stderr)\n    sys.exit(1)"))
             .arg(source).arg(serde_json::to_string(&cfg)?).arg(writer.as_raw_fd().to_string())
             .arg(accept_reader.as_raw_fd().to_string()).env_clear().envs(env).current_dir(&root);
         Ok(Self {
@@ -1208,7 +1188,7 @@ pub(crate) struct ContainedChild {
     pub(crate) child: Child,
     receipt: Option<ContainmentReceipt>,
     acceptance: Option<File>,
-    credentials: Option<PathBuf>,
+    credentials: Option<i64>,
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
@@ -1221,9 +1201,7 @@ impl ContainedChild {
         status: std::process::ExitStatus,
     ) -> Result<std::process::ExitStatus> {
         if let Some(credentials) = &self.credentials {
-            let expired = claude_credentials_expiry_ms(credentials)
-                .map(|at| at <= chrono::Utc::now().timestamp_millis())
-                .unwrap_or(true);
+            let expired = *credentials <= chrono::Utc::now().timestamp_millis();
             anyhow::ensure!(status.success() || !expired, CLAUDE_EXPIRED_IN_LANE);
         }
         Ok(status)
