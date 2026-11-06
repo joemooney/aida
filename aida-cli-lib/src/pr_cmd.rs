@@ -227,7 +227,25 @@ pub(crate) fn push_and_verify_held_branch(
         .output()
         .context("could not invoke git rev-parse")?;
     if !local.status.success() {
-        anyhow::bail!("local branch `{branch}` does not exist — nothing to push for the hold");
+        // Only rev-parse's quiet missing-ref result proves absence. In a
+        // native seat, host_git_command can instead return the clone safety
+        // refusal; retain that evidence without pushing or recording a hold.
+        // trace:TASK-2852 | ai:codex
+        let diagnostic = String::from_utf8_lossy(&local.stderr);
+        let diagnostic = diagnostic.trim();
+        if local.status.code() == Some(1) && diagnostic.is_empty() {
+            anyhow::bail!("local branch `{branch}` does not exist — nothing to push for the hold");
+        }
+        anyhow::bail!(
+            "could not resolve local branch `{branch}` in {} ({}) — the PR is not held{}",
+            repo.display(),
+            local.status,
+            if diagnostic.is_empty() {
+                String::new()
+            } else {
+                format!(": {diagnostic}")
+            }
+        );
     }
     let local_sha = String::from_utf8_lossy(&local.stdout).trim().to_string();
 

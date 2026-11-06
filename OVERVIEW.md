@@ -235,7 +235,10 @@ ID and the stored origin ID from the resolved requirement. Remapping an ID
 mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
-commit-evidence and ledgered `--force` rules.
+commit-evidence and ledgered `--force` rules. Branch lookup failures,
+including seat-clone refusals and detached HEAD, refuse before mutation even
+with `--skip-pr-check`; `--force` warns and retains the ledgered override.
+<!-- trace:TASK-2887 | ai:codex -->
 
 **Drain launch ownership.** A single, batch, or nextN member publishes its
 run UUID and zen provenance before the phase-1 status bump and phase-child
@@ -385,6 +388,7 @@ is transported; full incoming history is validated before fast-forward
 acceptance. Explicit processing stores immutable receipts and journals
 create/comment operations to recover confirmed writes without replay. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
+<!-- trace:TASK-3114 | ai:codex -->
 
 ### The four layers
 
@@ -604,6 +608,10 @@ retries unsettled mergeability three times, two seconds apart, and refuses
 mergeability only on a settled false; the forge still enforces conflicts at
 merge time. The wave gate distinguishes a settled GitHub conflict from unknown
 evidence.
+
+The condition checker also reads PR merge states through this boundary, with a
+15-second timeout; failed reads and malformed states evaluate to Unknown.
+<!-- trace:STORY-2402 | ai:codex -->
 
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
 ratchet freezes remaining raw GitHub reads outside that boundary and catches
@@ -1123,6 +1131,14 @@ rebuilds remain strict, as do mutations, gates and explicit cache operations.
 Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
+
+`aida pr hold` retains Git safety refusals and repository lookup errors and
+explicitly reports that no hold was recorded. Only Git's quiet missing-ref
+result reports a missing branch. This preserves diagnostics; it does not
+enable native-seat publication. Regression fixtures isolate Git discovery
+from `TMPDIR` and retain the existing seat-refusal coverage. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
 
 GitHub `aida pr ship` waits on classified CI rows for up to 20 minutes. The
 `[ci]` informational allow-list applies to pending as well as failed jobs;
