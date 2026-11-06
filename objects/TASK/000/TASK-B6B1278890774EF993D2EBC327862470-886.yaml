@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T15:44:15.178611844Z
-modified_at: 2026-11-06T20:41:39.766402804Z
+modified_at: 2026-11-06T20:51:45.268017661Z
 req_type: Task
 tags:
 - from-review
@@ -59,6 +59,12 @@ comments:
   created_at: 2026-11-06T20:39:17.663893259Z
   modified_at: 2026-11-06T20:39:17.663893259Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2a1-b7f4-79d3-b205-298ec276122c
+  author: joe
+  content: 'Round 2: addressed all three review findings. Inventory eagerly preflights only Rust sources, .gitlab-ci.yml and GitHub workflow YAML; local GitLab include blobs are loaded lazily by pinned object ID, retaining regular-file, per-file, aggregate, include expansion and deadline checks. Added both GitHub-only and GitLab regressions proving unrelated symlinked, >2 MiB and executable YAML is ignored, while those paths and missing files refuse when included. Documentation now describes the 300s snapshot cutoff checks and separate in-flight fetch/inventory budgets accurately. Removed the obsolete uncommitted-source append and redundant evidence guard from the Python fixture. Validation: 7 inventory + 2 relay inventory + 4 receipt + 1 native required-check source tests passed; cargo fmt --all -- --check, git diff --check and Python syntax compilation passed. The expensive three-SHA relay contract was not rerun this round. Native seat leaves the three changed files uncommitted for host publication; no queue completion or merge-hold clearance performed.'
+  created_at: 2026-11-06T20:51:45.268017661Z
+  modified_at: 2026-11-06T20:51:45.268017661Z
+  session_id: 01a1b29867f8
 history:
 - id: 01a1b188-7f48-76d0-a34d-07de8890a555
   author: joe
