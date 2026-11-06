@@ -68,7 +68,7 @@ leaked var:  AIDA_AUTO_COMPLETE=1, no token / dead pid  → detect() → Uncorro
    `echo "${AIDA_AUTO_COMPLETE:-}"` detection for `aida orchestrator status`.
 6. `aida-core/templates/skills/aida-review.md`, `aida-implement.md` — note the
    corroboration model (their path-valued handshake vars already self-verify).
-7. `docs/autonomous-drain.md` — document the orchestrator→child env contract.
+7. `docs/advanced/autonomous-drain.md` — document the orchestrator→child env contract.
 
 ## Critical Files
 

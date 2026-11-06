@@ -31,7 +31,7 @@ Verified 2026-05-19 against the Anthropic GitHub org and the Claude Code docs, a
 ### Watch-items
 
 - Does Anthropic extend `claude-code-setup` from *recommend* to *apply*? If it starts scaffolding, the seam narrows — re-evaluate the `aida init` differentiation (the graph / traces / queue still stand; the raw scaffolding does not).
-- Does an official "requirements" / "spec" / "project memory" plugin appear? That would be a direct neighbour — file a `vs-*.md` in `docs/positioning/`.
+- Does an official "requirements" / "spec" / "project memory" plugin appear? That would be a direct neighbour — file a `vs-*.md` in `docs/internal/positioning/`.
 - Marketplace submission terms for `claude-plugins-official` — relevant only if AIDA pursues channel (2).
 
 ### Open question for AIDA's roadmap

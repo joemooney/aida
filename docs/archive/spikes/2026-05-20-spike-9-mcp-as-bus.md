@@ -178,7 +178,7 @@ After this SPIKE merges, file:
 - No orchestrator changes
 - Schema documentation for each new tool
 - Tests for happy-path + concurrent-write contention + crash recovery
-- Update `docs/architecture/` with the "filesystem-canonical, MCP-transport" pattern
+- Update `docs/internal/architecture/` with the "filesystem-canonical, MCP-transport" pattern
 - README mention: "MCP coordination surface — any MCP-speaking agent can participate in AIDA drains"
 
 Estimated complexity: medium. Touches one file substantially; doesn't change architecture. ~3-4 sessions of focused implementation work.
@@ -189,5 +189,5 @@ Estimated complexity: medium. Touches one file substantially; doesn't change arc
 - **STORY-306** — headless advisor escalation; uses file-handshakes today, would gain MCP equivalents via this story's implementation
 - **STORY-285** — findings filing; same
 - **TASK-294** — directive channel; will compose with `post_directive` / `list_directives` if/when both ship
-- **TASK-337** — `docs/positioning/vs-claude-code-subagents.md`; positioning of AIDA's MCP coordination vs Claude Code Agent Teams
+- **TASK-337** — `docs/internal/positioning/vs-claude-code-subagents.md`; positioning of AIDA's MCP coordination vs Claude Code Agent Teams
 - **Claude Code Agent Teams** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) — Claude-Code-locked equivalent that AIDA's MCP-as-coordination-surface supersedes for cross-agent use

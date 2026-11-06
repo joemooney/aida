@@ -2360,7 +2360,7 @@ pub(crate) fn tick_invocation(repo: &Path, aida_exe: &Path) -> Result<TickInvoca
         repo: repo_str,
         exe: aida_exe_str,
         // BUG-1600: `schedule tick` has no `--json`/`--format json` projection
-        // (see docs/cli-format-json-audit.md, BUG-1502's capability gate) — it
+        // (see docs/internal/cli-format-json-audit.md, BUG-1502's capability gate) — it
         // only ever prints human/TOON lines. A prior version of the cron
         // builder added `--format json` believing cron needed a
         // machine-readable log; nothing ever parsed it, and every tick from an

@@ -3,7 +3,7 @@
 **Date:** 2026-06-29 · **Type:** dated competitive snapshot (autonomy/orchestration lane) ·
 **Trigger:** operator flagged `gnhf` as directly adjacent to AIDA's autonomous-drain layer.
 **Subject:** `gnhf` (`github.com/kunchenguid/gnhf`, npm `gnhf`, **~2,631★ / 188 forks**, MIT, TypeScript; created 2026-03-31, last push 2026-06-10).
-**Author:** Kun Chen (`kunchenguid`) — the same builder behind the **AXI** ecosystem AIDA already incorporated lessons from (`docs/positioning/vs-axi.md`, `docs/competitive-analysis/2026-06-28-axi-ecosystem.md`). gnhf was listed there as a one-liner; this is the deep dive.
+**Author:** Kun Chen (`kunchenguid`) — the same builder behind the **AXI** ecosystem AIDA already incorporated lessons from (`docs/internal/positioning/vs-axi.md`, `docs/internal/competitive-analysis/2026-06-28-axi-ecosystem.md`). gnhf was listed there as a one-liner; this is the deep dive.
 
 > Living-doc note: star counts and capability claims are point-in-time. Where a claim is read off gnhf's own README/source it's stated as such; where it's our inference it's flagged. Refresh signals at the bottom.
 
@@ -99,7 +99,7 @@ prompt between rounds, treat reviewer findings as the next acceptance criteria).
 
 ## AIDA's autonomy layer (the thing being compared)
 
-For context (sources in-repo: `docs/autonomous-drain.md`, `aida-cli/src/main.rs` orchestrator,
+For context (sources in-repo: `docs/advanced/autonomous-drain.md`, `aida-cli/src/main.rs` orchestrator,
 `auto_complete.rs`, `OVERVIEW.md`):
 
 - **`aida queue work --auto-complete`** — drives **one spec** through the full
@@ -262,7 +262,7 @@ and would have to become AIDA to get them. Borrow gnhf's *surface and operationa
 
 ## Related
 
-- `docs/positioning/vs-axi.md` · `docs/competitive-analysis/2026-06-28-axi-ecosystem.md` — same author, the AXI ecosystem (gnhf is a member).
-- `docs/autonomous-drain.md` — AIDA's `--no-human` drain (the compared capability).
-- `docs/competitive-analysis/marketplace-roster.md` — section B (orchestration); gnhf row added.
-- `docs/competitive-analysis/2026-06-12-beads-gastown-vs-aida.md` — adjacent orchestration-layer comparison.
+- `docs/internal/positioning/vs-axi.md` · `docs/internal/competitive-analysis/2026-06-28-axi-ecosystem.md` — same author, the AXI ecosystem (gnhf is a member).
+- `docs/advanced/autonomous-drain.md` — AIDA's `--no-human` drain (the compared capability).
+- `docs/internal/competitive-analysis/marketplace-roster.md` — section B (orchestration); gnhf row added.
+- `docs/internal/competitive-analysis/2026-06-12-beads-gastown-vs-aida.md` — adjacent orchestration-layer comparison.

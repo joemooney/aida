@@ -7,7 +7,6 @@
 - [Why AIDA?](WHY-AIDA.md)
 - [Getting started](getting-started.md)
 - [Your first project](first-project.md)
-- [The memory lane](positioning/memory-lane.md)
 - [Using AIDA with Claude Code](using-aida-with-claude-code.md)
 
 # Product guides
@@ -25,8 +24,8 @@
 
 - [The spec lifecycle](lifecycle.md)
 - [Review process — who reviews, by mode](review-process.md)
-- [The autonomous drain](autonomous-drain.md)
-- [The inter-agent mailbox](mailbox.md)
+- [The autonomous drain](advanced/autonomous-drain.md)
+- [The inter-agent mailbox](advanced/mailbox.md)
 - [Requirement types](requirement-types.md)
 - [Commit trailer convention](commit-trailer-convention.md)
 - [Git workflow](git-workflow.md)
@@ -44,30 +43,30 @@
 - [8 · Reporting & lenses](cli/08-reporting.md)
 - [9 · Integrations & servers](cli/09-integrations.md)
 - [10 · Storage & data](cli/10-storage.md)
-- [11 · Working on AIDA itself](cli/11-dev.md)
 - [12 · Glossary](cli/12-glossary.md)
 
 # Operating & setup
 
-- [User guide (retired)](user-guide.md)
-- [Admin guide](admin-guide.md)
-- [Storage modes](storage-modes.md)
-- [Multi-user setup](multi-user-setup.md)
-- [Multi-node](multi-node.md)
-- [Multi-advisor coordination](multi-advisor-coordination.md)
-- [Session lifecycle](session-lifecycle.md)
-- [Feature lanes: working on the side](explanations/feature-lanes.md)
-- [Environment variables](environment-variables.md)
-- [Forge providers](forge-providers.md)
+- [Running AIDA at scale](advanced/README.md)
 
-# Extending & conventions
+- [Admin guide](advanced/admin-guide.md)
+- [Storage modes](advanced/storage-modes.md)
+- [Multi-user setup](advanced/multi-user-setup.md)
+- [Multi-node](advanced/multi-node.md)
+- [Multi-advisor coordination](advanced/multi-advisor-coordination.md)
+- [Session lifecycle](advanced/session-lifecycle.md)
+- [Environment variables](environment-variables.md)
+- [Forge providers](advanced/forge-providers.md)
+
+# Agent setup
+
+- [Agent and MCP setup matrix](agents/aida-mcp-install-matrix.md)
+- [Codex setup](agents/codex-mcp-setup.md)
+- [Antigravity setup](agents/antigravity-mcp-setup.md)
+- [Per-agent configuration](agents/per-agent-config.md)
+
+# Skills
 
 - [Understanding skills](UNDERSTANDING_SKILLS.md)
 - [Extending skills](extending-skills.md)
-- [Skills convention](skills-convention.md)
-- [User-facing text conventions](user-facing-text-conventions.md)
-- [The git-verb surface](git-verb-surface.md)
-
-# Background
-
-- [Future vision](future-vision.md)
+- [Troubleshooting and FAQ](troubleshooting.md)

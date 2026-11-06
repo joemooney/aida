@@ -26,7 +26,7 @@
 //!      (scripts / CI / headless get ZERO output), and folded under the global
 //!      `AIDA_HINTS` umbrella so disabling all hints disables these too.
 //!   6. USER-FACING COPY. The hint strings carry NO spec-ids
-//!      (docs/user-facing-text-conventions.md) — they teach the *shape* of the
+//!      (docs/internal/user-facing-text-conventions.md) — they teach the *shape* of the
 //!      loop, not one spec's identifiers.
 //!
 //! trace:STORY-700 | ai:claude

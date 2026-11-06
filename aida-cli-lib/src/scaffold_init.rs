@@ -496,7 +496,8 @@ pub(crate) fn git_origin_url(root: &std::path::Path) -> Option<String> {
 }
 
 pub(crate) fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
-    let dir = root.join("docs").join("competitive-analysis");
+    // trace:STORY-1651 | ai:codex
+    let dir = root.join("docs/competitive-analysis");
     let dest = dir.join("ecosystem-watch.md");
     if dest.exists() && !force {
         return Ok(false);

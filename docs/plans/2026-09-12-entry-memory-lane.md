@@ -104,4 +104,4 @@ and records as it goes. That is the pass condition; nothing else proves "invisib
 ## Related
 
 - STORY-830 (`--footprint minimal`), the AGENTS.md injection work, the agent-surface
-  benchmark (CLI vs MCP token cost), `docs/positioning/`.
+  benchmark (CLI vs MCP token cost), `docs/internal/positioning/`.

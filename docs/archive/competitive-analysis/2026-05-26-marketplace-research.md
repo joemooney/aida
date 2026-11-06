@@ -214,7 +214,7 @@ Document what must be true before publishing AIDA into third-party marketplaces:
 Why: Marketplace trust is fragile. Claude's own docs warn users to review plugin permissions and connected services; AIDA should lead with the same discipline.
 
 Acceptance shape:
-- `docs/security/marketplace-publication-checklist.md`.
+- `docs/internal/security/marketplace-publication-checklist.md`.
 - CI validates plugin manifests and MCP metadata.
 - Release checklist includes the security review.
 

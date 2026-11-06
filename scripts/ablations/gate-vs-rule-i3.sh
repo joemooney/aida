@@ -5,7 +5,7 @@
 #
 # This is the DECISIVE POSITIVE test of the output-shape-vs-procedural hypothesis
 # that survived I1 + I2 + cross-vendor I2 (see
-# docs/research/ablations/2026-06-18-gate-vs-rule-i2.md). Three conjectures were
+# docs/internal/research/ablations/2026-06-18-gate-vs-rule-i2.md). Three conjectures were
 # pre-registered and falsified along the way:
 #   - rules-just-fail        (falsified by I1: a stated rule held at 100%)
 #   - attention-distance     (falsified by I2: a buried, never-restated rule held)
@@ -56,9 +56,9 @@
 # CLAUDE.md (Claude's native project-doc) and AGENTS.md (Codex's) so each vendor
 # reads the invariant from the file it actually loads -- keeping it fair.
 #
-# Design doc: docs/research/ablations/2026-06-17-gate-vs-rule.md
-# I3 stub:    docs/research/ablations/2026-06-18-gate-vs-rule-i3.md
-# Synthesis being tested: docs/research/ablations/2026-06-18-gate-vs-rule-i2.md
+# Design doc: docs/internal/research/ablations/2026-06-17-gate-vs-rule.md
+# I3 stub:    docs/internal/research/ablations/2026-06-18-gate-vs-rule-i3.md
+# Synthesis being tested: docs/internal/research/ablations/2026-06-18-gate-vs-rule-i2.md
 #
 # Pre-registered interpretation (keyed on Arm-R landed-compliance):
 #   Arm-R landed-compliance < 95% AND gate-saves > 0
@@ -171,7 +171,7 @@ fi
 # The filename carries the vendor when it's non-default so a codex run doesn't
 # overwrite a claude CSV (and vice versa).
 if [ -z "$OUT" ]; then
-    RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
+    RESULTS_DIR="$REPO_ROOT/docs/internal/research/ablations/results"
     if [ "$VENDOR" = "claude" ]; then
         OUT="$RESULTS_DIR/gate-vs-rule-i3-$(date +%Y%m%d-%H%M%S).csv"
     else

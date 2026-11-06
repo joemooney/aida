@@ -134,7 +134,7 @@ before storage init, reads only a `.aida/` runtime file, has a `--json` mode.
   after `SHELL_HELPERS` so `~/.aida/shell-init.sh` carries it. No rc-file
   logic changes — the source-stub already picks it up.
 
-#### `docs/autonomous-drain.md` — document the worker
+#### `docs/advanced/autonomous-drain.md` — document the worker
 
 - Add an `## aida-worker` section: the function, the `.aida/worker.cmd`
   directive vocabulary, the heredoc "overnight plan" example, the
@@ -187,7 +187,7 @@ before storage init, reads only a `.aida/` runtime file, has a `--json` mode.
 - `aida-cli/src/main.rs`
 - `aida-cli/src/cli.rs`
 - `aida-cli/src/worker.rs` (new)
-- `docs/autonomous-drain.md`
+- `docs/advanced/autonomous-drain.md`
 - `tests/test_aida_worker.sh` (new)
 
 ## Reusable helpers (do not reimplement)
@@ -226,7 +226,7 @@ before storage init, reads only a `.aida/` runtime file, has a `--json` mode.
 2. **Risk**: a real `--auto-complete` lifecycle that blocks on CI can exceed
    the 1800s default, so the watchdog kills legitimate in-progress work.
    **Mitigation**: keep the spec's stated 1800s default but document
-   `AIDA_WORKER_SPEC_TIMEOUT` prominently in `docs/autonomous-drain.md` —
+   `AIDA_WORKER_SPEC_TIMEOUT` prominently in `docs/advanced/autonomous-drain.md` —
    a CI-blocking drain wants it raised (e.g. 5400s).
 
 3. **Risk**: file race — the user overwrites `worker.cmd` (`>`) while the
@@ -312,4 +312,4 @@ aida worker directives                              # expect: No pending directi
 - Builds on: STORY-263 (`--no-human`, completed), TASK-292 / TASK-293 (head + `next` pickup, completed), STORY-301 (`drain-state.json` — the module pattern this mirrors, completed).
 - Composes with: STORY-276 (headless implementer — when it lands, `drain --no-human=both` becomes fully autonomous).
 - Next step if it grows limits: EPIC-30 (full worker daemon, Draft).
-- See also: `docs/autonomous-drain.md`.
+- See also: `docs/advanced/autonomous-drain.md`.

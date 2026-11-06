@@ -24,7 +24,7 @@ bytes/token and provides a deterministic CI signal alongside the live measure.
 ## Moved-content map
 
 No repository guidance was deleted. The complete former `CLAUDE.md` moved
-byte-for-byte to `docs/agents/aida-repository-guide.md`; the new root file is a
+byte-for-byte to `docs/internal/agents/aida-repository-guide.md`; the new root file is a
 short routing index.
 
 | Former always-loaded topic | Destination |
@@ -34,7 +34,7 @@ short routing index.
 | Discipline and lifecycle detail | `.aida/discipline/README.md` |
 | Skills and MCP catalogue | on-demand skill bodies; MCP install matrix |
 | Template internals and CLI reference | preserved guide |
-| Connector-disable guidance | `docs/agents/context-economy.md` |
+| Connector-disable guidance | `docs/internal/agents/context-economy.md` |
 
 Memory bodies were not changed. Their oversized index was replaced with grouped
 filename/pattern pointers, preserving on-demand discoverability without loading
