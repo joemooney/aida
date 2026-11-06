@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-06T06:50:33.412815658Z
+modified_at: 2026-11-06T07:11:03.007319080Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -134,6 +134,12 @@ comments:
   created_at: 2026-11-06T06:33:53.243816668Z
   modified_at: 2026-11-06T06:33:53.243816668Z
   session_id: 01a1af8693f7
+- id: 01a1afb2-575f-79b3-8a66-1196ff07133a
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-06 00:18 MST (round 5, PR #3448 at d609195): the ONLY remaining blocker is CI lib-0, and it is NOT a flake. Job 127752247612 fails the ratchet orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65) on a raw current-executable lookup in aida-cli-lib/src/tests/task_2838_agy_outcome_tests.rs. Route that lookup through the shared resolver (see resolve_aida_exe_tests.rs for the sanctioned helper); do not add an allowlist entry. Verify with: cargo test -p aida-cli-lib --lib resolve_aida_exe_tests task_2838. Nothing else changes; every other criterion was verified in round 4.'
+  created_at: 2026-11-06T07:11:03.007319080Z
+  modified_at: 2026-11-06T07:11:03.007319080Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1a7ac-d2e6-7811-96d9-59042b13ffdd
   author: joe
