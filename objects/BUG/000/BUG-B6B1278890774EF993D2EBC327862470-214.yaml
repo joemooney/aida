@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-06T21:41:40.430534601Z
+modified_at: 2026-11-06T21:41:47.910591412Z
 req_type: Bug
 tags:
 - area:containment
@@ -93,6 +93,12 @@ comments:
   content: 'Advisor 11:52: same as BUG-2447. Blocked on BUG-2470 (harness duplicate [contained] table). Re-run C3/C4 after it lands.'
   created_at: 2026-11-06T18:50:48.053592280Z
   modified_at: 2026-11-06T18:50:48.053592280Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2cf-8906-74f3-96b7-1dc625546eda
+  author: joe
+  content: 'Advisor 14:45: re-ran C3/C4 after BUG-2470 landed. Fixture setup and pickup now pass, but the AIDA-boundary Codex launch refuses ''contained ChatGPT auth waits for P3 (PR2)''. Blocked by STORY-2593 (ChatGPT login under the AIDA boundary). Report: ~/.aida/conformance-aida-1794001192/report.json.'
+  created_at: 2026-11-06T21:41:47.910591412Z
+  modified_at: 2026-11-06T21:41:47.910591412Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
