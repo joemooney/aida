@@ -1,0 +1,29 @@
+id: 01a1b14d-3aad-7963-bddc-2c8d3bf8cfe4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-884
+title: 'cosmetic: offline PTY test drains the master only after the child exits (tests/…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2462, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: offline PTY test drains the master only after the child exits (tests/test_containment_conformance_aida.py:45-57); stderr output larger than the PTY buffer would block the harness until the 45s timeout
+
+  PR: #3503
+  Reviewed sha: b74c96f5f0dfcc0056b26e4970fe7ebd4d7a2188
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-06T14:39:50.957504483Z
+modified_at: 2026-11-06T14:39:50.957504483Z
+req_type: Task
+tags:
+- carried-from:BUG-2462
+- finding-hash:4ecda69c
+- from-review:PR-3503
+- kind:carried-forward
+filed_at:
+  code_sha: 3267a3e97d804a85abacdeb04cce3b104ec34e5e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f50fa16ae95
+  vendor: claude
