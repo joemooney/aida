@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T13:10:33.598391528Z
+modified_at: 2026-11-06T13:17:45.995957576Z
 req_type: Task
 tags:
 - architecture
@@ -1009,6 +1009,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b102-14ea-7b01-ab3c-079294ed7d3d
+  author: joe
+  timestamp: 2026-11-06T13:17:46.090846046Z
+  session_id: 01a1b0fd9155
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -1021,3 +1027,11 @@ attention_reason:
   detail: 'Round 7 F1 (PR #3449 at aede2be58b3e), carrying Round 5 F2: no explicit advisor acceptance is present in TASK-2708 comments 1-58 or the supplied ruling for BOTH AC1 deviations: every contained vendor requires Linux 5.19+ for NEW_LISTENER|WAIT_KILLABLE_RECV, and handled SIGINT/SIGALRM/SIGTERM/Go SIGURG are deferred after broker RECV, potentially indefinitely for a blocking send without SO_SNDTIMEO. Please explicitly accept both or direct an exactly-once redesign; removing the flag reintroduces duplicate sends. Round 7 F3 also needs acceptance or direction: SCM_CREDENTIALS/other non-SCM_RIGHTS ancillary messages now return EACCES, and SO_PASSCRED receivers see the host broker credentials (PID 0 in lane pidns), not trapped sender credentials. Neither finding is disputed, and no acceptance is claimed. Two uncommitted files document these deltas and fix F4 with a named CI error. All 38 fast gates and 25 shard tests passed; required-live Rust tests are still compiling. At reviewed head all hosted jobs except CLI-0 are green; gates logs prove 9/9 TASK-2708 live tests and help-golden success, and lib-1 JUnit proves the old-kernel regression passed. The 2d054799 failure was help-golden missing merge-base evidence, not containment; it did not recur at aede2be58b3e. Exact publication-head CI remains a gate. Mechanical bdcec264 remains an ancestor. This punt retains the publication veto and existing supervised hold; native seat does not commit/push or complete the queue.'
   raised_by: implementer
   raised_at: 2026-11-06T13:07:08.963645821Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 8: e64a7581 only adds the named ::error:: for task_2708_claude_prepare_fake_home in ci.yml and documents the ancillary-credential deltas (round-7 F3/F4 fixed). The blocker is still open: no advisor acceptance is recorded on TASK-2708 for WAIT_KILLABLE_RECV signal deferral, the Linux 5.19+ floor for every lane, or the SCM_CREDENTIALS/SO_PASSCRED deltas. CI at the head is still queued. AC1: PARTIAL (headless Claude migrated behind opt-in; acceptance missing). AC2/AC3: not applicable (Refs slice, not started).'
+  recovery_hint: address the review findings, move TASK-2708 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-06T13:17:45.995957576Z
