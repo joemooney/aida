@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-06T08:21:47.506797558Z
+modified_at: 2026-11-06T08:36:45.327741841Z
 req_type: Story
 tags:
 - docs:impacted
@@ -425,6 +425,12 @@ comments:
   created_at: 2026-11-06T07:48:24.340591555Z
   modified_at: 2026-11-06T07:48:24.340591555Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b000-ce8f-7a00-9951-0f15c14b1b8b
+  author: joe
+  content: 'Round 4: hardening scope tracked separately as TASK-b6b1278890774ef993d2ebc327862470-871 (TASK-3196). The existing rework test covers only the train approval decision, not the train entry point. AC5 remains unmet and STORY-2492 must remain In Progress. PR #3479 is being re-trailered to the scoped task under finding 7 alternative; the host launcher must also use only the task in its new commit and squash trailer. No ship/review-record/queue-done or code Git mutation performed from the native seat.'
+  created_at: 2026-11-06T08:36:45.327741841Z
+  modified_at: 2026-11-06T08:36:45.327741841Z
+  session_id: 01a1aff312e8
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
