@@ -1502,6 +1502,12 @@ pub(crate) fn publish_local(pr: u64, labels: &[String], findings: &[String]) -> 
 #[path = "tests/story_2492_publication_tests.rs"]
 mod tests;
 
+// Keep entry-point coverage mounted on the protected gate floor.
+// trace:STORY-2492 | ai:codex
+#[cfg(test)]
+#[path = "tests/story_2492_entry_tests.rs"]
+mod entry_tests;
+
 /// The checked canonical gate report shares the same synced selection. Local
 /// hold events retain their lifecycle; local verdict/carry-over evidence cannot
 /// grant credit beyond the exact signed publication head.

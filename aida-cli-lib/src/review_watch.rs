@@ -1787,10 +1787,6 @@ fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Comma
     command
 }
 
-fn child(root: &Path, repo: &forge::Repository, reservation: &str) -> Result<()> {
-    child_with_program(root, repo, reservation, &crate::aida_exe_path())
-}
-
 // Kept separate from executable resolution so process-level fixtures exercise
 // the production receipt/preflight/queue command boundary without an LLM.
 // trace:TASK-1993 | ai:codex
@@ -2130,11 +2126,25 @@ pub(crate) fn reviewer_status_on_spawn(
 }
 
 pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
-    let root = forge::main_root(&std::env::current_dir()?)?;
+    run_with_program(args, &std::env::current_dir()?, None).map(|_| ())
+}
+
+// The executable seam replaces only the model/CLI process in end-to-end tests;
+// discovery, admission, exact-head preflight and receipts remain production code.
+// trace:STORY-2492.ac540936 | ai:codex
+pub(crate) fn run_with_program(
+    args: &ReviewWatchArgs,
+    start: &Path,
+    program: Option<&Path>,
+) -> Result<Vec<Child>> {
+    let root = forge::main_root(start)?;
     let repo = forge::Repository::load(&root)?;
     crate::gate::seat_authority::validate_child_delegation(&root, "reviewer")?;
     if let Some(reservation) = args.launch_reservation.as_deref() {
-        return child(&root, &repo, reservation);
+        let program = program
+            .map(Path::to_path_buf)
+            .unwrap_or_else(crate::aida_exe_path);
+        return child_with_program(&root, &repo, reservation, &program).map(|_| Vec::new());
     }
     let store = Store::open(&root, &repo.identity)?;
     // trace:TASK-1955 | ai:claude (TASK-1-412)
@@ -2142,7 +2152,7 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         admission::require_released(&root, key)?;
         let released = store.release(key)?;
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
-        return Ok(());
+        return Ok(Vec::new());
     }
     // trace:TASK-1955 | ai:claude (TASK-1-413)
     let swept = forge::sweep_probe_refs(&root);
@@ -2201,10 +2211,19 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
         watch_changes(&store, changes, |change| {
-            watch_change(&root, &repo, &store, args, &mut children, &authors, change)
+            watch_change(
+                &root,
+                &repo,
+                &store,
+                args,
+                &mut children,
+                &authors,
+                change,
+                program,
+            )
         })?;
         if args.once {
-            return Ok(());
+            return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
@@ -2358,6 +2377,7 @@ fn watch_change(
     children: &mut Vec<Dispatcher>,
     authors: &update::AuthorLiveness,
     mut change: forge::Change,
+    program: Option<&Path>,
 ) -> Result<()> {
     let key = change.key();
     // An obsolete head is superseded before anything else, whether or not
@@ -2441,7 +2461,10 @@ fn watch_change(
             let spawned = (|| {
                 let logs = Directory::open(&store.dir.path().join("logs"))?;
                 let log = logs.file(&format!("{key}-{}.log", attempt.token), true)?;
-                let mut command = watch_command(repo, root, &crate::aida_exe_path());
+                let program = program
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(crate::aida_exe_path);
+                let mut command = watch_command(repo, root, &program);
                 command
                     .args([
                         "review",

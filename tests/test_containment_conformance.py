@@ -11,6 +11,7 @@ import pty
 from pathlib import Path
 import tempfile
 import time
+import tomllib
 import unittest
 from unittest import mock
 
@@ -64,6 +65,40 @@ class PolicyRevisionTests(unittest.TestCase):
 
 # trace:TASK-3131 | ai:codex
 class AidaBoundaryTests(unittest.TestCase):
+    # trace:BUG-2470 | ai:codex
+    def test_fixture_policy_merges_existing_tables_and_replaces_hosts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text('''title = "fixture"
+[agents]
+contained = false
+vendor = "claude"
+model = "retained"
+[contained]
+allowed_hosts = [
+    "deny.fixture.test", # init defaults must not survive
+    "github.com",
+]
+extra = true
+[contained.vendors]
+codex = "native"
+claude = "aida"
+[unrelated]
+items = [{name = "preserved", enabled = true}]
+''')
+            before = tomllib.loads(config.read_text())
+            c.fixture_policy(config)
+            merged = tomllib.loads(config.read_text())
+            self.assertEqual(merged["agents"],
+                             {"contained": True, "vendor": "codex", "model": "retained"})
+            self.assertEqual(merged["contained"], {
+                "allowed_hosts": ["api.openai.com", "allow.fixture.test"],
+                "extra": True, "vendors": {"codex": "aida", "claude": "aida"}})
+            self.assertEqual(merged["unrelated"], before["unrelated"])
+            self.assertEqual(merged["title"], before["title"])
+            c.fixture_policy(config)
+            self.assertEqual(tomllib.loads(config.read_text()), merged)
+
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
         fixture_home = Path.home() / ".aida"
