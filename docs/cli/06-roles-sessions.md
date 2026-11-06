@@ -216,6 +216,18 @@ cause and recovery commands. A refused launch rolls back this attempt's
 allocations; existing leases and directories are preserved, and cleanup refuses
 a tree with live users. A failed spawn revokes only its newly issued grant.
 
+Advisor and integrator children inherit the validated parent's delegable seats.
+For example, a shell entered with `--delegate-seat advisor --delegate-seat
+reviewer --delegate-seat implementer` can launch `aida agent new claude --role
+advisor --permission-mode auto`; that advisor can then dispatch reviewers and
+implementers. Repeat `--delegate-seat` on `agent new` to select a narrower set,
+for example `--delegate-seat reviewer`. Requests outside the parent's set refuse
+with a role-entry recovery command. Implementer and reviewer children always
+have no delegable seats and reject explicit delegation flags. Rotation retains
+the selection for every generation. Descendant authority expires with its grant
+chain and refuses if any ancestor is revoked or no longer authorized.
+<!-- trace:BUG-2467 | ai:codex -->
+
 For AIDA delegation, keep the advisor shell's validated parent grant and clear
 `AIDA_SESSION_PURPOSE`; the launcher issues the child's own grant. If the grant
 was scrubbed, enter the advisor role in a human terminal by evaluating the

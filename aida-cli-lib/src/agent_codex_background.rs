@@ -532,6 +532,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     // A contained parent refuses codex outright (inherited containment is
     // sticky; native is never relabelled as AIDA containment).
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -548,6 +549,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         )
     })?;
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -594,6 +596,11 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         .or_else(|| existing_owner.as_ref().and_then(|lease| lease.role.clone()))
         .unwrap_or_else(|| agent_new_scope_role(&spec_id).to_string());
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
+    crate::gate::seat_authority::validate_launch_delegable_seats(
+        &project_root,
+        Some(&expected_role),
+        &config.delegate_seats,
+    )?;
     let early_instance = resolve_role_instance_for_launch(
         &project_root,
         Some(&expected_role),

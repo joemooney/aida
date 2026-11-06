@@ -220,6 +220,7 @@ fn story_2254_bg_native_posture_requires_trusted_opt_in() {
     let tmp = tempfile::tempdir().unwrap();
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: [
