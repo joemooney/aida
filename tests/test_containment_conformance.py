@@ -11,6 +11,7 @@ import pty
 from pathlib import Path
 import tempfile
 import time
+import tomllib
 import unittest
 from unittest import mock
 
@@ -64,6 +65,40 @@ class PolicyRevisionTests(unittest.TestCase):
 
 # trace:TASK-3131 | ai:codex
 class AidaBoundaryTests(unittest.TestCase):
+    # trace:BUG-2470 | ai:codex
+    def test_fixture_policy_merges_existing_tables_and_replaces_hosts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text('''title = "fixture"
+[agents]
+contained = false
+vendor = "claude"
+model = "retained"
+[contained]
+allowed_hosts = [
+    "deny.fixture.test", # init defaults must not survive
+    "github.com",
+]
+extra = true
+[contained.vendors]
+codex = "native"
+claude = "aida"
+[unrelated]
+items = [{name = "preserved", enabled = true}]
+''')
+            before = tomllib.loads(config.read_text())
+            c.fixture_policy(config)
+            merged = tomllib.loads(config.read_text())
+            self.assertEqual(merged["agents"],
+                             {"contained": True, "vendor": "codex", "model": "retained"})
+            self.assertEqual(merged["contained"], {
+                "allowed_hosts": ["api.openai.com", "allow.fixture.test"],
+                "extra": True, "vendors": {"codex": "aida", "claude": "aida"}})
+            self.assertEqual(merged["unrelated"], before["unrelated"])
+            self.assertEqual(merged["title"], before["title"])
+            c.fixture_policy(config)
+            self.assertEqual(tomllib.loads(config.read_text()), merged)
+
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
         fixture_home = Path.home() / ".aida"
@@ -102,6 +137,7 @@ class AidaBoundaryTests(unittest.TestCase):
                 self.assertEqual(run.call_args_list[1].args[0][-4:],
                                  ["team", "allow-seat", "fixture-user", "implementer"])
                 self.assertEqual(run.call_args_list[2].args[0][1:4], ["role", "enter", "advisor"])
+                self.assertNotIn("--delegate-seat", run.call_args_list[2].args[0])
                 for call in run.call_args_list:
                     self.assertNotIn("stdin", call.kwargs)
                     self.assertNotIn("stderr", call.kwargs)
@@ -209,6 +245,14 @@ class AidaBoundaryTests(unittest.TestCase):
             os.close(master)
             os.close(terminal)
 
+    # trace:TASK-2941 | ai:codex
+    def test_closed_stdin_refuses_before_spawning(self):
+        with mock.patch.object(c.os, "dup", side_effect=OSError(9, "Bad file descriptor")), \
+                mock.patch.object(c.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(ValueError, "^fixture-terminal-stdin-unavailable$"):
+                c.launch_aida_continuation("private-eval-block", Path("."), {}, 30)
+        popen.assert_not_called()
+
     # trace:TASK-3194 | ai:codex
     def test_hidden_output_refuses_before_any_setup_or_grant(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as directory:
@@ -309,8 +353,12 @@ class AidaBoundaryTests(unittest.TestCase):
                     (repo / ".aida/config.toml").touch()
                 report["setup"].append({"stage": stage})
                 return "fixture"
-            def timeout(script, repo, env, seconds):
-                self.assertGreaterEqual(seconds, args.timeout + 150)
+            # trace:TASK-2941 | ai:codex
+            def timeout(script, repo, env, seconds, cleanup_grace):
+                # Cover all four 30s setup calls, the full inner budget, its
+                # TERM/KILL cleanup and time to publish the real outcome.
+                self.assertEqual(seconds, args.timeout + 4 * 30 + 180 + 30)
+                self.assertEqual(cleanup_grace, 25)
                 report = json.loads((root / "aida-state.json").read_text())["report"]
                 report["setup"].append({"stage": "continuation-only-evidence"})
                 c.write_json(root / "report.json", report)
@@ -326,6 +374,55 @@ class AidaBoundaryTests(unittest.TestCase):
             report = json.loads((root / "report.json").read_text())
             self.assertEqual(report["setup"][-1]["stage"], "continuation-only-evidence")
             self.assertEqual(report["unsupported_reason"], "aida-boundary-continuation-timeout")
+
+    # trace:TASK-2941 | ai:codex
+    def test_outer_cleanup_allows_nested_supervisor_to_kill_term_ignoring_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Both the inner group leader and its descendant ignore TERM.
+            # The setup supervisor must survive long enough to KILL them.
+            inner = f"""
+import os, pathlib, signal, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = os.fork()
+if child == 0:
+    time.sleep(50)
+else:
+    pathlib.Path({str(root / 'pids')!r}).write_text(str(os.getpid()) + '\\n' + str(child))
+    time.sleep(50)
+"""
+            script = "exec " + c.shlex.join([c.sys.executable, "-c", inner])
+            supervisor = f"""
+import importlib.util, os, pathlib, signal
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+signal.signal(signal.SIGTERM, c.continuation_terminated)
+try:
+    c.launch_aida_continuation({script!r}, pathlib.Path({str(root)!r}), dict(os.environ), 40)
+except ValueError:
+    pathlib.Path({str(root / 'supervisor-cleaned')!r}).touch()
+"""
+            outer_script = "exec " + c.shlex.join([c.sys.executable, "-c", supervisor])
+            try:
+                with self.assertRaisesRegex(ValueError, "continuation-timeout"):
+                    c.launch_aida_continuation(outer_script, root, dict(os.environ), 5,
+                                              cleanup_grace=25)
+                self.assertTrue((root / "supervisor-cleaned").is_file())
+                pids = (root / "pids").read_text().splitlines()
+                self.assertEqual(len(pids), 2)
+                for pid in pids:
+                    info = Path("/proc") / pid / "stat"
+                    if info.exists():
+                        self.assertEqual(info.read_text().rsplit(")", 1)[1].split()[0], "Z")
+            finally:
+                # A failing regression must not leave the stubborn group alive.
+                if (root / "pids").exists():
+                    group = int((root / "pids").read_text().splitlines()[0])
+                    try:
+                        os.killpg(group, c.signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
 
     def test_outer_timeout_reaps_lane_closes_network_and_preserves_setup(self):
         with tempfile.TemporaryDirectory() as directory:

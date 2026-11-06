@@ -54,6 +54,7 @@ fn fixture(body: &str) -> Fixture {
 
 fn claude_config(sid: Option<&str>) -> AgentLaunchConfig {
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -542,4 +543,64 @@ exit 0
     assert!(hellos
         .iter()
         .all(|m| m.thread_id == "aida-hello-claude-advisor-08"));
+}
+
+// trace:BUG-2467 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-233.ac958507 | ai:codex
+#[test]
+fn bug_2467_rotation_retains_explicit_delegation_in_every_generation() {
+    let _serial = crate::agent_rotation::supervisor_test_lock();
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
+        "AIDA_USER",
+        crate::gate::seat_authority::GRANT_ENV,
+        "AIDA_CONTAINED",
+    ]);
+    env.set_key("AIDA_USER", "rotation-operator");
+    env.unset_key("AIDA_CONTAINED");
+    let fx = fixture(
+        r#"
+echo "$AIDA_SESSION_GRANT" >> "$AIDA_PROJECT_ROOT/grants.log"
+[ "$AIDA_ROTATION_GENERATION" = 1 ] && handoff "continue"
+exit 0
+"#,
+    );
+    let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.project,
+        "rotation-operator",
+        "advisor",
+        &["advisor", "reviewer", "implementer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+    let sid = agent_native_session_id_for_new("claude");
+    let mut launch_plan = plan(&fx.project, Some("advisor"), None);
+    launch_plan.native_session_id = sid.clone();
+    let mut config = claude_config(sid.as_deref());
+    config.delegate_seats = vec!["reviewer".into()];
+    let outcome = run_rotating_agent(
+        &fx.binary,
+        &config,
+        &launch_plan,
+        None,
+        &[],
+        None,
+        false,
+        false,
+        None,
+        Supervision {
+            policy: quick(),
+            on_gap: &mut |_| {},
+        },
+        || {},
+    )
+    .unwrap();
+    assert!(matches!(outcome, RotationOutcome::Exited(s) if s.success()));
+    let log = std::fs::read_to_string(fx.project.join("grants.log")).unwrap();
+    let ids: Vec<_> = log.lines().collect();
+    assert_eq!(ids.len(), 2);
+    assert_ne!(ids[0], ids[1]);
+    for id in ids {
+        let grant = crate::gate::seat_authority::read_grant(id).unwrap();
+        assert_eq!(grant.delegable_seats, ["reviewer"]);
+        assert_eq!(grant.parent_grant_id.as_deref(), Some(parent.as_str()));
+    }
 }

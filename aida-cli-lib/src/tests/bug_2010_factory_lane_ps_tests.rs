@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 // trace:BUG-2010 | ai:antigravity
 fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
@@ -82,6 +83,7 @@ fn agent_entry(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats: Vec::new(),
         resumed_from: None,
     }
 }

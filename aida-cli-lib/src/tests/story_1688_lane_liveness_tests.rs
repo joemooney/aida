@@ -40,6 +40,7 @@ fn live_pid() -> Pid {
 
 fn lease(id: &str, scope: &str, pid: &Pid, started_at: DateTime<Utc>) -> SessionLease {
     SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
@@ -1434,6 +1435,7 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         },
     )

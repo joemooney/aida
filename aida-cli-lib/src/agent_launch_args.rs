@@ -922,6 +922,10 @@ pub enum AgentCommand {
         /// Role for a launch using the configured default vendor.
         #[clap(long)]
         role: Option<String>,
+        /// Narrow delegable seats when using the configured default vendor.
+        // trace:BUG-2467 | ai:codex
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
         /// Spec for a launch using the configured default vendor.
         #[clap(long, value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
@@ -1132,6 +1136,12 @@ pub enum AgentNewCommand {
         #[clap(long)]
         role: Option<String>,
 
+        /// Narrow the seats an advisor/integrator child may delegate (repeatable).
+        /// Defaults to the parent's delegable seats; never widens its authority.
+        // trace:BUG-2467 | ai:codex
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
+
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
         #[clap(value_parser = crate::spec_arg::spec_id)]
@@ -1307,6 +1317,12 @@ pub enum AgentNewCommand {
         /// Role propagated to the spawned Codex process as AIDA_SESSION_ROLE.
         #[clap(long)]
         role: Option<String>,
+
+        /// Narrow the seats an advisor/integrator child may delegate (repeatable).
+        /// Defaults to the parent's delegable seats; never widens its authority.
+        // trace:BUG-2467 | ai:codex
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
 
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
@@ -1501,6 +1517,12 @@ pub enum AgentNewCommand {
         /// Role propagated to the spawned Antigravity process as AIDA_SESSION_ROLE.
         #[clap(long)]
         role: Option<String>,
+
+        /// Narrow the seats an advisor/integrator child may delegate (repeatable).
+        /// Defaults to the parent's delegable seats; never widens its authority.
+        // trace:BUG-2467 | ai:codex
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
 
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]

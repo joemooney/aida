@@ -63,6 +63,7 @@ fn issue(root: &Path) -> (SeatGrant, DetachedLaunchCapability) {
         false,
         &Uuid::new_v4().to_string(),
         "implementer:TASK-1",
+        &[],
     )
     .unwrap()
 }
@@ -191,6 +192,7 @@ fn story_2254_bg_issuance_requires_delegation() {
         false,
         &Uuid::new_v4().to_string(),
         "s",
+        &[],
     )
     .unwrap_err();
     assert!(ChildGrantRefused::is_in(&err), "{err:#}");
@@ -202,6 +204,7 @@ fn story_2254_bg_issuance_requires_delegation() {
         false,
         &Uuid::new_v4().to_string(),
         "s",
+        &[],
     )
     .unwrap_err();
     assert!(ChildGrantRefused::is_in(&err), "{err:#}");

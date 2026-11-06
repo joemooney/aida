@@ -46,6 +46,7 @@ fn claude_launch(
         crate::agent_config::load_agents_contained(root)
     })?;
     let mut config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: posture.default_args,
@@ -127,6 +128,7 @@ fn contained_parent_refuses_codex_and_agy_even_with_bypass_sandbox() {
     ] {
         for explicit in [false, true] {
             let mut cfg = AgentLaunchConfig {
+                delegate_seats: Vec::new(),
                 agent_type,
                 binary,
                 default_args: if explicit {
@@ -162,6 +164,7 @@ fn a_malformed_aida_contained_fails_closed_on_agent_new() {
     let err = claude_launch(&root, None, false, Vec::new()).expect_err("typo must refuse");
     assert!(format!("{err:#}").contains("not recognised"), "{err:#}");
     let cfg = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
@@ -596,6 +599,7 @@ fn task_1761_sandbox_contains_and_per_tool_settings_do_not() {
     .unwrap();
     assert!(posture.contained, "--sandbox sets contained");
     let cfg = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: posture.default_args,
@@ -610,6 +614,7 @@ fn task_1761_sandbox_contains_and_per_tool_settings_do_not() {
     )
     .unwrap();
     let mut cfg = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: Vec::new(),

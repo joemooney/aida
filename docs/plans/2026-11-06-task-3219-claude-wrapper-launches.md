@@ -2,9 +2,12 @@
 
 <!-- trace:TASK-3219 | ai:codex -->
 
-Status: proposed; advisor signoff required before implementation. TASK-3219
-comments dated 2026-11-06 13:29 and 16:04 UTC explicitly require this sketch
-and signoff. This document grants no launch or publication authority.
+Status: approved by the advisor's 2026-11-06 16:19 UTC spec comment, with
+four separate Refs slices in order: S1 coordinator, S2 interactive PTY,
+S3 background supervisor, S4 resume. S4 alone removes the remaining refusal
+and carries the completing trailer. S1 uses the existing foreground headless
+boundary, receipt-before-release and worker grant binding; the other surfaces
+continue to refuse. This document grants no launch or publication authority.
 
 ## Contract
 
@@ -99,9 +102,17 @@ silently skip when required-live is enabled. Run targeted tests,
 `cargo fmt --all -- --check`, and `make check-ci-fast`; report the actual live
 count and infrastructure refusals separately from unit-test results.
 
-## Decisions requested
+## Advisor decision
 
-Approve or revise the AIDA-owned background supervisor and its attach/log
-contract, the private-PTY interactive transport, and the narrowly scoped resume
-transcript import/publication lifecycle. Then authorize implementation of this
-sketch. No implementation or test pass is claimed by this planning slice.
+The 2026-11-06 16:19 UTC signoff approves private-PTY interactive transport,
+the AIDA-owned background supervisor, and the narrow explicit-ID resume
+import/publication lifecycle. Background access is limited to AIDA-level logs
+and `aida agent attach`-style access; opted-in `claude attach` must refuse with
+an explicit hint. Native background behavior stays unchanged. Continue and
+fork remain refused.
+
+The binding implementation order is S1 coordinator, S2 interactive PTY,
+S3 background supervisor, S4 resume, with a separate Refs PR and targeted/live
+regression for each. Only S4 removes the remaining refusal and completes the
+task. This checkout implements S1; validation results belong in the spec audit
+trail and host publication handoff.

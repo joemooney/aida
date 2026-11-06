@@ -290,6 +290,21 @@ command = "session hygiene"
 every = "1h"
 enabled = true
 
+# Typed deferrals resurface hourly; holds and old manual conditions route to human.
+# trace:STORY-2402 | ai:codex
+[[schedule.jobs]]
+name = "defer-resurface"
+command = "defer resurface"
+every = "1h"
+enabled = true
+
+[[schedule.jobs]]
+name = "defer-resurface-route"
+seats = ["advisor"]
+on = ["CronJobFailed:defer-resurface"]
+prompt = "The deferral sweep found a condition evaluation error or an internal read/write error. Unparseable triggers stay parked awaiting typed-condition migration. Inspect the reported specs and repair the evidence, then rerun aida defer resurface. Never lift an operator hold automatically."
+enabled = true
+
 [[schedule.jobs]]
 name = "session-hygiene-route"
 seats = ["advisor"]
