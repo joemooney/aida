@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-06T07:59:21.179751332Z
+modified_at: 2026-11-06T08:14:56.288515252Z
 req_type: Story
 tags:
 - architecture
@@ -301,6 +301,12 @@ comments:
   created_at: 2026-11-06T06:25:02.802935626Z
   modified_at: 2026-11-06T06:25:02.802935626Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1afec-d520-7b21-9120-fbe5296f013c
+  author: joe
+  content: 'Native implementer handoff (2026-11-06, origin/main a8e8311d546): PR-C is NOT complete and remains punted/NeedsAttention; publication veto must remain. Retained uncommitted edits only in aida-cli-lib/src/gate/effective.rs and gate/tests/story_2324_effective_tests.rs: persisted spec_key takes precedence over obsolete/missing audit labels; mismatched unbound UUID buckets refuse; enabled PR3306 superseded-head refusal fixture with protective cases for current/unknown/abbreviated heads, late collection and unrelated approvals. All incomplete production reader routing/deletion edits were restored to HEAD. Outstanding PR-C scope: production consumer cutover, legacy import/archive, string/path ratchets, agreement fixtures and STORY-1392 follow-up after merge. Runner blocker: aida lane job run refused twice because lease 01a1afd07f09 has no runner. Supplemental direct validation: initial story_2324 filter passed two writer tests but did not exercise the effective module; corrected gate::effective::tests run is still compiling as of handoff (/tmp/story2324-effective-test.log). make check-ci-fast has not returned, currently checking aida-tui (/tmp/story2324-check-ci-fast.log). cargo fmt --all -- --check and git diff --check passed. untested=true for the retained core change until the corrected run settles; no full gate pass claimed. Read-only installed-binary --compare probe covered all seven then-open PRs (3483,3482,3479,3477,3453,3449,3448); verdict/hold/draft-only matched, with supervised display/native spelling differences only. No commit, push, PR, queue completion, review record or ship was attempted.'
+  created_at: 2026-11-06T08:14:56.288515252Z
+  modified_at: 2026-11-06T08:14:56.288515252Z
+  session_id: 01a1afd07f09
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
