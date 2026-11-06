@@ -561,6 +561,12 @@ def continuation_terminated(_signum, _frame):
 
 def run_aida(args):
     if args.vendor != "codex":
+        # The signed outer-only posture is not permission to run the native
+        # diagnostic with bypass flags or to claim a shared-wrapper receipt.
+        # trace:TASK-3048 | ai:codex
+        if args.vendor == "agy":
+            raise ValueError("aida-boundary-unsupported-vendor: agy; outer-only adapter requires "
+                             "auth inventory, mediated-write policy and integrated conformance")
         raise ValueError(f"aida-boundary-unsupported-vendor: {args.vendor}")
     # Refuse hidden output before creating files or invoking grant setup.
     # trace:TASK-3194 | ai:codex
@@ -960,7 +966,7 @@ def run(args):
                   "all_tools": {"status": "unknown", "reason": "Prompt prohibition is not disabled-tool attestation; file/edit/browser/MCP/delegated paths unverified"},
                   "whole_lane_pass": False, "production_launcher_credit": False,
                   "unsupported_reason": unsupported,
-                  "agy_posture": "aida-required; native not earned" if args.vendor == "agy" else None}
+                  "agy_posture": "aida outer-only (native_layer=none); applied ContainmentReceipt required" if args.vendor == "agy" else None}
         write_json(root / "report.json", report)
         print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
     finally:

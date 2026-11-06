@@ -89,10 +89,33 @@ enum IpcLayout {
 enum CredentialLayout {
     Unverified,
 }
+/// Missing declarations retain the existing native layer. Only a signed,
+/// shipped outer-only row may request permission bypass inside AIDA's boundary.
+// trace:TASK-3048 | ai:codex
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum NativeLayer {
+    #[default]
+    Required,
+    None,
+}
+
+pub(crate) fn native_layer(vendor: &str) -> anyhow::Result<NativeLayer> {
+    let data: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
+    anyhow::ensure!(data.version == 1, "unsupported capability schema");
+    Ok(data
+        .vendor
+        .get(vendor)
+        .ok_or_else(|| anyhow::anyhow!("unsupported vendor capability: {vendor}"))?
+        .native_layer)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Capability {
     native: NativeAdapter,
+    #[serde(default)]
+    native_layer: NativeLayer,
     ipc: IpcLayout,
     credentials: CredentialLayout,
 }

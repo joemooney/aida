@@ -566,6 +566,55 @@ fn task_2707_no_deserialized_receipt_grants_applied_credit() {
         true,
         Some(&receipt)
     ));
+    // A structurally valid receipt from disk cannot authorize outer-only argv.
+    // trace:TASK-3048 | ai:codex
+    let error = crate::launch::agy::AGY
+        .candidate_argv(Path::new("/private/agy-runtime"), "probe", Some(&receipt))
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("applied AIDA ContainmentReceipt"));
+    for vendor in ["claude", "codex", "opencode"] {
+        assert!(require_outer_only_receipt(vendor, Some(&receipt))
+            .unwrap_err()
+            .to_string()
+            .contains("not an approved outer-only vendor"));
+    }
+}
+
+// This tests argv construction using the common wrapper's real accepted receipt,
+// not AGY execution or all-tool conformance. trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
+    if !live_available() {
+        return;
+    }
+    let plan = fixture(
+        "print('done')",
+        "print('seat_grant_valid=true expected_seat=true')",
+    );
+    let mut run = plan.spawn(Stdio::null()).unwrap();
+    let runtime = run._state.path().join("agy-runtime");
+    let prompt = "--mode auto is prompt text";
+    let args = crate::launch::agy::AGY
+        .candidate_argv(&runtime, prompt, Some(run.receipt()))
+        .unwrap();
+    assert_eq!(&args[args.len() - 2..], &["-p", prompt]);
+    assert_eq!(
+        args.iter()
+            .filter(|a| a.as_str() == "--dangerously-skip-permissions")
+            .count(),
+        1
+    );
+    assert!(args
+        .windows(2)
+        .any(|a| a[0] == "--settings" && Path::new(&a[1]) == runtime.join("settings.json")));
+    assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
+    assert!(crate::launch::agy::AGY
+        .candidate_argv(Path::new("/"), prompt, Some(run.receipt()))
+        .is_err());
+    run.release().unwrap();
+    assert!(run.child.wait().unwrap().success());
 }
 /// M5: a relocated CODEX_HOME and CODEX_SQLITE_HOME are masked as well as the
 /// default `~/.codex`/`~/.claude`; the default layout masks exactly those two;
