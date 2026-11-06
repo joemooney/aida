@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T21:12:56.746234741Z
+modified_at: 2026-11-06T21:48:28.662517860Z
 req_type: Story
 tags:
 - architecture
@@ -700,6 +700,12 @@ comments:
   created_at: 2026-11-06T20:56:16.435392370Z
   modified_at: 2026-11-06T20:56:16.435392370Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b2d5-a676-7e43-a1f2-dfd9fd3a9d99
+  author: joe
+  content: 'Round 6 / PR #3531: fixed argv[0] to aida in the shared control-child constructor and all TUI control paths via apply_control_env. Added real subprocess argv0 tests and ProcFacts/loop_anchor coverage. Removed the ignored control_child path parameter, eager production phase-driver path storage, and stale replacement-image comments; fixture injection remains cfg(test). Repaired all eight reported lib CI guards: inventory the shared advisor builder and its callers, recognize scoped grant cleanup before result propagation, keep gate-owned issuance on the authority floor, centralize CLI selector transport reads, narrowly inventory the TUI selector transport read, and follow the relocated grant issuer. Updated the CLI alias guard and launch-policy/OVERVIEW contract. Validation: direct cargo test --profile agent -p aida-cli-lib --lib story_2326 passed 38 tests; final-source combined STORY-2326 plus eight reported lib guards passed 46; TUI STORY-2326 passed 4; CLI launch_aliases_delegate_to_the_tested_lock_boundaries passed 1; make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check passed. Native publication declaration recorded: [AI:codex] fix(launch): preserve control child identity and repair PR-C guards (Refs STORY-2326). Edits intentionally uncommitted for host publication. Finding 1 remains open until the host commits/pushes this round and exact-head PR CI is green; the expected supervised merge hold remains in place. No queue completion, merge, review recording, commit, or push was attempted from this seat.'
+  created_at: 2026-11-06T21:48:28.662517860Z
+  modified_at: 2026-11-06T21:48:28.662517860Z
+  session_id: 01a1b2b5141e
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
