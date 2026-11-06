@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T07:56:58.888015905Z
+modified_at: 2026-11-06T08:19:23.633187533Z
 req_type: Task
 tags:
 - architecture
@@ -360,6 +360,12 @@ comments:
   content: 'Round 2 advisor F9 decision: no evidence establishes that `claude auth status` renews OAuth credentials. Removed pre-refresh entirely. Preparation reads expiresAt from the exact validated descriptor bound read-only into the lane and refuses immediately with CLAUDE_EXPIRED plus the remedy: operator runs `claude /login` on the host, then relaunch. No vendor/auth subprocess is run to refresh. F1 CI log job 127746720835 proves unshare(CLONE_NEWUSER|CLONE_NEWNET) returned EPERM before socket inspection; explicit under-filter nested probe now refuses with NESTED_USERNS_UNAVAILABLE. CI-only setup unloads the explicit bwrap-userns-restrict AppArmor profile on its disposable VM (sysctl=0 does not remove its child capability deny); runtime host policy is unchanged. Primary profile: https://gitlab.com/apparmor/apparmor/-/raw/master/profiles/apparmor/profiles/extras/bwrap-userns-restrict . Validation and final handoff follow.'
   created_at: 2026-11-06T07:56:58.888015905Z
   modified_at: 2026-11-06T07:56:58.888015905Z
+  session_id: 01a1afcd7009
+- id: 01a1aff0-e971-7e23-8775-7c15c32b0662
+  author: joe
+  content: 'Round 2 implementation and validation complete; native-seat handoff remains UNCOMMITTED for host publication. F1-F9 addressed; no findings deferred/disputed. Final required-live TASK-2708 run: 29 passed with AIDA_REQUIRE_BWRAP_LIVE=1 and AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1. Same final binary legacy TASK-2707 run: 21 passed (installed-Codex composition remains separately opt-in, not exercised). make check-ci-fast: all 38 gates passed. Fresh final-source aida-cli --no-default-features check, formatting, diff check, Python syntax, CI YAML parsing and 25 CI-sharding tooling tests passed. Hosted CI must still validate the CI-only AppArmor profile preparation; no publication/hold clearance/review recording/queue completion from this seat. Changed files: .github/workflows/ci.yml; aida-cli-lib/src/containment/contained_host.py; aida-cli-lib/src/containment/contained_lane.py; aida-cli-lib/src/containment/tests/launch_tests.rs; aida-cli-lib/src/launch/contained.rs; docs/internal/testing/task-2708-round2.md. Testing note contains per-finding evidence and limitations. bdcec264ee88 remains an ancestor of HEAD.'
+  created_at: 2026-11-06T08:19:23.633187533Z
+  modified_at: 2026-11-06T08:19:23.633187533Z
   session_id: 01a1afcd7009
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
