@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-836",
+  "publishes": [
+    {
+      "at": "2026-11-06T07:09:45.660111214Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T19:31:15.814534297Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-836",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-05T20:34:53.454501647Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-836",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T03:55:29.664188207Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-836",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-06T07:09:45.457075198Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-836",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a8e8311d54671600c1a362f8c1b814b512749adc",
+        "pr": 3475,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
