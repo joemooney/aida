@@ -8,8 +8,9 @@
 //! each call site, and a "no" read off a timeout could eject or close.
 //!
 //! Callers decide only on `Known`. `Pending` and `Transient` mean "not
-//! known yet". A destructive caller re-reads with [`settle`], which keeps
-//! the re-read loop bounded and in one place.
+//! known yet". `settle` handles non-destructive reads. Destructive callers
+//! use `confirm_negative` or `confirm_snapshot` for repeated observations and
+//! independent ground truth.
 //!
 //! The gh-read ratchet (`tests/story_2401_forge_read_ratchet_tests.rs`)
 //! keeps new raw `gh` spawns out of files other than `forge*.rs`.
@@ -185,6 +186,100 @@ pub(crate) fn settle<T>(
         last = read();
     }
     last
+}
+
+/// A negative is actionable only after two matching reads and independent
+/// ground truth. Unavailable or contradictory evidence never grants mutation.
+// trace:STORY-2401 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Confirmed {
+    Positive,
+    Negative,
+    Unconfirmed,
+}
+
+/// `true` means the change landed. Require two consecutive negative reads,
+/// separated by backoff, and a fresh negative Git observation before cleanup.
+/// A positive forge answer wins; Git alone proves landing only when the forge
+/// never supplied a contradictory negative.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn confirm_negative(
+    attempts: u32,
+    mut read: impl FnMut() -> Observed<bool>,
+    ground_truth: impl FnOnce() -> Observed<bool>,
+    mut pause: impl FnMut(),
+) -> Confirmed {
+    let mut consecutive = 0;
+    let mut saw_negative = false;
+    for attempt in 0..attempts.max(2) {
+        if attempt > 0 {
+            pause();
+        }
+        match read() {
+            Observed::Known(true) => return Confirmed::Positive,
+            Observed::Known(false) => {
+                saw_negative = true;
+                consecutive += 1;
+                if consecutive >= 2 {
+                    break;
+                }
+            }
+            _ => consecutive = 0,
+        }
+    }
+    match ground_truth() {
+        Observed::Known(false) if consecutive >= 2 => Confirmed::Negative,
+        Observed::Known(true) if !saw_negative => Confirmed::Positive,
+        _ => Confirmed::Unconfirmed,
+    }
+}
+
+/// Confirm a complete snapshot before a status flip or publication retraction.
+/// Unlike `settle`, a single settled answer is insufficient. The independent
+/// probe must agree with the stable snapshot; reads changing head/base/author
+/// cannot be combined into permission to act.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn confirm_snapshot<T: PartialEq>(
+    mut read: impl FnMut() -> Observed<T>,
+    ground_truth: impl FnOnce(&T) -> Observed<bool>,
+    mut pause: impl FnMut(),
+) -> Observed<T> {
+    let mut previous = None;
+    let mut unavailable = None;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            pause();
+        }
+        match read() {
+            Observed::Known(value) => {
+                if previous.as_ref() == Some(&value) {
+                    return match ground_truth(&value) {
+                        Observed::Known(true) => Observed::Known(value),
+                        Observed::Known(false) => {
+                            Observed::Pending("forge state conflicts with Git evidence".into())
+                        }
+                        Observed::Pending(why) => Observed::Pending(why),
+                        Observed::Transient(why) => Observed::Transient(why),
+                    };
+                }
+                previous = Some(value);
+                unavailable = None;
+            }
+            Observed::Pending(why) => {
+                previous = None;
+                unavailable = Some((false, why));
+            }
+            Observed::Transient(why) => {
+                previous = None;
+                unavailable = Some((true, why));
+            }
+        }
+    }
+    match unavailable {
+        Some((true, why)) => Observed::Transient(why),
+        Some((false, why)) => Observed::Pending(why),
+        None => Observed::Pending("forge state could not be confirmed on re-read".into()),
+    }
 }
 
 #[cfg(test)]

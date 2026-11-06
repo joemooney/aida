@@ -328,7 +328,14 @@ impl Repository {
     /// reaches git only through the credential gate's environment, not argv
     /// (BUG-2181). The pinned identity is rechecked first.
     // trace:TASK-1993 | ai:claude
+    // trace:STORY-2401 | ai:codex
     fn fetch(&self, root: &Path, refspecs: &[&str]) -> Result<()> {
+        retry_fetch(
+            || self.fetch_once(root, refspecs),
+            crate::forge_confirmation::backoff,
+        )
+    }
+    fn fetch_once(&self, root: &Path, refspecs: &[&str]) -> Result<()> {
         use aida_core::git_ops::RemoteCredentialsExt as _;
         anyhow::ensure!(
             Self::load(root)?.identity == self.identity,
@@ -349,12 +356,16 @@ impl Repository {
         clear_routing(&mut command);
         command.remote_credentials(root, "origin");
         let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
-            .context("review-watch git fetch failed or exceeded 30 seconds")?;
-        anyhow::ensure!(
-            out.status.success(),
-            "review-watch git fetch failed ({})",
-            out.status
-        );
+            .ok_or_else(|| {
+            FetchUnavailable("review-watch git fetch failed or exceeded 30 seconds".into())
+        })?;
+        if !out.status.success() {
+            return Err(FetchUnavailable(format!(
+                "review-watch git fetch failed ({})",
+                out.status
+            ))
+            .into());
+        }
         Ok(())
     }
     fn overlap(&self, root: &Path, change: &Change) -> Result<(bool, u64)> {
@@ -643,4 +654,36 @@ pub(super) fn paths_overlap(left: &BTreeSet<String>, right: &BTreeSet<String>) -
     left.iter()
         .any(|name| right.contains(name) || descendant(right, name))
         || right.iter().any(|name| descendant(left, name))
+}
+
+/// A failed fetch is unavailable evidence, never a completed review attempt.
+// trace:STORY-2401 | ai:codex
+#[derive(Debug)]
+pub(super) struct FetchUnavailable(pub(super) String);
+impl std::fmt::Display for FetchUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for FetchUnavailable {}
+
+pub(super) fn retry_fetch(
+    mut fetch: impl FnMut() -> Result<()>,
+    mut pause: impl FnMut(),
+) -> Result<()> {
+    let mut last = String::new();
+    for attempt in 0..3 {
+        if attempt > 0 {
+            pause();
+        }
+        match fetch() {
+            Ok(()) => return Ok(()),
+            Err(error) if error.downcast_ref::<FetchUnavailable>().is_some() => {
+                last = format!("{error:#}");
+                eprintln!("review-watch fetch unavailable ({}/3): {last}", attempt + 1);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(FetchUnavailable(last).into())
 }
