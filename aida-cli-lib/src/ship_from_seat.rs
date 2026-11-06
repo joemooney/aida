@@ -260,7 +260,6 @@ pub(crate) enum PostExitCommit {
 /// `(Refs SPEC)` so they never complete the spec at merge (advisor F4).
 // trace:TASK-2712 | ai:claude
 pub(crate) fn post_exit_message(spec: &str, lane: &str, clean_exit: bool) -> String {
-    let spec = aida_core::node_alias::display_spec_id(spec);
     if clean_exit {
         format!("[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({spec})")
     } else {
@@ -297,7 +296,7 @@ fn post_exit_message_with_completion(
 ) -> String {
     let mut message = post_exit_message(spec, lane, clean_exit);
     if clean_exit && !completing {
-        let display = aida_core::node_alias::display_spec_id(spec);
+        let display = spec;
         message = message
             .trim_end_matches(&format!("({display})"))
             .to_string()
@@ -328,6 +327,32 @@ pub(crate) fn post_exit_commit(
     // trace:TASK-2032 | ai:claude
     if crate::seat_clone::host_recorded_clone(&main, tree).is_none() {
         return PostExitCommit::NotASeat;
+    }
+    // trace:TASK-2902 | ai:codex
+    // Every exit path honors vetoes before resolving or inspecting intent.
+    if publication_veto(&main, spec) {
+        return PostExitCommit::Clean;
+    }
+    let validated = (|| -> Result<(String, Option<String>)> {
+        let canonical = crate::native_publication::resolve_scope(&main, spec)?;
+        let declared = crate::native_publication::read(&main, tree, &canonical)?;
+        Ok((canonical, declared))
+    })();
+    let (spec, declared) = match validated {
+        Ok(value) => value,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    let spec = spec.as_str();
+    if let Some(mut message) = declared {
+        if !clean_exit {
+            let prefix = message.rsplit_once('(').expect("validated trailer").0;
+            message = format!("{prefix}(Refs {spec})");
+        }
+        return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
+            Ok(Some(tip)) => PostExitCommit::Committed(tip),
+            Ok(None) => PostExitCommit::Clean,
+            Err(e) => PostExitCommit::Failed(format!("{e:#}")),
+        };
     }
     // Resolve against the host forge, never seat-controlled remote config.
     // trace:TASK-2879 | ai:codex
@@ -438,7 +463,8 @@ pub(crate) fn publish_queue_exit(
             &main,
             FromSeatOptions {
                 clone: tree.to_path_buf(),
-                spec: Some(spec.to_string()),
+                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
                 no_pr: false,
                 dry_run: false,
                 commit_pending: None,
@@ -477,9 +503,7 @@ fn publish_queue_exit_with(
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
-    if crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
-        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
-    {
+    if publication_veto(main, spec) {
         return Ok(());
     }
     finish_queue_exit(commit(), &publish, || {
@@ -493,6 +517,12 @@ fn publish_queue_exit_with(
         }
         notify()
     })
+}
+
+// trace:TASK-2902 | ai:codex
+fn publication_veto(main: &Path, spec: &str) -> bool {
+    crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
+        || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
 }
 
 // trace:STORY-2475 | ai:codex

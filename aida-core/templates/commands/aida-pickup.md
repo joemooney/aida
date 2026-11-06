@@ -22,7 +22,12 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    In a native sandbox (`AIDA_CONTAINMENT_POSTURE=native`), Git metadata is read-only:
    leave edits uncommitted, write a final handoff with changed files, validation results and
    any blockers, then exit. The host launcher commits, pushes and opens the PR after exit;
-   it preserves a Refs PR's non-completing trailer. Do not attempt commit/push/PR creation
+   it preserves a Refs PR's non-completing trailer.
+   For an approved partial slice, first record its subject with
+   `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`. This only records
+   a lease-bound declaration; failed exits always retain Refs.
+   <!-- trace:TASK-2902 | ai:codex -->
+   Do not attempt commit/push/PR creation
    or `aida queue done` from this seat. The host finishes queue completion after publication.
    In other postures, commit the implementation.
 7. Outside a native sandbox, `aida queue done <id>` atomically completes + removes from queue

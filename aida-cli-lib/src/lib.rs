@@ -570,6 +570,7 @@ pub(crate) use aida_core::liveness::{
     classify_lease_state, classify_spec_liveness, classify_stale_lease_recovery, LeaseState,
     SpecLiveness, StaleLeaseRecovery,
 };
+mod native_publication;
 mod prompts;
 mod ship;
 mod ship_from_seat;

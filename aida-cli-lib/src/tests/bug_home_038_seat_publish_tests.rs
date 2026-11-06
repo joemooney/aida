@@ -662,6 +662,25 @@ fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBu
     clone
 }
 
+// trace:TASK-2902 | ai:codex
+fn seat_with_publication_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+    let clone = seat_with_pending(fx, name, id, branch);
+    // trace:TASK-2902 | ai:codex — use a live spec belonging to this lease.
+    let lease_path = crate::lease_path(&fx.main, id);
+    let lease = std::fs::read_to_string(&lease_path)
+        .unwrap()
+        .replace("scope = \"TASK-2053\"", "scope = \"BUG-1\"");
+    std::fs::write(lease_path, lease).unwrap();
+    let mut store = aida_core::RequirementsStore::new();
+    store
+        .requirements
+        .push(title_spec("Repair seat publication"));
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    clone
+}
+
 /// A commit step that must never run.
 // trace:TASK-2712 | ai:claude
 fn commit_never(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
@@ -983,7 +1002,7 @@ fn task_2712_failed_commit_after_add_restores_the_index() {
 fn task_2712_lane_post_exit_commits_pending_seat_work() {
     use crate::ship_from_seat::{post_exit_commit, post_exit_message, PostExitCommit};
     let fx = fixture();
-    let clone = seat_with_pending(&fx, "postexit", "c0ffee271214", "post-exit");
+    let clone = seat_with_publication_pending(&fx, "postexit", "c0ffee271214", "post-exit");
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
     let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", true, &test_commit);
     let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
@@ -1012,7 +1031,7 @@ fn task_2712_lane_post_exit_commits_pending_seat_work() {
 fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
     use crate::ship_from_seat::{post_exit_commit, post_exit_message, PostExitCommit};
     let fx = fixture();
-    let clone = seat_with_pending(&fx, "salvage", "c0ffee271216", "salvage");
+    let clone = seat_with_publication_pending(&fx, "salvage", "c0ffee271216", "salvage");
     let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-9", false, &test_commit);
     let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
     assert_eq!(outcome, PostExitCommit::Committed(tip));
@@ -1053,7 +1072,7 @@ fn task_2712_lane_post_exit_commit_runs_the_sandboxed_host_commit() {
         return;
     }
     let fx = fixture();
-    let clone = seat_with_pending(&fx, "postlive", "c0ffee271215", "post-live");
+    let clone = seat_with_publication_pending(&fx, "postlive", "c0ffee271215", "post-live");
     git_ok(&fx.main, &["config", "user.name", "Host Operator"]);
     git_ok(&fx.main, &["config", "user.email", "host@example.com"]);
     let sentinel = fx.root.join("hook-ran");
@@ -1952,7 +1971,7 @@ fn task_2879_post_exit_commit_looks_up_refs_pr() {
         return;
     }
     let fx = fixture();
-    let clone = seat_with_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
+    let clone = seat_with_publication_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
     let bin = fx.root.join("bin");
     std::fs::create_dir(&bin).unwrap();
     let gh = bin.join("gh");
@@ -2077,5 +2096,276 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
         }
         assert!(!sentinel.exists(), "seat hooks must never execute");
         assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    }
+}
+
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
+    use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "declaration", "c0ffee290201", "declared");
+    for (clean, requested, expected) in [
+        (
+            true,
+            "[AI:codex] feat(seat): partial slice (Refs BUG-1)",
+            "[AI:codex] feat(seat): partial slice (Refs BUG-1)",
+        ),
+        (
+            true,
+            "[AI:codex] feat(seat): complete slice (BUG-1)",
+            "[AI:codex] feat(seat): complete slice (BUG-1)",
+        ),
+        (
+            false,
+            "[AI:codex] feat(seat): interrupted slice (BUG-1)",
+            "[AI:codex] feat(seat): interrupted slice (Refs BUG-1)",
+        ),
+    ] {
+        crate::native_publication::prepare(&fx.main, &clone).unwrap();
+        crate::native_publication::declare(&clone, Some("BUG-1"), requested, false).unwrap();
+        std::fs::write(clone.join("slice.txt"), requested).unwrap();
+        let result = post_exit_commit(&fx.main, &clone, "BUG-1", "test", clean, &test_commit);
+        assert!(matches!(result, PostExitCommit::Committed(_)), "{result:?}");
+        let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+        assert_eq!(subject, expected);
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(None, &subject).unwrap(),
+            expected
+        );
+        let forge = crate::forge::fake::RecordingForge {
+            opens_as: Some(77),
+            ..crate::forge::fake::RecordingForge::new()
+        };
+        crate::ship_from_seat::run_from(
+            &fx.main,
+            opts(&clone, false, false),
+            &crate::ship_from_seat::Deps {
+                bundle: &test_bundle,
+                commit: &no_commit,
+                forge: &|_| Box::new(forge.clone()),
+                after_open: &|_, _| {},
+            },
+        )
+        .unwrap();
+        assert_eq!(forge.opened.lock().unwrap()[0].title, expected);
+        assert_eq!(
+            git_ok(
+                &fx.origin,
+                &["log", "-1", "--format=%s", "refs/heads/declared"]
+            ),
+            expected
+        );
+    }
+}
+
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "stale", "c0ffee290202", "stale");
+    let path = clone.join(".aida/native-publication.json");
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    crate::native_publication::declare(&clone, None, "[AI:codex] feat: slice (Refs BUG-1)", false)
+        .unwrap();
+    let old = std::fs::read(&path).unwrap();
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    assert!(!path.exists());
+    for bytes in [old, b"invalid JSON".to_vec()] {
+        std::fs::write(&path, bytes).unwrap();
+        let result = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "test",
+            true,
+            &commit_never,
+        );
+        assert!(
+            matches!(result, crate::ship_from_seat::PostExitCommit::Failed(_)),
+            "{result:?}"
+        );
+    }
+    for subject in [
+        "no trailer",
+        "slice (Refs BUG-1 BUG-2)",
+        "slice (BUG-2)",
+        "slice (BUG-1)\nbody",
+    ] {
+        assert!(
+            crate::native_publication::declare(&clone, None, subject, false).is_err(),
+            "{subject}"
+        );
+    }
+    for scope in ["EPIC-1", "BUG-1 BUG-2", "unknown"] {
+        let result = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            scope,
+            "test",
+            true,
+            &commit_never,
+        );
+        assert!(
+            matches!(result, crate::ship_from_seat::PostExitCommit::Failed(_)),
+            "{result:?}"
+        );
+    }
+}
+
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_lease_scope_and_veto_precede_declaration_or_commit() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "bound", "c0ffee290203", "bound");
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    let path = clone.join(".aida/native-publication.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, "malformed declaration").unwrap();
+    let mut store = aida_core::RequirementsStore::new();
+    store.requirements.push(title_spec("Implement bug"));
+    let mut other = title_spec("Other work");
+    other.spec_id = Some("BUG-2".into());
+    store.requirements.push(other);
+    let mut epic = title_spec("Container");
+    epic.spec_id = Some("EPIC-1".into());
+    epic.req_type = aida_core::RequirementType::Epic;
+    store.requirements.push(epic);
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    let lease_path = crate::lease_path(&fx.main, "c0ffee290203");
+    let original = std::fs::read_to_string(&lease_path).unwrap();
+    for scope in ["BUG-2", "EPIC-1", "BUG-1 BUG-2", "missing"] {
+        std::fs::write(
+            &lease_path,
+            original.replace("scope = \"BUG-1\"", &format!("scope = \"{scope}\"")),
+        )
+        .unwrap();
+        let result = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "test",
+            true,
+            &commit_never,
+        );
+        assert!(
+            matches!(result, crate::ship_from_seat::PostExitCommit::Failed(_)),
+            "{scope}: {result:?}"
+        );
+    }
+    std::fs::write(lease_path, original).unwrap();
+    crate::punt::write_hold_signal(
+        &crate::punt::hold_signal_path(&fx.main, "BUG-1"),
+        &crate::punt::HoldSignal {
+            spec: "BUG-1".into(),
+            spec_key: None,
+            branch: "bound".into(),
+            reason: Some("manual gate".into()),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "test",
+            true,
+            &commit_never
+        ),
+        crate::ship_from_seat::PostExitCommit::Clean
+    );
+}
+
+// trace:TASK-2902 | ai:codex
+#[test]
+fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "command", "c0ffee290204", "command");
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_CONTAINMENT_POSTURE", "native");
+    std::env::set_current_dir(&clone).unwrap();
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pending = git_ok(&clone, &["status", "--porcelain"]);
+    let crate::command_registry::Handler::Early(run) = crate::pr_cmd::SHIP.run else {
+        panic!("ship is an early command");
+    };
+    let ctx = crate::command_registry::DispatchCtx {
+        globals: None,
+        store: None,
+    };
+    let subject = "[AI:codex] feat(seat): partial slice (Refs BUG-1)";
+    let command = || (crate::pr_cmd::SHIP.command)();
+    let path = clone.join(".aida/native-publication.json");
+    let preview = command()
+        .try_get_matches_from(["ship", "-m", subject, "--dry-run"])
+        .unwrap();
+    run(&preview, &ctx).unwrap();
+    assert!(!path.exists());
+    let declare = command()
+        .try_get_matches_from(["ship", "BUG-1", "-m", subject])
+        .unwrap();
+    run(&declare, &ctx).unwrap();
+    assert_eq!(
+        crate::native_publication::read(&fx.main, &clone, "BUG-1")
+            .unwrap()
+            .as_deref(),
+        Some(subject)
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    let no_message = command().try_get_matches_from(["ship"]).unwrap();
+    assert!(run(&no_message, &ctx).is_err());
+}
+
+// trace:TASK-2902 trace:BUG-2459 | ai:codex
+#[test]
+fn task_2902_post_exit_uses_canonical_display_id_for_origin_scope() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "origin", "c0ffee290205", "origin");
+    let origin = "BUG-b6b1278890774ef993d2ebc327862470-021";
+    let mut map = aida_core::node_alias::NodeAliasMap::default();
+    map.bindings.push(aida_core::node_alias::NodeAliasBinding {
+        label: "HOME".into(),
+        node: "b6b1278890774ef993d2ebc327862470".into(),
+        retired: false,
+    });
+    let _map = aida_core::node_alias::install_for_thread(map);
+    let mut store = aida_core::RequirementsStore::new();
+    let mut req = title_spec("Canonical publication");
+    req.spec_id = Some(origin.into());
+    req.agreed_id = Some("BUG-1".into());
+    store.requirements.push(req);
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    let lease_path = crate::lease_path(&fx.main, "c0ffee290205");
+    let lease = std::fs::read_to_string(&lease_path)
+        .unwrap()
+        .replace("scope = \"BUG-1\"", &format!("scope = \"{origin}\""));
+    std::fs::write(lease_path, lease).unwrap();
+    for (clean, suffix) in [(true, "(BUG-1)"), (false, "(Refs BUG-1)")] {
+        std::fs::write(clone.join("canonical.txt"), suffix).unwrap();
+        let result = crate::ship_from_seat::post_exit_commit(
+            &fx.main,
+            &clone,
+            origin,
+            "canonical",
+            clean,
+            &test_commit,
+        );
+        assert!(
+            matches!(result, crate::ship_from_seat::PostExitCommit::Committed(_)),
+            "{result:?}"
+        );
+        let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+        assert!(subject.ends_with(suffix), "{subject}");
+        crate::ship_from_seat::pending_message_check(&fx.main, &subject, Some("BUG-1")).unwrap();
+        assert!(!subject.contains("HOME"));
     }
 }

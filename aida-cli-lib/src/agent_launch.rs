@@ -6504,6 +6504,11 @@ pub(crate) fn build_agent_new_bg_command(
         command.env("AIDA_SESSION_SCOPE", spec);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    // trace:TASK-2902 | ai:codex
+    if native_post_exit_spec(config, plan).is_some() {
+        crate::native_publication::prepare(&plan.project_root, &plan.launch_cwd)?;
+    }
+
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
@@ -7221,6 +7226,11 @@ pub(crate) fn run_agent_generation(
         command.env("AIDA_SESSION_SCOPE", spec);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    // trace:TASK-2902 | ai:codex
+    if native_post_exit_spec(config, plan).is_some() {
+        crate::native_publication::prepare(&plan.project_root, &plan.launch_cwd)?;
+    }
+
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     command
         .env_remove(crate::agent_rotation::GENERATION_ENV)

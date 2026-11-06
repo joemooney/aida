@@ -6546,6 +6546,16 @@ pub(crate) fn run_vendor_headless_to_exit(
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    // trace:TASK-2902 | ai:codex
+    if vendor == HeadlessVendor::Codex {
+        if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+            crate::native_publication::prepare(
+                &crate::main_worktree_root_from(&headless_worktree_root()),
+                tree,
+            )?;
+        }
+    }
+
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
     // lane job runner too, so it can run its targeted tests outside its
     // 60-second tool-call cap, and a lane that ran none is reported untested.
@@ -7931,6 +7941,15 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         _ => aida_core::agents_config::AgentSeat::Implementer,
     };
     let tuning = resolve_agent_tuning(cwd, vendor, agent_seat);
+    // trace:TASK-2902 | ai:codex
+    if crate::canonical_role_name(seat) == "implementer" {
+        crate::native_publication::prepare(
+            &host_main
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| crate::main_worktree_root_from(cwd)),
+            cwd,
+        )?;
+    }
     let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)

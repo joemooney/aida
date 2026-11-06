@@ -1149,6 +1149,11 @@ fn build_worker_exec(
         command.env("AIDA_SESSION_SCOPE", spec);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    // trace:TASK-2902 | ai:codex
+    if super::native_post_exit_spec(config, plan).is_some() {
+        crate::native_publication::prepare(&plan.project_root, &plan.launch_cwd)?;
+    }
+
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
