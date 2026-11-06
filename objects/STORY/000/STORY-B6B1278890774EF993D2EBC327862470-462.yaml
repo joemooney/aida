@@ -9,11 +9,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-06T00:18:37.529991046Z
+modified_at: 2026-11-06T15:29:58.148057279Z
 req_type: Story
 tags:
 - architecture
-- operator-held
 - regroup
 - sketch-first
 history:
@@ -22,10 +21,11 @@ history:
   timestamp: 2026-11-06T00:18:37.604557783Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
-deferred: true
-deferred_at: 2026-11-06T00:18:37.529991046Z
-deferred_until: when STORY-2326 PR-B (Codex/agy spawn sites on spawn_agent) merges
-deferred_reason: 'regroup: depends on STORY-2326''s launcher types; sketch after PR-B'
+- id: 01a1b17b-1e19-7411-8e35-1c01d0e6c72e
+  author: joe
+  timestamp: 2026-11-06T15:29:58.297508009Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  changes: []
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
