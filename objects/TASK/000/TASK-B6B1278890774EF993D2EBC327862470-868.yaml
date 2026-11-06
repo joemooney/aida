@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T07:55:16.768119746Z
-modified_at: 2026-11-06T08:16:56.602113698Z
+modified_at: 2026-11-06T08:25:25.629746484Z
 req_type: Task
 tags:
 - carried-from:TASK-3074
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-11-06T07:57:05.017194687Z
   modified_at: 2026-11-06T07:57:05.017194687Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1aff6-6f7d-7e22-8f5a-2cfbf17bad7e
+  author: joe
+  content: 'Implemented separate once-per-episode deferral-expiry escalation with pipeline_escalation_<episode>_deferral rule and independent durable pending/sent state. Prior unresolved delivery no longer suppresses late deferral expiry; persistent-stall notices remain independent. Missing until is explicitly unknown and falls back to receipt.recorded_at + 30 minutes instead of a moving deadline. Changed aida-cli-lib/src/pipeline_stall.rs, aida-cli-lib/src/pipeline_stall_action_tests.rs and docs/cli/06-roles-sessions.md. Validation: cargo test -p aida-cli-lib pipeline_stall --lib --offline: 49 passed; cargo fmt --all -- --check and git diff --check passed. Native-seat handoff: edits intentionally uncommitted; host must commit/publish and complete queue after publication. No blockers.'
+  created_at: 2026-11-06T08:25:25.629746484Z
+  modified_at: 2026-11-06T08:25:25.629746484Z
+  session_id: 01a1afee40e4
 history:
 - id: 01a1afdc-8fd4-7d52-bccc-54476d15222b
   author: joe
