@@ -1,3 +1,8 @@
+Question parking with an empty consequence preserves an existing deferral trigger
+and timestamp; without a trigger it defaults to the resolver's manual condition,
+without an empty comment. See docs/cli/02-specs.md.
+<!-- trace:STORY-2402 | ai:codex -->
+
 Queue completion requires readable branch ownership evidence even with
 `--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
 warns and retains its ledgered override. See OVERVIEW.md.

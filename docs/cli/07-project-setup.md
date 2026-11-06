@@ -367,14 +367,14 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **One line** — park a spec as primed/conditional work — hidden from the default view, but with a recorded *revisit trigger*, not filed away like archive.
 
-**Mental model.** `defer` is a **view-level flag** (like archive) that does *not* touch the lifecycle status machine. The one thing distinguishing deferred from archived is `--until`: a free-text condition that says *what brings the spec back* ("when a slice verb ships"). Archived is retrospective ("done with this, filed"); deferred is prospective ("not yet, but here's the trigger"). Deferred rows drop out of `list`/`search`/`history` by default and resurface with `--deferred` (only) or `--all` (union).
+**Mental model.** `defer` is a **view-level flag** (like archive) that does *not* touch the lifecycle status machine. The one thing distinguishing deferred from archived is `--until`: a typed condition that says *what brings the spec back* (for example, `pr:123=merged` or `date:2026-12-01`). Archived is retrospective ("done with this, filed"); deferred is prospective ("not yet, but here's the trigger"). Deferred rows drop out of `list`/`search`/`history` by default and resurface with `--deferred` (only) or `--all` (union).
 
 **Reach for it when** — you've captured a real idea but it's blocked on a future condition and you don't want it cluttering the open-work view — yet you also don't want to lose the *why it'll come back*. The EPIC-shaped "smallest slice now, revisit-trigger filed" discipline lands here.
 
 **Don't reach for it when** — the spec is genuinely *done with* (that's `archive`, Ch.2); or it's actually *blocked by another spec* — that's an `aida edit --blocked-by` relationship, which the graph tracks, not a view flag. Defer is for conditions the graph can't express.
 
 **Key options (rationale only).**
-- `--until <condition>` — the whole reason to defer rather than archive. Record the revisit trigger; a deferred spec with no `--until` is just a hidden spec you'll forget. Always set it.
+- `--until <condition>` — record a typed revisit trigger: `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. `manual:<who>` requires a non-empty `--reason` and product/advisor/operator authority. A bare re-deferral preserves the existing trigger and timestamp.
 
 **Gotchas.** Deferred is *orthogonal to status* — a deferred Approved spec is still Approved, just hidden. Don't read "deferred" as a lifecycle state; it's a lens flag stacked on top of whatever status the spec holds.
 

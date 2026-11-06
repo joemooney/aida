@@ -498,6 +498,47 @@ fn apply_token_bare_defer_parks_out_of_queue() {
     assert!(applied.keeps_parked, "a deferred spec is not queue-worthy");
 }
 
+// trace:STORY-2402 | ai:codex
+#[test]
+fn apply_token_bare_defer_empty_consequence_preserves_trigger() {
+    for consequence in ["", " \t\n"] {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.deferred = true;
+        req.deferred_at = Some(chrono::Utc::now() - chrono::Duration::days(1));
+        req.deferred_until = Some("date:2026-12-01".to_string());
+        let before = req.clone();
+
+        let applied = apply_resolution_token(&mut req, "park", "Later", consequence);
+
+        assert!(req.deferred);
+        assert!(applied.keeps_parked);
+        assert_eq!(req.deferred_until, before.deferred_until);
+        assert_eq!(req.deferred_at, before.deferred_at);
+        assert_eq!(req.comments.len(), before.comments.len());
+    }
+}
+
+// trace:STORY-2402 | ai:codex
+#[test]
+fn apply_token_bare_defer_empty_consequence_defaults_to_manual() {
+    let _identity = crate::test_env::EnvVarGuard::set("AIDA_USER", "empty-consequence-resolver");
+    for consequence in ["", " \t\n"] {
+        let mut req = sample_requirement("STORY-N", "body");
+        let comment_count = req.comments.len();
+
+        let applied = apply_resolution_token(&mut req, "defer", "Later", consequence);
+
+        assert!(req.deferred);
+        assert!(req.deferred_at.is_some());
+        assert!(applied.keeps_parked);
+        assert_eq!(
+            req.deferred_until,
+            Some(format!("manual:{}", current_user_id(None)))
+        );
+        assert_eq!(req.comments.len(), comment_count);
+    }
+}
+
 #[test]
 fn apply_token_bare_disposition_verbs_work_without_prefix() {
     // BUG-726: bare disposition verbs resolve without the `disposition:` prefix.

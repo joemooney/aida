@@ -530,20 +530,26 @@ pub(crate) fn apply_resolution_token(
         // that evidence in a comment and name the answering identity as the
         // manual resolver; never interpret prose as a machine trigger.
         // trace:STORY-2402 | ai:codex
-        let condition = consequence.parse::<aida_core::condition::Condition>();
-        req.deferred_until = Some(match condition {
-            Ok(condition) => condition.to_string(),
-            Err(_) => {
-                let resolver = current_user_id(None);
-                let mut comment = Comment::new(
-                    resolver.clone(),
-                    format!("Deferred by question resolution ({label}): {consequence}"),
-                );
-                comment.session_id = resolve_current_session_id();
-                req.comments.push(comment);
-                aida_core::condition::Condition::Manual { who: resolver }.to_string()
-            }
-        });
+        // A bare re-deferral retains its trigger; absent triggers still need
+        // an explicit resolver, without recording empty prose.
+        if !consequence.trim().is_empty() || req.deferred_until.is_none() {
+            let condition = consequence.parse::<aida_core::condition::Condition>();
+            req.deferred_until = Some(match condition {
+                Ok(condition) => condition.to_string(),
+                Err(_) => {
+                    let resolver = current_user_id(None);
+                    if !consequence.trim().is_empty() {
+                        let mut comment = Comment::new(
+                            resolver.clone(),
+                            format!("Deferred by question resolution ({label}): {consequence}"),
+                        );
+                        comment.session_id = resolve_current_session_id();
+                        req.comments.push(comment);
+                    }
+                    aida_core::condition::Condition::Manual { who: resolver }.to_string()
+                }
+            });
+        }
         return ResolutionApplied {
             effects: vec!["deferred — parked out of the queue".to_string()],
             is_disposition: true,
