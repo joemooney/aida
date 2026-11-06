@@ -16,45 +16,41 @@ that couples mutation and dedupe outcome.
 
 [`scripts/store-writers.toml`](../../../scripts/store-writers.toml) is review
 evidence, **not an allow-list** and not a second requirements database.
-`source_revision` is the audited code commit, not a moving branch or a promise
-that the inventory applies to every later commit. Version 1 has deterministic,
-path-sorted `[[writer]]` records. Each record contains:
+Version 2 keys each writer row by **path + enclosing item + sink kind**.
+There are no file hashes or source-revision pins. Line numbers, comments,
+whitespace, arguments, and edits elsewhere in a file do not change site identity.
+Repeated calls of the same kind in one item share a site, per the advisor's
+2026-11-06 16:22 UTC ruling. A new kind or enclosing item needs a new row;
+a removed site makes its row stale. Policy schema validation remains strict.
 
 | Field | Meaning |
 |---|---|
-| `id`, `path` | Stable repository-relative source identity; no absolute or parent paths |
-| `surface`, `selector` | CLI/MCP/internal/script surface or explicit unresolved candidate |
-| `entrypoints` | Sorted source function names containing candidate sinks or wrapper calls; `<module/script>` for module-level/script evidence |
-| `sink` | Sorted concrete lexical sink/wrapper names in that file, or explicit dispatch-only marker; qualify names with `path` |
-| `source_sha256` | Hash of production source evidence, including destination strings, arguments, dispatch and comments |
-| `artifacts` | Canonical objects, metadata, authority, cache, local coordination, store Git, external output, or explicitly unresolved |
-| `lock` | Observed locking route, caller-held requirement, or explicit unresolved blocker; never inferred merely from atomic rename |
-| `gate` | Observed operation policy or explicit unresolved blocker; a persistence helper does not authenticate a lane |
-| `disposition` | `s2_typed`, `host_only`, `lane_private`, `read_only`, or `blocked`; none grants present authority |
-| `blocker`, `refusal`, `cutover_owner` | Explicit cutover work/refusal, owned by TASK-3223 |
-| `evidence` | Audit/source and reproduction references |
+| `id`, `path`, `item`, `sink` | Stable site identity; item includes enclosing Rust module/impl/function or Python class/function |
+| `lock`, `gate` | Observed lock and operation policy, or explicit caller-owned/unresolved cutover requirement |
+| `disposition`, `blocker` | Reviewed disposition and outstanding TASK-3223 work; no present authority |
+| `proposed_operation` | Candidate typed operation or explicit unresolved/refusal |
+| `evidence_tests` | Reproduction fixtures or operation-specific evidence to preserve |
 
-Records group evidence by source file rather than pretending one mixed handler
-has a single destination or authority rule. Mixed surfaces remain blocked until
-S2 separates operations and destinations. `entrypoints` and `sink` describe
-source candidates, not a resolved Rust call graph. The broad candidate set
-intentionally retains false positives (for example unrelated output writes,
-read-only `OpenOptions`, or same-named methods). Boundary families below have
-source-checked notes; every other record explicitly says its destination, lock
-and gate are unresolved. Do not interpret the candidate count as the number of
-confirmed canonical writers, or the existence of a row as completed policy review.
+The `operation` array separately accounts for each registered CLI command and
+each dispatched MCP tool, and every immediate operation in the comment, queue,
+findings, mailbox and session command enums. Concrete mappings include `comment
+add`, `queue done`, `findings add`, `session handoff`, `session handoff standing-orders add` and `mailbox send/digest`.
+Each row names qualified entrypoints and references actual sink-row IDs.
+Empty `sites` means unresolved, **never** read-only. Even nonempty mappings
+remain blocked for S2 until receiver/trait, alias, legacy dispatch and deferred
+child edges and host authority are reviewed. Per-operation lock/gate notes
+preserve the concrete known routes for spec edits, comments, claims, completion,
+findings and mail. The inventory does not forward generic CLI/MCP requests.
 
-Every `blocked` record's `blocker` is an outstanding cutover blocker. Host-only
-records also carry preservation requirements. The complete, file-addressed list
-is the TOML itself; print it without running AIDA or touching a live store:
+Print unresolved operations without touching a live store:
 
 ```bash
 python3 - <<'PY'
 import tomllib
 with open('scripts/store-writers.toml', 'rb') as handle:
-    rows = tomllib.load(handle)['writer']
+    rows = tomllib.load(handle)['operation']
 for row in rows:
-    print(row['path'], row['disposition'], row['blocker'], sep=' | ')
+    print(row['id'], len(row['sites']), row['blocker'], sep=' | ')
 PY
 ```
 
@@ -96,67 +92,76 @@ mutating surface to its sinks, and every sink to its callers/surfaces. Search
 command registration, legacy dispatch and aliases, MCP tool registration AND
 handler dispatch; include operations presented as reads that create, refresh or
 migrate derived state. Follow traits, wrappers, macros and deferred children.
-The guard pins `command_registry.rs`, `cli.rs`, `lib.rs` and CLI `main.rs`
-even when lexical write discovery finds no sink there.
+Registration and MCP dispatch selectors are reconciled separately from sinks;
+unresolved selectors are explicit operation blockers.
 
 ```bash
 rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\(' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
 rg -n 'fs::(write|rename|remove_file|create_dir_all|copy)|OpenOptions|File::create|write_atomic|write_all|execute_batch|transaction|queue_(add|remove|reorder)' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
 rg -n 'write_cas|write_batch|register_node|acquire_claim|release_claim|digest_snapshot_to_canonical|publish_to_store|commit_record|git_ops::(add|commit|push)|pull_rebase|fast_forward_store' aida-core/src aida-cli-lib/src
 rg -n 'REGISTRY|CmdPolicy|Command::|tool_[a-z_]+|handoff|mailbox|deputy|claim|cache|migrat' aida-cli-lib/src/command_registry.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/mcp.rs
-rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-cli-lib/src/containment
+rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-core/templates aida-cli-lib/src/containment
 python3 scripts/check-store-writers.py --candidates > /tmp/store-writer-candidates.json
 python3 scripts/check-store-writers.py
 python3 -m unittest tests/test_store_writer_inventory.py
 python3 scripts/check-ci-gates.py --audit
 ```
 
-The scanner covers Rust/Python/shell files in the workspace-style `aida-*/src`
-roots, plus `scripts`, `hooks` and `.githooks`, including Python containment
-helpers. New `aida-*/src` roots are discovered automatically. Explicit test/
-fixture directories, `tests.rs`, `test_*` and `*_tests.rs` files are excluded.
-In mixed Rust files only exact `#[cfg(test)]` function/module items are masked;
-production after inline tests remains scanned. Complex test cfg expressions,
-test fields/arms and ambiguous files are retained conservatively. The scanner
-itself is exempt: it reads source and TOML and prints diagnostics/candidates;
-its behavior and CI wiring have independent fixtures. Candidate printing does
-not rewrite or bless inventory records.
+The scanner covers Rust/Python/shell files in workspace-style `aida-*/src`
+roots, `scripts`, and **all `aida-core/templates`**, including the real
+`aida-core/templates/hooks/*.sh` and terminal Python templates. Optional
+`hooks`/`.githooks` roots are also scanned if introduced. New crate roots are
+discovered automatically. Test/fixture directories and test-named Rust/Python
+files are excluded; only exact `#[cfg(test)]` Rust function/module items are
+masked, preserving production after inline tests.
 
-For Rust discovery, comments and string contents are masked before matching
-calls; destination strings remain in the hashed production evidence. Writer
-wrapper names are learned from current source and propagated to callers to a
-fixed point, so adding a caller in an uninventoried file is checked as well as
-changing an existing writer. Ambiguous common names such as `new`, `run`,
-`collect` and `push` are not propagated; direct persistence seeds are still
-matched. A changed candidate file requires evidence review even if the change
-looks unrelated. This intentionally conservative hash also notices production
-comments/whitespace, and changes to the masked span's length can require refresh.
+Rust comments and string contents are masked before calls are matched. Wrapper
+propagation uses qualified function identities, including enclosing impl types,
+and reaches a fixed point only through actual bodies containing sinks or calls
+to classified wrappers. It never promotes a bare method name: `path.join`,
+`display`, `is_empty`, and unrelated free functions with colliding names do not
+become writers. Explicit `crate::writer::add` remains detectable. Unresolved
+imports, bare free-function calls, receiver methods and trait dispatch require
+S2 reconciliation; the scanner does not guess their target. Python uses AST
+call nodes; shell uses lexical tokens with comments/quoted payloads opaque.
 
-For each change, inspect the changed functions, destination construction,
-operation policy, lock, wrapper/trait implementations and both CLI/MCP callers.
-Update the affected record's classification and source evidence explicitly;
-remove retired records. `--candidates` is only an aid to that review. There is
-no baseline rewrite/auto-approval flag. Review the inventory diff alongside the
-code; never update only a digest to make the guard green.
+After the host merges **current main**, regenerate against that merged tree:
+
+```bash
+python3 scripts/check-store-writers.py --regenerate
+git diff -- scripts/store-writers.toml
+python3 scripts/check-store-writers.py
+python3 -m unittest tests/test_store_writer_inventory.py
+make check-ci-fast
+```
+
+Regeneration retains existing site and operation policy, adds newly discovered
+sites as **blocked**, removes stale sites, and refreshes operation-to-site
+references. Review the additions, removals and mapping changes before committing.
+It grants no routing or cutover authority. The failure diagnostic includes this
+recipe; concurrent main changes require regeneration after merging, rather than
+hand-copying a digest. Unrelated edits produce no inventory diff.
 
 ## Limits and refusal tests
 
 This is a source-review ratchet, not a Rust/Python/shell compiler or a security
 boundary. It cannot prove destination resolution, alias/macro/function-pointer
 call graphs, dynamic command construction, generated/extension code behavior,
-foreign-language I/O, or every implicit writer. Same-named methods may produce
-false positives. A novel write API outside the seed vocabulary needs scanner
+foreign-language I/O, or every implicit writer. Direct seed APIs remain conservative lexical candidates, including non-store
+output writes; qualified wrappers do not use same-name receiver inference. A novel write API outside the seed vocabulary needs scanner
 and inventory review; presence of a path/row does not settle that question.
 These are S2 cutover blockers requiring manual reconciliation, not exclusions
-that authorize a bypass. Scripts are intentionally scanned conservatively as
-text, including string/comment candidates. No lane code/config/hooks are run
+that authorize a bypass. Shell heredocs, expansion and dynamic command construction still require
+manual review; lexical tokens do not establish an executable shell call graph. No lane code/config/hooks are run
 by this audit.
 
 `tests/test_store_writer_inventory.py` uses disposable source trees. Required
 mutants each refuse **before** classification and pass only after an explicit
 fixture inventory update: a raw filesystem writer, a caller of an existing
 writer wrapper, and a cache-on-read SQLite writer. Additional tests cover
-transitive wrappers, new crates, writes inserted in an existing record,
+transitive qualified wrappers, bare-name collisions (negative), generic writer
+names (positive), real hook templates, unrelated edits (negative), new crates,
+new sink kinds inserted in an existing item,
 missing sink/lock/gate/disposition, stale/duplicate rows, source symlinks,
 comments/raw strings, production following inline tests, Python/shell writes,
 and actual CI fast-tier wiring.
@@ -164,10 +169,10 @@ and actual CI fast-tier wiring.
 The CI Build job runs the standalone guard and mutation fixtures. Both steps
 are `fast` in `scripts/ci-gate-tiers.toml`; `make check-ci-fast` derives them
 through `scripts/check-ci-gates.py`, without a second command list in Makefile.
-At this audit revision that aggregate also includes `cargo check -p aida-cli
---no-default-features` and formatting. A no-Cargo lane can run the targeted
-Python checks, gate audit and dry-run the Make target, but cannot claim the
-whole aggregate passed. Host/CI must run the remaining aggregate checks.
+The LIGHT gate is the Python fixtures plus `make check-ci-fast`; its
+workflow-derived command list remains the source of truth. Report the actual
+aggregate result and any environment refusal. A local pass is not a claim that
+the remote PR Gates shard has run at the unpublished head.
 
 Runtime malformed/oversized/path-bearing request, expired/revoked/sibling
 identity, endpoint replay/replacement and absent-service tests belong to S1b

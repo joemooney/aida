@@ -14,14 +14,13 @@ SPEC.loader.exec_module(guard)
 
 
 def inventory(root, rows):
-    text = 'version = 1\nsource_revision = "' + '0' * 40 + '"\n'
-    for path, evidence in sorted(rows.items()):
-        row = dict(id=path, path=path, surface="internal", selector="fixture",
-                   lock="none; fixture blocker", gate="none; fixture blocker",
-                   artifacts=["unresolved"], disposition="blocked", refusal="no S2 routing",
-                   cutover_owner="TASK-3223", evidence="disposable fixture",
-                   blocker="fixture policy unresolved", **evidence)
-        text += '\n[[writer]]\n' + ''.join(f'{key} = {json.dumps(value)}\n' for key, value in row.items())
+    text = 'version = 2\nwriter = [\n'
+    for key, evidence in sorted(rows.items()):
+        row = dict(id=key, lock="fixture lock", gate="fixture gate",
+                   disposition="blocked", blocker="fixture policy unresolved",
+                   proposed_operation="fixture", evidence_tests=["fixture"], **evidence)
+        text += '  { ' + ', '.join(f'{key} = {json.dumps(value)}' for key, value in row.items()) + ' },\n'
+    text += ']\n'
     target = root / guard.INVENTORY
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
@@ -62,7 +61,7 @@ class WriterInventoryTests(unittest.TestCase):
         self.assert_refused_then_classified()
 
     def test_wrapper_caller_mutant(self):
-        self.put("aida-cli-lib/src/new_surface.rs", '''
+        self.put("aida-core/src/new_surface.rs", '''
             fn innocent(path: &Path) { crate::writer::write_edit_atomically(path); }
         ''')
         errors = guard.check(self.root)
@@ -79,7 +78,7 @@ class WriterInventoryTests(unittest.TestCase):
 
     def test_new_call_inside_existing_record_is_refused(self):
         path = self.root / "aida-core/src/writer.rs"
-        path.write_text(path.read_text().replace('"body"', '"new destination or payload"'))
+        path.write_text(path.read_text().replace(".unwrap();", ".unwrap(); std::fs::rename(path, target);"))
         self.assert_refused_then_classified()
 
     def test_missing_lock_gate_sink_and_disposition_refuse(self):
@@ -87,14 +86,14 @@ class WriterInventoryTests(unittest.TestCase):
         text = path.read_text()
         for field in ("sink", "lock", "gate", "disposition"):
             with self.subTest(field=field):
-                path.write_text('\n'.join(line for line in text.splitlines() if not line.startswith(field + ' =')))
+                path.write_text(text.replace(field + ' =', 'missing_' + field + ' ='))
                 self.assertTrue(guard.check(self.root))
         path.write_text(text)
 
     def test_deleted_source_and_duplicate_row_refuse(self):
         path = self.root / guard.INVENTORY
         text = path.read_text()
-        path.write_text(text + '\n[[writer]]\n' + text.split('[[writer]]\n')[1])
+        path.write_text(text.replace(']\n', text.splitlines()[2] + '\n]\n'))
         self.assertTrue(any("duplicate" in e for e in guard.check(self.root)))
         path.write_text(text)
         (self.root / "aida-core/src/writer.rs").unlink()
@@ -107,9 +106,8 @@ class WriterInventoryTests(unittest.TestCase):
             }
             fn production() { std::fs::write("store", "raw").unwrap(); }
         ''')
-        row = guard.discover(self.root)["aida-cli-lib/src/mixed.rs"]
-        self.assertIn("production", row["entrypoints"])
-        self.assertNotIn("test_only", row["entrypoints"])
+        rows = [r for r in guard.discover(self.root).values() if r["path"] == "aida-cli-lib/src/mixed.rs"]
+        self.assertEqual({"production"}, {r["item"] for r in rows})
         self.assert_refused_then_classified()
 
     def test_comments_literals_and_nested_comments_are_not_calls(self):
@@ -117,7 +115,7 @@ class WriterInventoryTests(unittest.TestCase):
             /* outer /* std::fs::write("x", "y"); */ nested */
             fn pure() { let example = r#"std::fs::write(path, value)"#; let byte = br#"{ std::fs::write( }"#; }
         ''')
-        self.assertNotIn("aida-cli-lib/src/pure.rs", guard.discover(self.root))
+        self.assertFalse(any(r["path"] == "aida-cli-lib/src/pure.rs" for r in guard.discover(self.root).values()))
         self.assertEqual([], guard.check(self.root))
 
     def test_shell_writer_and_python_writer_refuse(self):
@@ -134,9 +132,9 @@ class WriterInventoryTests(unittest.TestCase):
             guard.check(self.root)
 
     def test_transitive_wrapper_caller_refuses(self):
-        self.put("aida-core/src/relay.rs", "fn relay(p: &Path) { write_edit_atomically(p); }")
+        self.put("aida-core/src/relay.rs", "fn relay(p: &Path) { crate::writer::write_edit_atomically(p); }")
         self.classify()
-        self.put("aida-cli-lib/src/caller.rs", "fn command(p: &Path) { relay(p); }")
+        self.put("aida-core/src/caller.rs", "fn command(p: &Path) { crate::relay::relay(p); }")
         self.assert_refused_then_classified()
 
     def test_new_crate_cannot_escape_discovery(self):
@@ -153,6 +151,98 @@ class WriterInventoryTests(unittest.TestCase):
         )
         self.assertEqual(1, result.returncode)
         self.assertIn("unclassified writer/caller", result.stderr)
+
+    def test_unrelated_edits_do_not_change_sites(self):
+        path = self.root / "aida-core/src/writer.rs"
+        path.write_text("// whitespace and comments\n" + path.read_text().replace('"body"', '"changed payload"') + "\nfn pure() { let n = 3; }\n")
+        self.assertEqual([], guard.check(self.root))
+
+    def test_bare_name_collision_is_not_a_wrapper(self):
+        self.put("aida-core/src/actual.rs", "fn join() { std::fs::write(p, data); } fn add() { std::fs::write(p, data); }")
+        self.classify()
+        self.put("aida-core/src/pure.rs", "fn pure() { path.join(p); x.display(); x.is_empty(); join(); add(); other::join(); }")
+        self.assertEqual([], guard.check(self.root))
+        self.put("aida-core/src/caller.rs", "fn caller() { crate::actual::add(); crate::actual::join(); }")
+        self.assert_refused_then_classified()
+
+    def test_impl_scopes_do_not_collide(self):
+        self.put("aida-core/src/impls.rs", "struct A; struct B; impl A { fn save() { std::fs::write(p, d); } } impl B { fn save() { std::fs::write(p, d); } }")
+        items = {r["item"] for r in guard.discover(self.root).values() if r["path"].endswith("impls.rs")}
+        self.assertEqual({"impl A::save", "impl B::save"}, items)
+
+    def test_qualified_impl_wrapper_is_propagated(self):
+        self.put("aida-core/src/writer.rs", "struct Writer; impl Writer { fn add() { std::fs::write(p, d); } }")
+        self.classify()
+        self.put("aida-core/src/caller.rs", "fn command() { crate::writer::Writer::add(); }")
+        self.assert_refused_then_classified()
+
+    def test_generic_impls_keep_type_identity(self):
+        self.put("aida-core/src/types.rs", "impl<T> A<T> { fn add() { std::fs::write(p, d); } } impl<T> B<T> { fn add() { std::fs::write(p, d); } }")
+        items = {r["item"] for r in guard.discover(self.root).values() if r["path"].endswith("types.rs")}
+        self.assertEqual({"impl <T> A<T>::add", "impl <T> B<T>::add"}, items)
+        self.classify()
+        self.put("aida-core/src/caller.rs", "fn command() { crate::types::A::add(); }")
+        self.assert_refused_then_classified()
+
+    def test_declaration_is_not_a_sink(self):
+        self.put("aida-core/src/trait.rs", "trait Read { fn save(&self); } fn save() { read(); }")
+        self.assertEqual([], guard.check(self.root))
+
+    def test_duplicate_sink_kind_in_same_item_shares_site(self):
+        path = self.root / "aida-core/src/writer.rs"
+        path.write_text(path.read_text().replace('.unwrap();', '.unwrap(); std::fs::write(other, data);'))
+        self.assertEqual([], guard.check(self.root))
+
+    def test_hook_template_mutant(self):
+        self.put("aida-core/templates/hooks/new-hook.sh", '# aida edit TASK-1\necho "aida edit TASK-1"\naida comment add TASK-1 "persist"\n')
+        self.assert_refused_then_classified()
+
+    def test_script_comments_and_strings_are_not_sites(self):
+        self.put("scripts/pure.py", '# cache.write_bytes(data)\nx = "cache.write_bytes(data)"\nopen("input", "r")\n')
+        self.put("scripts/pure.sh", '# aida edit TASK-1\necho "aida comment add TASK-1"\n')
+        self.assertEqual([], guard.check(self.root))
+
+    def test_regenerate_is_idempotent_and_keeps_policy(self):
+        guard.regenerate(self.root)
+        target = self.root / guard.INVENTORY
+        first = target.read_text()
+        guard.regenerate(self.root)
+        self.assertEqual(first, target.read_text())
+        self.assertEqual([], guard.check(self.root))
+
+    def test_operations_include_unresolved_and_resolved_tools(self):
+        self.put("aida-cli-lib/src/mcp.rs", '''
+            impl Server {
+                fn dispatch() { match tool_name {
+                    "write" => self.tool_write(args),
+                    "unknown" => self.tool_unknown(args),
+                } }
+                fn tool_write() { std::fs::write(p, d); }
+                fn tool_unknown() { opaque.call(); }
+            }
+        ''')
+        ops = guard.operations(self.root)
+        self.assertTrue(ops["mcp:write"]["sites"])
+        self.assertEqual([], ops["mcp:unknown"]["sites"])
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+        self.put("aida-cli-lib/src/mcp.rs", (self.root / "aida-cli-lib/src/mcp.rs").read_text().replace('"unknown"', '"new_tool"'))
+        self.assertTrue(any("operation mapping changed" in e for e in guard.check(self.root)))
+
+    def test_compound_cli_operations_are_not_omitted(self):
+        self.put("aida-cli-lib/src/queue_cmd_args.rs", '''
+            enum QueueCommand {
+                Add { id: String },
+                #[clap(name = "custom-done")]
+                Done { id: String },
+                List,
+            }
+        ''')
+        ops = guard.operations(self.root)
+        self.assertEqual({"cli:queue add", "cli:queue custom-done", "cli:queue list"}, set(ops))
+        self.assertTrue(all(not row["sites"] for row in ops.values()))
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
 
     def test_actual_ci_fast_tier_wiring(self):
         import tomllib
