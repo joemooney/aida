@@ -979,6 +979,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     storage.save(&store).unwrap();
     let lease = implementer_lease(worktree.clone());
     let lease = SessionLease {
+        holder_record: None,
         pid_namespace: crate::agent_registry::current_pid_namespace(),
         creator_pid: None,
         creator_pid_start_time: None,
