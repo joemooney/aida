@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T16:55:03.926174542Z
+modified_at: 2026-11-06T16:59:15.463434830Z
 req_type: Task
 tags:
 - area:containment
@@ -177,6 +177,12 @@ comments:
   content: 'Current native-seat preparation under the signed outer-only ruling: vendors.toml now records agy native_layer=none; missing native_layer stays required for Claude/Codex/OpenCode. A common descriptor/receipt gate requires a host-accepted receipt before candidate AGY argv can return --dangerously-skip-permissions; missing/deserialized receipts refuse. Candidate argv omits --sandbox and unavailable --mode auto. Production AGY admission remains closed; no new enforcement arm, vendor launch or applied credit. Added descriptor, receipt refusal and real-wrapper candidate-argv regressions (the latter tests argv only, not AGY conformance). Native harness remains bypass-free, preserves per-check unsupported_tool diagnostics, and now records the selected outer-only posture. Shared-boundary harness refuses AGY by name with remaining auth, mediated-write and conformance gates. Documentation updated. Validation: 36 offline conformance tests PASS; fmt/diff checks PASS; targeted Rust tests untested=true because lease 01a1b1bfc08b has no lane job runner. Fast checks are still compiling; final result will follow. Recorded non-completing publication declaration: [AI:codex] fix(containment): gate outer-only agy adapter argv; Refs STORY-2460 (Refs TASK-3048). No completion claim, commit/push/PR/queue-done or host measurement attempted.'
   created_at: 2026-11-06T16:52:55.222115298Z
   modified_at: 2026-11-06T16:52:55.222115298Z
+  session_id: 01a1b1bfc08b
+- id: 01a1b1cc-dc87-7d13-9eae-f7225ce6a6b5
+  author: joe
+  content: 'Final validation/handoff: 36 offline conformance tests PASS; cargo fmt --all -- --check and git diff --check PASS; no-default-features compilation guard PASS (210.3s). The original make check-ci-fast was interrupted with exit 130 at the TUI build-slot wait, so the full tier is INCOMPLETE. All 36 remaining fast-tier gates then PASS using the unchanged CI runner/step bodies, excluding only the completed no-default-features guard and interrupted TUI guard. Targeted Rust tests remain untested=true: lease has no lane job runner; newly added Rust receipt/descriptor tests were not executed. Nine modified files remain uncommitted: containment/{mod.rs,vendors.toml,tests.rs,tests/launch_tests.rs}, launch/{agy.rs,contained.rs}, scripts/containment/conformance.py, tests/test_containment_conformance.py, docs/internal/testing/containment-conformance.md. TASK-3048 was explicitly punted for finding 1 and remains Needs Attention; no findings disputed. The Refs publication declaration is recorded, but the punt and any hold remain publication vetoes. No commit, push, PR creation, queue done, vendor launch, host measurement, review record or merge performed. Turn ended after this handoff.'
+  created_at: 2026-11-06T16:59:15.463434830Z
+  modified_at: 2026-11-06T16:59:15.463434830Z
   session_id: 01a1b1bfc08b
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
