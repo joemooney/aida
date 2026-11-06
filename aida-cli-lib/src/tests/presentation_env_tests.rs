@@ -319,6 +319,7 @@ fn noexec_preview_shows_none_set_when_no_presentation_vars_are_present() {
     ]);
 
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -372,6 +373,7 @@ fn noexec_preview_reports_stripped_and_kept_presentation_vars() {
     ]);
 
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],
@@ -420,6 +422,7 @@ fn show_context_body_surfaces_kept_presentation_vars() {
     ]);
 
     let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "claude",
         binary: "claude",
         default_args: vec![],

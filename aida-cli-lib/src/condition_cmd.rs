@@ -25,7 +25,7 @@ pub(crate) struct ConditionArgs {
 }
 
 /// The live facts a condition is evaluated against. The store loads at most
-/// once, and only when a condition needs it.
+/// once, and only when a condition needs it; sweeps supply their existing snapshot.
 // trace:STORY-2402 | ai:claude
 pub(crate) struct CliConditionFacts {
     project_root: PathBuf,
@@ -42,7 +42,17 @@ impl CliConditionFacts {
         }
     }
 
-    fn store(&self) -> Result<&RequirementsStore, String> {
+    // Reuse a sweep's strict canonical snapshot for spec/query observations.
+    // trace:STORY-2402 | ai:codex
+    pub(crate) fn from_store(project_root: &Path, store: RequirementsStore) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+            store: OnceCell::from(Ok(store)),
+            file: None,
+        }
+    }
+
+    pub(crate) fn store(&self) -> Result<&RequirementsStore, String> {
         self.store
             .get_or_init(|| {
                 read_store(&self.project_root, self.file.as_deref()).map_err(|e| format!("{e:#}"))
@@ -55,7 +65,7 @@ impl CliConditionFacts {
 // Strict, read-only reads: an unreadable canonical object must never turn a
 // query into a smaller count or select a legacy fallback store.
 // trace:STORY-2402 | ai:codex
-fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsStore> {
+pub(crate) fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsStore> {
     let path = match file {
         Some(path) => path.to_path_buf(),
         None => match crate::detect_distributed_store_from(root) {

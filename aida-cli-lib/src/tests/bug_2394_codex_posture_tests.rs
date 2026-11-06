@@ -425,6 +425,7 @@ fn bug_2394_codex_mcp_trust_is_keyed_on_the_seat_not_the_launcher_root() {
     );
 
     let config = |args: Vec<String>| crate::AgentLaunchConfig {
+        delegate_seats: Vec::new(),
         agent_type: "codex",
         binary: "codex",
         default_args: args,

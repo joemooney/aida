@@ -156,6 +156,12 @@ pub(crate) struct AgentRegistryEntry {
     // trace:STORY-2338 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) grant_key: Option<String>,
+    /// Explicit launcher narrowing, restored on resume and revalidated at issuance.
+    /// This is a requested selection, never authority; empty/legacy rows inherit
+    /// the current validated parent just like a fresh launch without flags.
+    // trace:BUG-2467 | ai:codex
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) delegate_seats: Vec<String>,
 }
 
 /// The `key:` token of the seat grant this process exports AND holds the
@@ -315,6 +321,7 @@ pub(crate) fn carry_concurrent_launcher_write(
     // Only the launcher stamps the wake and only arming moves it on; the
     // hook's row never decides it.
     entry.mail_wake = disk.mail_wake;
+    entry.delegate_seats = disk.delegate_seats.clone();
     if read == Some(disk) || disk.source != "agent-launcher" {
         return;
     }
@@ -790,6 +797,7 @@ pub(crate) fn touch_mcp_agent(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats: Vec::new(),
         resumed_from: None,
     });
 
@@ -952,6 +960,7 @@ fn touch_session_start_agent_for(
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         });
 
@@ -1225,13 +1234,10 @@ pub(crate) fn register_spawned_agent(
     resumed_from: Option<String>,
     description: Option<String>,
 ) -> Result<AgentRegistryEntry> {
-    let pid_start = crate::process_probe::process_start_identity(pid);
-    register_spawned_agent_as(
+    register_spawned_agent_with_row(
         project_root,
         agent_type,
         pid,
-        pid_start,
-        current_pid_namespace(),
         SpawnedRow {
             role,
             current_spec,
@@ -1241,7 +1247,25 @@ pub(crate) fn register_spawned_agent(
             native_session_id,
             resumed_from,
             description,
+            delegate_seats: Vec::new(),
         },
+    )
+}
+
+// trace:BUG-2467 | ai:codex
+pub(crate) fn register_spawned_agent_with_row(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    row: SpawnedRow<'_>,
+) -> Result<AgentRegistryEntry> {
+    register_spawned_agent_as(
+        project_root,
+        agent_type,
+        pid,
+        crate::process_probe::process_start_identity(pid),
+        current_pid_namespace(),
+        row,
     )
 }
 
@@ -1256,6 +1280,7 @@ pub(crate) struct SpawnedRow<'a> {
     pub native_session_id: Option<String>,
     pub resumed_from: Option<String>,
     pub description: Option<String>,
+    pub delegate_seats: Vec<String>,
 }
 
 /// STORY-2254: register a detached worker strictly. Its start identity is
@@ -1353,6 +1378,7 @@ fn register_spawned_agent_as(
         native_session_id,
         resumed_from,
         description,
+        delegate_seats,
     } = row;
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -1411,6 +1437,7 @@ fn register_spawned_agent_as(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats,
         resumed_from,
     };
     write_entry_locked(project_root, &entry)?;
@@ -1460,6 +1487,7 @@ pub(crate) fn register_role_enter_agent(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats: Vec::new(),
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1630,6 +1658,7 @@ pub(crate) fn register_existing_agent(
         spec_status_at_end: None,
         mail_wake: None,
         grant_key: None,
+        delegate_seats: Vec::new(),
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -3518,6 +3547,7 @@ mod tests {
             spec_status_at_end: None,
             mail_wake: None,
             grant_key: None,
+            delegate_seats: Vec::new(),
             resumed_from: None,
         }
     }

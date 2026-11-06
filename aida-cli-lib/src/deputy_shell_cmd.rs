@@ -286,6 +286,19 @@ pub(crate) fn submit(
     allowed_seats: &[String],
     out: &mut dyn Write,
 ) -> Result<i32> {
+    submit_with_runner_status(q, a, submitter, allowed_seats, out, || q.runner_status())
+}
+
+// Inject the observer so legacy diagnostics can also be tested in a PID sandbox.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
+pub(crate) fn submit_with_runner_status(
+    q: &Queue,
+    a: &ShellSubmitArgs,
+    submitter: ds::Submitter,
+    allowed_seats: &[String],
+    out: &mut dyn Write,
+    runner_status: impl FnOnce() -> ds::RunnerStatus,
+) -> Result<i32> {
     if !allowed_seats.iter().any(|s| s == &submitter.seat) {
         bail!(
             "seat {} may not submit to script deputy {:?} (allowed: {}). The operator widens it with `aida deputy shell run --allow-seat {}`",
@@ -317,6 +330,17 @@ pub(crate) fn submit(
     };
     // trace:STORY-2343 | ai:claude
     if q.live_runner().is_none() {
+        // Legacy liveness is diagnostic only; native submission still requires
+        // a stamped native runner and its authenticated socket protocol.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
+        if let ds::RunnerStatus::Legacy(pid) = runner_status() {
+            bail!(
+                "legacy bash runner live for script deputy {:?}, pid {pid}; use `aida-deputy-shell submit {} <file>` or stop it and restart natively with `aida deputy shell run --name {}` in the operator's terminal",
+                q.name,
+                q.name,
+                q.name
+            );
+        }
         bail!(
             "no script deputy {:?} is running; the operator starts it with `aida deputy shell run --name {}` in their terminal first",
             q.name,
