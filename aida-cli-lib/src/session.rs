@@ -13775,9 +13775,11 @@ mod tests {
         .unwrap();
         let fake = tmp.path().join("fake-vendor");
         let env_out = tmp.path().join("env.txt");
+        // Emit valid AGY terminal evidence for the uncontained control.
+        // trace:TASK-2838 | ai:codex
         crate::test_exec::write_executable(
             &fake,
-            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nprintf '%s\\n' '{{\"event\":\"result\",\"result\":{{\"status\":\"SUCCESS\"}}}}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
         let tee_opts = crate::headless_tee::TeeOptions {
@@ -13843,7 +13845,7 @@ mod tests {
                 false,
             )
             .unwrap();
-            assert!(status.success());
+            assert!(status.success(), "{vendor:?}: {status}");
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
                 !env_contents

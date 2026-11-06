@@ -250,3 +250,113 @@ fn task_2838_forward_failure_drains_and_preserves_process_status() {
     .unwrap();
     assert_eq!(evidence.status(ExitStatus::from_raw(0)).code(), Some(1));
 }
+
+// trace:TASK-2838 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_2838_delayed_reader_drains_buffered_evidence_after_stop() {
+    use std::sync::{atomic::AtomicBool, Arc};
+    for (stream, expected) in [
+        (format!("{ERROR}{RETRY}{SUCCESS}"), 0),
+        (SUCCESS.replace("SUCCESS", "ERROR"), 1),
+    ] {
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$1\"", "buffered-evidence", &stream])
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let pipe = CoordinatorPipe {
+            output: child.stdout.take().unwrap(),
+            stop: Arc::new(AtomicBool::new(false)),
+        };
+        let process = child.wait().unwrap();
+        // No reader runs until after the coordinator's entire post-exit grace.
+        // stdout contains the complete stream, even though cancellation is set.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        pipe.stop.store(true, std::sync::atomic::Ordering::Release);
+        let evidence = Evidence::read(pipe, None, false).unwrap();
+        assert!(!evidence.invalid, "{evidence:?}");
+        assert_eq!(evidence.status(process).code(), Some(expected));
+    }
+}
+
+// trace:TASK-2838 | ai:codex
+#[test]
+fn task_2838_distinct_tool_limit_fails_closed_after_recovery() {
+    for count in [MAX_TOOLS, MAX_TOOLS + 1] {
+        let mut evidence = Evidence::default();
+        for index in 0..count {
+            evidence.line(
+                ERROR
+                    .replace("run_command", &format!("tool_{index}"))
+                    .as_bytes(),
+                false,
+            );
+        }
+        assert_eq!(evidence.unresolved.len(), MAX_TOOLS);
+        assert_eq!(evidence.invalid, count > MAX_TOOLS);
+        for index in 0..count {
+            evidence.line(
+                RETRY
+                    .replace("run_command", &format!("tool_{index}"))
+                    .as_bytes(),
+                false,
+            );
+        }
+        evidence.line(SUCCESS.as_bytes(), false);
+        assert!(evidence.unresolved.is_empty());
+        assert_eq!(
+            evidence.status(ExitStatus::from_raw(0)).code(),
+            Some(if count > MAX_TOOLS { INCOMPLETE } else { 0 })
+        );
+    }
+}
+
+// trace:TASK-2838 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_2838_tee_disabled_diagnostics_reach_stderr() {
+    const CHILD_MODE: &str = "AIDA_TASK_2838_DIAGNOSTIC_CHILD";
+    if let Ok(mode) = std::env::var(CHILD_MODE) {
+        let dir = tempfile::tempdir().unwrap();
+        let status = if mode == "direct" {
+            let log = dir.path().join("headless.log");
+            std::fs::write(&log, DENIED).unwrap();
+            log_status(&log, ExitStatus::from_raw(0))
+        } else {
+            let mut command = std::process::Command::new("/bin/sh");
+            command.args(["-c", "printf '%s' \"$1\"", "stream-json", DENIED]);
+            crate::session::coordinator_status_with_handle_guard(
+                crate::session::HeadlessVendor::Agy,
+                &mut command,
+                dir.path(),
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        assert_eq!(status.code(), Some(INCOMPLETE));
+        return;
+    }
+    // libtest normally captures eprintln; a child with nocapture proves these
+    // diagnostics actually reach stderr with both log tee and forwarding off.
+    for mode in ["direct", "coordinator"] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "agy_outcome::tests::task_2838_tee_disabled_diagnostics_reach_stderr",
+                "--nocapture",
+            ])
+            .env(CHILD_MODE, mode)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{mode}: {stderr}");
+        assert!(
+            stderr.contains("AGY outcome:")
+                && stderr.contains("denied_actions=true")
+                && stderr.contains("incomplete"),
+            "{mode}: {stderr}"
+        );
+    }
+}

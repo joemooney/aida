@@ -200,12 +200,6 @@ impl Read for CoordinatorPipe {
         use std::os::fd::AsRawFd;
         use std::sync::atomic::Ordering;
         loop {
-            if self.stop.load(Ordering::Acquire) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "stdout remained open after AGY exited",
-                ));
-            }
             let mut fd = libc::pollfd {
                 fd: self.output.as_raw_fd(),
                 events: libc::POLLIN,
@@ -215,6 +209,15 @@ impl Read for CoordinatorPipe {
             let ready = unsafe { libc::poll(&mut fd, 1, 50) };
             if ready > 0 {
                 return self.output.read(bytes);
+            }
+            // trace:TASK-2838 | ai:codex
+            // Cancellation bounds idle descendants, not buffered evidence. A
+            // delayed reader must drain ready bytes (and observe EOF) first.
+            if ready == 0 && self.stop.load(Ordering::Acquire) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "stdout remained open after AGY exited",
+                ));
             }
             if ready < 0 {
                 let error = std::io::Error::last_os_error();
