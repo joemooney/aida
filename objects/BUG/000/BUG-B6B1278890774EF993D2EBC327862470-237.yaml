@@ -8,12 +8,12 @@ description: |-
   Acceptance:
   1. A per-PR refusal or setup failure is recorded against that PR (as 'exited without completing' already is) and the watch continues with the other PRs. Only a watch-level failure (grant invalid, state file unusable) exits nonzero.
   2. A test drives two PRs, one refusing at pickup, and asserts the other is admitted in the same tick and the watch keeps running.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T19:46:16.177042346Z
+modified_at: 2026-11-06T19:58:56.805424258Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -85,6 +85,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b271-5f25-7f80-b6d9-897c560e0500
+  author: aida-session-start
+  timestamp: 2026-11-06T19:58:56.805423116Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
