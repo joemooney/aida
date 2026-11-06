@@ -233,6 +233,8 @@ fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
         "Codex ships command-backed status lines",
         "upstream release ships",
         "advisor decides",
+        "spec:",
+        "date:bad",
     ] {
         backend.add_requirement(parked(trigger)).unwrap();
     }
@@ -260,7 +262,7 @@ fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
             14
         )
         .unwrap(),
-        3
+        5
     );
     run(dir.path(), &path, &backend, false, 14).unwrap();
     for (object, bytes) in bytes_before {
@@ -273,4 +275,62 @@ fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
     assert!(!result.deferred);
     assert_eq!(result.comments.len(), 1);
     assert_eq!(result.status, met.status);
+}
+
+// The production snapshot and per-spec writer must preserve concurrent holds,
+// while a real evaluation failure still returns an error and allows progress.
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s4_canonical_stale_snapshot_and_evaluation_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let init = crate::test_exec::output(
+        crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "--initial-branch=main", "--quiet"]),
+    )
+    .unwrap();
+    assert!(init.status.success());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "implementer", &[]);
+    let path = dir.path().join(".aida-store");
+    std::fs::create_dir_all(&path).unwrap();
+    aida_core::work_binding::bootstrap(&path).unwrap().unwrap();
+    let backend = CachedGitBackend::open(&path, &dir.path().join("cache.db")).unwrap();
+    let held = backend.add_requirement(parked("date:2000-01-01")).unwrap();
+    let snapshot = crate::condition_cmd::read_store(dir.path(), Some(&path)).unwrap();
+    backend
+        .update_spec_atomically(&held, |current| {
+            current.deferred_reason = Some("concurrent operator hold".into());
+            current.tags.insert("operator-held".into());
+        })
+        .unwrap();
+    let before = backend.get_requirement(&held.id).unwrap().unwrap();
+    sweep(
+        &backend,
+        &snapshot.requirements,
+        &Facts,
+        Utc::now(),
+        false,
+        14,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_yaml::to_value(backend.get_requirement(&held.id).unwrap().unwrap()).unwrap(),
+        serde_yaml::to_value(&before).unwrap()
+    );
+    assert!(backend.queue_list("role:human", true).unwrap().is_empty());
+
+    backend
+        .add_requirement(parked("spec:TASK-404=completed"))
+        .unwrap();
+    let met = backend.add_requirement(parked("date:2000-01-01")).unwrap();
+    let error = run(dir.path(), &path, &backend, false, 14).unwrap_err();
+    assert!(error.to_string().contains("TASK-404"), "{error:#}");
+    assert!(!backend.get_requirement(&met.id).unwrap().unwrap().deferred);
+    assert!(backend.get_requirement(&held.id).unwrap().unwrap().deferred);
+    assert!(backend
+        .queue_list("role:human", true)
+        .unwrap()
+        .iter()
+        .any(|entry| entry.requirement_id == held.id));
 }

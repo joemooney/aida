@@ -346,9 +346,11 @@ without writing specs or queues.
 
 Unknown observations (including failed forge/release probes) are reported and
 left parked, with a successful exit. Free-text and unparseable triggers are
-also Unknown and remain unchanged; the run reports `N deferrals awaiting
-typed-condition migration` as information. Only real evaluation errors (such
-as a parseable condition referencing a missing spec) and store/internal errors
+also Unknown and remain unchanged, including invalid typed syntax such as
+`spec:` or `date:bad`; the run reports `N deferrals awaiting typed-condition
+migration` as information. A store containing only these unmigrated triggers
+exits successfully without writing objects or queues. Only real evaluation errors
+(such as `spec:TASK-404=completed` referencing a missing spec) and store/internal errors
 produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
 are retained for a later sweep. This repository registers the sweep hourly as
 the timer-only `defer-resurface` job and routes job failures to the advisor.
