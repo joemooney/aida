@@ -268,3 +268,85 @@ was performed. All requested round-6 repairs are implemented and validation is
 complete. Changed files: `OVERVIEW.md`, `aida-cli-lib/src/gate/approval.rs`,
 `aida-cli-lib/src/gate/orchestrator_leaves.rs`, and this plan. The remaining
 publication and active human merge-hold gates belong to the host/reviewer.
+
+
+## Slice 4: resumable train intent (2026-11-06)
+
+Binding advisor brief: implement AC3 only; publish one Refs STORY-2401 PR.
+Workflow-definition digest evidence (AC4) remains slice 5. Existing confirmation,
+merge leases, approval/corpus and dispatch gates remain authoritative. The journal
+never grants merge permission or restores a saved mandate cover.
+
+Implementation is in `pr_train.rs` and new `pr_train_journal.rs`. The main
+worktree's `.aida/train/` owns a permanent nonblocking run lock and version-1
+per-branch JSON entries. Entries retain the Built head/base/member pins, current
+step (open, CI, gate, merge, retirement, member cleanup, done), recorded member
+refusals and completed member cleanup. Atomic rename follows file fsync; directory
+fsync completes the intent write before a call proceeds. Checkpoint failures stop
+the operation. `forge.rs` adds no-op-outside-train checkpoints at GitHub command,
+metadata, check-row and checked merge-attempt boundaries, so nested calls and
+merge transport retries retain the active intent. The legacy train retry runner
+also checkpoints each attempt.
+
+Startup recovers unfinished entries before the abandoned-train sweep or candidate
+admission. Known change numbers are read directly, including merged/closed trains.
+An interrupted create without a saved number searches all states by exact branch;
+two empty reads permit opening that branch, while ambiguous or failed reads stop.
+Metadata must match the journaled head/base/branch. Existing forge_confirmation
+and independent Git confirmation select landing, retirement or retention. A merge
+already applied finishes only its remaining member cleanup. Recorded member refusals
+are re-read and confirmed again before ejection; lifted refusals leave the member
+eligible for a replacement train. Retirement independently confirms non-landing. Already-closed PRs are not
+closed twice. Unknown/changed evidence stops admission; live gates and the merge
+lease are re-acquired before any resumed merge. Journaled retirement preserves
+remote branches rather than deleting a potentially moved or unconfirmed ref.
+Legacy unjournaled trains keep the existing confirmed owner cleanup.
+
+The fixture tests in `tests/story_1690_train_tests.rs` spawn a real test child,
+wait for a receipt marker at the merge-call/eject-decision seam, SIGKILL it, then
+resume using a fresh rails instance and independent forge fixture truth. They
+assert no second open or completed merge, no ejection after a proven landing,
+retirement after a confirmed ejection, and no replay of completed journal entries.
+Additional fixtures cover unknown evidence, failed writes and partial member
+cleanup, including removal of serialized mandate covers.
+
+Validation: LIGHT gate only, `cargo test -p aida-cli-lib --lib pr_train` and
+`make check-ci-fast`; results and publication declaration follow below. Initial
+test compilation exposed Drop-related borrow lifetimes in existing port fixtures;
+the journal's independent scope guard now owns cleanup without extending the
+borrow of the train ports. No unrelated fixture changes are needed.
+
+Native handoff: leave edits uncommitted; the host owns commit/PR publication.
+No ship merge, review record or queue completion is authorized in this seat.
+BUG-2463 / PR #3519 may require a host rebase before publication; this slice
+leaves `forge_confirmation.rs` untouched.
+
+
+Slice-4 targeted validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p
+ aida-cli-lib --lib pr_train` ran **163 tests, zero failures**, with 12,539
+unrelated tests filtered out; runtime **58.55s**, incremental build **2m 00s**.
+Log: `/tmp/story2401-slice4-tests-pass.log`. Both real child-kill recovery cases
+passed, along with production checked-close, write-failure, unknown-evidence and
+partial-member-cleanup fixtures. Earlier validation exposed an Option/Result
+adapter mismatch and two fixture issues (crate-prefixed child test name and a
+700-byte neighbouring-source match); these were corrected before this passing run.
+
+Native publication declaration accepted:
+`[AI:codex] feat(train): resume journaled intent from forge truth (Refs STORY-2401)`.
+PR #3519 was still OPEN at the final overlap check; the host must rebase if it
+lands first. Git metadata remains untouched by this seat. No commit, push, PR,
+queue completion, review record or merge was performed. STORY-2401 remains
+In Progress for slice 5.
+
+
+Slice-4 fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`
+completed **all 38 gates**, including feature-disabled CLI, standalone TUI,
+formatting and guard fixtures. Log: `/tmp/story2401-slice4-fast-final.log`.
+`git diff --check` passed. No implementation or validation blocker remains.
+The host owns the uncommitted edits and publication under the recorded Refs
+subject; existing punt/hold vetoes remain authoritative.
+
+Changed files: `AGENTS.md`, `OVERVIEW.md`, `aida-cli-lib/src/forge.rs`,
+`aida-cli-lib/src/pr_train.rs`, new `aida-cli-lib/src/pr_train_journal.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`,
+`docs/cli/04-git-lifecycle.md`, and this plan.

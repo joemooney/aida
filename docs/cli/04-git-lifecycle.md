@@ -347,12 +347,18 @@ CI wait; a missing required check after the other lanes settle keeps its
 600-second registration bound. Failed check-row reads retry three times on
 the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
-eligible. Inspect the paused PR before retrying the same member list; a later
-train retires the abandoned train through the normal owner-liveness check.
+eligible. Retry the same command to resume: before admitting riders, a non-dry
+train reads its intent journals under the main worktree's `.aida/train/` and
+reconciles the pinned heads with fresh forge confirmation. A completed merge is
+not repeated; remaining member closes finish from forge state. Recorded retirement
+decisions are confirmed again before closure. Unknown evidence stops admission and
+retains the PR and journal for inspection. A permanent run lock prevents concurrent
+recovery. Dry runs do not recover or write journals. Trains predating the journal
+retain the confirmed owner-liveness cleanup path.
 A required check that was skipped, a train PR whose head, base or state
 changed, and a required check still missing after 600 seconds are not read
 failures: the train PR is closed and its members are ejected with that reason.
-<!-- trace:BUG-2423 | ai:codex -->
+<!-- trace:BUG-2423 STORY-2401 | ai:codex -->
 <!-- trace:STORY-1690 | ai:claude -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).

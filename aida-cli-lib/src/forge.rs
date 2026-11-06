@@ -1958,6 +1958,8 @@ impl GitHubForge {
                         .enforce(self, &self.project_root, c, opts)
                         .map_err(std::io::Error::other)?;
                 }
+                crate::pr_train::before_train_forge_call("GitHub merge attempt")
+                    .map_err(std::io::Error::other)?;
                 let mut cmd = Command::new("gh");
                 cmd.current_dir(&project_root)
                     .args(args.iter().map(String::as_str));
@@ -1985,6 +1987,8 @@ impl GitHubForge {
     }
 
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("GitHub command")?;
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
@@ -2311,11 +2315,15 @@ impl Forge for GitHubForge {
         id: u64,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Observed<std::result::Result<ChangeMetadata, String>> {
+        if let Err(error) = crate::pr_train::before_train_forge_call("GitHub metadata") {
+            return Observed::Transient(format!("{error:#}"));
+        }
         let Some(gh) = crate::resolve_gh_binary() else {
             return Observed::Transient("gh executable unavailable".into());
         };
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         observe_metadata_with_retry(id, &cfg, sink, || {
+            crate::pr_train::before_train_forge_call("GitHub metadata").ok()?;
             let mut cmd = Command::new(&gh);
             cmd.current_dir(&self.project_root).args([
                 "pr", "view", &id.to_string(), "--json",
@@ -4428,6 +4436,7 @@ fn glab_ci_state_from_status(status: &str) -> CiState {
 /// still prints the rows, so the exit status is ignored when stdout is JSON.
 // trace:STORY-1166 | ai:claude
 pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) -> Result<String> {
+    crate::pr_train::before_train_forge_call("GitHub checks")?;
     let mut cmd = Command::new("gh");
     cmd.current_dir(project_root)
         .args(["pr", "checks", &pr.to_string()])

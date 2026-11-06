@@ -1162,6 +1162,8 @@ fn live_gate_refuses_a_hold_marker_unreadable_labels_and_a_stale_pin() {
 /// repeats); `gates` overrides a member's re-gate at land.
 #[derive(Default)]
 struct FakeForge {
+    // trace:STORY-2401 | ai:codex
+    crash_marker: Option<(String, std::path::PathBuf)>,
     mains: VecDeque<String>,
     gates: std::collections::BTreeMap<u64, std::result::Result<Member, String>>,
     lease_busy: usize,
@@ -1207,6 +1209,25 @@ impl FakeForge {
 }
 
 impl TrainForge for FakeForge {
+    fn recover_change(
+        &mut self,
+        entry: &journal::Entry,
+    ) -> Result<(crate::forge::ChangeRef, crate::forge::ChangeState)> {
+        Ok((
+            crate::forge::ChangeRef {
+                id: entry.change_id.unwrap_or(901),
+                url: String::new(),
+                branch: entry.branch.clone(),
+                base: "main".into(),
+                title: None,
+            },
+            if self.confirmation == Some(crate::forge_observed::Confirmed::Positive) {
+                crate::forge::ChangeState::Merged
+            } else {
+                crate::forge::ChangeState::Open
+            },
+        ))
+    }
     fn fetch_main(&mut self) -> Result<String> {
         Ok(if self.mains.len() > 1 {
             self.mains.pop_front().unwrap()
@@ -1299,6 +1320,16 @@ impl TrainForge for FakeForge {
         _change: &crate::forge::ChangeRef,
         _train: &Built,
     ) -> crate::forge_observed::Confirmed {
+        if let Some((stage, marker)) = &self.crash_marker {
+            if stage == "retire"
+                && journal::entries(marker.parent().unwrap())
+                    .unwrap()
+                    .iter()
+                    .any(|e| matches!(e.step, journal::Step::Retire { .. }))
+            {
+                crash_ready(marker, "eject_decided");
+            }
+        }
         self.confirmation
             .unwrap_or(crate::forge_observed::Confirmed::Negative)
     }
@@ -1315,6 +1346,11 @@ impl TrainForge for FakeForge {
         }
         if self.merge_fails {
             return Err(anyhow::anyhow!("gh pr merge: HTTP 502").context(ForgeMergeCallFailed));
+        }
+        if let Some((stage, marker)) = &self.crash_marker {
+            if stage == "merge" {
+                crash_ready(marker, "merged");
+            }
         }
         self.merged.push((change.id, tip.to_string()));
         Ok(())
@@ -2416,12 +2452,28 @@ fn bug_2219_exhausted_retries_return_the_final_failure() {
 // trace:BUG-2219 | ai:claude
 #[test]
 fn bug_2219_train_network_helpers_route_through_the_retry_runner() {
-    let src = include_str!("../pr_train.rs");
-    // trace:BUG-2401 | ai:claude — the required-check policy reads too.
-    for name in ["fn gh_stdout(", "fn origin_git(", "fn train_policy_read("] {
+    let train = include_str!("../pr_train.rs");
+    let forge = include_str!("../forge.rs");
+    // trace:STORY-2401 | ai:codex — inspect the actual delegated body,
+    // rather than accidentally matching a neighbouring helper in 700 bytes.
+    for (src, name, callee) in [
+        (train, "fn gh_stdout(", "crate::forge::train_gh_stdout("),
+        (
+            train,
+            "fn train_policy_read(",
+            "crate::forge::train_gh_api_read(",
+        ),
+        (train, "fn origin_git(", "net_output("),
+        (forge, "fn train_gh_stdout(", "crate::pr_train::net_output("),
+        (
+            forge,
+            "fn train_gh_api_read(",
+            "crate::pr_train::net_output(",
+        ),
+    ] {
         let start = src.find(name).expect(name);
-        let body = &src[start..start + 700];
-        assert!(body.contains("net_output("), "{name} must retry transients");
+        let body = src[start..].split("\n}").next().unwrap();
+        assert!(body.contains(callee), "{name} must route through {callee}");
     }
 }
 
@@ -3640,7 +3692,7 @@ fn story_2401_live_preland_gate_refusal_ejects() {
     let change = crate::forge::ChangeRef {
         id: 100,
         url: "fixture".into(),
-        branch: "train".into(),
+        branch: "codex/task".into(),
         base: "main".into(),
         title: None,
     };
@@ -3675,4 +3727,225 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
     checks.hold = Some("new hold".into());
     assert!(matches!(typed_gate_member_with(&mut checks, "main", 42),
         Err(MemberGateError::Refused(why)) if why.contains("merge hold")));
+}
+
+// trace:STORY-2401 BUG-2412 | ai:codex
+fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
+    // This file represents the forge receipt, outside the killed train's
+    // journal. The parent SIGKILLs only after the fixture reaches the seam.
+    std::fs::write(marker, truth).unwrap();
+    loop {
+        std::thread::park();
+    }
+}
+
+#[test]
+fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
+    const CHILD: &str = "AIDA_TRAIN_JOURNAL_CRASH_CHILD";
+    if let Ok(stage) = std::env::var(CHILD) {
+        let dir = std::path::PathBuf::from(std::env::var("AIDA_TRAIN_JOURNAL_TEST_DIR").unwrap());
+        let _lock = journal::lock(&dir).unwrap();
+        let mut forge = FakeForge::mains(&["main"]);
+        forge.crash_marker = Some((stage.clone(), dir.join("ready")));
+        if stage == "retire" {
+            forge.gates.insert(1, Err("approval withdrawn".into()));
+        }
+        let mut rails = ForgeRails::new(&mut forge, "crash-fixture".into()).with_journal(&dir);
+        let _ = drive(&mut rails, vec![member(1, "head1", "s")]);
+        panic!("crash seam was not reached");
+    }
+    let name = std::thread::current()
+        .name()
+        .expect("libtest thread name")
+        .to_string();
+    for stage in ["merge", "retire"] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &name, "--nocapture"])
+            .env(CHILD, stage)
+            .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !dir.path().join("ready").exists() && std::time::Instant::now() < deadline {
+            if let Some(status) = child.try_wait().unwrap() {
+                panic!("crash child exited early: {status}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let reached = dir.path().join("ready").exists();
+        child.kill().unwrap();
+        let status = child.wait().unwrap();
+        assert!(reached, "child never reached {stage} seam");
+        assert!(!status.success());
+        let entries = journal::entries(dir.path()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].train.tip, "car1");
+        assert_eq!(entries[0].train.members()[0].head, "head1");
+        let _lock = journal::lock(dir.path()).unwrap();
+        let mut forge = FakeForge::mains(&["main"]);
+        let receipt = std::fs::read_to_string(dir.path().join("ready")).unwrap();
+        if receipt == "eject_decided" {
+            forge.gates.insert(1, Err("approval withdrawn".into()));
+        }
+        forge.confirmation = Some(if receipt == "merged" {
+            crate::forge_observed::Confirmed::Positive
+        } else {
+            crate::forge_observed::Confirmed::Negative
+        });
+        let mut rails = ForgeRails::new(&mut forge, "resume".into()).with_journal(dir.path());
+        let out = rails.resume().unwrap();
+        if stage == "merge" {
+            assert_eq!(out.landed.len(), 1);
+            assert!(out.ejected.is_empty());
+            assert_eq!(
+                rails.ports.recover_change(&entries[0]).unwrap().1,
+                crate::forge::ChangeState::Merged
+            );
+        } else {
+            assert_eq!(out.ejected.len(), 1);
+            assert_eq!(out.ejected[0].pr, 1);
+            assert!(out.landed.is_empty());
+        }
+        assert_eq!(
+            journal::entries(dir.path()).unwrap()[0].step,
+            journal::Step::Done
+        );
+        assert!(
+            rails.resume().unwrap().landed.is_empty(),
+            "completed journal must not replay"
+        );
+        drop(rails);
+        assert_eq!(forge.opened, 0, "resume must not open another train");
+        assert!(
+            forge.merged.is_empty(),
+            "completed merge must not run twice"
+        );
+        assert_eq!(forge.retired.len(), usize::from(stage == "retire"));
+        assert_eq!(forge.landed_members.len(), usize::from(stage == "merge"));
+    }
+}
+
+#[test]
+fn pr_train_journal_unknown_recovery_and_write_failure_preserve_members() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut forge = FakeForge::mains(&["main"]);
+    {
+        let mut rails = ForgeRails::new(&mut forge, "unknown".into()).with_journal(dir.path());
+        rails
+            .test(&[train_of("main", &[member(1, "head1", "s")])])
+            .unwrap();
+    }
+    forge.confirmation = Some(crate::forge_observed::Confirmed::Unconfirmed);
+    {
+        let mut rails = ForgeRails::new(&mut forge, "resume".into()).with_journal(dir.path());
+        assert!(rails.resume().is_err());
+    }
+    assert!(forge.retired.is_empty());
+    assert!(forge.landed_members.is_empty());
+    let missing = dir.path().join("missing");
+    let mut rails = ForgeRails::new(&mut forge, "write-fails".into()).with_journal(&missing);
+    assert!(rails
+        .test(&[train_of("main", &[member(2, "head2", "s")])])
+        .is_err());
+    drop(rails);
+    assert_eq!(forge.opened, 1, "failed intent write must precede open");
+}
+
+#[test]
+fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut forge = FakeForge::mains(&["main"]);
+    let mut m = member(1, "head1", "s");
+    m.release = Some(crate::gate::mandate_ship::MandateCover {
+        id: "not-authority".into(),
+        principal: "operator".into(),
+    });
+    let train = train_of("main", &[m, member(2, "head2", "s")]);
+    let mut rails = ForgeRails::new(&mut forge, "member-progress".into()).with_journal(dir.path());
+    rails.test(std::slice::from_ref(&train)).unwrap();
+    journal::complete_member(1).unwrap();
+    drop(rails);
+    assert!(journal::entries(dir.path()).unwrap()[0].train.cars[0]
+        .member
+        .release
+        .is_none());
+    forge.confirmation = Some(crate::forge_observed::Confirmed::Positive);
+    let mut rails = ForgeRails::new(&mut forge, "resume".into()).with_journal(dir.path());
+    assert_eq!(rails.resume().unwrap().landed.len(), 2);
+    drop(rails);
+    assert_eq!(forge.landed_members, vec![2]);
+}
+
+// Exercise production checked cleanup, including a close that happened before
+// the killed writer could save its completion receipt.
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
+    let root = tempfile::tempdir().unwrap();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.metadata_head = "head1".into();
+    forge.metadata_state = crate::forge::ChangeState::Closed;
+    let mut train = train_of("main", &[member(1, "head1", "s")]);
+    train.tip = "head1".into();
+    let change = crate::forge::ChangeRef {
+        id: 901,
+        url: String::new(),
+        branch: "codex/task".into(),
+        base: "main".into(),
+        title: None,
+    };
+    let mut host = LiveTrainForge {
+        project_root: root.path().into(),
+        main_worktree: root.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    host.retire_checked(&change, &train, "retire").unwrap();
+    host.member_landed_checked(&change, &train, &train.cars[0], Some("landed1"))
+        .unwrap();
+    assert!(
+        forge.closed.lock().unwrap().is_empty(),
+        "a completed close must not be replayed"
+    );
+    forge.metadata_state = crate::forge::ChangeState::Open;
+    forge.close_error = Some("HTTP 503 after close".into());
+    let mut host = LiveTrainForge {
+        project_root: root.path().into(),
+        main_worktree: root.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(host
+        .member_landed_checked(&change, &train, &train.cars[0], None)
+        .is_err());
+    let attempts = forge.closed.lock().unwrap().len();
+    forge.metadata_head = "new-head".into();
+    let mut host = LiveTrainForge {
+        project_root: root.path().into(),
+        main_worktree: root.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(host
+        .member_landed_checked(&change, &train, &train.cars[0], None)
+        .is_err());
+    assert_eq!(
+        forge.closed.lock().unwrap().len(),
+        attempts,
+        "changed heads must stop before closing"
+    );
 }
