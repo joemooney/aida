@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T20:44:03.569244030Z
+modified_at: 2026-11-06T20:46:32.849828038Z
 req_type: Story
 tags:
 - architecture
@@ -234,6 +234,12 @@ comments:
   created_at: 2026-11-06T20:42:39.757376915Z
   modified_at: 2026-11-06T20:42:39.757376915Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b29c-f391-7e21-b4ca-7999f3b10c3f
+  author: joe
+  content: 'Round 5 implementation: added python3 scripts/check-exec-context.py --write-ledger --base origin/main. It generates a sorted exact-site Counter ledger with computed ceiling and checks base growth before writing. Command-level regression tests cover missing-ledger bootstrap, preserved multiplicities, growth/expression refusal without writes, relocation, shrink, and missing base refusal. All 19 ratchet tests pass on Python 3.12.3; regenerated ledger. Native seat leaves edits uncommitted for host. Finding 2 remains pending host publication and fully green exact-head CI including gates ExecContext; existing merge-hold requires authorized clearance. Host must merge then-current origin/main and regenerate before pushing.'
+  created_at: 2026-11-06T20:46:32.849828038Z
+  modified_at: 2026-11-06T20:46:32.849828038Z
+  session_id: 01a1b29aa16c
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
