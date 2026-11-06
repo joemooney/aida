@@ -92,22 +92,34 @@ provides and independently proves the selected adapter.
 ### AGY shared-boundary adapter preparation
 
 <!-- trace:TASK-3048 | ai:codex -->
-The binding 2026-11-05 advisor ruling limits this slice to fixture permissions
-and adapter data, while the advisor owns fresh host measurements. The shared
+The binding 2026-11-05 12:20 MST advisor ruling supersedes the earlier native
+permission experiment: AGY is **outer-only**. Its default-mode tool-safety
+monitor rejects `write_file` before fixture permissions can admit it, and auto
+mode is unavailable on the measured account. The shipped `vendors.toml` row
+records `native_layer = "none"`; omitted declarations retain a required native
+layer, so Claude, Codex and unverified OpenCode receive no outer-only opt-in.
+The advisor owns fresh host measurements. The shared
 launcher's `launch/agy.rs` records posture A, the private runtime/credential
 layout, safe option order before final `-p <prompt>`, allowed write classes,
 raw Git/store denial with mediated-only operations, and browser/URL/MCP/delegated
 tool disablement requirements. It introduces no separate enforcement engine.
-The candidate argv omits `--mode auto`: the advisor's host run observed auto
+The candidate argv omits both `--sandbox` and `--mode auto`: the advisor's host run observed auto
 unavailable and a fallback to default mode. The table records that observation;
-it grants no default-mode tool support. The harness retains the auto request
-as a measurement and reports tool-safety refusals found in its bounded stream,
+it grants no default-mode tool support. Its permission-bypass flag is allowed
+only with a host-accepted `ContainmentReceipt`, through the common, descriptor-based
+receipt gate. Missing or deserialized receipts refuse before returning argv.
+This candidate builder does not spawn AGY or admit it to the production launcher.
+The native diagnostic above retains the auto request as a historical
+measurement, never uses permission bypass, and reports tool-safety refusals found in its bounded stream,
 stderr or private `runtime/log/cli-*.log` diagnostics as `unsupported_reason`
 on the report and every C0–C4 check (for example, `default-mode tool safety:
 unsupported_tool write_file`). Measured failures remain failures. These
 vendor diagnostics explain missing evidence and grant no positive credit.
-Candidate data must not be passed through the existing Codex preparation arm,
-which has a different auth model and grants raw store writes.
+Candidate data must not be passed through either existing vendor's preparation
+arm. The common wrapper now supports Codex and Claude, but its auth mechanisms
+are specifically an OpenAI API key and Claude's credentials file/expiry schema;
+it also grants raw store writes. Neither mechanism implements AGY's credential
+layout or its signed mediated-only write policy.
 
 `daily-cloudcode-pa.googleapis.com` is observed evidence only. Approved auth
 hosts remain empty and the inventory remains explicitly incomplete. The table
@@ -118,6 +130,15 @@ integrated launch must enforce the table through the shared pinned filesystem,
 IPC and egress boundary and demonstrate mediated-write positive controls and
 fresh all-tool conformance before that gate can change. This slice does not
 claim an integrated launch or complete the parent story's real-lane acceptance.
+
+The 2026-11-06 advisor dependency narrowing to merged PR #3449 is acknowledged:
+the common wrapper has landed, so TASK-2708 as a whole is not the blocker.
+Remaining work is the generic credential/runtime and mediated-write policy data
+needed to represent AGY on that wrapper, the approved auth/refresh-host inventory,
+and an advisor host run through the actual applied boundary. Do not add a separate
+AGY containment arm or grant completion credit to candidate-argv tests. The shared
+boundary harness still refuses AGY by name with these remaining gates and cannot
+fall back to the native diagnostic or add bypass there.
 
 ### Non-completing adapter handoff
 
