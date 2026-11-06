@@ -789,7 +789,12 @@ pub(crate) const LINKAGE_WORKTREE_LIST_TIMEOUT: std::time::Duration =
 /// however many calls run. Only show surfaces take a deadline; every other
 /// caller of the linkage collectors keeps its unbounded behaviour.
 // trace:BUG-1993 | ai:claude
-pub(crate) const SHOW_LINKAGE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(4);
+// trace:BUG-2466 | ai:codex
+// Four seconds of optional linkage alone exhausted the five-second response
+// ceiling under contention. Leave room for canonical lookup and cache context;
+// expired probes keep the existing partial/unknown evidence labels.
+pub(crate) const SHOW_LINKAGE_DEADLINE: std::time::Duration =
+    std::time::Duration::from_millis(1200);
 
 /// BUG-1993: what is left of a show linkage `deadline`, at most `cap`.
 // trace:BUG-1993 | ai:claude
