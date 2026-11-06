@@ -5,8 +5,8 @@ use crate::session::ContainmentPosture;
 use anyhow::Result;
 use std::path::Path;
 
-/// Requirements for the shared launcher's future AGY arm. These are deliberately
-/// not applied by the Codex arm: its raw-store grants and API-key auth differ.
+/// AGY policy inputs for the common launcher, pending integrated admission.
+/// Existing vendor profiles cannot apply these raw-store and auth requirements.
 /// The incomplete auth inventory cannot become an egress allow list.
 #[allow(dead_code)] // Adapter stays unlaunchable until independently measured.
 pub(crate) struct Adapter {
@@ -41,7 +41,7 @@ pub(crate) const AGY: Adapter = Adapter {
     // This mode has no all-tool conformance credit. trace:TASK-3048 | ai:codex
     observed_mode: "default (auto unavailable)",
     argv_prefix: &[
-        "--sandbox",
+        "--dangerously-skip-permissions",
         "--output-format",
         "stream-json",
         "--disable-slash-commands",
@@ -54,7 +54,7 @@ impl Adapter {
     /// including the auth inventory and mediated-write positive controls.
     pub(crate) fn require_conformance(&self) -> Result<()> {
         anyhow::bail!(
-            "agy shared AIDA boundary is pending fresh all-tool conformance; \
+            "agy shared AIDA boundary is pending fresh all-tool conformance for its outer-only posture; \
              raw Git/store writes are denied and require mediated host operations; \
              auth/refresh host inventory is incomplete; refusing to launch"
         )
@@ -68,7 +68,11 @@ impl Adapter {
         &self,
         private_runtime: &Path,
         prompt: &str,
+        receipt: Option<&super::contained::ContainmentReceipt>,
     ) -> Result<Vec<String>> {
+        // The signed outer-only posture permits this argv only with applied
+        // evidence; it must never escape through a native/uncontained builder.
+        super::contained::require_outer_only_receipt("agy", receipt)?;
         anyhow::ensure!(
             crate::contained_boundary::root_rule_path(private_runtime).is_some(),
             "AGY requires an exact absolute private runtime path"
@@ -115,19 +119,22 @@ mod tests {
     }
 
     #[test]
-    fn agy_adapter_candidate_argv_has_final_prompt_and_no_bypass() {
+    fn agy_adapter_outer_only_argv_refuses_without_applied_receipt() {
         let runtime = Path::new("/private/agy-runtime");
         let prompt = "--dangerously-skip-permissions is prompt text";
-        let args = AGY.candidate_argv(runtime, prompt).unwrap();
-        assert_eq!(&args[args.len() - 2..], &["-p", prompt]);
-        assert!(!args.iter().any(|s| s == "--dangerously-skip-permissions"));
-        assert!(args
-            .windows(2)
-            .any(|a| a == ["--settings", "/private/agy-runtime/settings.json"]));
-        assert!(!args.iter().any(|s| s == "--mode" || s == "auto"));
+        assert!(AGY
+            .candidate_argv(runtime, prompt, None)
+            .unwrap_err()
+            .to_string()
+            .contains("applied AIDA ContainmentReceipt"));
+        assert!(AGY.argv_prefix.contains(&"--dangerously-skip-permissions"));
+        assert!(!AGY
+            .argv_prefix
+            .iter()
+            .any(|s| matches!(*s, "--mode" | "auto" | "--sandbox")));
         assert_eq!(AGY.observed_mode, "default (auto unavailable)");
         assert_eq!(AGY.runtime_relative, ".gemini/antigravity-cli");
         assert_eq!(AGY.credential_relative, "antigravity-oauth-token");
-        assert!(AGY.candidate_argv(Path::new("/"), prompt).is_err());
+        assert!(AGY.candidate_argv(Path::new("/"), prompt, None).is_err());
     }
 }
