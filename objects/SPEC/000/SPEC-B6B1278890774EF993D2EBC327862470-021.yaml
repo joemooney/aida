@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-021
 agreed_id: TASK-2902
 title: Native lane clean-exit commits cannot preserve approved partial-spec Refs trailers
 description: 'Observed while implementing TASK-3074 PR-A under the advisor''s explicit two-PR signoff (2026-11-05 18:42 UTC): PR-A must use (Refs TASK-3074), and PR-B completes. In a native Codex seat, `aida ship TASK-3074 --no-merge --dry-run` refuses publication and requires host-side post-exit commit. `aida-cli-lib/src/ship_from_seat.rs::post_exit_message` unconditionally gives every clean exit a completing `(SPEC)` trailer, whereas only failed-exit salvage uses `(Refs SPEC)`. `open_pr` takes its title from that commit subject. Thus the default host path cannot represent this approved partial implementation without a manual host subject override. Suggested follow-up: carry an explicit non-completing/Refs publication intent through the native exit handshake, while retaining ordinary successful completion. For this pickup, host publication must use `[AI:codex] feat(mailbox): record recipient request dispositions (Refs TASK-3074)` and keep TASK-3074 In Progress for PR-B.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-06T06:28:51.285868521Z
+modified_at: 2026-11-06T06:36:54.569726127Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
@@ -72,6 +72,12 @@ comments:
   created_at: 2026-11-06T05:46:37.422512239Z
   modified_at: 2026-11-06T05:46:37.422512239Z
   session_id: 01a1af555e26
+- id: 01a1af93-15a9-73e2-9b2b-2055f4ae0e10
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI green at a5d077a; core declaration/scope/veto/failed-exit-Refs paths verified by tests, but agent rotation wipes a prior generation''s declaration (partial slice can complete its spec) and a declared completing subject bypasses the TASK-2879 existing-Refs-PR gate. No triage reason was given.'
+  created_at: 2026-11-06T06:36:54.569724636Z
+  modified_at: 2026-11-06T06:36:54.569724636Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
 history:
 - id: 01a1add3-42d8-7ae1-8075-3c9bdbf1eb62
   author: joe
@@ -154,14 +160,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1af93-15a9-73e2-9b2b-2045293f27eb
+  author: joe
+  timestamp: 2026-11-06T06:36:54.569715148Z
+  session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: CI green at a5d077a; core declaration/scope/veto/failed-exit-Refs paths verified by tests, but agent rotation wipes a prior generation's declaration (partial slice can complete its spec) and a declared completing subject bypasses the TASK-2879 existing-Refs-PR gate
-  recovery_hint: address the review findings, move TASK-2902 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T06:28:51.285868521Z
