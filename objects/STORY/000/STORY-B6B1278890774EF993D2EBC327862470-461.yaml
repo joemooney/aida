@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-06T20:42:28.807349140Z
+modified_at: 2026-11-06T20:42:39.882320260Z
 req_type: Story
 tags:
 - architecture
@@ -219,6 +219,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4: F1 (ledger refreshed: +3 inherited #3504 sites, sum of multiplicities = ceiling 1220, head contains main 28ff4ec), F2 (docs cite the ceiling field, no literal counts), F3 (OVERVIEW prepend and round-specific AGENTS sentences removed) and F5 (extern crate alias resolved, with mutants, and documented) are fixed. Two blockers remain: the advisor ruling''s one-command ledger regenerate path was never implemented, and exact-head CI is still all queued.. No triage reason was given.'
   created_at: 2026-11-06T20:42:28.807347644Z
   modified_at: 2026-11-06T20:42:28.807347644Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b299-650d-7402-be48-ae7be08488a7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4a3175070864
+    Recorded: 2026-11-06T20:09:43.282478489+00:00
+    Findings:
+    1. BLOCKING (advisor ruling 2026-11-06 12:38, item (a), binding for this round): the ledger regenerate path must be ONE command, e.g. 'scripts/check-exec-context.py --write-ledger'. It is not implemented. main() at scripts/check-exec-context.py:342-355 accepts only '[--base REF]' and rejects everything else with 'usage: check-exec-context.py [--base REF]'. docs/internal/testing/exec-context-migration.md:118-125 tells the operator to 'rescan ... include inherited sites ... recompute ceiling' with no command, so every main merge still means hand-editing JSON (exactly how round 3 went stale). Fix: add a write mode that serializes Counter(scan()) into scripts/exec-context-legacy.json with sorted keys and ceiling=sum(multiplicities). It must keep the growth contract: when --base has a ledger, run check_growth on the candidate and refuse to write additions, so the command can only bootstrap, shrink or relocate. Add a test covering both bootstrap-write and refuse-on-growth. Name the exact command in the migration doc's maintenance paragraph.
+    2. BLOCKING (round-1 F6 / round-2 F2 / round-3 F4, still unmet): there is no green exact-head CI. At review time run 42282607842 (head 4a31750, created 19:46Z) still had all 7 CI jobs queued, including gates with its ExecContext ratchet step, and merge-hold-gate was pending. The extern-crate fixtures, the golden-key tests and the 1220-site ledger have never passed on the runner's Python. Re-review must cite a fully green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:42:39.757376915Z
+  modified_at: 2026-11-06T20:42:39.757376915Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
