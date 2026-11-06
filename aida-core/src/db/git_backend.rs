@@ -1093,6 +1093,18 @@ impl GitBackend {
                 std::collections::HashSet::new()
             };
 
+            // Deferred creates must publish their separate provenance with the object.
+            // trace:STORY-1468 | ai:codex
+            for op in log.operations.iter().filter(|op| {
+                !committed_ids.contains(&op.id)
+                    && matches!(op.kind, crate::oplog::OpKind::Create { .. })
+            }) {
+                if crate::origin_prompt::OriginPrompt::read(&self.root, op.target_id)?.is_some() {
+                    let artifact = crate::origin_prompt::OriginPrompt::relative_path(op.target_id);
+                    crate::git_ops::add(&self.root, &[&artifact])?;
+                }
+            }
+
             let mut uncommitted_targets: std::collections::HashSet<uuid::Uuid> = log
                 .operations
                 .iter()

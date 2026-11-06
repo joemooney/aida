@@ -70,9 +70,9 @@ impl OriginPrompt {
         // Small refusal screen, not a substitute for caller review/redaction.
         // Never echo matches or retain a hash/source copy of rejected material.
         static SECRETS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-            regex::Regex::new(r#"(?im)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b|\b(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*["']?[^\s"'\[<]{8,}"#).unwrap()
+            regex::Regex::new(r#"(?im)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*["']?[^\s"'\[<]{8,}"#).unwrap()
         });
-        if SECRETS.is_match(&self.text) {
+        if SECRETS.is_match(&self.text) || crate::secret_screen::contains_secret_token(&self.text) {
             bail!("Originating prompt refused: possible credential or private key; redact before submission");
         }
         Ok(())
@@ -232,6 +232,11 @@ mod tests {
             "api_key=abcdefghijklmnop",
             "ghp_abcdefghijklmnopqrstuvwxyz1234",
             "sk-proj-abcdefghijklmnopqrstuvwxyz",
+            "xoxb-example-token",
+            "gho_short-token",
+            "https://example.test/ghp_abcdefghijklmnopqrstuvwxyz1234",
+            "quoted-sk-proj-abcdefghijklmnopqrstuvwxyz",
+            "AKIA1234567890123456",
         ] {
             let error = OriginPrompt::reviewed(text.into(), true)
                 .unwrap_err()
@@ -311,6 +316,34 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8(output.stdout).unwrap()
+    }
+
+    #[test]
+    fn origin_prompt_deferred_create_catches_up_with_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = backend(dir.path());
+        git(dir.path(), &["init", "-q"]);
+        git(dir.path(), &["config", "user.name", "Test"]);
+        git(dir.path(), &["config", "user.email", "test@example.test"]);
+        git(dir.path(), &["add", "."]);
+        git(dir.path(), &["commit", "--allow-empty", "-qm", "seed"]);
+        // Model a failure before staging: leave the object, oplog and artifact
+        // on disk, with nothing staged. Avoid Git's stale-lock recovery path.
+        let b = b.with_auto_commit(false);
+        let prompt = OriginPrompt::reviewed("Reviewed deferred request".into(), false).unwrap();
+        let row = b
+            .add_requirement_with_origin_prompt(req(), Some(&prompt))
+            .unwrap();
+        let b = b.with_auto_commit(true);
+        b.add_requirement(req()).unwrap();
+        let files = git(dir.path(), &["show", "--pretty=", "--name-only", "HEAD"]);
+        assert!(
+            files.contains(&OriginPrompt::relative_path(row.id)),
+            "{files}"
+        );
+        assert!(git(dir.path(), &["status", "--porcelain"])
+            .trim()
+            .is_empty());
     }
 
     #[test]

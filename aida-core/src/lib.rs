@@ -200,6 +200,7 @@ pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;
 pub mod review_config;
+pub mod secret_screen;
 // trace:BUG-626 | ai:claude
 pub mod rollup;
 #[cfg(feature = "native")]

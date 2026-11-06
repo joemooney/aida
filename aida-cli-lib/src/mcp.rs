@@ -1927,26 +1927,37 @@ impl<'a> McpServer<'a> {
     // trace:STORY-82 | ai:claude
     fn tool_add_requirement(&self, args: &Value) -> Result<String, String> {
         // trace:STORY-1468 | ai:codex — explicit reviewed input only, before mutation.
-        let origin_prompt = if let Some(input) = args.get("origin_prompt") {
-            self.storage
-                .check_origin_prompt_support()
-                .map_err(|e| e.to_string())?;
-            let text = input
-                .get("text")
-                .and_then(Value::as_str)
-                .ok_or("origin_prompt.text must be a reviewed UTF-8 string")?;
-            let redacted = match input.get("redacted") {
-                None => false,
-                Some(Value::Bool(b)) => *b,
-                _ => return Err("origin_prompt.redacted must be boolean".into()),
+        let origin_prompt =
+            if let Some(input) = args.get("origin_prompt").filter(|input| !input.is_null()) {
+                let object = input.as_object().ok_or("origin_prompt must be an object")?;
+                if object
+                    .keys()
+                    .any(|key| !matches!(key.as_str(), "text" | "redacted"))
+                {
+                    return Err(
+                        "origin_prompt contains an unknown field; allowed fields: text, redacted"
+                            .into(),
+                    );
+                }
+                self.storage
+                    .check_origin_prompt_support()
+                    .map_err(|e| e.to_string())?;
+                let text = input
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .ok_or("origin_prompt.text must be a reviewed UTF-8 string")?;
+                let redacted = match input.get("redacted") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(b)) => *b,
+                    _ => return Err("origin_prompt.redacted must be boolean".into()),
+                };
+                Some(
+                    aida_core::origin_prompt::OriginPrompt::reviewed(text.into(), redacted)
+                        .map_err(|e| e.to_string())?,
+                )
+            } else {
+                None
             };
-            Some(
-                aida_core::origin_prompt::OriginPrompt::reviewed(text.into(), redacted)
-                    .map_err(|e| e.to_string())?,
-            )
-        } else {
-            None
-        };
 
         let title = args
             .get("title")
@@ -2091,6 +2102,7 @@ impl<'a> McpServer<'a> {
         let work = self.storage.work_enrolled().map_err(|e| e.to_string())?;
         #[cfg(not(unix))]
         let work = false;
+        let mut parent_warning = None;
         let new_spec_id = if let Some(prompt) = &origin_prompt {
             let added = self
                 .storage
@@ -2098,16 +2110,16 @@ impl<'a> McpServer<'a> {
                 .map_err(|e| e.to_string())?;
             if let Some((parent_id, _)) = &parent_link {
                 let mut error = None;
-                self.storage
-                    .update_atomically(|store| {
-                        error = store
-                            .add_relationship(parent_id, RelationshipType::Parent, &added.id, true)
-                            .err();
-                    })
-                    .map_err(|e| e.to_string())?;
-                if let Some(error) = error {
-                    return Err(error.to_string());
-                }
+                let write_result = self.storage.update_atomically(|store| {
+                    error = store
+                        .add_relationship(parent_id, RelationshipType::Parent, &added.id, true)
+                        .err();
+                });
+                // Creation already succeeded. Never invite a duplicate filing on retry.
+                // trace:STORY-1468 | ai:codex
+                parent_warning = write_result.err().or(error).map(|_| {
+                    " (warning: requirement filed, but parent link failed; inspect and retry only the relationship)".to_string()
+                });
             }
             added.spec_id.unwrap_or_else(|| "?".into())
         } else if work {
@@ -2150,11 +2162,15 @@ impl<'a> McpServer<'a> {
 
         // STORY-82: note the parent link in the result so the agent sees the
         // edge landed.
-        let parent_note = match &parent_link {
-            Some((_, parent_spec)) if !parent_spec.is_empty() => {
-                format!(" (linked under {})", parent_spec)
+        let parent_note = if let Some(warning) = parent_warning {
+            warning
+        } else {
+            match &parent_link {
+                Some((_, parent_spec)) if !parent_spec.is_empty() => {
+                    format!(" (linked under {})", parent_spec)
+                }
+                _ => String::new(),
             }
-            _ => String::new(),
         };
 
         // TASK-647 (ADR-3): if a requested approved+ status was held back, say
@@ -7508,11 +7524,11 @@ pub fn tool_descriptors() -> Value {
                 "type": "object",
                 "properties": {
                     "origin_prompt": {
-                        "type": "object",
-                        "description": "Opt-in only: reviewed originating prompt, stored separately in Git history and replicas. Redact secrets before submitting; 64 KiB max; obvious credentials refuse. Omit to opt out. Git-canonical stores only.",
+                        "type": ["object", "null"],
+                        "description": "Opt-in only: reviewed originating prompt, stored separately in Git history and replicas. Redact secrets before submitting; 64 KiB max; obvious credentials refuse. Omit or pass null to opt out. Git-canonical stores only.",
                         "properties": {
                             "text": {"type": "string", "description": "Reviewed, optionally redacted UTF-8 text."},
-                            "redacted": {"type": "boolean", "description": "Whether the caller redacted the text; default false."}
+                            "redacted": {"type": ["boolean", "null"], "description": "Whether the caller redacted the text; omitted or null defaults to false."}
                         },
                         "required": ["text"],
                         "example": {"text": "Please make the dashboard blue", "redacted": false},
@@ -9430,6 +9446,84 @@ mod tests {
         let error = server.tool_add_requirement(&json!({"title": "Refused", "description": "Derived", "type": "task", "origin_prompt": {"text": "password=do-not-store-this"}})).unwrap_err();
         assert!(!error.contains("do-not-store-this"));
         assert_eq!(server.storage.load().unwrap().requirements.len(), before);
+    }
+
+    // trace:STORY-1468 | ai:codex
+    #[test]
+    fn origin_prompt_mcp_optional_null_and_unknown_fields() {
+        let dir = tempdir().unwrap();
+        let legacy = mk_server(dir.path());
+        let response = legacy
+            .tool_add_requirement(&json!({
+                "title": "No capture", "description": "Derived", "type": "task",
+                "origin_prompt": null
+            }))
+            .unwrap();
+        assert!(response.contains("Requirement added:"));
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "Default disposition", "description": "Derived", "type": "task",
+                "origin_prompt": {"text": "Reviewed historical request", "redacted": null}
+            }))
+            .unwrap();
+        let view = server
+            .tool_show_requirement(&json!({
+                "id": added_spec_id(&response), "include_origin_prompt": true
+            }))
+            .unwrap();
+        assert!(view.contains("Captured"));
+        let before = server.storage.load().unwrap().requirements.len();
+        for input in [
+            json!({"text": "Reviewed request", "redact": true}),
+            json!(false),
+        ] {
+            assert!(server
+                .tool_add_requirement(&json!({
+                    "title": "Refused", "description": "Derived", "type": "task",
+                    "origin_prompt": input
+                }))
+                .is_err());
+        }
+        assert_eq!(server.storage.load().unwrap().requirements.len(), before);
+    }
+
+    #[test]
+    fn origin_prompt_mcp_parent_link_is_persisted() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let parent = server
+            .tool_add_requirement(&json!({
+                "title": "Parent", "description": "Derived", "type": "story"
+            }))
+            .unwrap();
+        let parent_spec = added_spec_id(&parent);
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child", "description": "Derived", "type": "task", "parent": parent_spec,
+                "origin_prompt": {"text": "Reviewed child request"}
+            }))
+            .unwrap();
+        assert!(child.contains(&format!("linked under {parent_spec}")));
+        let store = server.storage.load().unwrap();
+        let parent = store
+            .get_requirement_unambiguous(parent_spec)
+            .unwrap()
+            .unwrap();
+        let child = store
+            .get_requirement_unambiguous(added_spec_id(&child))
+            .unwrap()
+            .unwrap();
+        assert!(parent
+            .relationships
+            .iter()
+            .any(|r| r.target_id == child.id && r.rel_type == RelationshipType::Parent));
+        assert!(server
+            .storage
+            .read_origin_prompt(child.id)
+            .unwrap()
+            .is_some());
     }
 
     fn mk_server(dir: &Path) -> McpServer<'static> {

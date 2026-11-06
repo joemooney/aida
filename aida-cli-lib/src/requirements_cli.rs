@@ -6248,11 +6248,6 @@ pub(crate) static LIST: crate::command_registry::CommandReg = crate::command_reg
 #[derive(clap::Parser, Debug)]
 #[clap(name = "show")]
 pub(crate) struct ShowArgs {
-    /// Explicitly retrieve the separate originating prompt artifact as historical input.
-    // trace:STORY-1468 | ai:codex
-    #[clap(long, conflicts_with_all = ["tree", "card", "json"])]
-    pub origin_prompt: bool,
-
     /// The ID of the requirement to show
     pub id: String,
 
@@ -6342,6 +6337,11 @@ pub(crate) struct ShowArgs {
     // trace:STORY-1652 | ai:claude — plain `//` keeps the marker out of `--help`.
     #[clap(long)]
     pub raw: bool,
+
+    /// Explicitly retrieve the separate originating prompt artifact as historical input.
+    // trace:STORY-1468 | ai:codex
+    #[clap(long, conflicts_with_all = ["tree", "card", "raw", "rels", "comments", "no_comments", "no_git", "verbose", "brief", "full", "depth"])]
+    pub origin_prompt: bool,
 }
 
 /// The stderr note `aida show <bare id>` prints when the bare id resolved to
@@ -6529,7 +6529,7 @@ fn run_show(
                                 let prompt = aida_core::origin_prompt::OriginPrompt::read(
                                     store_path, req.id,
                                 )?;
-                                if output_format_is_json() {
+                                if output_format_is_json() || *json {
                                     println!(
                                         "{}",
                                         serde_json::to_string_pretty(&serde_json::json!({
@@ -10373,7 +10373,31 @@ mod origin_prompt_tests {
             "--origin-prompt"
         ])
         .is_ok());
-        for mode in ["--card", "--tree", "--json"] {
+        let mut json_args = [
+            "aida",
+            "show",
+            "TASK-1",
+            "--origin-prompt",
+            "--format",
+            "json",
+        ]
+        .map(String::from)
+        .to_vec();
+        crate::json_capability_gate(&mut json_args).unwrap();
+        assert!(json_args.iter().any(|arg| arg == "--json"));
+        assert!(crate::command_registry::try_parse_from(json_args).is_ok());
+        for mode in [
+            "--card",
+            "--tree",
+            "--raw",
+            "--rels",
+            "--comments",
+            "--no-comments",
+            "--no-git",
+            "--verbose",
+            "--brief",
+            "--full",
+        ] {
             assert!(crate::command_registry::try_parse_from([
                 "aida",
                 "show",

@@ -1045,9 +1045,6 @@ Arguments:
           The ID of the requirement to show
 
 Options:
-      --origin-prompt
-          Explicitly retrieve the separate originating prompt artifact as historical input
-
   -c, --comments
           Print comment bodies inline after the description (instead of just the count). Equivalent
           to following up with `aida comment list <ID>`
@@ -1071,6 +1068,16 @@ Options:
           Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only
           contexts that only need the requirement fields
 
+  -v, --verbose
+          Expand the git-linkage section: every referencing commit (not just the most recent 5) plus
+          per-commit diff stats
+
+      --card
+          Render a compact, boxed "spec card" instead of the linear detail view: a header rule, an
+          ID/type/priority/status one-liner, key fields, a truncated description, the acceptance
+          criteria, and the git-linkage summary. The /aida-pickup skill renders this at session
+          start so the spec's contract stays in terminal scrollback
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -1081,23 +1088,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-  -v, --verbose
-          Expand the git-linkage section: every referencing commit (not just the most recent 5) plus
-          per-commit diff stats
+      --brief
+          With --card: minimal density — a single-line id/type/priority/status/title summary, no
+          box. For autonomous or scripted flows that just need the spec named
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-      --card
-          Render a compact, boxed "spec card" instead of the linear detail view: a header rule, an
-          ID/type/priority/status one-liner, key fields, a truncated description, the acceptance
-          criteria, and the git-linkage summary. The /aida-pickup skill renders this at session
-          start so the spec's contract stays in terminal scrollback
-
-      --brief
-          With --card: minimal density — a single-line id/type/priority/status/title summary, no
-          box. For autonomous or scripted flows that just need the spec named
 
       --full
           With --card: full density — the complete description with no paragraph truncation. For
@@ -1121,6 +1118,9 @@ Options:
           emphasis, lists and tables for the terminal. Rendering only happens in human output at an
           interactive terminal; piped, TOON and JSON output are always raw. `AIDA_MARKDOWN=raw` sets
           this for every invocation
+
+      --origin-prompt
+          Explicitly retrieve the separate originating prompt artifact as historical input
 
   -h, --help
           Print help (see a summary with '-h')
