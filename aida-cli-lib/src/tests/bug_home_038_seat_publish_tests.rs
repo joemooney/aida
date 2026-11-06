@@ -1041,6 +1041,89 @@ fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
     assert!(!subject.contains(" (BUG-1)"), "{subject}");
 }
 
+/// Origin-scoped native lanes must publish canonical trailers even when HOME
+/// aliases are installed. Exercise both completion and failed-exit salvage,
+/// with and without an agreed display ID, through the real trailer guard/push.
+// trace:BUG-2459 | ai:codex
+#[test]
+fn bug_2459_post_exit_origin_scope_publishes_without_home_alias_trailers() {
+    use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
+    use aida_core::node_alias::{install_for_thread, NodeAliasBinding, NodeAliasMap};
+    let node = "b6b1278890774ef993d2ebc327862470";
+    let origin = format!("BUG-{node}-225");
+    let _aliases = install_for_thread(NodeAliasMap {
+        bindings: vec![NodeAliasBinding {
+            label: "HOME".into(),
+            node: node.into(),
+            retired: false,
+        }],
+        ..Default::default()
+    });
+    assert_eq!(
+        aida_core::node_alias::display_spec_id(&origin),
+        "BUG-HOME-225"
+    );
+    for agreed in [Some("BUG-2459"), None] {
+        for clean_exit in [true, false] {
+            let fx = fixture();
+            let clone = seat_with_pending(&fx, "alias", "c0ffee245900", "alias-publish");
+            let lease = crate::lease_path(&fx.main, "c0ffee245900");
+            let text = std::fs::read_to_string(&lease).unwrap();
+            std::fs::write(&lease, text.replace("TASK-2053", &origin)).unwrap();
+            let mut req = title_spec("Publish native lane work");
+            req.spec_id = Some(origin.clone());
+            req.agreed_id = agreed.map(str::to_string);
+            let mut store = aida_core::RequirementsStore::new();
+            store.requirements.push(req);
+            aida_core::Storage::new(fx.main.join("requirements.yaml"))
+                .save(&store)
+                .unwrap();
+            let outcome = post_exit_commit(
+                &fx.main,
+                &clone,
+                &origin,
+                "lane-alias",
+                clean_exit,
+                &test_commit,
+            );
+            let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+            assert_eq!(outcome, PostExitCommit::Committed(tip.clone()));
+            let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+            let id = agreed.unwrap_or(&origin);
+            let trailer = if clean_exit {
+                format!("({id})")
+            } else {
+                format!("(Refs {id})")
+            };
+            assert!(subject.ends_with(&trailer), "{subject}");
+            assert!(!subject.contains("HOME"), "{subject}");
+            let mut options = opts(&clone, false, false);
+            options.spec = Some(origin.clone());
+            let forge = crate::forge::fake::RecordingForge {
+                opens_as: Some(77),
+                ..crate::forge::fake::RecordingForge::new()
+            };
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                options,
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| Box::new(forge.clone()),
+                    after_open: &|_, _| {},
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", "refs/heads/alias-publish"]),
+                tip
+            );
+            assert!(forge.opened.lock().unwrap()[0].title.ends_with(&trailer));
+            assert!(import_refs(&fx.main).is_empty());
+        }
+    }
+}
+
 /// Advisor F5: the index is rolled back only while HEAD has not moved.
 // trace:TASK-2712 | ai:claude
 #[test]
@@ -1158,9 +1241,9 @@ fn bug_home_038_from_seat_explicit_spec_must_match_trailers() {
     assert_eq!(import_refs(&fx.main), "", "the refused import kept its ref");
 
     let ids = vec!["BUG-2".to_string(), "TASK-7".to_string()];
-    crate::ship_from_seat::explicit_spec_check("bug-2", &ids).unwrap();
-    crate::ship_from_seat::explicit_spec_check("TASK-7", &ids).unwrap();
-    assert!(crate::ship_from_seat::explicit_spec_check("BUG-3", &ids).is_err());
+    crate::ship_from_seat::explicit_spec_check(None, "bug-2", &ids).unwrap();
+    crate::ship_from_seat::explicit_spec_check(None, "TASK-7", &ids).unwrap();
+    assert!(crate::ship_from_seat::explicit_spec_check(None, "BUG-3", &ids).is_err());
 }
 
 /// `--from-seat` run from inside a seat clone is refused before anything.
@@ -1263,7 +1346,7 @@ fn bug_2431_from_seat_accepts_refs_only_trailer() {
     })
     .unwrap();
     assert_eq!(ids, vec!["BUG-1".to_string()]);
-    crate::ship_from_seat::explicit_spec_check("bug-1", &ids).unwrap();
+    crate::ship_from_seat::explicit_spec_check(None, "bug-1", &ids).unwrap();
     let err = crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
         crate::trace::SpecResolution::Missing
     })
@@ -1970,7 +2053,25 @@ fn task_2879_post_exit_commit_looks_up_refs_pr() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // trace:BUG-2459 | ai:codex
+    let _aliases = aida_core::node_alias::install_for_thread(aida_core::node_alias::NodeAliasMap {
+        bindings: vec![aida_core::node_alias::NodeAliasBinding {
+            label: "HOME".into(),
+            node: "b6b1278890774ef993d2ebc327862470".into(),
+            retired: false,
+        }],
+        ..Default::default()
+    });
+    let origin = "BUG-b6b1278890774ef993d2ebc327862470-225";
     let fx = fixture();
+    let mut req = title_spec("Preserve partial work");
+    req.spec_id = Some(origin.into());
+    req.agreed_id = Some("BUG-1".into());
+    let mut store = aida_core::RequirementsStore::new();
+    store.requirements.push(req);
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
     let clone = seat_with_publication_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
     let bin = fx.root.join("bin");
     std::fs::create_dir(&bin).unwrap();
@@ -2011,7 +2112,7 @@ esac
         let outcome = crate::ship_from_seat::post_exit_commit(
             &fx.main,
             &clone,
-            "BUG-1",
+            origin,
             "lane",
             true,
             &test_commit,
