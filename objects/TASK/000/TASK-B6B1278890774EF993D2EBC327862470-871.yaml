@@ -8,12 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-06T08:35:23.956488956Z
-modified_at: 2026-11-06T08:35:23.956488956Z
+modified_at: 2026-11-06T08:47:24.529897522Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
   created_at: 2026-11-06T08:35:44.351394171Z
+comments:
+- id: 01a1b00a-8f71-73f1-bfb4-7f1604b17990
+  author: joe
+  content: 'Round-4 native-seat handoff: edits left uncommitted for the host launcher. Findings 1-6 and 8-10 addressed with per-PR shards, signed direct-human expected-tip stopped-admission re-anchoring (including revoked owners), disabled default hub config, continuous sync refusal retry, local cleanup on all admission/spawn failures, cached peer holds, network outside store writer lock, lifecycle regressions and canonical criterion traces. Validation: cargo test -p aida-cli-lib story2492 --lib --no-default-features: 15 passed; review_watch::tests:: on the resulting test binary: 46 passed; publication regressions: 10 passed; cargo fmt --all -- --check and git diff --check passed. Finding 7 permitted scope alternative: PR #3479 title now ends only in (TASK-b6b1278890774ef993d2ebc327862470-871). Host new commit and squash trailer MUST also use only this task, not STORY-2492. AC5 remains explicitly untraced; story stays open. No ship, review-record or queue-done performed; existing merge hold retained. This task was filed Draft by AIDA and awaits advisor triage.'
+  created_at: 2026-11-06T08:47:24.529897522Z
+  modified_at: 2026-11-06T08:47:24.529897522Z
+  session_id: 01a1aff312e8
 history:
 - id: 01a1afff-e7d6-78a2-869f-d7e2e2c949d8
   author: joe
