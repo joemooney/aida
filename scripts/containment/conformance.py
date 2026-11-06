@@ -517,6 +517,15 @@ def fixture_command(argv, cwd, env, report, stage):
     return result.stdout.strip()
 
 
+# trace:BUG-2462 | ai:codex
+def role_enter_refusal(diagnostic):
+    if "has no team roster" in diagnostic:
+        return "fixture-roster-missing"
+    if "AIDA-managed agent sessions cannot issue direct TTY grants" in diagnostic:
+        return "fixture-role-enter-refused-managed"
+    return "fixture-role-enter-refused"
+
+
 # Retain the operator's terminal session, but own a group for continuation
 # setup. SIGTERM unwinds the continuation's lane-group and Network finally
 # blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
@@ -615,6 +624,18 @@ def run_aida(args):
         setup(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture AIDA policy and closed experiment"], "policy-commit")
         report["trusted_policy_sha"] = setup(["git", "rev-parse", "HEAD"], "policy-sha")
         setup([aida, "role", "scaffold"], "role-scaffold")
+        # Production roster creation requires both the operator's stdin and
+        # stderr TTY. Keep managed identity intact, and never author team.toml.
+        # Match the CLI's current_user_id environment precedence.
+        # trace:BUG-2462 | ai:codex
+        user = next((env[key] for key in ("AIDA_USER", "USER", "USERNAME") if key in env), "default")
+        argv = [str(aida), "team", "allow-seat", user, "implementer"]
+        roster = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
+        report["setup"].append({"stage": "roster-allow-seat", "argv": argv,
+                                "exit_code": roster.returncode, "stdout": roster.stdout})
+        if roster.returncode:
+            print(roster.stdout, file=sys.stderr, end="")
+            aida_refuse(root, report, "fixture-roster-allow-seat-refused")
         # stdout contains a key-adoption heredoc on success. Never put it in
         # a report, file, argv or environment. stderr retains the operator TTY.
         argv = [str(aida), "role", "enter", "implementer", "--delegate-seat", "implementer", "--no-resume", "--no-title"]
@@ -625,7 +646,7 @@ def run_aida(args):
             # Do not lose it, and never evaluate failed command output.
             print(entered.stdout, file=sys.stderr, end="")
             report["setup"][-1]["diagnostic"] = entered.stdout
-            aida_refuse(root, report, "fixture-role-enter-refused: operator-context grant required; managed agents must not mint seat grants")
+            aida_refuse(root, report, role_enter_refusal(entered.stdout))
         lines = entered.stdout.splitlines()
         if lines.count("#aida:eval:begin") != 1 or lines.count("#aida:eval:end") != 1:
             aida_refuse(root, report, "fixture-role-enter-invalid-eval-block")
