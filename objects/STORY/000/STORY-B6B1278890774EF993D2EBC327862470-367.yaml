@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T21:43:29.624334538Z
+modified_at: 2026-11-06T21:44:57.510365938Z
 req_type: Story
 relationships:
 - rel_type:
@@ -367,6 +367,12 @@ comments:
   created_at: 2026-11-06T19:55:29.419060381Z
   modified_at: 2026-11-06T19:55:29.419060381Z
   session_id: 01a1b258be51
+- id: 01a1b2d2-6da6-7010-9a75-64e2a9662755
+  author: joe
+  content: 'Current slice-4 follow-up after the main integration: existing journal/review repairs are present. Found that GitHubForge::change_metadata, used by the final verified-train gate, still uses unchecked transport retries, so nested metadata retries can bypass the per-call journal checkpoint. Add a checked checkpoint before every metadata attempt and a PATH-isolated production adapter fixture: first request returns a retryable error after making the journal unavailable; no second request may spawn. Expected files: forge.rs, train tests, slice plan and concise orientation docs. Run the binding LIGHT gate; keep slice 5 deferred and use Refs STORY-2401 publication intent.'
+  created_at: 2026-11-06T21:44:57.510365938Z
+  modified_at: 2026-11-06T21:44:57.510365938Z
+  session_id: 01a1b2d10e25
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
