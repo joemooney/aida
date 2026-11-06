@@ -1009,3 +1009,27 @@ fn worker_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cmd
         team_identity_write: false,
     }
 }
+
+/// Read-only native seats leave lifecycle completion to the publishing host.
+/// No Git subprocess is needed to identify the lease's branch.
+// trace:TASK-2879 | ai:codex
+pub(crate) fn refuse_native_queue_done(root: &std::path::Path) -> anyhow::Result<()> {
+    let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(root) else {
+        return Ok(());
+    };
+    let main = crate::main_worktree_root_from(&clone);
+    let lease = crate::list_leases(&main).into_iter().find(|lease| {
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone
+            && lease.worktree_path.canonicalize().ok() == clone.canonicalize().ok()
+    });
+    let branch = lease
+        .as_ref()
+        .map(|l| l.branch.as_str())
+        .unwrap_or("unknown (no recorded lease)");
+    anyhow::bail!(
+        "queue done deferred to the host: native seat {} uses branch `{branch}` from its seat \
+         lease. Leave tested edits uncommitted and exit with a handoff. The host must publish \
+         the PR before completing the queue item; no status or queue entry was changed",
+        clone.display()
+    )
+}
