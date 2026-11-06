@@ -146,6 +146,25 @@ impl ContainmentReceipt {
     }
 }
 
+/// Outer-only permission argv is available only for an explicitly shipped
+/// descriptor and host-accepted evidence. Serialized receipts cannot grant it.
+/// This does not admit a vendor or release the contained exec barrier.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn require_outer_only_receipt(
+    vendor: &str,
+    receipt: Option<&ContainmentReceipt>,
+) -> Result<()> {
+    anyhow::ensure!(
+        crate::containment::native_layer(vendor)? == crate::containment::NativeLayer::None,
+        "{vendor} is not an approved outer-only vendor; refusing permission bypass"
+    );
+    anyhow::ensure!(
+        receipt.is_some_and(ContainmentReceipt::is_accepted),
+        "{vendor} outer-only permission bypass requires an applied AIDA ContainmentReceipt; refusing"
+    );
+    Ok(())
+}
+
 struct Mount {
     file: File,
     path: PathBuf,
