@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-06T13:22:05.254228914Z
+modified_at: 2026-11-06T16:44:35.399913278Z
 req_type: Bug
 tags:
 - area:containment
@@ -78,6 +78,12 @@ comments:
   created_at: 2026-11-06T13:22:05.254228914Z
   modified_at: 2026-11-06T13:22:05.254228914Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
+- id: 01a1b1bf-6ec7-7f40-bdff-608fc6960de6
+  author: joe
+  content: 'Operator conformance run 09:43 (~/.aida/conformance-aida-1793983381): C0-C4 are UNKNOWN, not failed. Fixture setup could not queue the probe (fixture-queue-add-refused); filed as BUG-2465. Re-run after BUG-2465 lands.'
+  created_at: 2026-11-06T16:44:35.399913278Z
+  modified_at: 2026-11-06T16:44:35.399913278Z
+  session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
