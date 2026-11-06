@@ -44,6 +44,13 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
+# Label/body reruns share the PR group so the replacement can report the gate.
+# Keep this workflow separate from CI's cancellation group.
+# trace:TASK-3267 | ai:codex
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   pull-requests: read
