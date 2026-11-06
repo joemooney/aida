@@ -129,3 +129,68 @@ flags, worker timeout, capacity restoration and saturation.
 The native implementer leaves changes uncommitted for host publication. No
 review verdict, merge-hold clearance, ship, or queue completion is attempted.
 The mechanical bdcec264 CI merge-resolution commit remains an ancestor of HEAD.
+
+## Round 4 review
+
+<!-- trace:TASK-2708 | ai:codex -->
+
+This revision addresses all four findings against PR #3449 at 9e1319e8b3fb.
+The round 3 deadline and saturation behavior above is historical and superseded.
+The mechanical bdcec264ee88 CI merge-resolution commit remains an ancestor.
+
+* F1: blocking sends have no broker-imposed deadline. Workers try MSG_DONTWAIT,
+  poll POLLOUT in at most 50 ms steps and recheck NOTIF_ID_VALID each time.
+  SO_SNDTIMEO is captured from the pinned socket at admission; zero means no
+  deadline, and expiry returns EAGAIN. At most 16 workers snapshot arguments.
+  Saturated calls queue their notification and pinned socket without copying
+  payloads or rights. Queue waits count toward the socket timeout; cancelled
+  queued calls release their socket. The broker continues servicing other
+  notifications while sends wait. No shared descriptor flags/timeouts change.
+* F2: the lane installs NEW_LISTENER | WAIT_KILLABLE_RECV. Kernels refusing
+  these flags fail with SECCOMP_WAIT_KILLABLE_RECV_UNAVAILABLE, without fallback.
+  Handled signals cannot restart a notification after its send side effect.
+* F3: host send attempts use MSG_NOSIGNAL, then EPIPE explicitly delivers
+  SIGPIPE with tgkill to the notification's host TID unless the original call
+  requested MSG_NOSIGNAL. Delivery failure reports SEND_SIGPIPE_FAILED and EIO.
+  Nonleader fd duplication uses PIDFD_THREAD on Linux 6.9+; older kernels must
+  prove KCMP_FILES equality before using the leader's pidfd, otherwise refuse
+  with SOCKET_THREAD_FILE_TABLE_UNPROVEN. This preserves thread-directed signal
+  masks/handlers and default termination without granting foreign socket scope.
+* F4: the round-specific AGENTS.md paragraph is removed. OVERVIEW.md retains
+  only a short architecture-level sentence. Detailed evidence stays here and
+  in the owning spec comment; the host launcher supplies the PR publication.
+
+The live blocking regression stalls its reader for 3.5 seconds, verifies the
+marker, complete 4 MiB upload and 100-iovec sendmsg, checks a 500 ms socket
+send timeout, then releases 20 blocked senders through the 16-worker limit.
+A separate live regression fires a 1 ms SIGALRM interval throughout scalar and
+vector sends and compares every received byte; it also checks SIGPIPE handlers,
+MSG_NOSIGNAL suppression, a blocked nonleader's sigtimedwait, and a child with
+SIG_DFL. Synthetic coverage includes queued timeout accounting, worker and queue
+cancellation cleanup, old-kernel named filter refusal, and proven/unproven
+shared-file-table fallback.
+
+### Round 4 validation
+
+Validated locally on 2026-11-06 against the final source:
+
+* `AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test
+  -p aida-cli-lib --lib --profile agent task_2708_ -- --nocapture`: 33 passed,
+  no failures or live skips. A second final-source invocation also passed.
+* The same compiled test binary with both required-live flags, filtered to
+  `task_2707_`: 21 passed. Installed-Codex native composition remains separately
+  opt-in and was not exercised.
+* `make check-ci-fast`: all 38 fast gates passed, including the feature-disabled
+  CLI check. Optional ref refreshes reported the seat's read-only Git metadata;
+  the gates completed successfully.
+* Direct real-filter signal-storm/SIGPIPE regression: five repetitions passed.
+  Direct blocking/backpressure/20-sender regression and final synthetic broker
+  regression passed as well.
+* Python source compilation, `cargo fmt --all -- --check`, and
+  `git diff --check` passed.
+
+All four round 4 findings are addressed; none are deferred or disputed. The
+native seat leaves the six edited files uncommitted for host publication and
+records the result on TASK-2708. Store comment persistence queues its Git commit
+for the host. The existing merge hold remains; this seat performs no merge-hold
+clearance, review verdict, source commit/push, or queue completion.

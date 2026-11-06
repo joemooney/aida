@@ -121,8 +121,11 @@ def install_lane_filter():
     filters = (Filter * len(ops))(*(Filter(*op) for op in ops))
     prog = Program(len(ops), filters)
     checked(LIBC.prctl(38, 1, 0, 0, 0), 'no_new_privs unavailable')
-    return checked(LIBC.syscall(317, 1, 8, C.byref(prog)),
-                   'seccomp NEW_LISTENER unavailable')
+    # Handled signals must not restart a send after the host performed its side effect.
+    # No fallback: flags unsupported by the kernel refuse before vendor exec.
+    # trace:TASK-2708 | ai:codex
+    return checked(LIBC.syscall(317, 1, 8 | 32, C.byref(prog)),
+                   'SECCOMP_WAIT_KILLABLE_RECV_UNAVAILABLE: requires Linux 5.19+ NEW_LISTENER|WAIT_KILLABLE_RECV')
 
 
 def splice(a, b):

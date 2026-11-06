@@ -1422,18 +1422,8 @@ receipt-owning headless launch boundary") whatever posture the surface stamped.
 A test-time inventory pins every Codex spawn path.
 <!-- trace:TASK-2708 | ai:claude -->
 
-The shared sendto/sendmsg broker snapshots arguments and pins sockets instead of
-continuing mutable lane calls. Blocking sockets wait for POLLOUT in at most 16
-workers, each with a three-second deadline; saturation returns ENOBUFS and a
-stalled send returns ETIMEDOUT. Descriptor O_NONBLOCK and explicit MSG_DONTWAIT
-still return EAGAIN immediately. The broker never changes shared socket flags.
-Stream calls copy at most 1 MiB and 64 iovecs per notification and return short
-counts, so large sendall uploads can progress. Oversized datagram/seqpacket
-messages return EMSGSIZE without truncation. Named AF_UNIX sends refuse;
-named network sends require kernel-proven lane or descendant ownership, with
-foreign namespaces and unreadable evidence refused. Named sendmsg remains
-conservatively refused. The vendor table declares whether preparation must
-probe nested-userns support. See [review evidence](docs/internal/testing/task-2708-round2.md#round-3-review).
+The shared send broker pins sockets and snapshots arguments, with bounded workers,
+notification-aware blocking waits, socket send timeouts and queued admission.
 <!-- trace:TASK-2708 | ai:codex -->
 
 Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`

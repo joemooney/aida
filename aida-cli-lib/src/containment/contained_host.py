@@ -7,6 +7,8 @@
 # key reaches the worker only as its own env var in the exact environment
 # Rust built. trace:TASK-2707 | ai:claude
 import fcntl
+import collections
+import signal
 
 ECONNREFUSED_ERR = -errno.ECONNREFUSED
 KEYCTL_JOIN, KEYCTL_SETPERM, KEYCTL_SEARCH, KEYCTL_READ, KEYCTL_TIMEOUT = 1, 5, 10, 11, 15
@@ -68,7 +70,25 @@ SIOCGSKNS = 0x894C
 def target_socket(pid, target_fd):
     """A host-side duplicate of the trapped task's descriptor (pidfd_getfd):
     the very socket object the task named, not a path or caller claim."""
-    pidfd = os.pidfd_open(pid)
+    # Notifications name a TID, not necessarily a group leader. Linux 6.9+
+    # supports PIDFD_THREAD. Older kernels may use the leader only after kcmp
+    # proves that the two threads share the exact same file table.
+    # trace:TASK-2708 | ai:codex
+    try:
+        pidfd = os.pidfd_open(pid, 0x80)  # PIDFD_THREAD
+    except OSError as error:
+        if error.errno != errno.EINVAL:
+            raise
+        try:
+            pidfd = os.pidfd_open(pid)
+        except OSError as error:
+            if error.errno not in (errno.ENOENT, errno.ESRCH):
+                raise
+            with open('/proc/%d/status' % pid) as status:
+                tgid = next(int(line.split()[1]) for line in status if line.startswith('Tgid:'))
+            require(LIBC.syscall(312, pid, tgid, 2, 0, 0) == 0,
+                    'SOCKET_THREAD_FILE_TABLE_UNPROVEN')  # KCMP_FILES
+            pidfd = os.pidfd_open(tgid)
     try:
         fd = LIBC.syscall(438, pidfd, target_fd, 0)
         if fd < 0:
@@ -177,19 +197,20 @@ class SendHeader(C.Structure):
 
 
 SEND_SLOTS = threading.BoundedSemaphore(16)
-SEND_TIMEOUT = 3
+SEND_PENDING = collections.deque()
+SEND_POLL_MS = 50
 SEND_BYTES = 1048576
 SEND_IOVS = 64
 
 
 def send_snapshot(listener, ident, sock, buffers, ancillary, flags, address, named, rights,
-                  wait=False):
+                  wait=False, deadline=None, pid=None):
     """Use nonblocking attempts without changing the shared descriptor flags.
-    A blocking caller waits off the broker loop, with bounded time and workers.
+    Blocking callers wait off the broker loop until progress, their socket
+    timeout, or notification cancellation. Worker count remains bounded.
     Snapshot memory and rights remain owned until the one send completes.
     trace:TASK-2708 | ai:codex"""
     try:
-        deadline = time.monotonic() + SEND_TIMEOUT
         poll = select.poll()
         poll.register(sock.fileno(), select.POLLOUT)
         while True:
@@ -198,27 +219,34 @@ def send_snapshot(listener, ident, sock, buffers, ancillary, flags, address, nam
                 if address is not None:
                     rc = LIBC.sendto(sock.fileno(), C.c_char_p(buffers[0]),
                                      C.c_size_t(len(buffers[0])),
-                                     C.c_int(flags | socket.MSG_DONTWAIT),
+                                     C.c_int(flags | socket.MSG_DONTWAIT | socket.MSG_NOSIGNAL),
                                      C.c_char_p(address) if named else None,
                                      C.c_uint(len(address)))
                     if rc < 0:
                         raise OSError(C.get_errno(), 'sendto refused')
                 else:
-                    rc = sock.sendmsg(buffers, ancillary, flags | socket.MSG_DONTWAIT)
+                    rc = sock.sendmsg(buffers, ancillary, flags | socket.MSG_DONTWAIT | socket.MSG_NOSIGNAL)
                 break
             except BlockingIOError:
                 if not wait:
                     raise
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise OSError(errno.ETIMEDOUT, 'blocking send deadline exceeded')
-                poll.poll(max(1, int(remaining * 1000)))
+                remaining = deadline - time.monotonic() if deadline is not None else None
+                if remaining is not None and remaining <= 0:
+                    raise BlockingIOError(errno.EAGAIN, 'socket send timeout')
+                poll.poll(SEND_POLL_MS if remaining is None else
+                          max(1, min(SEND_POLL_MS, int(remaining * 1000))))
         ioctl(listener, SEND, Response(ident, rc, 0, 0))
     except (OSError, RuntimeError, ValueError) as error:
         code = error.errno if isinstance(error, OSError) else errno.EACCES
         try:
+            if code == errno.EPIPE and not flags & socket.MSG_NOSIGNAL:
+                try:
+                    send_sigpipe(listener, ident, pid)
+                except (OSError, RuntimeError) as signal_error:
+                    print('SEND_SIGPIPE_FAILED: %s' % signal_error, file=sys.stderr, flush=True)
+                    code = errno.EIO
             ioctl(listener, SEND, Response(ident, 0, -code, 0))
-        except RuntimeError:
+        except (OSError, RuntimeError):
             pass
     finally:
         sock.close()
@@ -228,10 +256,66 @@ def send_snapshot(listener, ident, sock, buffers, ancillary, flags, address, nam
             SEND_SLOTS.release()
 
 
-def broker_send(listener, n, lane_net, lane_user):
-    dup, mem, rights = None, None, []
+def send_sigpipe(listener, ident, tid):
+    # seccomp reports the host TID. tgkill targets that thread, including
+    # callers whose handler/mask differs from the thread-group leader.
+    # WAIT_KILLABLE_RECV keeps handled signals from restarting the send.
+    with open('/proc/%d/status' % tid) as status:
+        tgid = next(int(line.split()[1]) for line in status if line.startswith('Tgid:'))
+    ioctl(listener, VALID, C.c_ulonglong(ident))
+    checked(LIBC.syscall(234, tgid, tid, signal.SIGPIPE), 'SEND_SIGPIPE_FAILED')
+
+
+def send_deadline(dup):
+    sock = socket.socket(fileno=dup)
     try:
-        dup = target_socket(n.pid, n.data.args[0])
+        seconds, micros = struct.unpack('ll', sock.getsockopt(
+            socket.SOL_SOCKET, socket.SO_SNDTIMEO, struct.calcsize('ll')))
+        timeout = seconds + micros / 1000000
+        return time.monotonic() + timeout if timeout else None
+    finally:
+        sock.detach()
+
+
+def drain_pending_sends():
+    # Queued calls retain only the pinned socket, notification and deadline;
+    # payload/rights snapshots are made only after admission to the 16 workers.
+    # The broker continues receiving calls (including nonblocking reader IPC).
+    for _ in range(len(SEND_PENDING)):
+        listener, n, lane_net, lane_user, dup, deadline = SEND_PENDING.popleft()
+        try:
+            ioctl(listener, VALID, C.c_ulonglong(n.id))
+            if deadline is not None and time.monotonic() >= deadline:
+                ioctl(listener, SEND, Response(n.id, 0, -errno.EAGAIN, 0))
+            elif SEND_SLOTS.acquire(blocking=False):
+                broker_send(listener, n, lane_net, lane_user, dup, deadline, True)
+                dup = None  # broker_send owns the descriptor and slot
+            else:
+                SEND_PENDING.append((listener, n, lane_net, lane_user, dup, deadline))
+                dup = None
+        except (OSError, RuntimeError):
+            pass  # cancellation frees its pinned descriptor without a send
+        finally:
+            if dup is not None:
+                os.close(dup)
+
+
+def broker_send(listener, n, lane_net, lane_user, dup=None, deadline=None, reserved=False):
+    mem, rights = None, []
+    try:
+        if dup is None:
+            dup = target_socket(n.pid, n.data.args[0])
+            flags = n.data.args[3 if n.data.nr == 44 else 2]
+            wait = not (fcntl.fcntl(dup, fcntl.F_GETFL) & os.O_NONBLOCK or
+                        flags & socket.MSG_DONTWAIT)
+            if wait:
+                deadline = send_deadline(dup)
+                if not SEND_SLOTS.acquire(blocking=False):
+                    SEND_PENDING.append((listener, n, lane_net, lane_user, dup, deadline))
+                    dup = None
+                    return
+                reserved = True
+        ioctl(listener, VALID, C.c_ulonglong(n.id))
         stream = sock_type(dup) == socket.SOCK_STREAM
         mem = os.open('/proc/%d/mem' % n.pid, os.O_RDONLY | os.O_CLOEXEC)
         def read(ptr, size):
@@ -292,21 +376,17 @@ def broker_send(listener, n, lane_net, lane_user):
                         'foreign named send refused')
             require(n.data.nr == 44 or not name, 'named sendmsg refused')
             address = (read(name, namelen) if name else b'') if n.data.nr == 44 else None
-            wait = not (fcntl.fcntl(sock.fileno(), fcntl.F_GETFL) & os.O_NONBLOCK or
-                        flags & socket.MSG_DONTWAIT)
+            wait = reserved
             if wait:
-                if not SEND_SLOTS.acquire(blocking=False):
-                    raise OSError(errno.ENOBUFS, 'send worker capacity exhausted')
-                try:
-                    threading.Thread(target=send_snapshot,
-                                     args=(listener, n.id, sock, buffers, ancillary, flags,
-                                           address, bool(name), rights, True), daemon=True).start()
-                except BaseException:
-                    SEND_SLOTS.release()
-                    raise
+                # Admission owns a slot before any payload snapshot.
+                threading.Thread(target=send_snapshot,
+                                 args=(listener, n.id, sock, buffers, ancillary, flags,
+                                       address, bool(name), rights, True, deadline, n.pid),
+                                 daemon=True).start()
+                reserved = False
             else:
                 send_snapshot(listener, n.id, sock, buffers, ancillary, flags,
-                              address, bool(name), rights)
+                              address, bool(name), rights, pid=n.pid)
             sock, rights = None, []  # worker (or synchronous send) owns these
         finally:
             if sock is not None:
@@ -318,6 +398,8 @@ def broker_send(listener, n, lane_net, lane_user):
         except RuntimeError:
             pass
     finally:
+        if reserved:
+            SEND_SLOTS.release()
         for fd in rights + ([dup] if dup is not None else []) + ([mem] if mem is not None else []):
             os.close(fd)
 
@@ -576,6 +658,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         while True:
             require(time.monotonic() < end and process.poll() is None,
                     'contained requested-seat preflight did not complete')
+            drain_pending_sends()
             ready, _, _ = select.select([broker, notification, proxy], [], [], 0.1)
             if notification in ready:
                 broker_connect_contained(notification, state_fd, state_prefix, connector, port,
@@ -614,7 +697,8 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         broker.send(b'exec-v1')
         watch = [proxy] + ([notification] if notification is not None else [])
         while process.poll() is None:
-            ready, _, _ = select.select(watch, [], [], 0.2)
+            drain_pending_sends()
+            ready, _, _ = select.select(watch, [], [], 0.05 if SEND_PENDING else 0.2)
             if notification in ready and not broker_connect_contained(
                     notification, state_fd, state_prefix, connector, port, lane_net, lane_user):
                 if select.poll and _hung_up(notification):

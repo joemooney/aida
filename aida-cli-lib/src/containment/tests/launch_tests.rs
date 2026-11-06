@@ -1633,7 +1633,7 @@ while True:
     except BlockingIOError: break
 received=bytearray()
 def drain():
-    time.sleep(0.2)
+    time.sleep(3.5)
     while True:
         b=y.recv(65536)
         if not b: break
@@ -1641,7 +1641,7 @@ def drain():
 t=threading.Thread(target=drain);t.start()
 started=time.monotonic()
 assert x.send(b'marker')==6
-assert time.monotonic()-started>=0.1
+assert time.monotonic()-started>=3.3
 payload=b'abcd'*(1024*1024)
 x.sendall(payload)
 iovs=[b'v'*16384]*100
@@ -1652,6 +1652,42 @@ while iovs:
     if iovs: iovs[0]=iovs[0][n:]
 x.shutdown(socket.SHUT_WR);t.join(5);assert not t.is_alive()
 assert received==b'f'*filled+b'marker'+payload+b'v'*(16384*100)
+# SO_SNDTIMEO is the only blocking-send deadline, returning EAGAIN.
+a,b=socket.socketpair();a.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+while True:
+    try: a.send(b'f'*4096,socket.MSG_DONTWAIT)
+    except BlockingIOError: break
+import struct
+a.setsockopt(socket.SOL_SOCKET,socket.SO_SNDTIMEO,struct.pack('ll',0,500000))
+started=time.monotonic()
+try:
+    a.send(b'timeout');raise AssertionError('full socket sent')
+except BlockingIOError as e: assert e.errno==errno.EAGAIN,e
+assert 0.4<=time.monotonic()-started<1.5
+a.close();b.close()
+# More blocked callers than worker slots queue until readers free capacity.
+pairs=[];done=[]
+def queued_send(index,sock):
+    assert sock.send(b'z')==1
+    done.append(index)
+for index in range(20):
+    a,b=socket.socketpair();a.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+    filled=0
+    while True:
+        try: filled+=a.send(b'f'*4096,socket.MSG_DONTWAIT)
+        except BlockingIOError: break
+    t=threading.Thread(target=queued_send,args=(index,a));t.start()
+    pairs.append((a,b,filled,t))
+time.sleep(0.2)
+assert not done,done
+for a,b,filled,t in pairs:
+    while filled:
+        data=b.recv(min(filled,65536));assert data;filled-=len(data)
+for a,b,filled,t in pairs:
+    t.join(3);assert not t.is_alive()
+    assert b.recv(1)==b'z'
+    a.close();b.close()
+assert sorted(done)==list(range(20)),done
 print('blocking and large stream sends ok')
 "#,
     );
@@ -1665,7 +1701,7 @@ print('blocking and large stream sends ok')
 /// memory, with only seccomp notification/pidfd transport supplied by the test.
 // trace:TASK-2708 | ai:codex
 #[test]
-fn task_2708_send_bounds_namespace_and_worker_deadline() {
+fn task_2708_send_bounds_namespace_timeout_queue_and_cancellation() {
     let code = format!(
         "{COMMON}\n{LANE}\n{HOST}\n{}",
         r#"
@@ -1673,6 +1709,7 @@ import tempfile
 responses=[]
 def ioctl(fd,op,response):
     if op==SEND: responses.append((response.val,response.error))
+shipped_target_socket=target_socket
 def target_socket(pid,fd): return os.dup(fd)
 def notify(sock,buf,name=None,flags=socket.MSG_DONTWAIT):
     n=Notification();n.id=1;n.pid=os.getpid();n.data.nr=44
@@ -1736,9 +1773,9 @@ x.setblocking(False)
 broker_send(-1,notify(x,payload,flags=0),None,None)
 assert wait_response()==(0,-errno.EAGAIN)
 x.setblocking(True)
-SEND_TIMEOUT=0.1
+x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDTIMEO,struct.pack('ll',0,100000))
 broker_send(-1,notify(x,payload,flags=0),None,None)
-assert wait_response()==(0,-errno.ETIMEDOUT)
+assert wait_response()==(0,-errno.EAGAIN)
 assert not fcntl.fcntl(x.fileno(),fcntl.F_GETFL)&os.O_NONBLOCK
 # Wait for the worker's final cleanup before asserting capacity restoration.
 deadline=time.monotonic()+2
@@ -1746,11 +1783,87 @@ while SEND_SLOTS._value!=16:
     assert time.monotonic()<deadline
     time.sleep(0.001)
 for _ in range(16): assert SEND_SLOTS.acquire(blocking=False)
+# Saturation queues a notification without copying payloads or returning ENOBUFS.
+x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDTIMEO,struct.pack('ll',0,0))
 broker_send(-1,notify(x,payload,flags=0),None,None)
-assert wait_response()==(0,-errno.ENOBUFS)
+assert len(SEND_PENDING)==1 and not responses
 for _ in range(16): SEND_SLOTS.release()
+y.recv(65536)
+drain_pending_sends()
+assert wait_response()==(1,0) and not SEND_PENDING
+# An invalid/dead notification releases a worker within a short poll interval.
+while SEND_SLOTS._value!=16: time.sleep(0.001)
+while True:
+    try: x.send(b'f'*4096,socket.MSG_DONTWAIT)
+    except BlockingIOError: break
+real_ioctl=ioctl
+valid=True
+def ioctl(fd,op,value):
+    if op==VALID and not valid: raise RuntimeError('notification cancelled')
+    real_ioctl(fd,op,value)
+broker_send(-1,notify(x,payload,flags=0),None,None)
+valid=False
+deadline=time.monotonic()+1
+while SEND_SLOTS._value!=16:
+    assert time.monotonic()<deadline,'cancelled caller retained send worker'
+    time.sleep(0.001)
+responses.clear()
+# A dead queued caller frees its pinned socket without attempting the send.
+valid=True
+for _ in range(16): assert SEND_SLOTS.acquire(blocking=False)
+# A queued call's SO_SNDTIMEO includes time spent waiting for a worker.
+x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDTIMEO,struct.pack('ll',0,100000))
+broker_send(-1,notify(x,payload,flags=0),None,None)
+time.sleep(0.12);drain_pending_sends()
+assert wait_response()==(0,-errno.EAGAIN) and not SEND_PENDING
+x.setsockopt(socket.SOL_SOCKET,socket.SO_SNDTIMEO,struct.pack('ll',0,0))
+broker_send(-1,notify(x,payload,flags=0),None,None)
+queued_fd=SEND_PENDING[0][4]
+valid=False
+drain_pending_sends()
+assert not SEND_PENDING
+try: os.fstat(queued_fd);raise AssertionError('cancelled queued fd leaked')
+except OSError as e: assert e.errno==errno.EBADF
+for _ in range(16): SEND_SLOTS.release()
+ioctl=real_ioctl
 x.close();y.close()
-print('send bounds namespace and deadline ok')
+class OldKernel:
+    def prctl(self,*args): return 0
+    def syscall(self,nr,op,flags,*args):
+        assert (nr,op,flags)==(317,1,8|32),(nr,op,flags)
+        C.set_errno(errno.EINVAL);return -1
+real_libc=LIBC
+LIBC=OldKernel()
+try:
+    install_lane_filter();raise AssertionError('old kernel accepted filter')
+except RuntimeError as e: assert 'SECCOMP_WAIT_KILLABLE_RECV_UNAVAILABLE' in str(e),e
+LIBC=real_libc
+# Older kernels only duplicate a leader fd after proving shared file tables.
+real_pidfd_open=os.pidfd_open
+opened=[]
+def old_pidfd_open(pid,flags=0):
+    opened.append((pid,flags))
+    if flags: raise OSError(errno.EINVAL,'PIDFD_THREAD unavailable')
+    if len(opened)==2: raise OSError(errno.ENOENT,'nonleader')
+    return os.open('/dev/null',os.O_RDONLY)
+class OldPidfdKernel:
+    shared=True
+    def syscall(self,nr,*args):
+        if nr==312: return 0 if self.shared else 1
+        assert nr==438,nr
+        return os.dup(args[1])
+old_kernel=OldPidfdKernel()
+os.pidfd_open=old_pidfd_open;LIBC=old_kernel
+with tempfile.TemporaryFile() as f:
+    fd=shipped_target_socket(os.getpid(),f.fileno());os.close(fd)
+    assert [flags for pid,flags in opened]==[128,0,0],opened
+    old_kernel.shared=False;opened.clear()
+    try:
+        shipped_target_socket(os.getpid(),f.fileno())
+        raise AssertionError('unproven thread file table admitted')
+    except RuntimeError as e: assert 'SOCKET_THREAD_FILE_TABLE_UNPROVEN' in str(e),e
+os.pidfd_open=real_pidfd_open;LIBC=real_libc
+print('send bounds namespace timeout queue cancellation and kernel gate ok')
 "#
     );
     let out = Command::new("/usr/bin/python3")
@@ -1762,6 +1875,82 @@ print('send bounds namespace and deadline ok')
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Handled signals cannot restart completed sends; EPIPE preserves per-thread SIGPIPE.
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_live_send_signals_exactly_once_and_sigpipe() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,threading,time,signal,errno,subprocess,sys
+signal.alarm(20)
+a,b=socket.socketpair();a.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+received=bytearray();hits=[]
+def read():
+    time.sleep(0.15)
+    while True:
+        chunk=b.recv(1024)
+        if not chunk: break
+        received.extend(chunk)
+        time.sleep(0.0001)
+t=threading.Thread(target=read);t.start()
+signal.signal(signal.SIGALRM,lambda *_:hits.append(1))
+signal.setitimer(signal.ITIMER_REAL,0.001,0.001)
+payload=bytes(range(256))*512
+for start in range(0,len(payload),256):
+    a.sendall(payload[start:start+128])
+    view=memoryview(payload)[start+128:start+256]
+    while view:
+        n=a.sendmsg([view]);assert n>0;view=view[n:]
+signal.setitimer(signal.ITIMER_REAL,0)
+a.shutdown(socket.SHUT_WR);t.join(5)
+assert not t.is_alive() and received==payload,(len(received),len(payload))
+assert len(hits)>20,len(hits)
+a.close();b.close()
+# MSG_NOSIGNAL suppresses delivery; both send syscalls otherwise signal the caller.
+pipes=[]
+signal.signal(signal.SIGPIPE,lambda *_:pipes.append(1))
+a,b=socket.socketpair();b.close()
+for send in [lambda flags:a.send(b'x',flags),lambda flags:a.sendmsg([b'x'],[],flags)]:
+    before=len(pipes)
+    try: send(socket.MSG_NOSIGNAL)
+    except BrokenPipeError: pass
+    else: raise AssertionError('closed peer accepted send')
+    assert len(pipes)==before
+    try: send(0)
+    except BrokenPipeError: pass
+    else: raise AssertionError('closed peer accepted send')
+    deadline=time.monotonic()+1
+    while len(pipes)==before and time.monotonic()<deadline: time.sleep(0.001)
+    assert len(pipes)==before+1,pipes
+a.close()
+# A nonleader caller receives a thread-directed blocked SIGPIPE, not the leader.
+signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGPIPE})
+thread_results=[]
+def broken_thread():
+    x,y=socket.socketpair();y.close()
+    try: x.send(b'x')
+    except BrokenPipeError: pass
+    thread_results.append(signal.sigtimedwait({signal.SIGPIPE},1) is not None)
+    x.close()
+t=threading.Thread(target=broken_thread);t.start();t.join(3)
+assert not t.is_alive() and thread_results==[True],thread_results
+signal.pthread_sigmask(signal.SIG_UNBLOCK,{signal.SIGPIPE})
+# Default disposition still terminates a lane child.
+r=subprocess.run([sys.executable,'-I','-S','-c',
+    'import signal,socket;signal.signal(signal.SIGPIPE,signal.SIG_DFL);a,b=socket.socketpair();b.close();a.send(b"x")'])
+assert r.returncode==-signal.SIGPIPE,r.returncode
+print('signal storm exactly once and SIGPIPE ok')
+"#,
+    );
+    assert!(
+        output.contains("signal storm exactly once and SIGPIPE ok"),
+        "{output}"
     );
 }
 
