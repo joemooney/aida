@@ -1,0 +1,34 @@
+id: 01a1b044-b6db-74c0-a7f6-0de1804b6058
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-478
+agreed_id: STORY-2555
+title: 'Review PR-3492: [AI:codex] chore(seat): work native Codex lane 01a1b0390333 left uncommitted (TASK-b6b1278890774ef993d2ebc327862470-872)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b039`) for branch `task-b6b1278890774ef993d2ebc327862470-872`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3492>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-872` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-872
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3492` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-06T09:50:55.707655190Z
+modified_at: 2026-11-06T09:50:55.707655190Z
+req_type: Story
+filed_at:
+  code_sha: 2aeb7cc34b17ef04d2b1af76c358df7de5181940
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2aeb7cc34b1
+  vendor: claude
+  session: 01a1b0390333
