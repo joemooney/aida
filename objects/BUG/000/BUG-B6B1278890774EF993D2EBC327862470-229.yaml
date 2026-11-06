@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-229
 agreed_id: BUG-2463
 title: Confirm rebase-merged PRs when the original head is absent locally
 description: 'PR #3493 round-5 finding 5: GitHub rebase-merges can report Merged while the original pinned head is absent locally and no squash/merge-subject receipt exists. metadata_for stays Pending forever, preventing merge credit and cleanup. Add bounded private PR-head fetch or another independently verified rebase landing receipt; unavailable or conflicting evidence must retain state. Include a regression with a rebase merge and no local original-head object.'
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:59:24.595886026Z
-modified_at: 2026-11-06T15:10:19.800842825Z
+modified_at: 2026-11-06T17:05:37.117270952Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -79,6 +79,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b1d2-af5d-7350-9a40-970aa7ad082a
+  author: aida-session-start
+  timestamp: 2026-11-06T17:05:37.117264459Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: dd852f74c3b
