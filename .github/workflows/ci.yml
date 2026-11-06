@@ -116,6 +116,21 @@ jobs:
           # Ubuntu's default AppArmor userns restriction.
           # trace:TASK-2706 | ai:codex
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          # The explicit bwrap AppArmor profile also transitions children to
+          # unpriv_bwrap (audit deny capability); the sysctl does not disable
+          # that profile. Only this disposable CI VM unloads it. Product
+          # launches retain the host policy and refuse nested-userns failures.
+          # trace:TASK-2708 | ai:codex
+          if sudo grep -q '^bwrap ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+            for profile in /etc/apparmor.d/bwrap-userns-restrict /usr/share/apparmor/extra-profiles/bwrap-userns-restrict; do
+              if [ -f "$profile" ]; then
+                sudo apparmor_parser -R "$profile"
+                break
+              fi
+            done
+          fi
+          # Probe the actual cap-dropped boundary, not merely outer bwrap.
+          bwrap --unshare-all --cap-drop ALL --ro-bind / / -- /usr/bin/python3 -I -S -c 'import ctypes as C; lib=C.CDLL(None,use_errno=True); rc=lib.unshare(0x10000000|0x40000000); assert rc==0,"NESTED_USERNS_UNAVAILABLE: CI lane probe errno=%d" % C.get_errno()'
 
       # The shell-wrapper tests run every case under bash AND zsh when zsh is
       # on PATH (`wrapper_shells()`); without it the zsh leg silently skips.
@@ -365,7 +380,7 @@ jobs:
           # can split a passing test's console line. Keep console output for skips.
           # trace:STORY-2475 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture --logfile "$lib_results" \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ task_2708_claude_prepare_fake_home 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture --logfile "$cli_results" \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
           grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sed 's/^fn //' | sort -u > "$RUNNER_TEMP/live-bwrap.expected"
@@ -398,6 +413,17 @@ jobs:
           ran_2707=$(grep -hE '^ok ' "$lib_results" | grep -oE 'task_2707_[a-z0-9_]+$' | grep -v "$not_required_2707" | sort -u | wc -l)
           echo "task_2707 contained-launch tests: $ran_2707 of $expected_2707 ran ok"
           if [ "$ran_2707" -ne "$expected_2707" ]; then echo "::error::only $ran_2707 of $expected_2707 task_2707_ tests ran ok"; exit 1; fi
+          # trace:TASK-2708 | ai:claude — the F-a amendment tests for Claude M1
+          # (advisor ruling 2026-11-05 11:25: netlink route-only, inet DGRAM
+          # reaches nothing, the broker judges the socket's own netns) run
+          # required-live under the same gate and count.
+          expected_2708=$(grep -rhoE 'fn task_2708_live_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
+          ran_2708=$(grep -hE '^ok ' "$lib_results" | grep -oE 'task_2708_live_[a-z0-9_]+$' | sort -u | wc -l)
+          echo "task_2708 F-a amendment live tests: $ran_2708 of $expected_2708 ran ok"
+          if ! grep -q '^ok launch::contained::tests::task_2708_claude_prepare_fake_home$' "$lib_results"; then
+            echo "::error::required-live test task_2708_claude_prepare_fake_home did not report ok"; exit 1
+          fi
+          if [ "$expected_2708" -eq 0 ] || [ "$ran_2708" -ne "$expected_2708" ]; then echo "::error::only $ran_2708 of $expected_2708 task_2708_live_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction

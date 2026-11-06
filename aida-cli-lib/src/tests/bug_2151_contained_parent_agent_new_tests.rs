@@ -633,3 +633,30 @@ fn task_1761_sandbox_contains_and_per_tool_settings_do_not() {
         "a per-tool --settings reads as uncontained"
     );
 }
+
+// trace:TASK-2708 | ai:codex
+#[test]
+fn task_2708_widening_flags_refuse_before_contained_boundary_setup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+    // Boundary composition would refuse this Git version. Invalid flags must
+    // win first, before Git probing, trusted wrapper lookup or launch setup.
+    aida_core::git_ops::with_host_git_version("git version 2.39.5", || {
+        let err = claude_launch(&root, None, false, vec!["--add-dir=/".into()]).unwrap_err();
+        assert!(format!("{err:#}").contains("--extra-flag"), "{err:#}");
+        std::fs::write(
+            root.join(".aida/agents.toml"),
+            "[agents.claude]\ndefault_flags = [\"--add-dir=/\"]\n",
+        )
+        .unwrap();
+        let err = claude_launch(&root, None, false, Vec::new()).unwrap_err();
+        assert!(format!("{err:#}").contains("agents.toml"), "{err:#}");
+        std::fs::write(root.join(".aida/agents.toml"), "[agents]\n").unwrap();
+        let err = claude_launch(&root, None, false, vec!["--model=sonnet".into()]).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("Upgrade git to 2.40"),
+            "valid flags still require the contained boundary: {err:#}"
+        );
+    });
+}

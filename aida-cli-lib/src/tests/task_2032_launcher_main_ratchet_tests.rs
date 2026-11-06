@@ -29,7 +29,6 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("agent_launch.rs", "handle_session_command"),
     ("agent_launch.rs", "agent_resume_launch_config"),
     ("agent_launch.rs", "rescope_contained_settings"),
-    ("agent_launch.rs", "resolve_claude_new_posture"),
     ("agent_launch.rs", "wrapped_agent_program_and_args"),
     ("agent_launch.rs", "build_agent_new_bg_command"),
     ("agent_launch.rs", "run_agent_generation"),

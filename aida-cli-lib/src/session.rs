@@ -2116,6 +2116,11 @@ fn spawn_vendor_headless_forking(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
+    // trace:TASK-2708 | ai:claude — the shared wrapper owns this launch's
+    // boundary (Codex `aida`, or Claude once the trusted config selects it).
+    let wrapper = contained_wrapper_launch(vendor, contained)?;
+    let composition =
+        (wrapper && vendor == HeadlessVendor::Claude).then(ClaudeWrapperComposition::enter);
     let (program, mut args) = compose_headless_command_forking(
         host_main,
         vendor,
@@ -2126,6 +2131,7 @@ fn spawn_vendor_headless_forking(
         tuning.effort.as_deref(),
         fork_thread,
     )?;
+    drop(composition);
     // Each seat gets its own role's write set. trace:TASK-2712 | ai:claude
     rescope_native_codex_for_seat(
         host_main,
@@ -2175,18 +2181,19 @@ fn spawn_vendor_headless_forking(
             grant: &child_grant.id,
         },
     )?;
-    if vendor == HeadlessVendor::Codex {
+    if vendor == HeadlessVendor::Codex || wrapper {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
-        if posture != ContainmentPosture::Aida {
-            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
-                revoke_headless_child_grant(&child_grant.id);
-                return Err(error);
-            }
+    }
+    if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            revoke_headless_child_grant(&child_grant.id);
+            return Err(error);
         }
     }
     // trace:TASK-2707 | ai:codex
-    if vendor == HeadlessVendor::Codex && posture == ContainmentPosture::Aida {
+    // trace:TASK-2708 | ai:claude
+    if wrapper {
         let result = (|| -> Result<_> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
                 &cmd,
@@ -2207,9 +2214,11 @@ fn spawn_vendor_headless_forking(
                 run.receipt(),
             )?;
             run.release()?;
-            run.child
+            let status = run
+                .child
                 .wait()
-                .context("failed to wait for contained Codex")
+                .with_context(|| format!("failed to wait for contained {}", vendor.program()))?;
+            run.vendor_exit(status)
         })();
         tee.stop();
         record_headless_session_end(&headless_worktree_root(), session_id);
@@ -3382,7 +3391,10 @@ pub fn containment_applied(
         None,
     }
     let evidence = match (vendor, contained, receipt) {
-        (HeadlessVendor::Claude, true, _) => Evidence::ClaudeNative,
+        // trace:TASK-2708 | ai:claude — a Claude launch through the shared
+        // wrapper is credited by its accepted receipt, like Codex.
+        (HeadlessVendor::Claude, true, Some(receipt)) => Evidence::Receipt(receipt),
+        (HeadlessVendor::Claude, true, None) => Evidence::ClaudeNative,
         (HeadlessVendor::Codex, true, Some(receipt)) => Evidence::Receipt(receipt),
         _ => Evidence::None,
     };
@@ -3404,6 +3416,70 @@ pub fn sandboxed_child_grant(vendor: HeadlessVendor, contained: bool) -> Result<
         || (vendor == HeadlessVendor::Codex
             && containment_posture(vendor, contained)? == ContainmentPosture::Aida))
 }
+
+/// Whether the trusted default-branch config selects the shared contained
+/// wrapper for Claude (`[contained.vendors] claude = "aida"`, written out).
+/// Unset keeps the Claude-native boundary (Claude's own sandbox under AIDA's
+/// generated settings) until the operator opts in. A malformed trusted
+/// value refuses (fail closed).
+// trace:TASK-2708 | ai:claude
+pub(crate) fn claude_uses_contained_wrapper(root: &Path) -> Result<bool> {
+    Ok(crate::agent_config::load_contained_vendor(root, "claude")?.as_deref() == Some("aida"))
+}
+
+/// Whether this headless launch runs inside the shared contained wrapper
+/// (`launch::contained::PreparedLaunch`): Codex under the `aida` posture,
+/// and Claude under the `aida` posture once the trusted config selects it.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn contained_wrapper_launch(vendor: HeadlessVendor, contained: bool) -> Result<bool> {
+    Ok(match vendor {
+        HeadlessVendor::Codex => {
+            containment_posture(vendor, contained)? == ContainmentPosture::Aida
+        }
+        HeadlessVendor::Claude => {
+            contained
+                && containment_posture(vendor, contained)? == ContainmentPosture::Aida
+                && claude_uses_contained_wrapper(&headless_worktree_root())?
+        }
+        HeadlessVendor::Agy => false,
+    })
+}
+
+thread_local! {
+    /// Set only while a wrapper-owned headless launch composes its Claude argv.
+    // trace:TASK-2708 | ai:claude
+    static CLAUDE_WRAPPER_COMPOSITION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The scope in which a wrapper-owned headless launch composes its Claude
+/// argv: the contained Claude flags are permitted, and the legacy os_wrap is
+/// not applied (the wrapper owns the boundary). Outside it, a Claude AIDA
+/// composition under `claude = "aida"` refuses by name
+/// ([`CLAUDE_WRAPPER_UNWIRED`]): every surface not yet wired to the wrapper
+/// fails closed rather than run the Claude-native boundary instead.
+// trace:TASK-2708 | ai:claude
+pub(crate) struct ClaudeWrapperComposition(bool);
+
+impl ClaudeWrapperComposition {
+    pub(crate) fn enter() -> Self {
+        Self(CLAUDE_WRAPPER_COMPOSITION.with(|c| c.replace(true)))
+    }
+}
+
+impl Drop for ClaudeWrapperComposition {
+    fn drop(&mut self) {
+        CLAUDE_WRAPPER_COMPOSITION.with(|c| c.set(self.0));
+    }
+}
+
+fn composing_for_claude_wrapper() -> bool {
+    CLAUDE_WRAPPER_COMPOSITION.with(std::cell::Cell::get)
+}
+
+/// The named refusal for a Claude AIDA launch surface the wrapper does not
+/// own yet, under `[contained.vendors] claude = "aida"`.
+// trace:TASK-2708 | ai:claude
+pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches only so far; this launch surface (interactive, --bg, coordinator or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
 // trace:TASK-2631 | ai:codex
@@ -4576,6 +4652,13 @@ pub(crate) fn claude_contained_flags_for_roots(
     host_main: Option<&Path>,
     write_roots: &[PathBuf],
 ) -> Result<Vec<String>> {
+    // trace:TASK-2708 | ai:claude — every Claude AIDA composition passes
+    // here: under `claude = "aida"`, only a wrapper-owned launch may compose.
+    anyhow::ensure!(
+        composing_for_claude_wrapper()
+            || !claude_uses_contained_wrapper(&headless_worktree_root())?,
+        CLAUDE_WRAPPER_UNWIRED
+    );
     Ok(vec![
         "--setting-sources".to_string(),
         "project".to_string(),
@@ -5905,6 +5988,14 @@ pub(crate) fn os_wrapped_program_and_args(
     {
         return Ok((program.to_string(), program_args));
     }
+    // trace:TASK-2708 | ai:claude — likewise a wrapper-owned Claude launch.
+    if composing_for_claude_wrapper()
+        && Path::new(program)
+            .file_name()
+            .is_some_and(|n| n == "claude")
+    {
+        return Ok((program.to_string(), program_args));
+    }
     if !os_wrap_enabled(worktree_root) {
         return Ok((program.to_string(), program_args));
     }
@@ -7151,6 +7242,12 @@ fn run_vendor_headless_child(
     // Own reservations from command construction through the actual spawn.
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
+    // trace:TASK-2708 | ai:claude — a Claude resume continues a session the
+    // lane's fresh private config dir does not hold: it stays outside the
+    // wrapper scope, so under `claude = "aida"` it refuses by name.
+    let wrapper = contained_wrapper_launch(vendor, contained)?;
+    let composition = (wrapper && vendor == HeadlessVendor::Claude && !hooks.resume)
+        .then(ClaudeWrapperComposition::enter);
     let mut child_cmd = build_exec_vendor_headless_command_for(
         host_main,
         vendor,
@@ -7163,6 +7260,7 @@ fn run_vendor_headless_child(
         grant_env,
         hooks.resume,
     )?;
+    drop(composition);
     // trace:STORY-1662 | ai:claude
     if let Some(customize) = hooks.customize {
         customize(&mut child_cmd);
@@ -7173,22 +7271,23 @@ fn run_vendor_headless_child(
     if let Some(id) = lease_id {
         child_cmd.env(crate::headless_background::LANE_MARKER_ENV, id);
     }
-    if vendor == HeadlessVendor::Codex {
+    if vendor == HeadlessVendor::Codex || wrapper {
         child_cmd
             .env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
         if let Some(id) = lease_id {
             child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, id);
         }
-        if containment_posture(vendor, contained)? != ContainmentPosture::Aida {
-            crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
-        }
+    }
+    if vendor == HeadlessVendor::Codex
+        && containment_posture(vendor, contained)? != ContainmentPosture::Aida
+    {
+        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
     }
     // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
     // broker and proxy until the wrapper is reaped. No model before receipt.
-    if vendor == HeadlessVendor::Codex
-        && containment_posture(vendor, contained)? == ContainmentPosture::Aida
-    {
+    // trace:TASK-2708 | ai:claude — Claude under `claude = "aida"` too.
+    if wrapper {
         // trace:TASK-2708 | ai:claude — every exit past the tee start, success
         // or error, finishes the lane record it registered and stops the tee;
         // a dropped ContainedChild kills the wrapper.
@@ -7231,7 +7330,8 @@ fn run_vendor_headless_child(
                 hooks.hold_reap.unwrap_or(&|| false),
             )
             .map(|w| w.status)
-            .context("failed to wait for contained Codex")
+            .with_context(|| format!("failed to wait for contained {}", vendor.program()))
+            .and_then(|status| run.vendor_exit(status))
         })();
         if registered {
             crate::lane_liveness::finish_headless_lane_for_child(
