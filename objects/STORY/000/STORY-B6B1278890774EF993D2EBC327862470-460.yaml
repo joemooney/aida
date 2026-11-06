@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-06T20:14:22.388993305Z
+modified_at: 2026-11-06T20:30:02.991764594Z
 req_type: Story
 tags:
 - architecture
@@ -227,6 +227,12 @@ comments:
   content: 'PR #3483 CI follow-up at 060a752a: remaining failures traced to the legacy detached test shim admitting self against synthetic start tokens, a raw executable lookup in the new reparenting regression, and the changed foreign-pidns label contract. Fixed all three without weakening existing assertions. Also found the core SessionLeaseLite reader still had the original legacy-policy regression; restored its legacy policies and original tests, with new refused-holder/foreign-backstop coverage. No heartbeat removal or ownership cutover proposed; prior round fixes remain. Targeted build and make check-ci-fast are running. Native seat leaves edits uncommitted; host must publish a new commit and squash with subject ending (Refs STORY-2537) (BUG-2458).'
   created_at: 2026-11-06T20:14:22.388993305Z
   modified_at: 2026-11-06T20:14:22.388993305Z
+  session_id: 01a1b27cbb43
+- id: 01a1b28d-d8ef-7b33-b87d-92c0bb358627
+  author: joe
+  content: 'PR #3483 fresh round-3 CI follow-up ready for host commit. Five changed files: aida-cli-lib/src/leases.rs (correct holder field documentation), session.rs (legacy detached test stamp explicitly has no cooperative admission, so synthetic namespace/authorship tokens are not paired with a captured real holder), tests/story_2254_ps_detached_codex_tests.rs (self-executable helper for exact test re-exec), aida-core/src/liveness.rs (restore legacy/advisory/PID/worktree policies and original assertions; foreign backstop before admission; preserve foreign-state label contract; new refused/malformed-holder regression), proc_identity_tests.rs (admitted child exit overrides live creator in core reader). No assertions relaxed. Latest CI failing tests all pass: detached_worker_stamp_and_record_carry_the_pid_namespace, bug_2425_foreign_pidns (3 cases), executable-resolver ratchet. ProcIdentity CLI 5 pass including real setsid/reparenting/stamp/ownership Dead; ownership 43; actual lane_liveness::tests 29; review-watch bug2442 4; core liveness 90 plus core ProcIdentity 2; launch ratchet 2; recovery 28 with AIDA_TRUST_PID_NAMESPACE=1 only for private temp fixtures. make check-ci-fast passes all 38 gates, formatting and git diff --check pass. Broader unstamped detached fixture and launch cleanup/reentry tests encounter native PID-namespace restrictions here (1 detached and 11 launch failures); require host rerun, with tests unchanged. Host migrate/compare acceptance and ownership cutover are not claimed. Prior round fixes retain legacy heartbeats, propagate serialization errors, and shorten architecture docs. Recorded native publication declaration ending (Refs STORY-2537); no commit/push/queue done/hold clear/review record performed. Host must create a NEW commit for this diff and squash using subject [AI:codex] fix(process): preserve legacy lease policies and repair CI regressions (Refs STORY-2537) (BUG-2458), never the old completing STORY trailer. Active merge hold still requires its authorized review/clearance path. Logs: /tmp/story-2537-check-ci-fast.log, /tmp/story-2537-targeted-tests.log, /tmp/story-2537-recovery-fixture-tests.log, /tmp/story-2537-lane-tests.log, /tmp/story-2537-core-tests.log.'
+  created_at: 2026-11-06T20:30:02.991764594Z
+  modified_at: 2026-11-06T20:30:02.991764594Z
   session_id: 01a1b27cbb43
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
