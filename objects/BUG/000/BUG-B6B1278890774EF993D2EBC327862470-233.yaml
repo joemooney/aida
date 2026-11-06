@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:18:44.126112839Z
-modified_at: 2026-11-06T20:27:46.872381694Z
+modified_at: 2026-11-06T20:38:14.593398766Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -92,6 +92,12 @@ comments:
   content: 'Round 3 approach: add criterion anchors to the existing launch/narrowing/grandchild and rotation tests, add a command-level test parsing and dispatching the exact standing-orders advisor launch through handle_agent_command, and carry the requested delegate-seat selection into detached supervisor registration rather than reading effective grant seats. Add a supervisor regression for persisted selection and resume inheritance. Expected files: agent_codex_background.rs and the BUG-2467, rotation, and detached-supervisor test modules. No acceptance ambiguity or disputed finding.'
   created_at: 2026-11-06T20:27:46.872381694Z
   modified_at: 2026-11-06T20:27:46.872381694Z
+  session_id: 01a1b28a6ea7
+- id: 01a1b295-5941-75d1-a280-208d5abc3c68
+  author: joe
+  content: 'Round 3 complete: added all five canonical criterion test anchors; aida criteria reports no untested criteria. Added exact standing-orders command dispatch coverage through handle_agent_command/dispatch_agent_new and verified the real child grant inherits the parent seats with permission-mode auto. Detached supervisor now carries config.delegate_seats and records the requested selection without rereading the grant; regression exercises wire transport, actual registry persistence, and resumed issuance under a reduced parent for empty versus explicit selections. Validation: cargo test -p aida-cli-lib --lib bug_2467 (8 passed), cargo test -p aida-cli-lib --lib story_2254_codex_bg_supervisor_tests (23 passed), cargo fmt --all -- --check and git diff --check passed. Native seat: four source/test files remain uncommitted for host publication; existing merge hold unchanged.'
+  created_at: 2026-11-06T20:38:14.593398766Z
+  modified_at: 2026-11-06T20:38:14.593398766Z
   session_id: 01a1b28a6ea7
 history:
 - id: 01a1b1e7-637b-72a2-848f-931cefeb89f5
