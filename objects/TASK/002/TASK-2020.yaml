@@ -6,12 +6,12 @@ description: |
   scripts/test-time-budget.toml was calibrated from only 3 nextest shadow runs on main. A test whose max measured time is under about 6.7s (x1.5 stays under the default) gets no entry and must stay under the hard 10s default_limit. Under nextest's num-cpus parallel load, the wall-clock-sensitive integration tests (bug_1594_show_bounded, bug_1956_*, bug_1993_*) may drift over it and fail the Test time budget step. Recalibrate from more gating runs.
 
   Raised in review of PR-2785: https://github.com/joemooney/aida/pull/2785#issuecomment-6300385815
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-11-06T07:12:53.216811838Z
+modified_at: 2026-11-06T08:25:16.319847046Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -111,6 +111,13 @@ history:
   timestamp: 2026-11-06T07:12:53.412136052Z
   session_id: 8143f1d0-f26e-45bd-8720-147dcb1ab37a
   changes: []
+- id: 01a1aff6-4b1f-7b13-b640-8fcc403fa9aa
+  author: aida-session-start
+  timestamp: 2026-11-06T08:25:16.319846407Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
   branch: pr-2785
