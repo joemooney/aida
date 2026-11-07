@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:54:02.085718205Z
+modified_at: 2026-11-07T07:19:30.114407332Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -756,6 +756,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b4e0-7042-7f21-a566-1e74f3e9126f
+  author: aida-orchestrator
+  timestamp: 2026-11-07T07:19:30.114431091Z
+  session_id: 01a1b4dabc8e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -765,3 +774,11 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-10 findings all fixed (BUG-2480 fixture context, host-recorded OAuth-denial signal mapped to RELAUNCH with tests, re-probe assertions). Blocking: CI gates ''ExecContext environment ratchet'' is red at this head because of a new ambient std::env::var("PATH") read in a test. AC1 verified; AC2/AC3 are advisor-owned steps 4-5 (Refs slice). lib-1 still pending at record time.'
+  recovery_hint: address the review findings, move STORY-2593 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T07:19:30.114407332Z
