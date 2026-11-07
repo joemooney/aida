@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T00:35:48.901847970Z
+modified_at: 2026-11-07T00:35:51.161214774Z
 req_type: Story
 tags:
 - architecture
@@ -298,6 +298,13 @@ comments:
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
   created_at: 2026-11-07T00:35:48.901843578Z
   modified_at: 2026-11-07T00:35:48.901843578Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b36e-e277-7aa1-ae3b-366d86cf79fa
+  author: joe
+  content: 'advisor resolved the recurrence: round-4 scope; this round is CI-only at 7fa530d'
+  created_at: 2026-11-07T00:35:51.031856501Z
+  modified_at: 2026-11-07T00:35:51.031856501Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 history:
