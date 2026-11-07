@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T02:32:53.139974255Z
+modified_at: 2026-11-07T02:36:02.047437136Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -135,6 +135,12 @@ comments:
   content: 'Round-3 hard-gate result: installed codex-cli 0.166.0 binary SHA256 b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8 rejects cached access-only auth without id_token/refresh_token in login status. With a synthetic ID token but no refresh field, exec sent neither bearer nor account routing to a local HTTP recorder. An empty-refresh-string control sent both. Fake tokens only; isolated HOME/CODEX_HOME/XDG; no operator credentials read; input auth files unchanged; fake access token absent from stdout/stderr. This does not prove all log artifacts are secret-free. The signed design explicitly requires a leaf containing no refresh field, so step 1 is not satisfied. Need a distinct advisor interface decision on the ID-token-shaped/empty-refresh schema or another supported exec interface; do not substitute app-server or remove refusal. Findings 4 and 5 are disputed as current blockers: design squash 90d0ec0baf4 is docs/Refs and the 00:33:24Z sign-off exists. Findings 1-3 remain open. BUG-2447/2448 now show Approved but remain blocked. Full local evidence is in docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md; edits remain uncommitted for handoff.'
   created_at: 2026-11-07T02:29:06.625369413Z
   modified_at: 2026-11-07T02:29:06.625369413Z
+  session_id: 01a1b3d35e1a
+- id: 01a1b3dc-ea7f-7120-ac76-1cb40494a6dc
+  author: joe
+  content: 'Handoff validation after the interface-gate punt: make check-ci-fast passed all 38 fast-tier gates (including CLI no-default-features, standalone TUI, 43 containment evidence fixtures, formatting and docs checks). git diff --check passed. The only local tracked edit is docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md, left uncommitted. Synthetic auth tests are interface observations, not live C0-C4 evidence or successful inference. Punt remains the publication/completion veto; no commit, push, PR operation or queue completion was performed.'
+  created_at: 2026-11-07T02:36:02.047437136Z
+  modified_at: 2026-11-07T02:36:02.047437136Z
   session_id: 01a1b3d35e1a
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
