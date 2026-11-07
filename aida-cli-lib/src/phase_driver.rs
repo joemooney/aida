@@ -2538,12 +2538,22 @@ pub(crate) fn build_phase_driver_advisor_command(
         })?;
         crate::launch::spawn_agent(&ctx)?
     };
-    // Intentionally inherits the drain launcher's grant because the consult runs at the launcher's own advisor authority.
+    // The consult uses the launcher's advisor authority. Transport its selector
+    // explicitly even when Claude clears the parent environment; the Codex
+    // caller replaces it with its delegated advisor grant before spawning.
+    // trace:STORY-2326 | ai:codex
+    crate::launch::assign_seat(
+        &mut cmd,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        crate::launch::SeatDecision::Child {
+            role: "advisor",
+            grant: &crate::gate::seat_authority::current_grant_id().unwrap_or_default(),
+        },
+    )?;
     cmd.current_dir(project_root)
         .env("AIDA_HEADLESS", "1")
         .env(punt::REQUEST_FILE_ENV, request_path)
         .env(punt::RESPONSE_FILE_ENV, response_path)
-        .env("AIDA_SESSION_ROLE", "advisor")
         .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::scrub_launcher_session_env(&mut cmd);
     Ok(cmd)
