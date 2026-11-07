@@ -157,3 +157,27 @@ fn publication_refuses_ambiguous_store_identity_even_when_literal_matches() {
     )
     .is_some());
 }
+
+// trace:BUG-2483 | ai:codex
+#[test]
+fn publication_missing_expected_spec_in_loaded_store_uses_literal_match() {
+    let store = aida_core::RequirementsStore::new();
+    assert_eq!(store.resolve_unambiguous_index("STORY-2325").unwrap(), None);
+    for (subject, passes) in [
+        ("fix: slice (Refs story-2325)", true),
+        ("fix: slice (story-2325)", true),
+        ("fix: other (Refs STORY-9999)", false),
+        ("fix: no trailer", false),
+    ] {
+        assert_eq!(
+            pr_publication_spec_guard_violation(
+                &[commit("abc123", subject)],
+                "STORY-2325",
+                Some(&store)
+            )
+            .is_none(),
+            passes,
+            "{subject}"
+        );
+    }
+}

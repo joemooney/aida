@@ -31,6 +31,50 @@ fn set_owner(main: &Path, pid: Option<u32>) {
         toml::to_string_pretty(&lease).unwrap(),
     )
     .unwrap();
+    seed_owner(main, &lease);
+}
+
+fn seed_owner(main: &Path, lease: &crate::SessionLease) {
+    let mut lease = lease.clone();
+    lease.hostname = crate::coordination::hostname();
+    if uuid::Uuid::parse_str(&lease.scope).is_err() {
+        lease.scope = uuid::Uuid::new_v4().to_string();
+    }
+    if lease.active_pid.is_some() && lease.active_pid_start_time.is_none() {
+        lease.active_pid_start_time = Some("linux-starttime:1".into());
+    }
+    // Cooperative holder evidence is seeded before exercising record readers.
+    // A dead fixture PID cannot be captured from procfs after its exit.
+    if let Some(pid) = lease.active_pid {
+        let ns = crate::agent_registry::current_pid_namespace().unwrap();
+        let ticks = lease
+            .active_pid_start_time
+            .as_deref()
+            .unwrap_or("linux-starttime:1")
+            .strip_prefix("linux-starttime:")
+            .unwrap();
+        let identity = aida_core::proc_identity::ProcIdentity::from_record(
+            &aida_core::process_probe::ProcessIdentity {
+                pid,
+                start: format!("linux:{}:{ticks}", aida_core::local_boot_id().unwrap()),
+            },
+            Some(ns),
+        )
+        .unwrap();
+        let record = serde_json::json!({"version":1,
+            "node_id": aida_core::proc_identity::local_node_id().unwrap(),
+            "identity":identity,"generation":"force-claim-fixture","refusal":null});
+        lease.holder_record = Some(record.to_string());
+    } else {
+        lease.holder_record = None;
+    }
+    std::fs::write(
+        crate::lease_path(main, &lease.id),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::lease_written(main, &lease);
 }
 
 fn dead_pid() -> u32 {
@@ -238,6 +282,7 @@ fn bug_2455_bwrap_all_clones_checked_before_any_retirement() {
             toml::to_string_pretty(lease).unwrap(),
         )
         .unwrap();
+        seed_owner(&fx.main, lease);
     }
     let safe = &leases[0].worktree_path;
     let dirty = &leases[1].worktree_path;

@@ -22,12 +22,15 @@
 //! marker also carries a TTL backstop: 2h for pid-backed markers (a pid can be
 //! reused), 30m (overridable) for an explicit `aida review claim`, which has no
 //! process to watch. An expired marker is removed on read and the merger is
-//! told so — it never blocks forever.
+//! told so. During ownership-store discovery/read failures, pid-backed markers
+//! fail closed even after process death or TTL expiry: repair the store or use
+//! `aida review claim --release` to clear the marker explicitly.
 //!
 //! Cost (criterion 7): with no marker present the gate is one `stat` of a
 //! local file. Only a LIVE marker costs a forge round-trip, to compare the
 //! marker's head against the PR's current head.
 // trace:STORY-1405 | ai:claude
+// trace:STORY-2325 | ai:codex
 // mandate-gate
 
 use std::path::{Path, PathBuf};
@@ -251,7 +254,21 @@ pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<Str
     None
 }
 
-/// Is `m` still a live review (not expired by pid or TTL)?
+/// Recorded ownership controls reviews; legacy/manual markers without a
+/// matching record retain their own process-identity check and TTL expiry.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
+    ownership_ended(root, m).is_none()
+}
+
+fn ownership_ended(root: &Path, m: &Marker) -> Option<String> {
+    match super::kernel_deps::review_ownership_ended(root, m) {
+        Some(ended) => ended,
+        None => expired_reason(m, &crate::coordination::hostname(), now_secs()),
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn is_live(m: &Marker) -> bool {
     expired_reason(m, &crate::coordination::hostname(), now_secs()).is_none()
 }
@@ -295,7 +312,7 @@ pub(crate) fn merge_gate(
     let Some(m) = read(root, pr) else {
         return MergeGate::Clear;
     };
-    if let Some(reason) = expired_reason(&m, &crate::coordination::hostname(), now_secs()) {
+    if let Some(reason) = ownership_ended(root, &m) {
         clear(root, pr);
         return MergeGate::ExpiredCleared(m, reason);
     }
@@ -311,7 +328,7 @@ pub(crate) fn merge_gate(
 /// `pr` covering `current_head`, else `None`. Never removes anything.
 pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>) -> Option<String> {
     let m = read(root, pr)?;
-    (is_live(&m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
+    (is_live_at(root, &m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].
