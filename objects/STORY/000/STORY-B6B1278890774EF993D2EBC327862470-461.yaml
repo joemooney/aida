@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T02:52:34.650286581Z
+modified_at: 2026-11-07T03:22:59.686172810Z
 req_type: Story
 tags:
 - architecture
@@ -368,6 +368,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-07T02:51:32.457918963Z
   modified_at: 2026-11-07T02:51:32.457918963Z
+- id: 01a1b407-e8e6-74c0-a315-4ff1b834d526
+  author: joe
+  content: '[advisor 20:24] #3515 hand-merged after R5 (#3559) landed: kept EnvPolicy/ChildEnv, dropped the old LaunchVendor enum in favour of R5''s re-export from vendors, kept both lib.rs modules and both OVERVIEW paragraphs. dell1: check --tests (aida-core + aida-cli-lib) OK; launch_policy/exec_context/vendors tests 15 pass.'
+  created_at: 2026-11-07T03:22:59.686172810Z
+  modified_at: 2026-11-07T03:22:59.686172810Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
