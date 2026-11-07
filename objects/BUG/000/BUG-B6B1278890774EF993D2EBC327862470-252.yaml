@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-252
 agreed_id: BUG-2487
 title: Contained Codex pin (0.166.0) contradicts the launcher's -P permission-profile flag (codex 0.167+); re-pin to 0.167.0
 description: 'launch/contained.rs:1397 adds ''-P aida'' (permission profile), which codex-cli only accepts from 0.167.0. launch/codex_auth.rs pins the contained binary to codex-cli 0.166.0 (SHA b8a11fed...), which rejects it: ''error: unexpected argument -P found''. So no binary can pass both the pin and the launch. Repro 2026-11-07 16:52Z, operator''s live conformance run (out=~/.aida/conformance-codex-aida-1794070266): the containment receipt was issued, then codex exited 2 on -P, and C0-C4 were all unknown. dell1 has codex 0.167.0 with -P. Acceptance: (1) the pin moves to codex-cli 0.167.0 with its probed SHA-256 for the npm vendored musl binary (re-probe per STORY-2593: version, no in-lane refresh, empty refresh_token behavior). (2) The launcher checks before launch that the pinned version supports every flag it passes, and fails closed naming the flag. (3) A test pairs the pin with the argv builder, so a future flag or pin change can''t drift apart again. (4) Docs name the supported codex version and the upgrade step (npm i -g @openai/codex@0.167.0).'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:07:52.440511863Z
+modified_at: 2026-11-07T17:19:41.755157732Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-11-07T17:00:26.540394231Z
   modified_at: 2026-11-07T17:00:26.540394231Z
   session_id: 01a1b6f07ef4
+- id: 01a1b705-eebb-7272-9eab-4f5955d5cae7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Investigation-only doc PR: none of BUG-2487''s four acceptance criteria are met (pin, argv, tests, launcher all unchanged), yet the commit says ''fix: ... re-pin to 0.167.0 (BUG-2487)'', so merging would auto-complete the bug. The evidence doc is useful; land it with a non-completing Refs trailer once the -P design fork is decided.. It was punted on: design-fork: The requested npm codex-cli 0.167.0 x86_64 musl binary (SHA-256 cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda) also rejects -P at top level and under exec (exit 2); only sandbox accepts it. Re-pinning cannot satisfy the launch contract. Evidence and reproduction: docs/internal/testing/bug-2487-codex-pin.md. Requires an authorized exec-compatible profile-selection interface or a different measured binary before implementation and compatibility admission.. No triage reason was given.'
+  created_at: 2026-11-07T17:19:41.755154278Z
+  modified_at: 2026-11-07T17:19:41.755154278Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
   author: joe
@@ -64,6 +71,15 @@ history:
   session_id: 01a1b6fa7c23
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b705-eebb-7272-9eab-4f4cad21dd07
+  author: joe
+  timestamp: 2026-11-07T17:19:41.755134954Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -73,17 +89,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'The requested npm codex-cli 0.167.0 x86_64 musl binary (SHA-256 cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda) also rejects -P at top level and under exec (exit 2); only sandbox accepts it. Re-pinning cannot satisfy the launch contract. Evidence and reproduction: docs/internal/testing/bug-2487-codex-pin.md. Requires an authorized exec-compatible profile-selection interface or a different measured binary before implementation and compatibility admission.'
-  lean: Validate a config-based permission-profile selection for exec while retaining the sandbox preflight, then re-probe the full production argv and credential contract; do not claim 0.167.0 supports the current -P argv.
-  raised_by: implementer
-  raised_at: 2026-11-07T17:00:03.790443443Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Investigation-only doc PR: none of BUG-2487''s four acceptance criteria are met (pin, argv, tests, launcher all unchanged), yet the commit says ''fix: ... re-pin to 0.167.0 (BUG-2487)'', so merging would auto-complete the bug. The evidence doc is useful; land it with a non-completing Refs trailer once the -P design fork is decided.'
-  recovery_hint: address the review findings, move BUG-2487 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T17:07:52.440511863Z
