@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-882
 agreed_id: TASK-3225
 title: 'STORY-2561 S1b: per-lane SEQPACKET store-mutation channel, launch-bound identity and lifecycle (read-only verbs)'
 description: 'Split from TASK-3222 by the advisor ruling on sketch v1 (2026-11-06). Implement sketch v1 sections 1-4 and the matching section 6 tests: broker-injected per-lane AF_UNIX SEQPACKET channel at an exact synthetic epoch address (no host listener), per-message SCM_CREDENTIALS sender checks against the pinned lane, a closed v1 protocol with ONLY session_probe and request_status, the bounds and retry-key semantics, and lifecycle at PreparedLaunch/ContainedChild with refuse-on-absent. No CLI/MCP routing, no grant change. It extends contained_host.py from PR #3449, so start after #3449 merges.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T14:07:54.758655795Z
-modified_at: 2026-11-07T01:52:05.075214943Z
+modified_at: 2026-11-07T02:42:22.649031899Z
 req_type: Task
 tags:
 - architecture
@@ -331,6 +331,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b3e2-b915-7071-a1a1-1721a1918ae5
+  author: aida-auto-bump
+  timestamp: 2026-11-07T02:42:22.613275244Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b3e2-b939-7702-8de1-1d6c6b7c336f
+  timestamp: 2026-11-07T02:42:22.649027312Z
+  agent: aida
+  commit_sha: eaebcf25a0b8ff3fdf7d16027982a847aca1ca12
+  summary: 'Full sweep at 3bd157c: every TASK-3225 criterion verified (exact-epoch SEQPACKET broker channel with no host listener, per-packet SCM_CREDENTIALS+pidfd sender checks with sibling-namespace/FD-transfer/procfs refusal, closed v1 protocol of only session_probe and request_status, bounds/retry keys/digest conflict, PreparedLaunch/ContainedChild lifecycle refusing absent or empty binding, forking and child native-path guards, 5s authority bound with fatal endpoint shutdown, real-owner refusal tests, observation-only ProcIdentity::capture worker binding). The advisor hand-merge with #3545 keeps both outer_only and mutation fields and closes the TASK-3048 test. CI run 42326316810 is all green: lib-0, lib-1, gates (Store mutation channel tests step success, forced live), cli-0, cli-1, contracts, rest and the aggregate Build. No defects found.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: f50fa16ae956f2508aa8550cc4efb9915f9db768
@@ -340,3 +354,7 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T02:42:22.613269386Z
+  completion_sha: eaebcf25a0b8ff3fdf7d16027982a847aca1ca12
