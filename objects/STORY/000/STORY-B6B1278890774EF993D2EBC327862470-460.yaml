@@ -15,12 +15,12 @@ description: |
   - A sketch on this spec covering the type, the judge semantics per namespace case, the consumer inventory and the migration order; advisor signoff recorded.
   - Slice 1: the type, the judge and the ratchet, with the ownership judge and leases migrated, and tests for same-ns, foreign-ns, a reparented/subreaper holder, pid reuse and a clock step.
   - Later slices are filed as children when the sketch is signed.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:21.442941596Z
-modified_at: 2026-11-07T10:47:25.151529204Z
+modified_at: 2026-11-07T11:05:14.556124500Z
 req_type: Story
 tags:
 - architecture
@@ -256,6 +256,13 @@ comments:
   modified_at: 2026-11-07T10:47:25.151529204Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5af-1c3c-76b2-8770-8814aa632207
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: other: Nothing left to implement under the 2026-11-05 23:30 brief: slice 1 (ProcIdentity primitive, judge, ratchet, ownership+lease migration, BUG-2458 owning-process holder) already merged to origin/main as c4c0461a21f (#3483, ''(Refs STORY-2537)''), after the brief was written. aida-core/src/proc_identity.rs + proc_identity_tests.rs exist on main 5a0dff1aa07; BUG-2458 is status completed. This lane (story-2537-r0306) made no commits on purpose: re-implementing would duplicate merged work. Remaining story acceptance is AC3 only (file later slices as children); none exist yet (aida search ProcIdentity returns only STORY-2537). Slice boundaries are an advisor decision, so I did not file them.. No triage reason was given.'
+  created_at: 2026-11-07T11:05:14.556116486Z
+  modified_at: 2026-11-07T11:05:14.556116486Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-0181-7b50-9d1c-badaafe61b7e
   author: joe
@@ -486,6 +493,15 @@ history:
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b5af-1c3c-76b2-8770-880278c9d60d
+  author: joe
+  timestamp: 2026-11-07T11:05:14.556102931Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -494,9 +510,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-attention_reason:
-  category: other
-  detail: 'Nothing left to implement under the 2026-11-05 23:30 brief: slice 1 (ProcIdentity primitive, judge, ratchet, ownership+lease migration, BUG-2458 owning-process holder) already merged to origin/main as c4c0461a21f (#3483, ''(Refs STORY-2537)''), after the brief was written. aida-core/src/proc_identity.rs + proc_identity_tests.rs exist on main 5a0dff1aa07; BUG-2458 is status completed. This lane (story-2537-r0306) made no commits on purpose: re-implementing would duplicate merged work. Remaining story acceptance is AC3 only (file later slices as children); none exist yet (aida search ProcIdentity returns only STORY-2537). Slice boundaries are an advisor decision, so I did not file them.'
-  lean: 'Advisor files children for sketch slices 2-6 (docs/plans/2026-11-05-story-2537-proc-identity.md ''Proposed slice order'': 2 merge serialization, 3 review-watch, 4 registry/mail-wake/binding, 5 remaining inventory + ratchet closure, 6 separately signed broker), then completes STORY-2537.'
-  raised_by: implementer
-  raised_at: 2026-11-07T10:14:20.015845235Z
