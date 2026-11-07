@@ -8,13 +8,21 @@ description: |-
   Fix: order advisor direction by created_at. The newest advisor comment (brief or ruling) is THE task. An older ruling or brief is shown only as labelled background ('earlier direction, superseded by the newer one above'), or omitted. Keep the existing verdict-vs-brief standing logic.
 
   Acceptance: a unit test where an older ruling and a newer brief yield a prompt whose authoritative block is the brief, with the ruling marked superseded; a newer ruling over an older brief does the reverse; the existing BUG-057 tests still pass. LIGHT gate.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:15:44.102546116Z
-modified_at: 2026-11-07T22:15:44.102546116Z
+modified_at: 2026-11-07T22:24:55.410096229Z
 req_type: Bug
+history:
+- id: 01a1b81d-6072-7322-a321-c34e2330c3fc
+  author: aida-session-start
+  timestamp: 2026-11-07T22:24:55.410094964Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
