@@ -70,66 +70,30 @@ fn skill_is_portable(skill: &str) -> bool {
         && inventory::portable_skill_md_source(skill).is_some()
 }
 
-fn with_args(head: String, args: &str) -> String {
-    let args = args.trim();
-    if args.is_empty() {
-        head
-    } else {
-        format!("{head} {args}")
-    }
-}
-
-/// How `vendor` invokes skill `skill` (`aida-pr`, no leading slash) with
-/// `args`: `/aida-pr`, `$aida-pr`, or the `aida skill render` fallback.
-// trace:BUG-2396 | ai:claude
+/// Render from the shared descriptor after resolving project skill inventory.
+// trace:BUG-2396 STORY-2539 | ai:codex
 pub(crate) fn skill_ref(vendor: HeadlessVendor, skill: &str, args: &str) -> String {
-    let skill = skill.trim_start_matches('/');
-    match vendor {
-        HeadlessVendor::Claude => with_args(format!("/{skill}"), args),
-        HeadlessVendor::Codex if skill_is_portable(skill) => with_args(format!("${skill}"), args),
-        // `aida skill render` takes exactly one NAME, so the args ride in a
-        // trailing note rather than as extra (rejected) arguments.
-        _ => {
-            let render = format!("aida skill render {skill}");
-            match args.trim() {
-                "" => render,
-                args => format!("{render}  # then follow it for {args}"),
-            }
-        }
-    }
+    crate::vendors::skill_ref(
+        vendor.profile(),
+        skill,
+        args,
+        skill_is_portable(skill.trim_start_matches('/')),
+    )
 }
 
-/// The `aida agent new <vendor>` subcommand token for `vendor`.
-fn agent_new_token(vendor: HeadlessVendor) -> &'static str {
-    match vendor {
-        HeadlessVendor::Claude => "claude",
-        HeadlessVendor::Codex => "codex",
-        HeadlessVendor::Agy => "antigravity",
-    }
-}
-
-/// `aida agent new <vendor> <flags>`. `background` adds `--bg`, which only
-/// the Claude lane supports; other vendors get the foreground form.
-// trace:BUG-2396 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub(crate) fn agent_new_cmd(vendor: HeadlessVendor, flags: &str, background: bool) -> String {
-    let mut cmd = with_args(format!("aida agent new {}", agent_new_token(vendor)), flags);
-    if background && vendor == HeadlessVendor::Claude {
-        cmd.push_str(" --bg");
-    }
-    cmd
+    crate::vendors::agent_new_cmd(vendor.profile(), flags, background)
 }
 
-/// Shell line that starts `vendor` with `skill args` as its first prompt.
-/// The prompt is single-quoted so a Codex `$aida-*` mention is not expanded
-/// by the shell. A vendor without a skill syntax gets `aida agent new`.
-// trace:BUG-2396 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub(crate) fn launch_with_skill(vendor: HeadlessVendor, skill: &str, args: &str) -> String {
-    match vendor {
-        HeadlessVendor::Claude | HeadlessVendor::Codex => {
-            format!("{} '{}'", vendor.program(), skill_ref(vendor, skill, args))
-        }
-        HeadlessVendor::Agy => agent_new_cmd(vendor, &format!("--spec {}", args.trim()), false),
-    }
+    crate::vendors::launch_with_skill(
+        vendor.profile(),
+        skill,
+        args,
+        skill_is_portable(skill.trim_start_matches('/')),
+    )
 }
 
 /// The interactive agent CLI to start in a worktree (`claude` / `codex`),

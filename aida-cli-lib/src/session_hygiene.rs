@@ -259,7 +259,14 @@ fn salvage_candidates(project_root: &Path) -> Vec<SalvageCandidate> {
             if dispatch.state != DispatchState::Salvageable {
                 return None;
             }
-            let probe = dispatch_health_ps::probe_worktree(&row.lease.worktree_path);
+            let probe =
+                dispatch_health_ps::probe_worktree_from(project_root, &row.lease.worktree_path);
+            // The tree may have been cleaned since the row was gathered.
+            // Unknown state is not evidence for a salvage notification.
+            // trace:BUG-2473 | ai:codex
+            if probe.error.is_some() || !probe.dirty {
+                return None;
+            }
             let idle_secs = probe.dirty_newest_mtime_age_secs.or_else(|| {
                 dispatch_health_ps::newest_mtime_age_secs(
                     &activity_paths(project_root, &row.lease.id, &row.lease.worktree_path),
