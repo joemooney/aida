@@ -19,10 +19,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:50:04.319403829Z
-modified_at: 2026-10-21T04:32:32.671217675Z
+modified_at: 2026-11-07T20:28:13.715425221Z
 req_type: Story
 tags:
 - operator-held
+comments:
+- id: 01a1b7b2-8a13-7ff3-8001-15702d94a149
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-21T04:32:32.671217675Z","deferred_until":"Authority-model change; TASK-1787 (4caea8b7a3) added operator-chosen grant TTL + max_grant_hours cap. Revisit if grant expiry stalls a lane again.","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:28:13.715419566Z
+  modified_at: 2026-11-07T20:28:13.715419566Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a15cbb-7b5b-70d2-aec5-535dd206c317
   author: joe
@@ -31,7 +42,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-21T04:32:32.671217675Z
-deferred_until: Authority-model change; TASK-1787 (4caea8b7a3) added operator-chosen grant TTL + max_grant_hours cap. Revisit if grant expiry stalls a lane again.
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 278ff0b09857793951b477ef891e07212a53f833
