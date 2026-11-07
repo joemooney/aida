@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T11:28:00.000963639Z
+modified_at: 2026-11-07T15:11:20.031076090Z
 req_type: Story
 tags:
 - architecture
@@ -736,6 +736,13 @@ comments:
   created_at: 2026-11-07T10:37:29.958186693Z
   modified_at: 2026-11-07T10:37:29.958186693Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b690-6904-73f1-a9c4-bbfa127e58ce
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 08:25 on the 04:28 punt (PR-D design fork): ACCEPT the proposal as written. (a) Pinned ambient AIDA_* allowlist in launch_policy, which EnvPolicy accepts: config keys that grant no authority. Excludes AIDA_TEST_*, AIDA_REQUIRE_*, AIDA_AGENT_CMD and every token/API-key credential. (b) A ratchet test: every production AIDA_* read is owned, ambient, or explicitly dropped. (c) Per-vendor non-AIDA keys stay exact lists in launch/profile.rs. (d) Full parent env only under the uncontained AIDA_AGENT_CMD fixture seam. (e) Keep the clear through the Codex rebuild (removed-marker test). (f) Claude first, plus the ratchet forbidding issue_launch_child_with_delegation/issue_child_from outside launch/. DECISION: the missing dropped-keys report is ACCEPTED as a known risk; ''aida launch explain'' is NOT a prerequisite. Record it as a one-line known-limitation in the PR body. Salvage the 1 uncommitted path from the r0419 worktree if it is useful. Test story_2326_spawn_agent_clears_env. LIGHT gate: one targeted cargo test plus make check-ci-fast. Commit (Refs STORY-2326), push, open the PR. Runs on dell1 (codex).'
+  created_at: 2026-11-07T15:11:19.812595166Z
+  modified_at: 2026-11-07T15:11:19.812595166Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
