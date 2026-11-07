@@ -16,12 +16,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T21:37:39.393335869Z
-modified_at: 2026-11-07T21:37:39.393335869Z
+modified_at: 2026-11-07T22:10:52.487955430Z
 req_type: Spike
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T21:37:47.743036415Z
+comments:
+- id: 01a1b810-83c7-77f0-8329-31199b02353b
+  author: joe
+  content: 'Deep dive drafted (Fable 5.1 agent) and published as PR #3633, docs only. Advisor spot-checks passed: the dell1 build at 2:42.6 wall with EXIT=0, and the doctor_cmd/mcp/auto_complete inline-test splits match the files. After it lands, the advisor rules on the doc''s open questions and files the three ''start today'' PRs.'
+  created_at: 2026-11-07T22:10:52.487955430Z
+  modified_at: 2026-11-07T22:10:52.487955430Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7f2-40d4-7c30-893c-c6bfa958c1d6
   author: joe
