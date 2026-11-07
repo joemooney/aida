@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T03:47:19.898567423Z
-modified_at: 2026-11-07T04:56:14.186452276Z
+modified_at: 2026-11-07T04:56:20.848420512Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,13 @@ comments:
   content: 'Auto-rejected: PR #3563 closed on the forge without merging.'
   created_at: 2026-11-07T04:56:14.186585700Z
   modified_at: 2026-11-07T04:56:14.186585700Z
+- id: 01a1b45d-6070-7522-9414-65f7cfca21d6
+  author: joe
+  content: 'Advisor: the PR under review was closed unmerged (see its parent spec); this review story is moot.'
+  created_at: 2026-11-07T04:56:20.848420512Z
+  modified_at: 2026-11-07T04:56:20.848420512Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b41e-7554-7591-a05f-fead85a39ad7
   author: joe
