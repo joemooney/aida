@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T00:33:26.301067941Z
+modified_at: 2026-11-07T00:36:35.385936982Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -101,6 +101,13 @@ comments:
     #3544 lands as the docs-only design record, retitled with a Refs trailer; it does not complete the story. Mode guided -> drive (credential path: auto through CI, gated merge).
   created_at: 2026-11-07T00:33:24.041403710Z
   modified_at: 2026-11-07T00:33:24.041403710Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b36f-8fb9-7eb0-8910-025e80a6111c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3 review of ef3e9d4bc65d: findings 1-5 accepted; no finding is disputed. Finding 1/AC1: refuse_chatgpt still rejects auth.json and OPENAI_API_KEY remains required; no brokered ChatGPT path exists. Finding 2/AC2: no ChatGPT C0-C4 run under --boundary aida, policy/binary/receipt hashes, or credential-visibility sentinels exist. Finding 3/AC3: BUG-2447 and BUG-2448 remain needs-attention pending actual C3/C4 evidence, with no basis to close or rescope them. Finding 4: both 058e9899a195 and ef3e9d4bc65d have inaccurate feat/completing subjects and PR #3544 has the same metadata problem; select reviewer option (2): keep PR #3544 unmerged until approved implementation steps 1-5 land. Git metadata is read-only in this native seat; no history rewrite or publication is authorized here. Finding 5 is the blocking operator action: record explicit master/operator sign-off on STORY-2593 for option (a), residual readable bearer-token risk, no-in-lane-renewal deadline, and returning to the gate if installed codex exec cannot consume access-only credentials. Requeue without a triage reason is not sign-off. Escalate this decision to the operator instead of scheduling another docs-only implementer round. This punt vetoes host publication and completion. No new implementation, credential access, or docs-only revision was made.. No triage reason was given.'
+  created_at: 2026-11-07T00:36:35.385935685Z
+  modified_at: 2026-11-07T00:36:35.385935685Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -213,6 +220,15 @@ history:
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b36f-8fb9-7eb0-8910-024f853ffd1f
+  author: joe
+  timestamp: 2026-11-07T00:36:35.385926896Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -222,9 +238,3 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
-attention_reason:
-  category: design-fork
-  detail: 'Round 3 review of ef3e9d4bc65d: findings 1-5 accepted; no finding is disputed. Finding 1/AC1: refuse_chatgpt still rejects auth.json and OPENAI_API_KEY remains required; no brokered ChatGPT path exists. Finding 2/AC2: no ChatGPT C0-C4 run under --boundary aida, policy/binary/receipt hashes, or credential-visibility sentinels exist. Finding 3/AC3: BUG-2447 and BUG-2448 remain needs-attention pending actual C3/C4 evidence, with no basis to close or rescope them. Finding 4: both 058e9899a195 and ef3e9d4bc65d have inaccurate feat/completing subjects and PR #3544 has the same metadata problem; select reviewer option (2): keep PR #3544 unmerged until approved implementation steps 1-5 land. Git metadata is read-only in this native seat; no history rewrite or publication is authorized here. Finding 5 is the blocking operator action: record explicit master/operator sign-off on STORY-2593 for option (a), residual readable bearer-token risk, no-in-lane-renewal deadline, and returning to the gate if installed codex exec cannot consume access-only credentials. Requeue without a triage reason is not sign-off. Escalate this decision to the operator instead of scheduling another docs-only implementer round. This punt vetoes host publication and completion. No new implementation, credential access, or docs-only revision was made.'
-  lean: 'Keep the story Needs Attention and PR #3544 unmerged. Resume implementation only after explicit design sign-off is recorded on the spec; then collect real boundary evidence before AC credit.'
-  raised_by: implementer
-  raised_at: 2026-11-06T22:12:59.816150726Z
