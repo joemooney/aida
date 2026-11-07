@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T07:31:24.329127969Z
+modified_at: 2026-11-07T07:48:22.901301345Z
 req_type: Story
 relationships:
 - rel_type:
@@ -461,6 +461,12 @@ comments:
   content: 'Round 8 PR #3533: addressing the current-executable ratchet, removing the AGENTS prepend and trimming architecture prose, adding confirmed lease-bound retired-branch deletion with absent-branch recovery, and typed journal contention returned to Pending by dispatch. Crash-left dot-tmp files are documented under the existing run-lock inspection procedure. Native-seat edits and validation are in progress; Git publication remains host-owned.'
   created_at: 2026-11-07T07:31:24.329127969Z
   modified_at: 2026-11-07T07:31:24.329127969Z
+  session_id: 01a1b4e70e9b
+- id: 01a1b4fa-e0f5-7e33-ad87-6e7d8efc76ce
+  author: joe
+  content: 'Round 8 PR #3533 completed in native seat. All five findings addressed: hardened executable resolver in crash test; removed AGENTS prepend and trimmed OVERVIEW to architecture; retirement confirms Closed then deletes via explicit force-with-lease against the pinned tip, recognizes already-absent branches, and retains moved branches/unknown closure; whole-run serialization documented with typed lock contention returning dispatch requests to Pending for a later revalidated claim; crash-left dot-tmp inspection/removal documented under run.lock. Tests cover branch deletion/absence/movement, accepted-but-unconfirmed and failed closes, typed flock contention, and dispatch Pending/retry. Final validation: cargo test -p aida-cli-lib --lib pr_train: 180 passed, zero failures (106.36s); exact raw-executable resolver ratchet: 1 passed; dispatch fallback contention/retry: 1 passed; make check-ci-fast: all 43 gates passed; formatting and git diff --check passed. The prior static-forge ejection fixture was updated to expect retained recovery work when the fake still reports Open after accepting close. Logs: /tmp/story2401-round8-train-verified.log, /tmp/story2401-round8-resolver.log, /tmp/story2401-round8-dispatch.log, /tmp/story2401-round8-fast.log. Native declaration accepted: [AI:codex] fix(train): resolve journal lifecycle review findings (Refs STORY-2401). Ten source/docs files remain uncommitted; host owns the new commit and publication. No implementation or validation blocker remains. Existing merge hold remains active; slice 5 is outside this work.'
+  created_at: 2026-11-07T07:48:22.901301345Z
+  modified_at: 2026-11-07T07:48:22.901301345Z
   session_id: 01a1b4e70e9b
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
