@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T10:03:41.440035549Z
+modified_at: 2026-11-07T10:37:30.050287607Z
 req_type: Story
 tags:
 - architecture
@@ -725,6 +725,13 @@ comments:
   created_at: 2026-11-07T10:03:41.440035549Z
   modified_at: 2026-11-07T10:03:41.440035549Z
   session_id: 01a1b575fecb
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b595-b5e6-71e2-9ef1-85e5f45de91a
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 03:35: PR-A/B/C have landed. NEXT = PR-D: launch/spawn.rs spawn_agent builds the child env from aida_core::launch_policy::ChildEnv, with per-vendor EnvPolicy keys from the STORY-2539 VendorProfile (launch/profile.rs); call cmd.env_clear().envs(child_env.pairs()); apply the resources.rs cargo env through the same path. Extend story_2326_launch_ratchet_tests.rs to forbid issue_launch_child_with_delegation/issue_child_from outside launch/. Test story_2326_spawn_agent_clears_env (a parent sentinel var is absent in the child; allowlisted keys are present). Refs STORY-2326. SEQUENCING: this lands BEFORE STORY-2538 slice B (same files).'
+  created_at: 2026-11-07T10:37:29.958186693Z
+  modified_at: 2026-11-07T10:37:29.958186693Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
