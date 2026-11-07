@@ -1092,16 +1092,7 @@ impl PreparedLaunch {
             }
             VendorAuth::RuntimeCredentialsFile => {
                 let policy = runtime_policy.as_ref().context("runtime policy missing")?;
-                // Only the terminal prompt is accepted from the site. Session
-                // options cannot smuggle settings, MCP servers or a host daemon.
-                anyhow::ensure!(
-                    original.len() == 2 && original[0] == "-p",
-                    "outer-only runtime requires exactly -p <prompt>; extra options refused"
-                );
-                (
-                    wrapped_outer_only_argv(policy, &private_home, &original[1])?,
-                    Vec::new(),
-                )
+                (runtime_argv(policy, &private_home, &original)?, Vec::new())
             }
         };
         preflight.extend([
@@ -1125,6 +1116,22 @@ impl PreparedLaunch {
         prepared.outer_only = runtime_policy.map(|_| vendor.key);
         Ok(prepared)
     }
+}
+
+/// Outer-only runtime argv accepts only a terminal prompt from the site.
+/// Keep this adapter separate from the Claude settings adapter: session
+/// options cannot smuggle settings, MCP servers or a host daemon.
+// trace:TASK-3048 | ai:codex
+fn runtime_argv(
+    policy: &crate::containment::RuntimePolicy,
+    runtime: &Path,
+    original: &[String],
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        original.len() == 2 && original[0] == "-p",
+        "outer-only runtime requires exactly -p <prompt>; extra options refused"
+    );
+    wrapped_outer_only_argv(policy, runtime, &original[1])
 }
 
 /// Codex's argv: the tool-env and native-profile overrides, then the site's

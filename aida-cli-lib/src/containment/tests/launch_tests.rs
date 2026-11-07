@@ -582,6 +582,36 @@ fn task_2707_no_deserialized_receipt_grants_applied_credit() {
     }
 }
 
+// The wrapper must reject site-owned options before adding receipt-gated argv.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let runtime = Path::new("/private/agy-runtime");
+    let prompt = "--settings /host/settings.json --dangerously-skip-permissions";
+    let args = runtime_argv(&policy, runtime, &["-p".into(), prompt.into()]).unwrap();
+    assert_eq!(&args[args.len() - 2..], &["-p", prompt]);
+    assert_eq!(
+        args.iter()
+            .filter(|arg| arg.as_str() == "--settings")
+            .count(),
+        1
+    );
+    for original in [
+        vec![],
+        vec!["-p"],
+        vec!["--prompt", "text"],
+        vec!["--settings", "/host/settings.json", "-p", "text"],
+        vec!["-p", "text", "-dangerously-skip-permissions"],
+    ] {
+        let original = original.into_iter().map(String::from).collect::<Vec<_>>();
+        assert!(runtime_argv(&policy, runtime, &original)
+            .unwrap_err()
+            .to_string()
+            .contains("requires exactly -p <prompt>"));
+    }
+}
+
 // This tests argv construction using the common wrapper's real accepted receipt,
 // not AGY execution or all-tool conformance. trace:TASK-3048 | ai:codex
 #[test]
