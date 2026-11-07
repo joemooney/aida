@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:58:08.715154038Z
+modified_at: 2026-11-07T18:05:17.553632261Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -105,6 +105,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-07T17:52:37.852319275Z
   modified_at: 2026-11-07T17:52:37.852319275Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b72f-ad09-70c1-967d-87ce5d90d73d
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 11:15 on the lane''s evidence (docs/internal/testing/bug-2487-codex-pin.md): ''-P/--permission-profile'' exists only on ''codex sandbox'', in 0.166.0 and in 0.167.0 (npm and standalone, both SHA cdcb45aa...). No codex accepts ''-P aida'' before or after ''exec''. Contained Codex launches have failed since #3307. RE-SCOPE: (1) KEEP the 0.166.0 pin; no re-pin. Strike AC1 and AC4''s upgrade step. (2) Fix launch/contained.rs:1397: select the ''aida'' permission profile through a mechanism ''codex exec'' accepts in the pinned version. Probe ''-c'' config keys (e.g. default_permissions / permissions profile selection) with an empty HOME, and prove the profile is honoured by a denied-write probe. If exec cannot select a permission profile, remove the flag and rely on ''-s workspace-write'' inside the AIDA boundary, and record that the inner profile is not applied (the AIDA bwrap boundary is the containment; the codex profile was defense in depth). (3) AC2+AC3 stand: a test runs the argv builder''s flags against the pinned binary''s ''exec --help'' (or a recorded fixture of it) and fails on any flag the parser lacks. Completing (BUG-2487). LIGHT gate. Push to #3611.'
+  created_at: 2026-11-07T18:05:17.449652667Z
+  modified_at: 2026-11-07T18:05:17.449652667Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
