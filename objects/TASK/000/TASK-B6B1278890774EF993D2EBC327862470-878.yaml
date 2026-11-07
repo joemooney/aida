@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T20:48:20.285002870Z
+modified_at: 2026-11-07T21:13:44.081819959Z
 req_type: Task
 tags:
 - architecture
@@ -303,6 +303,40 @@ comments:
   modified_at: 2026-11-07T20:48:20.285002870Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7dc-3391-79f3-a759-118e021b9553
+  author: dirtlab
+  content: |
+    S3 only, per binding 2026-11-07 advisor brief and signed sketch decision (b). Implemented an AIDA-owned detached supervisor for trusted opted-in contained Claude background launches. It runs foreground print-mode Claude inside PreparedLaunch, keeps wrapper state alive, binds the accepted receipt's worker grant and registry row before release, transfers setup ownership over a private inherited socket before release, acknowledges only after release, forwards signals, marks registry teardown and revokes the child grant. Lost final acknowledgements retain the admitted lease/worktree. Logs and read-only attach use AIDA attempt UUIDs; wrapped claude attach refuses with an AIDA hint. Native background command construction stays on its existing branch. Explicit resume/rotation and the resume picker remain refused in this S3 path; S4 is outstanding.
+
+    First checked 31a4e2b9713: its prepare_with_io and three PTY writer inventory changes are already reflected on origin/main, with later destination-policy refinements. No duplicate cherry-pick. Read-only origin probes confirmed remote main and this seat HEAD both e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3, including at final handoff. Host must refresh/rebase again before pushing if main moves, especially around parallel contained.rs fixes. contained.rs edits are only the five-line attach refusal.
+
+    Validation (LIGHT):
+    - Targeted supervisor module unit: cargo test --profile agent -p aida-cli-lib --lib -- supervisor_protocol_refuses_unowned_release_and_oversized_frames: 1 executed, 1 passed. Lane job j20261107T205333176-2-0.
+    - LIVE COUNT SEPARATE: 1 live regression executed, 1 passed, 0 skipped. cargo test --profile agent -p aida-cli-lib --lib -- task_3219_live_claude_background_supervisor --nocapture. Lane job j20261107T211133692-2-0. It re-execs an exiting dispatcher and independent supervisor, proves accepted-wrapper/grant/registry startup, worker survival after dispatcher exit, protected Git/AIDA writes, denied raw egress, the CLI surface, host isolation of private tmpfs writes, child-grant revocation without revoking the parent, and refusal before vendor release. Initial fixture failures were resolved: inheritably revoked keyring -> own fresh synthetic keyring; writable private /tmp -> host-isolation assertion rather than treating scratch as a host write.
+    - CLI help golden snapshot regenerated and checked; help_surface_matches_golden_snapshot passed in j20261107T210815353-2-0 (that combined run's live fixture still failed before the final successful live run).
+    - make check-ci-fast: 43 gates passed with umask 022, log /tmp/task3219-check-ci-fast-final.log. Initial default-umask mail-wake failures and a missing Linux cfg on the new procfs test were corrected before the green run.
+    - Final rustfmt --check on changed Rust sources and git diff --check passed.
+
+    Changed files:
+    aida-cli-lib/src/agent_claude_background.rs (new)
+    aida-cli-lib/src/agent_launch.rs
+    aida-cli-lib/src/agent_launch_args.rs
+    aida-cli-lib/src/internal_cmd.rs
+    aida-cli-lib/src/internal_cmd_args.rs
+    aida-cli-lib/src/launch/contained.rs
+    aida-cli-lib/src/containment/tests/launch_tests.rs
+    aida-cli-lib/src/role.rs
+    aida-cli-lib/src/session.rs
+    aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+    docs/cli/06-roles-sessions.md
+    docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md
+    scripts/store-writers.toml
+
+    Native handoff: all code remains uncommitted. No push, PR creation, queue completion, review record or merge was attempted. Recorded lease-bound host publication declaration: [AI:codex] feat(containment): supervise Claude background launches (Refs TASK-3219). No implementation blockers remain. S4 resume is intentionally outstanding; this is a Refs slice.
+  created_at: 2026-11-07T21:13:44.081819959Z
+  modified_at: 2026-11-07T21:13:44.081819959Z
+  session_id: 01a1b7c61284
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
