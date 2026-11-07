@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T17:21:42.702701449Z
+modified_at: 2026-11-07T17:23:14.489590748Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -89,6 +89,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b709-2db9-7b12-a1b2-9a62510bf462
+  author: aida-session-start
+  timestamp: 2026-11-07T17:23:14.489589913Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
