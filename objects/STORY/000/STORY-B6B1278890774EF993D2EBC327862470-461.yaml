@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T09:37:36.738650875Z
+modified_at: 2026-11-07T09:53:00.268648146Z
 req_type: Story
 tags:
 - architecture
@@ -380,6 +380,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A code and scope still match the signed-off sketch and amendment (no launch/ edits; EnvPolicy/ChildEnv rebased cleanly onto R5''s vendors::LaunchVendor re-export), all prior findings are resolved, and the exec-context ledger is current (1241 sites = ceiling, zero additions vs origin/main 110130a). The ExecContext ratchet step and 6 of 7 CI jobs are green at the exact head. Still blocking: CI (gates) fails on the ''Store writer inventory ratchet'' that main #3511 (TASK-3222) introduced, because this PR''s --write-ledger write is not in scripts/store-writers.toml.. No triage reason was given.'
   created_at: 2026-11-07T04:07:59.932487765Z
   modified_at: 2026-11-07T04:07:59.932487765Z
+- id: 01a1b56c-f96c-7a50-bb7a-f23e48bfdee5
+  author: joe
+  content: 'Native-seat validation at a54530cb6e1: the checkout already contains the prior CI repairs (Slice A landed as 36fc675baec / PR #3515). Regenerated docs/internal/architecture/external-tool-output-classifiers.md: byte-identical, no diff. The reported Python gate error does not reproduce: make check-ci-fast passed all 43 gates, exit 0, including ExecContext environment ratchet and store-writer inventory. Separate checks: ExecContext Python fixtures 19/19; classifier fixtures 12/12; explicit check-exec-context.py --base origin/main passes with 1241 exact sites and zero additions; store writer check reconciles 3324 sites; git diff --check passes. Changed files: none; working tree clean. LIGHT targeted cargo test -p aida-core --lib -- exec_context could not start because this standalone lease has no lane job runner; untested=true for that test. No commit, push, PR, queue-done, review record, or hold clearance attempted. No new nits or changes outside the binding CI-only ruling. Host should treat this as validation of an already-landed repair, not publish an empty implementation commit.'
+  created_at: 2026-11-07T09:53:00.268648146Z
+  modified_at: 2026-11-07T09:53:00.268648146Z
+  session_id: 01a1b55ed722
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
