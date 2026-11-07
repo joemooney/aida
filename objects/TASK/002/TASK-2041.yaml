@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:49:29.555327066Z
-modified_at: 2026-10-21T04:50:13.640453596Z
+modified_at: 2026-11-07T20:28:29.068049874Z
 req_type: Task
 tags:
 - operator-held
@@ -17,6 +17,17 @@ relationships:
   target_id: 01a1101a-d324-7002-9942-3eb492b0fc4c
   created_at: 2026-10-21T04:50:13.640443397Z
   created_by: joe
+comments:
+- id: 01a1b7b2-c60c-7cd3-ad38-db4ba14a0ea0
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-21T04:49:58.878179497Z","deferred_until":"the advisor schedules the A2 V3 signoff review on BUG-1808","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:28:29.068045438Z
+  modified_at: 2026-11-07T20:28:29.068045438Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a15ccb-72f4-7783-a198-95f97998dce9
   author: joe
@@ -30,7 +41,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-21T04:49:58.878179497Z
-deferred_until: the advisor schedules the A2 V3 signoff review on BUG-1808
+deferred_until: manual:operator
 deferred_reason: Needs an independent A2 V3 signoff first (BUG-1808 proposal)
 filed_at:
   code_sha: d29b69c35cafa137e15d5935aefc4f79837996e3
