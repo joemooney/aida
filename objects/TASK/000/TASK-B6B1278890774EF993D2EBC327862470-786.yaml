@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T16:59:26.468668799Z
+modified_at: 2026-11-07T23:30:38.171659084Z
 req_type: Task
 tags:
 - area:containment
@@ -344,6 +344,21 @@ comments:
   created_at: 2026-11-07T16:59:26.468668799Z
   modified_at: 2026-11-07T16:59:26.468668799Z
   session_id: 01a1b6e79dd6
+- id: 01a1b859-89db-71f0-860c-263d736c1ae3
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-07 16:40 MST (TASK-3048 next slice; supersedes the native-diagnostic direction of the 11-07 rounds).
+    Finding: every agy conformance run so far used the harness's NATIVE path (scripts/containment/conformance.py:1043-1052: `agy --sandbox --settings` with a write_file(<ws>/**) allow glob). agy rejects that glob ("readwrite <ws>/**: globs not supported") before any probe runs, so C0-C4 can only ever read "unknown". Under the 11-05 ruling agy is OUTER-ONLY (vendors.toml native_layer="none"): its native sandbox/permission layer is not the admission path, and fixing the glob would not earn credit.
+    THIS SLICE (code only; the implementer does not run real vendor models):
+    1. Extend run_aida (conformance.py:681) to accept agy: launch it through AIDA's shared boundary (the same bwrap/netns relay/broker/grant path Codex uses there), with argv from contained::outer_only_argv (launch/agy.rs candidate_argv) — `--dangerously-skip-permissions` present ONLY with an applied ContainmentReceipt, no --sandbox, no native permissions settings file, private runtime dir, OAuth token mounted read-only by handle, no ~/.gemini inheritance, MCP/browser/URL tools off.
+    2. Auth host inventory: make the allowed egress set data (runtime_policy auth_hosts), add the hosts agy actually needs for token refresh, and record the measured list on the spec. Unknown host => fail closed with a named reason.
+    3. Retire the native agy diagnostic as an admission input: leave it runnable for diagnosis if you want, but its report must say production_launcher_credit=false and the AIDA-boundary report is the only one that can flip whole_lane_pass.
+    4. Keep Adapter::require_conformance refusing in production. Unlocking it is a SEPARATE final step after the advisor's fresh live run passes C0-C4 through the AIDA boundary (advisor runs it via script deputy and attaches report.json).
+    Tests: Python conformance suite plus one targeted `cargo test -p aida-cli-lib --lib task_3048` and make check-ci-fast (LIGHT gate). Commit subject trailer: (Refs TASK-3048). Do not complete TASK-3048 in this PR.
+  created_at: 2026-11-07T23:30:38.171659084Z
+  modified_at: 2026-11-07T23:30:38.171659084Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
