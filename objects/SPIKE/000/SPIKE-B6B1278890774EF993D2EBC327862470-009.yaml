@@ -18,6 +18,17 @@ feature: Uncategorized
 created_at: 2026-11-07T21:37:39.393335869Z
 modified_at: 2026-11-07T21:37:39.393335869Z
 req_type: Spike
+relationships:
+- rel_type: Child
+  target_id: 01a13390-7b59-7570-a329-3542db098e83
+  created_at: 2026-11-07T21:37:47.743036415Z
+history:
+- id: 01a1b7f2-40d4-7c30-893c-c6bfa958c1d6
+  author: joe
+  timestamp: 2026-11-07T21:37:49.268134196Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 79603aff6b027dc2e6e68a808ea800c353af9cc2
   branch: main
