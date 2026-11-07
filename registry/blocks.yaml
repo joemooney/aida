@@ -1173,7 +1173,7 @@ blocks:
   type_prefix: BUG
   range_start: 2479
   range_end: 2578
-  next: 2482
+  next: 2483
   allocated_at: 2026-11-06T03:06:59.484726634Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: redacted@node.invalid
