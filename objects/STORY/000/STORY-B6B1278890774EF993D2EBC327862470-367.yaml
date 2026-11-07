@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T01:05:56.356811333Z
+modified_at: 2026-11-07T01:24:44.852088139Z
 req_type: Story
 relationships:
 - rel_type:
@@ -394,6 +394,12 @@ comments:
   content: 'Slice-4 audit: existing journal and SIGKILL merge/eject tests are present. Remaining gap: merge_hold shared label runners can issue nested label writes/retries without persisting active intent. Will checkpoint both production label runners, add a PATH-isolated read/write/retry regression in story_1690_train_tests.rs, and run the binding pr_train plus check-ci-fast LIGHT gate. Slice 5 remains excluded; native host publication uses Refs.'
   created_at: 2026-11-07T01:05:56.356811333Z
   modified_at: 2026-11-07T01:05:56.356811333Z
+  session_id: 01a1b388d365
+- id: 01a1b39b-a6b4-7982-b3e0-ace55da512b5
+  author: joe
+  content: 'Slice-4 hold-label checkpoint follow-up complete. Shared production label reads/writes now persist active intent before every call/retry. PATH-isolated regression covers refusal before read, between probe/write, and before mutation retry (0/1/1 forge calls). LIGHT gate passed: 172 pr_train tests, zero failures; all 38 check-ci-fast gates; fmt/diff clean. BUG-2463 already integrated. Changed merge_hold.rs, story_1690_train_tests.rs and owning plan; left uncommitted. Native publication declaration accepted: [AI:codex] fix(train): checkpoint hold label reads and mutation retries (Refs STORY-2401). Host owns publication; slice 5 remains outstanding; existing vetoes remain authoritative.'
+  created_at: 2026-11-07T01:24:44.852088139Z
+  modified_at: 2026-11-07T01:24:44.852088139Z
   session_id: 01a1b388d365
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
