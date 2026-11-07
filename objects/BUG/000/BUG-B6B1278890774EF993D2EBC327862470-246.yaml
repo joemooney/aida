@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-246
 agreed_id: BUG-2481
 title: 'Full aida status with no derived cache exceeds 50s on a ~7k-row store: the first-use cache rebuild is unbounded'
 description: 'Split from BUG-2479 (advisor 2026-11-06 23:50). With the derived cache warm, full status on 7,247 rows takes about 5s (debug build). With the derived cache empty (a fresh clone, a cache-version bump, or a CI job with no warm-up step), the same command exceeded a 50s watchdog while the cache stayed at zero rows. That means it never populated the cache during the run, or rebuilt it serially per record. Acceptance: on a ~7k-row store snapshot with no derived cache, the first full status populates the cache and finishes within 15s on an optimized build, and the second run takes under 5s. Add a timed regression on a generated 7k-row fixture, not the real store.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:11:09.674846666Z
+modified_at: 2026-11-07T07:15:32.908507337Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -29,6 +29,13 @@ comments:
   created_at: 2026-11-07T07:05:21.495707231Z
   modified_at: 2026-11-07T07:05:21.495707231Z
   session_id: 01a1b4c79430
+- id: 01a1b4dc-d1ac-7c83-8e82-8a3383e49934
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Batched epic rollup is semantically equivalent to derive_epic_status (terminal skip, shared closure, first-match index) and unit-tested, but the new 7k-row timed regression is never executed by CI, so the performance acceptance is guarded only by implementer self-report.. No triage reason was given.'
+  created_at: 2026-11-07T07:15:32.908504814Z
+  modified_at: 2026-11-07T07:15:32.908504814Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b4c2-b43b-7d73-b618-1f11ca67da92
   author: joe
@@ -65,6 +72,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b4dc-d1ac-7c83-8e82-8a28f54aa7c2
+  author: joe
+  timestamp: 2026-11-07T07:15:32.908488819Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
   branch: main
@@ -74,11 +90,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Batched epic rollup is semantically equivalent to derive_epic_status (terminal skip, shared closure, first-match index) and unit-tested, but the new 7k-row timed regression is never executed by CI, so the performance acceptance is guarded only by implementer self-report.
-  recovery_hint: address the review findings, move BUG-2481 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T07:11:09.674846666Z
