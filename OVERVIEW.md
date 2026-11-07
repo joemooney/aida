@@ -421,13 +421,18 @@ identity spellings, interactive prompt transport, hook paths and closed
 wake/resume/background/sandbox capabilities. `launch_policy` re-exports the
 existing vendor key. Session identity, wake selection, resume eligibility and
 operator hints consume these descriptors; `aida-cli-lib/src/vendors/` renders
-vendor-facing hints. The effectful `launch/profile.rs` adapter references the
-same descriptor and retains the existing finalizer. Capabilities do not admit
+vendor-facing hints and resolves headless posture inputs. The core profile's
+`headless_args` composes argv and no-background settings from those resolved
+inputs; compatibility session helpers and the AI client's posture exports keep
+their existing interfaces. A token-aware test inventories production vendor
+strings and typed references outside `vendors/` by path and enclosing item.
+Its checked-in ledger permits reductions only and excludes tests, fixtures and
+docs; mutant fixtures exercise new literals, match arms and aliases.
+The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
-still refuses pending conformance. Headless argv/settings, hook event/backend
-and resume/fork backend migration, the effectful adapter move and the shrinking
-production vendor-literal ratchet remain later slices. See the
-[approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
+still refuses pending conformance. Hook event/backend and resume/fork backend
+migration, the effectful adapter move and further vendor-debt reductions remain
+later slices. See the [approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
 <!-- trace:STORY-2539 | ai:codex -->
 
 ### The four layers
