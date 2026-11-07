@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T23:02:00.516121384Z
+modified_at: 2026-11-07T23:29:09.455455409Z
 req_type: Task
 tags:
 - architecture
@@ -407,6 +407,12 @@ comments:
   modified_at: 2026-11-07T22:46:17.188823045Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b858-2f4f-7682-86f0-1137fdd9069e
+  author: joe
+  content: 'PR #3628 round 4 edits: fix the no-prompt fixture to disable auto-prompt; check CLI safety refusals on both stdout and stderr; reduce the existing vendor literal ledger entry from 2 to 1. Preserve the launch refusal when supervisor cleanup also fails. Escape control/non-ASCII bytes for terminal log output, preserve redirected bytes, and cover logs/attach with a real PTY. Add native agent_new_claude --bg preview coverage with wrapper opt-in absent (plain and sandbox). Restore helper docs. The seven inventory entries added by 31a4e2b9713 are already reflected on origin/main despite the original commit not being an ancestor. Non-Cargo fast checks passed in segmented runs. Cold lane Cargo build and targeted tests are still running/queued; no executed-test result claimed yet. Native seat leaves edits uncommitted for host publication.'
+  created_at: 2026-11-07T23:29:09.455455409Z
+  modified_at: 2026-11-07T23:29:09.455455409Z
+  session_id: 01a1b83f4946
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
