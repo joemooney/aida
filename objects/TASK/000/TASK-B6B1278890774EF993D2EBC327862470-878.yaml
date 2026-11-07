@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T01:03:14.340956522Z
+modified_at: 2026-11-07T01:34:00.642600131Z
 req_type: Task
 tags:
 - architecture
@@ -214,6 +214,12 @@ comments:
   content: 'S2 continuation on the already merged private-PTY implementation: verify the agent_launch.rs merge resolution preserves pre-release registry binding and delegate_seats. Add focused fixture assertions for that contract and bounded PTY diagnostics so an unexpected worker exit retains its terminal error instead of failing before driver collection. Re-run wrapper/PTY tests under required-live, report actual task_3219_live_ count separately, formatting and make check-ci-fast. S3 background and S4 resume remain refused; Refs-only host publication.'
   created_at: 2026-11-07T01:03:14.340956522Z
   modified_at: 2026-11-07T01:03:14.340956522Z
+  session_id: 01a1b3868126
+- id: 01a1b3a4-21c2-7f90-bc1a-6288834dc04b
+  author: joe
+  content: 'S2 continuation / merge-resolution validation completed. This checkout already contained private-PTY S2 from #3547 and its main merge resolution. Verified the production path retains receipt -> worker-grant binding -> register_spawned_agent_with_row (including delegate_seats) -> release -> supervision. Two uncommitted files: containment/tests/launch_tests.rs adds live/native delegation assertions, checks registry presence at the spawn callback, and always gathers a bounded 64 KiB PTY tail before exit assertions; launch/contained_pty.rs adds the missing Linux cfg on its shell-backed error-restoration unit test. Final-source required-live command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-s2-final-results.log. Result 52 passed, 0 failed; separate actual TASK-3219 live count 2/2 (S2 private PTY 1/1, S1 coordinator 1/1), PTY units 3/3. No infrastructure refusal; installed-Codex companion remains separately opt-in and was not exercised. make check-ci-fast passed all 38 gates after fixing the Linux annotation identified on the first run; cargo fmt --all -- --check and git diff --check passed. Background/resume remain refused. No new design blocker or manual gate. Edits remain uncommitted for Refs-only host publication; TASK-3219 remains in progress for S3/S4.'
+  created_at: 2026-11-07T01:34:00.642600131Z
+  modified_at: 2026-11-07T01:34:00.642600131Z
   session_id: 01a1b3868126
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
