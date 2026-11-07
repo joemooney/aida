@@ -133,7 +133,8 @@ allows both write-control paths; the selected Codex profile denies only one.
 This is exec profile/argument evidence, not integrated AIDA C0-C4 conformance,
 real-account authentication, or new credential-refresh evidence.
 
-`codex_0166_help.json` records version, executable SHA-256 and unmodified
+`aida-cli-lib/src/launch/codex_0166_help.json` (beside its production consumer,
+`validate_codex_flags`) records version, executable SHA-256 and unmodified
 stdout from each help scope. Re-record from a newly measured binary whenever
 changing the production pin; the always-on test fails if the digests differ.
 It exercises the shared headless builder with model/effort and generated

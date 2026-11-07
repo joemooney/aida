@@ -1479,11 +1479,11 @@ fn codex_argv(
 
 /// Validate against recorded help from the exact auth pin, without executing
 /// lane-selected vendor code on the host. Parse option declarations only;
-/// option values and text within the terminal prompt are opaque.
+/// option values and text within the terminal prompt are opaque. The recorded
+/// help lives beside this production consumer, not under a tests directory.
 // trace:BUG-2487 | ai:codex
 fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
-    let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("../containment/tests/codex_0166_help.json"))?;
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0166_help.json"))?;
     anyhow::ensure!(
         fixture["sha256"] == codex_auth::PROGRAM_SHA256,
         "contained Codex help fixture differs from executable pin; re-record help before launch"

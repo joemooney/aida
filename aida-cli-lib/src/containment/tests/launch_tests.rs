@@ -3425,7 +3425,7 @@ fn bug_2487_codex_env() -> BTreeMap<String, String> {
 // trace:BUG-2487 | ai:codex
 fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
     let recorded: serde_json::Value =
-        serde_json::from_str(include_str!("codex_0166_help.json")).unwrap();
+        serde_json::from_str(include_str!("../../launch/codex_0166_help.json")).unwrap();
     assert_eq!(
         recorded["sha256"],
         codex_auth::PROGRAM_SHA256,
