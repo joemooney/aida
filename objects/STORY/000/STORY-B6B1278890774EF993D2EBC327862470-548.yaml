@@ -1,0 +1,36 @@
+id: 01a1b5ec-c74a-7810-b3e6-9840c095be40
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-548
+agreed_id: STORY-2625
+title: 'Review PR-3593: [AI:codex] feat(db): migrate legacy deferral conditions (Refs STORY-2402)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b5cb`) for branch `story-2402-r0434`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3593>
+  - Branch: `story-2402-r0434` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2402
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3593` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T12:12:36.042198488Z
+modified_at: 2026-11-07T12:12:36.042198488Z
+req_type: Story
+filed_at:
+  code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4803b66ade9
+  vendor: claude
+  session: 01a1b5cbe3c6
