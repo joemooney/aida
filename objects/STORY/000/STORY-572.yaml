@@ -13,10 +13,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:49.880980182Z
-modified_at: 2026-09-24T16:30:26.031565471Z
+modified_at: 2026-11-07T20:26:06.222520965Z
 req_type: Story
 tags:
-- deferred:stabilization-first
 - docs
 - parent:EPIC-39
 - repositioning
@@ -30,5 +29,19 @@ relationships:
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:43:10.685053681Z
   created_by: joe
+comments:
+- id: 01a1b7b0-980e-7113-a2bb-e37ddf6aa095
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:stabilization-first"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:06.222514525Z
+  modified_at: 2026-11-07T20:26:06.222514525Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-13T01:48:35.955681802Z
+deferred: true
+deferred_at: 2026-09-24T16:30:26.031565471Z
+deferred_until: manual:operator
