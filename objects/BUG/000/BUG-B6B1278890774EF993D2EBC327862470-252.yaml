@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:00:03.790443443Z
+modified_at: 2026-11-07T17:00:26.540394231Z
 req_type: Bug
+comments:
+- id: 01a1b6f4-4e2c-7450-aaf6-2d8e229ba883
+  author: joe
+  content: 'Investigation only; production pin/argv unchanged. Requested npm 0.167.0-linux-x64 tarball integrity verified; native musl SHA-256 cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda. Both -P aida exec --help and exec -P aida --help exit 2 with unexpected argument -P; sandbox --help alone accepts it. Fake-only reduced-leaf probe passed after increasing its eight-second timeout to 30 seconds: bearer/account matched, intentional local HTTP 400, auth unchanged, no token in scanned artifacts. No live containment/real-account inference credit. Full evidence and reproduction in docs/internal/testing/bug-2487-codex-pin.md. Punted design-fork; publication remains vetoed. Native seat leaves one uncommitted evidence document for host handoff.'
+  created_at: 2026-11-07T17:00:26.540394231Z
+  modified_at: 2026-11-07T17:00:26.540394231Z
+  session_id: 01a1b6f07ef4
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
   author: joe
