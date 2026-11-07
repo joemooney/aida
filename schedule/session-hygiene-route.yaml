@@ -1,8 +1,8 @@
 job: session-hygiene-route
-last_run: 2026-11-07T01:18:56.924002930Z
+last_run: 2026-11-07T02:27:44.108933653Z
 last_by:
   seat: advisor
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   vendor: claude
 result: done
-note: 'same 14 KEEP items; tracked by BUG-2473 (rework lane running for #3551)'
+note: same known salvage items; BUG-2473 rework in flight (#3551)
