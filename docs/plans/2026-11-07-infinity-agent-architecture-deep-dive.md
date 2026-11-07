@@ -129,3 +129,37 @@ surface-specific conformance limits. See
 The deliverable of this track is better coordination of Codex, Claude, and AGY.
 Deciding against an AIDA-owned agent leaves every benefit in this document
 available on its own merits.
+
+## Lifecycle test results (SPIKE-711, 2026-11-07)
+
+Run from a sandboxed advisor-seat subagent (scratch dir under `$TMPDIR`, tiny
+prompts, `timeout`-wrapped, no permission-bypass flags, no credential files
+touched). Versions: Claude Code 2.1.319, codex-cli 0.166.0, agy 1.5.3.
+Evidence kinds: **live** (command executed) and **help/binary** (CLI `--help`
+or strings in the shipped binary; proves the surface exists, not the behavior).
+
+Environment finding common to all rows: the seat sandbox mounts the vendor
+state directories read-only (`~/.claude/projects`, `~/.codex`,
+`~/.gemini/antigravity-cli`), so no vendor can persist a session transcript
+from this seat. Every persisted-session test (fork, resume) therefore needs a
+host run. Nothing was worked around.
+
+| Candidate | Vendor | Version | Result | Evidence |
+|---|---|---|---|---|
+| 1. Turn-boundary fork | Claude Code | 2.1.319 | unverified: transcript not persistable in sandbox | `claude -p --model haiku --session-id <uuid> "Remember the word PELICAN. Reply only OK."` (network allowed for api.anthropic.com) printed `OK`, but `find ~/.claude -name '<uuid>*'` found no `.jsonl` (projects dir write-denied). Then `claude -p --model haiku --resume <uuid> --fork-session "What word did I ask you to remember?"` and plain `--resume <uuid>` both: `No conversation found with session ID: <uuid>`. `claude --help` confirms `--resume <id>`, `--fork-session` ("create a new session ID"), `--session-id`. Operator rerun (host, outside sandbox): `SID=$(uuidgen); claude -p --model haiku --session-id $SID "Remember the word PELICAN. Reply only OK."; F=$(ls ~/.claude/projects/*/$SID.jsonl); stat -c '%s %Y' $F; claude -p --model haiku --resume $SID --fork-session "What word did I ask you to remember?"; stat -c '%s %Y' $F` -- yes only if the answer is PELICAN and size/mtime of `$F` are unchanged. |
+| 1. Turn-boundary fork | Codex | 0.166.0 | unverified: sandbox blocks startup; also no non-interactive fork | `codex exec --skip-git-repo-check -s read-only "Remember the word PELICAN. Reply only OK."` -> `Error: failed to initialize in-process app-server client: Read-only file system (os error 30)`. `codex fork --help`: `codex fork [OPTIONS] [SESSION_ID] [PROMPT]` ("Fork a previous interactive session"); no `codex exec fork` exists, so the fork test is interactive-TUI only (or via the app-server). Operator rerun: `codex exec -s read-only "Remember the word PELICAN. Reply only OK."` (note the session id in the header / `~/.codex/sessions`), then `codex fork <id> "What word did I ask you to remember?"` in a pty, and compare the original rollout file size/mtime before and after. |
+| 1. Turn-boundary fork | AGY | 1.5.3 | unverified: not logged in, log dir read-only | `agy --print="Remember the word PELICAN. Reply only OK."` -> `open /home/joe/.gemini/antigravity-cli/log/...: read-only file system` and `error getting token source: You are not logged into Antigravity`. `agy --help` shows no fork flag; it has `--conversation <id>` (resume) and `--continue`. `invoke_subagent` exists (98 `invoke_subagent` / 109 `InvokeSubagent` strings in the binary), but it is a model-invoked tool, not a CLI fork of an existing transcript; it cannot be exercised without a login. For the CLI-fork shape: no CLI surface. Operator rerun: run the PELICAN prompt with `agy --print=...`, then ask a second `agy --print=... --conversation <id>` and inspect the conversation file; test `invoke_subagent` by prompting the agent to delegate and check whether the child sees parent context. |
+| 2. Pre-compaction handoff | Claude Code | 2.1.319 | yes (help/binary evidence; no live test) | `claude --help`: `--autocompact <auto\|tokens>  Auto-compact window size (auto, or 100k-1M tokens)`. `strings $(readlink -f $(which claude))` finds `PreCompact` (44 hits), `PostCompact` (47), `autoCompactEnabled` (25), `DISABLE_AUTO_COMPACT` (6), `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (8). So the PreCompact hook event and the `--autocompact` flag are real in this version. Not tested live: a hook firing needs a context large enough to trigger compaction (or an interactive `/compact`). Host rerun: register a `PreCompact` hook in a scratch project's `.claude/settings.json` that appends to a file, run `/compact` in a session, check the file. |
+| 2. Pre-compaction handoff | Codex | 0.166.0 | unverified: no PreCompact hook found | `codex features list` shows only `async_compaction` (under development), `compaction_image_budget`, `guardian_reuse_parent_compaction`; binary strings contain no `PreCompact` hook name. Compaction exists but no pre-compaction user hook was found; the token-limit config key name was not confirmed from the binary. Operator check: `codex --help`, the `~/.codex/config.toml` docs for the auto-compact token limit, and whether `hooks` supports a compaction event. |
+| 2. Pre-compaction handoff | AGY | 1.5.3 | unverified | Binary contains `CompactionConfig`, `compactionConfig`, `COMPACTION_BACKWARD_WALK` strings and no `PreCompact`; no compaction flag in `agy --help` (only `--settings` JSON). Needs a logged-in host to inspect settings keys and trigger behavior. |
+| 3. Exit + resume across a human wait | Claude Code | 2.1.319 | unverified: transcript not persistable in sandbox | Same `--session-id` run as row 1 printed `OK`; `claude -p --resume <uuid> "..."` -> `No conversation found with session ID`. Cause is the read-only `~/.claude/projects`, not the CLI. Operator rerun: `SID=$(uuidgen); claude -p --model haiku --session-id $SID "Ask me one question: my favourite fruit? Then stop."; claude -p --model haiku --resume $SID "Banana. Now repeat my favourite fruit and the first question you asked."` -- yes if the reply cites both. |
+| 3. Exit + resume across a human wait | Codex | 0.166.0 | unverified: sandbox blocks startup | Same `codex exec` startup error as row 1. `codex exec resume --help`: `codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]` (`--last` also accepted), so the surface exists. Operator rerun: `codex exec -s read-only "Ask me one question and stop."`, then `codex exec resume <id> "Banana. Repeat the question and my answer."`. |
+| 3. Exit + resume across a human wait | AGY | 1.5.3 | unverified: not logged in | Same login/read-only error as row 1. `agy --help` shows `--conversation <id>` ("Resume a previous conversation by ID") and `--continue`. Operator rerun: `agy --print="Ask me one question and stop."`, then `agy --conversation <id> --print="Banana. Repeat the question and my answer."`. |
+
+Conclusions: (a) only candidate 2 on Claude Code is a documented yes
+(PreCompact hook and `--autocompact` exist in 2.1.319), and it still lacks a
+live firing test; (b) candidates 1 and 3 are unverified on all three vendors and
+need a host run outside the seat sandbox with the commands above, with the extra
+caveat that Codex has no non-interactive fork and AGY has no CLI fork (its
+`invoke_subagent` is a model tool); (c) no row is a verified "yes", so no
+implementation DRAFT spec is warranted until the host reruns land.
