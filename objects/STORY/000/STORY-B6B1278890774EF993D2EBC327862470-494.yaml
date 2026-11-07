@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T09:59:17.192982516Z
+modified_at: 2026-11-07T09:59:23.079304313Z
 req_type: Story
 tags:
 - area:advisor
@@ -313,6 +313,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Doc-only reconciliation with the v2 signoff is accurate except it cites the wrong landing PR for BUG-2471 (#3536 is BUG-2472; BUG-2471 landed as #3535, commit 37c695e3406), plus one stale ''proposed'' wording. AC1 verified (inventory present/updated); AC2-6 not applicable (Refs doc lane, no runtime claim). CI: rest/cli/lib/merge-hold pass; contracts+gates still pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T09:59:17.192981116Z
   modified_at: 2026-11-07T09:59:17.192981116Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b572-d063-7810-b9fb-f337bab2efcf
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3589):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7460b2eca04e
+    Recorded: 2026-11-07T09:55:03.453403007+00:00
+    Findings:
+    1. minor: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:136 and docs/internal/agents/advisor-script-inventory.md:57 say BUG-2471 landed via PR #3536. PR #3536 is BUG-2472 (train/* admission, commit a6e5865acc8). BUG-2471's fix is PR #3535 (commit 37c695e3406 on origin/main), which is also what the 19:56 UTC signoff comment cites ('BUG-2471 (#3535)'). Change both citations to #3535. (The AIDA linkage shipped_pr=3536 on BUG-2471 appears mis-attributed; do not use it as the source.)
+    2. cosmetic: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:13 still says the inventory records 'every proposed disposition', but this PR's inventory intro (advisor-script-inventory.md:11-14) now says dispositions follow the v2 signoff. Change it to 'every signed-off disposition' (or similar) so the two docs agree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T09:59:22.979880566Z
+  modified_at: 2026-11-07T09:59:22.979880566Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
