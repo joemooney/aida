@@ -21,8 +21,8 @@ BUG-2447/2448 disposition) for the advisor through deputy 3. The later scope
 comment at `2026-11-07T00:45:56Z` moves AC1-AC3 to the implementation PR;
 it does not reassign ownership of steps 4-5. The design record landed as
 `90d0ec0baf4` (#3544), with a `docs(plans)` subject and
-`(Refs STORY-2593)` trailer; that squash
-resolves finding 4's completion-metadata concern for the landed record.
+`(Refs STORY-2593)` trailer; that squash resolves finding 4's
+completion-metadata concern for the landed record.
 
 Synthetic probes used the installed `codex-cli 0.166.0` executable at
 `@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex`, SHA-256
@@ -75,7 +75,7 @@ implementation slice.
 
 ## Decision escalation and host handoff
 
-Review of `14ef038e232f` is accepted on its facts. Findings 1-3 remain open:
+Review of `0c3299c77788` is accepted on its facts. Findings 1-3 remain open:
 the production refusal is retained, containment and credential-visibility
 evidence is absent, and BUG-2447/2448 remain Approved and blocked. Treating
 those findings as actionable implementation work before resolving finding 5
@@ -84,10 +84,11 @@ interface decision first. Accepting the ID-token-shaped/empty-refresh schema
 or naming another supported `codex exec` interface needs an explicit recorded
 decision; requeueing without one does not resolve the gate.
 
-Finding 4 remains a host action. Commit `cadef932a42c` uses docs/Refs, but
-`14ef038e232f` regressed to feat/completion; `e58b7e8cafc` and PR #3560 also
-claim feature completion. Future commits on this branch must use the
-docs/Refs subject below. Before any eventual squash, the host must retitle
+Finding 4 remains a host action. Commit `0c3299c77788` uses docs/Refs, but
+`14ef038e232f`, `e58b7e8cafc` and PR #3560 still claim feature completion.
+The corrected latest commit does not correct the PR's squash title.
+Future commits on this branch must use the docs/Refs subject below.
+Before any eventual squash, the host must retitle
 the PR to
 `[AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593)`
 or close it unmerged. This native seat cannot change Git metadata or perform
