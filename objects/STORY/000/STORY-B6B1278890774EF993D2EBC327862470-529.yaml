@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T06:41:28.022687981Z
+modified_at: 2026-11-07T08:16:52.937011795Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -64,6 +64,13 @@ comments:
   created_at: 2026-11-07T06:41:28.022687981Z
   modified_at: 2026-11-07T06:41:28.022687981Z
   session_id: 01a1b4bb3dcb
+- id: 01a1b514-f8c9-79d3-82f5-7149527a046a
+  author: joe
+  content: '[advisor 01:15] Hand-merged origin/main into #3578 (ci-gate-tiers.toml: kept both independent entries). make check-ci-fast passes all 44 gates (clean env).'
+  created_at: 2026-11-07T08:16:52.937011795Z
+  modified_at: 2026-11-07T08:16:52.937011795Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b445-7165-7711-9410-a0b875b2776d
   author: joe
