@@ -1,5 +1,5 @@
 {
-  "ceiling": 1224,
+  "ceiling": 1231,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -749,6 +749,7 @@
     "aida-cli-lib/src/tests/bug_2434_lane_os_wrap_tests.rs:an_explicit_off_is_left_alone_and_the_probe_is_not_asked:var:24c5681c8a357ee3ec65": 1,
     "aida-cli-lib/src/tests/bug_2434_lane_os_wrap_tests.rs:offer_with_bwrap_live_and_os_wrap_unset_gives_the_lane_a_runner_and_leaks_nothing:var_os:8ead1a3951ada15de59c": 1,
     "aida-cli-lib/src/tests/bug_2455_force_claim_clone_tests.rs:bwrap_live:var_os:e41b8db44fe40e21871e": 1,
+    "aida-cli-lib/src/tests/bug_2467_delegator_launch_tests.rs:bug_2467_resume_restores_persisted_narrowing_and_revalidates_parent:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:bug_home_038_bwrap_import_quarantines_the_seat_branch:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:bwrap_live_or_skip:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:task_2879_post_exit_commit_looks_up_refs_pr:var:c2c7e032717fc5d2fa3f": 1,
@@ -782,6 +783,7 @@
     "aida-cli-lib/src/tests/story_2254_codex_bg_supervisor_tests.rs:sleep_worker:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/tests/story_2254_codex_bg_supervisor_tests.rs:start:var:69afff1dcb45dd5c2d96": 1,
     "aida-cli-lib/src/tests/story_2254_codex_bg_supervisor_tests.rs:story_2254_barrier_entry:var_os:c04f527feb885e0986dd": 1,
+    "aida-cli-lib/src/tests/story_2254_ps_detached_codex_tests.rs:proc_identity_detached_stamp_tracks_reparented_worker_until_dead:var_os:7632ef26efce2b8263fd": 1,
     "aida-cli-lib/src/tests/story_2315_pr_lease_takeover_tests.rs:bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/tests/story_2402_defer_tests.rs:story2402_s2_defer_help_matches_snapshot:var_os:859c7dfc4d1f25a6a95e": 1,
     "aida-cli-lib/src/tests/story_696_ps_tests.rs:pool_reuse_revokes_only_the_prior_occupants_child_grant:var:7b07c61dde19eb95da92": 1,
@@ -793,6 +795,8 @@
     "aida-cli-lib/src/tests/task_1518_drain_sigterm_tests.rs:task_1518_real_sigterm_child_body:var_os:474d8c9c87eadc8006a9": 1,
     "aida-cli-lib/src/tests/task_1518_drain_sigterm_tests.rs:task_1542_real_sigterm_stop_child_body:var_os:16af20b1cc403fcb249c": 1,
     "aida-cli-lib/src/tests/task_1793_harness_version_tests.rs:task1793_launched_write_child:var_os:d0245d0cc2260597bc41": 1,
+    "aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:aida_sized_relay_native_statuses_reach_required_pr_and_train_gates:var_os:51581d1ff1556fbfaf60": 1,
+    "aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:aida_sized_relay_native_statuses_reach_required_pr_and_train_gates:var_os:a9de272e44ca8d223e93": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:git_shim:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage:var_os:e41b8db44fe40e21871e": 1,
@@ -1131,6 +1135,7 @@
     "tests/test_codex_mail_wake.py:test_uninstall_retains_unit_edited_during_monitoring_removal:os.environ:601d17992ae915bcabd6": 1,
     "tests/test_containment_conformance.py:run_agy_fixture:os.environ:ea1ac8b145c8f1cdf516": 1,
     "tests/test_containment_conformance.py:test_continuation_preserves_actual_terminal_stdin:os.environ:38322890337b478a92a9": 1,
+    "tests/test_containment_conformance.py:test_outer_cleanup_allows_nested_supervisor_to_kill_term_ignoring_group:os.environ:a4cecfdb32bb08d25816": 1,
     "tests/test_containment_conformance.py:test_outer_timeout_reaps_lane_closes_network_and_preserves_setup:os.environ:291e51a5f361aab6f604": 1,
     "tests/test_containment_conformance.py:test_production_launch_retains_terminal_session_but_owns_cleanup_group:os.environ:e8b28c559076e822bd1c": 1,
     "tests/test_containment_conformance.py:test_run_mounts_payload_outside_workspace_read_only:os.environ:ea1ac8b145c8f1cdf516": 1,
@@ -1162,7 +1167,9 @@
     "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:5669a4474ea92d5cb7d0": 1,
     "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:7bd404f46f1c610eb55d": 1,
     "tests/test_work_ci_relay.py:<module>:os.environ:08a057369b0bd4bb9890": 1,
-    "tests/test_work_ci_relay.py:__init__:os.environ:d30b27289acc2502f701": 1
+    "tests/test_work_ci_relay.py:__init__:os.environ:d30b27289acc2502f701": 1,
+    "tests/test_work_ci_relay.py:test_aida_sized_multi_sha_templates_and_native_gate_evidence:os.environ:681ec7db212277c02edb": 1,
+    "tests/test_work_ci_relay.py:test_aida_sized_multi_sha_templates_and_native_gate_evidence:os.environ:8adbff741d6a9a765420": 1
   },
   "version": 1
 }
