@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-07T20:57:46.810059355Z
+modified_at: 2026-11-07T20:57:53.909753036Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -25,6 +25,13 @@ comments:
     Migrated condition: spec:STORY-2492=completed
   created_at: 2026-11-07T20:28:32.195806910Z
   modified_at: 2026-11-07T20:28:32.195806910Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cd-b3f5-7751-a753-b960baa49070
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage: ACTIVATED. Its typed condition spec:STORY-2492=completed has fired.'
+  created_at: 2026-11-07T20:57:53.909753036Z
+  modified_at: 2026-11-07T20:57:53.909753036Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
