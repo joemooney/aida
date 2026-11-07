@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-11-06T00:15:55.556512021Z
+modified_at: 2026-11-07T20:27:09.542416499Z
 req_type: Epic
 tags:
 - architecture
@@ -1212,6 +1212,16 @@ comments:
   created_at: 2026-11-06T00:15:55.556512021Z
   modified_at: 2026-11-06T00:15:55.556512021Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-8f66-7f63-a27b-d402ddf6574e
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-19T15:50:15.996650012Z","deferred_until":"when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:09.542409018Z
+  modified_at: 2026-11-07T20:27:09.542409018Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a154db-3bc2-7791-9b8b-74b2a1179e78
   author: joe
@@ -1220,7 +1230,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-19T15:50:15.996650012Z
-deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
