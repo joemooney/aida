@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T20:32:24.452235562Z
+modified_at: 2026-11-07T20:42:04.050478175Z
 req_type: Story
 tags:
 - architecture
@@ -577,6 +577,12 @@ comments:
   modified_at: 2026-11-07T20:31:03.601295529Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7bf-3592-7341-b819-e15644b137b3
+  author: joe
+  content: 'Round 7 implementation: replacing retirement build/executable gate with delivery-state checks under the existing fence/quiesce/preserve/final-check protocol. Unbound queued deliveries retain the source; delivered mail (including unread mail) and ACK evidence remain durably preserved and logically readable. Unknown delivery evidence refuses. Named session-start, orphan-adoption, queue-next/fill and review-watch liveness decisions now use ownership::reader; fetch-worker probe refs use their separate process-liveness check. Adding regressions for no-first-push clean dead lanes, dry-run recovery of Live/Unknown owners, fresh dispatch in an unverified namespace, and Unknown conversation display. Validation in progress through lane job runner. No merge-hold clearance claimed.'
+  created_at: 2026-11-07T20:42:04.050478175Z
+  modified_at: 2026-11-07T20:42:04.050478175Z
+  session_id: 01a1b7b65058
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
