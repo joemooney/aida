@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:25.477355443Z
-modified_at: 2026-11-06T00:18:44.068333732Z
+modified_at: 2026-11-07T20:28:09.257314339Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -38,6 +38,16 @@ comments:
   created_at: 2026-11-06T00:18:44.068333732Z
   modified_at: 2026-11-06T00:18:44.068333732Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b2-78a9-7580-98f7-5c2ec4c69f92
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-19T16:08:25.551914335Z","deferred_until":"STORY-1853, STORY-1690 and TASK-1945 have landed and the operator reopens architecture work","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:28:09.257306833Z
+  modified_at: 2026-11-07T20:28:09.257306833Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a154eb-dc28-7a21-b9d7-0eabe519f4f9
   author: joe
@@ -46,7 +56,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-19T16:08:25.551914335Z
-deferred_until: STORY-1853, STORY-1690 and TASK-1945 have landed and the operator reopens architecture work
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-19: parked during the dev-cycle speed push. Operator ruled the architecture/crate-split work premature on 2026-10-18 (burndown speed first).'
 execution_mode: guided
 filed_at:
