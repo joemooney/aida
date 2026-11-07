@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:58.191330588Z
-modified_at: 2026-11-06T00:14:53.548999918Z
+modified_at: 2026-11-07T20:26:42.098149487Z
 req_type: Story
 tags:
 - aida-why
@@ -39,6 +39,16 @@ comments:
   created_at: 2026-11-06T00:14:53.548999918Z
   modified_at: 2026-11-06T00:14:53.548999918Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-2432-7470-bf6b-49d8f90cbcff
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-07T17:00:43.759211553Z","deferred_until":"operator explicitly decides on the standalone aida-why extraction (positioning proposal, not a recorded decision)","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:42.098141763Z
+  modified_at: 2026-11-07T20:26:42.098141763Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-07T17:00:43.759211553Z
-deferred_until: operator explicitly decides on the standalone aida-why extraction (positioning proposal, not a recorded decision)
+deferred_until: manual:operator
