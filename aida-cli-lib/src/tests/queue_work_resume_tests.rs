@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 use super::*;
 
 #[test]
@@ -383,11 +384,11 @@ fn orchestrated_lease_owner_alive_rejects_recycled_pid() {
     let sessions = root.join(".aida").join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     let mint = |lease_id: &str, claude_id: &str, owner_lines: &str| {
-        std::fs::write(
-            sessions.join(format!("{lease_id}.toml")),
-            format!("id = \"{lease_id}\"\nbranch = \"b\"\n{owner_lines}"),
-        )
-        .unwrap();
+        let mut body = format!("id = \"{lease_id}\"\nbranch = \"b\"\n{owner_lines}");
+        if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+            body.push_str(&format!("pid_namespace = {namespace}\n"));
+        }
+        std::fs::write(sessions.join(format!("{lease_id}.toml")), body).unwrap();
         let manifest = session_manifest::SessionManifest {
             session_id: lease_id.to_string(),
             planned_at: chrono::Utc::now(),

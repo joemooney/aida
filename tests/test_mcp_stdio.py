@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# trace:BUG-2476 | ai:codex
 """Black-box MCP stdio compatibility tests for AIDA.
 
 This suite starts `aida mcp-serve` as a child process and speaks JSON-RPC over
@@ -193,7 +194,7 @@ class McpClient:
 
 def own_process_binding() -> list[str]:
     """BUG-1934: the presenter binding ``test_support::mint_grant_for`` gives a
-    grant: ``proc:<pid>@linux-starttime:<ticks>`` for this test process (field
+    grant: ``proc:<pid>@[pidns-<inode>/]linux-starttime:<ticks>`` (field
     22 of its stat file, as ``process_start_identity`` reads it). Every binary
     the test spawns descends from it, so its ancestry intersects the binding.
     Raises instead of minting an unbindable grant. trace:BUG-1934 | ai:claude
@@ -201,7 +202,12 @@ def own_process_binding() -> list[str]:
     pid = os.getpid()
     stat = Path(f"/proc/{pid}/stat").read_text()
     ticks = stat[stat.rindex(")") + 1 :].split()[22 - 3]
-    return [f"proc:{pid}@linux-starttime:{ticks}"]
+    start = f"linux-starttime:{ticks}"
+    namespace = Path("/proc/self/ns/pid").stat().st_ino
+    # Linux reserves this inode for the initial namespace (BUG-2419).
+    if namespace != 0xEFFFFFFC:
+        start = f"pidns-{namespace}/{start}"
+    return [f"proc:{pid}@{start}"]
 
 
 def mint_seat_grant(root: Path, seat: str, delegable: tuple[str, ...] = ()) -> dict[str, str]:

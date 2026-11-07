@@ -101,6 +101,7 @@
 //! and print a one-line warning that the check was skipped.
 //!
 // trace:BUG-1947 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -854,6 +855,7 @@ mod tests {
     // trace:BUG-1947 | ai:claude
     #[test]
     fn a_separate_pid_namespace_is_unverified_but_the_host_namespace_is_not() {
+        let _env = crate::test_env::EnvVarGuard::unset(TRUST_PID_NAMESPACE_ENV);
         let (_t, fake, wt, _outside) = fixture();
         fake.add(1, 0, "init", Path::new("/"));
         let me = fake.add(200, 1, "aida session reap", &wt);
@@ -1040,6 +1042,9 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn real_proc_scan_finds_a_live_sleep_inside_the_worktree() {
+        // This fixture owns the temporary tree and every process entering it.
+        // An empty scan in a container needs that explicit local opt-in.
+        let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "1");
         let tmp = tempfile::tempdir().unwrap();
         let wt = tmp.path().join("wt");
         std::fs::create_dir_all(&wt).unwrap();
