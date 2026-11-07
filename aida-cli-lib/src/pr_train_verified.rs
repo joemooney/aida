@@ -349,7 +349,8 @@ fn collect(
         // superseded (it is a past round, not the standing decision). With
         // no current-head verdict every body still counts, so an off-head
         // approval stands only as the patch-identity carry-over the corpus
-        // gate proved, and a refusal at the current head always refuses.
+        // gate proved. At the same head, the newest dated verdict wins
+        // across PR/spec keys, as in the corpus gate above.
         // trace:BUG-2438 | ai:claude
         let reviewed_at_head = |v: &rv::RecordedVerdict| {
             v.reviewed_sha
@@ -359,6 +360,17 @@ fn collect(
         let at_head = verdicts
             .iter()
             .any(|(_, _, v)| !v.is_closed() && reviewed_at_head(v));
+        // trace:BUG-2474 | ai:codex
+        let recorded_time = |v: &rv::RecordedVerdict| {
+            v.recorded_at
+                .as_deref()
+                .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+        };
+        let newest_at_head = verdicts
+            .iter()
+            .filter(|(_, _, v)| !v.is_closed() && reviewed_at_head(v))
+            .filter_map(|(_, _, v)| recorded_time(v))
+            .max();
         let mut originals = Vec::new();
         let mut superseded_here = Vec::new();
         for (key, record, verdict) in verdicts {
@@ -373,7 +385,10 @@ fn collect(
                     let sha = sha.trim();
                     sha.len() >= 7
                         && sha.bytes().all(|c| c.is_ascii_hexdigit())
-                        && !rv::same_reviewed_sha(sha, &fresh.head)
+                        && (!rv::same_reviewed_sha(sha, &fresh.head)
+                            || recorded_time(&verdict)
+                                .zip(newest_at_head)
+                                .is_some_and(|(at, newest)| at < newest))
                 });
             if is_superseded {
                 // Covered by this car's current-head verdict, so the train's
