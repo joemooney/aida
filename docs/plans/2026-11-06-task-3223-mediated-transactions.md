@@ -13,23 +13,9 @@ advisor approval is recorded on TASK-3223. A code-review verdict or merging this
 document does not supply that architecture approval. The full S2 contract stays
 open; this sketch implements none of its acceptance criteria.
 
-## Review and publication scope
+## Implementation scope
 
-For PR #3563, use this documentation-only subject for the corrective commit, PR
-title and eventual squash commit, if publication is authorized:
-
-```text
-[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)
-```
-
-The earlier `1baca620b4a5` subject incorrectly claims the full implementation and
-uses a closing trailer. A follow-up documentation commit does not rewrite that
-subject. The host must correct the PR title and squash subject before merge and
-ensure the earlier closing subject cannot land as completion evidence. Preserve
-the active merge hold and any punt: this text grants no publication or clearance
-authority. Do not mark TASK-3223 Done or Completed for this sketch.
-
-The following acceptance work remains unimplemented by this PR:
+The following acceptance work remains unimplemented by this sketch:
 
 | TASK-3223 contract | Current evidence / remaining work |
 | --- | --- |
