@@ -5,11 +5,25 @@
     {
       "at": "2026-11-07T04:53:18.655470597Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-07T04:53:20.197099228Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
       "ts": "2026-11-07T04:53:18.353203045Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-492",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "36fc675baec589c06c273135f0021eefcfe35db7",
+        "pr": 3515,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-07T04:53:19.985384924Z",
       "spec": "STORY-b6b1278890774ef993d2ebc327862470-492",
       "kind": {
         "event": "SpecCompleted",
