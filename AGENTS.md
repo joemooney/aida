@@ -1,3 +1,9 @@
+CI freshness compares pinned workflow content: the GitHub `.github/workflows`
+tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
+refusals, including edits followed by reverts; the separate behind-base gate
+still applies. Train CI proofs bind head SHA plus workflow digest. See OVERVIEW.md.
+<!-- trace:STORY-2401 | ai:codex -->
+
 Question parking with an empty consequence preserves an existing deferral trigger
 and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.
