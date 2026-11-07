@@ -428,10 +428,15 @@ fn adoption_lease_fixture(
     worktree_path: &str,
     custom_key: bool,
 ) -> String {
+    // trace:TASK-2959 | ai:codex
+    // This lease belongs to the test process's namespace, including in a sandbox.
+    let namespace = crate::agent_registry::current_pid_namespace()
+        .map(|ns| format!("pid_namespace = {ns}\n"))
+        .unwrap_or_default();
     format!(
         "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
          worktree_path = {}\nbranch = \"claude/task-77\"\n\
-         started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\n{}",
+         started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\n{namespace}{}",
         aida_core::toml_quote::toml_string(worktree_path),
         if custom_key {
             "custom_key = \"kept\"\n"
