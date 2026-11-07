@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T02:58:45.666282799Z
+modified_at: 2026-11-07T03:06:54.491547551Z
 req_type: Task
 tags:
 - architecture
@@ -252,6 +252,13 @@ comments:
   content: 'Round 2 / PR #3547 at 626b32c: addressed all three current review findings. Downloaded the actual CI job logs. lib-0 failures were codex_tool_env::tests::bug_2395_every_role_launch_site_is_inventoried (agent_launch role sites 6 vs 5) and bug_2398_final_spawn_boundary_ratchet (launch sites 8 vs 7): audited the Claude-wrapper-only baseline assign_seat arm and updated both counts without weakening Codex finalization. lib-1 failed launch::contained::tests::task_3219_live_claude_interactive_private_pty because its Python SIGINT handler called print while PTY-RESIZED print held BufferedWriter: RuntimeError reentrant call, exit 1. Signal handlers now use os.write/os._exit. PrivatePty::wait now drains the master through EIO/EOF after observing child exit; a regression checks an already-reaped child''s terminal-reset suffix and 256 KiB output. Added required-live task_3219_live_claude_interactive_grant using plan.role=Some(implementer) and the production issue_launch_child_with_delegation path. A test-only pre-release observer verifies the real child grant is bound to the accepted receipt''s worker PID before vendor execution; an injected refusal verifies child revocation, parent preservation and no vendor execution. This new case exposed a production transport defect: contained_host.py omitted unused variadic keyctl arguments, making KEYCTL_SEARCH''s destination register undefined and refusing a possessed child key with EINVAL. Independently reproduced current isolation failure vs successful zero-padded isolation; the helper now supplies every syscall argument explicitly. Final-source required-live wrapper selection plus four inventory guards: 61 passed, zero failed; actual TASK-3219 live count 3/3 (coordinator, baseline interactive, granted interactive), PTY units 4/4. No required-live infrastructure refusal; installed-Codex companion remains separately opt-in and unexercised. Final make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check pass. Logs: /tmp/task3219-round2-green.log, /tmp/task3219-round2-green-results.log, /tmp/task3219-round2-fast-final.log. Five changed files remain uncommitted for host publication: agent_launch.rs, containment/contained_host.py, containment/tests/launch_tests.rs, launch/contained_pty.rs, tests/bug_2398_codex_tool_env_tests.rs. Refs-only S2 correction; S3/S4 and existing merge hold remain. No commit, push, PR, ship merge, review verdict or queue completion from this native seat.'
   created_at: 2026-11-07T02:58:45.666268280Z
   modified_at: 2026-11-07T02:58:45.666268280Z
+- id: 01a1b3f9-2e9b-7582-9518-85d02eeaec9a
+  author: joe
+  content: '[advisor 20:06] #3547 hand-merged a third time, after #3516 landed: union of store_mutation + pty modules and the mutation + io fields. dell1: check --tests OK; task_3219/task_3225 21/21 pass.'
+  created_at: 2026-11-07T03:06:54.491547551Z
+  modified_at: 2026-11-07T03:06:54.491547551Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
