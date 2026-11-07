@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T09:57:45.265191061Z
+modified_at: 2026-11-07T09:58:34.243168565Z
 req_type: Story
 relationships:
 - rel_type:
@@ -398,6 +398,13 @@ comments:
   created_at: 2026-11-06T21:20:08.537749994Z
   modified_at: 2026-11-06T21:20:08.537749994Z
   session_id: 01a1b2a05a88
+- id: 01a1b572-1203-7340-bf32-d64b80d305fa
+  author: joe
+  content: 'Pickup (implementer, claude, 2026-11-07): no-op. The trigger-half slice in the 2026-11-06 brief, the hourly ''defer resurface'' due job, already landed on main as 584e94aeb3d (#3506, via merge train #3546). It includes the 15:57 advisor ruling: free-text or unparseable triggers are Unknown, the run reports ''N deferrals awaiting typed-condition migration'', and it exits 0 (test story2402_s4_canonical_snapshot_and_legacy_only_run) and errors only on a real evaluation failure (story2402_s4_canonical_stale_snapshot_and_evaluation_error). The schedule entry is in maintenance_schedule.rs. Per the brief, the derived-attention half waits on STORY-2324/STORY-2325 and was not started. Story stays open. Also still outstanding and not in that brief: S3 (one-time free-text→typed migration) and S5 (relay/recurrence conditions).'
+  created_at: 2026-11-07T09:58:34.243168565Z
+  modified_at: 2026-11-07T09:58:34.243168565Z
+  session_id: 01a1b57149f8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
