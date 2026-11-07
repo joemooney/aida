@@ -1,0 +1,33 @@
+id: 01a1b360-6482-7631-b3d7-e12de9408e09
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-239
+agreed_id: BUG-2473
+title: session hygiene flags clean, fully pushed seat worktrees as 'salvageable uncommitted work', and session end on them fails 'cannot establish remote commit coverage' with the cause swallowed, so the hou
+description: |
+  Observed 2026-11-06 17:20 MST (advisor claude-advisor-105).
+
+  `aida session hygiene --dry-run` reports 14 KEEP "salvageable work ... dead process, uncommitted work (branch , last commit "(no commits yet)")" items. 11 of them have `git status --porcelain` empty, HEAD contained in origin/<branch>, and no local branch absent from every remote (e.g. session 01a19917, BUG-2387 seat ...-161: HEAD 7306031a7fd on origin/bug-...-161). The hint text even shows an empty branch name and "(no commits yet)", so the salvage probe is reading the worktree wrongly (seat clone? branch lookup failing?), not finding real work.
+
+  `aida session end 01a19917` on that clean tree fails: Error: "cannot establish remote commit coverage; session was NOT ended" (session_end.rs guard_remote_commits). The anyhow cause chain is dropped, so the operator can't see why remote_missing_commits_for_lease failed.
+
+  Effect: session-hygiene exits 1 every hour and routes to the advisor; the only way out is --discard-unpushed, which the guard rightly makes scary.
+
+  Acceptance:
+  1. The salvage probe classifies a worktree with a clean status and every local branch/HEAD covered by a remote ref as reapable, not salvageable (regression test on a seat-clone fixture).
+  2. guard_remote_commits surfaces the underlying error (print the full chain, {:#}).
+  3. Hygiene hint text never prints an empty branch / "(no commits yet)" for a tree that has commits.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T00:20:01.282059557Z
+modified_at: 2026-11-07T00:20:01.282059557Z
+req_type: Bug
+filed_at:
+  code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
+  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
