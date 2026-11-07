@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T06:35:16.742625189Z
+modified_at: 2026-11-07T06:35:23.765576491Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -38,6 +38,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI gates lane red: ExecContext environment ratchet fails on the new unledgered os.environ site in tests/test_gdma_ci.py, so the ''GitLab upstream CI adapter fixtures'' step was skipped and AC1 (home CI passes test_gdma_ci.py) is unverified. AC2 (inventory admits gdma-ci: [lane] names: ci_inventory.rs test + contracts relay contract green) and AC3 (no work hostnames/registries/credentials; only .invalid placeholders) verified. Two further adapter defects listed.. No triage reason was given.'
   created_at: 2026-11-07T06:35:16.742622653Z
   modified_at: 2026-11-07T06:35:16.742622653Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4b8-0e8c-7461-9c4f-75f047f4b3d5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2606):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 91b4643f5d62
+    Recorded: 2026-11-07T06:29:46.788557646+00:00
+    Findings:
+    1. BLOCKING (CI): gates job 128322655078 step 'ExecContext environment ratchet' fails at 91b4643. tests/test_gdma_ci.py:82 adds patch.dict(os.environ, ...) in ExecutionTests.run_workflow, a new ambient-env site absent from scripts/exec-context-legacy.json (STORY-2538 ratchet scans tests/**/*.py). Because the ratchet runs first, the 'GitLab upstream CI adapter fixtures' step (ci.yml:929-931) was skipped, so the acceptance 'home CI passes test_gdma_ci.py' is not demonstrated. Fix: stop mutating os.environ, e.g. let run-upstream.py main() take an injectable environ mapping that the test passes in (preferred, since the ratchet ledger is meant to shrink), or follow the STORY-2538 policy for adding a ledger entry. Then confirm both steps go green.
+    2. MINOR (correctness, stale artifacts): .gdma-job (.gitlab/ci/gdma.yml) inherits the root .gitlab-ci.yml globals GIT_STRATEGY: fetch, GIT_CLEAN_FLAGS: none and CARGO_HOME=/ci-cache/cargo-home, which were tuned for the home runner's persistent /builds volume. It also sets CARGO_TARGET_DIR=$CI_PROJECT_DIR/target inside that persistent checkout. collect_artifacts() (ci/gdma/run-upstream.py) globs target/nextest/ci/junit-*.xml and copies into an existing .ci-artifacts/ (mkdir exist_ok), so on a persistent runner, JUnit reports and logs left by an earlier pipeline or another lane in the same slot get uploaded as this job's reports. A lane that fails before nextest would show old passing tests. The README says 'Keep a fresh checkout per job' but the job config does not enforce it. Fix: set GIT_STRATEGY: clone (or GIT_CLEAN_FLAGS: -ffdx) in .gdma-job variables, and/or rm -rf .ci-artifacts plus remove target/nextest/ci/junit-*.xml, test-run.log and ci-summary.md before the run (as the root 'test' job already does for its junit, TASK-3232). Add a test for the cleanup.
+    3. MINOR (fail-open against the 'refuses unsupported input' contract): validate_job() in ci/gdma/run-upstream.py closes step keys and defaults.run, but does not check job-level keys of jobs.build. A future 'container:', 'services:', 'if:', 'continue-on-error:', 'needs:' or 'strategy.matrix.include/exclude' on the build job would be silently ignored, and the adapter would run the steps on the wrong image or under the wrong conditions. Today the keys are {name, runs-on, defaults, timeout-minutes, env, strategy, steps}. Fix: a closed allowlist for job keys and for strategy/matrix keys, with a test in UnsupportedLaterInput style asserting refusal before the first command.
+    4. COSMETIC: run-upstream.py applies the job-level timeout-minutes (40) to each step separately, not as a whole-job budget (GitLab's own 40m timeout bounds it in practice). Its ==/!= comparisons are case-sensitive, while GitHub expression string comparison ignores case. That is harmless with the current lowercase literals, but worth a comment or a .lower() so the 'same semantics' claim in ci/gdma/README.md stays true.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T06:35:23.660532713Z
+  modified_at: 2026-11-07T06:35:23.660532713Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
