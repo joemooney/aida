@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:32.761539508Z
-modified_at: 2026-11-07T05:19:28.224958330Z
+modified_at: 2026-11-07T05:54:56.866795955Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ comments:
   modified_at: 2026-11-07T04:39:15.688485195Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b493-06e2-73d0-8961-ca258f228294
+  author: joe
+  content: 'Implemented UUID-based escalation classification in status_awaiting.rs, preserving the display label for output. Added a regression with two distinct records sharing one agreed display ID and alternated which has a failure_reason. The regression failed against the old display-ID lookup (shelved_total 0 instead of 1), then passed with the fix. Validation: cargo test --offline --profile agent -p aida-cli-lib --lib -- story_465_awaiting_report_tests story_1680_idle_in_progress_tests: 33 passed; cargo fmt --all -- --check and git diff --check passed. Native implementer handoff: changes remain uncommitted for host publication; no queue completion or PR actions performed. No implementation blockers.'
+  created_at: 2026-11-07T05:54:56.866795955Z
+  modified_at: 2026-11-07T05:54:56.866795955Z
+  session_id: 01a1b4721cd9
 history:
 - id: 01a1b444-f08d-71b1-aa6b-32549950054c
   author: joe
