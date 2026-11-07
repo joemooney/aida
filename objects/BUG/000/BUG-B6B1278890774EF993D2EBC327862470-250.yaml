@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-250
 agreed_id: BUG-2485
 title: Conformance harness kills the interactive role-enter prompt after 30s
 description: 'scripts/containment/conformance.py runs ''aida role enter advisor --no-resume --no-title'' with a 30s subprocess timeout. That command can stop at an interactive y/N prompt (''Include it in the TTY-issued delegation set?''). When the operator doesn''t answer within 30s, the harness reports rc=2 with ''timed out after 30 seconds'' and leaves the terminal in a broken mode (the staircase output). Repro 2026-11-07 16:44Z, out=~/.aida/conformance-codex-aida-1794069894. Acceptance: role-enter prompts run without a deadline (or with a long one, minutes, that says it is waiting for the operator), or the harness pre-answers the delegation-set question non-interactively when it is the expected answer. The terminal state is restored on every exit path.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T17:04:16.948365765Z
+modified_at: 2026-11-07T17:17:53.334854943Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-11-07T17:00:30.553122422Z
   modified_at: 2026-11-07T17:00:30.553122422Z
   session_id: 01a1b6f01b40
+- id: 01a1b704-4736-71f2-859b-65b826c44f0c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor-path fix is right (300s window, announcement, outer terminal restore, SIGTERM unwind), but the new restore also runs inside the continuation''s background process group, where tcsetattr on the controlling tty raises SIGTTOU and stops the whole setup group. Bug protocol (touches a test file): met. CI was still pending at review time.. No triage reason was given.'
+  created_at: 2026-11-07T17:17:53.334850462Z
+  modified_at: 2026-11-07T17:17:53.334850462Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6e9-7c41-7821-b0b6-d68fe217481a
   author: joe
@@ -59,6 +66,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b704-4736-71f2-859b-65a717b1c06f
+  author: joe
+  timestamp: 2026-11-07T17:17:53.334832122Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -68,11 +84,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor-path fix is right (300s window, announcement, outer terminal restore, SIGTERM unwind), but the new restore also runs inside the continuation''s background process group, where tcsetattr on the controlling tty raises SIGTTOU and stops the whole setup group. Bug protocol (touches a test file): met. CI was still pending at review time.'
-  recovery_hint: address the review findings, move BUG-2485 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T17:04:16.948365765Z
