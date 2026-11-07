@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T08:25:38.015565602Z
+modified_at: 2026-11-07T08:42:18.718213626Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -85,6 +85,12 @@ comments:
   modified_at: 2026-11-07T08:23:58.912883701Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b52c-40de-7d92-b9db-d771e3256812
+  author: joe
+  content: 'Round 3: classified Run full-status cold-cache latency regression as full beside the show latency entry, with trace. Downloaded original job logs: lib-0 ran 5200 tests, 5199 passed; its only failure was task_1555_every_ci_build_gate_is_classified_for_the_local_runner, whose panic explicitly names the same missing classification. Not an epic-rollup failure or flake. Updated PR #3581 body with actual contracts CI timings at a56e1fbf5116: cold 14.28s, warm 1.93s, 7000 cached rows, 1 Completed and 999 InProgress epics; linked job https://github.com/joemooney/aida/actions/runs/42353310889/job/128345887901 and distinguished debug budgets from optimized acceptance. Required make check-ci-fast initially found two unguarded fixture Git commits; added maintenance.auto=false and gc.auto=0 to both. Full rerun passed all 43 fast gates. Additional validation: all gate listing succeeds, 25 shard-tooling tests pass, 8 maintenance-ratchet tests pass, all 4 existing Rust gate-tier tests pass using unchanged test source compiled standalone against prebuilt dependencies with this checkout manifest path; cargo fmt and git diff --check pass. Changed scripts/ci-gate-tiers.toml and tests/test_status_cold_cache.py only. Native edits remain uncommitted for host publication; new-head CI and commit/push belong to host. Existing merge hold untouched.'
+  created_at: 2026-11-07T08:42:18.718213626Z
+  modified_at: 2026-11-07T08:42:18.718213626Z
+  session_id: 01a1b51cf34a
 history:
 - id: 01a1b4c2-b43b-7d73-b618-1f11ca67da92
   author: joe
