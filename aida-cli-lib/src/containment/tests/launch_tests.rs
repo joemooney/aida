@@ -551,7 +551,7 @@ print('seat_grant_valid=true expected_seat=true')
 fn task_2707_posture_without_receipt_refuses_unhandled_launch() {
     let mut cmd = Command::new("codex");
     cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    assert!(crate::codex_tool_env::prepare_launch(&mut cmd)
+    assert!(crate::launch::profile::finalize_codex(&mut cmd)
         .unwrap_err()
         .to_string()
         .contains("receipt-owning headless launch boundary"));

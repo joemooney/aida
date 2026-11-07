@@ -165,7 +165,7 @@ fn a_refused_reviewer_child_grant_releases_only_the_review_lease() {
 /// seat; a validated grant does; revocation and a shrunk roster ceiling
 /// fail closed.
 #[test]
-fn env_role_alone_confers_no_seat_and_grants_fail_closed() {
+fn story_2326_env_role_alone_confers_no_seat_and_grants_fail_closed() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let mut env = pinned_env(); // trace:BUG-2125 | ai:claude
@@ -198,7 +198,7 @@ fn env_role_alone_confers_no_seat_and_grants_fail_closed() {
             "read-only validation must not issue a child grant"
         );
         // The grant delegates only its explicit subset.
-        let child = issue_child(root, "implementer", "child-subject")
+        let child = crate::launch::issue_launch_child(root, "implementer", "child-subject", false)
             .expect("delegable child seat is issuable");
         assert_eq!(child.seat, "implementer");
         assert_eq!(child.parent_grant_id.as_deref(), Some(id.as_str()));
@@ -206,7 +206,7 @@ fn env_role_alone_confers_no_seat_and_grants_fail_closed() {
             child.delegable_seats.is_empty(),
             "children default to an empty delegation set"
         );
-        let refused = issue_child(root, "reviewer", "child-subject")
+        let refused = crate::launch::issue_launch_child(root, "reviewer", "child-subject", false)
             .expect_err("a seat outside the delegation set must refuse");
         // Advisor comment 35 (TASK-1955): the refusal is typed, so a
         // launcher can release the lease it took, and reads unchanged.

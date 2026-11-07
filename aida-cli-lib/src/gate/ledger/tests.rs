@@ -794,7 +794,7 @@ fn a_contained_reviewers_own_grant_verdict_is_collected_from_its_worktree() {
         &["reviewer"],
         &[("AIDA_CONTAINED", None)],
     );
-    let child = crate::gate::seat_authority::issue_launch_child(
+    let child = crate::launch::issue_launch_child(
         &launcher,
         "reviewer",
         crate::test_env::HERMETIC_TEST_USER,

@@ -426,27 +426,23 @@ fn phase_child_env_carries_auto_complete_variant() {
     assert!(env
         .iter()
         .any(|(k, v)| *k == crate::orchestrator::PHASE_ENV && v == "1"));
-    assert!(env
-        .iter()
-        .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "implementer"));
+    assert!(!env.iter().any(|(k, _)| *k == "AIDA_SESSION_ROLE"));
     assert!(env
         .iter()
         .any(|(k, v)| *k == "AIDA_USER" && v == "queue-owner"));
 }
 
 #[test]
-fn reviewer_phase_child_env_sets_reviewer_role() {
+fn story_2326_reviewer_phase_routes_without_replacing_caller_seat() {
     let env = orchestrator_phase_child_env(
         "run-token",
         crate::auto_complete::Phase::Reviewer,
         crate::auto_complete::AutoCompleteVariant::Full,
         "pipeline-owner",
     );
-    // BUG-901: phase children must not inherit the launcher/advisor shell role;
-    // queue-work's strict role-routed lookup reads AIDA_SESSION_ROLE.
-    assert!(env
-        .iter()
-        .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "reviewer"));
+    // Routing travels as --role reviewer; control_env removes the ambient role
+    // and forwards the caller selector for ordinary delegation validation.
+    assert!(!env.iter().any(|(k, _)| *k == "AIDA_SESSION_ROLE"));
     // BUG-1038: the reviewer role must not replace the queue identity selected
     // by the parent drain; queue membership reads AIDA_USER.
     assert!(env
@@ -3374,4 +3370,28 @@ exec sleep 120
         failure.reason.contains("implementer phase watchdog"),
         "{failure:?}"
     );
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_auto_punt_uses_phase_driver_control_fixture() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::test_env::AmbientGuard::hermetic(root, None);
+    let mut driver = driver(root, "STORY-2326");
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    let fake = root.join("aida-fixture");
+    crate::test_exec::write_executable(&fake, "#!/bin/sh\nprintf '%s\n' \"$@\" > punt-args\n");
+    driver.aida_exe = fake;
+    let logs = root.join(".aida/headless-logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    std::fs::write(logs.join("implementer-session.jsonl"), r#"{"type":"result","subtype":"success","is_error":false,"result":"Which path do you want me to take? My recommendation is B."}"#).unwrap();
+    assert!(driver.auto_punt_text_question(root, "session").is_some());
+    let args = std::fs::read_to_string(root.join("punt-args")).unwrap();
+    assert!(
+        args.starts_with("punt\nSTORY-2326\n--category\ndesign-fork\n"),
+        "{args}"
+    );
+    driver.aida_exe = root.join("missing-control");
+    assert!(driver.auto_punt_text_question(root, "session").is_none());
 }

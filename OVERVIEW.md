@@ -396,7 +396,15 @@ create/comment operations to recover confirmed writes without replay. See [the w
 constructs vendor processes through `spawn_agent`. Seat assignment is explicit;
 background handoffs recover lane identity from the worktree lease. An exact-count
 source ratchet inventories constructors and protected environment writers outside
-the launcher. Resource validation grants no write authority by itself.
+the launcher. The effectful vendor profile owns Codex finalization, after seat
+and identity decisions and before stdio or process hooks. Launched children mint
+through one `launch::issue_launch_child` entry, retaining delegation and keyring
+checks. AIDA control children execute the kernel-held `/proc/self/exe` image, surviving
+promote/rollback renames and unlinking, with `argv[0]` set to `aida` so process
+labels, loop-anchor detection and CLI usage retain the AIDA name. They forward
+only the caller's grant selector; routing roles travel as explicit command args.
+The TUI uses the same selector-only `control_env` policy. Resource validation
+grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
 ### The four layers

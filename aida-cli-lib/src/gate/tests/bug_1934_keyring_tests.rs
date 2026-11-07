@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::gate::review_authority::{with_identity_source, IdentitySource, ProcEntry};
+use crate::launch::issue_launch_child;
 use crate::test_env::EnvVarsGuard;
 
 const SUBJECT: &str = "bug-1934-keyring-fixture-user";

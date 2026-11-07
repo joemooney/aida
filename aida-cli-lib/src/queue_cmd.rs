@@ -13768,12 +13768,9 @@ pub(crate) fn handle_queue_work(
         }
     }
 
-    // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
-    // logic the rest of this command runs against). session_start reads
-    // it to record the lease's role field when --role isn't passed; we
-    // pass --role anyway, but the env var is what the claude SessionStart
-    // hook sees on launch.
-    std::env::set_var("AIDA_SESSION_ROLE", &role);
+    // The selected role is launch intent, never a process-wide authority
+    // mutation. Each child receives it together with its own grant below.
+    // trace:STORY-2326 | ai:codex
 
     // STORY-248: resolve the stacked base BEFORE session_start so the
     // worktree is forked from the right place and the SHA capture has a
@@ -14235,7 +14232,7 @@ pub(crate) fn handle_queue_work(
         let mut headless_child_grant = None;
         if !no_human {
             // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-            let child_grant = crate::gate::seat_authority::issue_launch_child(
+            let child_grant = crate::launch::issue_launch_child(
                 &project_root,
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
@@ -14498,13 +14495,22 @@ pub(crate) fn handle_queue_work(
                     )
                     .cyan()
                 );
-                session::exec_claude_resume(
+                let mut cmd = session::build_claude_resume_exec_command(
                     host_main.as_deref(),
                     &id,
                     permission_mode.as_deref(),
                     contained,
                     child_grant_id.as_deref(),
-                )
+                )?;
+                crate::launch::assign_seat(
+                    &mut cmd,
+                    aida_core::launch_policy::LaunchKind::Resume,
+                    crate::launch::SeatDecision::Child {
+                        role: &crate::canonical_role_name(&role),
+                        grant: child_grant_id.as_deref().unwrap_or(""),
+                    },
+                )?;
+                crate::launch::spawn::exec_agent(&mut cmd)
             }
             QueueWorkLaunch::Fresh(id) => {
                 let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
@@ -14615,16 +14621,25 @@ pub(crate) fn handle_queue_work(
                     )
                     .cyan()
                 );
-                session::exec_claude_with_session(
+                let mut cmd = session::build_claude_exec_command(
                     host_main.as_deref(),
                     permission_mode.as_deref(),
                     name.as_deref(),
-                    &prompt,
-                    &id,
+                    Some(&prompt),
+                    Some(&id),
                     contained,
                     resolved_model.as_deref(),
                     child_grant_id.as_deref(),
-                )
+                )?;
+                crate::launch::assign_seat(
+                    &mut cmd,
+                    aida_core::launch_policy::LaunchKind::Exec,
+                    crate::launch::SeatDecision::Child {
+                        role: &crate::canonical_role_name(&role),
+                        grant: child_grant_id.as_deref().unwrap_or(""),
+                    },
+                )?;
+                crate::launch::spawn::exec_agent(&mut cmd)
             }
         }
     };
@@ -15022,7 +15037,7 @@ pub(crate) fn run_standalone_reviewer(
                 }
                 if recorded == session::HeadlessVendor::Codex {
                     // A Codex reviewer resumes its thread interactively.
-                    let grant = crate::gate::seat_authority::issue_launch_child(
+                    let grant = crate::launch::issue_launch_child(
                         project_root,
                         "reviewer",
                         &crate::current_user_id(None),
@@ -15081,7 +15096,7 @@ pub(crate) fn run_standalone_reviewer(
                         .cyan()
                     );
                     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-                    let grant = crate::gate::seat_authority::issue_launch_child(
+                    let grant = crate::launch::issue_launch_child(
                         project_root,
                         "reviewer",
                         &crate::current_user_id(None),
