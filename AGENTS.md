@@ -6,6 +6,7 @@ and rechecks live authority; journaled retirement retains remote branches. Neste
 metadata retries in the final merge gate and confirmation's base/head fetches
 also require a durable checkpoint. GitLab CI polling and nested pipeline/job
 reads checkpoint as well; unavailable post-watch rows suspend. See OVERVIEW.md.
+Commit-keyed CI API reads checkpoint each check-run page and commit-status request.
 <!-- trace:STORY-2401 | ai:codex -->
 
 Question parking with an empty consequence preserves an existing deferral trigger

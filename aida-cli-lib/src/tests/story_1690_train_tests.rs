@@ -3741,9 +3741,10 @@ fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
 
 #[test]
 fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
+    let environment = aida_core::exec_context::Environment::capture();
     const CHILD: &str = "AIDA_TRAIN_JOURNAL_CRASH_CHILD";
-    if let Ok(stage) = std::env::var(CHILD) {
-        let dir = std::path::PathBuf::from(std::env::var("AIDA_TRAIN_JOURNAL_TEST_DIR").unwrap());
+    if let Ok(stage) = environment.var(CHILD).map(str::to_owned) {
+        let dir = std::path::PathBuf::from(environment.var("AIDA_TRAIN_JOURNAL_TEST_DIR").unwrap());
         let _lock = journal::lock(&dir).unwrap();
         let mut forge = FakeForge::mains(&["main"]);
         forge.crash_marker = Some((stage.clone(), dir.join("ready")));
@@ -4056,6 +4057,7 @@ fn pr_train_journal_live_recover_reopens_ambiguity_and_pin_mismatches() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     let root = repo();
     let r = root.path();
     let remote = tempfile::tempdir().unwrap();
@@ -4075,7 +4077,7 @@ case "$*" in
 esac
 "#,
     );
-    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
     let _env = crate::test_env::EnvVarsGuard::set(&[
         ("PATH", &path),
         ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
@@ -4154,6 +4156,7 @@ fn pr_train_journal_confirmation_fetches_refuse_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     let root = repo();
     let r = root.path();
     crate::test_exec::write_executable(
@@ -4173,7 +4176,7 @@ done
 exit 0
 "#,
     );
-    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
     let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
     for fail_before_base in [true, false] {
         let dir = r.join("intent");
@@ -4210,6 +4213,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     use crate::forge::Forge;
     let root = repo();
     let r = root.path();
@@ -4227,7 +4231,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         &gh,
         "#!/bin/sh\nprintf '%s\\n' \"$*\" >> gh-calls\nexit 1\n",
     );
-    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
     let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
     let forge = crate::forge::fake::RecordingForge::new();
     let meta = forge
@@ -4274,6 +4278,7 @@ fn pr_train_journal_hold_label_calls_refuse_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     for seam in ["read", "write", "retry"] {
         let root = repo();
         let r = root.path();
@@ -4300,7 +4305,7 @@ case "$*" in
 esac
 "#,
         );
-        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
         let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
         let dir = r.join("intent");
         std::fs::create_dir(&dir).unwrap();
@@ -4346,6 +4351,7 @@ fn pr_train_journal_metadata_retry_refuses_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     use crate::forge::Forge;
     #[derive(Default)]
     struct Retries(usize);
@@ -4373,7 +4379,7 @@ echo 'error connecting to api.github.com' >&2
 exit 1
 "#,
     );
-    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
     let _env = crate::test_env::EnvVarsGuard::set(&[
         ("PATH", &path),
         ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
@@ -4416,6 +4422,7 @@ fn pr_train_journal_hold_gate_poll_does_not_swallow_checkpoint_failure() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     for fail_before_first in [true, false] {
         let root = repo();
         let r = root.path();
@@ -4428,7 +4435,7 @@ printf 'unavailable' > intent
 printf '%s\n' '[{"name":"merge-hold-gate","bucket":"pending","workflow":"hold"}]'
 "#,
         );
-        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
         let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
         let dir = r.join("intent");
         std::fs::create_dir(&dir).unwrap();
@@ -4472,6 +4479,7 @@ fn pr_train_journal_carryover_fetches_require_durable_intent() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     for fail_before_base in [true, false] {
         let root = repo();
         let r = root.path();
@@ -4495,7 +4503,7 @@ esac
 exit 2
 "#,
         );
-        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
         let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
         let dir = r.join("intent");
         std::fs::create_dir(&dir).unwrap();
@@ -4571,6 +4579,7 @@ fn pr_train_journal_gitlab_ci_calls_require_durable_intent() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     use crate::forge::Forge;
     // Refuse before registration, watch, fallback rows, or the nested jobs read.
     for seam in ["initial", "registration", "watch", "jobs", "fallback-jobs"] {
@@ -4603,7 +4612,7 @@ case "$*" in
 esac
 "#,
         );
-        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
         let _env = crate::test_env::EnvVarsGuard::set(&[
             ("PATH", &path),
             ("AIDA_TEST_GLAB_BINARY", glab.to_str().unwrap()),
@@ -4665,6 +4674,7 @@ fn pr_train_journal_verified_required_checks_require_durable_intent() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let environment = aida_core::exec_context::Environment::capture();
     for fail_before_first in [true, false] {
         let root = repo();
         let r = root.path();
@@ -4678,7 +4688,7 @@ printf unavailable > intent
 printf '%s\n' '[{"name":"Build","bucket":"pass","workflow":"CI","link":""}]'
 "#,
         );
-        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
         let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
         let dir = r.join("intent");
         std::fs::create_dir(&dir).unwrap();
@@ -4718,6 +4728,91 @@ printf '%s\n' '[{"name":"Build","bucket":"pass","workflow":"CI","link":""}]'
         assert_eq!(saved[0].step, journal::Step::Merge);
         assert_eq!(saved[0].change_id, Some(901));
         assert_eq!(saved[0].train.tip, "car1");
+        assert_eq!(saved[0].train.members()[0].head, "head1");
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_commit_ci_pages_require_durable_intent() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let environment = aida_core::exec_context::Environment::capture();
+    use crate::forge::Forge;
+    let head = "a".repeat(40);
+    for seam in ["initial", "page", "status"] {
+        let root = repo();
+        let r = root.path();
+        let gh = r.join("gh");
+        crate::test_exec::write_executable(
+            &gh,
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+cp intent/commit-ci-1.json checkpoint.json || exit 2
+mv intent intent-saved || exit 2
+printf unavailable > intent
+cat check-runs.json
+"#,
+        );
+        // A full first page forces another page; an empty complete listing
+        // forces the separate commit-status read. Neither may reuse the first
+        // request's successful checkpoint after its destination is lost.
+        let runs: Vec<_> = if seam == "page" {
+            (0..100)
+                .map(|i| {
+                    serde_json::json!({
+                        "name": format!("check-{i}"), "head_sha": head,
+                        "status": "completed", "conclusion": "success"
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        write(
+            r,
+            "check-runs.json",
+            &serde_json::json!({
+                "total_count": if seam == "page" { 101 } else { 0 },
+                "check_runs": runs
+            })
+            .to_string(),
+        );
+        let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", &path),
+            ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+        ]);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut train = train_of("main", &fms(&[1]));
+        train.tip = head.clone();
+        let mut entry = journal::Entry::new(train, "train/commit-ci-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if seam == "initial" {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let forge = crate::forge::GitHubForge::new(r);
+        let error = forge.commit_checks(&head).unwrap_err();
+        assert!(format!("{error:#}").contains("could not persist train intent"));
+        let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(seam != "initial"));
+        if seam != "initial" {
+            assert!(calls.contains("check-runs?per_page=100&page=1"));
+            let checkpoint: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(r.join("checkpoint.json")).unwrap()).unwrap();
+            assert_eq!(checkpoint["call"], "commit CI API read");
+        }
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Merge);
+        assert_eq!(saved[0].change_id, Some(901));
+        assert_eq!(saved[0].train.tip, head);
         assert_eq!(saved[0].train.members()[0].head, "head1");
     }
 }

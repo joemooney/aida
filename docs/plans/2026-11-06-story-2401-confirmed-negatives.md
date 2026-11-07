@@ -736,3 +736,68 @@ feature-disabled CLI, standalone TUI and formatting checks. Log:
 The host owns commit creation and publication under the accepted Refs subject;
 slice 5 remains outstanding and existing punt/hold signals retain their veto.
 Turn ends with the four changed files uncommitted.
+
+## Slice-4 integration follow-up: commit-keyed CI reads (2026-11-07)
+
+The starting checkout already includes the resumable intent journal, both SIGKILL
+recovery fixtures, and BUG-2463 (#3519). The final train proof reads exact-commit
+CI through `commit_ci_api`, a separate runner from the PR checks adapter. That
+runner now persists active train intent before each request, including each
+check-run page and the separate commit-status read. The shared GitHub/GitLab
+runner remains a no-op checkpoint outside an active train. Slice 5 is excluded.
+
+A PATH-isolated production-provider regression makes the journal unavailable
+before the first call, after the first full check-run page, or before the
+commit-status read. It asserts zero/one/one actual calls, inspects the durable
+checkpoint at call time, and retains the pinned Merge entry, change number,
+train head and member head for recovery. Both SIGKILL recovery tests remain
+in the binding `pr_train` filter.
+
+Changed files: `aida-cli-lib/src/forge.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, `AGENTS.md`, `OVERVIEW.md`,
+and this plan. Native-seat edits remain uncommitted for the host launcher.
+The advisory claim command refused its write to the read-only shared session
+directory; no shared lease or Git metadata was changed. Validation and native
+publication results follow below.
+
+<!-- trace:STORY-2401 | ai:codex -->
+
+Targeted validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib
+--lib pr_train` ran **179 tests, zero failures**, 12,632 unrelated tests
+filtered out; runtime **117.25s**, cold build **7m 51s**. Both SIGKILL
+recovery cases and the new commit-keyed CI checkpoint regression passed.
+Log: `/tmp/story2401-commit-ci-train.log`.
+
+The first fast run exposed an integration mismatch with main's newly merged
+STORY-2538 exact-site environment ratchet. Eleven ambient reads in existing
+journal fixtures, plus the new fixture's PATH read, were absent from main's
+legacy ledger. The journal fixtures now capture their test inputs once through
+`aida_core::exec_context::Environment` at the test boundary and read that
+snapshot. No legacy ledger growth, new ambient reader, test writer or child
+allowlist was introduced. Final-source validation is rerun below.
+
+The focused environment ratchet passed all **19 tests** after that integration
+repair. Log: `/tmp/story2401-commit-ci-env.log`.
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint exact-commit CI API reads (Refs STORY-2401)`.
+This records host publication intent only. No commit, push, PR creation,
+merge, review recording, hold clearance or queue completion occurred in this
+seat. Existing punt/hold signals retain their publication vetoes.
+
+Final-source targeted validation passed: **179 tests, zero failures**, 12,632
+filtered out; runtime **200.91s**, incremental build **4m 37s**.
+Command: `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`.
+Both SIGKILL recovery cases and all journal checkpoint fixtures passed with
+the snapshot-based test inputs. Log: `/tmp/story2401-commit-ci-train-final.log`.
+
+Final fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`
+completed **all 42 gates**, including formatting, feature-disabled CLI,
+standalone TUI, the environment ratchet (**1,241 exact sites, zero additions**),
+and the store-writer inventory. Log: `/tmp/story2401-commit-ci-fast-final.log`.
+Guards reporting native read-only `.git/FETCH_HEAD` refusals passed using their
+local-evidence path. `git diff --check` passed.
+
+Turn ended with the five files above uncommitted for the host launcher.
+No implementation or validation blocker remains. The host owns commit creation
+and publication under the accepted Refs subject. Slice 5 remains outstanding;
+existing punt/hold signals retain their publication vetoes.

@@ -4598,6 +4598,11 @@ const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
 fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    // The verified train gate reads check-run pages and commit statuses here,
+    // independently of the ordinary PR checks runner. Each request needs its
+    // own durable checkpoint. Outside an active train this is a no-op.
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("commit CI API read")?;
     let mut command = Command::new(cli);
     command
         .args(["api", "-X", "GET", endpoint])
