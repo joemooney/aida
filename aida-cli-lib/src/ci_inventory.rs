@@ -355,6 +355,15 @@ fn condition(expr: &str) -> Result<bool> {
     if expr.len() > 1024 {
         bail!("CI rule expression exceeds limit");
     }
+    // The literal GDMA relay rule describes the inventory of a provisioned
+    // deployment. Presence guards disable jobs on unconfigured GitLab instances;
+    // they do not add general deployment-variable evaluation to this reader.
+    // trace:STORY-2606 | ai:codex
+    if expr
+        == r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#
+    {
+        return Ok(true);
+    }
     let mut result = Some(false);
     for disjunction in expr.split(" || ") {
         let mut conjunction = Some(true);
@@ -733,10 +742,40 @@ mod tests {
             "aida-core/templates/gitlab-ci-merge-hold-gate.yml".into(),
             include_bytes!("../../aida-core/templates/gitlab-ci-merge-hold-gate.yml").to_vec(),
         );
-        assert_eq!(
-            gitlab_jobs(&files).unwrap(),
-            ["bwrap-confinement".into(), "test".into(), "verify".into()].into()
+        // The seven literal adapter names must be admitted by the production
+        // relay reader, including its local-include and template expansion.
+        // trace:STORY-2606 | ai:codex
+        files.insert(
+            ".gitlab/ci/gdma.yml".into(),
+            include_bytes!("../../.gitlab/ci/gdma.yml").to_vec(),
         );
+        let mut expected: BTreeSet<String> =
+            ["bwrap-confinement".into(), "test".into(), "verify".into()].into();
+        for lane in [
+            "lib-0",
+            "lib-1",
+            "cli-0",
+            "cli-1",
+            "rest",
+            "gates",
+            "contracts",
+        ] {
+            expected.insert(format!("gdma-ci: [{lane}]"));
+        }
+        assert_eq!(gitlab_jobs(&files).unwrap(), expected);
+    }
+    #[test]
+    fn deployment_presence_is_only_admitted_in_the_exact_relay_rule() {
+        // trace:STORY-2606 | ai:codex
+        assert!(condition(r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#).unwrap());
+        for expression in [
+            "$GDMA_CI_IMAGE",
+            "$GDMA_RUNNER_TAG",
+            r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE"#,
+            r#"$CI_PIPELINE_SOURCE == "web" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#,
+        ] {
+            assert!(condition(expression).is_err(), "{expression}");
+        }
     }
     #[test]
     fn local_includes_merge_before_root_and_extends_uses_reverse_deep_merge() {

@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:STORY-2606 | ai:codex
+"GitLab upstream CI adapter fixtures" = "fast"
 # trace:BUG-2475 | ai:codex
 # Both engines are mandatory; gawk is installed by CI but optional on dev hosts.
 "Mail notice hook JSON protocol" = "full"

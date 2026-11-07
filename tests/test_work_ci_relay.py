@@ -167,6 +167,31 @@ class WorkCiTests(unittest.TestCase):
         self.f = Fixture()
         self.addCleanup(self.f.close)
 
+    # trace:STORY-2606 | ai:codex
+    def test_upstream_adapter_lane_receipts_use_the_committed_inventory(self):
+        f = self.f
+        f.poll()
+        f.cli(f.home_clone, "ci", "process")
+        for include in (".gitlab-ci.yml", ".gitlab/ci/gdma.yml",
+                        "aida-core/templates/gitlab-ci-merge-hold-gate.yml"):
+            path = f.source / include
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((ROOT / include).read_bytes())
+        f.git(f.source, "add", ".")
+        f.git(f.source, "commit", "-qm", "Upstream adapter fixture")
+        f.sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
+        f.attempt, f.pipeline = 2, 42
+        f.job_names = sorted(["bwrap-confinement", "test", "verify"] + [
+            f"gdma-ci: [{lane}]" for lane in
+            ("lib-0", "lib-1", "cli-0", "cli-1", "rest", "gates", "contracts")])
+        f.git(f.source, "push", "-q", str(f.home), f"{f.sha}:refs/aida/ci/2", principal="request")
+        f.cli(f.home_clone, "ci", "request", "--attempt", "2", "--sha", f.sha, principal="request")
+        self.assertIn("published", f.poll().stdout)
+        self.assertEqual([job["name"] for job in f.receipt(2)["jobs"]], f.job_names)
+        f.cli(f.home_clone, "ci", "process")
+        rows = json.loads(f.cli(f.home_clone, "ci", "read", "--json").stdout)
+        self.assertEqual(sum(row["verification"] == "verified" for row in rows), 2)
+
     # trace:TASK-3232 | ai:codex
     @unittest.skipUnless(os.environ.get("AIDA_CI_GATE_EVIDENCE"),
                          "runs through the Rust native PR/train gate contract")
@@ -176,9 +201,10 @@ class WorkCiTests(unittest.TestCase):
         f.poll()
         f.cli(f.home_clone, "ci", "process")
         (f.source / ".gitlab-ci.yml").write_bytes((ROOT / ".gitlab-ci.yml").read_bytes())
-        include = "aida-core/templates/gitlab-ci-merge-hold-gate.yml"
-        (f.source / include).parent.mkdir(parents=True)
-        (f.source / include).write_bytes((ROOT / include).read_bytes())
+        # trace:STORY-2606 | ai:codex
+        for include in ("aida-core/templates/gitlab-ci-merge-hold-gate.yml", ".gitlab/ci/gdma.yml"):
+            (f.source / include).parent.mkdir(parents=True, exist_ok=True)
+            (f.source / include).write_bytes((ROOT / include).read_bytes())
         # Real AIDA Rust sources, padded above 48 MiB. Three distinct source
         # commits exercise independent pinned inventories, then a cold validator.
         paths = f.git(ROOT, "ls-files", "*.rs").stdout.splitlines()
@@ -195,7 +221,8 @@ class WorkCiTests(unittest.TestCase):
             data = b"//" + b"x" * (512 * 1024 - 3) + b"\n"
             (padding / f"source-{total}.rs").write_bytes(data)
             total += len(data)
-        f.job_names = ["bwrap-confinement", "test", "verify"]
+        f.job_names = sorted(["bwrap-confinement", "test", "verify"] + [
+            f"gdma-ci: [{lane}]" for lane in ("lib-0", "lib-1", "cli-0", "cli-1", "rest", "gates", "contracts")])
         evidence, shas, durations = [], [], []
         for attempt, result in [(2, "success"), (3, "failed"), (4, "success")]:
             (f.source / "lib.rs").write_text(f"#[test] fn checks() {{}} // revision {attempt}\n")
