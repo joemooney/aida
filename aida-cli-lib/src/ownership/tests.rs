@@ -361,6 +361,7 @@ fn reclaim_matrix() {
             Phase::InPr {
                 change: change(5),
                 handed_off_at: now(),
+                handed_off_by: None,
                 head: "pr".into(),
             },
         ),
@@ -526,6 +527,7 @@ fn ownership_record_round_trips_as_json() {
         phase: Phase::InPr {
             change: change(12),
             handed_off_at: now(),
+            handed_off_by: None,
             head: "deadbeef".into(),
         },
     };

@@ -43,7 +43,7 @@ fn unprovable_death_keeps_the_previous_handling() {
 fn dead_lease_with_clean_seat_at_pr_head_is_ended() {
     assert_eq!(
         classify(OwnerLiveness::Dead, &clean_at("abc"), Some("abc"), never),
-        PrLeaseCheck::SafeToForceEnd
+        PrLeaseCheck::SafeToEnd
     );
 }
 
@@ -55,14 +55,14 @@ fn dead_lease_whose_head_is_behind_the_pr_head_is_ended() {
         Some("new"),
         |seat, pr| seat == "old" && pr == "new",
     );
-    assert_eq!(check, PrLeaseCheck::SafeToForceEnd);
+    assert_eq!(check, PrLeaseCheck::SafeToEnd);
 }
 
 #[test]
 fn missing_seat_is_ended() {
     assert_eq!(
         classify(OwnerLiveness::Dead, &SeatReading::Missing, None, never),
-        PrLeaseCheck::SafeToForceEnd
+        PrLeaseCheck::SafeToEnd
     );
 }
 
@@ -277,7 +277,7 @@ fn check_dead(fx: &Fixture) -> PrLeaseCheck {
 #[test]
 fn clean_seat_at_the_pushed_pr_head_is_ended() {
     let fx = shipped_lane();
-    assert_eq!(check_dead(&fx), PrLeaseCheck::SafeToForceEnd);
+    assert_eq!(check_dead(&fx), PrLeaseCheck::SafeToEnd);
 }
 
 #[test]
@@ -298,7 +298,7 @@ fn clean_seat_behind_a_pr_that_moved_on_is_ended() {
     );
     commit(&other, "more.txt", "rework");
     git(&other, &["push", "-q", "origin", "HEAD:feat"]);
-    assert_eq!(check_dead(&fx), PrLeaseCheck::SafeToForceEnd);
+    assert_eq!(check_dead(&fx), PrLeaseCheck::SafeToEnd);
 }
 
 #[test]
@@ -339,16 +339,16 @@ fn branch_never_pushed_is_not_judged() {
 fn end_action_maps_every_verdict() {
     let lease = seat_lease(Path::new("/nonexistent/seat"));
     assert_eq!(
-        end_action(&lease, "feat", &PrLeaseCheck::SafeToForceEnd),
-        LeaseEndAction::ForceEnd
+        end_action(&lease, "feat", &PrLeaseCheck::SafeToEnd),
+        LeaseEndAction::SafeEnd
     );
     assert_eq!(
         end_action(&lease, "feat", &PrLeaseCheck::Live),
-        LeaseEndAction::PlainEnd
+        LeaseEndAction::Bail("ownership holder is alive; wait for voluntary handoff".into())
     );
     assert_eq!(
         end_action(&lease, "feat", &PrLeaseCheck::NotProvable("x".into())),
-        LeaseEndAction::PlainEnd
+        LeaseEndAction::Bail("ownership retained: x".into())
     );
     match end_action(
         &lease,
@@ -368,7 +368,7 @@ fn no_nameable_pr_branch_keeps_the_plain_end() {
     let lease = seat_lease(Path::new("/nonexistent/seat"));
     assert_eq!(
         plan_lease_end(Path::new("/nonexistent/main"), &lease, None),
-        LeaseEndAction::PlainEnd
+        LeaseEndAction::Bail("PR branch unknown; ownership retained".into())
     );
 }
 
@@ -398,7 +398,7 @@ fn every_collected_lease_gets_its_own_action() {
         vec![lease_on("rev-old", "pr-42")],
     );
     let verdicts = |l: &crate::SessionLease| match l.id.as_str() {
-        "impl-a" => PrLeaseCheck::SafeToForceEnd,
+        "impl-a" => PrLeaseCheck::SafeToEnd,
         "impl-b" => PrLeaseCheck::NotProvable("no pid".into()),
         _ => PrLeaseCheck::Refuse("its seat has commits the PR lacks: abc".into()),
     };
@@ -406,8 +406,8 @@ fn every_collected_lease_gets_its_own_action() {
         .iter()
         .map(|l| end_action(l, "feat", &verdicts(l)))
         .collect();
-    assert_eq!(actions[0], LeaseEndAction::ForceEnd);
-    assert_eq!(actions[1], LeaseEndAction::PlainEnd);
+    assert_eq!(actions[0], LeaseEndAction::SafeEnd);
+    assert!(matches!(actions[1], LeaseEndAction::Bail(_)));
     match &actions[2] {
         LeaseEndAction::Bail(msg) => {
             assert!(msg.contains("rev-old"), "{msg}");
@@ -429,7 +429,7 @@ fn regression_dead_clean_in_pr_lease_is_force_ended_not_could_not_end() {
     let action = end_action(&lease, "feat", &check_dead(&fx));
     assert_eq!(
         action,
-        LeaseEndAction::ForceEnd,
+        LeaseEndAction::SafeEnd,
         "a plain end here is what produced 'could not end dead lease … add --force'"
     );
 }
@@ -458,9 +458,53 @@ fn refusal_message_names_a_reviewers_own_branch() {
 
 // trace:BUG-2450 | ai:codex
 fn exited_lease(fx: &Fixture) -> crate::SessionLease {
+    use crate::ownership::{Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey};
     let mut lease = seat_lease(&fx.seat);
-    lease.active_pid = Some(u32::MAX - 1);
-    lease.active_pid_start_time = Some("gone".into());
+    lease.scope = uuid::Uuid::from_u128(2315).to_string();
+    lease.hostname = crate::coordination::hostname();
+    lease.active_pid = Some(i32::MAX as u32 - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    let id = aida_core::process_probe::ProcessIdentity {
+        pid: i32::MAX as u32 - 1,
+        start: format!("linux:{}:1", aida_core::local_boot_id().unwrap()),
+    };
+    let ns = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(std::process::id())
+        .unwrap();
+    let identity = aida_core::proc_identity::ProcIdentity::from_record(&id, Some(ns)).unwrap();
+    let admission: aida_core::proc_identity::HolderRecord = serde_json::from_value(serde_json::json!({"version":1,"node_id":aida_core::proc_identity::local_node_id().unwrap(),"identity":identity,"generation":"dead-fixture","refusal":null})).unwrap();
+    lease.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    let key = WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(uuid::Uuid::from_u128(2315)),
+    };
+    let store = crate::ownership::store::OwnershipStore::at(fx.main.join(".aida/ownership"));
+    store
+        .update(&key, "seed", crate::ownership::store::Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    phase: Phase::Leased,
+                    holder: Some(Holder {
+                        seat: "fixture".into(),
+                        session: lease.id.clone(),
+                        role: Role::Implementer,
+                        tree: None,
+                        witnesses: vec![Witness {
+                            kind: WitnessKind::Process {
+                                host: lease.hostname.clone(),
+                                id,
+                                pid_ns: Some(ns),
+                            },
+                            admission: Some(admission),
+                            recorded_at: chrono::Utc::now(),
+                        }],
+                    }),
+                },
+                None,
+            ))
+        })
+        .unwrap();
     lease
 }
 
@@ -473,10 +517,16 @@ fn bug2450_reviewer_reclaims_a_clean_pushed_dead_seat() {
         &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
     );
     let lease = exited_lease(&fx);
-    assert_eq!(owner_liveness(&lease), OwnerLiveness::Dead);
+    let record = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        crate::ownership::reader::owner(&record),
+        crate::ownership::OwnerVerdict::Dead { .. }
+    ));
     assert_eq!(
         plan_lease_end(&fx.main, &lease, Some("feat")),
-        LeaseEndAction::ForceEnd
+        LeaseEndAction::SafeEnd
     );
     assert!(fx.seat.exists(), "planning itself never removes a seat");
 }
@@ -493,7 +543,7 @@ fn bug2450_reviewer_reclaims_an_already_pushed_staged_index() {
     let lease = exited_lease(&fx);
     assert_eq!(
         plan_lease_end(&fx.main, &lease, Some("feat")),
-        LeaseEndAction::ForceEnd
+        LeaseEndAction::SafeEnd
     );
     std::fs::write(fx.seat.join("work.txt"), "unstaged work").unwrap();
     assert!(matches!(
@@ -503,7 +553,7 @@ fn bug2450_reviewer_reclaims_an_already_pushed_staged_index() {
 }
 
 #[test]
-fn bug2450_all_pushed_branches_are_safe_even_when_not_in_this_pr() {
+fn prc_relaunch_retains_head_not_in_pr_even_if_pushed_elsewhere() {
     let fx = shipped_lane();
     let _ambient = crate::test_env::AmbientGuard::hermetic_and(
         &fx.main,
@@ -515,10 +565,10 @@ fn bug2450_all_pushed_branches_are_safe_even_when_not_in_this_pr() {
     commit(&fx.seat, "later.txt", "pushed elsewhere");
     git(&fx.seat, &["push", "origin", "HEAD:published-elsewhere"]);
     let lease = exited_lease(&fx);
-    assert_eq!(
+    assert!(matches!(
         plan_lease_end(&fx.main, &lease, Some("feat")),
-        LeaseEndAction::ForceEnd
-    );
+        LeaseEndAction::Bail(_)
+    ));
 }
 
 #[test]
@@ -551,7 +601,7 @@ fn bug2450_recorded_branch_without_upstream_blocks_force_cleanup_until_discard_i
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     assert_eq!(
         plan_lease_end(&fx.main, &lease, Some("feat")),
-        LeaseEndAction::ForceEnd
+        LeaseEndAction::SafeEnd
     );
 }
 
@@ -642,7 +692,7 @@ fn bug2450_unrelated_host_branches_do_not_block_end_or_reclaim() {
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     assert_eq!(
         plan_lease_end(&fx.main, &lease, Some("feat")),
-        LeaseEndAction::ForceEnd
+        LeaseEndAction::SafeEnd
     );
     // The seat's current branch is protected even if it differs from the lease.
     git(&fx.seat, &["checkout", "-b", "seat-current"]);
@@ -724,4 +774,244 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
         );
         assert!(messages[0].body.contains(&lease.id));
     }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_safe_end_retires_dead_pushed_seat_without_force() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let lease = exited_lease(&fx);
+    let cargo_target = fx._tmp.path().join("target/worktrees/seat");
+    std::fs::create_dir_all(&cargo_target).unwrap();
+    std::fs::create_dir_all(fx.seat.join(".aida")).unwrap();
+    std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+    std::fs::write(
+        fx.seat.join(".aida/session-env.sh"),
+        format!("export CARGO_TARGET_DIR='{}'\n", cargo_target.display()),
+    )
+    .unwrap();
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
+    crate::session_end::session_end(
+        Some(&lease.id),
+        None,
+        None,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap();
+    assert!(!path.exists());
+    assert!(!fx.seat.exists());
+    assert!(!cargo_target.exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
+    ship_handoff_resume_case(false);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_ship_handoff_resumes_detached_rework() {
+    ship_handoff_resume_case(true);
+}
+
+// trace:STORY-2325 | ai:codex
+fn ship_handoff_resume_case(detached_rework: bool) {
+    let fx = shipped_lane();
+    let lease = {
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            &fx.main,
+            None,
+            &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+        );
+        exited_lease(&fx)
+    };
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[
+            ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
+            ("AIDA_SESSION_ID", Some(&lease.id)),
+        ],
+    );
+    crate::ownership::dual::enable_for_test();
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lease_body = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &lease_body).unwrap();
+    std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = crate::ownership::store::OwnershipStore::for_project(&fx.main)
+        .unwrap()
+        .unwrap();
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(uuid::Uuid::from_u128(2315)),
+    };
+    store
+        .update(&key, "tree", crate::ownership::store::Expect::Any, |cur| {
+            let mut r = cur.unwrap().clone();
+            r.holder.as_mut().unwrap().tree = Some(crate::ownership::SeatTree {
+                path: fx.seat.clone(),
+                kind: crate::ownership::TreeKind::Worktree,
+                branch: Some("feat".into()),
+            });
+            Some((r, None))
+        })
+        .unwrap();
+    crate::ownership::dual::handed_off(&fx.main, &fx.seat, "feat", &lease.scope, 42).unwrap();
+    assert!(matches!(
+        store.load(&key).unwrap().unwrap().phase,
+        crate::ownership::Phase::InPr { .. }
+    ));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), lease_body);
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|l| l.branch == "feat"));
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
+    // A live handing-off lease still blocks cleanup, even though the key is free.
+    let mut live = lease.clone();
+    live.active_pid = Some(std::process::id());
+    live.active_pid_start_time = crate::process_probe::process_start_identity(std::process::id());
+    live.holder_record = Some(
+        serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(
+            std::process::id(),
+        ))
+        .unwrap(),
+    );
+    assert_eq!(check_pr_lease(&fx.main, &live, "feat"), PrLeaseCheck::Live);
+    // A different handing-off session grants neither recovery nor cleanup.
+    store
+        .update(
+            &key,
+            "foreign",
+            crate::ownership::store::Expect::Any,
+            |cur| {
+                let mut record = cur.unwrap().clone();
+                if let crate::ownership::Phase::InPr { handed_off_by, .. } = &mut record.phase {
+                    *handed_off_by = Some("another-session".into());
+                }
+                Some((record, None))
+            },
+        )
+        .unwrap();
+    assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+    assert!(matches!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::Bail(_)
+    ));
+    store
+        .update(
+            &key,
+            "restore",
+            crate::ownership::store::Expect::Any,
+            |cur| {
+                let mut record = cur.unwrap().clone();
+                if let crate::ownership::Phase::InPr { handed_off_by, .. } = &mut record.phase {
+                    *handed_off_by = Some(lease.id.clone());
+                }
+                Some((record, None))
+            },
+        )
+        .unwrap();
+    let head = git(&fx.seat, &["rev-parse", "HEAD"]);
+    git(&fx.seat, &["update-ref", "refs/heads/feat", "HEAD~1"]);
+    assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+    git(&fx.seat, &["update-ref", "refs/heads/feat", &head]);
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, false).unwrap(),
+        "feat"
+    );
+    assert!(
+        git(&fx.seat, &["branch", "--show-current"]).is_empty(),
+        "dry-run stays detached"
+    );
+    let rework_head = if detached_rework {
+        // An unrelated detached commit must never replace the handed-off branch.
+        git(&fx.seat, &["checkout", "--detach", "HEAD~1"]);
+        git(&fx.seat, &["commit", "--allow-empty", "-m", "unrelated"]);
+        assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+        assert_eq!(git(&fx.seat, &["rev-parse", "refs/heads/feat"]), head);
+        git(&fx.seat, &["checkout", "--detach", &head]);
+        // Rework agents keep running after handoff and commit on detached HEAD.
+        std::fs::write(fx.seat.join("rework.txt"), "review fixes").unwrap();
+        git(&fx.seat, &["add", "rework.txt"]);
+        git(&fx.seat, &["commit", "-m", "detached rework"]);
+        let rework_head = git(&fx.seat, &["rev-parse", "HEAD"]);
+        assert_ne!(rework_head, head);
+        assert_eq!(
+            crate::pr_cmd::ship_branch(&fx.seat, &fx.main, false).unwrap(),
+            "feat"
+        );
+        assert_eq!(git(&fx.seat, &["rev-parse", "refs/heads/feat"]), head);
+        assert!(git(&fx.seat, &["branch", "--show-current"]).is_empty());
+        rework_head
+    } else {
+        head.clone()
+    };
+    // Both ship entry points use this recovery seam after --no-merge or a hold.
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
+        "feat"
+    );
+    assert_eq!(git(&fx.seat, &["branch", "--show-current"]), "feat");
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
+        "feat"
+    );
+    assert_eq!(
+        git(&fx.seat, &["rev-parse", "refs/heads/feat"]),
+        rework_head
+    );
+    assert_eq!(git(&fx.seat, &["rev-parse", "HEAD"]), rework_head);
+    if detached_rework {
+        assert_eq!(
+            std::fs::read_to_string(fx.seat.join("rework.txt")).unwrap(),
+            "review fixes"
+        );
+    }
+    git(&fx.seat, &["push", "origin", "feat"]);
+    // The resumed branch can hand off again, then take the ordinary cleanup path.
+    crate::ownership::dual::handed_off(&fx.main, &fx.seat, "feat", &lease.scope, 42).unwrap();
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
+    crate::session_end::session_end(
+        Some(&lease.id),
+        None,
+        None,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap();
+    assert!(!path.exists());
+    assert!(!fx.seat.exists());
 }
