@@ -3,6 +3,7 @@ No vendor, real grant, mutable canonical store or production mutation handler.
 trace:TASK-3225 | ai:codex
 """
 import array
+import ast
 import json
 import os
 from pathlib import Path
@@ -39,6 +40,18 @@ class Identity:
 
     def close(self):
         self.closed = True
+
+
+class ContainedHostShutdownTests(unittest.TestCase):
+    # trace:BUG-2480 | ai:codex
+    def test_notification_peer_hangup_does_not_block_lane_shutdown(self):
+        for mode in ('hangup', 'notification', 'cancelled'):
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [sys.executable, '-m', 'tests.test_store_mutation', '--shutdown-helper', mode],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('notification-shutdown-ok', result.stdout)
 
 
 class StoreMutationTests(unittest.TestCase):
@@ -547,6 +560,69 @@ while True:
             self.assertEqual(len(self.service.accepted), 1)
 
 
+def shutdown_helper(mode):
+    """Run the production supervision loop with real readiness/HUP and a lane
+    process, without requiring keyrings, namespaces or a vendor. Extract only
+    the loop to leave privileged launch setup out of this shutdown regression.
+    The separate interpreter gives even a blocking receive a hard watchdog.
+    trace:BUG-2480 | ai:codex
+    """
+    tree = ast.parse((SOURCE / 'containment/contained_host.py').read_text())
+    host = next(node for node in tree.body
+                if isinstance(node, ast.FunctionDef) and node.name == 'host_contained')
+    loop, = [node for node in ast.walk(host) if isinstance(node, ast.While)
+             and ast.unparse(node.test) == 'process.poll() is None']
+    code = compile(ast.Module(body=[loop], type_ignores=[]), 'host-shutdown-loop', 'exec')
+    notification, peer = socket.socketpair()
+    proxy, proxy_peer = socket.socketpair()
+    # Keep the wrapper alive briefly after its notification peer closes, as
+    # happens when filtered tasks exit before bwrap has finished shutting down.
+    child = """import socket,sys,time
+s=socket.socket(fileno=int(sys.argv[1]))
+s.settimeout(1)
+if sys.argv[2]!='hangup':
+    s.sendall(b'N')
+    assert s.recv(1)==b'R'
+else:
+    time.sleep(.05)
+s.close()
+time.sleep(.2)
+"""
+    process = subprocess.Popen([sys.executable, '-c', child, str(peer.fileno()), mode],
+                               pass_fds=(peer.fileno(),))
+    peer.close()
+    calls = []
+
+    def receive_notification(*args):
+        # A seccomp RECV can block on hang-up; a socket recv would merely
+        # return EOF and hide the regression. Refuse that call explicitly.
+        assert notification.recv(1) == b'N', 'broker received after listener hang-up'
+        calls.append(mode)
+        notification.sendall(b'R')
+        return mode != 'cancelled'
+
+    watch = [proxy, notification]
+    context = dict(ns, process=process, notification=notification, proxy=proxy,
+                   watch=watch, mutation=None, state_fd=-1, state_prefix=b'', connector=None,
+                   port=0, lane_net=None, lane_user=None,
+                   broker_connect_contained=receive_notification)
+    start = time.monotonic()
+    try:
+        exec(code, context)
+        assert process.wait(timeout=1) == 0
+        assert time.monotonic() - start < 2, 'host missed shutdown deadline'
+        assert notification not in watch, 'hung-up listener still watched'
+        assert calls == ([] if mode == 'hangup' else [mode]), calls
+        print('notification-shutdown-ok')
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=1)
+        notification.close()
+        proxy.close()
+        proxy_peer.close()
+
+
 def live_helper(fault='none'):
     """Synthetic shared-boundary fixture, never a real grant/vendor claim."""
     import select
@@ -668,6 +744,10 @@ print('live-store-channel-ok',flush=True)
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--shutdown-helper':
+        assert sys.argv[2] in ('hangup', 'notification', 'cancelled')
+        shutdown_helper(sys.argv[2])
+        sys.exit(0)
     if len(sys.argv) in (2, 3) and sys.argv[1] == '--live-helper':
         fault = sys.argv[2] if len(sys.argv) == 3 else 'none'
         assert fault in ('none', 'absent', 'wrong_epoch', 'empty_grant', 'revoked', 'slow_authority')
