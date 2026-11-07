@@ -1,5 +1,8 @@
 // trace:TASK-2707 | ai:codex
 use super::*;
+
+// trace:TASK-3225 | ai:codex — broker fixtures load the same fixed service definitions.
+const MUTATION: &str = store_mutation::SOURCE;
 #[test]
 fn task_2707_chatgpt_auth_named_refusal() {
     let home = tempfile::tempdir().unwrap();
@@ -1277,6 +1280,7 @@ fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
         receipt: None,
         acceptance: None,
         credentials,
+        mutation: None,
         _state: tempfile::tempdir().unwrap(),
     };
     let failed = Command::new("/bin/false").status().unwrap();
@@ -1669,7 +1673,7 @@ print('Claude prepare live mounts ok')
 #[test]
 fn task_2708_socket_ancestry_and_connect_deadline() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 with tempfile.TemporaryDirectory() as root:
@@ -1832,7 +1836,7 @@ print('blocking and large stream sends ok')
 #[test]
 fn task_2708_send_bounds_namespace_timeout_queue_and_cancellation() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 responses=[]
@@ -1999,7 +2003,7 @@ print('send bounds namespace timeout queue cancellation and kernel gate ok')
 #[test]
 fn task_2708_target_socket_old_kernel_thread_file_tables() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 leader=os.getpid()
@@ -2257,6 +2261,8 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
         relay_port: 8080,
         policy_sha: policy_sha.into(),
         keyring: "isolated_child_only".into(),
+        mutation_epoch: None,
+        mutation_ready: false,
     };
     assert_eq!(
         receipt_diagnostic(&receipt, policy_sha).unwrap(),
@@ -2459,6 +2465,61 @@ fn task_3048_runtime_descriptor_masks_host_state_for_every_vendor() {
         masks,
         crate::containment::runtime_host_parents(host.path()).unwrap()
     );
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_service_required_refuses_absent_and_empty_binding_before_setup() {
+    let root = tempfile::tempdir().unwrap();
+    for grant in [None, Some("")] {
+        let mut command = Command::new("codex");
+        command.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+        if let Some(grant) = grant {
+            command.env(crate::gate::seat_authority::GRANT_ENV, grant);
+        }
+        let error = match PreparedLaunch::prepare(&command, root.path(), None) {
+            Ok(_) => panic!("service admitted missing binding"),
+            Err(error) => error,
+        };
+        assert!(error
+            .to_string()
+            .contains("nonempty explicit grant binding"));
+    }
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_service_receipt_and_empty_worker_binding_refuse() {
+    let mut receipt: ContainmentReceipt = serde_json::from_value(serde_json::json!({
+        "version":1,"posture":"aida","worker_pid":123,"worker_start":"456",
+        "wrapper_pid":789,"namespaces":{},"uid_map_identity":true,"seat_preflight":true,
+        "broker":"seccomp_notify_addfd","relay_port":8080,"policy_sha":"test",
+        "keyring":"isolated_child_only"
+    }))
+    .unwrap();
+    assert!(validate_service_receipt(&receipt, None).is_ok());
+    let epoch = "11111111-1111-4111-8111-111111111111";
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_err());
+    receipt.mutation_epoch = Some(epoch.into());
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_err());
+    receipt.mutation_ready = true;
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_ok());
+    assert!(validate_service_receipt(&receipt, None).is_err());
+    assert!(validate_service_receipt(&receipt, Some("other")).is_err());
+    receipt.accepted = true;
+    let error =
+        crate::gate::seat_authority::bind_contained_launch_worker("", &receipt).unwrap_err();
+    assert!(error.to_string().contains("nonempty grant binding"));
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_required_service_refuses_unwrapped_launch() {
+    let mut child = Command::new("codex");
+    assert!(require_store_service_surface(&child, false).is_ok());
+    child.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+    assert!(require_store_service_surface(&child, false).is_err());
+    assert!(require_store_service_surface(&child, true).is_ok());
 }
 
 /// S1 exercises the coordinator builder and its actual spawn adapter. All
