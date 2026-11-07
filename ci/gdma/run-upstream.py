@@ -9,8 +9,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 
 import yaml
 
@@ -20,7 +22,12 @@ TOKEN = re.compile(r"\s*(\|\||&&|==|!=|[!(),]|'[^']*'|[A-Za-z_][A-Za-z0-9_.]*)")
 INSTALL_STEPS = {
     "Install Rust toolchain", "Pin stable toolchain & verify cargo",
     "Install Linux dependencies", "Install zsh (shell-wrapper test matrix)",
+    "Install awk engines",
 }
+# Runner-owned shell inputs must be explicitly supplied, never inherited by accident.
+# trace:STORY-2606 | ai:codex
+RUNNER_VARIABLES = {"GITHUB_STEP_SUMMARY", "RUNNER_TEMP"}
+RUNNER_REFERENCE = re.compile(r"\$\{?((?:RUNNER_|GITHUB_)[A-Za-z0-9_]+)")
 ACTIONS = {
     "actions/checkout", "dorny/paths-filter", "dtolnay/rust-toolchain",
     "Swatinem/rust-cache", "taiki-e/install-action", "actions/upload-artifact",
@@ -136,11 +143,26 @@ def shell(text):
     return re.sub(r"\$\{\{(.*?)\}\}", substitute, text)
 
 
+def step_command(step):
+    command = shell(step["run"])
+    if step.get("name") == "Live bwrap OS-wrap confinement gate":
+        # Host namespace policy is provisioned by the administrator, like the
+        # equivalent preparation in Install Linux dependencies. Keep the probe.
+        command = command.replace(
+            "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true\n", "", 1)
+    return command
+
+
 def full_ci(base):
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "-z", f"{base}...HEAD"],
-        cwd=ROOT, stdout=subprocess.PIPE, check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "-z", f"{base}...HEAD"],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+    except subprocess.CalledProcessError:
+        # Missing objects or merge bases must never suppress the suite.
+        print("Baseline unavailable; selecting full CI", file=sys.stderr)
+        return True
     paths = result.stdout.decode().split("\0")
     return any(path and not (
         path.startswith("docs/") or path.endswith(".md") or
@@ -216,7 +238,13 @@ def validate_job(job, current):
         elif "run" in step:
             if step.get("shell", "bash") not in {"bash", "bash --noprofile --norc -e -o pipefail {0}"}:
                 raise ValueError("Unsupported upstream shell")
-            shell(step["run"])
+            command = step_command(step)
+            if step.get("name") not in INSTALL_STEPS:
+                if re.search(r"\b(?:sudo|apt-get)\b", command):
+                    raise ValueError("Unmapped upstream image installation step")
+                unknown = set(RUNNER_REFERENCE.findall(command)) - RUNNER_VARIABLES
+                if unknown:
+                    raise ValueError(f"Unsupported runner variables: {', '.join(sorted(unknown))}")
         else:
             raise ValueError("Unmapped upstream step")
 
@@ -279,6 +307,7 @@ def main(argv=None, environ=None):
     environment["GDMA_EVENT_NAME"] = event_name(environ)
     (ROOT / "target").mkdir(exist_ok=True)
     environment["GITHUB_STEP_SUMMARY"] = str(ROOT / "target/ci-summary.md")
+    environment["RUNNER_TEMP"] = tempfile.mkdtemp(prefix="gdma-runner-", dir=ROOT / "target")
     environment.pop("AIDA_SESSION_ROLE", None)
     initial = context(args.lane, full, environ=environ)
     environment = step_environment(workflow, initial, environment)
@@ -307,13 +336,23 @@ def main(argv=None, environ=None):
         # Step subprocess caps are separate; GitLab enforces the whole-job 40m budget.
         timeout = step.get("timeout-minutes", job.get("timeout-minutes", 40)) * 60
         try:
-            command = shell(step["run"])
-            result = subprocess.run(
+            command = step_command(step)
+            process = subprocess.Popen(
                 ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
                 cwd=ROOT, env=step_environment(step, current, environment),
-                stdin=subprocess.DEVNULL, timeout=timeout,
+                stdin=subprocess.DEVNULL, start_new_session=True,
             )
-            failed = failed or result.returncode != 0
+            try:
+                returncode = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # Kill descendants before cleanup/collection can observe late writes.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                raise
+            failed = failed or returncode != 0
         except subprocess.TimeoutExpired:
             print(f"Timed out: {name}", file=sys.stderr)
             failed = True

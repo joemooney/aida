@@ -78,7 +78,40 @@ class ExpressionTests(unittest.TestCase):
                             if 'uses' in step:
                                 self.assertIn(step['uses'].split('@')[0], adapter.ACTIONS)
                             elif 'run' in step and step.get('name') not in adapter.INSTALL_STEPS:
-                                adapter.shell(step['run'])
+                                command = adapter.shell(step['run'])
+                                self.assertLessEqual(set(adapter.RUNNER_REFERENCE.findall(command)),
+                                                     adapter.RUNNER_VARIABLES)
+
+    def test_every_current_package_install_is_mapped(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        for step in workflow['jobs']['build']['steps']:
+            if 'apt-get' in step.get('run', ''):
+                with self.subTest(name=step.get('name')):
+                    self.assertIn(step.get('name'), adapter.INSTALL_STEPS)
+
+    def test_live_probe_maps_only_known_host_preparation(self):
+        step = {"name": "Live bwrap OS-wrap confinement gate", "run":
+                "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true\n"
+                "echo probe"}
+        self.assertEqual(adapter.step_command(step), "echo probe")
+        step['run'] += "\nsudo unexpected"
+        with self.assertRaises(ValueError):
+            adapter.validate_job({'steps': [step]}, adapter.context('gates', True))
+
+    def test_unavailable_baseline_selects_full_ci(self):
+        with patch.object(adapter.subprocess, "run", side_effect=
+                          subprocess.CalledProcessError(128, ["git", "diff"])):
+            self.assertTrue(adapter.full_ci("a" * 40))
+
+    def test_missing_baseline_object_in_real_clone_selects_full_ci(self):
+        with tempfile.TemporaryDirectory() as directory:
+            subprocess.run(["git", "init", "--quiet", directory], check=True)
+            subprocess.run(["git", "-c", "user.name=Fixture", "-c",
+                            "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null",
+                            "commit", "--quiet", "--allow-empty", "-m", "baseline"],
+                           cwd=directory, check=True)
+            with patch.object(adapter, "ROOT", Path(directory)):
+                self.assertTrue(adapter.full_ci("a" * 40))
 
 
 
@@ -121,9 +154,28 @@ class ExecutionTests(unittest.TestCase):
 
     def test_shell_context_and_summary_are_available(self):
         code, root = self.run_workflow([{"run":
-            'test "$GDMA_LANE/$GDMA_EVENT_NAME" = gates/push; echo summary >> "$GITHUB_STEP_SUMMARY"'}])
+            'test "$GDMA_LANE/$GDMA_EVENT_NAME" = gates/push; '
+            'test -d "$RUNNER_TEMP"; test -w "$RUNNER_TEMP"; '
+            'echo temp > "$RUNNER_TEMP/probe"; '
+            'printf "%s" "$RUNNER_TEMP" > runner-temp-path; '
+            'echo summary >> "$GITHUB_STEP_SUMMARY"'}])
         self.assertEqual(code, 0)
         self.assertEqual((root / ".ci-artifacts/ci-summary.md").read_text(), "summary\n")
+        runner_temp = Path((root / "runner-temp-path").read_text())
+        self.assertEqual(runner_temp.parent, root / "target")
+        self.assertEqual((runner_temp / "probe").read_text(), "temp\n")
+
+    def test_runner_inputs_are_supplied_and_temp_is_fresh_per_job(self):
+        with patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+            code, root = self.run_workflow([{"run": "true"}])
+            self.assertEqual(code, 0)
+            first = spawn.call_args.kwargs['env']
+            self.assertLessEqual(adapter.RUNNER_VARIABLES, first.keys())
+            with patch.object(adapter, "ROOT", root):
+                self.assertEqual(adapter.main(["--lane", "gates"], environ={}), 0)
+            second = spawn.call_args.kwargs['env']
+            self.assertNotEqual(first['RUNNER_TEMP'], second['RUNNER_TEMP'])
+            self.assertTrue(Path(second['RUNNER_TEMP']).is_dir())
 
     def test_new_branch_without_baseline_runs_full_ci(self):
         code, root = self.run_workflow([
@@ -133,7 +185,7 @@ class ExecutionTests(unittest.TestCase):
         self.assertTrue((root / "full-ci-ran").exists())
 
     def test_unknown_lane_is_refused_before_execution(self):
-        with patch.object(adapter.subprocess, "run") as run:
+        with patch.object(adapter.subprocess, "Popen") as run:
             with self.assertRaises(ValueError):
                 self.run_workflow([{"run": "true"}], lane="unknown")
             run.assert_not_called()
@@ -151,8 +203,12 @@ class ExecutionTests(unittest.TestCase):
                      {"if": "false", "run": "echo ${{ secrets.TOKEN }}"},
                      {"run": "true", "continue-on-error": True},
                      {"run": "true", "shell": "python"},
-                     {"run": "true", "env": {"VALUE": "prefix-${{ secrets.TOKEN }}"}}):
-            with self.subTest(step=step), patch.object(adapter.subprocess, "run") as run:
+                     {"run": "true", "env": {"VALUE": "prefix-${{ secrets.TOKEN }}"}},
+                     {"if": "false", "run": "sudo echo unmapped"},
+                     {"run": "apt-get install new-package"},
+                     {"run": 'echo "$RUNNER_UNKNOWN"'},
+                     {"run": 'echo "${GITHUB_UNKNOWN:-}"'}):
+            with self.subTest(step=step), patch.object(adapter.subprocess, "Popen") as run:
                 with self.assertRaises(ValueError):
                     self.run_workflow([{"run": "touch premature"}, step])
                 run.assert_not_called()
@@ -168,7 +224,7 @@ class ExecutionTests(unittest.TestCase):
                                         ("unknown", []), ("os", ["windows-latest"]))]
         settings.append({"strategy": {"matrix": {"shard": ["gates"]}, "max-parallel": 2}})
         for job_settings in settings:
-            with self.subTest(settings=job_settings), patch.object(adapter.subprocess, "run") as run:
+            with self.subTest(settings=job_settings), patch.object(adapter.subprocess, "Popen") as run:
                 with self.assertRaises(ValueError):
                     self.run_workflow([{"run": "touch premature"}], job_settings=job_settings)
                 run.assert_not_called()
@@ -185,14 +241,17 @@ class ExecutionTests(unittest.TestCase):
             self.assertEqual(adapter.main(["--collect"], environ={}), 0)
         self.assertEqual(list((root / ".ci-artifacts").rglob("*")), [])
 
-    def test_timeout_fails_and_allows_cleanup(self):
-        with patch.object(adapter.subprocess, "run", side_effect=[
-                subprocess.TimeoutExpired("fixture", 1), subprocess.CompletedProcess([], 0)]):
-            code, _ = self.run_workflow([
-                {"run": "slow", "timeout-minutes": 1},
-                {"if": "always ()", "run": "cleanup"},
-            ])
+    def test_timeout_kills_grandchildren_before_cleanup_and_collection(self):
+        code, root = self.run_workflow([
+            {"run": "mkdir -p target/nextest/ci; "
+             "(sleep 1; echo late > target/nextest/ci/junit-late.xml) & wait",
+             "timeout-minutes": 0.005},
+            {"if": "always ()", "run": "sleep 1.2; touch cleanup-ran"},
+        ])
         self.assertEqual(code, 1)
+        self.assertTrue((root / "cleanup-ran").exists())
+        self.assertFalse((root / "target/nextest/ci/junit-late.xml").exists())
+        self.assertFalse((root / ".ci-artifacts/nextest/ci/junit-late.xml").exists())
 
     def test_literal_jobs_match_upstream_lane_set(self):
         config = yaml.safe_load((ROOT / ".gitlab/ci/gdma.yml").read_text())
@@ -207,6 +266,9 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(config[".gdma-job"]["variables"]["GIT_STRATEGY"], "clone")
         self.assertEqual(config[".gdma-job"]["image"], "$GDMA_CI_IMAGE")
         self.assertEqual(config[".gdma-job"]["tags"], ["$GDMA_RUNNER_TAG"])
+        self.assertEqual(config[".gdma-job"]["rules"], [{"if":
+            '$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG '
+            '&& $CI_COMMIT_BRANCH =~ /^ci\\/[1-9][0-9]*$/'}])
 
 
 class SourceTests(unittest.TestCase):

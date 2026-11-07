@@ -355,6 +355,15 @@ fn condition(expr: &str) -> Result<bool> {
     if expr.len() > 1024 {
         bail!("CI rule expression exceeds limit");
     }
+    // The literal GDMA relay rule describes the inventory of a provisioned
+    // deployment. Presence guards disable jobs on unconfigured GitLab instances;
+    // they do not add general deployment-variable evaluation to this reader.
+    // trace:STORY-2606 | ai:codex
+    if expr
+        == r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#
+    {
+        return Ok(true);
+    }
     let mut result = Some(false);
     for disjunction in expr.split(" || ") {
         let mut conjunction = Some(true);
@@ -754,6 +763,19 @@ mod tests {
             expected.insert(format!("gdma-ci: [{lane}]"));
         }
         assert_eq!(gitlab_jobs(&files).unwrap(), expected);
+    }
+    #[test]
+    fn deployment_presence_is_only_admitted_in_the_exact_relay_rule() {
+        // trace:STORY-2606 | ai:codex
+        assert!(condition(r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#).unwrap());
+        for expression in [
+            "$GDMA_CI_IMAGE",
+            "$GDMA_RUNNER_TAG",
+            r#"$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE"#,
+            r#"$CI_PIPELINE_SOURCE == "web" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/"#,
+        ] {
+            assert!(condition(expression).is_err(), "{expression}");
+        }
     }
     #[test]
     fn local_includes_merge_before_root_and_extends_uses_reverse_deep_merge() {

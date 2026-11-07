@@ -14,7 +14,7 @@
     GIT_DEPTH: "0"
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/'
   script:
     - |
       if [ "${GDMA_CHECK_SOURCES:-0}" = 1 ]; then
