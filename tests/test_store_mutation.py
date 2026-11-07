@@ -137,7 +137,7 @@ class StoreMutationTests(unittest.TestCase):
             caller.join(timeout=3)
 
     def test_closed_operations_and_schemas(self):
-        for op in ('own_claim', 'comment_add', 'spec_edit', 'queue_done', 'exec', 'unknown'):
+        for op in ('own_claim', 'queue_done', 'exec', 'unknown'):
             self.refuses('UnsupportedOperation', self.request(op))
         for field in ('path', 'cwd', 'store', 'program', 'argv', 'git_config', 'replacement', 'role', 'grant', 'pid'):
             req = self.request()
@@ -147,6 +147,83 @@ class StoreMutationTests(unittest.TestCase):
             req[field] = '/host/canary'
             self.refuses('InvalidRequest', req)
         self.assertFalse(self.service.accepted)
+
+    # trace:TASK-3223 | ai:codex
+    def test_canonical_schemas_are_closed_and_cannot_select_authority(self):
+        for op, extra in [('comment_add', {'content': 'hello'}),
+                          ('spec_edit', {'fields': {'title': 'updated'}})]:
+            data = dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)
+            self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
+            for field in ('author', 'path', 'status', 'grant', 'replacement'):
+                self.refuses('InvalidRequest', self.request(op, dict(data, **{field: 'x'})))
+        for fields in ({'status': 'Completed'}, {}, {'title': None}, {'title': ''},
+                       {'title': None, 'description': 'text'},
+                       {'title': 'title', 'description': None}):
+            self.refuses('InvalidRequest', self.request('spec_edit', dict(spec_id='TASK-1', expected_revision='a' * 64, fields=fields)))
+        self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='stale', content='hi')))
+        self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='A' * 64, content='hi')))
+
+    def test_staged_canonical_verbs_refuse_without_calling_host(self):
+        for op, extra in [('comment_add', {'content': 'hello'}),
+                          ('spec_edit', {'fields': {'description': 'text'}}),
+                          ('own_claim', {}), ('queue_done', {})]:
+            self.refuses('UnsupportedOperation', self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)))
+        probe = self.dispatch(self.request())
+        self.assertEqual(probe['result']['permitted_verbs'], ['session_probe', 'request_status'])
+        self.assertEqual(len(self.service.accepted), 1)
+
+    def test_multiline_canonical_schemas_reject_only_other_controls(self):
+        for text in ('first\n\tsecond', 'bad\r', 'bad\x00', 'bad\x7f', 'bad\x85'):
+            for op, extra in [('comment_add', {'content': text}),
+                              ('spec_edit', {'fields': {'description': text}})]:
+                request = self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra))
+                if text.startswith('first'):
+                    self.assertEqual(parse(self.wire(request))['data'], request['data'])
+                else:
+                    with self.assertRaisesRegex(Refusal, 'InvalidRequest'):
+                        parse(self.wire(request))
+
+    # trace:TASK-3223 | ai:codex
+    def test_mutations_use_correlated_framed_host_rpc_and_do_not_replay_locally(self):
+        helper, host = socket.socketpair()
+        authority = ns['MutationAuthority'](helper)
+        self.addCleanup(helper.close)
+        self.addCleanup(host.close)
+        self.service.authorize = authority
+        request = self.request('comment_add', dict(spec_id='TASK-1', expected_revision='a' * 64, content='one comment'))
+        seen, errors = [], []
+        def exact(n):
+            value = b''
+            while len(value) < n:
+                chunk = host.recv(n - len(value))
+                if not chunk:
+                    raise OSError('closed')
+                value += chunk
+            return value
+        def responder():
+            try:
+                host.settimeout(3)
+                for _ in range(2):
+                    self.assertEqual(exact(1), b'?'); host.sendall(b'Y')
+                    self.assertEqual(exact(1), b'?'); host.sendall(b'Y')
+                    self.assertEqual(exact(1), b'M')
+                    size = struct.unpack('!I', exact(4))[0]
+                    received = json.loads(exact(size)); seen.append(received)
+                    reply = json.dumps(dict(launch_epoch=received['launch_epoch'], request_id=received['request_id'], result={'comment_id': 'fixed'})).encode()
+                    host.sendall(struct.pack('!I', len(reply)) + reply)
+            except BaseException as error:
+                errors.append(error)
+        thread = threading.Thread(target=responder); thread.start()
+        try:
+            # Exercise staged framing only; production admission remains disabled.
+            with patch.dict(ns, MUTATION_VERBS=ns['MUTATION_VERBS'] + ns['CANONICAL_VERBS']):
+                first = self.dispatch(request)
+                self.assertEqual(self.dispatch(request), first)
+        finally:
+            thread.join(4)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(errors, errors)
+        self.assertEqual(seen, [request, request])
 
     def test_malformed_duplicate_trailing_and_non_utf8(self):
         raw = self.wire(self.request())
@@ -604,7 +681,8 @@ time.sleep(.2)
     watch = [proxy, notification]
     context = dict(ns, process=process, notification=notification, proxy=proxy,
                    watch=watch, mutation=None, state_fd=-1, state_prefix=b'', connector=None,
-                   port=0, lane_net=None, lane_user=None,
+                   port=0, lane_net=None, lane_user=None, oauth_denial_fd=None,
+                   credential_deadline=lambda: None,
                    broker_connect_contained=receive_notification)
     start = time.monotonic()
     try:

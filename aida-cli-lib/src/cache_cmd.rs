@@ -94,7 +94,7 @@ pub(crate) fn handle_cache_command(
                     actual_sha.clone()
                 }
             );
-            let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
+            let stale = backend.cache_snapshot_is_stale()? || recorded_sha.is_empty();
             if stale && !actual_sha.is_empty() {
                 println!(
                     "Status:           {} — run `aida cache rebuild`",

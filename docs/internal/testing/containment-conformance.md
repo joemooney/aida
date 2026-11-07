@@ -118,6 +118,16 @@ supply a mediated-writer positive control. The same bwrap process tree, network
 namespace, relay, broker, grant keyring and exec barrier cover every tool and
 exec descendant. No AGY containment engine is added.
 
+The live private-runtime regression also starts external file and URL helpers
+and a stdio request server inside that same boundary. Each must write private
+runtime state while refusing writes to readable host canaries, direct host TCP
+and a reachable host UNIX socket; each must still reach the inherited relay.
+The parent establishes host positive controls and checks that tool state never
+appears in the host runtime. These synthetic processes test inherited boundary
+mechanics, not AGY tool invocation, real browser/MCP behavior or C0–C4 acceptance.
+Set `AIDA_REQUIRE_BWRAP_LIVE=1` when running the regression to turn missing live
+prerequisites into failures rather than skips.
+
 The data records only the host-evidenced endpoint
 `daily-cloudcode-pa.googleapis.com`, with `auth_inventory_complete = false`.
 Inventory entries are requirements on the pinned trusted

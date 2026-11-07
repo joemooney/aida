@@ -45,6 +45,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 sha2 = "0.10"
+# Decode bounded JWT expiry claims from pinned host credentials. trace:STORY-2593 | ai:codex
+base64 = "0.22"
 # Relay run capabilities. trace:STORY-1843 | ai:claude
 getrandom = "0.2"
 # Fresh scoring roots need automatic cleanup in production. trace:TASK-1731 | ai:codex

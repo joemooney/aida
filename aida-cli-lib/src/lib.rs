@@ -421,6 +421,10 @@ mod focus_cmd;
 mod forge;
 mod forge_confirmation;
 mod forge_observed;
+
+// trace:STORY-2401 | ai:codex
+mod ci_digest;
+
 mod forge_profiles;
 mod gate_cmd;
 // trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.

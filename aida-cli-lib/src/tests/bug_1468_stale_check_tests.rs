@@ -191,14 +191,11 @@ fn workflow_change_on_main_is_flagged_as_definition() {
     assert!(warning.test_files.is_empty());
 }
 
-/// Follow-up 2 (proxy-review narrowing): a workflow that only runs on a
-/// cron schedule (no `pull_request` trigger) changing on main must NOT be
-/// flagged as a definition change — it never gated this PR's own check, so
-/// it must not make `aida pr ship` refuse. It also isn't an ordinary test
-/// file, so it lands in neither tier.
+/// STORY-2401: the digest includes all workflow definitions, including cron.
+/// The path classifier is still used to explain PR-triggered changes.
 // trace:BUG-1468 | ai:claude
 #[test]
-fn cron_only_workflow_change_on_main_is_not_flagged_as_definition() {
+fn cron_only_workflow_change_on_main_changes_the_workflow_tree_digest() {
     let (tmp, branch) = fixture();
     let p = tmp.path();
     run_git(p, &["checkout", "-q", "main"]);
@@ -217,9 +214,9 @@ fn cron_only_workflow_change_on_main_is_not_flagged_as_definition() {
 
     let warning = pr_stale_check_warning(p, branch, "main").expect("branch is behind main");
     assert_eq!(warning.behind_commits, 1);
-    // This is exactly the signal `aida pr ship` gates its refusal on — an
-    // empty `definition_files` means it proceeds instead of bailing.
-    assert!(warning.definition_files.is_empty());
+    // STORY-2401 keys definition evidence by the entire workflow tree.
+    assert_ne!(warning.head_digest, warning.base_digest);
+    assert_eq!(warning.definition_files, vec![".github/workflows"]);
     assert!(warning.test_files.is_empty());
 }
 
