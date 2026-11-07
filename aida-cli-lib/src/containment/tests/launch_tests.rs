@@ -4,15 +4,6 @@ use super::*;
 // trace:TASK-3225 | ai:codex — broker fixtures load the same fixed service definitions.
 const MUTATION: &str = store_mutation::SOURCE;
 #[test]
-fn task_2707_chatgpt_auth_named_refusal() {
-    let home = tempfile::tempdir().unwrap();
-    std::fs::write(home.path().join("auth.json"), "{}").unwrap();
-    assert!(refuse_chatgpt(home.path())
-        .unwrap_err()
-        .to_string()
-        .contains("contained ChatGPT auth waits for P3 (PR2)"));
-}
-#[test]
 fn task_2707_codex_applied_requires_receipt_ratchet() {
     use crate::session::{containment_applied, HeadlessVendor};
     for requested in [false, true] {
@@ -1280,6 +1271,7 @@ fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
         receipt: None,
         acceptance: None,
         credentials,
+        chatgpt: false,
         mutation: None,
         _state: tempfile::tempdir().unwrap(),
     };
@@ -2784,3 +2776,6 @@ fn task_3219_coordinator_composition_scope_and_native_argv() {
         );
     }
 }
+
+#[path = "codex_auth_tests.rs"]
+mod codex_auth_tests;

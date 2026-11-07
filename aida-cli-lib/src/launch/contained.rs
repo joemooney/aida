@@ -1,7 +1,7 @@
 //! The one AIDA contained headless boundary. Vendor
 //! differences are rows of [`CONTAINED_VENDORS`] plus each vendor's argv
-//! finisher; credentials exist only in the exact child env (Codex) or as a
-//! read-only credentials leaf (Claude).
+//! finisher; credentials exist only in the exact child env (API key) or as a
+//! read-only credentials leaf (Claude and brokered Codex ChatGPT).
 // trace:TASK-2707 | ai:codex
 // trace:TASK-2708 | ai:claude
 use anyhow::{Context, Result};
@@ -18,6 +18,9 @@ use std::time::{Duration, Instant};
 
 #[path = "../store_mutation/mod.rs"]
 mod store_mutation;
+
+#[path = "codex_auth.rs"]
+mod codex_auth;
 
 const COMMON: &str = include_str!("../containment/egress_probe.py");
 const LANE: &str = include_str!("../containment/contained_lane.py");
@@ -176,6 +179,8 @@ pub(crate) fn require_outer_only_receipt(
 }
 
 struct Mount {
+    /// Anonymous content must use bwrap data delivery, not pathname resolution.
+    data: bool,
     file: File,
     path: PathBuf,
     writable: bool,
@@ -216,6 +221,7 @@ impl WriteProfile {
             );
         }
         self.mounts.push(Mount {
+            data: false,
             file,
             path: path.into(),
             writable,
@@ -247,7 +253,9 @@ impl WriteProfile {
         args.push(cwd.to_string_lossy().into_owned());
         for m in &self.mounts {
             args.extend([
-                if m.writable {
+                if m.data {
+                    "--ro-bind-data"
+                } else if m.writable {
                     "--bind-fd"
                 } else {
                     "--ro-bind-fd"
@@ -420,6 +428,7 @@ fn bind_runtime_credential(
     let file = open_credentials_leaf_for_owner(source, owner)
         .context("outer-only runtime credential refused")?;
     profile.mounts.push(Mount {
+        data: false,
         file,
         path: runtime.join(leaf),
         writable: false,
@@ -553,6 +562,7 @@ enum Auth {
     Env(&'static str, String),
     File(PathBuf),
     RuntimeFile(PathBuf),
+    ChatGpt(codex_auth::Credential),
 }
 
 /// The OAuth credentials leaf inside a Claude config dir.
@@ -621,13 +631,6 @@ fn open_credentials_leaf_for_owner(credentials: &Path, owner: u32) -> Result<Fil
     Ok(file)
 }
 
-fn refuse_chatgpt(home: &Path) -> Result<()> {
-    anyhow::ensure!(
-        !home.join("auth.json").exists(),
-        "contained ChatGPT auth waits for P3 (PR2)"
-    );
-    Ok(())
-}
 /// Host vendor state the sandbox must see as an empty read-only view: the
 /// default `~/.codex` and `~/.claude`, plus the resolved Codex home and
 /// `CODEX_SQLITE_HOME` when an operator relocated them (else the relocated
@@ -728,6 +731,7 @@ pub(crate) struct PreparedLaunch {
     accept_writer: File,
     /// Expiry captured from the exact read-only bound Claude leaf.
     credentials: Option<i64>,
+    chatgpt: bool,
     outer_only: Option<&'static str>,
     mutation: Option<store_mutation::Session>,
 }
@@ -784,7 +788,7 @@ impl PreparedLaunch {
             policy.pointer_vendor(vendor.key) == Some("aida"),
             "{label} AIDA posture requires trusted policy"
         );
-        let allowed = policy
+        let mut allowed = policy
             .get("contained")
             .and_then(|c| c.get("allowed_hosts"))
             .map(|v| -> Result<Vec<String>> {
@@ -848,14 +852,33 @@ impl PreparedLaunch {
         // unusable one is a named refusal, never a lane without it.
         let auth = match vendor.auth {
             VendorAuth::OpenAiApiKey => {
-                refuse_chatgpt(&codex_home)?;
-                let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-                    anyhow::anyhow!(
-                        "contained Codex requires OPENAI_API_KEY; ChatGPT auth waits for P3 (PR2)"
-                    )
-                })?;
-                anyhow::ensure!(!key.is_empty(), "contained Codex requires OPENAI_API_KEY");
-                Auth::Env("OPENAI_API_KEY", key)
+                // trace:STORY-2593 | ai:codex — probe the resolved executable,
+                // never trust inherited informational version context.
+                match std::fs::symlink_metadata(codex_home.join("auth.json")) {
+                    Ok(_) => {
+                        let program = resolve_program(child, &selected_environment(child))?;
+                        let version = crate::agent_launch::reported_harness_version(
+                            program.as_os_str(),
+                            &["--version".into()],
+                            Some(&root),
+                        );
+                        let auth = codex_auth::prepare(
+                            &codex_home,
+                            credential_owner,
+                            version.as_deref(),
+                            ttl,
+                        )?;
+                        codex_auth::exclude_oauth_hosts(&mut allowed);
+                        Auth::ChatGpt(auth)
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        let key = std::env::var("OPENAI_API_KEY").map_err(|_| anyhow::anyhow!(
+                            "contained Codex requires file ChatGPT login or OPENAI_API_KEY; keyring logins unsupported"))?;
+                        anyhow::ensure!(!key.is_empty(), "contained Codex requires OPENAI_API_KEY");
+                        Auth::Env("OPENAI_API_KEY", key)
+                    }
+                    Err(_) => anyhow::bail!("ChatGPT credentials unavailable"),
+                }
             }
             VendorAuth::ClaudeCredentialsFile => {
                 let credentials = claude_home.join(CLAUDE_CREDENTIALS);
@@ -923,6 +946,7 @@ impl PreparedLaunch {
             };
             let file = File::open(view)?;
             profile.mounts.push(Mount {
+                data: false,
                 file,
                 path: p,
                 writable: false,
@@ -1014,7 +1038,10 @@ impl PreparedLaunch {
         let lane_tmp = state.path().join("tmp");
         ensure_dir(&lane_tmp)?;
         std::fs::set_permissions(&lane_tmp, std::fs::Permissions::from_mode(0o700))?;
+        let chatgpt = matches!(&auth, Auth::ChatGpt(_));
+        let mut codex_deadline = None;
         let credentials = match &auth {
+            Auth::ChatGpt(_) => None,
             Auth::Env(..) => {
                 let config = private_home.join("config.toml");
                 std::fs::write(&config, profile.native())?;
@@ -1031,6 +1058,7 @@ impl PreparedLaunch {
                 let leaf = private_home.join(CLAUDE_CREDENTIALS);
                 std::fs::write(&leaf, "")?;
                 profile.mounts.push(Mount {
+                    data: false,
                     file: file.try_clone()?,
                     path: leaf,
                     writable: false,
@@ -1049,7 +1077,17 @@ impl PreparedLaunch {
                 None
             }
         };
+        // Transfer the sealed leaf without a disk-backed secret copy.
+        let auth = match auth {
+            Auth::ChatGpt(auth) => {
+                codex_deadline = Some(codex_auth::bind(&mut profile, &private_home, auth)?);
+                None
+            }
+            other => Some(other),
+        };
         let mut env = selected_environment(child);
+        // A ChatGPT lane must not inherit an alternate API credential.
+        env.remove("OPENAI_API_KEY");
         env.insert(
             "CARGO_HOME".into(),
             std::env::var_os("CARGO_HOME")
@@ -1102,7 +1140,7 @@ impl PreparedLaunch {
         for (name, value) in vendor.fixed_env {
             env.insert((*name).into(), (*value).into());
         }
-        if let Auth::Env(name, key) = auth {
+        if let Some(Auth::Env(name, key)) = auth {
             env.insert(name.into(), key);
         }
         // Select an ephemeral number; the listener binds it only in the new
@@ -1151,12 +1189,16 @@ impl PreparedLaunch {
         let cfg = serde_json::json!({"grant":grant,"ttl":ttl,"mode":"normal","port":port,"allowed":allowed,
             "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.nested_userns,"argv":argv});
         let mut cfg = cfg;
+        if let Some(deadline) = codex_deadline {
+            cfg["chatgpt_deadline"] = deadline.into();
+        }
         if let Some(service) = &mutation {
             cfg["mutation"] = service.config.clone();
         }
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.mutation = mutation;
         prepared.credentials = credentials;
+        prepared.chatgpt = chatgpt;
         prepared.outer_only = runtime_policy.map(|_| vendor.key);
         Ok(prepared)
     }
@@ -1363,6 +1405,7 @@ impl PreparedLaunch {
             accept_reader,
             accept_writer,
             credentials: None,
+            chatgpt: false,
             outer_only: None,
             mutation: None,
         })
@@ -1408,6 +1451,7 @@ impl PreparedLaunch {
             acceptance: None,
             receipt: None,
             credentials: self.credentials,
+            chatgpt: self.chatgpt,
             mutation: self.mutation,
             _state: self._state,
         };
@@ -1486,6 +1530,7 @@ pub(crate) struct ContainedChild {
     receipt: Option<ContainmentReceipt>,
     acceptance: Option<File>,
     credentials: Option<i64>,
+    chatgpt: bool,
     mutation: Option<store_mutation::Session>,
     _state: tempfile::TempDir,
 }
@@ -1498,6 +1543,7 @@ impl ContainedChild {
         &self,
         status: std::process::ExitStatus,
     ) -> Result<std::process::ExitStatus> {
+        anyhow::ensure!(!self.chatgpt || status.success(), codex_auth::RELAUNCH);
         if let Some(credentials) = &self.credentials {
             let expired = *credentials <= chrono::Utc::now().timestamp_millis();
             anyhow::ensure!(status.success() || !expired, CLAUDE_EXPIRED_IN_LANE);

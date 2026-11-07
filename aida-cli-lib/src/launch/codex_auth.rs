@@ -1,0 +1,177 @@
+//! Host-only, non-renewing ChatGPT credential delivery. Never serialize the
+//! host cache or refresh material into the lane, argv, environment or receipts.
+// trace:STORY-2593 | ai:codex
+use super::{Mount, WriteProfile};
+use anyhow::{Context, Result};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use std::fs::File;
+use std::io::{Seek, Write};
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
+use std::path::Path;
+
+pub(super) const RELAUNCH: &str =
+    "contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch";
+const MARGIN: i64 = 300;
+const BASELINE: i64 = 3600;
+const BOUND: usize = 65536;
+
+// Intentionally no Debug/Serialize: only the sealed reduced leaf can cross.
+pub(super) struct Credential {
+    pub file: File,
+    pub deadline: i64,
+}
+
+/// No endpoint-level TLS inspection exists in the CONNECT broker. Deny the
+/// entire OAuth hosts, even if trusted policy allows them for other vendors.
+pub(super) fn exclude_oauth_hosts(allowed: &mut Vec<String>) {
+    allowed.retain(|h| {
+        !matches!(
+            h.as_str(),
+            "auth.openai.com" | "auth0.openai.com" | "openai.auth0.com" | "auth.chatgpt.com"
+        )
+    });
+}
+
+// This reads lifetime/routing metadata from the trusted host cache, not a
+// signature check or a new source of grant authority. Upstream verifies tokens.
+fn claims(token: &str) -> Result<serde_json::Value> {
+    let parts: Vec<_> = token.split('.').collect();
+    anyhow::ensure!(parts.len() == 3, "ChatGPT token claims invalid");
+    let bytes = URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|_| anyhow::anyhow!("ChatGPT token claims invalid"))?;
+    serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("ChatGPT token claims invalid"))
+}
+
+pub(super) fn prepare(
+    home: &Path,
+    owner: u32,
+    version: Option<&str>,
+    ttl: i64,
+) -> Result<Credential> {
+    anyhow::ensure!(version == Some("codex-cli 0.166.0"),
+        "contained ChatGPT auth refused: re-probe this codex version (supported: codex-cli 0.166.0)");
+    let file = std::fs::OpenOptions::new().read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(home.join("auth.json"))
+        .map_err(|_| anyhow::anyhow!("ChatGPT file credentials unavailable; keyring logins unsupported; relaunch after host login"))?;
+    let md = file.metadata()?;
+    anyhow::ensure!(
+        md.is_file()
+            && md.nlink() == 1
+            && md.uid() == owner
+            && md.mode() & 0o7777 == 0o600
+            && md.len() <= BOUND as u64,
+        "ChatGPT credential identity or permissions refused (requires private mode 0600)"
+    );
+    let mut bytes = vec![0; BOUND + 1];
+    let n = file
+        .read_at(&mut bytes, 0)
+        .context("ChatGPT credentials unreadable")?;
+    anyhow::ensure!(n <= BOUND, "ChatGPT credentials exceed bound");
+    // Do not propagate serde errors: a type mismatch can echo secret values.
+    let value: serde_json::Value = serde_json::from_slice(&bytes[..n])
+        .map_err(|_| anyhow::anyhow!("ChatGPT credentials invalid"))?;
+    anyhow::ensure!(
+        value.get("auth_mode").and_then(|v| v.as_str()) == Some("chatgpt"),
+        "ChatGPT file login required; keyring and other auth modes unsupported"
+    );
+    let tokens = value.get("tokens").context("ChatGPT tokens missing")?;
+    let access = tokens
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .context("ChatGPT access token missing")?;
+    let id = tokens
+        .get("id_token")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .context("ChatGPT identity token missing")?;
+    let identity = claims(id)?;
+    let account = identity
+        .pointer("/https:~1~1api.openai.com~1auth/chatgpt_account_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .context("ChatGPT identity account routing missing")?;
+    // Account ID is derived from the identity claim the approved CLI uses.
+    // Refuse conflicting host routing rather than silently switching account.
+    anyhow::ensure!(
+        tokens
+            .get("account_id")
+            .and_then(|v| v.as_str())
+            .is_none_or(|v| v == account),
+        "ChatGPT account routing mismatch"
+    );
+    let exp = claims(access)?
+        .get("exp")
+        .and_then(|v| v.as_i64())
+        .context("ChatGPT access-token expiry missing")?;
+    let now = chrono::Utc::now().timestamp();
+    let lifetime = if ttl > 0 { ttl } else { BASELINE };
+    let deadline = now
+        .checked_add(lifetime)
+        .context("ChatGPT deadline invalid")?;
+    anyhow::ensure!(
+        exp.saturating_sub(deadline) >= MARGIN,
+        "{RELAUNCH} (grant plus 300s margin required)"
+    );
+    // No other host-cache fields are copied. Codex needs explicit account
+    // routing and a recent cache timestamp to avoid its refresh path. Derive
+    // routing from the approved ID token and stamp this leaf's delivery time;
+    // this neither refreshes the bearer nor extends its checked expiry.
+    let reduced = serde_json::json!({"auth_mode":"chatgpt", "tokens": {
+        "access_token":access, "id_token":id, "refresh_token":"", "account_id":account
+    }, "last_refresh":chrono::Utc::now().to_rfc3339()});
+    let fd = unsafe {
+        libc::memfd_create(
+            c"aida-codex-auth".as_ptr(),
+            libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING,
+        )
+    };
+    anyhow::ensure!(fd >= 0, "ChatGPT memory leaf unavailable");
+    let mut leaf = unsafe { File::from_raw_fd(fd) };
+    use std::os::unix::fs::PermissionsExt;
+    leaf.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    leaf.write_all(&serde_json::to_vec(&reduced)?)?;
+    anyhow::ensure!(
+        unsafe {
+            libc::fcntl(
+                leaf.as_raw_fd(),
+                libc::F_ADD_SEALS,
+                libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL,
+            )
+        } == 0,
+        "ChatGPT memory leaf sealing failed"
+    );
+    leaf.rewind()?;
+    Ok(Credential {
+        file: leaf,
+        deadline,
+    })
+}
+
+pub(super) fn bind(
+    profile: &mut WriteProfile,
+    private_home: &Path,
+    auth: Credential,
+) -> Result<i64> {
+    let config = private_home.join("config.toml");
+    std::fs::write(
+        &config,
+        format!(
+            "cli_auth_credentials_store = \"file\"\n{}",
+            profile.native()
+        ),
+    )?;
+    profile.add(&config, false)?;
+    let path = private_home.join("auth.json");
+    std::fs::write(&path, "")?;
+    profile.mounts.push(Mount {
+        data: true,
+        file: auth.file,
+        path,
+        writable: false,
+    });
+    Ok(auth.deadline)
+}

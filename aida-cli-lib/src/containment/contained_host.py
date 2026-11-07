@@ -592,6 +592,11 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             'seccomp notification ABI unsupported')
     isolate_keyring(cfg['grant'], cfg['ttl'])
     broker_mode = True
+    # trace:STORY-2593 | ai:codex — host-enforced absolute, non-renewing lifetime.
+    def credential_deadline():
+        require(not cfg.get('chatgpt_deadline') or time.time() < cfg['chatgpt_deadline'],
+                'contained ChatGPT credentials expired; reauthenticate on the host, then relaunch')
+    credential_deadline()
     port = cfg['port']
     allowed = {(h, 443) for h in cfg['allowed']}
     fixture = tuple(cfg['fixture']) if cfg.get('fixture') else None
@@ -609,7 +614,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
     if broker_mode:
         fds.add(broker_child.fileno())
     for i, value in enumerate(args):
-        if value in ('--bind-fd', '--ro-bind-fd'):
+        if value in ('--bind-fd', '--ro-bind-fd', '--ro-bind-data'):
             fds.add(int(args[i + 1]))
     command = ['/usr/bin/bwrap', '--info-fd', str(info_w), '--block-fd', str(block_r)] + args + [
         '--', '/usr/bin/python3', '-I', '-S', '-c',
@@ -730,10 +735,12 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         ready, _, _ = select.select([acceptance_fd], [], [], 10)
         require(ready and os.read(acceptance_fd, 1) == b'R', 'receipt was not accepted')
         os.close(acceptance_fd)
+        credential_deadline()
         broker.send(b'exec-v1')
         watch = [proxy] + ([notification] if notification is not None else [])
         next_authority_check = time.monotonic()
         while process.poll() is None:
+            credential_deadline()
             if mutation is not None:
                 if time.monotonic() >= next_authority_check:
                     mutation.live()

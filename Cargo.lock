@@ -54,6 +54,7 @@ dependencies = [
  "aida-core",
  "aida-tui",
  "anyhow",
+ "base64",
  "chrono",
  "clap",
  "colored",

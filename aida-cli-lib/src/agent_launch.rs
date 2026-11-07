@@ -6367,7 +6367,7 @@ pub(crate) fn apply_harness_version(
 
 // trace:TASK-1793 | ai:codex
 #[cfg(unix)]
-fn reported_harness_version(
+pub(crate) fn reported_harness_version(
     program: &std::ffi::OsStr,
     args: &[String],
     cwd: Option<&std::path::Path>,
@@ -6472,7 +6472,7 @@ fn reported_harness_version(
 }
 
 #[cfg(not(unix))]
-fn reported_harness_version(
+pub(crate) fn reported_harness_version(
     _program: &std::ffi::OsStr,
     _args: &[String],
     _cwd: Option<&std::path::Path>,
