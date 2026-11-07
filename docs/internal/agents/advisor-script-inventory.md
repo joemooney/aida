@@ -8,8 +8,10 @@ This records all shell scripts present, including historical/generated jobs,
 rather than guessing which files are unused from sandbox process visibility.
 A file's presence, timestamp or incoming reference does not prove it is running.
 No live service was stopped, restarted or modified to prepare this inventory.
-Dispositions are **proposed**, pending the
-[architecture sketch's signoff](../../plans/2026-11-06-story-2571-advisor-operations-sketch.md).
+Dispositions follow the
+[architecture sketch's v2 signoff](../../plans/2026-11-06-story-2571-advisor-operations-sketch.md)
+(2026-11-06 19:56 UTC). Migration and runtime evidence remain separate work;
+signoff does not mean these scripts have been replaced or retired.
 
 The inventory reads each script and records its full SHA-256. It deliberately
 does not copy scripts, environment contents, credentials or transcripts into the
@@ -51,9 +53,10 @@ human-clear authority. `auto-rework.sh` uses typed verdict/CI facts and dispatch
 `auto-publish.sh` uses the existing native publication lifecycle.
 
 `launch-review-watch.sh` and the later `review-watch-loop.sh` move to the
-supervised review-watch service (AC2). A single PR refusal currently exits the
-watcher; the service must keep running across per-PR refusals, with bounded
-retry/backoff and reservation-preserving restart.
+supervised review-watch service (AC2), the first implementation slice named in
+the signoff. BUG-2471 (Completed, PR #3536) fixed the snapshot-era behavior where
+a single PR refusal exited the watcher. Build on its per-PR refusal handling;
+the service must retain bounded retry/backoff and reservation-preserving restart.
 
 `host-merge.sh` becomes the proposed `aida pr host-merge` local fallback after
 GitHub's server-side update refuses. Reuse existing rebase/update helpers and

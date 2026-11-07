@@ -2,17 +2,21 @@
 
 <!-- trace:STORY-2571 | ai:codex -->
 
-Status: **proposed; advisor signoff required before runtime implementation**.
-This is the sketch-only first lane requested in the owning spec's 2026-11-06
-17:28 UTC comment. Nothing here changes the deputy contract or authorizes a
-service, permission exception, merge, grant issuance, or process termination.
+Status: **sketch v2 signed off; runtime implementation remains separate work**.
+The owning spec's 2026-11-06 19:56 UTC advisor comment signs off v2 at `14bc7fc`
+and directs one Refs PR per slice, starting with supervised review-watch.
+This document originated in the sketch-only first lane requested at 17:28 UTC;
+this revision remains documentation-only. Nothing here changes the deputy
+contract or enables a service, permission exception, merge, grant issuance, or
+process termination.
 The [script inventory](../internal/agents/advisor-script-inventory.md) records
 the inspected host snapshot and every proposed disposition.
 
 Revision basis: the binding 2026-11-06 19:09 UTC advisor ruling accepts all four
 findings on PR #3526. This revision extends shipped dispatch, reuses branch-update
 mechanics, retires the superseded stall wrapper and includes review-watch's
-respawn wrapper. Runtime implementation still waits for signoff.
+respawn wrapper. The later signoff accepts that design; it does not establish
+runtime acceptance or a prompt-free advisor sweep.
 
 ## Contract and dependencies
 
@@ -127,9 +131,11 @@ pending requests' requester grants or bypass `DispatchExecutionContext`
 revalidation; requests whose original authority is invalid remain refused until
 an authorized fresh request is admitted through ordinary dispatch.
 
-Replace both `launch-review-watch.sh` and `review-watch-loop.sh`. Today one PR
-refusal can exit `aida review watch`; the supervised service must record that
-per-PR refusal and continue servicing other PRs with bounded retry/backoff. If
+Replace both `launch-review-watch.sh` and `review-watch-loop.sh`. At the original
+inventory snapshot, one PR refusal could exit `aida review watch`. BUG-2471 is
+now Completed (landed via PR #3536); `review_watch.rs` records per-PR refusals
+and continues the pass. Build the supervised service on that behavior, retaining
+bounded retry/backoff rather than adding another respawn loop. If
 the controller exits, reconcile reservations before supervised restart. Authority
 loss still blocks admission; neither a restart nor a per-PR refusal clears
 ambiguous review capacity. Persist exact PR-head deduplication and train ejection
@@ -248,9 +254,14 @@ existing deputy authorization; no new credential or remote-mutation authority.
 
 ## Delivery and evidence gates
 
-1. Advisor signs off this sketch, especially service binding succession, fixed
-   operation transport, slot accounting and conflict recovery. Confirm BUG-2467
-   and BUG-2468 integration before dependent runtime work.
+1. Advisor signoff is recorded at 2026-11-06 19:56 UTC for sketch v2 at
+   `14bc7fc`, including service binding succession, fixed operation transport,
+   slot accounting and conflict recovery. Its delivery direction takes
+   precedence over the numbered order below: start with the supervised
+   review-watch slice, build on BUG-2471, and publish one Refs PR per slice.
+   Confirm BUG-2467 and BUG-2468 integration before dependent runtime work.
+   Remaining steps describe the required work and evidence, not permission to
+   skip prerequisites when starting the first slice.
 2. Implement authenticated host liveness and bounded read transport; test healthy
    and unavailable hosts from a real nested PID namespace.
 3. Extend service-owned state and rotation handshake, including dispatch serve;
