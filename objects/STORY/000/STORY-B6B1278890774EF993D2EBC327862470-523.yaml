@@ -1,0 +1,34 @@
+id: 01a1b38d-6141-7ef2-86c8-c5a85e6550b2
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-523
+agreed_id: STORY-2600
+title: 'Review PR-3553: [AI:codex] fix: A newer APPROVED verdict keyed on PR-N does not supersede an older request-changes verdict keyed on the spec at the same head, so the train refuses an approved PR (BUG-'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b37c`) for branch `bug-b6b1278890774ef993d2ebc327862470-240`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3553>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-240` → `main`
+
+  ## Covers
+
+  - BUG-2474
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3553` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T01:09:09.569068428Z
+modified_at: 2026-11-07T01:09:09.569068428Z
+req_type: Story
+filed_at:
+  code_sha: 37c695e340639ae667426824967c5ca3c708e25e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
+  session: 01a1b37ca493
