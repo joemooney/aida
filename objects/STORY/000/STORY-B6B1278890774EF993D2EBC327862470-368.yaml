@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T13:27:15.479545190Z
+modified_at: 2026-11-07T13:34:58.447881484Z
 req_type: Story
 relationships:
 - rel_type:
@@ -482,6 +482,12 @@ comments:
   content: 'PR #3593 round 9 rework prepared in native implementer seat (uncommitted for host publication). Addressed all four findings: numeric-only legacy spec-ID inference with unambiguous resolution against the strict loaded snapshot, falling back to owner/operator manual review for missing/ambiguous targets; backfill missing deferred_at from pre-migration modified_at for all migrated deferred rows; skip non-deferred rows without legacy tags; report overdue resulting manual candidates at the default 14-day threshold and render trigger/tags without Debug Option wrappers. Updated docs/cli/10-storage.md. Validation: cargo test -p aida-cli-lib --lib story2402_s3_migration: 6 passed, 0 failed; cargo fmt --all -- --check and git diff --check passed. Round-trip audit restoration, idempotence, missing target evaluation safety, and live-row replanning covered. Existing merge hold retained. Refs STORY-2402; S5/derived attention remain outside this slice.'
   created_at: 2026-11-07T13:02:36.699922085Z
   modified_at: 2026-11-07T13:02:36.699922085Z
+- id: 01a1b638-318f-79a0-b981-b64891183635
+  author: joe
+  content: 'Native pickup verification (2026-11-07): this clean checkout already contains the S3 implementation and review fixes through c48aebe6d98, so no additional source or documentation edits were necessary. Verified registered dry-run/apply CLI, conservative inference, lossless migration audit, idempotence and locked live-row replanning. Validation: cargo test -p aida-cli-lib --lib story2402_s3_migration -- --nocapture passed all 6 tests; cargo fmt --all -- --check and git diff --check passed. Changed files this session: none. Recorded the native host publication declaration with Refs STORY-2402; no commit, push, PR, queue completion, review verdict or merge operation was performed. S5 and derived attention remain out of scope; existing holds remain in force.'
+  created_at: 2026-11-07T13:34:58.447881484Z
+  modified_at: 2026-11-07T13:34:58.447881484Z
+  session_id: 01a1b6311878
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
