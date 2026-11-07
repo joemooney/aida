@@ -7,7 +7,67 @@ STORY-2593). This is the design record, not a completed containment change.
 This file is the canonical design; the STORY-2593 comment points here rather
 than maintaining a second copy.
 
-## Round 2: acceptance and approval checkpoint
+## Round 3: signed interface gate fails (2026-11-06)
+
+The advisor's spec comment at `2026-11-07T00:33:24Z` signs off option (a),
+accepts the readable bearer-token risk, and makes the installed `codex exec`
+compatibility probe a hard gate. Finding 5's missing-sign-off premise is now
+superseded. This does not satisfy AC1-AC3. The later scope comment at
+`2026-11-07T00:45:56Z` assigns live conformance and bug disposition to the
+implementation follow-up. The design record landed as `90d0ec0baf4` (#3544),
+with a `docs(plans)` subject and `(Refs STORY-2593)` trailer; that squash
+resolves finding 4's completion-metadata concern for the landed record.
+
+Synthetic probes used the installed `codex-cli 0.166.0` executable at
+`@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex`, SHA-256
+`b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8`.
+Each case had a fresh temporary HOME, CODEX_HOME and XDG directories, an
+explicit environment without inherited credentials, and fake tokens only.
+No operator auth file or keyring was read.
+
+Fixtures used `auth_mode: "chatgpt"`, a `tokens` object with the fake access
+token and account ID, and a recent `last_refresh`. The synthetic ID token
+was an unsigned JWT (`alg: none`, `exp: 4102444800`) whose
+`https://api.openai.com/auth` claim named the same fake `chatgpt_account_id`
+and `chatgpt_plan_type: "plus"`; it was not copied from a real login.
+
+| Synthetic input / command | Observed result |
+| --- | --- |
+| `login status`, access token plus account ID only | Exit 1: missing `id_token`. |
+| `login status`, synthetic ID token plus access token and account ID, no refresh field | Exit 1: missing `refresh_token`. |
+| `login status`, same input plus `refresh_token: ""` (control only) | Exit 0: logged in using ChatGPT. |
+| `exec`, no refresh field | Local `/v1/responses` request carried neither the expected bearer nor account ID. |
+| `exec`, empty refresh string (control only) | Local `/v1/responses` request carried both the expected bearer and account ID. |
+
+The `exec` probes used a custom Responses provider with
+`requires_openai_auth=true`, WebSockets disabled and zero request/stream
+retries. Its base URL was an ephemeral loopback HTTP recorder; other HTTP(S)
+traffic was pointed at an unavailable loopback proxy. Both requests received
+a deliberate HTTP 400 and `exec` exited 1. That exit is an expected fixture
+response, not a successful inference or containment run. Each child had a
+seven-second timeout. Neither stdout nor stderr contained the fake access
+token, and each input auth.json was unchanged. This checks only those output
+streams and the input file, not every possible runtime/log artifact.
+
+**Stop at step 1.** The approved leaf explicitly requires no refresh field;
+the installed cached-ChatGPT path did not authenticate that shape. The control
+shows a possible alternative requiring an ID-token-shaped value and an empty
+refresh field. It does not authorize changing the approved leaf contract,
+prove compatibility with real account/workspace restrictions, or establish
+absence of secret persistence. Return this distinct interface decision to
+the advisor as required by the sign-off; do not substitute app-server, copy
+host refresh material, or remove `refuse_chatgpt()`.
+
+Findings 1-2 remain open: production authentication and credential visibility
+sentinels are unimplemented; no ChatGPT C0-C4 run, policy hash or containment
+receipt is supplied. Finding 3 remains open: BUG-2447 and BUG-2448 currently
+show Approved and remain blocked by this story; no C3/C4 evidence supports
+closing or rescoping them. Their historical Needs Attention labels below are
+round-2 observations. The punt for this interface gate vetoes publication and
+completion; these local evidence edits are a handoff, not another completed
+implementation slice.
+
+## Round 2: historical acceptance and approval checkpoint
 
 Review of `058e9899a195` correctly found that all three acceptance criteria
 remain unmet. This revision is documentation only:
