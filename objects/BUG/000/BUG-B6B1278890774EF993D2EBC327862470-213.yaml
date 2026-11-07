@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-06T21:41:38.004599949Z
+modified_at: 2026-11-07T00:30:34.183284380Z
 req_type: Bug
 tags:
 - area:containment
@@ -96,6 +96,13 @@ comments:
   created_at: 2026-11-06T21:41:38.004599949Z
   modified_at: 2026-11-06T21:41:38.004599949Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b36a-0cc7-70e2-834e-642715ca54d7
+  author: joe
+  content: '[advisor 17:36] C3/C4 run 1794001192 (14:39, after #3532): fixture setup OK, but the codex lane refused ''contained ChatGPT auth waits for P3 (PR2)'', so C0-C4 are unknown. Blocked by STORY-2593 (#3544, brokered ChatGPT credential). Re-run the harness through deputy 3 once #3544 lands.'
+  created_at: 2026-11-07T00:30:34.183284380Z
+  modified_at: 2026-11-07T00:30:34.183284380Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a957-aeb7-7150-887a-dd6b7a33021d
   author: joe
