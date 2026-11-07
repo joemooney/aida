@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-07T21:27:00.473058857Z
+modified_at: 2026-11-07T21:27:02.788777252Z
 req_type: Task
 tags:
 - cli
@@ -42,6 +42,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Alias removal is complete across all 8 STORY-1028 families, but the policy-parity fixture still lists 20 removed-flag argv rows (test will fail) and a user-facing hint still tells users to run the retired history --events flag.. No triage reason was given.'
   created_at: 2026-11-07T21:27:00.473054876Z
   modified_at: 2026-11-07T21:27:00.473054876Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7e8-62ef-7682-8c95-20b7ec3226e8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 910ac86bdb11
+    Recorded: 2026-11-07T21:25:16.162728721+00:00
+    Findings:
+    1. aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv still has rows for the removed flags: lines 537 (drain status --clear), 661-662 (focus --clear/--show), 725/726/729/731 (graph --blocked-by/--blocks/--impact/--tree), 1445-1448 (release --check/--major/--minor/--patch), 1859 (statusline --title), 1963-1964 (upgrade --check/--diff), 1970/1972/1973/1974/1980/1981 (usage --auto-complete/--errors/--events/--health/--slowest/--unused TASK-1). registered_policy_matches_mains_legacy_tables_for_every_verb (story_1728_policy_parity_tests.rs) reports each of those argv as 'no longer parses', so it fails. The fixture must not be regenerated from a branch, so remove those rows by hand and add a 'Rows removed by hand' note to that file's header doc naming TASK-1214 (same as the existing TASK-1939 note).
+    2. aida-cli-lib/src/db_reconcile.rs:4678 still prints 'Run `aida history --since "5 min ago" --events` for the full event stream.'. With the hidden --events flag gone, that command now fails at parse. Change it to 'aida history events --since "5 min ago"' (or use --full).
+    3. scripts/check-removed-flags.sh: the guard only matches the literal 'aida history --events', so it missed the db_reconcile.rs hint above, where filters sit between 'history' and '--events'. Tighten it the way graph_regex already is (e.g. 'aida history( +[^|;`]*)? +--events\b'), add a fixture case to tests/test_check_removed_flags.sh, and check that the wider pattern does not flag the canonical 'aida usage events' or 'aida history events'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T21:27:02.639319009Z
+  modified_at: 2026-11-07T21:27:02.639319009Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
