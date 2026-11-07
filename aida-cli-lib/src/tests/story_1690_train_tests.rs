@@ -4468,6 +4468,79 @@ printf '%s\n' '[{"name":"merge-hold-gate","bucket":"pending","workflow":"hold"}]
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_carryover_fetches_require_durable_intent() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for fail_before_base in [true, false] {
+        let root = repo();
+        let r = root.path();
+        crate::test_exec::write_executable(
+            &r.join("git"),
+            r#"#!/bin/sh
+repo="$2"
+case "$3" in
+    fetch)
+        printf '%s\n' "$*" >> "$repo/fetch-calls"
+        mv "$repo/intent" "$repo/intent-saved" || exit 2
+        printf 'unavailable' > "$repo/intent"
+        exit 0 ;;
+    rev-parse)
+        case "$*" in
+            *refs/remotes/origin/main*) printf '%040d\n' 1; exit 0 ;;
+            *) exit 1 ;;
+        esac ;;
+    check-ref-format) exit 0 ;;
+esac
+exit 2
+"#,
+        );
+        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/proof-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Gate;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if fail_before_base {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let error = crate::gate::review_carryover::prove_carry_over(
+            r,
+            1,
+            "main",
+            &"a".repeat(40),
+            &"b".repeat(40),
+        )
+        .unwrap_err();
+        if fail_before_base {
+            assert!(error.reason().contains("could not persist train intent"));
+            assert!(!error.is_deterministic());
+        }
+        // The approval policy also fetches a missing reviewed commit to read
+        // its date. A failed checkpoint must leave that evidence unknown.
+        let approval = crate::gate::review_verdict::RecordedVerdict {
+            kind: crate::gate::review_verdict::VerdictKind::Approved,
+            reviewed_sha: Some("a".repeat(40)),
+            recorded_at: Some("2026-11-06T00:00:00Z".into()),
+            ..Default::default()
+        };
+        let policy = crate::gate::approval::ship_approval_policy(r, &[], None, &[approval]);
+        assert!(policy.reviewed_committed_at.is_none());
+        let calls = std::fs::read_to_string(r.join("fetch-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(!fail_before_base));
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Gate);
+        assert_eq!(saved[0].train.tip, "car1");
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_prunes_old_done_and_reports_corrupt_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/old-1".into());

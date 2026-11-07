@@ -594,3 +594,53 @@ must use `[AI:codex] fix(train): stop hold-gate polling on journal failure (Refs
 No implementation or validation blocker remains. No commit, push, PR creation,
 merge, review record, hold clearance or queue completion occurred in this seat.
 Slice 5 stays outstanding; existing punt/hold signals remain publication vetoes.
+
+
+## Slice-4 integration follow-up: approval proof fetches (2026-11-06)
+
+The starting checkout already contains the resumable intent journal, both
+SIGKILL recovery fixtures, and BUG-2463. Approval carry-over proofs and the
+approval timestamp reader could still issue nested remote Git fetches without
+persisting the active train intent. Those calls now checkpoint first. Carry-over
+base reads distinguish an unavailable intent from an ordinary fetch failure, so
+cached refs cannot swallow a failed checkpoint. This transient refusal is never
+cached as a deterministic proof result. Missing timestamp evidence stays unknown.
+Outside an active train the checkpoints remain no-ops.
+
+The PATH-isolated production-helper regression refuses the initial base fetch
+when its journal is unavailable, then separately allows one base fetch that makes
+the journal unavailable and refuses the missing approved-object fetch. Both cases
+also refuse the timestamp helper's fetch, retain the pinned Gate entry, and issue
+zero/one remote calls respectively. The frozen gate dependency inventory explicitly
+records these checkpoint calls; its human merge review requirement remains.
+
+Changed files: `aida-cli-lib/src/gate/approval.rs`,
+`aida-cli-lib/src/gate/review_carryover.rs`,
+`aida-cli-lib/src/gate/orchestrator_leaves.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, and this plan.
+Slice 5 remains excluded. Validation and native publication results follow below.
+
+<!-- trace:STORY-2401 | ai:codex -->
+
+Final-source targeted validation passed:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **176 passed, zero failures**, 12,618 filtered out; runtime **73.45s**.
+  Both SIGKILL recovery seams and the nested approval fetch regression passed.
+  Log: `/tmp/story2401-proof-train-final.log`.
+- The focused `gate_orchestrators_reach_outside_only_through_their_frozen_inventory`
+  test passed (**1 test**). Log: `/tmp/story2401-proof-inventory.log`.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint nested approval proof fetches (Refs STORY-2401)`.
+This records host publication intent only. The five changed files remain
+uncommitted. No commit, push, PR creation, merge, review record, hold clearance
+or queue completion was performed. Existing punt/hold signals remain publication
+vetoes. Fast-gate results follow below.
+
+Fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast` completed
+**all 38 gates**. Log: `/tmp/story2401-seat-fast.log`. Guards reporting native
+read-only `.git/FETCH_HEAD` refusals passed using their local-evidence path.
+No implementation or validation blocker remains. The host owns commit creation
+and publication under the accepted Refs subject. Slice 5 remains outstanding.

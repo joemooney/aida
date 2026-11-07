@@ -511,6 +511,10 @@ fn commit_committed_at_fetching(
         if sha.len() != 40 || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
             return None;
         }
+        // Missing review objects can trigger a nested remote read during a
+        // train gate. Unknown timestamp evidence grants no authority.
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("fetch approval timestamp").ok()?;
         let fetched = std::process::Command::new("git")
             .arg("-C")
             .arg(repo)
