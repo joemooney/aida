@@ -4412,6 +4412,62 @@ exit 1
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_hold_gate_poll_does_not_swallow_checkpoint_failure() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for fail_before_first in [true, false] {
+        let root = repo();
+        let r = root.path();
+        crate::test_exec::write_executable(
+            &r.join("gh"),
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+mv intent intent-saved || exit 2
+printf 'unavailable' > intent
+printf '%s\n' '[{"name":"merge-hold-gate","bucket":"pending","workflow":"hold"}]'
+"#,
+        );
+        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry =
+            journal::Entry::new(train_of("main", &fms(&[1])), "train/hold-poll-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Gate;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if fail_before_first {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let change = crate::forge::ChangeRef {
+            id: 901,
+            url: String::new(),
+            branch: "train/hold-poll-1".into(),
+            base: "main".into(),
+            title: None,
+        };
+        let error = crate::ci_gate::wait_hold_gate_green(
+            &crate::forge::GitHubForge::new(r),
+            &change,
+            std::time::Duration::from_secs(1),
+            std::time::Duration::ZERO,
+        )
+        .expect_err("journal refusal must not take the unsupported-rows success fallback");
+        assert!(format!("{error:#}").contains("could not persist train intent"));
+        let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(!fail_before_first));
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Gate);
+        assert_eq!(saved[0].train.tip, "car1");
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_prunes_old_done_and_reports_corrupt_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/old-1".into());

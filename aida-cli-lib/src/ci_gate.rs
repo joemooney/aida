@@ -503,6 +503,11 @@ pub(crate) fn wait_hold_gate_green(
 ) -> anyhow::Result<bool> {
     let deadline = Instant::now() + timeout;
     loop {
+        // A nested train poll must persist intent before reading the forge.
+        // Keep persistence failures outside the legacy unsupported-rows
+        // fallback below: they must stop the train, never permit a merge.
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("poll released hold gate")?;
         let rows = match forge.check_rows(change) {
             Ok(rows) => rows,
             Err(_) => return Ok(true), // no per-check rows on this forge — nothing to wait on

@@ -558,3 +558,39 @@ The three changed files remain uncommitted for the host launcher. BUG-2463
 merge, review record, hold clearance or queue completion occurred in this seat.
 No implementation or validation blocker remains. Slice 5 stays outstanding;
 existing punt/hold signals remain publication vetoes. Turn ends with this handoff.
+
+## Slice-4 integration follow-up: hold-gate polling (2026-11-06)
+
+The integrated checkout already includes the resumable journal, both SIGKILL
+recovery fixtures and BUG-2463 (#3519). The nested wait for a released hold
+gate treated every check-row error as an unsupported-forge success, including
+failure to persist train intent. Each poll now checkpoints before entering
+that fallback, propagating persistence failures and stopping before a forge call.
+Outside an active train the checkpoint remains a no-op.
+
+A PATH-isolated production-adapter regression makes the journal unavailable
+before the first poll or after the first pending response. Both cases return
+an error instead of permission to continue, issue zero or one forge calls,
+and retain the pinned Gate journal for recovery. Slice 5 remains excluded.
+
+Changed files: `aida-cli-lib/src/ci_gate.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, and this plan.
+Validation and native host publication results follow below.
+
+Focused validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib
+--lib pr_train` ran **173 tests, zero failures**, with 12,614 filtered out;
+test runtime **82.78s**, fresh unoptimized build **5m 40s**. The new hold-gate
+poll regression and both SIGKILL recovery cases passed. Log:
+`/tmp/story2401-hold-poll-train.log`.
+
+Fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast` completed
+**all 38 gates**, including formatting, the feature-disabled CLI and standalone
+TUI checks. Log: `/tmp/story2401-hold-poll-fast.log`. Guards reporting native
+read-only `.git/FETCH_HEAD` refusals passed with local evidence.
+`git diff --check` passed.
+
+Native-seat handoff: the three files above remain uncommitted. Host publication
+must use `[AI:codex] fix(train): stop hold-gate polling on journal failure (Refs STORY-2401)`.
+No implementation or validation blocker remains. No commit, push, PR creation,
+merge, review record, hold clearance or queue completion occurred in this seat.
+Slice 5 stays outstanding; existing punt/hold signals remain publication vetoes.
