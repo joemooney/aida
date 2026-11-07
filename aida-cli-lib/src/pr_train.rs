@@ -21,6 +21,9 @@
 //!    untested combination.
 // trace:STORY-1690 | ai:claude
 
+#[path = "pr_train_journal.rs"]
+mod journal;
+pub(crate) use journal::TrainJournalBusy;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -28,6 +31,13 @@ pub(crate) use verified::VerifiedTrainMerge;
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+
+/// The forge adapter checkpoints active train intent before nested calls and
+/// retry attempts. Outside a journaled train this is a no-op.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn before_train_forge_call(call: &str) -> Result<()> {
+    journal::before(call)
+}
 
 /// The train PR body line that names its members, `#N@<head>` comma-joined.
 /// merge-hold-gate's train mode reads it.
@@ -44,7 +54,7 @@ const PARALLEL_SUB_TRAINS: usize = 2;
 
 /// One PR the train may land: its number, the head its approval covers, and
 /// the commit message `aida pr ship` would have given its squash merge.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Member {
     pub pr: u64,
     pub head: String,
@@ -55,18 +65,19 @@ pub(crate) struct Member {
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
     /// to release.
     // trace:BUG-2214 | ai:claude
+    #[serde(skip)]
     pub release: Option<crate::gate::mandate_ship::MandateCover>,
 }
 
 /// A member left off main, and why.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Ejected {
     pub pr: u64,
     pub reason: String,
 }
 
 /// A member's commit in a built train.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Car {
     pub member: Member,
     pub commit: String,
@@ -74,7 +85,7 @@ pub(crate) struct Car {
 }
 
 /// A train built on `base`: `tip` is `base` plus one commit per car.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Built {
     pub base: String,
     pub tip: String,
@@ -936,14 +947,17 @@ impl Rails for LocalRails<'_> {
 pub(crate) fn net_output(
     repo: &Path,
     label: &str,
-    build: impl FnMut() -> std::process::Command,
+    mut build: impl FnMut() -> std::process::Command,
 ) -> Result<std::process::Output> {
     let config = crate::network_retry::RetryConfig::load(repo);
-    crate::network_retry::run_with_retry(
+    crate::network_retry::run_with_retry_checked(
         label,
         &config,
         &mut crate::network_retry::StderrSink,
-        build,
+        || {
+            journal::before(label).map_err(std::io::Error::other)?;
+            Ok(build())
+        },
     )
     .with_context(|| format!("could not run `{label}`"))
 }
@@ -952,6 +966,7 @@ pub(crate) fn net_output(
 /// behind forge.rs (STORY-2401).
 // trace:BUG-2401 trace:BUG-2219 trace:STORY-2401 | ai:claude
 fn train_policy_read(repo: &Path, endpoint: &str) -> Result<std::process::Output> {
+    journal::before("read train policy")?;
     crate::forge::train_gh_api_read(repo, endpoint)
 }
 
@@ -959,6 +974,7 @@ fn train_policy_read(repo: &Path, endpoint: &str) -> Result<std::process::Output
 /// forge.rs (STORY-2401).
 // trace:BUG-2214 trace:STORY-2401 | ai:claude
 fn gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
+    journal::before("train forge command")?;
     crate::forge::train_gh_stdout(repo, args)
 }
 
@@ -1341,6 +1357,9 @@ impl MemberChecks for LiveChecks<'_> {
         &mut self,
         pr: u64,
     ) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String> {
+        // Nested gate reads need their own durable intent, even when the
+        // preceding metadata read checkpoint succeeded. trace:STORY-2401 | ai:codex
+        journal::before("read member labels").map_err(|e| format!("{e:#}"))?;
         crate::merge_hold::fetch_pinned_change(self.project_root, self.forge.kind(), pr)
             .map_err(|e| e.to_string())
     }
@@ -1433,6 +1452,8 @@ impl MemberChecks for LiveChecks<'_> {
         head: &str,
     ) -> std::result::Result<(String, String), String> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
+            // trace:STORY-2401 | ai:codex
+            journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
             crate::pr_cmd::fetch_pr_ship_metadata_via_gh(self.project_root, pr)
                 .map_err(|e| format!("its title and body could not be read ({e:#})"))?
         } else {
@@ -1571,6 +1592,24 @@ pub(crate) fn prs_named_on_command_line(opts: &TrainOptions) -> bool {
 // trace:STORY-1690 trace:BUG-727 | ai:claude
 pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
     interactive_tty && named
+}
+
+// Recovery settles riders before admission, including an invocation whose only
+// candidates were just recovered. It must not schedule those members again.
+// trace:STORY-2401 | ai:codex
+fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    candidates.retain(|n| seen.insert(*n));
+    let had_candidates = !candidates.is_empty();
+    candidates.retain(|n| {
+        !recovered.landed.iter().any(|(pr, _)| pr == n)
+            && !recovered.ejected.iter().any(|e| e.pr == *n)
+    });
+    anyhow::ensure!(
+        had_candidates || !recovered.landed.is_empty() || !recovered.ejected.is_empty(),
+        "no PRs to train: name them (`aida pr train 12 13`) or pass --all-ready"
+    );
+    Ok(())
 }
 
 /// BUG-2220: why `pr` already rides a live train, or `None`. `open_trains`
@@ -2151,6 +2190,34 @@ pub(crate) trait TrainForge {
     }
     /// Close a train PR that will not merge, and delete its branch.
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str);
+    // Checked variants retain compatibility with injected ports. Production
+    // refuses to advance a journal after an unsuccessful mutation.
+    // trace:STORY-2401 | ai:codex
+    fn retire_checked(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        _train: &Built,
+        why: &str,
+    ) -> Result<()> {
+        self.retire(change, why);
+        Ok(())
+    }
+    fn recover_change(
+        &mut self,
+        _entry: &journal::Entry,
+    ) -> Result<(crate::forge::ChangeRef, crate::forge::ChangeState)> {
+        anyhow::bail!("this train port cannot recover a journal")
+    }
+    fn member_landed_checked(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        car: &Car,
+        sha: Option<&str>,
+    ) -> Result<()> {
+        self.member_landed(change, train, car, sha);
+        Ok(())
+    }
     /// No destructive cleanup on a single negative or an unavailable read.
     // trace:STORY-2401 | ai:codex
     fn confirm_not_landed(
@@ -2221,6 +2288,14 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
+    // A journal persists intent, never a previous terminal's consent. Naming a
+    // different PR now cannot authorize any recovered member.
+    // trace:STORY-2401 | ai:codex
+    fn for_recovery(mut self) -> Self {
+        self.named = false;
+        self
+    }
+
     /// Re-check the dispatch request's authority (a no-op for an ordinary
     /// train), remembering the first failure for [`TrainForge::dispatch_abort`].
     // trace:STORY-1917 trace:TASK-2344 | ai:claude
@@ -2263,6 +2338,7 @@ impl LiveTrainForge<'_> {
         let root = self.project_root.clone();
         let kind = self.forge.kind();
         self.train_ci_snapshot_with(change, tip, cars, policy, |pr| {
+            journal::before("read member labels").map_err(|e| e.to_string())?;
             crate::merge_hold::fetch_pinned_change(&root, kind, pr).map_err(|e| e.to_string())
         })
     }
@@ -2282,6 +2358,7 @@ impl LiveTrainForge<'_> {
         // Bracket the policy/row reads: rows from a different head or base
         // cannot promote the built train, including after hold release.
         let assert_head = || -> Result<()> {
+            journal::before("read train head")?;
             let body = gh_stdout(
                 &self.project_root,
                 &[
@@ -2316,6 +2393,7 @@ impl LiveTrainForge<'_> {
             }
         };
         // trace:BUG-2423 | ai:codex
+        journal::before("read CI rows")?;
         let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
         if rows.is_empty() {
             assert_head()?;
@@ -2334,6 +2412,25 @@ impl LiveTrainForge<'_> {
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
+    }
+
+    fn record_member_landed(&self, change: &crate::forge::ChangeRef, car: &Car, sha: Option<&str>) {
+        let specs = crate::pr_ship::extract_trailing_spec_ids_from_subject(&car.member.subject);
+        crate::pr_cmd::emit_ship_pr_merged(&self.main_worktree, car.member.pr as u32, &specs);
+        crate::pr_cmd::append_ship_activity_line(
+            &self.main_worktree,
+            &serde_json::json!({
+                "ts": chrono::Utc::now().to_rfc3339(),
+                "command": "aida pr train",
+                "event": "train_member_landed",
+                "pr": car.member.pr,
+                "train_pr": change.id,
+                "approved_head": car.member.head,
+                "patch_id": car.patch_id,
+                "landed": sha,
+            })
+            .to_string(),
+        );
     }
 
     fn member_ref(&self, pr: u64) -> crate::forge::ChangeRef {
@@ -2387,6 +2484,9 @@ impl TrainForge for LiveTrainForge<'_> {
         &mut self,
         pr: u64,
     ) -> crate::forge_observed::Observed<std::result::Result<Member, String>> {
+        if let Err(error) = journal::before("read member gate") {
+            return crate::forge_observed::Observed::Transient(format!("{error:#}"));
+        }
         use crate::forge_observed::Observed;
         if let Err(e) = self.dispatch_check() {
             return Observed::Transient(format!("{e:#}"));
@@ -2441,6 +2541,7 @@ impl TrainForge for LiveTrainForge<'_> {
             .iter()
             .flat_map(|c| crate::pr_ship::extract_trailing_spec_ids_from_subject(&c.member.subject))
             .collect();
+        journal::before("open train PR")?;
         crate::gate::ledger::open_change_bound_with_riders(
             self.forge,
             &self.main_worktree,
@@ -2493,6 +2594,9 @@ impl TrainForge for LiveTrainForge<'_> {
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
+            // A prior response may have arrived after intent storage failed.
+            // trace:STORY-2401 | ai:codex
+            journal::before("read CI registration")?;
             // trace:BUG-2423 | ai:claude
             match self
                 .forge
@@ -2514,6 +2618,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 CheckRegistration::NotYet => std::thread::sleep(std::time::Duration::from_secs(10)),
             }
         }
+        journal::before("watch CI")?;
         let ci_state = self.forge.watch_ci(change).map_err(TrainCiReadError)?;
         self.dispatch_check()?;
         Ok(match ci_state {
@@ -2523,15 +2628,18 @@ impl TrainForge for LiveTrainForge<'_> {
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude
-                let tolerated = self.forge.check_rows(change).is_ok_and(|rows| {
-                    hold_gate_tolerance(&rows, &train.cars, |pr| {
-                        crate::merge_hold::fetch_pinned_change(
-                            &self.project_root,
-                            self.forge.kind(),
-                            pr,
-                        )
-                        .map_err(|e| e.to_string())
-                    })
+                // Refuse persistence errors before the best-effort tolerance
+                // fallback can turn them into an ordinary red CI verdict.
+                // trace:STORY-2401 | ai:codex
+                journal::before("read post-watch CI rows")?;
+                let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+                let tolerated = hold_gate_tolerance(&rows, &train.cars, |pr| {
+                    crate::merge_hold::fetch_pinned_change(
+                        &self.project_root,
+                        self.forge.kind(),
+                        pr,
+                    )
+                    .map_err(|e| e.to_string())
                 });
                 if tolerated {
                     println!(
@@ -2554,11 +2662,213 @@ impl TrainForge for LiveTrainForge<'_> {
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
         if let Err(e) = self.forge.close_change(change, why) {
             eprintln!("  warning: could not close train PR #{}: {e:#}", change.id);
+            return;
         }
         let _ = origin_git(
             &self.main_worktree,
             &["push", "--quiet", "origin", "--delete", &change.branch],
         );
+    }
+
+    fn retire_checked(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        why: &str,
+    ) -> Result<()> {
+        journal::before("read retirement state")?;
+        let meta = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        let crate::forge_observed::Observed::Known(meta) = meta else {
+            anyhow::bail!("train retirement state unavailable")
+        };
+        anyhow::ensure!(
+            meta.head_sha == train.tip
+                && meta.head_ref == change.branch
+                && meta.base_ref == change.base,
+            "train identity changed"
+        );
+        match meta.state {
+            crate::forge::ChangeState::Open => {
+                journal::before("close retired train")?;
+                self.forge.close_change(change, why)?;
+            }
+            crate::forge::ChangeState::Closed => {}
+            _ => anyhow::bail!("train landed during retirement; reconcile before retrying"),
+        }
+        // Confirm the close before branch cleanup, including the close/receipt
+        // crash window. A successful close command alone is not confirmation.
+        // trace:STORY-2401 | ai:codex
+        journal::before("confirm retired train closed")?;
+        let closed = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        anyhow::ensure!(
+            matches!(closed, crate::forge_observed::Observed::Known(ref m)
+                if m.state == crate::forge::ChangeState::Closed
+                    && m.head_sha == train.tip
+                    && m.head_ref == change.branch
+                    && m.base_ref == change.base),
+            "retired train closure unavailable or identity changed"
+        );
+        let reference = format!("refs/heads/{}", change.branch);
+        journal::before("read retired train branch")?;
+        if origin_git(
+            &self.main_worktree,
+            &["ls-remote", "--refs", "origin", &reference],
+        )?
+        .is_empty()
+        {
+            // A previous deletion may have completed before its receipt.
+            return Ok(());
+        }
+        journal::before("delete retired train branch")?;
+        // The explicit expected tip never borrows a tracking ref. A branch
+        // moved by another actor survives, even after confirmed PR closure.
+        origin_git(
+            &self.main_worktree,
+            &[
+                "push",
+                "--quiet",
+                &format!("--force-with-lease={reference}:{}", train.tip),
+                "origin",
+                &format!(":{reference}"),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn recover_change(
+        &mut self,
+        entry: &journal::Entry,
+    ) -> Result<(crate::forge::ChangeRef, crate::forge::ChangeState)> {
+        let id = if let Some(id) = entry.change_id {
+            id
+        } else {
+            // The create call may have succeeded before its number was saved.
+            // Search all states by exact branch, then confirm the exact number.
+            #[derive(serde::Deserialize)]
+            struct Row {
+                number: u64,
+            }
+            journal::before("find journaled train")?;
+            let raw = gh_stdout(
+                &self.main_worktree,
+                &[
+                    "pr",
+                    "list",
+                    "--state",
+                    "all",
+                    "--head",
+                    &entry.branch,
+                    "--limit",
+                    "1000",
+                    "--json",
+                    "number",
+                ],
+            )?;
+            let mut rows: Vec<Row> = serde_json::from_str(&raw)?;
+            if rows.is_empty() {
+                crate::forge_confirmation::backoff();
+                let raw = gh_stdout(
+                    &self.main_worktree,
+                    &[
+                        "pr",
+                        "list",
+                        "--state",
+                        "all",
+                        "--head",
+                        &entry.branch,
+                        "--limit",
+                        "1000",
+                        "--json",
+                        "number",
+                    ],
+                )?;
+                rows = serde_json::from_str(&raw)?;
+                if rows.is_empty() {
+                    journal::before("resume unopened train")?;
+                    return self
+                        .open(&entry.train, &entry.branch)
+                        .map(|change| (change, crate::forge::ChangeState::Open));
+                }
+            }
+            anyhow::ensure!(rows.len() == 1, "journaled branch `{}` has no unique forge change; retain journal and inspect before retrying", entry.branch);
+            rows[0].number
+        };
+        let change = crate::forge::ChangeRef {
+            id,
+            url: String::new(),
+            branch: entry.branch.clone(),
+            base: self.base.clone(),
+            title: None,
+        };
+        journal::before("confirm journaled train metadata")?;
+        let meta = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        let crate::forge_observed::Observed::Known(meta) = meta else {
+            anyhow::bail!("journaled train metadata unconfirmed; members retained")
+        };
+        anyhow::ensure!(
+            meta.head_sha == entry.train.tip
+                && meta.head_ref == entry.branch
+                && meta.base_ref == self.base,
+            "journaled train head/base changed; members retained"
+        );
+        Ok((change, meta.state))
+    }
+
+    fn member_landed_checked(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        car: &Car,
+        sha: Option<&str>,
+    ) -> Result<()> {
+        journal::before("confirm landed member state")?;
+        let meta = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            car.member.pr,
+            &mut crate::network_retry::NoopSink,
+            |m| m.state != crate::forge::ChangeState::Open,
+        );
+        let crate::forge_observed::Observed::Known(meta) = meta else {
+            anyhow::bail!("landed member state unconfirmed; journal retained")
+        };
+        anyhow::ensure!(
+            meta.head_sha == car.member.head && meta.base_ref == change.base,
+            "landed member head/base changed; retain journal for inspection"
+        );
+        if meta.state == crate::forge::ChangeState::Open {
+            journal::before("close landed member")?;
+            let note = format!(
+                "Landed on `{}` as {} by merge train #{} (rebase-merged at {}). The approved head {} carried over: its patch-id {} is the landed commit's.",
+                change.base, sha.unwrap_or("(commit not found by subject)"), change.id,
+                short(&train.tip), short(&car.member.head), short(&car.patch_id),
+            );
+            self.forge
+                .close_change(&self.member_ref(car.member.pr), &note)?;
+            // The close succeeded. The ordinary callback now only writes local
+            // completion evidence; a crash before this point is recovered from
+            // the member's closed state without issuing another close.
+        }
+        self.record_member_landed(change, car, sha);
+        Ok(())
     }
 
     fn merge_verified(
@@ -2614,6 +2924,9 @@ impl TrainForge for LiveTrainForge<'_> {
         crate::forge_observed::confirm_negative(
             3,
             || {
+                if let Err(error) = journal::before("confirm pinned train") {
+                    return crate::forge_observed::Observed::Transient(format!("{error:#}"));
+                }
                 forge
                     .observe_change_metadata(change.id, &mut crate::network_retry::NoopSink)
                     .and_then(|value| {
@@ -2668,6 +2981,7 @@ impl TrainForge for LiveTrainForge<'_> {
             delete_branch: true,
             match_head: Some(tip.to_string()),
         };
+        journal::before("merge train")?;
         self.forge
             .merge_change(change, &opts, &mut crate::network_retry::StderrSink)
             .map(|_| ())
@@ -2783,39 +3097,16 @@ impl TrainForge for LiveTrainForge<'_> {
         car: &Car,
         sha: Option<&str>,
     ) {
-        let pr = car.member.pr;
-        let note = format!(
-            "Landed on `{}` as {} by merge train #{} (rebase-merged at {}). The approved \
-             head {} carried over: its patch-id {} is the landed commit's.",
-            self.base,
-            sha.unwrap_or("(commit not found by subject)"),
-            change.id,
-            short(&train.tip),
-            short(&car.member.head),
-            short(&car.patch_id),
-        );
-        if let Err(e) = self.forge.close_change(&self.member_ref(pr), &note) {
-            eprintln!("  warning: could not close PR #{pr} after landing: {e:#}");
+        if let Err(error) = self.member_landed_checked(change, train, car, sha) {
+            eprintln!("  warning: landed member cleanup incomplete: {error:#}");
         }
-        let specs = crate::pr_ship::extract_trailing_spec_ids_from_subject(&car.member.subject);
-        crate::pr_cmd::emit_ship_pr_merged(&self.main_worktree, pr as u32, &specs);
-        crate::pr_cmd::append_ship_activity_line(
-            &self.main_worktree,
-            &serde_json::json!({
-                "ts": chrono::Utc::now().to_rfc3339(),
-                "command": "aida pr train",
-                "event": "train_member_landed",
-                "pr": pr,
-                "train_pr": change.id,
-                "approved_head": car.member.head,
-                "patch_id": car.patch_id,
-                "landed": sha,
-            })
-            .to_string(),
-        );
     }
 
     fn comment(&mut self, pr: u64, note: &str) {
+        if let Err(err) = journal::before("comment") {
+            eprintln!("  warning: {err:#}");
+            return;
+        }
         if let Err(err) = self.forge.comment(&self.member_ref(pr), note) {
             eprintln!("  warning: could not comment on PR #{pr}: {err:#}");
         }
@@ -2850,6 +3141,8 @@ pub(crate) struct ForgeRails<'a> {
     // trace:STORY-2401 | ai:codex
     built: std::collections::HashMap<u64, Built>,
     reconciled: std::collections::HashSet<u64>,
+    journal_dir: Option<PathBuf>,
+    _journal_scope: Option<journal::Scope>,
 }
 
 impl<'a> ForgeRails<'a> {
@@ -2864,6 +3157,8 @@ impl<'a> ForgeRails<'a> {
             live: Vec::new(),
             built: std::collections::HashMap::new(),
             reconciled: std::collections::HashSet::new(),
+            journal_dir: None,
+            _journal_scope: None,
         }
     }
 
@@ -2874,10 +3169,20 @@ impl<'a> ForgeRails<'a> {
             .get(&change.id)
             .cloned()
             .ok_or_else(|| TrainCiUnavailable("missing pinned train evidence".into()))?;
+        self.intent(
+            change,
+            &train,
+            Some(journal::Step::Retire { why: why.into() }),
+        )?;
+        journal::before("confirm retirement")?;
         match self.ports.confirm_not_landed(change, &train) {
             crate::forge_observed::Confirmed::Negative => {
+                journal::before("retire")?;
+                self.ports
+                    .retire_checked(change, &train, why)
+                    .map_err(|e| TrainCiUnavailable(format!("retirement incomplete: {e:#}")))?;
+                self.intent(change, &train, Some(journal::Step::Done))?;
                 self.live.retain(|c| c.id != change.id);
-                self.ports.retire(change, why);
                 Ok(())
             }
             crate::forge_observed::Confirmed::Positive => {
@@ -2919,7 +3224,8 @@ impl<'a> ForgeRails<'a> {
         change: &crate::forge::ChangeRef,
         train: &Built,
     ) -> Result<Landing> {
-        self.live.retain(|c| c.id != change.id);
+        self.intent(change, train, Some(journal::Step::Members))?;
+        journal::before("fetch landed base")?;
         let main = match self.ports.fetch_main() {
             Ok(main) => main,
             // The merge landed; only the dispatch re-check before the fetch
@@ -2959,10 +3265,21 @@ impl<'a> ForgeRails<'a> {
             ));
         }
         for (car, sha) in train.cars.iter().zip(&landed) {
-            self.ports.member_landed(change, train, car, sha.as_deref());
+            self.intent(change, train, None)?;
+            if !journal::member_done(car.member.pr) {
+                journal::before("close landed member")?;
+                self.ports
+                    .member_landed_checked(change, train, car, sha.as_deref())
+                    .map_err(|e| {
+                        TrainCiUnavailable(format!("landed member cleanup incomplete: {e:#}"))
+                    })?;
+                journal::complete_member(car.member.pr)?;
+            }
             self.landed_on_main
                 .push((car.member.pr, sha.clone().unwrap_or_default()));
         }
+        self.intent(change, train, Some(journal::Step::Done))?;
+        self.live.retain(|c| c.id != change.id);
         Ok(Landing::Landed(main))
     }
     fn warn(&mut self, line: String) {
@@ -3002,29 +3319,37 @@ impl Rails for ForgeRails<'_> {
     fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
         let mut changes = Vec::new();
         for t in trains {
+            if let Ok(change) = self.change_for(&t.tip) {
+                if self.live.iter().any(|live| live.id == change.id) {
+                    changes.push(change);
+                    continue;
+                }
+            }
             self.count += 1;
             let branch = format!("{BRANCH_PREFIX}{}-{}", self.stamp, self.count);
-            // trace:STORY-2401 | ai:codex — an opening error can arrive
-            // after publication. Until the journal slice can resume it,
-            // preserve members and report the exact branch for inspection.
+            if let Some(dir) = &self.journal_dir {
+                journal::activate(dir, journal::Entry::new(t.clone(), branch.clone()))?;
+            }
+            journal::before("open train")?;
             let change = self.ports.open(t, &branch).map_err(|e| TrainCiUnavailable(format!(
-                "train opening result is unconfirmed for `{branch}`: {e:#}; inspect the branch before retrying; members retained"
+                "train opening result is unconfirmed for `{branch}`: {e:#}; journal retained for retry"
             )))?;
+            self.intent(&change, t, Some(journal::Step::Ci))?;
             self.live.push(change.clone());
             self.built.insert(change.id, t.clone());
-            let prs: Vec<String> = t.cars.iter().map(|c| format!("#{}", c.member.pr)).collect();
+            self.opened.push((t.tip.clone(), change.clone()));
             println!(
-                "  train PR #{} opened for {} ({branch} at {})",
+                "  train PR #{} opened ({branch} at {})",
                 change.id,
-                prs.join(", "),
                 short(&t.tip)
             );
-            self.opened.push((t.tip.clone(), change.clone()));
             changes.push(change);
         }
         // Every train's CI runs at once; wait for each in turn.
         let mut verdicts = Vec::new();
         for (change, train) in changes.iter().zip(trains) {
+            self.intent(change, train, Some(journal::Step::Ci))?;
+            journal::before("wait for CI")?;
             // trace:STORY-2401 | ai:codex — a failed read never proves a
             // red train. Reconcile a possible landing, otherwise preserve it.
             let mut v = match self.ports.wait_ci(change, train) {
@@ -3096,6 +3421,7 @@ impl Rails for ForgeRails<'_> {
 
     fn land(&mut self, train: &Built) -> Result<Landing> {
         let change = self.change_for(&train.tip)?;
+        self.intent(&change, train, Some(journal::Step::Gate))?;
         if self.reconciled.remove(&change.id) {
             return self.finish_landed(&change, train);
         }
@@ -3176,6 +3502,7 @@ impl Rails for ForgeRails<'_> {
         }
 
         if !refused.is_empty() {
+            journal::rejected(&refused)?;
             self.retire(
                 &change,
                 "A member failed its pre-land recheck; the train rebuilds.",
@@ -3274,6 +3601,8 @@ impl Rails for ForgeRails<'_> {
         for (car, member) in checked.cars.iter_mut().zip(&fresh) {
             car.member.release = member.release.clone();
         }
+        self.intent(&change, train, Some(journal::Step::Merge))?;
+        journal::before("merge verified train")?;
         if let Err(e) = self
             .ports
             .merge_verified(&change, &checked, _lease.as_ref())
@@ -3313,6 +3642,12 @@ impl Rails for ForgeRails<'_> {
                          landed and its members stay open for the advisor to reconcile",
                         change.id
                     )).into());
+                }
+                if self.journal_dir.is_some() && is_forge_merge_call_error(&e) {
+                    return Err(TrainCiUnavailable(format!(
+                        "merge call failed; resume from journal: {e:#}"
+                    ))
+                    .into());
                 }
                 return Err(e);
             }
@@ -3363,6 +3698,13 @@ impl Rails for ForgeRails<'_> {
             let Some(train) = self.built.get(&change.id).cloned() else {
                 return false;
             };
+            if self
+                .intent(&change, &train, None)
+                .and_then(|_| journal::before("confirm abort"))
+                .is_err()
+            {
+                return false;
+            }
             match self.ports.confirm_not_landed(&change, &train) {
                 crate::forge_observed::Confirmed::Negative => {}
                 crate::forge_observed::Confirmed::Positive => {
@@ -3372,11 +3714,16 @@ impl Rails for ForgeRails<'_> {
                 crate::forge_observed::Confirmed::Unconfirmed => return false,
             }
         }
-        for change in std::mem::take(&mut self.live) {
-            self.ports.retire(
-                &change,
-                &format!("The train run stopped ({error}); re-train the members."),
-            );
+        for change in self.live.clone() {
+            if self
+                .retire(
+                    &change,
+                    &format!("The train run stopped ({error}); re-train the members."),
+                )
+                .is_err()
+            {
+                return false;
+            }
         }
         true
     }
@@ -3511,6 +3858,29 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
+    let journal_dir = main_worktree.join(".aida/train");
+    let _journal_lock = if opts.dry_run {
+        None
+    } else {
+        Some(journal::lock(&journal_dir)?)
+    };
+    let recovered = if opts.dry_run {
+        Outcome::default()
+    } else {
+        let mut ports = LiveTrainForge {
+            project_root: project_root.clone(),
+            main_worktree: main_worktree.clone(),
+            base: base.clone(),
+            forge: forge.as_ref(),
+            named: false,
+            dispatch_ctx,
+            dispatch_abort: None,
+        }
+        .for_recovery();
+        ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
+            .with_journal(&journal_dir)
+            .resume()?
+    };
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
             .list_changes(crate::forge::ChangeFilter {
@@ -3526,12 +3896,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
-    let mut seen = std::collections::BTreeSet::new();
-    candidates.retain(|n| seen.insert(*n));
-    anyhow::ensure!(
-        !candidates.is_empty(),
-        "no PRs to train: name them (`aida pr train 12 13`) or pass --all-ready"
-    );
+    filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
         anyhow::bail!(why);
     }
@@ -3595,7 +3960,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let main = fetch_base(&main_worktree, &base)?;
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
-    let outcome = if opts.dry_run {
+    let mut outcome = if opts.dry_run {
         let built = build(&main_worktree, &main, &members)?;
         println!(
             "\nplan: {} car(s) on {} → train tip {}",
@@ -3637,15 +4002,16 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         };
-        let mut rails = ForgeRails::new(
-            &mut ports,
-            chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string(),
-        );
+        let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
+            .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;
-        warnings = rails.warnings;
+        warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
+    outcome.landed.extend(recovered.landed);
+    outcome.ejected.extend(recovered.ejected);
+    outcome.ci_runs += recovered.ci_runs;
     println!(
         "\n{} landed, {} ejected, {} CI run(s){}",
         outcome.landed.len(),

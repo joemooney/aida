@@ -33,11 +33,12 @@ purpose = "Route work and groom the queue."
 TOML
 
 # run <hook> [env...]: the hook's stdout, run from the fixture project.
+# Keep host session/rotation state out; each case supplies its own inputs.
+# trace:BUG-2482 | ai:codex
 run() {
     local hook="$1"
     shift
-    (cd "$TMP/project" && env -u AIDA_SESSION_ROLE -u AIDA_SESSION_GRANT \
-        -u AIDA_SESSION_PROJECT -u CODEX_PROJECT_DIR \
+    (cd "$TMP/project" && env -i HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" \
         CLAUDE_PROJECT_DIR="$TMP/project" PATH="$TMP/bin:$PATH" \
         AIDA_MAIN_CHECKOUT_DRIFT=off "$@" bash "$hook")
 }
@@ -196,11 +197,12 @@ if [ -r /proc/self/stat ]; then
 bash "$HOOK_UNDER_TEST"
 PARENT
     chmod +x "$TMP/daemon/codex"
+    # The daemon fixture uses the same clean environment as direct hooks.
+    # trace:BUG-2482 | ai:codex
     under_daemon() {
         local hook="$1"
         shift
-        (cd "$TMP/project" && env -u AIDA_SESSION_ROLE -u AIDA_SESSION_GRANT \
-            -u AIDA_SESSION_PROJECT -u CODEX_PROJECT_DIR \
+        (cd "$TMP/project" && env -i HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" \
             CLAUDE_PROJECT_DIR="$TMP/project" PATH="$TMP/bin:$PATH" \
             AIDA_MAIN_CHECKOUT_DRIFT=off HOOK_UNDER_TEST="$hook" "$@" \
             "$TMP/daemon/codex" app-server --managed-daemon)
