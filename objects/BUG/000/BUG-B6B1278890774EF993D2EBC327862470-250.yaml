@@ -8,8 +8,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T16:56:31.374233048Z
+modified_at: 2026-11-07T17:00:30.553122422Z
 req_type: Bug
+comments:
+- id: 01a1b6f4-5dd9-7a21-a430-4a8e19f1da7f
+  author: joe
+  content: 'Implemented in native seat; edits left uncommitted for host publication. Role entry now announces a five-minute operator prompt window, retaining existing delegation choices; outer continuation budget increased accordingly. Terminal attributes are saved/restored around role entry and continuation cleanup, including timeout, interruption, SIGTERM and forced child cleanup. Updated scripts/containment/conformance.py, tests/test_containment_conformance.py and docs/internal/testing/containment-conformance.md. Validation: both conformance suites passed (46 tests); final focused terminal/disconnection tests passed (3 tests); Python compilation, git diff --check and cargo fmt --all -- --check passed. No blockers. No live vendor conformance run performed.'
+  created_at: 2026-11-07T17:00:30.553122422Z
+  modified_at: 2026-11-07T17:00:30.553122422Z
+  session_id: 01a1b6f01b40
 history:
 - id: 01a1b6e9-7c41-7821-b0b6-d68fe217481a
   author: joe
