@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T10:00:58.698899847Z
+modified_at: 2026-11-07T10:16:06.627403135Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -469,6 +469,12 @@ comments:
   content: 'Round 13 validation update: cargo test -p aida-cli-lib --lib story_2593 --offline -- --nocapture passed: 11 passed, 0 failed, 1 watchdog-only test ignored (watchdog child passed separately). Live credential/refresh sentinel, live deadline and production-prepare fixtures passed. Exact installed-Codex probe skipped because AIDA_REQUIRE_CODEX_INSTALLED_LIVE was unset. Direct cargo run completed despite the separate lane-runner refusal; make check-ci-fast still running. Native publication declaration recorded as [AI:codex] fix(containment): preserve environment ledger sites and remove dead version gate (Refs STORY-2593). No Git mutation or hold clearance performed.'
   created_at: 2026-11-07T10:00:58.698899847Z
   modified_at: 2026-11-07T10:00:58.698899847Z
+  session_id: 01a1b56d99da
+- id: 01a1b582-20e3-7e13-8067-69597d2f03cc
+  author: joe
+  content: 'Round 13 final handoff: four files changed (launch/contained.rs, launch/codex_auth.rs, containment/tests/codex_auth_tests.rs, scripts/store-writers.toml). Findings 1/2 fixed; finding 3 caching explicitly deferred as permitted. ExecContext ledger unchanged; requested origin/main scan and fast-tier scan both report 1241 exact sites, zero additions. Targeted Rust tests: 11 passed, 1 watchdog-only ignored; installed-Codex opt-in probe skipped. make check-ci-fast initially stopped at a missing prior-round require_program OpenOptions inventory row. Added an explicitly read-only host_only classification and corrected stale version-pin descriptions. Inventory scan now passes (3328 sites, 293 mappings), 41 inventory fixtures pass, and every remaining fast-tier gate was run separately and passed: slice-stack 44, sccache 22, glyph, trace-header and docs scheduling. All earlier fast-tier gates passed, including formatting and no-default-features CLI. git diff --check passes. Native declaration already recorded: [AI:codex] fix(containment): preserve environment ledger sites and remove dead version gate (Refs STORY-2593). Work left uncommitted for host; no push, queue-done, ship/merge or review verdict performed. Existing merge hold and AC2/AC3 remain.'
+  created_at: 2026-11-07T10:16:06.627403135Z
+  modified_at: 2026-11-07T10:16:06.627403135Z
   session_id: 01a1b56d99da
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
