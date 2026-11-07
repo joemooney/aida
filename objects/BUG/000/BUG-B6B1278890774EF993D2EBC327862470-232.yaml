@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-07T10:44:49.550688437Z
+modified_at: 2026-11-07T15:49:42.090256190Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -78,6 +78,13 @@ comments:
   created_at: 2026-11-07T10:44:49.550688437Z
   modified_at: 2026-11-07T10:44:49.550688437Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6b3-8a4a-7ae2-a499-891395a1d0c2
+  author: joe
+  content: 'ADVISOR 2026-11-07 08:58: performance-guard 15:15Z still trips: aida show 14.8% over 2000ms (123/831), worst 13.9s. That is inside the 24h window that started 2026-11-07 00:10Z, so the window still mixes pre-fix calls. Judge at or after 2026-11-08 00:10Z as ruled.'
+  created_at: 2026-11-07T15:49:42.090256190Z
+  modified_at: 2026-11-07T15:49:42.090256190Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
