@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-247
 agreed_id: BUG-2482
 title: 'tests/test_session_role_grant.sh inherits the caller''s AIDA session env: ''no label: role addendum stays silent'' fails from an advisor shell'
 description: 'Found 2026-11-07 00:45 during an advisor hand merge. Running bash tests/test_session_role_grant.sh from a rotated advisor shell fails ''no label: role addendum stays silent'' (expected [] but an addendum printed). It passes under env -i. Scrubbing only AIDA_SESSION_ROLE/GRANT/PURPOSE/PROJECT/PERMISSION_MODE isn''t enough, so some other ambient AIDA_* variable (AIDA_ROTATION_*, AIDA_ROLE_INSTANCE, AIDA_AGENT_TYPE, ...) reaches the code under test. make check-ci-fast therefore goes red locally for any agent with a seat. Fix: start the test with an explicit env -i allowlist (HOME, PATH, TMPDIR and the fixture''s own variables), matching the hermetic-fixture rule. Acceptance: the test passes when run with every AIDA_* variable from a live advisor session exported.'
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T07:47:58.463173503Z
-modified_at: 2026-11-07T07:48:36.674926641Z
+modified_at: 2026-11-07T07:51:11.211156857Z
 req_type: Bug
 history:
 - id: 01a1b4fb-16c2-7c02-93b0-17f6488ba02f
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b4fd-726b-7fb0-b8e3-ddf9672a7950
+  author: aida-session-start
+  timestamp: 2026-11-07T07:51:11.211155573Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: bb6eef8efe4999767677c9c822ae26a35966b6e8
   branch: main
