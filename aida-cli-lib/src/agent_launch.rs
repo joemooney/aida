@@ -1166,9 +1166,10 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
         return Ok(agent_new_command_for_type(choices[0].1));
     }
     let labels: Vec<&str> = choices.iter().map(|(label, _)| *label).collect();
-    let select = inquire::Select::new("Select an agent type to launch:", labels).with_help_message(
-        "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
-    );
+    let select = crate::prompt_select::select("Select an agent type to launch:", labels)
+        .with_help_message(
+            "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
+        );
 
     match select.raw_prompt() {
         Ok(choice) => {
@@ -2446,7 +2447,7 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
         "Resume a recent {agent_type}/{role} session?",
         role = role.unwrap_or("implementer")
     );
-    let pick = match inquire::Select::new(&prompt, labels.clone())
+    let pick = match crate::prompt_select::select(&prompt, labels.clone())
         .with_help_message("arrows to move, type to filter, Enter to choose, Esc to start new")
         .prompt()
     {
@@ -5130,7 +5131,7 @@ pub(crate) fn choose_spec_for_scope_conflict(offer: &[SpecChoice]) -> Result<Opt
         .chain(std::iter::once(cancel.clone()))
         .collect();
     // ?-exempt: the refusal printed above is the local context card.
-    let pick = match inquire::Select::new(
+    let pick = match crate::prompt_select::select(
         "Launch on an approved unclaimed spec from the queue instead?",
         labels.clone(),
     )

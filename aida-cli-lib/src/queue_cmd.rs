@@ -196,7 +196,7 @@ pub(crate) fn handle_queue_advance(
         options.push("Skip");
         options.push("Quit");
 
-        let choice = match inquire::Select::new(
+        let choice = match crate::prompt_select::select(
             "Advance this item:",
             options.iter().map(|s| s.to_string()).collect(),
         )

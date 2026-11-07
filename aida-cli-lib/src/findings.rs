@@ -57,7 +57,7 @@ pub const LINKED_PREFIX: &str = "linked:";
 ///
 /// trace:STORY-467 trace:TASK-120 | ai:claude
 // trace:TASK-714
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ts_rs_forge::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ts_rs::TS)]
 pub enum Severity {
     Major,
     Minor,
@@ -447,7 +447,7 @@ pub fn gate_task_description(
 
 /// One row in the triage view.
 // trace:TASK-714
-#[derive(Debug, Clone, ts_rs_forge::TS)]
+#[derive(Debug, Clone, ts_rs::TS)]
 pub struct FindingRow {
     pub display_id: String,
     pub title: String,

@@ -687,7 +687,7 @@ pub(crate) fn pick_role_with_header(
     // from and never mixed into the driver/build seats.
     let (labels, targets) = assemble_role_picker_items(role_labels, &role_names, active.as_deref());
 
-    let mut select = inquire::Select::new(header, labels).with_help_message(
+    let mut select = crate::prompt_select::select(header, labels).with_help_message(
         "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
     );
     // TASK-817: park the cursor on the offered default so Enter accepts it.

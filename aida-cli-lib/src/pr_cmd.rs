@@ -8267,10 +8267,10 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
 /// The one shared file-the-reviewer-story step for a PR that is open on
 /// `branch`: file (or skip, if already filed) the review story, render the
 /// outcome, clear a satisfied PR-hold marker, bump the covered specs to In
-/// Progress, and on every skip print the exact re-run command. `aida pr
-/// auto-queue-review` and `aida ship --no-merge` (BUG-2217) both run it, so
-/// a PR opened by either path gets its reviewer story whatever the spec
-/// status — the auto-queue has no status gate.
+/// Progress, and on skips other than train refusals print the exact re-run
+/// command. `aida pr auto-queue-review` and `aida ship --no-merge` (BUG-2217)
+/// both run it, so a PR opened by either path gets its reviewer story whatever
+/// the spec status — the auto-queue has no status gate.
 // trace:BUG-2217 | ai:claude
 pub(crate) fn queue_review_for_open_pr(
     project_root: &std::path::Path,
@@ -8290,6 +8290,13 @@ pub(crate) fn queue_review_for_open_pr(
     let outcome =
         try_auto_queue_pr_review(project_root, branch, &session_id, AutoQueueOrigin::PrSkill);
     render_auto_queue_outcome(&outcome);
+
+    // Train branches always refuse review-story creation; retrying the same
+    // command cannot help. Keep the refusal without suggesting that retry.
+    // trace:TASK-2963 | ai:codex
+    if branch.starts_with(crate::pr_train::BRANCH_PREFIX) {
+        return outcome;
+    }
 
     // TASK-630: opening the PR is the event that ends a deliberate PR-hold
     // (BUG-250). `aida pr auto-queue-review` runs right after `gh pr create`
@@ -8328,7 +8335,7 @@ pub(crate) fn queue_review_for_open_pr(
         }
     }
 
-    // BUG-86: on every non-success outcome (needs-attention OR by-design
+    // BUG-86: on non-train non-success outcomes (needs-attention OR by-design
     // skip), print the exact command to re-run manually. The skill side
     // (/aida-pr step 10) consumes this so the agent can quote it back at
     // the user instead of having them spelunk for the right invocation.
@@ -8433,7 +8440,7 @@ mod bug_2217_ship_no_merge_files_review_story {
     }
 
     #[test]
-    fn every_skip_prints_the_rerun_command() {
+    fn both_non_train_skip_arms_print_the_rerun_command() {
         let src = include_str!("pr_cmd.rs");
         let start = src
             .find(concat!("pub(crate) fn queue_review_for_", "open_pr("))

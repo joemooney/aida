@@ -13,10 +13,10 @@ categories = ["development-tools", "command-line-utilities"]
 [dependencies]
 aida-core = { version = "0.16", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
 # `aida schema` derives the Requirement field/enum detail from the same
-# ts-rs-forge type reflection that backs aida-generate-types — the TS::decl()
+# ts-rs type reflection that backs aida-generate-types — the TS::decl()
 # output is the substrate-grounded source, not a hand-kept duplicate.
 # trace:STORY-538 | ai:claude
-ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
+ts-rs = { version = "12.0.1", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 
 # CLI-specific dependencies
 reqwest = { workspace = true }
@@ -24,12 +24,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
 inquire = { workspace = true }
+nucleo-matcher = "0.3.1"
 colored = { workspace = true }
 crossterm = { workspace = true }
 # Terminal markdown rendering for `aida show` (a small renderer over the
 # CommonMark parser aida-core already uses; unicode-width for display-width
 # alignment). Both were already in the dependency graph. trace:STORY-1652 | ai:claude
-pulldown-cmark = { version = "0.9", default-features = false }
+pulldown-cmark = { version = "0.13.6", default-features = false }
 unicode-width = "0.2"
 signal-hook = "0.3"
 # Pure-Rust unified-diff producer for `aida scaffold diff` (FR-1-027).
@@ -50,7 +51,6 @@ base64 = "0.22"
 getrandom = "0.2"
 # Fresh scoring roots need automatic cleanup in production. trace:TASK-1731 | ai:codex
 tempfile = "3.8"
-dirs = { workspace = true }
 fs2 = { workspace = true }
 tokio = { workspace = true }
 hostname = "0.4"
@@ -88,6 +88,8 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 tui = ["aida-tui"]
 
 [dev-dependencies]
+# Raw platform probe used only by the hermetic HOME fence. trace:TASK-3325 | ai:codex
+etcetera = { workspace = true }
 # STORY-2324: property tests for the canonical gate state.
 proptest = { version = "1", default-features = false, features = ["std"] }
 

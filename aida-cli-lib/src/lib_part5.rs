@@ -1552,7 +1552,7 @@ pub(crate) fn handle_review_spec(
     let diff_label = "Open the diff myself";
     let defer_label = "Defer (leave it held)";
     let options = vec![merge_label, rework_label, diff_label, defer_label];
-    let choice = match inquire::Select::new("What now?", options).prompt() {
+    let choice = match crate::prompt_select::select("What now?", options).prompt() {
         Ok(c) => c,
         Err(_) => {
             println!(
