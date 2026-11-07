@@ -1485,6 +1485,30 @@ success. The client retains one request ID across at most two retries. S1's
 memory-only dedupe is safe for read-only probes; recoverable canonical mutation
 transactions still require separate approval before S2 enables any writer.
 
+The S2 canonical-only core stages typed comment/edit schemas and version-1,
+fsynced redo decisions under the store writer lock. It recovers pending installs
+before admitting another writer and quarantines uncertain decisions. Retry
+quotas are per epoch; old epochs retain their evidence without exhausting new
+launches. Cache redo generation is recorded separately from Git HEAD, allowing
+incremental refresh and write-through restamping after a mediated install.
+Restart coverage includes record write, file fsync and rename: unrenamed
+temporary files are ignored as decisions, while visible pending records recover
+before another writer enters. Recovery syncs the journal directory before any
+object install, including when the prior process died immediately after rename.
+Status and retry lookup are read-only: absent journals report unknown without
+creating state or acquiring the writer lock. Status retains completed read-only
+requests from the launch's local accepted map. Git exclusion is installed only
+when initializing a journal. Canonical replacement staging stays inside that
+excluded directory; recovery removes abandoned UUID staging files there and
+legacy canonical staging files under objects before any writer can publish.
+Edit fields must be strings when present; null is refused. Expected revisions
+use lowercase SHA-256 hex in both schemas.
+**Live `comment_add` and `spec_edit` remain disabled** in both broker and host
+until installed objects have transactional Git/event publication. `own_claim`
+and `queue_done` remain unsupported. Quarantine diagnostics name the affected
+file and the [operator recovery procedure](docs/advanced/store-redo-recovery.md).
+<!-- trace:TASK-3223 | ai:codex -->
+
 The lane probes its actual channel before the receipt barrier; the host checks
 that receipt's exact epoch/readiness and the existing authority owner's worker
 stamp before releasing tools. Revocation, lease loss or authority-channel
