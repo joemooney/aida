@@ -29,6 +29,78 @@ fn error(home: &Path) -> String {
         Err(e) => format!("{e:#}"),
     }
 }
+// trace:BUG-2484 | ai:codex
+fn npm_wrapper(root: &Path, layout: &str) -> (PathBuf, PathBuf) {
+    let package = root.join("lib/node_modules/@openai/codex");
+    let wrapper = package.join("bin/codex.js");
+    std::fs::create_dir_all(wrapper.parent().unwrap()).unwrap();
+    let sentinel = root.join("wrapper-executed");
+    std::fs::write(
+        &wrapper,
+        format!("#!/bin/sh\ntouch '{}'\n", sentinel.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (platform, target) = match std::env::consts::ARCH {
+        "x86_64" => ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+        "aarch64" => ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+        _ => panic!("unsupported test architecture"),
+    };
+    let vendor = match layout {
+        "nested" => package.join("node_modules/@openai").join(platform),
+        "hoisted" => package.parent().unwrap().join(platform),
+        "bundled" => package.clone(),
+        _ => panic!("unknown fixture layout"),
+    };
+    let native = vendor.join(format!("vendor/{target}/bin/codex"));
+    std::fs::create_dir_all(native.parent().unwrap()).unwrap();
+    std::fs::write(&native, b"synthetic native executable").unwrap();
+    std::fs::set_permissions(&native, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let command = root.join("bin/codex");
+    std::fs::create_dir_all(command.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(wrapper, &command).unwrap();
+    (command, native)
+}
+
+#[test]
+fn bug_2484_npm_layouts_resolve_without_execution_and_keep_pin() {
+    use sha2::{Digest, Sha256};
+    for layout in ["nested", "hoisted", "bundled"] {
+        let root = tempfile::tempdir().unwrap();
+        let (wrapper, native) = npm_wrapper(root.path(), layout);
+        let env = BTreeMap::from([(
+            "PATH".into(),
+            root.path().join("bin").to_str().unwrap().into(),
+        )]);
+        let selected = resolve_program(&Command::new("codex"), &env).unwrap();
+        let resolved = codex_auth::resolve_native_program(&selected).unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(&native).unwrap());
+        assert_eq!(
+            codex_auth::resolve_native_program(&native).unwrap(),
+            resolved
+        );
+        let pin = format!("{:x}", Sha256::digest(std::fs::read(&native).unwrap()));
+        codex_auth::require_program(&resolved, &pin).unwrap();
+        assert!(codex_auth::require_program(&resolved, codex_auth::PROGRAM_SHA256).is_err());
+        let diagnostic = crate::vendors::codex_binary_diagnostic(&wrapper);
+        assert!(
+            diagnostic.contains(resolved.to_str().unwrap()),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains("re-probe this codex binary"));
+        std::fs::write(&native, "different executable").unwrap();
+        assert!(codex_auth::require_program(&resolved, &pin).is_err());
+        std::fs::set_permissions(&native, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(codex_auth::resolve_native_program(&wrapper).is_err());
+        std::fs::remove_file(&native).unwrap();
+        assert!(codex_auth::resolve_native_program(&wrapper)
+            .unwrap_err()
+            .to_string()
+            .contains("native executable missing"));
+        assert!(!root.path().join("wrapper-executed").exists());
+    }
+}
+
 #[test]
 fn story_2593_binary_pin_never_executes_host_code() {
     use sha2::{Digest, Sha256};
@@ -473,7 +545,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     std::fs::write(home.join(".codex/host-sentinel"), "default-secret").unwrap();
     let bin = home.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    let program = bin.join("codex");
+    let (wrapper, program) = npm_wrapper(&home, "nested");
     let sentinel = home.join("host-vendor-executed");
     std::fs::write(
         &program,
@@ -485,7 +557,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let _env = crate::test_env::EnvVarsGuard::set(&[("CODEX_HOME", relocated.to_str().unwrap())]);
-    let mut child = Command::new(&program);
+    let mut child = Command::new(&wrapper);
     child
         .args(["exec", "synthetic"])
         .env("AIDA_HEADLESS", "1")
@@ -536,6 +608,12 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     }
     let args: Vec<_> = plan.command.get_args().collect();
     let cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
+    // trace:BUG-2484 | ai:codex
+    assert_eq!(
+        cfg["argv"][0],
+        std::fs::canonicalize(&program).unwrap().to_str().unwrap()
+    );
+    assert!(!home.join("wrapper-executed").exists());
     assert_eq!(cfg["chatgpt_deadline"].as_i64(), plan.chatgpt_deadline);
     assert_eq!(
         cfg["oauth_hosts"],
@@ -624,6 +702,7 @@ fn story_2593_installed_codex_exact_leaf_probe() {
     let environment = aida_core::exec_context::Environment::capture();
     let env = BTreeMap::from([("PATH".into(), environment.var("PATH").unwrap().into())]);
     let program = resolve_program(&Command::new("codex"), &env).unwrap();
+    let program = codex_auth::resolve_native_program(&program).unwrap();
     let host = tempfile::tempdir().unwrap();
     host_auth(host.path(), 4102444800);
     let credential = prepare_auth(host.path(), 3600).unwrap();

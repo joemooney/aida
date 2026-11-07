@@ -1382,7 +1382,8 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
     // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
     // verify the branch actually carries a commit trailered for the spec
     // this drive is for.
-    ensure_pr_open_spec_attribution(worktree, branch, spec)?;
+    // trace:BUG-2483 | ai:codex
+    ensure_pr_publication_spec_attribution(worktree, branch, spec)?;
     // TASK-1443: a concurrent drive may have already opened a PR for this
     // head between the push above and this point — adopt it rather than
     // opening a second one. trace:TASK-1443 | ai:claude
@@ -1734,7 +1735,8 @@ pub(crate) fn open_orchestrator_pr_for_pushed_branch(
     // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
     // verify the pushed branch actually carries a commit trailered for the
     // spec this drive is for.
-    ensure_pr_open_spec_attribution(project_root, &branch_ref, spec)?;
+    // trace:BUG-2483 | ai:codex
+    ensure_pr_publication_spec_attribution(project_root, &branch_ref, spec)?;
     // TASK-1443: adopt an already-open PR for this head instead of opening a
     // second one (see `existing_open_pr_for_branch` above). trace:TASK-1443 | ai:claude
     let commit_msg = head_commit_message(project_root, &branch_ref)?;

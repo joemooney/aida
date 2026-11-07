@@ -431,3 +431,80 @@ pub(crate) fn bounded_review_output(
         _ => None,
     }
 }
+
+/// Only evidence for this marker's process may override its TTL. Closed
+/// records have no holder binding and cannot end a later manual claim.
+/// Outer None means there is no attributable evidence: use the marker's own
+/// process identity, then its TTL. Store discovery failures and store-wide read
+/// failures (including lock timeout or pending-batch recovery failure) instead
+/// return Some(None): attribution cannot be established, so a pid-backed marker
+/// stays retained even after process death or TTL expiry. Retry after repairing
+/// the store, or explicitly use `aida review claim --release`.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn review_ownership_ended(
+    root: &std::path::Path,
+    m: &super::review_marker::Marker,
+) -> Option<Option<String>> {
+    use crate::ownership::{store::OwnershipStore, WitnessKind, WorkKey};
+    if m.pid == 0 {
+        return None;
+    }
+    let store = match OwnershipStore::for_project(root) {
+        Ok(Some(store)) => store,
+        Ok(None) => return None,
+        Err(_) => return Some(None),
+    };
+    let (records, errors) = store.list();
+    // A damaged record for this PR may be this process's evidence. Retain it;
+    // errors for other PRs/kinds do not suppress a manual marker's expiry.
+    let prefix = format!("origin-{}-", m.pr);
+    let unreadable_matching = errors.iter().any(|(path, _)| {
+        path == store.dir()
+            || path == &store.dir().join("review")
+            || (path.parent() == Some(store.dir().join("review").as_path())
+                && path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .and_then(|s| s.strip_prefix(&prefix))
+                    .is_some_and(|head| super::review_marker::covers_head(head, Some(&m.head_sha))))
+    });
+    if unreadable_matching {
+        return Some(None);
+    }
+    let matching: Vec<_> = records
+        .iter()
+        .filter(|r| {
+            matches!(&r.key, WorkKey::Review { change, head }
+            if change == &crate::ownership::dual::change(m.pr)
+                && super::review_marker::covers_head(head, Some(&m.head_sha)))
+                && r.holder.as_ref().is_some_and(|holder| {
+                    holder.witnesses.iter().any(|w| match &w.kind {
+                        WitnessKind::Process { host, id, .. } => {
+                            m.pid != 0
+                                && host == &m.host
+                                && id.pid == m.pid
+                                && m.pid_start.as_deref().is_some_and(|start| {
+                                    aida_core::local_boot_id()
+                                        .and_then(|boot| {
+                                            crate::ownership::dual::identity_from_record(
+                                                m.pid, start, &boot,
+                                            )
+                                        })
+                                        .as_ref()
+                                        == Some(id)
+                                })
+                        }
+                        _ => false,
+                    })
+                })
+        })
+        .collect();
+    if matching.is_empty() {
+        return None;
+    }
+    let reasons: Option<Vec<_>> = matching
+        .into_iter()
+        .map(crate::ownership::reader::ended_record)
+        .collect();
+    Some(reasons.map(|r| r.join("; ")))
+}

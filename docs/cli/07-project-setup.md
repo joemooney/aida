@@ -678,6 +678,15 @@ write roots. Git metadata remains protected separately; see
 `[agents] vendor`, the active containment setting and the configuration fix.
 <!-- trace:TASK-2631 | ai:codex -->
 
+For the Codex AIDA boundary, an npm/nvm `codex` symlink to
+`@openai/codex/bin/codex.js` resolves to the package's native executable
+(nested or hoisted platform dependency, or older bundled `vendor/` layout).
+The launcher executes that binary directly without running the JavaScript
+wrapper. ChatGPT authentication still requires the supported native binary's
+SHA-256 pin; a different binary refuses. `aida doctor --category vendor-binary`
+shows the resolved path and pin diagnostic, including in JSON and TOON output.
+<!-- trace:BUG-2484 | ai:codex -->
+
 #### Model-free containment tracer
 
 `aida config permissions probe --vendor codex --json` runs a closed Linux

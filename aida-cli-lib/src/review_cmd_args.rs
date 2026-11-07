@@ -164,8 +164,8 @@ pub enum ReviewCommand {
     /// While the claim is live, `aida pr ship` and a drain's merge phase
     /// refuse to merge the PR at the claimed head, and `aida awaiting`
     /// shows it as under review. `aida review record … --pr N` clears the
-    /// claim; so does `--release`. It also expires on its own after
-    /// `--ttl-mins`, so an abandoned review never holds a PR indefinitely.
+    /// claim; so does `--release`. Manual claims without ownership records
+    /// expire after `--ttl-mins`; recorded reviewers end by ownership liveness.
     // trace:STORY-1405 | ai:claude
     Claim {
         /// Pull request number being reviewed.
@@ -181,7 +181,8 @@ pub enum ReviewCommand {
         #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
-        /// Minutes until the claim expires on its own. Capped at 1440 (24h);
+        /// Minutes until a manual claim without a matching ownership record expires.
+        /// Recorded reviewers use ownership liveness. Capped at 1440 (24h);
         /// a larger value is clamped, not refused.
         #[clap(long, value_name = "MINUTES", default_value_t = 30)]
         ttl_mins: u64,

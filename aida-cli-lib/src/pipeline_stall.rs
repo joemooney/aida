@@ -870,12 +870,7 @@ fn observe_prs(
             .unwrap();
         if pr.head_branch.starts_with("train/") {
             // An open train with unknown owner is never evidence of no train.
-            train.push(train_pr_running(
-                root,
-                pr.number,
-                row["body"].as_str().unwrap_or(""),
-                &mut s.details,
-            ));
+            train.push(train_pr_running(root, pr.number, &mut s.details));
             continue;
         }
         let ready = if hold_gate_failed(row) {
@@ -1065,18 +1060,14 @@ fn parse_stall_prs(
     )
 }
 
-fn train_pr_running(
-    root: &Path,
-    number: u64,
-    body: &str,
-    details: &mut Vec<String>,
-) -> Option<bool> {
-    if crate::pr_train::train_abandoned(
-        body,
-        &crate::coordination::hostname(),
-        crate::process_probe::process_identity_is_alive,
-    )
-    .is_some()
+fn train_pr_running(root: &Path, number: u64, details: &mut Vec<String>) -> Option<bool> {
+    let key = crate::ownership::WorkKey::Train {
+        train: crate::ownership::dual::change(number),
+    };
+    if crate::ownership::reader::ended(root, &key)
+        .ok()
+        .flatten()
+        .is_some()
     {
         Some(false)
     } else {
@@ -1668,14 +1659,14 @@ mod tests {
     #[test]
     fn unproven_train_owner_is_unknown_with_inspection_evidence() {
         let t = tempfile::tempdir().unwrap();
-        for body in [
+        for _body in [
             "",
             "legacy owner",
             "<!-- aida-train-owner: host=foreign pid=123 -->",
             &crate::pr_train::owner_line_for_self(),
         ] {
             let mut details = Vec::new();
-            assert_eq!(train_pr_running(t.path(), 88, body, &mut details), None);
+            assert_eq!(train_pr_running(t.path(), 88, &mut details), None);
             assert!(details[0].contains("Train PR-88"));
             assert!(details[0].contains("gh pr view 88"));
             assert!(details[0].contains("live or liveness is unknown"));
@@ -1820,3 +1811,83 @@ mod tests {
 #[cfg(test)]
 #[path = "pipeline_stall_action_tests.rs"]
 mod action_tests;
+
+#[cfg(test)]
+mod ownership_reader_tests {
+    use super::*;
+    // trace:STORY-2325 | ai:codex
+    #[test]
+    fn prc_train_running_uses_ownership_and_preserves_unknown() {
+        use crate::ownership::{
+            dual,
+            store::{Expect, OwnershipStore},
+            Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(p)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        let store = OwnershipStore::for_project(p).unwrap().unwrap();
+        let key = WorkKey::Train {
+            train: dual::change(12),
+        };
+        assert_eq!(train_pr_running(p, 12, &mut vec![]), None);
+        for state in ["unknown", "alive", "dead", "closed"] {
+            let witnesses = match state {
+                "alive" | "dead" => vec![Witness {
+                    admission: None,
+                    kind: WitnessKind::Heartbeat {
+                        at: if state == "alive" {
+                            chrono::Utc::now()
+                        } else {
+                            chrono::Utc::now() - chrono::Duration::days(1)
+                        },
+                        every_secs: 10,
+                    },
+                    recorded_at: chrono::Utc::now(),
+                }],
+                _ => vec![],
+            };
+            store
+                .update(&key, "seed", Expect::Any, |_| {
+                    Some((
+                        Ownership {
+                            key: key.clone(),
+                            generation: 0,
+                            holder: Some(Holder {
+                                seat: "train".into(),
+                                session: "t".into(),
+                                role: Role::Train,
+                                tree: None,
+                                witnesses,
+                            }),
+                            phase: if state == "closed" {
+                                Phase::Closed { why: "done".into() }
+                            } else {
+                                Phase::Leased
+                            },
+                        },
+                        None,
+                    ))
+                })
+                .unwrap();
+            let mut details = vec![];
+            assert_eq!(
+                train_pr_running(p, 12, &mut details),
+                if matches!(state, "dead" | "closed") {
+                    Some(false)
+                } else {
+                    None
+                },
+                "{state}"
+            );
+        }
+        std::fs::write(store.path_for(&key), "malformed").unwrap();
+        assert_eq!(train_pr_running(p, 12, &mut vec![]), None);
+    }
+}

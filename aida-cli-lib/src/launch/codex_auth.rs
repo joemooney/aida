@@ -9,7 +9,54 @@ use std::fs::File;
 use std::io::{Seek, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Resolve only the shipped npm package layout, without evaluating its JS.
+/// Layout discovery supplies no trust: ChatGPT admission still hashes the leaf.
+// trace:BUG-2484 | ai:codex
+pub(crate) fn resolve_native_program(program: &Path) -> Result<PathBuf> {
+    let program = std::fs::canonicalize(program)?;
+    if !program.ends_with("@openai/codex/bin/codex.js") {
+        return Ok(program);
+    }
+    let package = program.parent().unwrap().parent().unwrap();
+    let (platform, target) = match std::env::consts::ARCH {
+        "x86_64" => ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+        "aarch64" => ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+        _ => anyhow::bail!("contained Codex npm wrapper architecture unsupported"),
+    };
+    let leaf = format!("vendor/{target}/bin/codex");
+    // npm optional dependency, hoisted dependency, then older bundled layout.
+    let candidates = [
+        package
+            .join("node_modules/@openai")
+            .join(platform)
+            .join(&leaf),
+        package.parent().unwrap().join(platform).join(&leaf),
+        package.join(&leaf),
+    ];
+    for candidate in candidates {
+        match std::fs::metadata(&candidate) {
+            Ok(md) => {
+                anyhow::ensure!(
+                    md.is_file() && md.mode() & 0o111 != 0,
+                    "contained Codex npm native executable refused: {}",
+                    candidate.display()
+                );
+                return std::fs::canonicalize(candidate)
+                    .context("contained Codex npm native executable unavailable");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).context("contained Codex npm native executable unavailable")
+            }
+        }
+    }
+    anyhow::bail!(
+        "contained Codex npm native executable missing under {}; reinstall the Codex package",
+        package.display()
+    )
+}
 
 pub(super) const RELAUNCH: &str =
     "contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch";
@@ -17,12 +64,12 @@ const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
 pub(crate) const DEFAULT_MIN_GRANT_SECS: i64 = 1800;
 const BOUND: usize = 65536;
-pub(super) const PROGRAM_SHA256: &str =
+pub(crate) const PROGRAM_SHA256: &str =
     "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8";
 
 /// Pin the probed interface without executing lane-selected code on the host.
 /// The actual vendor execution still happens only within the contained lane.
-pub(super) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
+pub(crate) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
     let mut file = std::fs::OpenOptions::new()
