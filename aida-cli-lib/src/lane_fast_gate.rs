@@ -53,9 +53,78 @@ pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
     write(main, &receipt)
 }
 
+/// Settle abandoned reservations on every exit, including a missing PR lookup.
+/// A queued repair has a bound head and stays pending until its one retry.
+// trace:STORY-2640 | ai:codex
+pub(crate) struct Reservation {
+    main: PathBuf,
+    branch: String,
+    report_result: bool,
+}
+impl Reservation {
+    pub(crate) fn with_result_line(mut self) -> Self {
+        self.report_result = true;
+        self
+    }
+}
+pub(crate) fn reserve(main: &Path, branch: &str) -> Result<Reservation> {
+    begin(main, branch)?;
+    Ok(Reservation {
+        main: main.into(),
+        branch: branch.into(),
+        report_result: false,
+    })
+}
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        let result = (|| -> Result<()> {
+            if let Some(mut r) = read(&self.main, &self.branch)? {
+                if r.head.is_none() || r.native_ready {
+                    r.pending = false;
+                    r.native_ready = false;
+                    r.head = None;
+                    if r.marker == "skipped(pending)" {
+                        r.marker = "skipped(lane-ended)".into();
+                    }
+                    write(&self.main, &r)?;
+                }
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            eprintln!("fast gate reservation cleanup: {e:#}");
+        }
+        if self.report_result {
+            println!("{}", result_line(&self.main, &self.branch, "implementer:"));
+        }
+    }
+}
+
+/// Infrastructure trouble is visible but must not bypass lane reporting/cleanup.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &anyhow::Error) {
+    eprintln!("fast_gate=skipped(infrastructure): {error:#}");
+    let result = (|| -> Result<()> {
+        record_marker(main, lease, "skipped(infrastructure)")?;
+        if let Some(mut r) = read(main, branch)? {
+            r.marker = "skipped(infrastructure)".into();
+            write(main, &r)?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = result {
+        eprintln!("could not persist fast gate infrastructure marker: {e:#}");
+    }
+}
+
+pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
+    format!("{line} fast_gate={}", marker(main, branch))
+}
+
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
 pub(crate) fn blocks_review(main: &Path, branch: &str, head: &str) -> Result<bool> {
-    Ok(read(main, branch)?.is_some_and(|r| r.pending || r.head.as_deref() != Some(head)))
+    Ok(read(main, branch)?
+        .is_some_and(|r| r.pending || r.head.as_deref().is_some_and(|bound| bound != head)))
 }
 
 pub(crate) fn marker(main: &Path, branch: &str) -> String {
@@ -115,12 +184,7 @@ fn attempt(
         return Ok((String::new(), "skipped(no-sandbox)".into(), String::new()));
     }
     let head = snapshot(main, tree, branch)?;
-    let (marker, output): (String, String) =
-        match crate::lane_job::run_fast_gate(main, tree, lease)? {
-            None => ("skipped(no-sandbox)".into(), String::new()),
-            Some((0, output)) => ("pass".into(), output),
-            Some((_, output)) => ("fail".into(), output),
-        };
+    let (marker, output) = gate_result(crate::lane_job::run_fast_gate(main, tree, lease)?);
     anyhow::ensure!(
         snapshot(main, tree, branch)? == head,
         "seat changed during fast gate; refusing stale evidence"
@@ -128,6 +192,15 @@ fn attempt(
     record_marker(main, lease, &marker)?;
     eprintln!("fast_gate={marker} head={head}\n{output}");
     Ok((head, marker, output))
+}
+
+// A timeout/refusal is red, so it receives the same single repair as any gate.
+pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
+    match result {
+        None => ("skipped(no-sandbox)".into(), String::new()),
+        Some((0, output)) => ("pass".into(), output),
+        Some((_, output)) => ("fail".into(), output),
+    }
 }
 
 /// Host-published lanes commit locally, gate, resume once on red, and gate
@@ -142,18 +215,42 @@ pub(crate) fn native(
     clean: bool,
     mut repair: impl FnMut(&str) -> Result<bool>,
 ) -> Result<bool> {
+    match native_inner(main, tree, spec, lease, branch, clean, &mut repair) {
+        Ok(ready) => Ok(ready),
+        Err(error) => {
+            infrastructure(main, branch, lease, &error);
+            // Only a clean, inspectable committed seat can still be published.
+            // Never mint stale/pass evidence after a failed attempt.
+            let ready = (|| -> Result<bool> {
+                let head = snapshot(main, tree, branch)?;
+                let mut r = read(main, branch)?.context("fast gate receipt missing")?;
+                r.head = Some(head);
+                r.native_ready = true;
+                r.marker = "skipped(infrastructure)".into();
+                write(main, &r)?;
+                Ok(true)
+            })();
+            Ok(ready.unwrap_or(false))
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn native_inner(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lease: &str,
+    branch: &str,
+    clean: bool,
+    mut repair: impl FnMut(&str) -> Result<bool>,
+) -> Result<bool> {
     if veto(main, spec) {
         return Ok(true);
     }
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
-        record_marker(main, lease, "skipped(no-sandbox)")?;
-        let mut receipt = read(main, branch)?.context("fast gate was not reserved")?;
-        receipt.marker = "skipped(no-sandbox)".into();
-        write(main, &receipt)?;
-        eprintln!(
-            "fast_gate=skipped(no-sandbox); native commit/publication still requires its sandbox"
-        );
-        return Ok(true);
+        skip_native_without_sandbox(main, branch, lease)?;
+        return Ok(false);
     }
     let clean_exit = std::cell::Cell::new(clean);
     let publishable = std::cell::Cell::new(true);
@@ -178,9 +275,25 @@ pub(crate) fn native(
     Ok(publishable.get())
 }
 
+// Native seat Git itself requires bubblewrap: no commit or publication can
+// safely run here. Settle rather than reserving review forever.
+fn skip_native_without_sandbox(main: &Path, branch: &str, lease: &str) -> Result<()> {
+    record_marker(main, lease, "skipped(no-sandbox)")?;
+    let mut receipt = read(main, branch)?.context("fast gate was not reserved")?;
+    receipt.marker = "skipped(no-sandbox)".into();
+    receipt.pending = false;
+    receipt.head = None;
+    receipt.native_ready = false;
+    write(main, &receipt)?;
+    eprintln!(
+        "fast_gate=skipped(no-sandbox); native commit/publication still requires its sandbox"
+    );
+    Ok(())
+}
+
 // The native publication driver, with only the sandbox/commit effects injected.
 // The durable reservation and one-round limit are identical in production/tests.
-fn native_rounds(
+pub(crate) fn native_rounds(
     main: &Path,
     branch: &str,
     mut attempt: impl FnMut() -> Result<Option<(String, String, String)>>,
@@ -224,10 +337,39 @@ pub(crate) fn pushed(
     pr: u64,
     vendor: &str,
 ) -> Result<bool> {
+    match pushed_inner(main, tree, spec, lease, branch, pr, vendor) {
+        Ok(queued) => Ok(queued),
+        Err(error) => {
+            infrastructure(main, branch, lease, &error);
+            Ok(false)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn pushed_inner(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lease: &str,
+    branch: &str,
+    pr: u64,
+    vendor: &str,
+) -> Result<bool> {
     if veto(main, spec) {
         return Ok(false);
     }
-    let (mut head, result, output) = attempt(main, tree, lease, branch)?;
+    let (mut head, result, output) = match attempt(main, tree, lease, branch) {
+        Ok(result) => result,
+        Err(error) => {
+            infrastructure(main, branch, lease, &error);
+            (
+                String::new(),
+                "skipped(infrastructure)".into(),
+                String::new(),
+            )
+        }
+    };
     if head.is_empty() {
         head = crate::standalone_implementer::lookup_pr(main, branch)
             .filter(|(id, _)| *id == pr)
@@ -331,11 +473,20 @@ fn pushed_round(
     let queue = result == "fail" && !receipt.repair_used;
     receipt.pending = true;
     write(main, &receipt)?;
-    annotate()?;
+    if let Err(error) = annotate() {
+        eprintln!("fast_gate=skipped(annotation): {error:#}");
+        receipt.marker = "skipped(annotation)".into();
+        if !queue {
+            // An unpushed seat head may differ from the PR. A skipped gate
+            // must not leave an obsolete head fence after the lane exits.
+            receipt.head = None;
+        }
+        write(main, &receipt)?;
+    }
     if queue {
+        queue_repair()?;
         receipt.repair_used = true;
         write(main, &receipt)?;
-        queue_repair()?;
     } else {
         receipt.pending = false;
         write(main, &receipt)?;
@@ -369,6 +520,8 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac433911 | ai:codex
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
     fn native_fail_then_fixed_round_binds_repaired_head() {
         let tmp = tempfile::tempdir().unwrap();
@@ -408,6 +561,7 @@ mod tests {
         assert!(blocks_review(root, "lane", "old").unwrap());
     }
 
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
     fn native_persistent_failure_releases_for_publication_without_third_round() {
         let tmp = tempfile::tempdir().unwrap();
@@ -449,6 +603,7 @@ mod tests {
         assert!(blocks_review(tmp.path(), "lane", "old").unwrap());
     }
 
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
     #[test]
     fn exact_make_job_has_fixed_timeout_and_never_counts_as_cargo_tests() {
         let mut job = JobRequest {
@@ -477,6 +632,7 @@ mod tests {
         std::fs::write(path(tmp.path(), "lane"), b"invalid").unwrap();
         assert!(blocks_review(tmp.path(), "lane", "head").is_err());
     }
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
     fn native_publication_refuses_pending_and_changed_heads() {
         let tmp = tempfile::tempdir().unwrap();
@@ -500,8 +656,8 @@ mod tests {
         )
         .unwrap();
         publication_ready(&main, &tree, "main").unwrap();
-        check_import(&main, "main", &first).unwrap();
-        assert!(check_import(&main, "main", "different-import").is_err());
+        check_import(&main, "main", &first, true).unwrap();
+        assert!(check_import(&main, "main", "different-import", true).is_err());
         let next = crate::test_git::commit_fixture(&tree);
         assert_ne!(first, next);
         assert!(publication_ready(&main, &tree, "main").is_err());
@@ -549,26 +705,139 @@ mod tests {
         assert!(!blocks_review(root, "lane", "second").unwrap());
     }
 
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
     #[test]
-    fn annotation_and_queue_failures_keep_review_blocked() {
+    fn annotation_flake_does_not_abort_green_or_red_lane() {
         let tmp = tempfile::tempdir().unwrap();
-        for annotate_fails in [true, false] {
-            let branch = format!("lane-{annotate_fails}");
-            begin(tmp.path(), &branch).unwrap();
-            let result = pushed_round(
-                tmp.path(),
-                &branch,
-                "head",
-                "fail",
-                || {
-                    anyhow::ensure!(!annotate_fails, "forge unavailable");
-                    Ok(())
-                },
-                || anyhow::bail!("queue unavailable"),
+        for result in ["pass", "fail"] {
+            let guard = reserve(tmp.path(), result).unwrap();
+            let mut queued = false;
+            assert_eq!(
+                pushed_round(
+                    tmp.path(),
+                    result,
+                    "head",
+                    result,
+                    || anyhow::bail!("forge unavailable"),
+                    || {
+                        queued = true;
+                        Ok(())
+                    },
+                )
+                .unwrap(),
+                result == "fail"
             );
-            assert!(result.is_err());
-            assert!(blocks_review(tmp.path(), &branch, "head").unwrap());
+            assert_eq!(queued, result == "fail");
+            assert_eq!(marker(tmp.path(), result), "skipped(annotation)");
+            drop(guard);
+            assert_eq!(blocks_review(tmp.path(), result, "head").unwrap(), queued);
         }
+    }
+
+    #[test]
+    fn queue_error_keeps_review_blocked_without_consuming_repair() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        assert!(pushed_round(
+            tmp.path(),
+            "lane",
+            "head",
+            "fail",
+            || Ok(()),
+            || anyhow::bail!("queue unavailable"),
+        )
+        .is_err());
+        drop(guard);
+        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().repair_used);
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn held_lane_later_opened_by_operator_is_reviewable() {
+        let tmp = tempfile::tempdir().unwrap();
+        for outcome in ["held", "punted", "no-pr", "lookup-lag"] {
+            {
+                let _reservation = reserve(tmp.path(), outcome).unwrap();
+                assert!(blocks_review(tmp.path(), outcome, "later-head").unwrap());
+            }
+            assert!(!blocks_review(tmp.path(), outcome, "later-head").unwrap());
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn infrastructure_error_settles_reservation_and_result_line_has_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        infrastructure(tmp.path(), "lane", "lease", &anyhow::anyhow!("dirty seat"));
+        let line = result_line(tmp.path(), "lane", "implementer: pr=77");
+        let outcome = crate::standalone_implementer::Outcome::PrOpened {
+            pr: 77,
+            head: Some("head".into()),
+        };
+        let line = crate::standalone_implementer::with_untested(line, &outcome, true);
+        assert!(line.contains("fast_gate=skipped(infrastructure)"));
+        assert!(line.contains("untested=true"));
+        drop(guard);
+        assert!(!blocks_review(tmp.path(), "lane", "later-head").unwrap());
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+    #[test]
+    fn native_publication_annotation_flake_releases_review_with_skipped_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("host");
+        let tree = tmp.path().join("seat");
+        std::fs::create_dir_all(&tree).unwrap();
+        let head = crate::test_git::commit_fixture(&tree);
+        let guard = reserve(&main, "main").unwrap();
+        native_rounds(
+            &main,
+            "main",
+            || Ok(Some((head.clone(), "pass".into(), String::new()))),
+            |_| panic!("green needs no repair"),
+        )
+        .unwrap();
+        publication_ready(&main, &tree, "main").unwrap();
+        check_import(&main, "main", &head, true).unwrap();
+        finish_publication(&main, "main", || anyhow::bail!("gh flake")).unwrap();
+        drop(guard);
+        assert!(!blocks_review(&main, "main", &head).unwrap());
+        assert_eq!(
+            result_line(&main, "main", "implementer: pr=77"),
+            "implementer: pr=77 fast_gate=skipped(annotation)"
+        );
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acc30b8a | ai:codex
+    #[test]
+    fn advisor_step_six_documents_host_sandbox_and_one_repair() {
+        for doc in [
+            include_str!("../../.aida/discipline/rework-brief-craft.md"),
+            include_str!("../../aida-core/templates/.aida/discipline/rework-brief-craft.md"),
+        ] {
+            let step = doc.split("6.").nth(1).unwrap().split("7.").next().unwrap();
+            assert!(step.contains("host"));
+            assert!(step.contains("sandbox"));
+            assert!(step.contains("one") || step.contains("ONE"));
+            assert!(step.contains("fast_gate="));
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn native_no_sandbox_settles_without_publication_authority() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        skip_native_without_sandbox(tmp.path(), "lane", "lease").unwrap();
+        let r = read(tmp.path(), "lane").unwrap().unwrap();
+        assert!(!r.pending);
+        assert!(!r.native_ready);
+        assert_eq!(r.marker, "skipped(no-sandbox)");
+        drop(guard);
+        assert!(!blocks_review(tmp.path(), "lane", "operator-head").unwrap());
     }
 
     #[test]
@@ -592,6 +861,24 @@ mod tests {
     }
 }
 
+/// Annotation is informational: a forge flake cannot invalidate a checked
+/// publication or strand its lease. The local marker records that limitation.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn finish_publication(
+    main: &Path,
+    branch: &str,
+    annotate: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if let Err(error) = annotate() {
+        eprintln!("fast_gate=skipped(annotation): {error:#}");
+        let mut r = read(main, branch)?.context("fast gate receipt disappeared")?;
+        r.marker = "skipped(annotation)".into();
+        r.head = None;
+        write(main, &r)?;
+    }
+    published(main, branch)
+}
+
 /// Release review admission only after the host published and annotated its PR.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn published(main: &Path, branch: &str) -> Result<()> {
@@ -612,12 +899,14 @@ fn record_marker(main: &Path, lease: &str, marker: &str) -> Result<()> {
 /// The final imported bundle must still be the commit the host checked,
 /// including when publication reconciled a concurrently advanced remote head.
 // trace:STORY-2640 | ai:codex
-pub(crate) fn check_import(main: &Path, branch: &str, tip: &str) -> Result<()> {
-    if let Some(r) = read(main, branch)? {
-        anyhow::ensure!(
-            r.native_ready && r.head.as_deref() == Some(tip),
-            "imported lane head differs from the host fast gate; rerun the lane before publication"
-        );
+pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool) -> Result<()> {
+    if !automatic {
+        return Ok(());
     }
+    let r = read(main, branch)?.context("host publication has no fast-gate receipt")?;
+    anyhow::ensure!(
+        r.native_ready && r.head.as_deref() == Some(tip),
+        "imported lane head differs from the host fast gate; rerun the lane before publication"
+    );
     Ok(())
 }

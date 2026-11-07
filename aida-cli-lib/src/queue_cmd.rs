@@ -9062,12 +9062,13 @@ pub(crate) fn run_queue_resume_to_exit(
         target.vendor == session::HeadlessVendor::Codex && contained && implementing;
     let mut publish_native = host_published;
     let main = crate::main_worktree_root_from(publication.0);
+    let mut _fast_gate = None;
     let branch = if implementing {
         let lease = crate::list_leases(&main)
             .into_iter()
             .find(|l| l.id == publication.2)
             .context("fast gate resume lease disappeared")?;
-        crate::lane_fast_gate::begin(&main, &lease.branch)?;
+        _fast_gate = Some(crate::lane_fast_gate::reserve(&main, &lease.branch)?.with_result_line());
         Some(lease.branch)
     } else {
         None
@@ -9116,13 +9117,17 @@ pub(crate) fn run_queue_resume_to_exit(
         }
     }
     if publish_native {
-        crate::ship_from_seat::publish_queue_exit(
+        if let Err(error) = crate::ship_from_seat::publish_queue_exit(
             publication.0,
             tree,
             publication.1,
             publication.2,
             status.success(),
-        )?;
+        ) {
+            if let Some(branch) = branch.as_deref() {
+                crate::lane_fast_gate::infrastructure(&main, branch, publication.2, &error);
+            }
+        }
     }
     Ok(status)
 }

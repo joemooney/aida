@@ -1588,6 +1588,20 @@ forge evidence downgrade declared completion to Refs; failed exits always use
 Refs. Punt/hold vetoes take precedence. See the
 [native publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
+Host fast gates use the offline, cleared-environment lane-job bubblewrap
+profile to run `make check-ci-fast`. Native publication gets one repair round
+before publishing; self-pushing lanes get one queued repair before review.
+Gate infrastructure and forge-annotation failures produce `fast_gate=skipped(...)`
+and preserve lane result reporting and normal cleanup. Held, punted and no-PR
+exits settle their reservations so later operator publication remains reviewable.
+A successfully queued red-gate repair keeps review blocked until its retry.
+The imported-head fence applies only to automatic host publication; operator
+`ship --from-seat` retains its existing recovery checks. Missing bubblewrap
+reports `skipped(no-sandbox)`; native seats also need bubblewrap for Git commit
+and publication, so that path settles without publishing. Seat scripts never
+run unsandboxed as a fallback.
+<!-- trace:STORY-2640 | ai:codex -->
+
 Permission reports, doctor, launch output and statusline distinguish the posture;
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 

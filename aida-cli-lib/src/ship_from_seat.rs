@@ -506,7 +506,7 @@ pub(crate) fn publish_queue_exit(
         // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
         let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
         crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
-        run_at(
+        run_at_with_fast_gate(
             &main,
             FromSeatOptions {
                 clone: tree.to_path_buf(),
@@ -516,18 +516,20 @@ pub(crate) fn publish_queue_exit(
                 dry_run: false,
                 commit_pending: None,
             },
+            true,
         )?;
-        let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
-            .context("published PR unavailable for fast gate annotation; review remains blocked")?;
-        let head =
-            crate::lane_fast_gate::head(&main, &branch).context("fast gate head unavailable")?;
-        crate::lane_fast_gate::annotate(
-            &main,
-            pr,
-            &head,
-            &crate::lane_fast_gate::marker(&main, &branch),
-        )?;
-        crate::lane_fast_gate::published(&main, &branch)?;
+        crate::lane_fast_gate::finish_publication(&main, &branch, || {
+            let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                .context("published PR unavailable for fast gate annotation")?;
+            let head = crate::lane_fast_gate::head(&main, &branch)
+                .context("fast gate head unavailable")?;
+            crate::lane_fast_gate::annotate(
+                &main,
+                pr,
+                &head,
+                &crate::lane_fast_gate::marker(&main, &branch),
+            )
+        })?;
         eprintln!(
             "fast_gate={}",
             crate::lane_fast_gate::marker(&main, &branch)
@@ -546,7 +548,9 @@ pub(crate) fn publish_queue_exit(
             // trace:STORY-2640 | ai:codex
             let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
             crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
-            if let Some((pr, _)) = crate::standalone_implementer::lookup_pr(&main, &branch) {
+            crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                    .context("unchanged lane PR unavailable for fast gate annotation")?;
                 let head = crate::lane_fast_gate::head(&main, &branch)
                     .context("fast gate head unavailable")?;
                 crate::lane_fast_gate::annotate(
@@ -554,10 +558,8 @@ pub(crate) fn publish_queue_exit(
                     pr,
                     &head,
                     &crate::lane_fast_gate::marker(&main, &branch),
-                )?;
-                crate::lane_fast_gate::published(&main, &branch)?;
-            }
-            // An absent/unknown PR observation grants no review release.
+                )
+            })?;
             advisor_request(
                 &main,
                 "Queue-work lane exited without changes",
@@ -1391,6 +1393,11 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
 
 // trace:STORY-2475 | ai:codex
 pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
+    run_at_with_fast_gate(cwd, opts, false)
+}
+
+// trace:STORY-2640 | ai:codex
+fn run_at_with_fast_gate(cwd: &Path, opts: FromSeatOptions, automatic: bool) -> Result<()> {
     run_from_with_reconciliation(
         cwd,
         opts,
@@ -1403,6 +1410,7 @@ pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
             },
         },
         true,
+        automatic,
     )
 }
 
@@ -1489,17 +1497,18 @@ fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin
 /// [`run`] from `cwd`.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Result<()> {
-    run_from_with_reconciliation(cwd, opts, deps, false)
+    run_from_with_reconciliation(cwd, opts, deps, false, false)
 }
 
 // Reconciliation belongs after admission of the original bundle. Passing the
 // resolved spec here preserves explicit specs on otherwise unscoped branches.
 // trace:TASK-2879 | ai:codex
-fn run_from_with_reconciliation(
+pub(crate) fn run_from_with_reconciliation(
     cwd: &Path,
     opts: FromSeatOptions,
     deps: &Deps<'_>,
     reconcile: bool,
+    automatic: bool,
 ) -> Result<()> {
     if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(cwd) {
         anyhow::bail!(
@@ -1626,7 +1635,7 @@ fn run_from_with_reconciliation(
     drop_quarantine_on_refusal(
         &staged,
         false,
-        crate::lane_fast_gate::check_import(&main, &branch, tip),
+        crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);

@@ -6677,9 +6677,12 @@ pub(crate) fn run_vendor_headless_to_exit(
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
     // trace:STORY-2640 | ai:codex
-    if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
-        crate::lane_fast_gate::begin(&main_root, branch)?;
-    }
+    let _fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
+        .map(|(_, (_, branch))| {
+            crate::lane_fast_gate::reserve(&main_root, branch)
+                .map(crate::lane_fast_gate::Reservation::with_result_line)
+        })
+        .transpose()?;
     let result = with_implementer_jobs(
         &main_root,
         seat,
@@ -6792,22 +6795,18 @@ pub(crate) fn run_vendor_headless_to_exit(
                 .find(|l| l.id == lease)
                 .context("publication lease disappeared")?
                 .scope;
-            crate::ship_from_seat::publish_queue_exit(
+            if let Err(error) = crate::ship_from_seat::publish_queue_exit(
                 &main_root,
                 tree,
                 &scope,
                 lease,
                 status.success(),
-            )?;
+            ) {
+                if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
+                    crate::lane_fast_gate::infrastructure(&main_root, branch, lease, &error);
+                }
+            }
         }
-    }
-
-    // trace:STORY-2640 | ai:codex
-    if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
-        println!(
-            "implementer: fast_gate={}",
-            crate::lane_fast_gate::marker(&main_root, branch)
-        );
     }
     Ok(status)
 }

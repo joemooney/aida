@@ -1373,7 +1373,7 @@ fn run_one_timed(
         },
         &env,
     ) else {
-        return refuse(&format!("`{}` is not on the job's PATH", lane.program));
+        return refuse(&format!("`{}` is not on the job's PATH", job.argv[0]));
     };
     let args = job.argv[1..].to_vec();
     // The sandbox binds the seat's cargo target with `--bind-try`, which
@@ -1461,7 +1461,7 @@ fn run_one_timed(
     let started = Instant::now();
     let mut child = match cmd.spawn() {
         Ok(child) => child,
-        Err(e) => return refuse(&format!("start cargo: {e}")),
+        Err(e) => return refuse(&format!("start {}: {e}", job.argv[0])),
     };
     let mut progress = Instant::now();
     let (rc, how) = loop {
@@ -1818,6 +1818,7 @@ mod fast_gate_job_tests {
 
     // The unwrapped fixture is test-only. Production run_fast_gate always
     // selects BwrapDefaultOn before calling the same execution engine.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
     fn fast_gate_timeout_writes_host_result_and_retains_untested() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1880,6 +1881,26 @@ mod fast_gate_job_tests {
         assert!(output.contains("timed out"), "{output}");
         assert!(start.elapsed() < Duration::from_secs(5));
         assert!(tally.untested());
+        let (marker, diagnostic) = crate::lane_fast_gate::gate_result(Some((
+            read_rc(&lane.results, "host-gate").unwrap(),
+            output,
+        )));
+        assert_eq!(marker, "fail");
+        crate::lane_fast_gate::begin(tmp.path(), "lane").unwrap();
+        let mut repairs = 0;
+        crate::lane_fast_gate::native_rounds(
+            tmp.path(),
+            "lane",
+            || Ok(Some(("head".into(), marker.clone(), diagnostic.clone()))),
+            |prompt| {
+                repairs += 1;
+                assert!(prompt.contains("timed out"));
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(repairs, 1);
+        assert_eq!(crate::lane_fast_gate::marker(tmp.path(), "lane"), "fail");
     }
 }
 

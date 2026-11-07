@@ -480,8 +480,9 @@ fn all_refs(repo: &Path) -> String {
 /// Ruling items 3–5: `--dry-run` imports nothing; a real run pushes the
 /// quarantined commit to the LEASE's branch on origin, deletes the
 /// quarantine ref, and opens the PR with the "published from seat" note.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
 #[test]
-fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
+fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr_with_fast_gate_receipt() {
     let fx = fixture();
     let (clone, tip) = seat_with_commit(
         &fx,
@@ -502,6 +503,8 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
         after_open: &|_, branch| opened_for.borrow_mut().push(branch.to_string()),
     };
 
+    // Operator recovery must work even with a pending receipt from an old lane.
+    crate::lane_fast_gate::begin(&fx.main, "seat-feat").unwrap();
     let before = all_refs(&fx.main);
     crate::ship_from_seat::run_from(&fx.main, opts(&clone, true, false), &deps).unwrap();
     assert_eq!(all_refs(&fx.main), before, "a dry run changed main's refs");
@@ -2766,4 +2769,156 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         std::fs::read_to_string(&declaration).unwrap(),
         "generation-one declaration"
     );
+}
+
+// Exercise the automatic import fence, real bundle/push/forge path and receipt
+// release together. Only the gate and forge I/O use injected test effects.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
+#[test]
+fn story_2640_fast_gate_native_publishes_exact_checked_tip_and_releases_review() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "fast-gate",
+        "c0ffee264001",
+        "native-gated",
+        "fix: checked change (BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let reservation = crate::lane_fast_gate::reserve(&fx.main, "native-gated").unwrap();
+    crate::lane_fast_gate::native_rounds(
+        &fx.main,
+        "native-gated",
+        || Ok(Some((tip.clone(), "pass".into(), String::new()))),
+        |_| panic!("green gate must not repair"),
+    )
+    .unwrap();
+    crate::ship_from_seat::run_from_with_reconciliation(
+        &fx.main,
+        opts(&clone, false, false),
+        &deps,
+        false,
+        true,
+    )
+    .unwrap();
+    crate::lane_fast_gate::finish_publication(&fx.main, "native-gated", || {
+        assert_eq!(forge.opened.lock().unwrap().len(), 1);
+        assert_eq!(
+            git_ok(&fx.origin, &["rev-parse", "refs/heads/native-gated"]),
+            tip
+        );
+        assert!(crate::lane_fast_gate::blocks_review(
+            &fx.main,
+            "native-gated",
+            &tip
+        )?);
+        Ok(())
+    })
+    .unwrap();
+    drop(reservation);
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated", &tip).unwrap());
+    assert_eq!(
+        crate::lane_fast_gate::result_line(&fx.main, "native-gated", "implementer: pr=77"),
+        "implementer: pr=77 fast_gate=pass"
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+#[test]
+fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{HeadlessResume, HeadlessVendor};
+    let fx = fixture();
+    let lease = "c0ffee264002";
+    let branch = "gate-exits";
+    let clone = seat_with_publication_pending(&fx, "gate-exits", lease, branch);
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
+        ("AIDA_HOME", Some(fx.root.to_str().unwrap())),
+        ("HOME", Some(fx.root.to_str().unwrap())),
+        ("AIDA_SESSION_GRANT", None),
+        ("AIDA_SESSION_ROLE", None),
+    ]);
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    let tee = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+    for path in ["standalone", "drain", "resume"] {
+        crate::lane_fast_gate::begin(&fx.main, branch).unwrap();
+        let error = match path {
+            "standalone" => {
+                crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                    project_root: &fx.main,
+                    vendor: HeadlessVendor::Codex,
+                    prompt: "go",
+                    session_id: "test",
+                    spec: "BUG-1",
+                    lease_id: lease,
+                    branch,
+                    contained: false,
+                    child_grant: &grant,
+                    host_main: Some(&fx.main),
+                })
+                .err()
+            }
+            "drain" => crate::session::run_vendor_headless_to_exit(
+                Some(&fx.main),
+                HeadlessVendor::Codex,
+                "go",
+                "test",
+                &fx.root.join("log"),
+                &tee,
+                false,
+                Some(lease),
+                "implementer",
+                &grant,
+                Some((&clone, branch)),
+            )
+            .err(),
+            _ => crate::queue_cmd::run_queue_resume_to_exit(
+                Some(&fx.main),
+                &HeadlessResume {
+                    vendor: HeadlessVendor::Codex,
+                    session_id: "test",
+                    resume_id: "test",
+                },
+                "go",
+                &fx.root.join("log"),
+                &clone,
+                &tee,
+                false,
+                "implementer",
+                (&fx.main, "BUG-1", lease),
+            )
+            .err(),
+        };
+        assert!(error.is_some(), "{path} must refuse the missing vendor");
+        assert_eq!(
+            crate::lane_fast_gate::marker(&fx.main, branch),
+            "skipped(lane-ended)",
+            "{path} must reach the real reservation boundary: {error:?}"
+        );
+        assert!(
+            !crate::lane_fast_gate::blocks_review(&fx.main, branch, "operator-head").unwrap(),
+            "{path} left a permanent review reservation"
+        );
+    }
 }

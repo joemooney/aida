@@ -670,7 +670,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // the lane reports untested=true. An unset os_wrap defaults on for this
     // lane's runner alone when bubblewrap works (BUG-2434).
     // trace:BUG-2434 | ai:claude
-    crate::lane_fast_gate::begin(&main_root, launch.branch)?;
+    let _fast_gate = crate::lane_fast_gate::reserve(&main_root, launch.branch)?;
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
         "{}{}{}",
@@ -859,13 +859,20 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
     if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
-        crate::ship_from_seat::publish_queue_exit(
+        if let Err(error) = crate::ship_from_seat::publish_queue_exit(
             &main_root,
             &worktree,
             launch.spec,
             launch.lease_id,
             status.success(),
-        )?;
+        ) {
+            crate::lane_fast_gate::infrastructure(
+                &main_root,
+                launch.branch,
+                launch.lease_id,
+                &error,
+            );
+        }
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
     }
 
@@ -922,10 +929,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     if fast_rework {
         code = EMPTY_REWORK_EXIT_CODE;
     }
-    let line = format!(
-        "{line} fast_gate={}",
-        crate::lane_fast_gate::marker(&main_root, launch.branch)
-    );
+    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &line);
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
