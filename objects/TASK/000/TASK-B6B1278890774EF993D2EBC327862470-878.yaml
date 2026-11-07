@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T03:06:54.491547551Z
+modified_at: 2026-11-07T04:44:50.225095615Z
 req_type: Task
 tags:
 - architecture
@@ -258,6 +258,13 @@ comments:
   created_at: 2026-11-07T03:06:54.491547551Z
   modified_at: 2026-11-07T03:06:54.491547551Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b452-d6b1-76e3-9771-6edd80018fa3
+  author: joe
+  content: 'Advisor 21:50: #3547 was ejected from train 213805 because CI is red on main+PR. Gates job: ''Store writer inventory ratchet'' (scripts/check-store-writers.py, added by #3511/TASK-3222 after this head) refuses 7 unclassified sink sites in launch/contained.rs (PreparedLaunch::prepare_for_owner/prepare_interactive/prepare_with_io) and launch/contained_pty.rs (drain_exited_master, PrivatePty::report_refusal, PrivatePty::wait), plus 2 stale rows. Build ''Require every CI lane'' is red only as a consequence. Rework: merge origin/main, run python3 scripts/check-store-writers.py --regenerate, classify each new row (PTY write_all to a terminal fd is not a store writer; check that the fs::write in prepare_with_io targets lane-private paths only), delete the stale rows, then make check-ci-fast. LIGHT gate; no full suite.'
+  created_at: 2026-11-07T04:44:50.225095615Z
+  modified_at: 2026-11-07T04:44:50.225095615Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
