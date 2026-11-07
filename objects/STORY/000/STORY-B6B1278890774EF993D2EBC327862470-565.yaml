@@ -1,0 +1,41 @@
+id: 01a1b798-64a0-7890-a8c2-dd20db15b24d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-565
+agreed_id: STORY-2642
+title: 'aida doctor --lane-host: check and fix what any machine needs to run contained AIDA lanes (from the dell1 checklist)'
+description: |
+  ## Problem
+  FAQ-151 is a hand-kept checklist for making a machine able to run AIDA lanes (written for dell1). Missing items failed silently on 2026-11-07: lanes ran UNCONTAINED without agents.toml and the Codex workspace-write section; lanes ran untested with AIDA_OS_WRAP=0; bubblewrap failed until the userns sysctl was set; and the build cache was missing. Every project that wants AIDA automation on a machine hits the same list.
+
+  ## Proposal
+  `aida doctor --lane-host` (also run by `aida init` and before `aida queue work --no-human`) checks each requirement, says PASS/FAIL with the exact fix, and applies safe user-level fixes with `--fix`:
+  - binary current vs the project's main (dev builds) or release;
+  - `~/.aida/agents.toml` contained=true for every vendor that will run lanes;
+  - vendor sandbox config (Codex `[sandbox_workspace_write]` writable_roots/network);
+  - bubblewrap works (userns sysctl/AppArmor); prints the sudo line, never runs it;
+  - vendor auth present (codex/claude/agy);
+  - build cache configured and reachable from a lane job (see the sccache lane-job story);
+  - store remote reachable and in sync (`aida pull` freshness);
+  - `AIDA_OS_WRAP` not forced off.
+  A no-human lane launch on a host that fails a containment check refuses, with the doctor line, rather than running uncontained.
+
+  ## Acceptance
+  1. Each item above is a doctor finding with a fix hint, plus a test for each finding.
+  2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
+  3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
+  4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T19:59:40.192574469Z
+modified_at: 2026-11-07T19:59:40.192574469Z
+req_type: Story
+filed_at:
+  code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cd520a47e97
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
