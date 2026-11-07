@@ -8,10 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T03:56:15.742785142Z
-modified_at: 2026-11-07T20:28:27.377929627Z
+modified_at: 2026-11-07T20:55:21.716050367Z
 req_type: Bug
-tags:
-- operator-held
 comments:
 - id: 01a1b7b2-bf71-7a71-b521-5de38611949f
   author: aida:defer-migration
@@ -37,10 +35,12 @@ history:
   timestamp: 2026-10-21T04:33:11.546441716Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
-deferred: true
-deferred_at: 2026-10-21T04:33:11.124122954Z
-deferred_until: manual:operator
-deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
+- id: 01a1b7cb-61fa-79f3-92f2-de09e1b33d48
+  author: joe
+  timestamp: 2026-11-07T20:55:21.850312159Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
   branch: main
