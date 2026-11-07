@@ -19,8 +19,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:48:00.000573110Z
-modified_at: 2026-11-07T00:51:14.947447757Z
+modified_at: 2026-11-07T01:08:26.422623763Z
 req_type: Bug
+comments:
+- id: 01a1b38c-b8b6-7792-9607-f69bf8cea1fc
+  author: joe
+  content: 'Implemented in native seat; source edits remain uncommitted for host publication. Shared verdict reconciliation now selects the newest RFC3339-dated recording at the same head across PR/spec keys, preserves unordered/tied opposing evidence and malformed-round refusals, and the train source proof excludes superseded same-head recordings while retaining their audit evidence. Updated refusal guidance and git-lifecycle docs. Changed: aida-cli-lib/src/gate/review_verdict.rs; aida-cli-lib/src/gate/merge_hold_core.rs; aida-cli-lib/src/pr_train_verified.rs; aida-cli-lib/src/tests/bug_1774_corpus_merge_gate_tests.rs; aida-cli-lib/src/tests/bug2406_train_tests.rs; docs/cli/04-git-lifecycle.md. Validation: cargo test -p aida-cli-lib --lib --profile agent bug_2474 passed 4/4; compiled test binary suites review_verdict_tests 85/85, bug_1773_corpus 18/18, bug_1774_corpus 18/18, pr_train::verified::bug2406 58/58 (179 tests across related suites, including the four new regressions). cargo fmt --all -- --check and git diff --check passed. Broader bug_177 filter also ran an unrelated stale harness lease fixture, which fails alone in this PID-isolated sandbox because its unstamped lease is deliberately unobservable; added reproduction to existing finding TASK-b6b1278890774ef993d2ebc327862470-910 (recurrence 2). No implementation blockers; host commit/push/PR and queue completion remain pending by seat contract.'
+  created_at: 2026-11-07T01:08:26.422623763Z
+  modified_at: 2026-11-07T01:08:26.422623763Z
+  session_id: 01a1b37ca493
 history:
 - id: 01a1b37c-ad03-7492-a7b6-4b66763d938e
   author: aida-session-start
