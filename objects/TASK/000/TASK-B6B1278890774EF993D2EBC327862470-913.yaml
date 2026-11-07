@@ -13,13 +13,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T01:20:07.021012612Z
-modified_at: 2026-11-07T01:20:07.021012612Z
+modified_at: 2026-11-07T01:29:58.392850478Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-903
 - finding-hash:6c94b931
 - from-review:PR-3549
 - kind:carried-forward
+comments:
+- id: 01a1b3a0-6f78-79d3-9709-1f4dfe2a662e
+  author: joe
+  content: '[advisor 18:31] Folded into TASK-b6b1278890774ef993d2ebc327862470-911 (same page, one docs PR).'
+  created_at: 2026-11-07T01:29:58.392850478Z
+  modified_at: 2026-11-07T01:29:58.392850478Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
   branch: main
