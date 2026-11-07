@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1607",
+  "publishes": [
+    {
+      "at": "2026-11-07T20:58:05.473758826Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T01:46:15.327224281Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:47:05.117348776Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T01:49:34.837354683Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:49:46.081959251Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:51:06.436771906Z",
+      "spec": "TASK-1607",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T02:21:56.099411058Z",
+      "spec": "TASK-1607",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2451,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "11efa4a218c9381a2408bdb59e5f9ddb406f0ab5"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:21:56.876362948Z",
+      "spec": "TASK-1607",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "C7 checkpoint only: REQUEST_CHANGES. Actual CLI ack transfers after the absolute request deadline and to a revoked requester grant. Gateway steps 4-5 remain unauthorized; see .aida/handoff/task1607-rework/C7_INDEPENDENT_REVIEW.md.",
+        "recovery_hint": "address the review findings, move TASK-1607 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:23:56.892596334Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:50:16.865080114Z",
+      "spec": "TASK-1607",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2451,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "88e8b971f534700425e78aa3eba8406d6d2a80ae"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:50:17.586968651Z",
+      "spec": "TASK-1607",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "C7 checkpoint only: REQUEST_CHANGES. F1/F2 requester/deadline fixes pass; holder grant resolved before seat lock still authorizes ack/release after revocation during contention. See .aida/handoff/task1607-rework/C7_REREVIEW_88E8B97.md. No gateway activation, completion, hold clearance or merge authorization.",
+        "recovery_hint": "address the review findings, move TASK-1607 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:54:40.811519857Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T03:16:21.675078023Z",
+      "spec": "TASK-1607",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2451,
+        "verdict": "APPROVED",
+        "reviewed_sha": "56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f"
+      }
+    },
+    {
+      "ts": "2026-10-10T19:08:29.060878324Z",
+      "spec": "TASK-1607",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:26:24.625795808Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2451
+      }
+    },
+    {
+      "ts": "2026-10-15T15:26:41.670166541Z",
+      "spec": "TASK-1607",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (3d85bbd) but completion held at Done — blocked by EPIC-76 (Draft)",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-07T20:58:05.201747919Z",
+      "spec": "TASK-1607",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
