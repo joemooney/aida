@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-932
 agreed_id: TASK-3364
 title: 'STORY-2537 S2: ProcIdentity for the merge lock'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T15:11:54.273066915Z
+modified_at: 2026-11-07T15:21:25.913643354Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -231,6 +231,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b699-a899-7ee3-bdf1-fc977957566e
+  author: joe
+  timestamp: 2026-11-07T15:21:25.913662800Z
+  session_id: 01a1b690e2fb
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -240,3 +248,8 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Advisor-scoped portability fix is complete in tests/test_release_pr_flow.sh:381 with the identical sed substitution and portable temporary-file plus mv replacement. Ratchet baseline unchanged. bash -n and git diff --check passed; make check-ci-fast passed the Rust test portability ratchet but failed later at Store writer inventory ratchet: seven unclassified writer/caller sites in merge_lock.rs and scripts/release.sh plus two stale lease_acquire inventory rows. Those files are unchanged by this patch. The ruling permits only the sed fix and forbids baseline changes, so resolving this separate required-gate failure needs advisor or host action. Edits remain uncommitted under native-seat instructions; no commit, push, PR, queue completion, review record or publication declaration performed.'
+  raised_by: implementer
+  raised_at: 2026-11-07T15:21:25.913643354Z
