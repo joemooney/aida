@@ -1579,6 +1579,11 @@ pub(crate) fn ship_branch(
         "detached seat does not descend from the recorded PR head; inspect HEAD before resuming"
     );
     if !resume {
+        if seat_head != *head {
+            println!(
+                "  dry-run: would fast-forward {branch_ref} from {head} to detached HEAD {seat_head} before pushing; the branch currently lacks the detached rework commits"
+            );
+        }
         return Ok(lease.branch);
     }
     let mut attached = false;

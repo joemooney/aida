@@ -192,6 +192,73 @@ fn prc_manual_claim_expires_without_ownership() {
 
 // trace:STORY-2325 | ai:codex
 #[test]
+fn prc_store_failures_retain_dead_expired_process_markers_until_recovery() {
+    for failure in ["discovery", "lock", "pending"] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        let mut m = Marker::for_this_process(7, Some("abc"), None, "crashed reviewer");
+        m.pid = 4_000_000_000;
+        m.started_at = now_secs() - PID_BACKED_TTL_SECS - 60;
+        assert!(expired_reason(&m, &m.host, now_secs()).is_some());
+        write(root, &m).unwrap();
+        let store_dir = root.join(".aida/ownership");
+        std::fs::create_dir_all(&store_dir).unwrap();
+        let broken = match failure {
+            "discovery" => {
+                // A malformed gitfile makes store discovery fail, rather than
+                // positively establishing that no repository/store exists.
+                std::fs::rename(root.join(".git"), root.join("saved-git")).unwrap();
+                std::fs::write(root.join(".git"), "invalid gitfile\n").unwrap();
+                root.join(".git")
+            }
+            "lock" => {
+                let lock = store_dir.join(".lock");
+                std::fs::create_dir(&lock).unwrap();
+                lock
+            }
+            "pending" => {
+                let pending = store_dir.join(".pending.json");
+                std::fs::write(&pending, "{broken batch").unwrap();
+                pending
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            super::super::kernel_deps::review_ownership_ended(root, &m),
+            Some(None),
+            "{failure} must retain evidence whose attribution is unknown"
+        );
+        assert_eq!(
+            merge_gate(root, 7, || Some("abc".into())),
+            MergeGate::UnderReview(m.clone()),
+            "{failure}"
+        );
+        assert_eq!(read(root, 7), Some(m));
+        if failure == "lock" {
+            std::fs::remove_dir(broken).unwrap();
+        } else {
+            std::fs::remove_file(broken).unwrap();
+        }
+        if failure == "discovery" {
+            std::fs::rename(root.join("saved-git"), root.join(".git")).unwrap();
+        }
+        assert!(matches!(
+            merge_gate(root, 7, || panic!("dead reviewer needs no forge probe")),
+            MergeGate::ExpiredCleared(_, _)
+        ));
+        assert!(read(root, 7).is_none());
+    }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
 fn prc_closed_review_never_clears_a_fresh_manual_claim() {
     use crate::ownership::{
         store::{Expect, OwnershipStore},

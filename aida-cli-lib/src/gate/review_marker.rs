@@ -22,12 +22,15 @@
 //! marker also carries a TTL backstop: 2h for pid-backed markers (a pid can be
 //! reused), 30m (overridable) for an explicit `aida review claim`, which has no
 //! process to watch. An expired marker is removed on read and the merger is
-//! told so — it never blocks forever.
+//! told so. During ownership-store discovery/read failures, pid-backed markers
+//! fail closed even after process death or TTL expiry: repair the store or use
+//! `aida review claim --release` to clear the marker explicitly.
 //!
 //! Cost (criterion 7): with no marker present the gate is one `stat` of a
 //! local file. Only a LIVE marker costs a forge round-trip, to compare the
 //! marker's head against the PR's current head.
 // trace:STORY-1405 | ai:claude
+// trace:STORY-2325 | ai:codex
 // mandate-gate
 
 use std::path::{Path, PathBuf};

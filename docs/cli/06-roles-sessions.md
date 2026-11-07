@@ -1104,6 +1104,10 @@ can override that expiry only when its process identity matches the marker;
 a previous closed review at the same head cannot clear a new claim. Unrelated
 unreadable records do not disable TTL expiry or an exact-key operator release.
 Abbreviated and differently cased head SHAs match the merge gate's comparison.
+Store discovery failures and store-wide read failures (including lock timeouts
+and failed pending-batch recovery) retain pid-backed markers even after process
+death or TTL expiry. Repair the store and retry, or explicitly clear the marker
+with `aida review claim --pr <N> --release`.
 
 After PR handoff, the lease remains the seat's cleanup handle. A dead handing-off
 session with a clean, published tree can end through the guarded relaunch path.

@@ -435,7 +435,11 @@ pub(crate) fn bounded_review_output(
 /// Only evidence for this marker's process may override its TTL. Closed
 /// records have no holder binding and cannot end a later manual claim.
 /// Outer None means there is no attributable evidence: use the marker's own
-/// process identity, then its TTL.
+/// process identity, then its TTL. Store discovery failures and store-wide read
+/// failures (including lock timeout or pending-batch recovery failure) instead
+/// return Some(None): attribution cannot be established, so a pid-backed marker
+/// stays retained even after process death or TTL expiry. Retry after repairing
+/// the store, or explicitly use `aida review claim --release`.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn review_ownership_ended(
     root: &std::path::Path,
