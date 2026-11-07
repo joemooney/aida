@@ -2673,7 +2673,7 @@ pub(crate) fn guard_remote_commits(
     let count = remote_missing_commits_for_lease(main, lease).map_err(|error| {
         let message =
             format!("cannot establish remote commit coverage; session was NOT ended: {error:#}");
-        error.context(message)
+        anyhow::anyhow!(message)
     })?;
     anyhow::ensure!(count == 0,
         "lease {} at {} holds {} commit(s) reachable from HEAD or local branches that no remote has. The session was NOT ended; push the commits, or explicitly pass --discard-unpushed to discard them (--force does not override this guard)",

@@ -2451,7 +2451,10 @@ fn bug2454_hanging_sandbox_allows_explicit_lease_release() {
 /// not salvageable; the existing completion/merge gates still decide reap.
 // trace:BUG-2473 | ai:codex
 #[test]
-fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
+fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     if !bwrap_live() {
         return;
     }
@@ -2479,7 +2482,7 @@ fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     let rows = crate::ps_integrate::build_running_work(
         &[],
-        &[lease],
+        &[lease.clone()],
         &[],
         chrono::Utc::now(),
         |_| inspect(),
@@ -2499,16 +2502,49 @@ fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
     let hint = dispatch.hint.as_deref().unwrap_or_default();
     assert!(!hint.contains("branch ,"), "{hint}");
     assert!(!hint.contains("(no commits yet)"), "{hint}");
-    assert!(matches!(
-        crate::session_reap::classify_clone_reap(
-            || probe(&fx.main, &clone),
-            "feat",
-            true,
-            true,
-            || true,
-        ),
-        crate::session_reap::ReapVerdict::Reap(_)
-    ));
+    // Exercise the exact scan hygiene calls, with the legacy lease persisted.
+    // A finished spec and merged PR are real fixture inputs, not classifier flags.
+    use aida_core::DatabaseBackend;
+    let store = fx.main.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    aida_core::git_ops::init(&store).unwrap();
+    aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
+    let mut req = aida_core::Requirement::new("Finished work".into(), "body".into());
+    req.spec_id = Some(lease.scope.clone());
+    req.status = aida_core::RequirementStatus::Completed;
+    backend.add_requirement(req).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let legacy = toml::to_string_pretty(&lease)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with("tree_kind ="))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(crate::lease_path(&fx.main, &lease.id), legacy).unwrap();
+    let persisted = crate::list_leases(&fx.main).remove(0);
+    assert_eq!(persisted.tree_kind, TreeKind::Worktree);
+    assert!(persisted.branch.is_empty());
+    let shims = fx.root.join("shims");
+    std::fs::create_dir_all(&shims).unwrap();
+    // Refuse an empty/wrong branch and serve only a merged PR for feat.
+    crate::test_exec::write_executable(
+        &shims.join("gh"),
+        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shims);
+    let report = crate::session_reap::scan_reapable(&fx.main);
+    let row = report
+        .reapable
+        .iter()
+        .find(|row| row.session == lease.id)
+        .unwrap_or_else(|| panic!("legacy clone must be reapable: {report:?}"));
+    assert_eq!(row.branch, "feat");
+    assert!(row.branch_tip.is_some());
 
     // An extra unpublished branch must still stop the session-end guard.
     git_ok(&clone, &["checkout", "-q", "-b", "unpublished"]);
@@ -2516,6 +2552,11 @@ fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
     git_ok(&clone, &["checkout", "-q", "feat"]);
     let lease = crate::list_leases(&fx.main).remove(0);
     assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
+    let report = crate::session_reap::scan_reapable(&fx.main);
+    assert!(
+        report.reapable.is_empty(),
+        "unpublished work must stay: {report:?}"
+    );
     std::fs::write(clone.join("published.txt"), "unsaved change\n").unwrap();
     let dirty = inspect();
     assert!(dirty.error.is_none(), "{dirty:?}");
@@ -2532,6 +2573,15 @@ fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
     .unwrap();
     assert!(hint.contains("branch feat"), "{hint}");
     assert!(hint.contains("seat work"), "{hint}");
+    // The execution entry point must select the clone path too. Without a
+    // pinned scan HEAD it refuses before mail retention or any removal.
+    let outcome = crate::session_reap::reap_one(&fx.main, &lease, None);
+    assert!(
+        outcome.contains("scan recorded no HEAD for the seat clone"),
+        "{outcome}"
+    );
+    assert!(clone.exists());
+    assert!(!crate::list_leases(&fx.main).is_empty());
 }
 
 /// A broken clone is unknown, and the guard's ordinary Display carries the
@@ -2574,9 +2624,11 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
     let hint = dispatch.hint.as_deref().unwrap();
     assert!(hint.contains("not a real directory"), "{hint}");
     assert!(!hint.contains("salvage-commit"), "{hint}");
-    let error = crate::session_end::guard_remote_commits(&fx.main, &lease, false)
-        .unwrap_err()
-        .to_string();
+    let error = crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap_err();
+    assert_eq!(error.chain().count(), 1, "{error:?}");
+    let debug = format!("{error:?}");
+    assert!(!debug.contains("Caused by:"), "{debug}");
+    let error = error.to_string();
     assert!(error.contains("session was NOT ended:"), "{error}");
     assert!(error.contains("sandboxed"), "{error}");
     assert!(clone.exists());
