@@ -1149,6 +1149,14 @@ pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
     append_exclude_entries(&exclude_path, &[".aida/*.lock"])
 }
 
+/// Keep host-owned durable retry evidence out of canonical Git publication.
+/// The anchored runtime path is reserved in both project and store worktrees.
+// trace:TASK-3223 | ai:codex
+pub fn ensure_store_redo_excluded(store_root: &Path) -> Result<bool> {
+    let exclude_path = resolve_exclude_path(store_root)?;
+    append_exclude_entries(&exclude_path, &["/.aida/redo/"])
+}
+
 /// `git rev-parse --git-path info/exclude`, absolutized.
 // trace:BUG-914 trace:BUG-1612 | ai:claude
 fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {

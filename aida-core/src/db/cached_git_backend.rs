@@ -438,7 +438,16 @@ impl CachedGitBackend {
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.
     fn current_head_sha(&self) -> String {
-        crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
+        let head = crate::git_ops::head_sha(self.inner.path()).unwrap_or_default();
+        // A durable redo decision can change canonical bytes without a Git
+        // commit. Include its generation in the cache identity. Such identities
+        // deliberately decline Git incremental refresh and use a full rebuild.
+        // trace:TASK-3223 | ai:codex
+        match std::fs::read(self.inner.path().join(".aida/redo/cache-dirty")) {
+            Ok(bytes) => format!("{head}-redo-{}", super::redo::hash(&bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => head,
+            Err(_) => format!("{head}-redo-unreadable-{}", uuid::Uuid::new_v4()),
+        }
     }
 
     /// Resolve one UUID using the cache as a locator and canonical YAML as truth.
