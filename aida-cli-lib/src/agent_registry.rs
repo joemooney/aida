@@ -315,7 +315,12 @@ pub(crate) fn carry_concurrent_launcher_write(
     read: Option<&AgentRegistryEntry>,
     disk: Option<&AgentRegistryEntry>,
 ) {
-    let Some(disk) = disk.filter(|d| same_registry_process(d, entry)) else {
+    let Some(disk) = disk.filter(|d| {
+        same_registry_process(d, entry)
+            || entry.process_identity().is_some_and(|id| {
+                registration_matches(d, &id) && proc_identity::observe(&id, true) == Verdict::Alive
+            })
+    }) else {
         return;
     };
     // Only the launcher stamps the wake and only arming moves it on; the
@@ -752,19 +757,17 @@ pub(crate) fn touch_mcp_agent(
 
     // A row a recycled pid left belongs to a dead process: retire it, never
     // inherit its identity. trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-    let current_identity = Some(
-        ProcIdentity::capture(pid)
-            .map_err(anyhow::Error::msg)
-            .context("cannot verify local process coordinates; retry registration on the host")?,
-    );
+    let current_identity = ProcIdentity::capture(pid)
+        .map_err(anyhow::Error::msg)
+        .context("cannot verify local process coordinates; retry registration on the host")?;
     let own_row = match existing_launcher {
         Some((_, entry)) => Some(entry),
         None => match std::fs::read_to_string(&path)
             .ok()
             .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
         {
-            Some(old) if !same_identity(old.process_identity(), current_identity.clone()) => {
-                ensure_local_replacement(&old, current_identity.as_ref())?;
+            Some(old) if !registration_matches(&old, &current_identity) => {
+                ensure_local_replacement(&old, Some(&current_identity))?;
                 retire_displaced_entry(project_root, &old)?;
                 None
             }
@@ -775,8 +778,8 @@ pub(crate) fn touch_mcp_agent(
         id: id.clone(),
         agent_type: agent_type.clone(),
         pid,
-        pid_start: current_identity.as_ref().map(|id| id.legacy().start),
-        pid_namespace: current_identity.as_ref().map(|id| id.pidns_inode),
+        pid_start: Some(current_identity.legacy().start),
+        pid_namespace: Some(current_identity.pidns_inode),
         name: None,
         description: None,
         tty: current_tty(),
@@ -806,11 +809,15 @@ pub(crate) fn touch_mcp_agent(
     if entry.source != "agent-launcher" {
         entry.id = id;
         entry.agent_type = agent_type;
-        if entry.pid != pid || entry.pid_start.is_none() {
-            entry.pid_start = current_identity.as_ref().map(|id| id.legacy().start);
-            entry.pid_namespace = current_identity.as_ref().map(|id| id.pidns_inode);
+        if entry.pid != pid || entry.process_identity().is_none() {
+            entry.pid_start = Some(current_identity.legacy().start);
+            entry.pid_namespace = Some(current_identity.pidns_inode);
         }
         entry.pid = pid;
+    }
+    if entry.pid == pid && registration_matches(&entry, &current_identity) {
+        entry.pid_start = Some(current_identity.legacy().start);
+        entry.pid_namespace = Some(current_identity.pidns_inode);
     }
     entry.last_active_at = now;
     entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
@@ -900,11 +907,9 @@ fn touch_session_start_agent_for(
     let id = agent_id(&agent_type, pid);
     let path = registry_path(project_root, &id);
     let session_id = session_id.filter(|s| !s.trim().is_empty());
-    let current_identity = Some(
-        ProcIdentity::capture(pid)
-            .map_err(anyhow::Error::msg)
-            .context("cannot verify local process coordinates; retry registration on the host")?,
-    );
+    let current_identity = ProcIdentity::capture(pid)
+        .map_err(anyhow::Error::msg)
+        .context("cannot verify local process coordinates; retry registration on the host")?;
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
     let (linked, launch_name) = match linked {
         Some((lease, name)) => (Some(lease), name),
@@ -924,13 +929,13 @@ fn touch_session_start_agent_for(
     // A recycled pid's entry belongs to another process: keep it only
     // while its recorded start identity is this process's. A live
     // process that starts a new session (`/clear`, a new conversation)
-    // keeps its launcher entry. Incomplete legacy records never contribute
+    // keeps its launcher entry. Matching legacy ticks upgrade in place only
+    // with this positive local capture; other incomplete rows cannot contribute
     // session/thread fields to a fresh registration. trace:TASK-3366 | ai:codex
-    let same_process =
-        |old: &AgentRegistryEntry| same_identity(old.process_identity(), current_identity.clone());
+    let same_process = |old: &AgentRegistryEntry| registration_matches(&old, &current_identity);
     let displaced = read_row.as_ref().filter(|old| !same_process(old)).cloned();
     if let Some(old) = &displaced {
-        ensure_local_replacement(old, current_identity.as_ref())?;
+        ensure_local_replacement(old, Some(&current_identity))?;
     }
     let mut entry = read_row
         .clone()
@@ -939,8 +944,8 @@ fn touch_session_start_agent_for(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
-            pid_start: current_identity.as_ref().map(|id| id.legacy().start),
-            pid_namespace: current_identity.as_ref().map(|id| id.pidns_inode),
+            pid_start: Some(current_identity.legacy().start),
+            pid_namespace: Some(current_identity.pidns_inode),
             name: env_name.clone(),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -969,9 +974,9 @@ fn touch_session_start_agent_for(
 
     entry.id = id;
     entry.agent_type = agent_type;
-    if entry.pid != pid || entry.pid_start.is_none() {
-        entry.pid_start = current_identity.as_ref().map(|id| id.legacy().start);
-        entry.pid_namespace = current_identity.as_ref().map(|id| id.pidns_inode);
+    if entry.pid != pid || entry.process_identity().is_none() {
+        entry.pid_start = Some(current_identity.legacy().start);
+        entry.pid_namespace = Some(current_identity.pidns_inode);
     }
     entry.pid = pid;
     entry.last_active_at = now;
@@ -1019,7 +1024,7 @@ fn touch_session_start_agent_for(
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
     carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
     if let Some(old) = &displaced {
-        ensure_local_replacement(old, current_identity.as_ref())?;
+        ensure_local_replacement(old, Some(&current_identity))?;
         retire_displaced_entry(project_root, old)?;
     }
     write_entry_locked(project_root, &entry)?;
@@ -1098,15 +1103,13 @@ pub(crate) fn heartbeat_session_agent_for(
 ) -> Result<Heartbeat> {
     let session_id = session_id.map(str::trim).filter(|s| !s.is_empty());
     let path = registry_path(project_root, &agent_id(&detect_agent_type(), pid));
-    let current_identity = Some(
-        ProcIdentity::capture(pid)
-            .map_err(anyhow::Error::msg)
-            .context("cannot verify local process coordinates; retry registration on the host")?,
-    );
+    let current_identity = ProcIdentity::capture(pid)
+        .map_err(anyhow::Error::msg)
+        .context("cannot verify local process coordinates; retry registration on the host")?;
     let own = |row: &AgentRegistryEntry| {
         row.ended_at.is_none()
             && row.pid == pid
-            && same_identity(row.process_identity(), current_identity.clone())
+            && registration_matches(row, &current_identity)
             && match (session_id, row.claude_session_id.as_deref()) {
                 (Some(sid), Some(recorded)) => sid == recorded,
                 (Some(_), None) => false,
@@ -1124,6 +1127,8 @@ pub(crate) fn heartbeat_session_agent_for(
         // refreshed, not clobbered.
         if let Some(mut row) = read(&path).filter(|row| own(row)) {
             row.last_active_at = Utc::now();
+            row.pid_start = Some(current_identity.legacy().start);
+            row.pid_namespace = Some(current_identity.pidns_inode);
             write_entry_locked(project_root, &row)?;
             return Ok(Heartbeat::Refreshed);
         }
@@ -1308,7 +1313,7 @@ pub(crate) fn register_detached_worker(
     let captured = ProcIdentity::capture(pid).map_err(anyhow::Error::msg)?;
     // The launch receipt still transports raw ticks. Compare only after a
     // verified capture, and persist the boot-qualified registry format.
-    let start = format!("linux-starttime:{}", captured.starttime);
+    let start = captured.legacy_ticks_start();
     anyhow::ensure!(
         !expected_start.is_empty() && start == expected_start,
         "detached worker {pid} is no longer the spawned process (start identity changed)"
@@ -1377,7 +1382,7 @@ pub(crate) fn mark_detached_worker_ended(
     if entry.process_identity().is_none_or(|id| {
         id.boot_id != caller.boot_id
             || id.pidns_inode != caller.pidns_inode
-            || format!("linux-starttime:{}", id.starttime) != start
+            || id.legacy_ticks_start() != start
     }) || entry.ended_at.is_some()
     {
         return Ok(None);
@@ -2183,7 +2188,7 @@ pub(crate) fn live_agent_for_lease_or_spec<'a>(
             return false;
         }
         if !agent.process_identity().is_some_and(|id| {
-            format!("linux-starttime:{}", id.starttime) == start_time.as_str()
+            id.legacy_ticks_start() == start_time.as_str()
                 && lease.pid_namespace == Some(id.pidns_inode)
                 && proc_identity::observe(&id, true) == Verdict::Alive
         }) {
@@ -2576,9 +2581,7 @@ fn view_for(
     );
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
-    let compatible_start = entry
-        .process_identity()
-        .map(|id| format!("linux-starttime:{}", id.starttime));
+    let compatible_start = entry.process_identity().map(|id| id.legacy_ticks_start());
     AgentRegistryView {
         id: entry.id,
         agent_type: entry.agent_type,
@@ -2788,6 +2791,17 @@ fn ensure_local_replacement(old: &AgentRegistryEntry, new: Option<&ProcIdentity>
     }
     Ok(())
 }
+// Upgrade only during positive local registration, never during passive inspection.
+// trace:TASK-3366 | ai:codex
+fn registration_matches(row: &AgentRegistryEntry, captured: &ProcIdentity) -> bool {
+    row.process_identity().as_ref() == Some(captured)
+        || (row.pid == captured.pid
+            && row.pid_start.as_deref() == Some(captured.legacy_ticks_start().as_str())
+            && row
+                .pid_namespace
+                .is_none_or(|ns| ns == captured.pidns_inode))
+}
+
 fn same_identity(a: Option<ProcIdentity>, b: Option<ProcIdentity>) -> bool {
     a.is_some() && a == b
 }
@@ -3635,6 +3649,54 @@ mod tests {
     // trace:TASK-3366 | ai:codex
     #[test]
     #[cfg(target_os = "linux")]
+    fn proc_identity_s4_legacy_heartbeat_upgrades_in_place() {
+        let root = TempDir::new().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_SESSION_SCOPE", None),
+            ("AIDA_AGENT_NAME", None),
+        ]);
+        let pid = std::process::id();
+        let id = ProcIdentity::capture(pid).unwrap();
+        let binary = AgentBinaryIdentity::new("test".into(), "abc".into());
+        let mut old =
+            touch_session_start_agent_for(root.path(), root.path(), Some("sid"), &binary, pid)
+                .unwrap();
+        old.source = "agent-launcher".into();
+        old.name = Some("stable-seat".into());
+        old.role = Some("reviewer".into());
+        old.native_session_id = Some("native-thread".into());
+        old.mail_wake = Some(MailWake::Armed);
+        old.delegate_seats = vec!["reviewer".into()];
+        old.resumed_from = Some("old-thread".into());
+        old.pid_start = Some(id.legacy_ticks_start());
+        for namespace in [None, Some(id.pidns_inode)] {
+            old.pid_namespace = namespace;
+            write_entry(root.path(), &old).unwrap();
+            assert_eq!(
+                heartbeat_session_agent_for(root.path(), root.path(), Some("sid"), &binary, pid)
+                    .unwrap(),
+                Heartbeat::Refreshed
+            );
+            let body = std::fs::read_to_string(registry_path(root.path(), &old.id)).unwrap();
+            let upgraded: AgentRegistryEntry = toml::from_str(&body).unwrap();
+            let mut expected = old.clone();
+            expected.pid_start = Some(id.legacy().start);
+            expected.pid_namespace = Some(id.pidns_inode);
+            expected.last_active_at = upgraded.last_active_at;
+            assert_eq!(upgraded, expected);
+        }
+        assert!(!registry_path(root.path(), &old.id)
+            .parent()
+            .unwrap()
+            .join("retired")
+            .exists());
+    }
+
+    // trace:TASK-3366 | ai:codex
+    #[test]
+    #[cfg(target_os = "linux")]
     fn proc_identity_s4_registry_matrix_and_launcher_race() {
         let root = TempDir::new().unwrap();
         let pid = std::process::id();
@@ -3682,16 +3744,22 @@ mod tests {
                     id.boot_id = "00000000-0000-4000-8000-000000000001".into();
                     other.pid_start = Some(id.legacy().start);
                 }
-                "legacy" => {
-                    other.pid_start = Some(format!("linux-starttime:{}", identity.starttime))
-                }
+                "legacy" => other.pid_start = Some(identity.legacy_ticks_start()),
                 _ => other.pid_namespace = None,
             }
             assert!(!same_registry_process(&row, &other), "{changed}");
             row.mail_wake = None;
             other.mail_wake = Some(MailWake::Armed);
             carry_concurrent_launcher_write(&mut row, None, Some(&other));
-            assert_eq!(row.mail_wake, None, "{changed}: inherited successor's wake");
+            assert_eq!(
+                row.mail_wake,
+                if changed == "legacy" {
+                    Some(MailWake::Armed)
+                } else {
+                    None
+                },
+                "{changed}: inherited successor's wake"
+            );
         }
         let mut reused = row.clone();
         let mut id = identity.clone();

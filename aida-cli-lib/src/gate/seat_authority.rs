@@ -1013,7 +1013,7 @@ fn pid_binding_token(pid: u32) -> Option<String> {
     // Keep the established grant-token wire format; only its observation
     // input changes in this slice. trace:TASK-3366 | ai:codex
     let identity = aida_core::proc_identity::ProcIdentity::capture(pid).ok()?;
-    let start = format!("linux-starttime:{}", identity.starttime);
+    let start = identity.legacy_ticks_start();
     Some(crate::gate::review_authority::author_process_token(
         "proc",
         pid,
@@ -1800,6 +1800,26 @@ pub(crate) fn issue_direct(
     ttl: Option<Duration>,
     bind_pid: Option<u32>,
 ) -> Result<IssuedGrant> {
+    issue_direct_with_probe(
+        project_root,
+        seat,
+        delegable_seats,
+        ttl,
+        bind_pid,
+        probe_bind_target,
+    )
+}
+
+// Explicit probe injection exercises replacement refusal through the issuance path.
+// trace:TASK-3366 | ai:codex
+fn issue_direct_with_probe(
+    project_root: &Path,
+    seat: &str,
+    delegable_seats: Vec<String>,
+    ttl: Option<Duration>,
+    bind_pid: Option<u32>,
+    mut probe: impl FnMut(u32) -> Option<BindTarget>,
+) -> Result<IssuedGrant> {
     require_direct_human()?;
     // SKETCH v2: a grant for THIS terminal is also bound to a session-key
     // secret where the kernel offers a session keyring (elsewhere it stays
@@ -1825,14 +1845,13 @@ pub(crate) fn issue_direct(
         None => direct_issue_binding(&caller)?,
         Some(pid) => vec![check_bind_target(
             pid,
-            probe_bind_target(pid).as_ref(),
+            probe(pid).as_ref(),
             &caller,
             current_uid(),
         )?],
     };
     if let Some(pid) = bind_pid {
-        let checked =
-            check_bind_target(pid, probe_bind_target(pid).as_ref(), &caller, current_uid())?;
+        let checked = check_bind_target(pid, probe(pid).as_ref(), &caller, current_uid())?;
         anyhow::ensure!(
             binding == [checked],
             "binding target changed before grant issuance"
@@ -2168,7 +2187,7 @@ fn probe_bind_target(pid: u32) -> Option<BindTarget> {
             pid,
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
-            start: Some(format!("linux-starttime:{}", identity.starttime)),
+            start: Some(identity.legacy_ticks_start()),
         },
         uid,
     })

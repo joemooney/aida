@@ -665,3 +665,46 @@ fn proc_identity_s4_binding_input_keeps_token_transport_and_refuses_absence() {
         aida_core::proc_identity::Verdict::Alive
     );
 }
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_issue_direct_refuses_replaced_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let _env = EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_USER", Some("human-operator")),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
+    ]);
+    let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: dir.path().to_path_buf(),
+        stdin_is_terminal: true,
+        stdout_is_terminal: false,
+        stderr_is_terminal: true,
+    }));
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let mut calls = 0;
+    let result = issue_direct_with_probe(dir.path(), "reviewer", vec![], None, Some(pid), |pid| {
+        calls += 1;
+        Some(BindTarget {
+            entry: proc(pid, "bash", &format!("linux-starttime:{calls}")),
+            uid: current_uid(),
+        })
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    crate::test_ambient::replace(prev);
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("binding target changed before grant issuance"),
+        "{err}"
+    );
+    assert_eq!(calls, 2);
+    assert!(!dir.path().join(".aida/session-grants").exists());
+}

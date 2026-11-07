@@ -3324,9 +3324,7 @@ pub(crate) fn session_start_with_receipt(
             // Registry v1 identity is boot-qualified; leases retain their
             // existing raw-tick transport plus separate HolderRecord.
             // trace:TASK-3366 | ai:codex
-            let start = agent
-                .process_identity()
-                .map(|id| format!("linux-starttime:{}", id.starttime));
+            let start = agent.process_identity().map(|id| id.legacy_ticks_start());
             (Some(pid), start.clone(), Some(pid), start)
         } else {
             let creator_pid = creator_shell_pid();

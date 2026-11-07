@@ -622,3 +622,61 @@ fn proc_identity_s4_watched_mail_requires_full_local_tuple() {
         );
     }
 }
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_foreign_observer_session_binding() {
+    use crate::proc_identity::{DeadReason, UnknownReason, Verdict};
+    let dir = tempfile::tempdir().unwrap();
+    let mut env = IdentityEnv::fixture("u", &[], None);
+    env.payload_session = Some("sandbox-session".into());
+    let body = row_body(
+        "sandbox",
+        std::process::id(),
+        "native_session_id = \"sandbox-session\"\n",
+    );
+    let old = "2026-10-26T00:00:00Z";
+    let body = body.replace(old, &chrono::Utc::now().to_rfc3339());
+    let path = row(dir.path(), "sandbox", &body);
+    let foreign = |id: &crate::proc_identity::ProcIdentity| {
+        crate::proc_identity::judge(
+            id,
+            &crate::proc_identity::ObserverFacts {
+                same_node: true,
+                boot_id: Some(&id.boot_id),
+                pidns_inode: Some(id.pidns_inode ^ 1),
+                complete_procfs: true,
+            },
+            || panic!("a foreign observer must not probe the numeric host PID"),
+        )
+    };
+    assert!(SessionBindingFacts::verify_with(&path, &env, foreign).is_ok());
+    let mut pid_only = env.clone();
+    pid_only.payload_session = None;
+    pid_only.claude_pid = Some(std::process::id());
+    assert_eq!(
+        SessionBindingFacts::verify_with(&path, &pid_only, foreign),
+        Err(BindingRefusal::NotLive)
+    );
+    assert_eq!(
+        SessionBindingFacts::verify_with(&path, &env, |_| Verdict::ForeignUnknown(
+            UnknownReason::IncompleteProcfs
+        )),
+        Err(BindingRefusal::NotLive)
+    );
+
+    assert_eq!(
+        SessionBindingFacts::verify_with(&path, &env, |_| Verdict::Dead(DeadReason::Reused)),
+        Err(BindingRefusal::NotLive)
+    );
+    let stale = body.replace(
+        &chrono::Utc::now().format("%Y-%m-%d").to_string(),
+        "2020-01-01",
+    );
+    std::fs::write(&path, stale).unwrap();
+    assert_eq!(
+        SessionBindingFacts::verify_with(&path, &env, foreign),
+        Err(BindingRefusal::NotLive)
+    );
+}

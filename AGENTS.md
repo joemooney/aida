@@ -1,10 +1,3 @@
-Registry rows capture boot, namespace and start ticks together through
-ProcIdentity. Incomplete legacy rows retain unknown liveness; strict mail wake
-refuses them until SessionStart/heartbeat re-registers the session. Launcher/hook
-merges require full identity equality; explicit role binding keeps its eligibility
-checks and revalidates identity before minting. See OVERVIEW.md.
-<!-- trace:TASK-3366 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

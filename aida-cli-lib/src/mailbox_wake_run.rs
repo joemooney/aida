@@ -677,8 +677,8 @@ fn watch_row(
     if aida_core::mailbox_identity::normalize_agent_type(&entry.agent_type) != "codex" {
         bail!("unsupported: only Codex sessions have a live wake primitive");
     }
-    // Keep cooperative row writers outside the audience/thread validation and
-    // queue submission window. Contention retries on the watcher's next pass.
+    // Pin the row only during audience verification; external I/O must never
+    // hold the project-wide handle allocator lock.
     // trace:TASK-3366 | ai:codex
     let _namespace =
         crate::agent_handle::lock_namespace_within(&opts.project, Duration::from_secs(2))?;
@@ -702,6 +702,7 @@ fn watch_row(
     if verified != *entry {
         bail!("registry row changed while verifying mail audience; retry on the next pass");
     }
+    drop(_namespace);
     let inbox = Inbox::from_audience(&handle, &audience, entry.role.as_deref());
     let state = ThreadState::open(&opts.state_root, &thread)?;
     let mut ledger = match state.load()? {
@@ -727,7 +728,21 @@ fn watch_row(
         &crate::mailbox_view::explicit_limits(),
     )?;
     let mut persist = |l: &Ledger| state.write(l, now);
-    tick(
+    let validate_generation = || -> Result<()> {
+        let _guard =
+            crate::agent_handle::lock_namespace_within(&opts.project, Duration::from_secs(2))?;
+        let current: AgentRegistryEntry = toml::from_str(
+            &aida_core::mailbox_identity::read_bounded_regular(path)
+                .context("unreadable registry row")?,
+        )?;
+        anyhow::ensure!(
+            current == *entry,
+            "registry row changed during mail wake; retry on next pass"
+        );
+        Ok(())
+    };
+    validate_generation()?;
+    let result = tick(
         &mut ledger,
         snapshot.scan(),
         &inbox,
@@ -735,7 +750,9 @@ fn watch_row(
         opts.batch_seconds,
         queue,
         &mut persist,
-    )
+    );
+    validate_generation()?;
+    result
 }
 
 /// `--recover <thread> --accepted|--retry`.

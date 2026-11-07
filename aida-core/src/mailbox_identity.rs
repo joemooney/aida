@@ -249,6 +249,8 @@ struct RegistryRow {
     role: Option<String>,
     #[serde(default)]
     mail_wake: Option<String>,
+    #[serde(default)]
+    last_active_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a registry row was not accepted as this process's session binding.
@@ -287,8 +289,18 @@ impl SessionBindingFacts {
     /// process: its process is this process or an ancestor (start identity
     /// matching when recorded), or its native session id is this process's
     /// own (hook payload or that vendor's session variable), or, for a
-    /// Claude row, `CLAUDE_PID` names it.
+    /// Claude row, `CLAUDE_PID` names it. A native session match with a
+    /// heartbeat no older than five minutes also survives an observer namespace
+    /// mismatch; this private-inbox policy does not admit watched-mail readers.
     pub fn verify(row: &Path, env: &IdentityEnv) -> Result<Self, BindingRefusal> {
+        Self::verify_with(row, env, |id| crate::proc_identity::observe(id, true))
+    }
+
+    fn verify_with(
+        row: &Path,
+        env: &IdentityEnv,
+        observe: impl FnOnce(&crate::proc_identity::ProcIdentity) -> crate::proc_identity::Verdict,
+    ) -> Result<Self, BindingRefusal> {
         let body = read_bounded_regular(row).ok_or(BindingRefusal::Unreadable)?;
         let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
         if row.file_stem().and_then(|s| s.to_str()) != Some(parsed.id.as_str()) {
@@ -311,13 +323,28 @@ impl SessionBindingFacts {
         if !(by_session || by_claude_pid || is_self_or_ancestor(&parsed)) {
             return Err(BindingRefusal::NotThisProcess);
         }
-        // Thread/PID selection is not process evidence. A recycled or foreign
-        // row must never grant its predecessor's private inbox.
+        // A sandbox cannot observe host PID coordinates. A fresh native session
+        // binding can retain inbox access on namespace mismatch only; numeric PID
+        // selection, dead processes and incomplete records remain insufficient.
         // trace:TASK-3366 | ai:codex
-        if !parsed
-            .pid_start
-            .as_deref()
-            .is_some_and(|start| registry_process_live(parsed.pid, start, parsed.pid_namespace))
+        let identity = crate::proc_identity::ProcIdentity::from_registry(
+            parsed.pid,
+            parsed.pid_start.as_deref(),
+            parsed.pid_namespace,
+        )
+        .ok_or(BindingRefusal::NotLive)?;
+        let verdict = observe(&identity);
+        let fresh_session = by_session
+            && parsed.last_active_at.is_some_and(|at| {
+                let age = chrono::Utc::now().signed_duration_since(at).num_seconds();
+                (0..=300).contains(&age)
+            });
+        if verdict != crate::proc_identity::Verdict::Alive
+            && !(fresh_session
+                && verdict
+                    == crate::proc_identity::Verdict::ForeignUnknown(
+                        crate::proc_identity::UnknownReason::NamespaceMismatch,
+                    ))
         {
             return Err(BindingRefusal::NotLive);
         }

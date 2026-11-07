@@ -762,3 +762,52 @@ fn proc_identity_s4_changed_thread_is_not_queued() {
     assert!(error.to_string().contains("registry row changed"));
     assert!(queue.sent.borrow().is_empty());
 }
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_submission_releases_allocator_and_detects_replacement() {
+    struct ReplacingQueue<'a> {
+        project: &'a Path,
+        row: AgentRegistryEntry,
+    }
+    impl ThreadQueue for ReplacingQueue<'_> {
+        fn submit(&self, _: &str, _: &str) -> Result<(), QueueError> {
+            // This would time out if watch_row held the allocator across I/O.
+            crate::agent_registry::write_entry(self.project, &self.row).unwrap();
+            Ok(())
+        }
+    }
+    let r = mail_repo();
+    let state = tempfile::tempdir().unwrap();
+    crate::mailbox_store::write_message(&r.sib, &mail("wake", "codex-agent-02", 10, false))
+        .unwrap();
+    let path = register_self(&r.main, "codex-agent-02", Some("armed"));
+    let original: AgentRegistryEntry =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut successor = original.clone();
+    successor.native_session_id = Some("01a185ba-0000-7000-8000-000000000099".into());
+    let queue = ReplacingQueue {
+        project: &r.main,
+        row: successor,
+    };
+    let opts = options(&r, state.path());
+    let lock = WatchLock::acquire(state.path(), &r.main).unwrap();
+    let err = watch_row(
+        &opts,
+        &lock,
+        &own("operator", None),
+        &queue,
+        &path,
+        &original,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("registry row changed"), "{err}");
+    // Queue acceptance remains recorded even when the generation changed.
+    let ledger = ThreadState::open(state.path(), THREAD)
+        .unwrap()
+        .load()
+        .unwrap()
+        .unwrap();
+    assert!(ledger.accepted.contains("wake"));
+}

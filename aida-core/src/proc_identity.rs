@@ -147,6 +147,12 @@ impl ProcIdentity {
         )
     }
 
+    /// Raw-tick transport for existing grant, lease and display adapters.
+    // trace:TASK-3366 | ai:codex
+    pub fn legacy_ticks_start(&self) -> String {
+        format!("linux-starttime:{}", self.starttime)
+    }
+
     pub fn legacy(&self) -> ProcessIdentity {
         ProcessIdentity {
             pid: self.pid,

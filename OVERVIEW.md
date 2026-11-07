@@ -1802,38 +1802,6 @@ identity never authorizes signalling, including orphaned group members adopted
 by an unrelated subreaper.
 <!-- trace:TASK-3365 | ai:codex -->
 
-Agent registry runtime rows now store `linux:<boot-id>:<ticks>` in `pid_start`
-with `pid_namespace`, captured together through `ProcIdentity`. These local,
-unreplicated runtime files supply local provenance; they are not remote-node
-observations. Launcher/hook merges, heartbeat ownership and wake transitions
-compare the entire tuple. Foreign rows cannot be displaced by a colliding local
-PID. Missing boot/namespace or legacy timestamp/raw-tick records remain unknown
-for retention and cannot satisfy strict mail-wake or ancestry identity checks.
-No inspection upgrades an old PID. Restart the session or let its own
-SessionStart/per-prompt hook re-register it; failed coordinate capture asks for
-a host retry. Existing listing heartbeat windows remain display policy.
-
-Strict watched-mail and backlog readers require the recorded full local identity
-to be positively Alive. Wake passes check that the verified audience still
-belongs to the snapshot's process, thread, handle and role, holding the existing
-registry namespace lock through validation and submission. Explicit role binding
-captures and revalidates through the shared observer around existing same-user,
-harness/shell and terminal-ancestry eligibility checks. Observation does not
-supply cooperative non-subreaper holder admission or replace grant checks.
-
-The registry wire ID is prefixed `proc-identity-v1:`; updated readers strip
-it, keeping in-memory IDs, filenames and reservations stable. Older strict
-mail readers reject its filename mismatch even on their session-ID selection
-path. The start scheme is also boot-qualified, so older lenient process readers
-cannot compare it. Unsupported future registry ID versions remain unknown for retention and
-refuse strict mail binding. Restart old mail-wake services with
-the updated binary before relying on new rows. Registry views and new lease
-creation explicitly project raw ticks for their existing display/signal/lease
-adapters; the remaining registry/GC and signal inventory stays in S5. Grant
-binding tokens keep their existing namespace-qualified wire format, so existing
-presenter/review readers remain compatible. No grant authority model changes.
-<!-- trace:TASK-3366 | ai:codex -->
-
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
