@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T16:34:56.846486291Z
+modified_at: 2026-11-07T16:49:34.526979428Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -488,6 +488,13 @@ comments:
   content: 'ADVISOR 2026-11-07 09:40: the operator ran the live C0-C4 job at 16:33Z (grant OK). The launch refused because the PATH codex is the nvm codex.js wrapper, not the pinned native binary (BUG-2484 filed). The job script now puts the vendored native binary first on PATH; rerun pending.'
   created_at: 2026-11-07T16:34:56.846486291Z
   modified_at: 2026-11-07T16:34:56.846486291Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6ea-5b3e-7652-bfae-a1e9cbe5421f
+  author: joe
+  content: 'ADVISOR 2026-11-07 09:55: the second operator rerun passed the binary pin (BUG-2484 workaround), then refused on token life: 10.8h left against a 24h grant plus 300s. BUG-2486 filed (cap the child grant at token life). Interim: the operator runs codex login, then reruns.'
+  created_at: 2026-11-07T16:49:34.526979428Z
+  modified_at: 2026-11-07T16:49:34.526979428Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
