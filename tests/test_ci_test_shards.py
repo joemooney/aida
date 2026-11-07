@@ -304,12 +304,29 @@ class ShardsTest(unittest.TestCase):
         nextest = tomllib.loads((ROOT / '.config/nextest.toml').read_text())
         self.assertEqual(nextest['test-groups']['serial'], {'max-threads': 1})
         self.assertTrue(config['overrides'])
-        self.assertTrue(all(o['test-group'] == 'serial' for o in config['overrides']))
+        # Only the three-SHA AIDA-sized contract may reserve all runner slots
+        # and exceed the ordinary kill. Pin its complete override so a new
+        # ungrouped or extended-timeout test cannot silently inherit this waiver.
+        # trace:TASK-3232 | ai:codex
+        relay_test = 'aida_sized_relay_native_statuses_reach_required_pr_and_train_gates'
+        relay_override = {
+            'filter': f'test({relay_test})',
+            'threads-required': 'num-test-threads',
+            'slow-timeout': {'period': '10s', 'terminate-after': 54},
+        }
+        self.assertEqual([o for o in config['overrides'] if o.get('test-group') != 'serial'],
+                         [relay_override])
         # No budget entry may outlast nextest's kill: it would never be reached.
         kill = 10 * config['slow-timeout']['terminate-after']
         budgets = tomllib.loads((ROOT / 'scripts/test-time-budget.toml').read_text())['budget']
         self.assertTrue(budgets)
-        self.assertLessEqual(max(budgets.values()), kill)
+        relay_key = f'aida-cli-lib forge::commit_ci::tests::{relay_test}'
+        self.assertEqual(budgets[relay_key], 480)
+        for name, budget in budgets.items():
+            with self.subTest(budget=name):
+                test_kill = (10 * relay_override['slow-timeout']['terminate-after']
+                             if name == relay_key else kill)
+                self.assertLessEqual(budget, test_kill)
 
     def test_missing_nextest_falls_back_locally_and_fails_in_ci(self):
         packages = [dict(name='aida-cli', targets=[target('one'), target('two')]),

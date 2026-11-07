@@ -344,3 +344,108 @@ fn work_ci_native_status_is_a_required_train_and_pr_source() {
         assert_eq!(verdict.pending.is_empty(), outcome != CheckOutcome::Pending);
     }
 }
+
+// trace:TASK-3232 | ai:codex
+/// Cross the real bare-repo relay, receipt, HTTP status writer and native
+/// reader boundaries before judging the evidence used by PR/train gates.
+#[test]
+fn aida_sized_relay_native_statuses_reach_required_pr_and_train_gates() {
+    let binary = std::env::var_os("AIDA_TEST_BIN")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::var_os("CARGO_TARGET_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target")
+                })
+                .join("debug/aida")
+        });
+    assert!(
+        binary.is_file(),
+        "build the CLI first or set AIDA_TEST_BIN: {}",
+        binary.display()
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let evidence = temp.path().join("native-statuses.json");
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/test_work_ci_relay.py");
+    let mut command = std::process::Command::new("python3");
+    command
+        .arg(script)
+        .args(["WorkCiTests.test_aida_sized_multi_sha_templates_and_native_gate_evidence"])
+        .env("AIDA_TEST_BIN", binary)
+        .env("AIDA_CI_GATE_EVIDENCE", &evidence);
+    let (status, output, stderr) = aida_core::transport_policy::bounded_with_stderr(
+        command,
+        &[],
+        1024 * 1024,
+        std::time::Instant::now() + std::time::Duration::from_secs(480),
+    )
+    .unwrap();
+    assert!(
+        status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output),
+        String::from_utf8_lossy(&stderr)
+    );
+    println!("{}", String::from_utf8_lossy(&output));
+    let revisions: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(evidence).unwrap()).unwrap();
+    let revisions = revisions.as_array().unwrap();
+    assert_eq!(revisions.len(), 3);
+    for (index, revision) in revisions.iter().enumerate() {
+        let sha = revision["sha"].as_str().unwrap();
+        let statuses = revision["statuses"].as_array().unwrap();
+        for (phase, status) in statuses.iter().enumerate() {
+            assert_eq!(status["name"], "aida/work-ci");
+            let expected = if phase == 0 {
+                CheckOutcome::Pending
+            } else if index == 1 {
+                CheckOutcome::Failed
+            } else {
+                CheckOutcome::Passed
+            };
+            // These are the POST bodies captured by the home API, not invented
+            // pass/fail rows. Preserve the SHA captured from the POST endpoint;
+            // supply only the forge-owned monotonic id read metadata.
+            let mut row = status.clone();
+            row["id"] = json!(phase + 1);
+            assert_eq!(row["sha"], sha);
+            let wire = serde_json::to_vec(&json!([row])).unwrap();
+            let mut api = |_: &str| Ok(wire.clone());
+            let checks = gitlab_commit_checks("2", sha, &mut api).unwrap();
+            assert_eq!(checks.checks[0].outcome, expected);
+            assert_eq!(
+                judge_commit_checks(&checks, &["aida/work-ci"]) == CommitCi::Green,
+                expected == CheckOutcome::Passed
+            );
+            let native = crate::forge::ci_status_from_commit_checks(Ok(checks));
+            assert_eq!(
+                native.state == crate::gate::dispatch_types::CiState::Success,
+                expected == CheckOutcome::Passed
+            );
+            // PR ship's required-row classifier must retain a failure/pending
+            // verdict even if the operator has an informational wildcard.
+            let bucket = match expected {
+                CheckOutcome::Passed => "pass",
+                CheckOutcome::Pending => "pending",
+                _ => "fail",
+            };
+            let wire =
+                json!([{"name": status["name"], "bucket": bucket, "workflow": "", "link": ""}])
+                    .to_string();
+            let required = crate::forge::required_checks_from_output(true, &wire, "").unwrap();
+            let rows = crate::ci_gate::parse_check_rows(&wire).unwrap();
+            let cfg = crate::ci_gate::CiGateConfig {
+                informational_checks: vec!["*".into()],
+                informational_workflows: vec![],
+            };
+            let verdict = crate::ci_gate::classify_red(&rows, &required, &cfg, false, false);
+            assert_eq!(verdict.real.is_empty(), expected != CheckOutcome::Failed);
+            assert_eq!(
+                verdict.pending.is_empty(),
+                expected != CheckOutcome::Pending
+            );
+        }
+    }
+}
