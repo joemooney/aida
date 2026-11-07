@@ -1,10 +1,7 @@
-PR-D ownership fixes retain clean dead non-PR implementer lanes only when remote
-coverage is unknown or incomplete; zero missing commits permit journaled reclaim
-before a first branch push. Recovery dry-runs inspect live/unknown ownership;
-session listings render unknown evidence as `?`. The 2026-11-07 13:50 advisor
-ruling splits mail retention and four legacy relaunch readers to TASK-3420;
-PR-D references STORY-2325 without completing it. See OVERVIEW.md.
-<!-- trace:STORY-2325 | ai:codex -->
+Review-watch records retained fast-exiting children before reaping. Incomplete
+legacy receipts use the existing reboot/TTL backstop. Caller capture requires
+verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.
+<!-- trace:TASK-3365 | ai:codex -->
 
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
@@ -476,6 +473,9 @@ keep git and the spec store coherent, and leave durable traces for the
 next agent.
 
 ## Project Orientation
+
+For code navigation, use `codegraph callers <symbol>`, `codegraph callees <symbol>` or `codegraph impact <symbol>` against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes.
+<!-- trace:STORY-2630 | ai:codex -->
 
 AIDA is an agent-collaboration substrate: stable spec IDs, typed
 requirement relationships, code-to-spec trace comments, an autonomous

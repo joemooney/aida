@@ -591,7 +591,10 @@ pub(crate) fn seat_exclude_body(existing: &str, primary: &str) -> String {
     if !body.is_empty() && !body.ends_with('\n') {
         body.push('\n');
     }
-    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
+    // trace:STORY-2630 | ai:codex
+    body.push_str(
+        "# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n.codegraph\n",
+    );
     let mut present: std::collections::HashSet<String> =
         body.lines().map(|l| l.trim().to_string()).collect();
     let inherited: Vec<&str> = primary
@@ -1974,7 +1977,7 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
 /// build/cache output rather than work: the `.aida-store` link to the
 /// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
 /// `.aida/agents`, and `target/`. Only
-/// untracked entries qualify; `.aida-store` only while it is a symlink (read
+/// untracked entries qualify; `.aida-store` and `.codegraph` only while symlinks (read
 /// with metadata only; nothing in the clone is opened).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
@@ -1982,7 +1985,8 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         return false;
     };
     let path = path.trim_end_matches('/');
-    if path == ".aida-store" {
+    // trace:STORY-2630 | ai:codex
+    if matches!(path, ".aida-store" | ".codegraph") {
         return std::fs::symlink_metadata(clone.join(path))
             .is_ok_and(|meta| meta.file_type().is_symlink());
     }

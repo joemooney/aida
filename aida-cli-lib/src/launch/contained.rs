@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -250,7 +250,9 @@ impl WriteProfile {
             self.add(&path, false)?;
         }
         let cache = state.join("derived-cache");
-        std::fs::create_dir(&cache)?;
+        // This is launch-private even when the caller's state directory or
+        // umask is permissive. Never adopt a previous launch's cache.
+        std::fs::DirBuilder::new().mode(0o700).create(&cache)?;
         self.add(&cache, true)?;
         Ok(cache.join(aida_core::db::CACHE_FILE_NAME))
     }
@@ -987,7 +989,7 @@ impl PreparedLaunch {
             .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
-        let ttl = if grant.is_empty() {
+        let mut ttl = if grant.is_empty() {
             0
         } else {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
@@ -1009,7 +1011,19 @@ impl PreparedLaunch {
                         let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
                         pinned_program = Some(program);
-                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
+                        // trace:BUG-2486 | ai:codex — pinned trusted policy only.
+                        let floor = codex_auth::minimum_grant(&policy)?;
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
+                        if !grant.is_empty() {
+                            crate::gate::seat_authority::cap_launch_child_expiry(
+                                &grant,
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
+                            )?;
+                        }
+                        let (effective, diagnostic) =
+                            auth.launch_lifetime(ttl, chrono::Utc::now().timestamp());
+                        eprintln!("{diagnostic}");
+                        ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }

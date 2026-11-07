@@ -1074,12 +1074,13 @@ pub(crate) fn link_worktree_runtime_state(
 ) -> Result<()> {
     let store_src = project_root.join(".aida-store");
     let store_dst = worktree_path.join(".aida-store");
-    if store_src.exists() && !store_dst.exists() {
-        std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
+    let store_link = (store_src.exists() && !store_dst.exists()).then_some((store_src, store_dst));
+    if let Some((source, destination)) = store_link {
+        std::os::unix::fs::symlink(&source, &destination).with_context(|| {
             format!(
                 "symlink {} -> {} failed",
-                store_dst.display(),
-                store_src.display()
+                destination.display(),
+                source.display()
             )
         })?;
     }
@@ -1115,6 +1116,31 @@ pub(crate) fn link_worktree_runtime_state(
         // worktree may still hold an older binary's per-worktree sidecar;
         // retire it when its owner is dead. trace:BUG-1644 | ai:claude
         retire_stray_worktree_lock_info(&worktree_aida);
+    }
+    // Navigation is optional: restore all AIDA links first and never let an
+    // index conflict or I/O failure prevent session setup or recovery.
+    // trace:STORY-2630 | ai:codex
+    let navigation = (|| -> Result<()> {
+        let link = crate::codegraph::primary_index_link(project_root, worktree_path)?;
+        // Reused seat clones predate the symlink-safe exclude. Heal before
+        // linking so salvage never sees an untracked symlink to a directory.
+        // Also heal a correct link left by an older setup invocation.
+        if link.is_some() || worktree_path.join(".codegraph").is_symlink() {
+            aida_core::git_ops::ensure_aida_runtime_excluded(worktree_path)?;
+        }
+        if let Some((source, destination)) = link {
+            std::os::unix::fs::symlink(&source, &destination).with_context(|| {
+                format!(
+                    "symlink {} -> {} failed",
+                    destination.display(),
+                    source.display()
+                )
+            })?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = navigation {
+        eprintln!("warning: skipping primary codegraph index link: {error:#}");
     }
     Ok(())
 }
