@@ -22,7 +22,7 @@ pub(crate) mod pty;
 mod store_mutation;
 
 #[path = "codex_auth.rs"]
-mod codex_auth;
+pub(crate) mod codex_auth;
 
 // trace:TASK-3219 | ai:codex
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -977,6 +977,9 @@ impl PreparedLaunch {
                 .num_seconds()
                 .max(1)
         };
+        // Retain the checked path so verification and execution use one leaf.
+        // trace:BUG-2484 | ai:codex
+        let mut pinned_program = None;
         // Credentials resolve BEFORE any mount or state: a missing or
         // unusable one is a named refusal, never a lane without it.
         let auth = match vendor.auth {
@@ -986,7 +989,9 @@ impl PreparedLaunch {
                 match std::fs::symlink_metadata(codex_home.join("auth.json")) {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
+                        let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
+                        pinned_program = Some(program);
                         let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
@@ -1297,7 +1302,19 @@ impl PreparedLaunch {
                 service.endpoint.clone(),
             );
         }
-        let program = resolve_program(child, &env)?;
+        // API-key lanes share npm discovery, while only ChatGPT requires the pin.
+        // trace:BUG-2484 | ai:codex
+        let program = match pinned_program {
+            Some(program) => program,
+            None => {
+                let program = resolve_program(child, &env)?;
+                if vendor.auth == VendorAuth::OpenAiApiKey {
+                    codex_auth::resolve_native_program(&program)?
+                } else {
+                    program
+                }
+            }
+        };
         let original: Vec<_> = child
             .get_args()
             .map(|v| v.to_string_lossy().into_owned())
