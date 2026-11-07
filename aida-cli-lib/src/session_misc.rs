@@ -984,8 +984,14 @@ pub(crate) fn session_handoff_seat(
     seat: Option<&str>,
     final_: bool,
     rotated: bool,
+    until: Option<&str>,
+    spec: Option<&str>,
+    reason: Option<&str>,
 ) -> Result<()> {
-    let seat = resolve_handoff_seat(seat)?;
+    // Reject prose before reading stdin or changing handoff/store state.
+    // trace:STORY-2402 | ai:codex
+    let condition = crate::condition_cmd::canonical_condition(until, reason)?;
+    let seat = seat_rotation::sanitize_seat(&resolve_handoff_seat(seat)?)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
     if let Some(src) = write {
         let body = if src == "-" {
@@ -994,6 +1000,24 @@ pub(crate) fn session_handoff_seat(
             s
         } else {
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
+        };
+        anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        let body = if let Some(condition) = condition {
+            let spec =
+                spec.ok_or_else(|| anyhow::anyhow!("conditional handoffs require --spec"))?;
+            let path = crate::store_sync::detect_distributed_store_from(&project_root).ok_or_else(
+                || anyhow::anyhow!("conditional handoffs require the canonical store"),
+            )?;
+            let backend = crate::queue_cmd::advance_backend(&path)?;
+            let combined = format!("{body}\n\nRevisit {spec} when {condition}.\n");
+            anyhow::ensure!(
+                combined.trim().len() <= seat_rotation::HANDOFF_MAX_BYTES,
+                "conditional handoff exceeds the handoff size cap"
+            );
+            crate::defer_cmd::defer_single(spec, Some(&condition), reason, &backend, &path)?;
+            combined
+        } else {
+            body
         };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         let written = seat_rotation::write_handoff_by(

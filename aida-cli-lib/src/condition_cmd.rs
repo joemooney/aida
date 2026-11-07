@@ -209,3 +209,24 @@ pub(crate) static CONDITION: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/story_2402_condition_cmd_tests.rs"]
 mod tests;
+
+// Shared admission for deferrals, handoff triggers and recurrence.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn canonical_condition(
+    until: Option<&str>,
+    reason: Option<&str>,
+) -> anyhow::Result<Option<String>> {
+    use aida_core::condition::Condition;
+    let Some(raw) = until else { return Ok(None) };
+    let condition: Condition = raw.parse().map_err(|err| {
+        anyhow::anyhow!(
+            "invalid --until condition: {err}. For a human decision use manual:<who> with --reason"
+        )
+    })?;
+    if matches!(condition, Condition::Manual { .. })
+        && reason.is_none_or(|reason| reason.trim().is_empty())
+    {
+        anyhow::bail!("manual conditions require --reason with a non-empty explanation");
+    }
+    Ok(Some(condition.to_string()))
+}

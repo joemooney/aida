@@ -462,6 +462,15 @@ stale_after   = "2h"           # gap at/above this reads "stale"; "idle" between
 
 **Counting defect classes.** `findings classes` answers "how often does this kind of defect recur?" from recorded review verdicts. A reviewer can tag each finding with a class from a small fixed vocabulary when recording a verdict (incomplete-fix, fail-open, absent-evidence-reads-as-good, untested-path, contract-drift, race, perf, portability, stale-base, scope-creep); this report counts them across every verdict, archived rounds included, each act of review once. Limit it to a recent window with `--since` (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date at local midnight, or RFC3339) and get machine output with `--json`. Findings recorded before classes existed stay unclassified and are counted as such; free text is never classified after the fact, because a keyword match cannot tell an approval from a refusal. `aida review classes` prints the same report.
 
+To park a recurring finding until a machine-checkable trigger, use
+`aida findings recur <id> --until 'spec:<dependency-id>=completed' --note 'seen again'`.
+The recurrence counter still increments; the finding is deferred and the hourly
+`defer-resurface` job evaluates its trigger. Unknown observations retain the
+deferral. Free text is refused; `--until manual:<who>` requires a non-empty
+`--reason` and the same hold authority as `aida defer`. A reasoned hold is
+retained for human review even when its condition is met.
+<!-- trace:STORY-2402 | ai:codex -->
+
 **Gotchas.** A finding is the right home for a not-yet-confirmed pattern; promote it at recurrence (the counter survives in a `recurrence:N` tag).
 
 **Chains with** — filed by `queue work --auto-complete` shelving; triaged into rework (`aida rework`) or dismissal.

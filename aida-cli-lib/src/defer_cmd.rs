@@ -116,19 +116,7 @@ pub(crate) fn defer_single(
 /// evidence, including legacy text pending the separate migration slice.
 // trace:STORY-2402 | ai:codex
 fn canonical_defer_condition(until: Option<&str>, reason: Option<&str>) -> Result<Option<String>> {
-    use aida_core::condition::Condition;
-    let Some(raw) = until else { return Ok(None) };
-    let condition: Condition = raw.parse().map_err(|err| {
-        anyhow::anyhow!(
-            "invalid --until condition: {err}. For a human decision use manual:<who> with --reason"
-        )
-    })?;
-    if matches!(condition, Condition::Manual { .. })
-        && reason.is_none_or(|reason| reason.trim().is_empty())
-    {
-        anyhow::bail!("manual conditions require --reason with a non-empty explanation");
-    }
-    Ok(Some(condition.to_string()))
+    crate::condition_cmd::canonical_condition(until, reason)
 }
 
 fn remove_deferred_queue_rows(

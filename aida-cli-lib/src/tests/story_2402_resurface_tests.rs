@@ -334,3 +334,176 @@ fn story2402_s4_canonical_stale_snapshot_and_evaluation_error() {
         .iter()
         .any(|entry| entry.requirement_id == held.id));
 }
+
+// Handoff/recurrence writers share the same persisted deferrals and timer.
+#[test]
+fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
+    // Allocation rewrites its authority files, so a private umask must cover
+    // every write. Run in the shared exact-test child before changing it.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let init = crate::test_exec::output(
+        crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "--initial-branch=main", "--quiet"]),
+    )
+    .unwrap();
+    assert!(init.status.success());
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "advisor", &[]);
+    let path = dir.path().join(".aida-store");
+    std::fs::create_dir_all(&path).unwrap();
+    aida_core::work_binding::bootstrap(&path).unwrap().unwrap();
+    let backend = CachedGitBackend::open(&path, &dir.path().join("cache.db")).unwrap();
+    let mut row = Requirement::new("finding".into(), "".into());
+    row.tags.insert("from-advisor:STORY-1".into());
+    let row = backend.add_requirement(row).unwrap();
+    let id = row.spec_id.as_ref().unwrap();
+    for (until, reason) in [
+        ("when ready", None),
+        ("manual:joe", None),
+        ("manual:joe", Some("  ")),
+    ] {
+        assert!(crate::findings_gate::handle_findings_recur(
+            &backend,
+            &path,
+            id,
+            None,
+            Some(until),
+            reason
+        )
+        .is_err());
+        let current = backend.get_requirement(&row.id).unwrap().unwrap();
+        assert!(!current.deferred);
+        assert_eq!(
+            crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>()),
+            1
+        );
+    }
+    crate::findings_gate::handle_findings_recur(
+        &backend,
+        &path,
+        id,
+        Some("seen again"),
+        Some("date:2026-01-01"),
+        None,
+    )
+    .unwrap();
+    let current = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert!(current.deferred);
+    assert_eq!(
+        crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>()),
+        2
+    );
+    sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
+    assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    let note = dir.path().join("handoff.txt");
+    std::fs::write(&note, "Review the dependency after merge.").unwrap();
+    let before = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert!(crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        Some("if it stalls"),
+        Some(id),
+        None
+    )
+    .is_err());
+    assert_eq!(
+        serde_yaml::to_value(&before).unwrap(),
+        serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap()
+    );
+    assert!(!dir.path().join(".aida/handoff/advisor/latest.md").exists());
+    std::fs::write(&note, "x".repeat(crate::seat_rotation::HANDOFF_MAX_BYTES)).unwrap();
+    assert!(crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        Some("date:2026-01-01"),
+        Some(id),
+        None
+    )
+    .is_err());
+    assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    std::fs::write(&note, "Review the dependency after merge.").unwrap();
+    crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        Some("date:2026-01-01"),
+        Some(id),
+        None,
+    )
+    .unwrap();
+    let handoff = crate::seat_rotation::read_latest_handoff(dir.path(), "advisor")
+        .unwrap()
+        .unwrap();
+    assert!(handoff.contains("date:2026-01-01"));
+    let current = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert!(current.deferred);
+    sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
+    assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    crate::findings_gate::handle_findings_recur(
+        &backend,
+        &path,
+        id,
+        None,
+        Some("manual:joe"),
+        Some("needs judgement"),
+    )
+    .unwrap();
+    let mut current = backend.get_requirement(&row.id).unwrap().unwrap();
+    current.deferred_at = Some(Utc::now() - chrono::Duration::days(15));
+    backend.update_requirement(&current).unwrap();
+    let current = backend.get_requirement(&row.id).unwrap().unwrap();
+    sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
+    assert!(backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    assert_eq!(backend.queue_list("role:human", true).unwrap().len(), 1);
+}
+
+#[test]
+fn story2402_s5_handoff_cli_requires_write_and_spec() {
+    for args in [
+        vec!["aida", "session", "handoff", "--until", "date:2026-01-01"],
+        vec![
+            "aida",
+            "session",
+            "handoff",
+            "--write",
+            "-",
+            "--until",
+            "date:2026-01-01",
+        ],
+        vec!["aida", "session", "handoff", "--show", "--reason", "prose"],
+    ] {
+        assert!(crate::command_registry::try_parse_from(args).is_err());
+    }
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "session",
+        "handoff",
+        "--seat",
+        "advisor",
+        "--write",
+        "-",
+        "--spec",
+        "TASK-1",
+        "--until",
+        "manual:joe",
+        "--reason",
+        "review needed",
+    ])
+    .is_ok());
+    assert!(crate::condition_cmd::canonical_condition(Some("if it stalls"), None).is_err());
+}

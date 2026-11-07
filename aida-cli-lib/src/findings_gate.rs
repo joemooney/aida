@@ -1177,9 +1177,19 @@ pub(crate) fn handle_findings_command(
             tags.as_deref(),
         )?,
 
-        FindingsCommand::Recur { id, note } => {
-            handle_findings_recur(backend, store_path, id, note.as_deref())?
-        }
+        FindingsCommand::Recur {
+            id,
+            note,
+            until,
+            reason,
+        } => handle_findings_recur(
+            backend,
+            store_path,
+            id,
+            note.as_deref(),
+            until.as_deref(),
+            reason.as_deref(),
+        )?,
         // trace:STORY-1417 | ai:claude
         FindingsCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json)?,
     }
@@ -1353,7 +1363,12 @@ pub(crate) fn handle_findings_recur(
     store_path: &std::path::Path,
     id: &str,
     note: Option<&str>,
+    until: Option<&str>,
+    reason: Option<&str>,
 ) -> Result<()> {
+    // Admission precedes both the recurrence bump and parking.
+    // trace:STORY-2402 | ai:codex
+    crate::condition_cmd::canonical_condition(until, reason)?;
     let mut req = backend
         .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -1364,6 +1379,14 @@ pub(crate) fn handle_findings_recur(
              `aida findings recur` only bumps real findings. Re-file as an observation \
              with `aida findings add --note ...` if you meant to capture a new one."
         );
+    }
+
+    if until.is_some() {
+        crate::defer_cmd::defer_single(id, until, reason, backend, store_path)?;
+        // Reload the deferral so the recurrence write preserves it.
+        req = backend
+            .get_requirement_unambiguous(id)?
+            .ok_or_else(|| anyhow::anyhow!("finding disappeared"))?;
     }
 
     // Find and bump the existing counter; default to 2 when absent (the

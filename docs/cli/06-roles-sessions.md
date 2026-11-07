@@ -1115,3 +1115,15 @@ A later `aida ship` from that detached seat restores its leased branch only if
 both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
+
+
+Conditional relay/seat handoffs use
+`aida session handoff --seat advisor --write handoff.md --spec <spec-id> --until 'pr:42=merged'`.
+This parks the named spec using the same typed condition and hold policy as
+`aida defer`, and includes the canonical trigger in the handoff note. The
+hourly `defer-resurface` job evaluates that spec; a met condition resurfaces it.
+This does not automatically execute the handoff instructions or launch a seat.
+Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation>'`
+for a human decision; this retains an operator hold and routes old manual
+conditions to the human queue after 14 days.
+<!-- trace:STORY-2402 | ai:codex -->
