@@ -103,3 +103,10 @@
   note: 'manual condition older than 14 days; manual:operator: manual (waiting on operator to decide)'
   added_at: 2026-11-07T20:29:02.001481742Z
   for_role: human
+- user_id: role:human
+  requirement_id: 01a13d03-770f-7100-a5f8-765b76f55c88
+  position: 16000
+  added_by: aida:defer-resurface
+  note: 'manual condition older than 14 days; manual:operator: manual (waiting on operator to decide)'
+  added_at: 2026-11-07T20:29:02.001481742Z
+  for_role: human
