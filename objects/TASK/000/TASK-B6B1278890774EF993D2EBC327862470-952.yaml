@@ -1,0 +1,29 @@
+id: 01a1b76b-24c8-7cf0-a84b-ac87a522e480
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-952
+title: 'NON-BLOCKING minor: the outer run_aida KeyboardInterrupt path (Ctrl+C at the ad…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2485, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING minor: the outer run_aida KeyboardInterrupt path (Ctrl+C at the advisor role-entry prompt while the outer harness owns the foreground) has no direct test; the new SIGINT regression covers only --aida-setup and --aida-continue.
+
+  PR: #3612
+  Reviewed sha: 7dfe7680d021c78009223dbe89052f4d00ee1763
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T19:10:14.728032683Z
+modified_at: 2026-11-07T19:10:14.728032683Z
+req_type: Task
+tags:
+- carried-from:BUG-2485
+- finding-hash:05c56ab7
+- from-review:PR-3612
+- kind:carried-forward
+filed_at:
+  code_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
