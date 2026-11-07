@@ -479,12 +479,17 @@ also handles legacy records that prevent a caller from reaching acquisition.
 Read-only inspection never rewrites records.
 
 `aida merge-lock` text and JSON expose the holder verdict, reason, lease state,
-and operator repair hint; JSON also exposes `reclaimable`. The read-only
+and operator repair hint; JSON also exposes `reclaimable`. Incomplete records
+report `lease_state: Incomplete`, with reclamation controlled by the 30-second
+grace independently. The read-only
 `aida merge-lock --check-file <path> --json` helper applies the same judge and
 expiry policy for `scripts/release.sh`. The script fails closed if that helper
-is unavailable, and stamps its own unadmitted shell records with a one-hour
-boot deadline. Normal exit removes only its exact publication, with a bounded
-five-second guard wait and an explicit recovery warning on failure.
+is unavailable or fails, preserves the helper error, and asks for an up-to-date
+CLI rather than asserting that a merger is alive. Retained-lease refusals include
+the observation and legacy migration guidance. The script stamps its own
+unadmitted shell records with a one-hour boot deadline. Normal exit removes
+only its exact publication, with a bounded five-second guard wait and an
+explicit recovery warning on failure.
 `AIDA_RELEASE_LEASE_TTL_SECS` does not change recovery policy.
 
 For manual repair, stop all mergers for that branch, inspect the record on its

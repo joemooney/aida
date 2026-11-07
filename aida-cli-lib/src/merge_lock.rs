@@ -385,7 +385,7 @@ pub(crate) fn inspect_file(path: &Path) -> serde_json::Value {
             let (verdict, reason) = diagnostic(&h);
             let stale = body_stale_reason(path, &body, "");
             serde_json::json!({"holder_verdict": verdict, "reason": reason,
-                "lease_state": if stale.as_deref().is_some_and(|s| s.starts_with("Expired")) { "Expired" } else if verdict == "Dead" { "Dead" } else { "Retained" },
+                "lease_state": if !is_complete_record(&body) { "Incomplete" } else if stale.as_deref().is_some_and(|s| s.starts_with("Expired")) { "Expired" } else if verdict == "Dead" { "Dead" } else { "Retained" },
                 "reclaimable": stale.is_some(), "reclaim_reason": stale, "repair_hint": repair_hint(path)})
         }
         Err(e) => {
@@ -1050,6 +1050,8 @@ mod tests {
         let err = acquire(root, "main", Some(2), "second", Duration::from_millis(100)).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "", "never stolen");
+        assert_eq!(inspect_file(&path)["lease_state"], "Incomplete");
+        assert_eq!(inspect_file(&path)["reclaimable"], false);
 
         std::fs::write(&path, "host=h\npid=1\n").unwrap();
         let old = SystemTime::now() - Duration::from_secs(PARTIAL_GRACE_SECS + 5);
@@ -1059,6 +1061,8 @@ mod tests {
             .unwrap()
             .set_modified(old)
             .unwrap();
+        assert_eq!(inspect_file(&path)["lease_state"], "Incomplete");
+        assert_eq!(inspect_file(&path)["reclaimable"], true);
         let _g = acquire(root, "main", Some(3), "steal", Duration::from_millis(100)).unwrap();
         assert!(std::fs::read_to_string(&path)
             .unwrap()

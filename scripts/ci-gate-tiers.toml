@@ -18,8 +18,8 @@
 # trace:TASK-1555 | ai:claude
 
 # fast = needs no cargo BUILD, so it is cheap enough to run before every push.
-# full = invokes cargo, or shells into a script that runs `cargo build -p
-#        aida-cli` itself.
+# full = requires a built binary, invokes cargo, or shells into a script that
+#        runs `cargo build -p aida-cli` itself.
 #
 # The basis for each `full` entry is a grep for
 # `cargo build|cargo run|target/(debug|release)|AIDA_BIN` over the gate's step
@@ -94,7 +94,7 @@
 "Run git-guardrails parse test" = "fast"
 # trace:STORY-1854 | ai:claude
 "Run cargo-timeout hook test" = "fast"
-"Run release PR-flow fixtures" = "fast"  # trace:TASK-1721 | ai:claude
+"Run release PR-flow fixtures" = "full"  # trace:TASK-3364 | ai:codex
 "Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
 "Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"

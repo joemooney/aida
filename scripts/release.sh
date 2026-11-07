@@ -177,13 +177,19 @@ lease_field() {
     sed -n "s/^$1=//p" "$lease_file" 2>/dev/null | head -n1
 }
 
-# Shared Rust judge owns reclamation. An unavailable/older helper fails closed.
+# Shared Rust judge owns reclamation. Return success for any retained lease,
+# including helper failures, but preserve why it was retained for diagnostics.
 # trace:TASK-3364 | ai:codex
 lease_is_live() {
     [ -e "$lease_file" ] || [ -L "$lease_file" ] || return 1
-    local observation
-    observation=$(aida merge-lock --check-file "$lease_file" --json 2>/dev/null) || return 0
-    if grep -q '"reclaimable":true' <<< "$observation"; then
+    lease_observation=
+    if ! lease_observation=$(aida merge-lock --check-file "$lease_file" --json 2>&1); then
+        echo "warning: merge-lease helper unavailable or failed; retaining $lease_file:" >&2
+        printf '%s\n' "$lease_observation" >&2
+        echo "Use an up-to-date aida with merge-lock --check-file before retrying." >&2
+        return 0
+    fi
+    if grep -q '"reclaimable":true' <<< "$lease_observation"; then
         return 1
     fi
     return 0
@@ -288,17 +294,18 @@ lease_release() {
 }
 trap lease_release EXIT
 
-if lease_is_live && [ "$dry_run" = "1" ]; then
-    # A preview changes nothing, so it warns instead of refusing.
-    echo "warning: a real release would refuse to start now: $(lease_describe) holds the '$release_base' merge-lease (check with \`aida merge-lock\`)." >&2
-elif lease_is_live; then
-    cat <<EOM >&2
-error: an \`aida pr ship\` (or other merger) holds the '$release_base' merge-lease:
-  $(lease_describe)
-Releasing now would race that merge. Wait for it to finish (check with
-\`aida merge-lock\`), then re-run. Nothing was changed.
-EOM
-    exit 1
+if lease_is_live; then
+    if [ "$dry_run" = "1" ]; then
+        # A preview changes nothing, so it warns instead of refusing.
+        echo "warning: a real release would refuse to start now: the '$release_base' merge-lease is retained." >&2
+    else
+        echo "error: the '$release_base' merge-lease is retained; a safe release cannot be established." >&2
+    fi
+    lease_describe >&2
+    printf '\n%s\n' "$lease_observation" >&2
+    echo 'Inspect with `aida merge-lock`. For legacy records without a deadline, run `aida merge-lock --migrate-legacy`.' >&2
+    echo 'Retry after the holder finishes or the reported repair is complete. Nothing was changed.' >&2
+    [ "$dry_run" = "1" ] || exit 1
 fi
 
 # The release-PR publish sequence, printed by --dry-run and by the manual

@@ -76,8 +76,13 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
             now.saturating_sub(h.acquired_at),
             h.note
         );
+        let detail = if reason.is_empty() {
+            verdict.clone()
+        } else {
+            format!("{verdict}({reason})")
+        };
         println!(
-            "    holder_verdict={verdict}({reason}); lease={}",
+            "    holder_verdict={detail}; lease={}",
             merge_lock::stale_reason(&h, "").unwrap_or_else(|| "retained".into())
         );
         if verdict != "Alive" {
