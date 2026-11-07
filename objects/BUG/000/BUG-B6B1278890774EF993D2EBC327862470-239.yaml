@@ -15,12 +15,12 @@ description: |
   1. The salvage probe classifies a worktree with a clean status and every local branch/HEAD covered by a remote ref as reapable, not salvageable (regression test on a seat-clone fixture).
   2. guard_remote_commits surfaces the underlying error (print the full chain, {:#}).
   3. Hygiene hint text never prints an empty branch / "(no commits yet)" for a tree that has commits.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T01:53:56.051655288Z
+modified_at: 2026-11-07T03:15:14.526207460Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -160,6 +160,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b400-cfb9-7080-bd52-9be89ea47217
+  author: aida-auto-bump
+  timestamp: 2026-11-07T03:15:14.489843162Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b400-cfde-7e82-82a5-7d90b45dc764
+  timestamp: 2026-11-07T03:15:14.526204606Z
+  agent: aida
+  commit_sha: 0d32a3c45bcc6e0c835eaa1488a68ade19bc1a2a
+  summary: 'Round 3 fixes the only open finding (unguarded git push -> seat_git). AC1 verified by bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates: persisted legacy lease (no tree_kind, empty branch) lands in scan_reapable().reapable, unpublished branch stays, reap_one picks the clone path. Live bwrap gate green, so the test ran and was not skipped. AC2 verified by bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt (single-chain error carrying the cause, no duplicate Caused-by). AC3 verified by the same two tests plus the updated hint fallback (branch unavailable / commit unavailable) in dispatch_health_ps.rs:1049. All CI shards green at d4d06def; merge-hold-gate fails only because of the supervised hold, which needs a human/advisor clear.'
+  review_verdict: approved
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
   branch: main
@@ -169,3 +183,7 @@ filed_at:
   vendor: claude
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T03:15:14.489825085Z
+  completion_sha: 0d32a3c45bcc6e0c835eaa1488a68ade19bc1a2a
