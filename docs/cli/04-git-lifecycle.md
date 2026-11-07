@@ -194,6 +194,11 @@ display ID, never a friendly node alias.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+`auto-queue-review` refuses `train/` branches with a nonzero exit before forge
+or store access. Train members receive their own reviews; the landing PR must
+not get a reviewer story. The session-end backup also refuses to file one.
+<!-- trace:BUG-2472 | ai:codex -->
+
 **Post-merge cleanup.** The main merge lease covers check → merge → pull and
 is released before session cleanup, including when pull is skipped or fails.
 Session end, reap and merged-worktree pruning run sequentially in one cleanup
