@@ -43,6 +43,8 @@ stages:
 # labelled MR cannot merge until a human/advisor clears the hold. Included from
 # the scaffolded master so upstream fixes flow. trace:TASK-1254 | ai:claude
 include:
+  # trace:STORY-2606 | ai:codex
+  - local: .gitlab/ci/gdma.yml
   - local: 'aida-core/templates/gitlab-ci-merge-hold-gate.yml'
 
 variables:
