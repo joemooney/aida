@@ -9,6 +9,12 @@ and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.
 <!-- trace:STORY-2402 | ai:codex -->
 
+AGY runtime regressions exercise external tool descendants against filesystem,
+network and host-IPC denials with positive controls. This is synthetic shared
+wrapper evidence; admission still needs auth/refresh inventory and integrated
+AGY all-tool conformance. See docs/internal/testing/containment-conformance.md.
+<!-- trace:TASK-3048 | ai:codex -->
+
 Queue completion requires readable branch ownership evidence even with
 `--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
 warns and retains its ledgered override. See OVERVIEW.md.

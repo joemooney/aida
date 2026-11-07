@@ -2379,6 +2379,7 @@ fn task_3048_runtime_policy_fails_closed_before_launch() {
 // trace:TASK-3048 | ai:codex
 #[test]
 fn task_3048_live_private_runtime_preserves_read_only_credential() {
+    use std::os::unix::net::{UnixListener, UnixStream};
     if !live_available() {
         return;
     }
@@ -2390,11 +2391,30 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
     std::fs::write(runtime.join("host-plugin"), "host-plugin").unwrap();
     let token = runtime.join(&policy.credential);
     std::fs::write(&token, "synthetic-credential").unwrap();
+    // Real reachable host endpoints and writable canaries establish that
+    // descendant refusals come from the common boundary, not absent targets.
+    let ipc = home.path().join("host-tool.sock");
+    let listener = UnixListener::bind(&ipc).unwrap();
+    let _control = UnixStream::connect(&ipc).unwrap();
+    listener.accept().unwrap();
+    let tcp = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let address = tcp.local_addr().unwrap();
+    let _control = std::net::TcpStream::connect(address).unwrap();
+    tcp.accept().unwrap();
+    let protected: Vec<_> = ["outside", "git", "store"]
+        .map(|name| {
+            let path = home.path().join(name);
+            std::fs::write(&path, "host-canary").unwrap();
+            path
+        })
+        .into();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
+    let protected_json = serde_json::to_string(&protected).unwrap();
+    let ipc_json = serde_json::to_string(&ipc).unwrap();
     let script = format!(
         r#"
-import pathlib,errno,subprocess,sys
+import pathlib,errno,subprocess,sys,json,os
 runtime=pathlib.Path({runtime_json})
 assert (runtime/'settings.json').read_text()=='{{}}'
 assert not (runtime/'host-plugin').exists()
@@ -2408,7 +2428,57 @@ except OSError as e:
 # An exec descendant uses the same runtime mount, with no native permission layer.
 subprocess.run([sys.executable,'-c',"import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('private')",str(runtime/'child-state')],check=True)
 assert (runtime/'child-state').read_text()=='private'
-"#
+# Exercise external tool processes without a native permission monitor. Each
+# tool uses the same interpreter but a different invocation/transport: a file
+# helper, a URL helper and a long-lived stdio request server. This is boundary
+# inheritance evidence, not evidence that AGY invokes or disables these tools.
+probe = '''
+import pathlib,socket,errno,os
+def probe(request):
+    runtime=pathlib.Path(request['runtime'])
+    (runtime/request['name']).write_text('private-tool-state')
+    for path in request['protected']:
+        assert pathlib.Path(path).read_text()=='host-canary'
+        try:
+            pathlib.Path(path).write_text('escape')
+            raise AssertionError('tool escaped filesystem boundary')
+        except OSError as error:
+            assert error.errno in (errno.EACCES,errno.EPERM,errno.EROFS),error
+    with socket.socket(socket.AF_UNIX) as client:
+        try:
+            client.connect(request['ipc'])
+            raise AssertionError('tool reached host IPC')
+        except OSError as error:
+            assert error.errno==errno.EACCES,error
+    try:
+        socket.create_connection(('127.0.0.1',request['port']),timeout=2)
+        raise AssertionError('tool reached host TCP')
+    except OSError as error:
+        assert error.errno==errno.ECONNREFUSED,error
+    # The inherited relay remains usable; denial is not a broken socket API.
+    port=int(os.environ['HTTP_PROXY'].rsplit(':',1)[1])
+    with socket.create_connection(('127.0.0.1',port),timeout=2) as client:
+        client.sendall(b'GET / HTTP/1.1\\r\\n\\r\\n')
+        assert b'405 Method Not Allowed' in client.recv(4096)
+'''
+request=dict(runtime=str(runtime),protected={protected_json},ipc={ipc_json},port={port})
+for name in ('file-helper','url-helper','stdio-server'):
+    request['name']=name
+    if name=='stdio-server':
+        program=probe+'\nimport sys,json\nfor line in sys.stdin:\n probe(json.loads(line));print("ok",flush=True)'
+        tool=subprocess.Popen([sys.executable,'-I','-S','-c',program],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+        try:
+            stdout,_=tool.communicate(json.dumps(request)+'\n',timeout=10)
+            assert tool.returncode==0 and stdout.strip()=='ok'
+        finally:
+            if tool.poll() is None:
+                tool.kill();tool.wait(timeout=5)
+    else:
+        program=probe+'\nimport json,sys\nprobe(json.loads(sys.argv[1]))'
+        subprocess.run([sys.executable,'-I','-S','-c',program,json.dumps(request)],check=True,timeout=10)
+    assert (runtime/name).read_text()=='private-tool-state'
+"#,
+        port = address.port()
     );
     let mut plan = fixture(&script, "print('seat_grant_valid=true expected_seat=true')");
     plan.profile.add(home.path(), false).unwrap();
@@ -2447,6 +2517,12 @@ assert (runtime/'child-state').read_text()=='private'
     run.release().unwrap();
     assert!(run.child.wait().unwrap().success());
     assert!(!runtime.join("child-state").exists());
+    for name in ["file-helper", "url-helper", "stdio-server"] {
+        assert!(!runtime.join(name).exists());
+    }
+    for path in protected {
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "host-canary");
+    }
     assert_eq!(
         std::fs::read_to_string(&token).unwrap(),
         "synthetic-credential"
