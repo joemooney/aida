@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T15:54:13.193338455Z
+modified_at: 2026-11-07T15:54:22.084179962Z
 req_type: Story
 tags:
 - architecture
@@ -436,6 +436,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixes all four round-2 findings (InPr handoff now SafeEnds, detached re-ship recovers at the recorded head, Closed records no longer clear fresh claims, exact-key operator release). But the marker cutover dropped dead-pid expiry for markers with no Review record, and in-seat rework commits on the detached HEAD still cannot ship. CI was still running at this head.. No triage reason was given.'
   created_at: 2026-11-07T15:54:13.193334210Z
   modified_at: 2026-11-07T15:54:13.193334210Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6b7-cf76-7de3-8808-79b5122c9759
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3600):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: da5e4134327d
+    Recorded: 2026-11-07T15:52:57.368076253+00:00
+    Findings:
+    1. [major] Review-marker dead-pid expiry regressed (TASK-1750). Production is_live_at/merge_gate (gate/review_marker.rs:258-268) now use only review_ownership_ended (gate/kernel_deps.rs:439) and otherwise fall back to ttl_expired. The pid+start check survives only in expired_reason, which this PR made #[cfg(test)] (review_marker.rs:233). So review_marker_tests.rs:66-90 (dead_pid_on_this_host_expires_at_once and the recycled-pid case) now test dead code. The drain reviewer phase takes no lease (phase_driver_trait.rs:1670-1683), so it never has a Review ownership record. When it crashes, its marker blocks 'aida pr ship' at that head for the full PID_BACKED_TTL_SECS (2h). The comment there ('a crash leaves a marker whose dead pid expires it') is now false. The same applies whenever a marker's pid differs from the reviewer lease's holder pid. A same-host pid with matching start identity that is gone is Dead under the sketch's own liveness rule, not Unknown. Fix: when no attributable record exists, fall back to the marker's own pid+start check, then the TTL (i.e. expired_reason). Add a merge_gate test that a dead-pid marker with no ownership record clears at once.
+    2. [minor] Rework commits in a handed-off seat cannot ship. ship_branch (pr_cmd.rs:1527-1627) reattaches only when both HEAD and refs/heads/<branch> equal the recorded InPr head. After handoff the seat stays detached and its agent keeps running (lease retained), so a 'queue rework --work --resume' agent that commits its fixes commits on the detached HEAD. Then 'git push' fails and ship refuses with 'detached seat or branch moved beyond the recorded PR head', with no recovery hint, and nothing else reattaches the branch. Uncommitted rework still ships because switch carries the dirty tree. Fix: when HEAD is detached and refs/heads/<branch> is still at the recorded head, accept HEAD as a descendant of it: fast-forward the branch with an old-value check, then switch. Or reattach when the resumed session re-acquires. Test: handoff, commit on the detached HEAD, then ship_branch(resume=true) attaches with the new commit on the branch.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T15:54:21.942556168Z
+  modified_at: 2026-11-07T15:54:21.942556168Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
