@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:31:45.399075033Z
-modified_at: 2026-10-21T04:32:55.195760514Z
+modified_at: 2026-11-07T20:28:25.573317826Z
 req_type: Task
 tags:
 - operator-held
@@ -26,6 +26,17 @@ relationships:
   target_id: 01a1380e-2128-76a3-889a-4d1d759e76bf
   created_at: 2026-10-20T21:32:18.594281580Z
   created_by: joe
+comments:
+- id: 01a1b7b2-b865-7032-9129-2245c838c552
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-21T04:32:55.195760514Z","deferred_until":"Low; lane-liveness not on main yet (PR #2743). Revisit after #2743 merges and a resumed child is seen missing as a dead lane.","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:28:25.573313399Z
+  modified_at: 2026-11-07T20:28:25.573313399Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a15b3a-c27b-7dc0-a30b-c377aca9e3a9
   author: joe
@@ -39,7 +50,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-21T04:32:55.195760514Z
-deferred_until: 'Low; lane-liveness not on main yet (PR #2743). Revisit after #2743 merges and a resumed child is seen missing as a dead lane.'
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: cb782c925504496e41a460f2958a40ab5b01a54e
