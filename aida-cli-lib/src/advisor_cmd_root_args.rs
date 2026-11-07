@@ -208,9 +208,14 @@ pub enum ScheduleCommand {
 #[derive(Subcommand, Debug)]
 pub enum AdvisorLoopsCommand {
     /// Show review-watch's persisted binding and controller receipt.
-    Status,
+    Status {
+        /// Emit the persisted service status as JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Bind review-watch to this advisor grant through the operator's deputy.
     Rebind {
+        /// Name of the operator-started deputy.
         #[clap(long, default_value = "default")]
         deputy: String,
     },

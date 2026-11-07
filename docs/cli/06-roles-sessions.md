@@ -714,37 +714,77 @@ This host step replaces the advisor's manual auto-publish workaround.
 ## Watching for new review heads
 
 For an advisor service that follows grant rotation, start the operator's
-`aida deputy shell run` in its ordinary advisor terminal, then run
-`aida advisor loops rebind` from the current advisor session. Use
-`--deputy NAME` when the operator uses a named deputy. The advisor grant must
-allow both `advisor` and `reviewer` child seats; the controller receives only
-reviewer delegation. `aida advisor loops status` reports the persisted binding,
-controller and blocked state without exposing grant handles.
+`aida deputy shell run` in its ordinary advisor terminal, then launch the
+advisor through `aida agent new ... --role advisor`. The trusted host launcher
+bootstraps review-watch on the default deputy before entering the sandbox;
+subsequent launches use the deputy recorded in the service receipt. It can
+replace an operator-terminal binding with the advisor handle it just minted,
+subject to the same principal, newer issuance and non-widening successor checks.
+No socket exemption is needed inside the advisor sandbox for this path.
+
+For a named deputy, first run `aida advisor loops rebind --deputy NAME` in the
+operator's advisor terminal before launching the advisor. Manual rebind from
+an advisor session is also available when that session has host socket access.
+The advisor grant must allow both `advisor` and `reviewer` child seats; the
+controller receives only reviewer delegation. `aida advisor loops status`
+reports the persisted binding, controller and blocked state without exposing
+grant handles; `--json` and `--format json` emit the same JSON document, and
+`--format toon` emits structured fields. Status also names the recovery guide.
 
 Rebind is a fixed operation on the deputy's authenticated socket, subject to
 its normal host-access restrictions. The host checks the peer's process
 binding, project, roster, complete parent chain, expiry and delegation. It
 refuses an older successor or a successor that widens the accepted delegation.
 The advisor launcher requests this same authenticated operation after creating
-a fresh grant, including each rotation. A failed automatic rebind prints the
-manual recovery command; advisor registration alone grants no service authority.
+a fresh grant, including each rotation. A failed automatic rebind prints host
+recovery guidance; advisor registration alone grants no service authority.
 
 The deputy supervises review-watch independently of script jobs. A rebind stops
 old-generation admission before a replacement controller starts. The supervisor
 waits for confirmed exit and retains unknown process identities or ambiguous
 spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
 a refusal for one PR still leaves the remaining PRs available. Exited
-controllers have a ten-second restart backoff. Deputy pause, stale heartbeat,
+controllers have their recorded child grant revoked before their receipt is
+cleared, then a ten-second restart backoff. Deputy pause, stale heartbeat,
 authority loss or its existing mandate policy blocks admission. An expired
 advisor binding reports `blocked-authority` until a valid successor rebinds.
 
 Service binding and controller receipts live in `review-watch/service.json`
 under the existing admission lock; controller diagnostics are in
 `review-watch/service.log`. If a spawn receipt is ambiguous or the initialized
-service receipt disappears, inspect the controller and ordinary review receipts
-before operator recovery. Do not clear unresolved review reservations to restart
-a controller. This service covers review-watch; rework, train and dispatch
-serve retain their existing interfaces.
+service receipt disappears, use the recovery procedure below. This service
+covers review-watch; rework, train and dispatch serve retain their existing
+interfaces.
+
+### Review-watch service recovery
+
+Delegation deliberately only narrows during ordinary rotation. To accept a
+wider grant, change deputy, or recover a missing service receipt, the operator
+must reset the binding from a host terminal:
+
+1. Pause the recorded deputy with `aida deputy shell pause --name NAME`.
+   Inspect `aida advisor loops status`, `service.json`, `service.log` and the
+   ordinary review receipts. Let any recorded controller exit and let the
+   supervisor observe it; with an intact receipt it revokes that controller's
+   grant and clears `worker` and `child_grant`. If the receipt is missing or
+   ambiguous, identify the controller from host process/grant records and
+   establish that it and its descendants have exited. Do not infer exit from
+   missing or sandbox-invisible PIDs. If a surviving grant cannot be reconciled,
+   wait for its parent advisor grant to expire before proceeding.
+2. Stop the operator-started deputy with Ctrl-C in its host terminal. Confirm
+   no controller remains. Keep the ordinary `state.json`, `initialized`,
+   history and dispatcher receipts: those still fence live review descendants.
+3. From the main checkout, remove only the service binding receipts:
+   `rm -f .aida/review-watch/service.json .aida/review-watch/service-initialized`.
+   Do not delete the directory or ordinary review reservations.
+4. Restart the deputy, bind it using the intended advisor grant with
+   `aida advisor loops rebind --deputy NAME` from the operator's advisor
+   terminal, then launch the new advisor. Check `aida advisor loops status`.
+
+This manual reset is not an automated stop command. Unknown process evidence
+must be resolved before removing service receipts. The supervisor checks every
+second, refreshes its heartbeat every two seconds, and writes unchanged blocked
+state only when it changes; the initialization marker is synced only at creation.
 <!-- trace:STORY-2571 | ai:codex -->
 
 `aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and

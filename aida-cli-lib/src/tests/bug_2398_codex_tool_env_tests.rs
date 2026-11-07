@@ -564,9 +564,9 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // trace:STORY-2326 | ai:codex
     (
         "launch/grant.rs",
-        1,
+        2,
         Finalization::NotACodexLaunch(
-            "advisor seat builder only; intake/questions finalize via coordinator spawn",
+            "advisor builders: intake/questions finalize via coordinator spawn; review-watch executes only the fixed AIDA control worker",
         ),
     ),
     // Explicit advisor assignment transports the launcher's selector for Claude;
@@ -1857,7 +1857,7 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
     ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
     // Shared advisor builder only; callers finalize via coordinator spawn.
-    ("launch/grant.rs", 1, RoleRoute::SeatWriter),
+    ("launch/grant.rs", 2, RoleRoute::SeatWriter),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
     ("questions.rs", 1, RoleRoute::LaunchInventory),
     (

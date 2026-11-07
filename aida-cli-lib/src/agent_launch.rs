@@ -7418,7 +7418,7 @@ pub(crate) fn run_agent_generation(
             if let Err(error) =
                 crate::review_watch::service::rebind_after_launch(&plan.project_root, &grant)
             {
-                eprintln!("review-watch rotation rebind refused: {error:#}; run `aida advisor loops rebind` from the new advisor session");
+                eprintln!("review-watch rotation rebind refused: {error:#}; from the operator host advisor terminal run `aida advisor loops rebind` (add --deputy NAME for a named deputy), then relaunch the advisor");
             }
         }
     } else if wrapper {

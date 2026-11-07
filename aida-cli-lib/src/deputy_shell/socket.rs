@@ -489,6 +489,9 @@ mod unix {
         // Pin the peer before anything is read from /proc about it.
         let pidfd = peer_pidfd(stream.as_raw_fd());
         let start = aida_core::liveness::process_start_identity(cred.pid);
+        // Service admission uses namespace-qualified evidence.
+        // trace:STORY-2571 | ai:codex
+        let service_peer = aida_core::proc_identity::ProcIdentity::capture(cred.pid).ok();
         let bytes = match read_request(stream, REQUEST_DEADLINE) {
             Ok(b) => b,
             Err(e) => {
@@ -538,7 +541,7 @@ mod unix {
                     )
                     .context("advisor grant does not validate")?;
                     anyhow::ensure!(
-                        pidfd.as_ref().is_some_and(pidfd_running) && start.is_some(),
+                        pidfd.as_ref().is_some_and(pidfd_running) && service_peer.is_some(),
                         "service peer could not be pinned"
                     );
                     attest(
@@ -547,13 +550,24 @@ mod unix {
                         &grant,
                         &ancestry(cred.pid),
                         &|pid, start| {
-                            aida_core::liveness::process_identity_matches_strict(pid, start)
+                            aida_core::proc_identity::ProcIdentity::capture(pid).is_ok_and(
+                                |identity| {
+                                    format!("linux-starttime:{}", identity.starttime) == start
+                                        && matches!(
+                                            aida_core::proc_identity::observe(&identity, true),
+                                            aida_core::proc_identity::Verdict::Alive
+                                        )
+                                },
+                            )
                         },
                     )
                     .map_err(|r| anyhow::anyhow!(r.why))?;
                     anyhow::ensure!(
                         pidfd.as_ref().is_some_and(pidfd_running)
-                            && aida_core::liveness::process_start_identity(cred.pid) == start,
+                            && service_peer.as_ref().is_some_and(|identity| matches!(
+                                aida_core::proc_identity::observe(identity, true),
+                                aida_core::proc_identity::Verdict::Alive
+                            )),
                         "service peer changed during attribution"
                     );
                     crate::review_watch::service::rebind(&project, &q.name, &grant)

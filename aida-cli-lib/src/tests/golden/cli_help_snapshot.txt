@@ -2526,6 +2526,9 @@ Show review-watch's persisted binding and controller receipt
 Usage: aida advisor loops status [OPTIONS]
 
 Options:
+      --json
+          Emit the persisted service status as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -2549,6 +2552,8 @@ Usage: aida advisor loops rebind [OPTIONS]
 
 Options:
       --deputy <DEPUTY>
+          Name of the operator-started deputy
+          
           [default: default]
 
       --format <FORMAT>
@@ -33940,6 +33945,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the persisted service status as JSON"
       }
     ],
     "hidden": false
@@ -33961,7 +33971,7 @@ Working on aida itself
       {
         "name": "deputy",
         "takes_value": true,
-        "help": ""
+        "help": "Name of the operator-started deputy"
       },
       {
         "name": "format",
