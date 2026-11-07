@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:52:34.400093097Z
+modified_at: 2026-11-07T17:52:38.026013504Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -86,6 +86,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4: head moved only by a main merge (6f45718); diff is still one investigation doc. BUG-2487 AC1-AC4 all unmet and the PR still carries completing BUG-2487 attribution; blocked on the advisor''s -P exec-interface design fork.. It was punted on: design-fork: Round 3 at reviewed ca5ba6188064: finding 6 is the unresolved advisor blocker. Explicitly dispute the acceptance premise behind findings 1 and 4 that re-pinning to codex-cli 0.167.0 makes the production exec argv compatible: measured SHA-256 cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda rejects both top-level and exec -P (exit 2); only sandbox accepts it. Accept findings 1-5 as still open: pin, pre-launch validation, pin/argv regression and supported-upgrade instructions are unmet, and completing attribution is false. Current spec and comments supply no advisor decision or revised acceptance. Advisor must select an exec-compatible profile interface or different measured binary and rewrite acceptance before implementation resumes. Finding 5 requires host correction of PR #3611 to a docs(containment) subject ending (Refs BUG-2487) and removal/rewording of empty-claim commit cfbecb41250 before any merge; this native seat has read-only Git metadata and cannot rewrite history. Retain merge hold and publication veto; no completion claim, no new evidence-only doc churn, and no code changes this round.. No triage reason was given.'
   created_at: 2026-11-07T17:52:34.400091516Z
   modified_at: 2026-11-07T17:52:34.400091516Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b724-15dc-7590-aa5e-314c6d279461
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2487):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6f45718a6c0d
+    Recorded: 2026-11-07T17:47:15.433918293+00:00
+    Findings:
+    1. AC1 unmet: aida-cli-lib/src/launch/codex_auth.rs still pins codex-cli 0.166.0 (SHA b8a11fed...; refusal text codex_auth.rs:52). The only diff is docs/internal/testing/bug-2487-codex-pin.md, which records 0.167.0 SHA cdcb45aa... as measured identity only.
+    2. AC2 unmet: aida-cli-lib/src/launch/contained.rs:1397 still unconditionally adds '-P aida'. There is no pre-launch check that the pinned binary accepts each flag, and no fail-closed error naming the flag. Per the doc's own evidence, both 0.166.0 and 0.167.0 exit 2 on this argv.
+    3. AC3 unmet: no test pairs the pin with the argv builder; the diff adds no test.
+    4. AC4 unmet: the doc correctly says 0.167.0 is not a working upgrade, but it names no supported version or upgrade step.
+    5. Completion attribution still wrong: commit cfbecb41250 '[AI:codex] fix: ... re-pin to 0.167.0 (BUG-2487)' is still in the range, and the PR title still ends with the completing '(BUG-2487)'. A squash merge would auto-complete BUG-2487 while the launcher still exits 2. Retitle to the docs(containment) subject with '(Refs BUG-2487)' and drop or reword cfbecb41250.
+    6. Spec blocker (advisor action, not implementer): the acceptance premise is false, because 0.167.0 accepts -P only under 'codex sandbox'. The advisor must choose an exec-compatible profile-selection interface (e.g. a -c config override) or a different measured binary, then rewrite BUG-2487's acceptance. More implementer rework rounds only produce more docs. Option: land the doc alone as a Refs-only docs PR and keep the bug open.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:52:37.852319275Z
+  modified_at: 2026-11-07T17:52:37.852319275Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
