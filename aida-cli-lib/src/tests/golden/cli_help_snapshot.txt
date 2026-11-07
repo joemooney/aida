@@ -9231,6 +9231,28 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida internal claude-bg-supervise
+AIDA-owned shared-wrapper Claude background supervisor
+
+Usage: aida internal claude-bg-supervise [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida internal advisor-code-gate
 Enforce the advisor-no-code-write invariant at the commit boundary. Called by the scaffolded git
 pre-commit hook so the gate binds any vendor's commit (Codex, raw terminal, headless), not just
@@ -17560,6 +17582,8 @@ Launch and track AI agent processes for this AIDA project
 Usage: aida agent [OPTIONS] <COMMAND>
 
 Commands:
+  logs             Read the log of an AIDA-supervised Claude background attempt
+  attach           Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)
   new              Launch a new agent process
   register         Register an already-running raw-launched agent process
   list             List active agent processes [aliases: ls]
@@ -17579,6 +17603,58 @@ Commands:
                    resumes or stops anything, and keeps the worktree, branch and lease
   list-roles       List the supported agent roles in the taxonomy
   help             Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent logs
+Read the log of an AIDA-supervised Claude background attempt
+
+Usage: aida agent logs [OPTIONS] <ATTEMPT>
+
+Arguments:
+  <ATTEMPT>
+          Background attempt UUID returned by dispatch
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent attach
+Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)
+
+Usage: aida agent attach [OPTIONS] <ATTEMPT>
+
+Arguments:
+  <ATTEMPT>
+          Background attempt UUID returned by dispatch
 
 Options:
       --format <FORMAT>
@@ -17780,7 +17856,10 @@ Options:
           Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches
           from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is
           also passed, AIDA records the captured sessionId on the lease so the cross-substrate view
-          links them automatically. Without `--bg`, the foreground launch path is unchanged. For
+          links them automatically. With trusted `[contained.vendors] claude = "aida"`, AIDA instead
+          supervises a foreground contained worker; use `aida agent logs` or read-only `aida agent
+          attach` with its returned attempt UUID. Resume and rotation remain unavailable for that
+          background path. Without `--bg`, the foreground launch path is unchanged. For
           non-interactive dispatch, first set `[agents] confirm_bypass = false` in
           `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida
           agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE>
@@ -40655,6 +40734,32 @@ Working on aida itself
     "path": [
       "aida",
       "internal",
+      "claude-bg-supervise"
+    ],
+    "about": "AIDA-owned shared-wrapper Claude background supervisor",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
       "advisor-code-gate"
     ],
     "about": "Enforce the advisor-no-code-write invariant at the commit boundary. Called by the scaffolded git pre-commit hook so the gate binds any vendor's commit (Codex, raw terminal, headless), not just Claude. Exits non-zero (aborting the commit) when an advisor session stages code with no sanctioned-coding context",
@@ -49099,6 +49204,58 @@ Working on aida itself
     "path": [
       "aida",
       "agent",
+      "logs"
+    ],
+    "about": "Read the log of an AIDA-supervised Claude background attempt",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "attach"
+    ],
+    "about": "Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
       "new"
     ],
     "about": "Launch a new agent process",
@@ -49153,7 +49310,7 @@ Working on aida itself
       {
         "name": "bg",
         "takes_value": false,
-        "help": "Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is also passed, AIDA records the captured sessionId on the lease so the cross-substrate view links them automatically. Without `--bg`, the foreground launch path is unchanged. For non-interactive dispatch, first set `[agents] confirm_bypass = false` in `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume --permission-mode bypassPermissions`. An explicit owning cwd reuses its inactive same-role lease; it never takes over a live agent"
+        "help": "Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is also passed, AIDA records the captured sessionId on the lease so the cross-substrate view links them automatically. With trusted `[contained.vendors] claude = \"aida\"`, AIDA instead supervises a foreground contained worker; use `aida agent logs` or read-only `aida agent attach` with its returned attempt UUID. Resume and rotation remain unavailable for that background path. Without `--bg`, the foreground launch path is unchanged. For non-interactive dispatch, first set `[agents] confirm_bypass = false` in `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume --permission-mode bypassPermissions`. An explicit owning cwd reuses its inactive same-role lease; it never takes over a live agent"
       },
       {
         "name": "canonical-ids",

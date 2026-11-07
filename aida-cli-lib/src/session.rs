@@ -3469,7 +3469,7 @@ pub(crate) fn composing_for_claude_wrapper() -> bool {
 /// The named refusal for a Claude AIDA launch surface the wrapper does not
 /// own yet, under `[contained.vendors] claude = "aida"`.
 // trace:TASK-2708 | ai:claude
-pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches, coordinators and private-PTY agent-new so far; this launch surface (--bg or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
+pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches, coordinators, private-PTY agent-new and AIDA-supervised background launches so far; this launch surface (resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
 // trace:TASK-2631 | ai:codex

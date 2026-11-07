@@ -21,6 +21,11 @@ pub(crate) use internal_cmd_args::*;
 /// vendor-agnostic advisor-code-write gate (STORY-684).
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
+        // trace:TASK-3219 | ai:codex
+        cli::InternalCommand::ClaudeBgSupervise => {
+            crate::agent_launch::agent_claude_background::supervise_main()
+        }
+
         // trace:STORY-2254 | ai:claude
         cli::InternalCommand::CodexBgSupervise { attempt } => {
             crate::agent_launch::codex_bg_supervise_main(attempt)

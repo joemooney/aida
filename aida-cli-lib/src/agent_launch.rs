@@ -428,6 +428,8 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Resume { agent } => agent_resume(agent),
         AgentCommand::Describe { agent, description } => agent_describe(agent, description),
         AgentCommand::Stop { name } => agent_stop(name),
+        AgentCommand::Logs { attempt } => agent_claude_background::logs(attempt, false),
+        AgentCommand::Attach { attempt } => agent_claude_background::logs(attempt, true),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
         AgentCommand::Wake { command } => agent_wake(command),
         // trace:STORY-2254 | ai:claude
@@ -464,6 +466,9 @@ pub(crate) mod codex_bg_receipt;
 // trace:STORY-2254 | ai:claude
 #[path = "agent_codex_background.rs"]
 pub(crate) mod agent_codex_background;
+// trace:TASK-3219 | ai:codex
+#[path = "agent_claude_background.rs"]
+pub(crate) mod agent_claude_background;
 
 /// `aida internal codex-bg-supervise`.
 // trace:STORY-2254 | ai:claude
@@ -1726,7 +1731,7 @@ pub(crate) struct AgentLaunchConfig {
 // trace:STORY-2539 | ai:codex
 pub(crate) use aida_core::vendors::PromptTransport as AgentPromptStyle;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AgentLaunchPlan {
     pub(crate) project_root: std::path::PathBuf,
     pub(crate) launch_cwd: std::path::PathBuf,
@@ -1760,7 +1765,7 @@ impl AgentContextOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AgentLaunchContext {
     pub(crate) path: std::path::PathBuf,
     pub(crate) token: String,
@@ -2676,10 +2681,10 @@ pub(crate) fn agent_new_claude(
         let root = agent_launch_project_root_from(&find_aida_project_root_from(&base)?);
         crate::agent_config::load_agents_contained(&root)
     };
-    // Only the foreground owner may compose wrapper argv. Background remains refused.
+    // Fresh foreground and AIDA-supervised background launches own wrapper composition.
     // trace:TASK-3219 | ai:codex
     let wrapper_root = child_role_project_root(cwd)?;
-    let _wrapper_composition = (!bg && session::claude_uses_contained_wrapper(&wrapper_root)?)
+    let _wrapper_composition = (session::claude_uses_contained_wrapper(&wrapper_root)?)
         .then(session::ClaudeWrapperComposition::enter);
     let ClaudeNewPosture {
         mut default_args,
@@ -2709,7 +2714,7 @@ pub(crate) fn agent_new_claude(
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
     // path below. trace:SPIKE-34 | ai:claude
-    if bg {
+    if bg && !(contained && session::claude_uses_contained_wrapper(&wrapper_root)?) {
         default_args.push("--bg".to_string());
     }
     let config = AgentLaunchConfig {
@@ -3405,7 +3410,7 @@ pub(crate) fn agent_new_bg_dispatch(
     show_prompt: bool,
     verbose: bool,
     prompt: AgentPromptOptions,
-    resume: AgentResumeOptions,
+    mut resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -3416,6 +3421,27 @@ pub(crate) fn agent_new_bg_dispatch(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = agent_launch_project_root_from(&discovered_root);
+    let wrapper = config.agent_type == "claude"
+        && config.contained
+        && session::claude_uses_contained_wrapper(&project_root)?;
+    if wrapper {
+        // S3 starts fresh only. In particular an interactive background
+        // dispatcher must not offer the still-unwired resume picker.
+        resume.prompt_enabled = false;
+        anyhow::ensure!(
+            !flag_options.rotate,
+            "AIDA background launches do not support --rotate"
+        );
+        anyhow::ensure!(
+            resume.direct_target.is_none(),
+            "contained Claude resume waits for private-state lifecycle support"
+        );
+        anyhow::ensure!(
+            prompt.auto_prompt || prompt.explicit_prompt.is_some(),
+            "AIDA background launches need a prompt"
+        );
+    }
+    let _composition = wrapper.then(session::ClaudeWrapperComposition::enter);
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -3437,7 +3463,9 @@ pub(crate) fn agent_new_bg_dispatch(
     // or side effect: no claim, lease, clone or pin is made for a launch that
     // cannot run. `build_agent_new_bg_command` re-checks the planned tree.
     // trace:BUG-2169 | ai:claude
-    refuse_bg_under_os_wrap(&config, &project_root)?;
+    if !wrapper {
+        refuse_bg_under_os_wrap(&config, &project_root)?;
+    }
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
     // launch lands on the native posture (no `--permission-mode` in the argv).
@@ -3573,19 +3601,24 @@ pub(crate) fn agent_new_bg_dispatch(
         plan.native_session_id.as_deref(),
     ));
     enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
-    let _description = resolve_agent_description(plan.role.as_deref(), description)?;
+    let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
     eprintln!(
-        "{} dispatching {} (stable name: {}) to Claude Code's background supervisor in {}",
+        "{} dispatching {} (stable name: {}) to {} in {}",
         crate::glyph(crate::glyphs::Glyph::FlowActive)
             .green()
             .bold(),
         config.agent_type,
         plan.name.cyan(),
+        if wrapper {
+            "AIDA's contained background supervisor"
+        } else {
+            "Claude Code's background supervisor"
+        },
         plan.launch_cwd.display().to_string().cyan()
     );
     if let Some(spec) = &plan.current_spec {
@@ -3626,11 +3659,31 @@ pub(crate) fn agent_new_bg_dispatch(
     // session keeps the project allow-list. Implementer lanes only: a review
     // seat must not run under the reviewed tree's own settings.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
-    if config.agent_type == "claude" {
+    if config.agent_type == "claude" && !wrapper {
         crate::claude_trust::report(&crate::claude_trust::ensure_role_seat_trusted(
             &plan.launch_cwd,
             plan.role.as_deref(),
         ));
+    }
+
+    // The native daemon path below remains unchanged when the opt-in is unset.
+    // trace:TASK-3219 | ai:codex
+    if wrapper {
+        agent_claude_background::dispatch(
+            &binary,
+            &config,
+            &plan,
+            launch_context.as_ref(),
+            &prompt_args,
+            description,
+            || {
+                handle_guard.disarm();
+                if let Some(receipt) = setup_receipt.as_mut() {
+                    receipt.disarm();
+                }
+            },
+        )?;
+        return Ok(());
     }
 
     let mut command = build_agent_new_bg_command(
@@ -7264,16 +7317,52 @@ pub(crate) fn run_agent_generation(
     rotation: Option<RotationEnv<'_>>,
     on_spawn: impl FnOnce(),
 ) -> Result<GenerationExit> {
+    run_agent_generation_with_io(
+        binary,
+        config,
+        plan,
+        launch_context,
+        prompt_args,
+        description,
+        title,
+        verbose,
+        mail_wake,
+        rotation,
+        || {
+            on_spawn();
+            Ok(())
+        },
+        None,
+    )
+}
+
+// trace:TASK-3219 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_agent_generation_with_io(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
+    rotation: Option<RotationEnv<'_>>,
+    on_spawn: impl FnOnce() -> Result<()>,
+    mut background_control: Option<&mut std::os::unix::net::UnixStream>,
+) -> Result<GenerationExit> {
+    let background = background_control.is_some();
     // trace:TASK-3219 | ai:codex
     let wrapper = config.agent_type == "claude"
         && config.contained
         && (session::composing_for_claude_wrapper()
             || session::claude_uses_contained_wrapper(&plan.launch_cwd)?);
     let _wrapper_composition = wrapper.then(session::ClaudeWrapperComposition::enter);
-    let terminal_io = wrapper
+    let terminal_io = (wrapper && !background)
         .then(crate::launch::contained::pty::host_stdio)
         .transpose()?;
-    let pty = wrapper
+    let pty = (wrapper && !background)
         .then(crate::launch::contained::pty::PrivatePty::open)
         .transpose()?;
     if let (Some(pty), Some((input, _))) = (&pty, &terminal_io) {
@@ -7443,17 +7532,31 @@ pub(crate) fn run_agent_generation(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    if background {
+        anyhow::ensure!(
+            wrapper,
+            "background supervision requires the shared Claude wrapper"
+        );
+        command.arg("--print").env("AIDA_HEADLESS", "1");
+    }
     // Keep the wrapper owner alive through registry binding, release and wait.
     // trace:TASK-3219 | ai:codex
     let mut contained = if wrapper {
-        Some(
+        Some(if background {
+            crate::containment::launch::PreparedLaunch::prepare(
+                &mut command,
+                &plan.launch_cwd,
+                crate::seat_clone::launcher_main().as_deref(),
+            )?
+            .spawn(std::process::Stdio::inherit())?
+        } else {
             crate::containment::launch::PreparedLaunch::prepare_interactive(
                 &mut command,
                 &plan.launch_cwd,
                 crate::seat_clone::launcher_main().as_deref(),
             )?
-            .spawn_interactive(pty.as_ref().expect("interactive PTY"))?,
-        )
+            .spawn_interactive(pty.as_ref().expect("interactive PTY"))?
+        })
     } else {
         None
     };
@@ -7491,7 +7594,7 @@ pub(crate) fn run_agent_generation(
         crate::launch::contained::pty::before_release(grant, run.receipt().worker_pid())?;
     } else {
         grant_rollback.disarm();
-        on_spawn.take().expect("spawn callback")();
+        on_spawn.take().expect("spawn callback")()?;
     }
     // BUG-1918: this launcher made the claim; record the worker it spawned.
     // trace:BUG-1918 | ai:claude
@@ -7583,11 +7686,23 @@ pub(crate) fn run_agent_generation(
             entry.id
         })
     });
+    let mut _background_registry = None;
     let registered = if let Some(run) = contained.as_mut() {
         let id = register.take().expect("registry callback")()?;
+        if background {
+            _background_registry = Some(agent_claude_background::RegistryEnd {
+                root: plan.project_root.clone(),
+                pid: child_pid,
+            });
+        }
+        if let Some(control) = background_control.as_mut() {
+            agent_claude_background::before_release(control)?;
+        }
         run.release()?;
-        grant_rollback.disarm();
-        on_spawn.take().expect("spawn callback")();
+        on_spawn.take().expect("spawn callback")()?;
+        if !background {
+            grant_rollback.disarm();
+        }
         Some(id)
     } else {
         None
@@ -7602,9 +7717,14 @@ pub(crate) fn run_agent_generation(
         },
         || {
             if let Some(run) = contained.as_mut() {
-                let (input, output) = terminal_io.expect("terminal endpoints");
-                pty.expect("private PTY")
-                    .wait(&mut run.child, input, output)
+                let status = if background {
+                    run.child.wait().map_err(anyhow::Error::from)
+                } else {
+                    let (input, output) = terminal_io.expect("terminal endpoints");
+                    pty.expect("private PTY")
+                        .wait(&mut run.child, input, output)
+                };
+                status
                     .and_then(|status| run.vendor_exit(status))
                     .map_err(std::io::Error::other)
             } else {

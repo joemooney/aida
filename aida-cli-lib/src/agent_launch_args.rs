@@ -898,6 +898,19 @@ pub enum SessionManifestCommand {
 // trace:STORY-432 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum AgentCommand {
+    /// Read the log of an AIDA-supervised Claude background attempt.
+    // trace:TASK-3219 | ai:codex
+    Logs {
+        /// Background attempt UUID returned by dispatch.
+        attempt: String,
+    },
+    /// Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches).
+    // trace:TASK-3219 | ai:codex
+    Attach {
+        /// Background attempt UUID returned by dispatch.
+        attempt: String,
+    },
+
     /// Launch a new agent process.
     ///
     /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
@@ -1288,6 +1301,10 @@ pub enum AgentNewCommand {
         /// in `claude agents` (and `aida status`). When `--spec` is
         /// also passed, AIDA records the captured sessionId on the
         /// lease so the cross-substrate view links them automatically.
+        /// With trusted `[contained.vendors] claude = "aida"`, AIDA instead
+        /// supervises a foreground contained worker; use `aida agent logs`
+        /// or read-only `aida agent attach` with its returned attempt UUID.
+        /// Resume and rotation remain unavailable for that background path.
         /// Without `--bg`, the foreground launch path is unchanged.
         /// For non-interactive dispatch, first set `[agents] confirm_bypass = false`
         /// in `~/.aida/config.toml`; trusted project config can still require consent.
