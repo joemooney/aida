@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T15:44:10.259519728Z
+modified_at: 2026-11-07T15:44:43.641805610Z
 req_type: Story
 tags:
 - architecture
@@ -424,6 +424,12 @@ comments:
   content: 'Round 3 PR #3600: addressed all four findings. InPr now records the handing-off session; relaunch judges that lease process and guards its tree. Both ship paths recover the same session branch only at the recorded head, with guarded checkout and staged reacquisition. Review marker ownership evidence binds to its process; older Closed records cannot clear fresh claims. Exact-key operator release ignores unrelated malformed records, manual TTL remains available, and unreadable train evidence retains only that train. Targeted validation passed: 17 PR-C, 34 takeover, 56 ownership, 14 review-marker, 5 live-bwrap clone tests, 2 operator-release, malformed-train fixture, process-identity ratchet, gate-boundary guard, and exhaustive CLI JSON audit. Help snapshot regenerated; final snapshot/format verification follows. Native publication declaration recorded with Refs STORY-2325; edits remain uncommitted for the host launcher.'
   created_at: 2026-11-07T15:44:10.259519728Z
   modified_at: 2026-11-07T15:44:10.259519728Z
+  session_id: 01a1b69c0c98
+- id: 01a1b6ae-fc79-7df1-ab78-d589a857ac15
+  author: joe
+  content: 'Final verification complete: regenerated help snapshot passes without update mode; cargo fmt --all -- --check and git diff --check pass. No implementation blocker remains in this round. Native seat edits are uncommitted and publication remains delegated to the host launcher under the recorded Refs subject.'
+  created_at: 2026-11-07T15:44:43.641805610Z
+  modified_at: 2026-11-07T15:44:43.641805610Z
   session_id: 01a1b69c0c98
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
