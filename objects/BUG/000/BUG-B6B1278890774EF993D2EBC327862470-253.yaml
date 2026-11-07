@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-07T20:42:03.729440604Z
+modified_at: 2026-11-07T21:08:31.808950712Z
 req_type: Bug
 comments:
 - id: 01a1b7af-5b2f-7c41-b302-d8aeec3784ae
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-07T20:42:03.526147783Z
   modified_at: 2026-11-07T20:42:03.526147783Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7d7-6fc0-75b1-8418-8c47448fd696
+  author: joe
+  content: 'Also observed 2026-11-07 14:15 (dell1): a lane that ends with no commits leaves its lease behind as ''orphaned, 1 uncommitted change'' (ignored .aida files only), so the next pickup of the spec refuses until someone runs ''session end --force --discard-unpushed''. The no-change outcome should end its own lease. Fix it in this bug''s rework if it is in the same code path; otherwise, the reviewer should rule it as a follow-up.'
+  created_at: 2026-11-07T21:08:31.808950712Z
+  modified_at: 2026-11-07T21:08:31.808950712Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
