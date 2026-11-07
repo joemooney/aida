@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T20:27:01.005448511Z
+modified_at: 2026-11-07T20:32:18.758642700Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -156,6 +156,12 @@ comments:
   modified_at: 2026-11-07T20:23:35.927381339Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7b6-4746-75a2-bbab-9af3683b6cee
+  author: joe
+  content: 'Round 5 rework prepared in native seat: clone exclude repair now pins real .git/info directories, uses bounded O_NOFOLLOW regular-file reads and an O_EXCL/O_NOFOLLOW temp plus rename through the pinned directory; no host Git in the clone. Added outside-secret exclude-symlink refusal, outside-directory info-symlink refusal, and rule-preserving/idempotent positive coverage. Updated six exact writer-inventory sites (clone metadata only). Removed transient round-4 handoff claims from the tracked blocker note and cited CI run 42410096051 for published 02d9c1304b46. Current checks: rustfmt and diff whitespace pass; template-hook checks pass; 8 Git-maintenance fixtures and 41 writer-inventory fixtures pass, inventory ratchet passes. Rust jobs are still running/queued; final executed-test evidence will be recorded separately. Existing Slice 2 design punt and merge hold are not cleared. No commit or publication from this native seat.'
+  created_at: 2026-11-07T20:32:18.758642700Z
+  modified_at: 2026-11-07T20:32:18.758642700Z
+  session_id: 01a1b7b057aa
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
