@@ -30,6 +30,23 @@ comments:
   modified_at: 2026-11-07T20:24:45.103215273Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7b8-59c1-7da1-8964-22e7085e5922
+  author: dirtlab
+  content: |
+    Implemented in the native seat, left uncommitted for host publication. Standalone punt/hold handshakes now use the leased seat's writable runtime directory; host publication checks both seat and legacy host vetoes. Host publication inspects the leased branch against its host-owned base pin before bundling, and successful unchanged standalone native exits report implementer: no-change with exit 0. Unreadable commit evidence refuses publication.
+    Validation: seat_publish_tests 51 passed, including BUG-2488's sandboxed signal write with read-only host/Git metadata, publication veto, no-bundle unchanged-seat check and positive commit control. queue_exit_tests 6 passed. Standalone suite: 25 passed; 1 fixture failure at storage.save before launcher invocation (allocation file ownership/mode trust check), filed as a draft finding. rustfmt --check and git diff --check pass. Changed files: seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_home_038_seat_publish_tests.rs, all under aida-cli-lib/src. No commit, push, PR, or queue completion attempted from this seat.
+  created_at: 2026-11-07T20:34:34.561124713Z
+  modified_at: 2026-11-07T20:34:34.561124713Z
+  session_id: 01a1b7ad8b31
+  harness_version: codex-cli 0.167.0
+- id: 01a1b7b8-74b2-77a2-bdcc-b44121d98bc1
+  author: dirtlab
+  content: |
+    Correction to the validation note: draft-finding creation was refused because this clone has no AIDA node binding; no finding object was created. Node acquisition was not attempted from this native seat with read-only Git metadata. The fixture failure remains recorded in this comment and lane job j20261107T203349539-2-0 for host triage.
+  created_at: 2026-11-07T20:34:41.458942811Z
+  modified_at: 2026-11-07T20:34:41.458942811Z
+  session_id: 01a1b7ad8b31
+  harness_version: codex-cli 0.167.0
 - id: 01a1b7bf-17c2-7781-a831-eea724094951
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests exist and the run_from no-change guard is sound, but moving the hold signal into the seat for every standalone lane breaks the main-root hold marker that held --resume and PR-open cleanup read; CI was still pending at review time.. No triage reason was given.'
