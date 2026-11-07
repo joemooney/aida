@@ -173,6 +173,23 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     assert!(finalize < claude && claude < receipt);
     assert!(coordinator[receipt..].contains("bind_contained_launch_worker(&grant, run.receipt())?"));
     expected.get_mut("session.rs").unwrap().1 += 1;
+    // S2 adds a separately named Claude interactive preparation seam. Codex
+    // still finalizes before it could reach that arm; the selection is Claude-only.
+    let agent = std::fs::read_to_string(src.join("agent_launch.rs")).unwrap();
+    let generation = fn_body(&agent, "run_agent_generation");
+    let selection = generation
+        .find("let wrapper = config.agent_type == \"claude\"")
+        .unwrap();
+    let finalize = generation.find(FINALIZER_CALL).unwrap();
+    let interactive = generation
+        .find("PreparedLaunch::prepare_interactive(")
+        .unwrap();
+    assert!(selection < finalize && finalize < interactive);
+    assert!(
+        generation[interactive..].contains("bind_contained_launch_worker(grant, run.receipt())?")
+    );
+    assert!(generation[interactive..].contains("Some(run.receipt())"));
+
     assert_eq!(
         found, expected,
         "a Codex spawn path was added or removed: audit it for the AIDA posture \
