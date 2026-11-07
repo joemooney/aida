@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T01:45:10.049358631Z
+modified_at: 2026-11-07T01:45:22.634686613Z
 req_type: Story
 tags:
 - architecture
@@ -356,6 +356,13 @@ comments:
   created_at: 2026-11-06T17:44:51.873303997Z
   modified_at: 2026-11-06T17:44:51.873303997Z
   session_id: 01a1b1f00f15
+- id: 01a1b3ae-89ca-7902-af92-6f0b68ef2eff
+  author: joe
+  content: '[advisor 18:46] Unblocked: STORY-2326 PR-C landed (#3531). Implement per the signed-off sketch on this spec, building on the PR-C launch module (launch/profile.rs owns prepare_launch). Mode drain. LIGHT gate: one targeted cargo test plus make check-ci-fast.'
+  created_at: 2026-11-07T01:45:22.634686613Z
+  modified_at: 2026-11-07T01:45:22.634686613Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
