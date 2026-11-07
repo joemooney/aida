@@ -98,47 +98,67 @@ monitor rejects `write_file` before fixture permissions can admit it, and auto
 mode is unavailable on the measured account. The shipped `vendors.toml` row
 records `native_layer = "none"`; omitted declarations retain a required native
 layer, so Claude, Codex and unverified OpenCode receive no outer-only opt-in.
-The advisor owns fresh host measurements. The shared
-launcher's `launch/agy.rs` records posture A, the private runtime/credential
-layout, safe option order before final `-p <prompt>`, allowed write classes,
-raw Git/store denial with mediated-only operations, and browser/URL/MCP/delegated
-tool disablement requirements. It introduces no separate enforcement engine.
-The candidate argv omits both `--sandbox` and `--mode auto`: the advisor's host run observed auto
-unavailable and a fallback to default mode. The table records that observation;
-it grants no default-mode tool support. Its permission-bypass flag is allowed
-only with a host-accepted `ContainmentReceipt`, through the common, descriptor-based
-receipt gate. Missing or deserialized receipts refuse before returning argv.
-This candidate builder does not spawn AGY or admit it to the production launcher.
-The native diagnostic above retains the auto request as a historical
-measurement, never uses permission bypass, and reports tool-safety refusals found in its bounded stream,
-stderr or private `runtime/log/cli-*.log` diagnostics as `unsupported_reason`
-on the report and every C0–C4 check (for example, `default-mode tool safety:
-unsupported_tool write_file`). Measured failures remain failures. These
-vendor diagnostics explain missing evidence and grant no positive credit.
-Candidate data must not be passed through either existing vendor's preparation
-arm. The common wrapper now supports Codex and Claude, but its auth mechanisms
-are specifically an OpenAI API key and Claude's credentials file/expiry schema;
-it also grants raw store writes. Neither mechanism implements AGY's credential
-layout or its signed mediated-only write policy.
+The advisor owns fresh host measurements. The common wrapper's `RuntimeCredentialsFile` mechanism now consumes the
+`[vendor.agy.runtime]` data in `containment/vendors.toml`. It provisions a mode
+0700 runtime under launch-owned state and binds it at the vendor's conventional
+`~/.gemini/antigravity-cli` path. The host `.gemini` tree is masked first; the
+runtime starts with empty settings, without inherited plugins, MCP servers,
+hooks, logs or daemon endpoints. The OAuth token is opened with the common
+non-following regular-file/owner/single-link checks and bound read-only by
+handle, never copied into writable state. Refresh and expiry behavior of this
+opaque credential remains unverified; this mechanism does not adopt Claude's
+expiry schema or grant authentication credit.
 
-`daily-cloudcode-pa.googleapis.com` is observed evidence only. Approved auth
-hosts remain empty and the inventory remains explicitly incomplete. The table
-does not grant network access or mount credentials. All AGY containment requests,
-including trusted `agy = "aida"` or `"native"`, fail with a named pending-all-tool
-conformance refusal. There is no config switch to unlock the adapter. A future
-integrated launch must enforce the table through the shared pinned filesystem,
-IPC and egress boundary and demonstrate mediated-write positive controls and
-fresh all-tool conformance before that gate can change. This slice does not
-claim an integrated launch or complete the parent story's real-lane acceptance.
+For runtime-file vendors, the shared filesystem policy keeps canonical
+store/cache paths and Git metadata read-only, including the private-clone Git
+carve-out that other vendors retain. Workspace, seat cargo target, scratch and
+the private runtime remain writable. The existing informational grant-notice
+leaf remains writable. This denies raw authority writes; it does not by itself
+supply a mediated-writer positive control. The same bwrap process tree, network
+namespace, relay, broker, grant keyring and exec barrier cover every tool and
+exec descendant. No AGY containment engine is added.
 
-The 2026-11-06 advisor dependency narrowing to merged PR #3449 is acknowledged:
-the common wrapper has landed, so TASK-2708 as a whole is not the blocker.
-Remaining work is the generic credential/runtime and mediated-write policy data
-needed to represent AGY on that wrapper, the approved auth/refresh-host inventory,
-and an advisor host run through the actual applied boundary. Do not add a separate
-AGY containment arm or grant completion credit to candidate-argv tests. The shared
-boundary harness still refuses AGY by name with these remaining gates and cannot
-fall back to the native diagnostic or add bypass there.
+The data records only the host-evidenced endpoint
+`daily-cloudcode-pa.googleapis.com`, with `auth_inventory_complete = false`.
+Inventory entries are requirements on the pinned trusted
+`contained.allowed_hosts`, never automatic additions to it. Missing or malformed
+hosts and incomplete inventories refuse before runtime creation or credential
+access. Completing the inventory requires advisor-owned refresh/login evidence;
+this change does not assume that a Google wildcard is safe or sufficient.
+
+Options precede the final `-p <prompt>`. The shipped argv omits both `--sandbox`
+and the unavailable `--mode auto`. Candidate permission-bypass argv still
+requires a host-accepted `ContainmentReceipt`; deserialized or missing receipts
+refuse. Within the common wrapper, argv preparation stays behind its exec
+barrier, and receipt acceptance checks the outer-only descriptor before exec
+can be released. Extra caller options are refused in the runtime-file arm.
+
+Legacy launch contexts now refuse receipt-only permission flags for vendors
+whose shipped descriptor has `native_layer = "none"`, even when the request
+claims AIDA posture. The wrapper adds those options behind its exec barrier;
+a launch-context marker grants no receipt authority. Value-taking prompt
+option names live in vendor data so literal bypass text in a prompt stays
+data. `agent new` checks explicit and configured bypass before setup, and
+headless AGY preflight checks the existing admission gate before creating a
+lease or worktree. Deferred manual handoffs report that refusal instead of
+printing a pasteable bypass command. Native diagnostic runs without bypass
+remain available.
+
+Production AGY admission remains closed in `launch/agy.rs`, and direct wrapper
+preparation also refuses its incomplete auth inventory. Trusted `agy = "aida"`
+or `"native"` settings cannot unlock it. The native diagnostic retains the old
+auto request as a historical measurement, never adds permission bypass, and
+reports bounded stream/stderr/private-log tool-safety diagnostics as
+`unsupported_reason` on the report and each C0–C4 check. Measured violations
+remain failures.
+
+This is a **Refs-only S2 slice**, continuing merged PR #3518 and the common
+wrapper from #3449. Remaining acceptance: finish the auth/refresh inventory,
+validate credential refresh/expiry with the private read-only token, demonstrate
+mediated-write positive controls, wire and run the production all-tool AGY
+conformance path, then change the admission gate only with fresh passing host
+evidence. The shared-boundary harness still refuses AGY by name; native fixture
+or model-free wrapper tests cannot substitute for that integrated host run.
 
 ### Non-completing adapter handoff
 

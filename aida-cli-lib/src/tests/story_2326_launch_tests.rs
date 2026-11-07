@@ -1374,3 +1374,153 @@ fn story_2326_pr_b_compete_builds_real_templates_without_scanning_prompts() {
         }
     }
 }
+
+/// Queue selection must never change this process's authority. Both Claude
+/// exec arms set the selected seat on their command before the shared exec.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_queue_exec_assigns_child_seat_without_parent_role_export() {
+    let src = include_str!("../queue_cmd.rs");
+    let body = src
+        .split("pub(crate) fn handle_queue_work(")
+        .nth(1)
+        .unwrap()
+        .split("\n}\n")
+        .next()
+        .unwrap();
+    assert!(!body.contains("set_var(\"AIDA_SESSION_ROLE\""));
+    for builder in [
+        "session::build_claude_exec_command(",
+        "session::build_claude_resume_exec_command(",
+    ] {
+        let arm = body.split(builder).nth(1).unwrap();
+        let seat = arm.find("crate::launch::assign_seat(").unwrap();
+        let exec = arm.find("crate::launch::spawn::exec_agent(").unwrap();
+        assert!(seat < exec);
+        assert!(arm[seat..exec].contains("child_grant_id.as_deref().unwrap_or(\"\")"));
+    }
+}
+
+/// Intake and clarify use the same mint/assign lifetime, including failures
+/// before spawn. Refused key installs must not persist a child grant.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_intake_clarify_keyring_refusal_and_grant_cleanup() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = launch_fixture();
+    let _env = fx.ambient();
+    std::env::set_current_dir(&fx.project).unwrap();
+    for clarify in [false, true] {
+        for contained in [true, false] {
+            let build = || {
+                if clarify {
+                    crate::questions::build_questions_clarify_command(
+                        crate::session::HeadlessVendor::Claude,
+                        "clarify",
+                        "",
+                        contained,
+                    )
+                    .unwrap()
+                } else {
+                    crate::autopilot_intake::build_autopilot_intake_command(
+                        crate::session::HeadlessVendor::Claude,
+                        "intake",
+                        if contained {
+                            "dontAsk"
+                        } else {
+                            "bypassPermissions"
+                        },
+                        "",
+                        false,
+                        &[],
+                        &[],
+                        &crate::intake::IntakeConfig::default(),
+                        "queue",
+                        crate::backlog::RiskLevel::Low,
+                        None,
+                        contained,
+                    )
+                    .unwrap()
+                }
+            };
+            let mut command = build();
+            // Quota refusal is unconditional, including kernels where
+            // keyrings are disabled. No child record or process may appear.
+            let grants = crate::gate::seat_authority::grant_dir().unwrap();
+            let before = std::fs::read_dir(&grants).unwrap().count();
+            crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|errno| errno.set(Some(libc::EDQUOT)));
+            let result = super::assign_advisor_child(
+                &fx.project,
+                crate::session::HeadlessVendor::Claude,
+                contained,
+                &mut command,
+            );
+            {
+                let error = result
+                    .err()
+                    .expect("contained child must refuse a missing key");
+                assert!(format!("{error:#}").contains("key"), "{error:#}");
+                assert!(!fx.capture.exists(), "refusal must precede child execution");
+                assert_eq!(std::fs::read_dir(&grants).unwrap().count(), before);
+            }
+            if contained {
+                // Unlike quota failure, EPERM only refuses a sandboxed
+                // grant. This catches accidentally passing `false` here.
+                crate::grant_keyring::FORCE_AVAILABLE.with(|available| available.set(Some(true)));
+                crate::grant_keyring::FORCE_INSTALL_ERRNO
+                    .with(|errno| errno.set(Some(libc::EPERM)));
+                let refusal = super::assign_advisor_child(
+                    &fx.project,
+                    crate::session::HeadlessVendor::Claude,
+                    contained,
+                    &mut command,
+                );
+                crate::grant_keyring::FORCE_AVAILABLE.with(|available| available.set(None));
+                let error = refusal
+                    .err()
+                    .expect("contained advisor must require the key");
+                assert!(
+                    format!("{error:#}").contains("contained `advisor` worker"),
+                    "{error:#}"
+                );
+                assert_eq!(std::fs::read_dir(&grants).unwrap().count(), before);
+            }
+            // The scoped grant is live until spawn returns, and is revoked
+            // on success and spawn error, in both containment postures.
+            let grant = super::assign_advisor_child(
+                &fx.project,
+                crate::session::HeadlessVendor::Claude,
+                contained,
+                &mut command,
+            )
+            .unwrap();
+            let id = command
+                .get_envs()
+                .find(|(key, _)| *key == "AIDA_SESSION_GRANT")
+                .unwrap()
+                .1
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            assert!(crate::gate::seat_authority::read_grant(&id)
+                .unwrap()
+                .revoked_at
+                .is_none());
+            if clarify {
+                command.current_dir(fx.tmp.path().join("missing"));
+                assert!(command.status().is_err());
+            } else {
+                assert!(command.status().unwrap().success());
+            }
+            drop(grant);
+            assert!(crate::gate::seat_authority::read_grant(&id)
+                .unwrap()
+                .revoked_at
+                .is_some());
+            let _ = std::fs::remove_file(&fx.capture);
+        }
+    }
+}

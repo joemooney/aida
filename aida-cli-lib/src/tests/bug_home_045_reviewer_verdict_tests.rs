@@ -314,12 +314,7 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
         );
     }
     let session = include_str!("../session.rs");
-    assert!(
-        session
-            .matches("seat_authority::issue_launch_child(")
-            .count()
-            >= 3
-    );
+    assert!(session.matches("launch::issue_launch_child(").count() >= 3);
 }
 
 /// TASK-HOME-144: every headless child launch, of any seat, hands its
@@ -367,9 +362,10 @@ fn task_144_headless_child_launches_pass_their_containment() {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-144.ac70bfc5 | ai:claude
 #[test]
 fn task_144_no_dead_child_issuer_remains() {
-    let source = include_str!("../gate/seat_authority.rs");
+    let authority = include_str!("../gate/seat_authority.rs");
+    let source = include_str!("../launch/grant.rs");
     assert!(
-        !source.contains("fn issue_sandboxed_child("),
+        !authority.contains("fn issue_sandboxed_child("),
         "seat_authority.rs regrew the dead sandboxed issuer"
     );
     assert_eq!(

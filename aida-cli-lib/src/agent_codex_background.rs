@@ -1180,7 +1180,7 @@ fn build_worker_exec(
     command
         .env("AIDA_SESSION_ROLE", role)
         .env(crate::gate::seat_authority::GRANT_ENV, grant_id);
-    crate::codex_tool_env::prepare_launch(&mut command)?;
+    crate::launch::profile::finalize_codex(&mut command)?;
     // The finalizer rebuilds the Command (default inheritance); the barrier
     // execs ONLY the explicit entries, never the launcher's environment.
     let env = command

@@ -333,13 +333,20 @@ pub(crate) fn submit_with_runner_status(
         // Legacy liveness is diagnostic only; native submission still requires
         // a stamped native runner and its authenticated socket protocol.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
-        if let ds::RunnerStatus::Legacy(pid) = runner_status() {
-            bail!(
+        // Preserve uncertainty when host process evidence is unavailable.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
+        match runner_status() {
+            ds::RunnerStatus::Unknown(why) => bail!(
+                "script deputy {:?} runner status is UNKNOWN ({why}); cannot verify a native runner; check from the host terminal before restarting the deputy",
+                q.name
+            ),
+            ds::RunnerStatus::Legacy(pid) => bail!(
                 "legacy bash runner live for script deputy {:?}, pid {pid}; use `aida-deputy-shell submit {} <file>` or stop it and restart natively with `aida deputy shell run --name {}` in the operator's terminal",
                 q.name,
                 q.name,
                 q.name
-            );
+            ),
+            _ => {}
         }
         bail!(
             "no script deputy {:?} is running; the operator starts it with `aida deputy shell run --name {}` in their terminal first",

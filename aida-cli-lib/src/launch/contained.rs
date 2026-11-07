@@ -1,4 +1,4 @@
-//! The one AIDA contained headless boundary (Codex and Claude). Vendor
+//! The one AIDA contained headless boundary. Vendor
 //! differences are rows of [`CONTAINED_VENDORS`] plus each vendor's argv
 //! finisher; credentials exist only in the exact child env (Codex) or as a
 //! read-only credentials leaf (Claude).
@@ -343,6 +343,116 @@ fn resolve_program(child: &Command, env: &BTreeMap<String, String>) -> Result<Pa
     }
     anyhow::bail!("contained vendor executable unavailable")
 }
+/// The shared relay accepts exact DNS names only, whether from trusted project
+/// config or shipped vendor inventory. No IP literals, globs or URL syntax.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn validate_allowed_host(host: &str) -> Result<()> {
+    anyhow::ensure!(
+        host.len() <= 253
+            && host.parse::<std::net::IpAddr>().is_err()
+            && host.split('.').all(|label| !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .as_bytes()
+                    .first()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .as_bytes()
+                    .last()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')),
+        "contained allowed_hosts requires exact lowercase DNS hostnames"
+    );
+    Ok(())
+}
+
+/// Install a private writable runtime at the descriptor's conventional path.
+/// The whole host vendor parent was masked first; only this runtime is reopened.
+/// Credentials are bound separately and never copied into writable state.
+// trace:TASK-3048 | ai:codex
+fn install_private_runtime(
+    profile: &mut WriteProfile,
+    state: &Path,
+    home: &Path,
+    policy: &crate::containment::RuntimePolicy,
+) -> Result<PathBuf> {
+    policy.validate()?;
+    let destination = home.join(&policy.relative);
+    anyhow::ensure!(
+        std::fs::canonicalize(&destination)? == destination,
+        "private runtime destination must have no symlink components"
+    );
+    let source = state.join("vendor-runtime");
+    ensure_dir(&source)?;
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o700))?;
+    // An empty settings document inherits no host plugins, MCP or hooks.
+    std::fs::write(source.join("settings.json"), "{}")?;
+    std::fs::write(source.join(&policy.credential), "")?;
+    profile.add(&source, true)?;
+    profile
+        .mounts
+        .last_mut()
+        .context("runtime mount missing")?
+        .path = destination.clone();
+    Ok(destination)
+}
+
+// trace:TASK-3048 | ai:codex
+fn bind_runtime_credential(
+    profile: &mut WriteProfile,
+    runtime: &Path,
+    source: &Path,
+    leaf: &str,
+    owner: u32,
+) -> Result<()> {
+    let file = open_credentials_leaf_for_owner(source, owner)
+        .context("outer-only runtime credential refused")?;
+    profile.mounts.push(Mount {
+        file,
+        path: runtime.join(leaf),
+        writable: false,
+    });
+    Ok(())
+}
+
+/// Only the common wrapper may prepare argv before receipt acceptance; it
+/// cannot release exec until spawn accepts a live receipt and checks the row.
+// trace:TASK-3048 | ai:codex
+fn wrapped_outer_only_argv(
+    policy: &crate::containment::RuntimePolicy,
+    runtime: &Path,
+    prompt: &str,
+) -> Result<Vec<String>> {
+    policy.validate()?;
+    anyhow::ensure!(
+        crate::contained_boundary::root_rule_path(runtime).is_some(),
+        "outer-only vendor requires an exact absolute private runtime path"
+    );
+    let mut args = policy.argv_prefix.clone();
+    args.extend([
+        "--settings".into(),
+        runtime.join("settings.json").to_string_lossy().into(),
+        "-p".into(),
+        prompt.into(),
+    ]);
+    Ok(args)
+}
+
+/// Candidate argv outside the wrapper always requires already-applied evidence.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn outer_only_argv(
+    vendor: &str,
+    runtime: &Path,
+    prompt: &str,
+    receipt: Option<&ContainmentReceipt>,
+) -> Result<Vec<String>> {
+    require_outer_only_receipt(vendor, receipt)?;
+    let policy = crate::containment::runtime_policy(vendor)?;
+    wrapped_outer_only_argv(&policy, runtime, prompt)
+}
+
 /// How a contained vendor authenticates. Each kind is one fixed, reviewed
 /// mechanism; a vendor row picks one, it never supplies its own.
 // trace:TASK-2708 | ai:claude
@@ -352,6 +462,9 @@ pub(crate) enum VendorAuth {
     OpenAiApiKey,
     /// The Claude OAuth credentials leaf, bound read-only (C7, 05:47 ruling).
     ClaudeCredentialsFile,
+    /// A descriptor-selected opaque read-only leaf in a private runtime.
+    // trace:TASK-3048 | ai:codex
+    RuntimeCredentialsFile,
 }
 
 /// One vendor's data for the shared contained boundary (TASK-2708 AC1:
@@ -398,6 +511,18 @@ pub(crate) const CONTAINED_VENDORS: &[ContainedVendor] = &[
         auth: VendorAuth::ClaudeCredentialsFile,
         nested_userns: true,
     },
+    // Outer-only vendors use the same mounts, network broker and exec barrier.
+    // Admission remains closed until the inventory and all-tool proof are complete.
+    // trace:TASK-3048 | ai:codex
+    ContainedVendor {
+        key: "agy",
+        label: "AGY",
+        private_home_env: &[],
+        private_tmp_env: &["TMPDIR"],
+        fixed_env: &[],
+        auth: VendorAuth::RuntimeCredentialsFile,
+        nested_userns: false,
+    },
 ];
 
 impl ContainedVendor {
@@ -417,6 +542,7 @@ impl ContainedVendor {
 enum Auth {
     Env(&'static str, String),
     File(PathBuf),
+    RuntimeFile(PathBuf),
 }
 
 /// The OAuth credentials leaf inside a Claude config dir.
@@ -503,7 +629,7 @@ fn host_vendor_state_masks(
     host_home: &Path,
     codex_home: &Path,
     sqlite_home: Option<&Path>,
-) -> Vec<PathBuf> {
+) -> Result<Vec<PathBuf>> {
     let mut masks: Vec<PathBuf> = Vec::new();
     let candidates = [
         Some(host_home.join(".codex")),
@@ -513,7 +639,11 @@ fn host_vendor_state_masks(
         Some(codex_home.to_path_buf()),
         sqlite_home.map(Path::to_path_buf),
     ];
-    for p in candidates.into_iter().flatten() {
+    let candidates = candidates
+        .into_iter()
+        .flatten()
+        .chain(crate::containment::runtime_host_parents(host_home)?);
+    for p in candidates {
         let Ok(canonical) = std::fs::canonicalize(&p) else {
             continue;
         };
@@ -521,7 +651,7 @@ fn host_vendor_state_masks(
             masks.push(canonical);
         }
     }
-    masks
+    Ok(masks)
 }
 /// The host kernel prerequisites `contained_host.py::host_contained` checks
 /// first (x86_64 broker, Landlock ABI 1..=8, seccomp user notification),
@@ -579,6 +709,7 @@ pub(crate) struct PreparedLaunch {
     accept_writer: File,
     /// Expiry captured from the exact read-only bound Claude leaf.
     credentials: Option<i64>,
+    outer_only: Option<&'static str>,
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
@@ -646,25 +777,18 @@ impl PreparedLaunch {
             );
         }
         for host in &allowed {
-            anyhow::ensure!(
-                host.len() <= 253
-                    && host.parse::<std::net::IpAddr>().is_err()
-                    && host.split('.').all(|label| !label.is_empty()
-                        && label.len() <= 63
-                        && label
-                            .as_bytes()
-                            .first()
-                            .is_some_and(u8::is_ascii_alphanumeric)
-                        && label
-                            .as_bytes()
-                            .last()
-                            .is_some_and(u8::is_ascii_alphanumeric)
-                        && label
-                            .bytes()
-                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')),
-                "contained allowed_hosts requires exact lowercase DNS hostnames"
-            );
+            validate_allowed_host(host)?;
         }
+        // Vendor data never silently expands the trusted egress policy.
+        // Refuse incomplete inventories before state creation or credentials.
+        // trace:TASK-3048 | ai:codex
+        let runtime_policy = if vendor.auth == VendorAuth::RuntimeCredentialsFile {
+            let policy = crate::containment::runtime_policy(vendor.key)?;
+            policy.require_auth_policy(&allowed)?;
+            Some(policy)
+        } else {
+            None
+        };
         let root = std::fs::canonicalize(root)?;
         let state = tempfile::Builder::new()
             .prefix("aida-contained-")
@@ -704,6 +828,10 @@ impl PreparedLaunch {
                 let credentials = claude_home.join(CLAUDE_CREDENTIALS);
                 Auth::File(credentials)
             }
+            VendorAuth::RuntimeCredentialsFile => {
+                let policy = runtime_policy.as_ref().context("runtime policy missing")?;
+                Auth::RuntimeFile(host_home.join(&policy.relative).join(&policy.credential))
+            }
         };
         let mut profile = WriteProfile::new();
         profile.add(&root, true)?;
@@ -712,7 +840,7 @@ impl PreparedLaunch {
         for p in crate::contained_boundary::contained_store_write_paths(&main) {
             let p =
                 std::fs::canonicalize(p).context("required store/cache directory unavailable")?;
-            profile.add(&p, true)?;
+            profile.add(&p, runtime_policy.is_none())?;
         }
         if let Some(clone) = crate::seat_clone::recorded_clone_for(host_main, &root) {
             for path in crate::seat_clone::seat_extra_write_paths(&clone) {
@@ -723,11 +851,26 @@ impl PreparedLaunch {
         // Mask host vendor credentials/daemon endpoints with launch-owned empty RO views.
         let empty = state.path().join("empty");
         ensure_dir(&empty)?;
+        // bwrap needs the nested runtime mountpoint inside the masked vendor
+        // parent. Use a dedicated view so other vendor masks stay empty.
+        // trace:TASK-3048 | ai:codex
+        let runtime_parent_mask = if let Some(policy) = &runtime_policy {
+            let view = state.path().join("runtime-parent-mask");
+            let nested: PathBuf = Path::new(&policy.relative).components().skip(1).collect();
+            ensure_dir(&view.join(nested))?;
+            let parent = Path::new(&policy.relative)
+                .components()
+                .next()
+                .context("runtime parent missing")?;
+            Some((std::fs::canonicalize(host_home.join(parent))?, view))
+        } else {
+            None
+        };
         // trace:TASK-2708 | ai:claude — including a relocated CODEX_HOME /
         // CODEX_SQLITE_HOME, which the default-path masks alone would leave
         // readable inside the sandbox.
         let sqlite_home = std::env::var_os("CODEX_SQLITE_HOME").map(PathBuf::from);
-        let mut masks = host_vendor_state_masks(&host_home, &codex_home, sqlite_home.as_deref());
+        let mut masks = host_vendor_state_masks(&host_home, &codex_home, sqlite_home.as_deref())?;
         // trace:TASK-2708 | ai:claude — and a relocated CLAUDE_CONFIG_DIR.
         if let Ok(relocated) = std::fs::canonicalize(&claude_home) {
             if !masks.contains(&relocated) {
@@ -737,7 +880,15 @@ impl PreparedLaunch {
         let empty_file = state.path().join("empty-file");
         std::fs::write(&empty_file, "")?;
         for p in masks {
-            let file = File::open(if p.is_dir() { &empty } else { &empty_file })?;
+            let view = if p.is_dir() {
+                runtime_parent_mask
+                    .as_ref()
+                    .filter(|(parent, _)| parent == &p)
+                    .map_or(&empty, |(_, view)| view)
+            } else {
+                &empty_file
+            };
+            let file = File::open(view)?;
             profile.mounts.push(Mount {
                 file,
                 path: p,
@@ -754,6 +905,7 @@ impl PreparedLaunch {
             let git = base.join(".git");
             if git.exists() {
                 if base == &root
+                    && runtime_policy.is_none()
                     && crate::seat_clone::recorded_clone_for(host_main, &root).is_some()
                 {
                     // Explicit native carve-out: the native workspace default
@@ -802,7 +954,7 @@ impl PreparedLaunch {
         profile.add(&authority_state, false)?;
         // Cache is an explicit exception below the protected .aida parent.
         let cache = aida_core::db::cache_dir_in(&main.join(".aida"));
-        profile.add(&std::fs::canonicalize(cache)?, true)?;
+        profile.add(&std::fs::canonicalize(cache)?, runtime_policy.is_none())?;
         if !grant.is_empty() {
             let notices = crate::grant_expiry_notice::notice_leaf(&grant)?;
             ensure_dir(&notices)?;
@@ -812,8 +964,15 @@ impl PreparedLaunch {
         // tool filtering retains HOME but not AIDA_HOME; relocating HOME would
         // silently redirect grant lookup. Vendor mutable state is separate:
         // a private vendor home inside the lane state (rw with the state).
-        let private_home = state.path().join(vendor.key);
-        ensure_dir(&private_home)?;
+        let private_home = if let Some(policy) = &runtime_policy {
+            // The vendor resolves this conventional path itself; mount only a
+            // launch-owned runtime there, never the host settings/plugins/logs.
+            install_private_runtime(&mut profile, state.path(), &host_home, policy)?
+        } else {
+            let path = state.path().join(vendor.key);
+            ensure_dir(&path)?;
+            path
+        };
         let runtime = state.path().join("runtime");
         ensure_dir(&runtime)?;
         std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700))?;
@@ -844,6 +1003,17 @@ impl PreparedLaunch {
                     writable: false,
                 });
                 Some(expires_at)
+            }
+            Auth::RuntimeFile(credentials) => {
+                let policy = runtime_policy.as_ref().context("runtime policy missing")?;
+                bind_runtime_credential(
+                    &mut profile,
+                    &private_home,
+                    credentials,
+                    &policy.credential,
+                    credential_owner,
+                )?;
+                None
             }
         };
         let mut env = selected_environment(child);
@@ -920,6 +1090,10 @@ impl PreparedLaunch {
             VendorAuth::ClaudeCredentialsFile => {
                 (claude_argv(&original, port, &allowed)?, Vec::new())
             }
+            VendorAuth::RuntimeCredentialsFile => {
+                let policy = runtime_policy.as_ref().context("runtime policy missing")?;
+                (runtime_argv(policy, &private_home, &original)?, Vec::new())
+            }
         };
         preflight.extend([
             crate::aida_exe_path().to_string_lossy().into_owned(),
@@ -939,8 +1113,25 @@ impl PreparedLaunch {
             "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.nested_userns,"argv":argv});
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.credentials = credentials;
+        prepared.outer_only = runtime_policy.map(|_| vendor.key);
         Ok(prepared)
     }
+}
+
+/// Outer-only runtime argv accepts only a terminal prompt from the site.
+/// Keep this adapter separate from the Claude settings adapter: session
+/// options cannot smuggle settings, MCP servers or a host daemon.
+// trace:TASK-3048 | ai:codex
+fn runtime_argv(
+    policy: &crate::containment::RuntimePolicy,
+    runtime: &Path,
+    original: &[String],
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        original.len() == 2 && original[0] == "-p",
+        "outer-only runtime requires exactly -p <prompt>; extra options refused"
+    );
+    wrapped_outer_only_argv(policy, runtime, &original[1])
 }
 
 /// Codex's argv: the tool-env and native-profile overrides, then the site's
@@ -1116,6 +1307,7 @@ impl PreparedLaunch {
             accept_reader,
             accept_writer,
             credentials: None,
+            outer_only: None,
         })
     }
     pub(crate) fn spawn(mut self, stdout: Stdio) -> Result<ContainedChild> {
@@ -1185,6 +1377,9 @@ impl PreparedLaunch {
             serde_json::from_slice(&bytes).context("invalid containment receipt")?;
         receipt.validate(&self.policy_sha)?;
         receipt.accepted = true;
+        if let Some(vendor) = self.outer_only {
+            require_outer_only_receipt(vendor, Some(&receipt))?;
+        }
         // Host-side evidence only: never export the private receipt or grant.
         // trace:TASK-3131 | ai:codex
         eprintln!("{}", receipt_diagnostic(&receipt, &self.policy_sha)?);

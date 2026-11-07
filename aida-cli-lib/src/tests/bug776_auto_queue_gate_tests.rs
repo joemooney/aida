@@ -7,6 +7,36 @@
 
 use super::{auto_queue_skip_reason, pr_head_remote_ref_for, review_forge_for_kind, ReviewForge};
 
+// trace:BUG-2472 | ai:codex
+#[test]
+fn bug2472_auto_queue_refuses_train_before_repository_or_store_access() {
+    let temp = tempfile::tempdir().unwrap();
+    let branch = format!("{}20261106-1", crate::pr_train::BRANCH_PREFIX);
+    for origin in [
+        super::AutoQueueOrigin::PrSkill,
+        super::AutoQueueOrigin::SessionEnd,
+    ] {
+        let outcome = crate::live_work::try_auto_queue_pr_review(
+            temp.path(),
+            &branch,
+            "fixture-session",
+            origin,
+        );
+        assert!(matches!(
+            outcome.status,
+            super::AutoQueueStatus::SkippedNeedsAttention
+        ));
+        assert!(
+            outcome.summary.contains("train branch"),
+            "{}",
+            outcome.summary
+        );
+        assert!(outcome.summary.contains("cannot have a reviewer story"));
+        assert!(outcome.covered_specs.is_empty());
+    }
+    assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 0);
+}
+
 #[test]
 fn no_origin_remote_skips_the_auto_file() {
     let reason = auto_queue_skip_reason(false, None, None)

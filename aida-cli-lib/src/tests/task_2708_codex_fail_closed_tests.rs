@@ -82,7 +82,7 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
 /// agent new codex --bg` launch, guarded by `build_worker_exec`'s finalizer.
 const DISPATCH_CODEX_LANE: &str = "build_codex_lane_command";
 
-const FINALIZER_CALL: &str = "crate::codex_tool_env::prepare_launch(";
+const FINALIZER_CALL: &str = "crate::launch::profile::finalize_codex(";
 const RECEIPT_CALL: &str = "crate::containment::launch::PreparedLaunch::prepare(";
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -217,7 +217,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
          finalize it through prepare_launch and record it in CODEX_SPAWN_PATHS"
     );
     // The refusal is the finalizer's first statement, before any rebuild.
-    let finalizer = fn_body(include_str!("../codex_tool_env.rs"), "prepare_launch");
+    let finalizer = fn_body(include_str!("../launch/profile.rs"), "prepare_launch");
     assert!(finalizer
         .trim_start_matches(|c: char| c != '{')
         .trim_start_matches('{')
@@ -245,6 +245,12 @@ enum SpawnAgentGuard {
 /// function. A new call site fails the count check below until it is audited
 /// and recorded here.
 const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
+    // PR-C: the guided vendor child now shares the launcher and its profile.
+    (
+        "zen_drive_root.rs",
+        "guided_launch_command",
+        SpawnAgentGuard::Itself,
+    ),
     // PR-B: each new constructor retains its finalizer after seat setup.
     // trace:STORY-2326 | ai:codex
     (
@@ -448,7 +454,7 @@ fn task_2708_trusted_aida_refuses_unwired_codex_whatever_the_stamp() {
                 }
                 cmd
             };
-            let error = prepare_launch(&mut build(aida.path()))
+            let error = crate::launch::profile::finalize_codex(&mut build(aida.path()))
                 .unwrap_err()
                 .to_string();
             assert!(
