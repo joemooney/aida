@@ -8,7 +8,7 @@ use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
@@ -257,193 +257,7 @@ fn immutable_push(root: &Path, remote: &str, sha: &str, target: &str) -> Result<
     )?;
     Ok(())
 }
-fn blob(root: &Path, sha: &str, path: &str) -> Result<Vec<u8>> {
-    let object = format!("{sha}:{path}");
-    let size: usize = git(root, &["cat-file", "-s", &object])?.parse()?;
-    if size > 1024 * 1024 {
-        bail!("CI inventory source exceeds size limit");
-    }
-    intent_intake::git(root, &["cat-file", "blob", &object], &[])
-        .map_err(|_| anyhow::anyhow!("CI inventory source unreadable"))
-}
-fn key<'a>(v: &'a serde_yaml::Value, name: &str) -> Option<&'a serde_yaml::Value> {
-    v.as_mapping()?.get(serde_yaml::Value::String(name.into()))
-}
-fn static_name(s: &str) -> Result<String> {
-    if s.is_empty() || s.len() > 512 || s.contains('$') || s.chars().any(char::is_control) {
-        bail!("Unsupported dynamic CI identifier");
-    }
-    Ok(s.into())
-}
-fn rust_tests(items: &[syn::Item], tests: &mut BTreeSet<String>) -> Result<()> {
-    for item in items {
-        match item {
-            syn::Item::Fn(f)
-                if f.attrs
-                    .iter()
-                    .any(|a| a.path().segments.last().is_some_and(|s| s.ident == "test")) =>
-            {
-                if !f.sig.inputs.is_empty() {
-                    bail!("Parameterized Rust tests are unsupported");
-                }
-                tests.insert(static_name(&f.sig.ident.to_string())?);
-            }
-            syn::Item::Mod(m) => {
-                if let Some((_, items)) = &m.content {
-                    rust_tests(items, tests)?;
-                }
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-fn inventory(root: &Path, sha: &str) -> Result<Inventory> {
-    let tree = intent_intake::git(root, &["ls-tree", "-rz", "--full-tree", sha], &[])?;
-    let deadline = std::time::Instant::now() + Duration::from_secs(20);
-    let mut source_files = 0;
-    let mut jobs = BTreeSet::new();
-    let mut tests = BTreeSet::new();
-    let mut total = 0;
-    let mut yaml_files = Vec::new();
-    for entry in tree.split(|b| *b == 0).filter(|e| !e.is_empty()) {
-        if std::time::Instant::now() >= deadline {
-            bail!("CI source inventory deadline exceeded");
-        }
-        let line = std::str::from_utf8(entry).context("Invalid CI source tree")?;
-        let (mode, path) = line.split_once('\t').context("Invalid CI source entry")?;
-        if path == ".gitlab-ci.yml"
-            || (path.starts_with(".github/workflows/")
-                && (path.ends_with(".yml") || path.ends_with(".yaml")))
-        {
-            if !mode.starts_with("100644 blob ") {
-                bail!("CI inventory requires regular committed files");
-            }
-            yaml_files.push(path.to_owned());
-        }
-        if path.ends_with(".rs") {
-            source_files += 1;
-            if source_files > 4096 {
-                bail!("CI source file limit exceeded");
-            }
-            if !mode.starts_with("100644 blob ") {
-                bail!("Rust test inventory requires ordinary source files");
-            }
-            let bytes = blob(root, sha, path)?;
-            total += bytes.len();
-            if total > 16 * 1024 * 1024 {
-                bail!("CI test inventory exceeds size limit");
-            }
-            let parsed = syn::parse_file(std::str::from_utf8(&bytes)?)
-                .map_err(|_| anyhow::anyhow!("Unsupported Rust test inventory syntax"))?;
-            rust_tests(&parsed.items, &mut tests)?;
-        }
-    }
-    // Work GitLab executes the GitLab definition, never the union of unrelated
-    // GitHub checks. GitHub-only static workflows can describe mirrored runners.
-    if yaml_files.iter().any(|p| p == ".gitlab-ci.yml") {
-        yaml_files.retain(|p| p == ".gitlab-ci.yml");
-    }
-    if yaml_files.is_empty() || yaml_files.len() > 64 {
-        bail!("Missing or oversized static CI inventory");
-    }
-    for path in yaml_files {
-        let yaml: serde_yaml::Value = serde_yaml::from_slice(&blob(root, sha, &path)?)
-            .map_err(|_| anyhow::anyhow!("Invalid committed CI YAML"))?;
-        if path == ".gitlab-ci.yml" {
-            let mapping = yaml.as_mapping().context("CI config must be a mapping")?;
-            for (name, value) in mapping {
-                let name = name.as_str().context("CI key must be a string")?;
-                if matches!(
-                    name,
-                    "stages"
-                        | "variables"
-                        | "image"
-                        | "services"
-                        | "before_script"
-                        | "after_script"
-                        | "cache"
-                ) {
-                    continue;
-                }
-                if name.starts_with('.')
-                    || matches!(name, "include" | "workflow" | "default" | "spec")
-                {
-                    bail!("Unsupported indirect GitLab inventory");
-                }
-                let job = value.as_mapping().context("CI job must be a mapping")?;
-                if key(value, "script").is_none()
-                    || job.keys().any(|k| {
-                        !matches!(
-                            k.as_str(),
-                            Some(
-                                "script"
-                                    | "stage"
-                                    | "image"
-                                    | "tags"
-                                    | "before_script"
-                                    | "after_script"
-                                    | "variables"
-                                    | "services"
-                                    | "cache"
-                                    | "artifacts"
-                                    | "interruptible"
-                                    | "retry"
-                                    | "timeout"
-                                    | "needs"
-                                    | "dependencies"
-                            )
-                        )
-                    })
-                {
-                    bail!("Unsupported conditional, matrix or included GitLab job");
-                }
-                if !jobs.insert(static_name(name)?) {
-                    bail!("Duplicate CI job name");
-                }
-            }
-        } else {
-            let mapping = key(&yaml, "jobs")
-                .and_then(|v| v.as_mapping())
-                .context("Missing GitHub jobs")?;
-            for (id, job) in mapping {
-                let fields = job.as_mapping().context("Invalid GitHub job")?;
-                if key(job, "steps").is_none()
-                    || fields.keys().any(|k| {
-                        !matches!(
-                            k.as_str(),
-                            Some(
-                                "name"
-                                    | "steps"
-                                    | "runs-on"
-                                    | "needs"
-                                    | "permissions"
-                                    | "env"
-                                    | "defaults"
-                                    | "timeout-minutes"
-                                    | "services"
-                                    | "container"
-                            )
-                        )
-                    })
-                {
-                    bail!("Unsupported conditional, matrix or reusable GitHub job");
-                }
-                let name = key(job, "name")
-                    .unwrap_or(id)
-                    .as_str()
-                    .context("Invalid GitHub job name")?;
-                if !jobs.insert(static_name(name)?) {
-                    bail!("Duplicate CI job name");
-                }
-            }
-        }
-    }
-    if jobs.is_empty() || jobs.len() > 256 || tests.len() > 100_000 {
-        bail!("CI inventory exceeds limits");
-    }
-    Ok(Inventory { jobs, tests })
-}
+use crate::ci_inventory::inventory;
 
 pub(super) struct Snapshot {
     pub requests: BTreeMap<u32, String>,
@@ -462,7 +276,7 @@ impl Snapshot {
             inventories: RefCell::new(BTreeMap::new()),
             root,
             remote: p.home_remote,
-            deadline: std::time::Instant::now() + Duration::from_secs(30),
+            deadline: std::time::Instant::now() + Duration::from_secs(300),
         })
     }
     pub fn admit<'a>(&self, path: &'a str) -> Result<(&'a str, u32)> {
