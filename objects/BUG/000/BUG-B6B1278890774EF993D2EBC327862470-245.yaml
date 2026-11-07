@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-245
 agreed_id: BUG-2480
 title: 'contained_host.py: shutdown can block because the notification listener is read before its hang-up is checked'
 description: 'Source: work GDMS CI report. In the run loop (aida-cli-lib/src/containment/contained_host.py about line 744), broker_connect_contained() runs on the notification socket before _hung_up() is checked, so a hung-up listener can block the shutdown. The work fix checks for listener hang-up before receiving. Acceptance: a test closes the notification peer during a lane run, and the host exits within the normal shutdown deadline.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:54.525722236Z
-modified_at: 2026-11-07T05:25:06.655322569Z
+modified_at: 2026-11-07T06:06:36.192173537Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -66,6 +66,20 @@ history:
   timestamp: 2026-11-07T05:25:07.867329904Z
   session_id: 01a1b47508f1
   changes: []
+- id: 01a1b49d-b1d7-7391-bb15-9c5d04c9495d
+  author: aida-auto-bump
+  timestamp: 2026-11-07T06:06:35.991208530Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b49d-b2a0-7051-a997-48e113586b1f
+  timestamp: 2026-11-07T06:06:36.192169285Z
+  agent: aida
+  commit_sha: b11ebbd4c258f311cd7647a28eb7b389a532b274
+  summary: 'BUG-2480 PASS: run loop checks listener POLLHUP/POLLERR before entering the seccomp RECV broker (contained_host.py:744-753) and drops the hung-up listener from the watch set; subprocess-watchdog regression drives the production loop (AST-extracted) through hangup/notification/cancelled modes with a live child lane and a 2s shutdown deadline; CI green at head (run 42342621874).'
+  review_verdict: approved
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
@@ -75,3 +89,7 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T06:06:35.991202393Z
+  completion_sha: b11ebbd4c258f311cd7647a28eb7b389a532b274
