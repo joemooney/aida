@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T21:09:07.632517472Z
+modified_at: 2026-11-07T21:26:07.924864700Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -84,6 +84,12 @@ comments:
   modified_at: 2026-11-07T21:08:23.551010157Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7e7-8d34-77f0-aaf3-6479505a6e26
+  author: joe
+  content: 'Round 3: addressed findings 1-4. Added auth_mode=chatgpt to the expired doctor fixture. PreparedLaunch now uses Credential::launch_lifetime to compute its effective TTL and diagnostic from auth.deadline; capped and ample cases exercise this shared production helper. Direct non-delegated grants remain byte-for-byte unchanged while the lane retains its credential-capped TTL; delegated cap, binding and revocation checks remain covered. Updated credential-lifetime documentation. Validation: rustfmt --check on all six changed Rust files and git diff --check passed. Lane job j20261107T211047549-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug_2486 but timed out after 900s during compilation, with no compiler errors and no executed-test result; untested=true. Native publication subject recorded; edits are uncommitted for host commit/publication. Existing merge hold remains.'
+  created_at: 2026-11-07T21:26:07.924864700Z
+  modified_at: 2026-11-07T21:26:07.924864700Z
+  session_id: 01a1b7d7f279
 history:
 - id: 01a1b6ea-5313-7aa0-90fc-6964f99ff91a
   author: joe
