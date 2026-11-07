@@ -801,3 +801,41 @@ Turn ended with the five files above uncommitted for the host launcher.
 No implementation or validation blocker remains. The host owns commit creation
 and publication under the accepted Refs subject. Slice 5 remains outstanding;
 existing punt/hold signals retain their publication vetoes.
+
+## Slice-4 final integration audit (2026-11-07)
+
+Starting HEAD `c4fc669c8a1` already contains the slice-4 implementation and its
+follow-up checkpoint fixes. No additional production change is needed for this
+brief. `pr_train_journal.rs` persists the tested train and member pins, lifecycle
+intent and completed-member receipts using atomic replacement and file/directory
+fsync. Non-dry startup holds `run.lock` while reconciling unfinished entries before
+admission. Recovery confirms fresh forge/Git evidence, retains unknown entries,
+rechecks live authority and recognizes completed merges and closes.
+
+The `pr_train_journal_killed_merge_and_eject_resume_without_replay` test kills a
+child after the merge call and after the persisted ejection decision. Both paths
+resume without opening another train or repeating a completed merge. Production
+cleanup fixtures also cover completed closes, failed closes and changed pins.
+BUG-2463 is present through `b815ab24313` (#3519), so no rebase is needed in this
+Git-read-only seat. Workflow-definition digests remain outside this slice.
+
+This audit changes only this existing plan. Fresh targeted validation passed:
+`cargo test -p aida-cli-lib --lib pr_train` ran **179 tests, zero failures**,
+12,632 unrelated tests filtered out, in **153.59s** after an **8m 43s** cold
+build. Both SIGKILL recovery seams passed. Log:
+`/tmp/story2401-seat-train.log`. The fast-gate log is
+`/tmp/story2401-seat-fast.log`; its final result is recorded below.
+
+Native publication declaration accepted:
+`[AI:codex] feat(train): resume journaled intent from forge truth (Refs STORY-2401)`.
+This records intent only. The host retains commit/PR publication authority;
+existing punts and holds retain their vetoes. No commit, push, merge, review
+recording or queue completion was performed in this seat.
+
+Final fast validation passed: `make check-ci-fast` completed **all 42 gates**,
+including formatting, the feature-disabled CLI, standalone TUI, environment
+ratchet (1,241 exact sites, zero additions) and store-writer inventory. Guards
+that attempted a fetch reported the native seat's read-only `.git/FETCH_HEAD`
+refusal and passed their local-evidence checks. `git diff --check` passed.
+No implementation or validation blocker remains. This plan is the only changed
+tracked file from the audit and is left uncommitted for the host launcher.
