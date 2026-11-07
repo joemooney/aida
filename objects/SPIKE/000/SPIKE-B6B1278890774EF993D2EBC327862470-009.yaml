@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T21:37:39.393335869Z
-modified_at: 2026-11-07T23:40:43.877824356Z
+modified_at: 2026-11-07T23:51:46.746760543Z
 req_type: Spike
 relationships:
 - rel_type: Child
@@ -46,6 +46,13 @@ comments:
     Filed: PR 4 and PR 12 as tasks under EPIC-78. SPIKE-713 deliverable is complete.
   created_at: 2026-11-07T23:39:24.377095222Z
   modified_at: 2026-11-07T23:39:24.377095222Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b86c-e53a-75f0-b5d8-f78894399b60
+  author: joe
+  content: 'ADVISOR REVISION 2026-11-07 17:45 MST after an independent blind review (Fable) that re-measured the doc. Most numbers CONFIRMED (sizes, fan-in, churn, ledgers, the SCC is real at ~341 modules). Corrections that change rulings: R1 revised: aida-mcp needs a prep step first (mcp_claim_path is used by session_end.rs:2129,2602 and tool_descriptors by mcp_cmd.rs:79; both move below cli-lib first); leaves (PR5) and mcp run in parallel after PR2. R6 revised: PR-D is merged, so Work moves in PR3, but PR3 is BLOCKED by open #3619 (STORY-2325 touches handle_queue_command/recover/rework/work in queue_cmd.rs); define regions by function boundaries. R9 REVERSED: aida-cli-lib''s default feature tui depends on aida-tui, so tui->cli-lib is a cycle; tui gets built_command() through aida-cmdkit after PR5. Doc errors to note: use crate::* is in 170 files, not 104; session.rs inline tests are 5,350 lines, not 1,277 (add to batch B); try_parse_from/parse_from/parse_command return cli::Cli and stay in command_registry (PR #3635 already does this); PR2 cannot change the SCC while the re-export keeps every importer naming command_registry; section 3.1''s chain estimate is inconsistent (~0% vs -25%; about -15% by its own model) and mixes clean and incremental rates, so no STORY-1488 gate may be derived from 3.1; ~10% of the SCC is test-only edges. STORY-2325''s in-flight file list is 52 files, not 4.'
+  created_at: 2026-11-07T23:51:46.746760543Z
+  modified_at: 2026-11-07T23:51:46.746760543Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
