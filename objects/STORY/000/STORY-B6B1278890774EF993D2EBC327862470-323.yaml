@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T17:25:38.054450763Z
+modified_at: 2026-11-07T17:25:45.345863651Z
 req_type: Story
 tags:
 - architecture
@@ -463,6 +463,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 fixes both round-3 findings (dead/recycled-pid marker expiry restored in production with merge_gate test; detached rework descendants resume via CAS fast-forward with rollback and test), and the code review finds no new blocker, but CI is red at edf7421: the gates shard fails the Store writer inventory ratchet (scripts/store-writers.toml not regenerated for this PR''s writers).. No triage reason was given.'
   created_at: 2026-11-07T17:25:38.054446201Z
   modified_at: 2026-11-07T17:25:38.054446201Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b70b-7651-7fb0-bcbf-be36788d7d22
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3600):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: edf7421cd9d9
+    Recorded: 2026-11-07T16:21:49.330487472+00:00
+    Findings:
+    1. [major][blocker] CI red at edf7421 (run 42389157418): 'CI (gates)' fails step 'Store writer inventory ratchet' (python3 scripts/check-store-writers.py), and 'Build (ubuntu-latest) / Require every CI lane' fails as a consequence. Reproduced locally: 5 unclassified writer sites added by this PR in aida-cli-lib/src/ownership/store.rs (OwnershipStore::read_lock|truncate at :423; OwnershipStore::recover|OpenOptions::new, set_len, truncate, write_all at :379) and 3 stale rows (ownership/dual.rs|handed_off|fs::remove_file; pr_cmd.rs|pr_ship_with_method_and_dispatch_ctx|wrapper:...dual::handed_off; pr_cmd.rs|run_human_finish_ceremony|wrapper:...dual::handed_off). Fix: run python3 scripts/check-store-writers.py --regenerate, give the new store.rs rows a real lock/gate/disposition (ownership lock held; host-only, contained refuses), delete the stale rows, and confirm python3 -m unittest tests/test_store_writer_inventory.py still passes. The earlier head b539779324 also failed CI, so check that this gate is the only red one.
+    2. [minor][non-blocking] gate/kernel_deps.rs:451 and :468: review_ownership_ended returns Some(None) (marker retained, with no dead-pid and no TTL expiry) on any OwnershipStore::for_project error and on any store-level list error (lock contended past LOCK_TIMEOUT, failed pending-batch recovery, unreadable store dir). A crashed reviewer's marker then blocks merges at that head until the store recovers, and the only escape is 'aida review claim --release'. This fails closed, so it is acceptable, but document it in the doc comment and add a test, or fall back to expired_reason when the error cannot be attributed to this PR.
+    3. [cosmetic][non-blocking] pr_cmd.rs:1581: ship_branch(resume=false), the dry-run path, returns the branch name for a detached rework descendant, but refs/heads/<branch> does not yet contain the rework commits. The dry-run therefore describes pushing a branch that lacks them. Say so in the dry-run output, or describe the pending fast-forward.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:25:44.145716318Z
+  modified_at: 2026-11-07T17:25:44.145716318Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
