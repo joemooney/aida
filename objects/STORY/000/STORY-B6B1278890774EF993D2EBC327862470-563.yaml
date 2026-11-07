@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T22:58:52.208229208Z
+modified_at: 2026-11-07T23:11:30.154815875Z
 req_type: Story
 relationships:
 - rel_type:
@@ -174,6 +174,12 @@ comments:
   content: 'Round 3 validation update: the first two Cargo jobs (j20261107T221053474-2-0 and j20261107T221150636-2-0) each hit the seeded-target 900-second compile timeout while compiling aida-cli-lib; neither executed tests. Replaced the still-pending 900-second final request with j20261107T222936130-2-0: AIDA_CARGO_TIMEOUT=3600 cargo test --profile agent -p aida-cli-lib --lib -- fast_gate --include-ignored --nocapture. This combined job is running and includes the real clean-main target through production run_fast_gate. Final-source rustfmt, git diff --check, portability and template/mirror parity pass. There are still five edited files, deliberately uncommitted. No completed Rust verdict at this checkpoint.'
   created_at: 2026-11-07T22:58:52.208229208Z
   modified_at: 2026-11-07T22:58:52.208229208Z
+  session_id: 01a1b80dd99e
+- id: 01a1b848-056a-7113-b654-ed456751420a
+  author: joe
+  content: 'Round 3 executed Rust result: job j20261107T222936130-2-0 ran 24 tests: 23 passed, 1 failed. All receipt/publication/recovery regressions passed. The new real-main sandbox test reached real cargo check compilation in the exact gate profile but hit the 300-second limit on its empty private target (rc=124), rather than a sandbox refusal. It did not produce passing gate evidence. Updated only the integration fixture: warm its private target through at most four bounded sandbox runs, retrying TIMEOUT_RC only and failing actual gate errors immediately, then require a fresh production run_fast_gate pass with the normal 300-second timeout. Production repair credit, timeout, sandbox and environment are unchanged. Final combined job j20261107T231049594-2-0 is submitted with a 3600-second budget. Prior job also reported overlay-stale because primary rewrote an underlying generation file.'
+  created_at: 2026-11-07T23:11:30.154815875Z
+  modified_at: 2026-11-07T23:11:30.154815875Z
   session_id: 01a1b80dd99e
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
