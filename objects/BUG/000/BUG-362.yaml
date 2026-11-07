@@ -42,13 +42,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-06-11T12:48:31.383831391Z
+modified_at: 2026-11-07T20:25:50.004760528Z
 req_type: Bug
 tags:
 - aida:pr:ship
 - bug-361-family
 - closing-discipline
-- deferred:needs-repro
 comments:
 - id: 019e7c9c-6de4-73e3-abf8-6787baa8eadd
   author: joe
@@ -70,5 +69,18 @@ comments:
   content: 'RESOLVED — already implemented (verify-before-building; supersedes my earlier ''implementing Option B'' comment). aida pr ship Step 5 (aida-cli/src/main.rs ~29742, pr_ship.rs ShipStep::EndLease) already implements Option B: after merge+pull it finds list_leases().find(|l| l.branch == branch) and runs ''aida session end <lease> --yes --skip-ci'', with guards for shell-inside-worktree (skip + instruct) and no-matching-lease (''nothing to clean up''). 71 pr_ship tests pass. The 2026-05-23 repro predates this step. The ''1 stale lease hidden'' in the current session is unrelated — main-repo branch ships (no session worktree) have no lease to end. Closing as Completed.'
   created_at: 2026-06-01T05:31:03.105070050Z
   modified_at: 2026-06-01T05:31:03.105070050Z
+- id: 01a1b7b0-58b4-74c1-ba32-c9d47fcc1a99
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:needs-repro"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:25:50.004753627Z
+  modified_at: 2026-11-07T20:25:50.004753627Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-11T12:48:31.383831391Z
+deferred: true
+deferred_at: 2026-06-11T12:48:31.383831391Z
+deferred_until: manual:operator
