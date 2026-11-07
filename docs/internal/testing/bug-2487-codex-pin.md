@@ -2,10 +2,16 @@
 
 <!-- trace:BUG-2487 | ai:codex -->
 
-BUG-2487 is blocked on a launch-interface decision. Re-pinning to the requested
-`codex-cli 0.167.0` does **not** make the current `-P aida exec ...` argv valid.
-Do not treat `npm i -g @openai/codex@0.167.0` as a working containment upgrade.
-No production pin or launch argv was changed by this investigation.
+The 2026-11-07 advisor ruling supersedes the original upgrade acceptance and
+round-2 blocking decision below. Keep `codex-cli 0.166.0` and its existing
+SHA-256 pin. Exec selects the generated profile with
+`-c default_permissions="aida"`; `-P aida` remains exclusive to the separate
+`codex sandbox` seat preflight. No package upgrade is required.
+
+The launcher checks both argv scopes against recorded help before vendor
+execution and names any unsupported flag. It never executes a lane-selected
+binary on the host to discover options. The fixture's executable digest is
+paired with `codex_auth::PROGRAM_SHA256` in the production-builder regression.
 
 ## Binary evidence, 2026-11-07
 
@@ -43,7 +49,8 @@ read. Results for the downloaded 0.167.0 executable:
 
 The installed 0.166.0 help has the same scope distinction. A sandbox-subcommand
 capability must not be used as evidence that the top-level or exec parser
-accepts a flag. The current production builder adds `-P aida` before `exec`.
+accepts a flag. The broken builder added `-P aida` before `exec`; the current
+builder uses `-c default_permissions="aida"`.
 
 Reproduce against a separately extracted binary without loading host config:
 
@@ -83,23 +90,67 @@ runtime artifacts for the synthetic access token. It does not use production
 or establish successful real-account inference. Host OAuth denial/deadline
 enforcement still needs its own conformance evidence.
 
-## Required decision and follow-up
+## Round 4 implementation and validation, 2026-11-07
 
-Choose and authorize an exec-compatible way to select the generated permission
-profile, or identify a different exact binary whose exec parser accepts the
-current argv. The choice must preserve both model tool containment and the
-separate sandbox seat preflight. A self-reported version or successful
-`sandbox --help` alone is insufficient.
+The binding advisor ruling authorizes probing an exec-compatible config
+selection and keeps the 0.166.0 pin. Empty-HOME probes found:
 
-After that decision, pair the exact binary pin with the production argv builder
-in an installed-binary regression, including distinct exec and sandbox scopes.
-Pre-launch compatibility refusals must name the unsupported flag without
-executing lane-selected vendor code on the host. Repeat the fake reduced-leaf
-credential probe and host-run containment conformance before claiming support.
-No C0-C4 pass credit, successful real-account authentication, or complete
-no-in-lane-refresh proof is established by these probes.
+- `-c default_permissions="missing" exec ...` refuses with
+  `default_permissions requires a [permissions] table`.
+- A generated `[permissions.aida.filesystem]` table and
+  `-c default_permissions="aida" exec ...` select the named profile.
+- A local synthetic Responses server supplies exactly one `exec_command`
+  call, then a final synthetic response. That call writes successfully in
+  an allowed directory and fails with `EROFS` in a read-only directory.
+  Both directories pass a write control under the same outer wrapper before
+  Codex starts. No credentials or external inference are used.
 
-## Round 2 review disposition, 2026-11-07
+Reproduce both the always-on pin/help regression and the opt-in installed
+binary/profile probe:
+
+```bash
+cargo test -p aida-cli-lib --lib bug_2487 -- --nocapture
+AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1 cargo test -p aida-cli-lib --lib bug_2487 -- --nocapture
+```
+
+Lane validation: the opt-in command above passed both tests (2 passed,
+0 failed), including the actual production-builder exec and sandbox write
+probes. `cargo fmt --all -- --check` and `git diff --check` passed. The
+execution-context guard reports 1241 exact legacy sites with zero additions.
+The fixture uses `/tmp` explicitly rather than Cargo's RAM-backed test TMPDIR;
+Codex startup is bounded at 40 seconds and helper probes at five seconds.
+
+The installed test resolves the npm native leaf, checks its exact production
+pin, compares fresh `exec --help` and `sandbox --help` against the fixture,
+and passes the actual production builder argv to the exec parser and
+synthetic write probe. The generated sandbox seat preflight separately passes
+the same allowed/denied write check. Each subprocess has a timeout. It uses an
+empty private HOME/CODEX_HOME and a temporary local HTTP listener. An additional
+nested bwrap namespace replaces the parent native sandbox's mode-000 daemon
+mask with an **empty** private 0700 directory, keeping host sockets hidden.
+Fresh proc/dev mounts permit nested sandbox initialization. The outer fixture
+allows both write-control paths; the selected Codex profile denies only one.
+This is exec profile/argument evidence, not integrated AIDA C0-C4 conformance,
+real-account authentication, or new credential-refresh evidence.
+
+`codex_0166_help.json` records version, executable SHA-256 and unmodified
+stdout from each help scope. Re-record from a newly measured binary whenever
+changing the production pin; the always-on test fails if the digests differ.
+It exercises the shared headless builder with model/effort and generated
+transport flags, and verifies that sandbox-only and unknown flags fail closed
+with the offending flag named.
+
+Review disposition under the ruling: findings 1 and 4's upgrade demands are
+superseded; findings 2 and 3 are implemented by the config selection, pre-launch
+validation and paired regressions. Finding 6's decision is supplied by the
+advisor. Finding 5's old re-pin subject remains historically inaccurate, but
+the corrected implementation now supports the advisor's completing BUG-2487
+attribution. The host should publish a new implementation commit to #3611
+and use a squash/title subject describing the exec config fix and retained
+0.166.0 pin, rather than claiming an upgrade. This native seat cannot rewrite
+Git history or retitle/publish the PR. The existing merge hold is not cleared.
+
+## Historical round 2 review disposition (superseded by advisor ruling)
 
 The review of `cfbecb41250f` is accepted: AC1 (pin), AC2 (pre-launch flag
 validation), AC3 (pin/argv regression), and AC4 (supported upgrade instructions)
