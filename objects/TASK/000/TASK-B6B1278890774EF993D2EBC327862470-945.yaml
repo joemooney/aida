@@ -1,0 +1,29 @@
+id: 01a1b72d-6029-7cb0-9bbe-c65d56e44983
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-945
+title: 'minor (non-blocking): pin mismatch / resolution refusal is surfaced only as an …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2484, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): pin mismatch / resolution refusal is surfaced only as an informational vendor_binaries line, not a DoctorFinding, so aida doctor totals stay clean when the contained ChatGPT launch would refuse (doctor_cmd.rs:1202).
+
+  PR: #3609
+  Reviewed sha: c69bbae990092548dcc582d01443ee91ade9f44b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T18:02:46.697971523Z
+modified_at: 2026-11-07T18:02:46.697971523Z
+req_type: Task
+tags:
+- carried-from:BUG-2484
+- finding-hash:5e48bfe5
+- from-review:PR-3609
+- kind:carried-forward
+filed_at:
+  code_sha: 9a9d2bdab8c27097e5f6fc80bd57c5a686895a68
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
