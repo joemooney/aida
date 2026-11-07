@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T03:46:27.156238458Z
+modified_at: 2026-11-07T03:46:45.048219753Z
 req_type: Task
 tags:
 - architecture
@@ -81,6 +81,14 @@ history:
   timestamp: 2026-11-07T03:45:03.212946902Z
   session_id: 01a1b41bb373
   changes: []
+- id: 01a1b41d-a8b8-74c3-87b1-23be390393ae
+  author: joe
+  timestamp: 2026-11-07T03:46:45.048238678Z
+  session_id: 01a1b41bb373
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -90,3 +98,9 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: Binding TASK-3225 advisor signoff comment 0 amendment 2 forbids enabling S2 mutation verbs until a separate recoverable transaction sketch is approved. TASK-3223 is guided and has no transaction approval. Sketch v1 is posted on TASK-3223 and saved in docs/plans/2026-11-06-task-3223-mediated-transactions.md. Requires independent selection/signoff on durable mutation-plus-dedupe transaction, canonical reader/writer recovery admission, and multi-root claim/queue participant protocol. Current read-only service and separately installed canonical files cannot provide that guarantee. No runtime edits or publication declaration; headless run exits without waiting.
+  lean: Approve host-owned redo transactions with canonical recovery/admission and explicit multi-root participant design, or authorize a separately scoped Refs transaction slice before routing/cutover.
+  raised_by: implementer
+  raised_at: 2026-11-07T03:46:45.048219753Z
