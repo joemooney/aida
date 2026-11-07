@@ -13,14 +13,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-10T06:40:40.129747743Z
+modified_at: 2026-11-07T20:25:52.987023013Z
 req_type: Story
 tags:
 - audit
 - auth
 - blocked
 - codex
-- deferred:post-stability
 - marketplace
 - mcp
 - remote
@@ -81,5 +80,18 @@ comments:
   content: 'Moved to Draft (advisor, 2026-06-07, operator-confirmed hold): not ready-to-build — your 2026-06-06 decision defers it to post-stability + a concrete remote/cloud-agent need (new HTTP+token-auth+audit attack surface during bugs-first phase). Draft is its honest state; promote back to Approved when the trigger fires. Pair with STORY-474 read-only profile when built.'
   created_at: 2026-06-08T06:23:57.579097706Z
   modified_at: 2026-06-08T06:23:57.579097706Z
+- id: 01a1b7b0-645b-74f3-8c34-65a6af796134
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:post-stability"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:25:52.987012138Z
+  modified_at: 2026-11-07T20:25:52.987012138Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-10T06:40:40.129747743Z
+deferred: true
+deferred_at: 2026-06-10T06:40:40.129747743Z
+deferred_until: manual:operator
