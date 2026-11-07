@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-324
 agreed_id: STORY-2326
 title: 'One agent launcher: LaunchContext + spawn_agent with an env-clear allowlist and declared sandbox resources'
 description: 'Regroup target 3, 2026-11-02. Build the context once (seat, validated grant, containment posture, worktree, vendor). Every agent spawn goes through spawn_agent, which clears the environment and sets an allowlist; a ratchet forbids other spawn sites. The containment profile declares cargo slots, sccache and the target directory, so lanes can run the LIGHT gate. Slice by vendor; high risk. Evidence: TASK-1749, TASK-1758, TASK-1788, TASK-1333, STORY-1486, BUG-1669, TASK-2772. Sketch-first; advisor signoff required.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T11:22:32.469768012Z
+modified_at: 2026-11-07T11:28:00.000963639Z
 req_type: Story
 tags:
 - architecture
@@ -1099,6 +1099,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b5c3-f200-7f31-ba40-4d0067f9dcc3
+  author: joe
+  timestamp: 2026-11-07T11:28:00.000982366Z
+  session_id: 01a1b5beea1e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -1107,3 +1116,9 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+attention_reason:
+  category: design-fork
+  detail: 'PR-D (2026-11-07 ruling): spawn_agent env_clear().envs(ChildEnv) cannot be wired without a policy decision the ruling does not make. (1) aida_core::launch_policy::EnvPolicy::new refuses every non-owned AIDA_* name in the forwarded set (''Unknown AIDA names cannot expand child authority; fixture inputs are never vendor allowlist entries''). Production source names ~330 distinct AIDA_* keys, and vendor children (hooks, the aida CLI inside the session) consume many through inheritance today: AIDA_HOME, AIDA_USER, AIDA_SESSION_ID/SCOPE/PROJECT, AIDA_HEADLESS_VENDOR, AIDA_AGENT_NAME/TYPE/MODEL, AIDA_HANDLE, AIDA_ROTATION_*, AIDA_SHELL_WRAPPER, AIDA_DEV_*, AIDA_TELEMETRY and more. With the current EnvPolicy, a cleared child would lose all of them; ThisSession exec children (the session becoming the vendor) break first. (2) The approved sketch''s C1 gate requires an operator-posted per-vendor ''aida launch explain'' dropped-keys report before each vendor''s allowlist merges. That command was never built (the ''launch'' subcommand does not exist), so no compatibility matrix exists to pick the keys from. (3) 13 aida-cli integration suites (bug_2139, story_1662, bug_2187 ...) pass fixture-only env (e.g. BUG2139_ENV_DUMP) to an AIDA_AGENT_CMD fake vendor, and a strict allowlist breaks them. (4) Secondary, solvable: Codex prepare_launch rebuilds the Command and loses env_clear; and contained.rs selected_environment treats every explicit env as site-decided, so forwarded host keys (PATH) would newly reach the wrapper. Need a ruling on (1)+(2) before coding.'
+  lean: 'Add an exact, pinned AMBIENT_AIDA_KEYS list to launch_policy: operational config keys that carry no authority, admitted by EnvPolicy::new next to OWNED_KEYS. Exclude AIDA_TEST_*/AIDA_REQUIRE_* fixtures, AIDA_AGENT_CMD and the *_TOKEN/*_API_KEY credentials. Back it with a ratchet test: every AIDA_ literal read in production is owned, ambient or explicitly dropped. Per-vendor non-AIDA exact keys live in launch/profile.rs. Under the uncontained AIDA_AGENT_CMD test seam the program is a fixture, not a vendor, so the parent env passes; the new story_2326_spawn_agent_clears_env unit test covers the clear. Codex prepare_launch keeps the clear through an env_remove marker. Ship as PR-D Claude-first with the ratchet extension (issue_launch_child_with_delegation/issue_child_from outside launch/), and treat the missing launch explain report as accepted risk or build it first, at the advisor''s call.'
+  raised_by: implementer
+  raised_at: 2026-11-07T11:28:00.000963639Z
