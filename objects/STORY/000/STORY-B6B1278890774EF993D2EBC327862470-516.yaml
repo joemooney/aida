@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T03:24:57.494683850Z
+modified_at: 2026-11-07T03:25:03.273146736Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -218,6 +218,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 7: docs-only plan update (reflow + descriptive headings + handoff text); STORY-2593 AC1-AC3 remain unmet and the PR title still carries a feat subject with a completing (STORY-2593) trailer; interface decision (finding 5) still unrecorded.. It was punted on: design-fork: Review of 14ef038e232f / PR #3560: factual findings 1-6 accepted. Explicitly dispute treating findings 1-3 as implementer-actionable before finding 5 is resolved: the signed step-1 stop condition failed for installed codex-cli 0.166.0, so removing refuse_chatgpt or claiming containment evidence would violate the advisor decision. AC1-AC3 remain unmet; BUG-2447/2448 are Approved and blocked, without C3/C4 evidence. Finding 5 requires an advisor/operator decision recorded on STORY-2593: authorize the ID-token-shaped/empty-refresh schema with explicit compatibility/security requirements, or name another supported codex exec interface. No later interface decision exists in the current story comments; prior risk approval and requeue without a triage reason do not resolve this fork. Escalate to advisor/operator instead of another docs-only implementation round. Finding 4 remains a host action: 14ef038e232f regressed from docs/Refs to feat/completion, and e58b7e8cafc and PR #3560 also claim completion. Retitle PR #3560 to [AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593), or close it unmerged. Future commits must use that docs/Refs subject. Recorded that exact native publication declaration; it is descriptive intent only, and this punt vetoes host publication and completion. Finding 6 fixed locally: reflowed the ownership paragraph and removed review-round numbering from section headings. Only docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md changed, left uncommitted. git diff --check passed; verified production refusal/API-key preflight and both blocked bug statuses with read-only inspection. No production code or credentials changed and no live conformance run claimed. Preserve the merge hold. Git metadata and PR operations remain outside this native seat.. No triage reason was given.'
   created_at: 2026-11-07T03:24:57.494682535Z
   modified_at: 2026-11-07T03:24:57.494682535Z
+- id: 01a1b409-cb44-78f1-bccd-bc7e8f48e15c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0c3299c77788
+    Recorded: 2026-11-07T03:20:57.125156343+00:00
+    Findings:
+    1. 1. AC1 unmet: refuse_chatgpt() is still defined and called (aida-cli-lib/src/launch/contained.rs:624, :851) and OPENAI_API_KEY is still required (:852-858). The PR diff touches only docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md; the plan says the refusal stays because the signed step-1 gate failed.
+    2. 2. AC2 unmet: no C0-C4 run under --boundary aida with the operator's ChatGPT login, no policy/binary/receipt hashes, no credential-visibility sentinels. The step-1 table (plan lines 41-47) is synthetic login-status/exec probes against a loopback recorder, which the doc itself says are not containment evidence.
+    3. 3. AC3 unmet: BUG-2447 and BUG-2448 are status approved and still blocked by this story; neither is closed or re-scoped from C3/C4 evidence.
+    4. 4. Metadata still completes the story: the new commit 0c3299c7778 correctly uses docs(plans)/(Refs STORY-2593), but the PR #3560 title and commits e58b7e8cafc and 14ef038e232 still read '[AI:codex] feat: ... replace the ... refusal with a brokered credential path (STORY-2593)'. A squash merge takes the PR title, so the trailing (STORY-2593) would auto-complete an unimplemented story. Host action: retitle the PR to '[AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593)' or close it unmerged.
+    5. 5. Blocking decision still unrecorded and belongs to the advisor/operator: no spec comment after 2026-11-07T03:07Z records an interface choice (accept the ID-token-shaped/empty-refresh schema with security/compatibility requirements, or name another supported codex exec interface). Steps 1-3 cannot proceed without it, and further docs-only implementer rounds cannot clear it. Escalate; do not requeue for the implementer.
+    6. 6. Cosmetic, docs: the round-6 reflow at plan lines 22-25 leaves a short ragged line ('`(Refs STORY-2593)` trailer; that squash' followed by 'resolves finding 4...'). Rejoin it into one paragraph at wrap width. Prior finding 6 (round-number headings) is otherwise fixed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T03:25:03.172030151Z
+  modified_at: 2026-11-07T03:25:03.172030151Z
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
