@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-941
 agreed_id: TASK-3387
 title: Separate Infinity lessons for vendor harness support from AIDA-owned agent research
 description: 'Documentation-only request from Joe: split the Infinity architecture deep dive into two independently readable documents. One covers benefits to existing Codex, Claude and AGY support, current capabilities, adapter limitations and incremental validation. The other covers the optional AIDA-owned agent runtime, durable execution risks, prototype scope and a separate investment decision. Cross-link the documents and preserve useful source analysis. No runtime implementation or runtime adoption is authorized.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T14:58:25.585224297Z
-modified_at: 2026-11-07T16:14:22.573266958Z
+modified_at: 2026-11-07T16:16:31.222322384Z
 req_type: Task
 comments:
 - id: 01a1b688-1438-7dc1-87bf-340cf18e483d
@@ -30,6 +30,12 @@ comments:
   modified_at: 2026-11-07T16:08:01.934830366Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6cc-17f6-7b11-bb2b-936118169079
+  author: joe
+  content: 'Native-seat handoff: no repository files changed; no documents rewritten or created. Reviewed both exact draft blobs at a78d8d357a0 against the request: harness benefits/capabilities/limitations/incremental validation and separate optional runtime risks/prototype/investment decision are covered and cross-linked. All 7 relative link targets, TASK-3387 traces and trailing-whitespace checks pass. make check-ci-fast was attempted on the supplied origin/main worktree, reached Check aida-cli without default features, then waited for a build slot (2 in use); interrupted with exit 130, so no passing gate result is claimed. Branch mismatch is punted as a publication veto. Host recovery: use docs/infinity-docs-draft at a78d8d357a0; merge current origin/main into that branch; run make check-ci-fast on the resulting branch; use completing (TASK-3387) only after all requested items pass; open PR from that existing branch. No commit/push/PR/queue-done/review-record performed here.'
+  created_at: 2026-11-07T16:16:31.222322384Z
+  modified_at: 2026-11-07T16:16:31.222322384Z
+  session_id: 01a1b6ca12f9
 history:
 - id: 01a1b6c2-e4cf-7d10-ab19-cb08755df6d7
   author: joe
@@ -47,6 +53,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b6cb-e47d-7db3-8645-7f7ba623c02b
+  author: joe
+  timestamp: 2026-11-07T16:16:18.045894995Z
+  session_id: 01a1b6ca12f9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -54,3 +68,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 02790568d5e
   vendor: codex
+attention_reason:
+  category: blocked-dependency
+  detail: Advisor ruling requires preserving and publishing origin/docs/infinity-docs-draft at a78d8d357a0. Native seat was provisioned instead on task-b6b1278890774ef993d2ebc327862470-941 at origin/main ac1f7e0a9c4, without the draft docs; Git metadata is read-only. Cannot switch branch, merge main, change the publication trailer or open the required PR here. Existing draft content satisfies the requested split and seven local link targets plus traces/whitespace pass. Host must use the existing draft branch, merge current main (currently two commits ahead), run make check-ci-fast there and publish from that branch only. No documents were created or rewritten; retain Refs until branch validation completes.
+  raised_by: implementer
+  raised_at: 2026-11-07T16:16:18.045873776Z
