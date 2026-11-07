@@ -1,0 +1,21 @@
+id: 01a1b59e-3913-7c73-bc2d-d8c93d129a05
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
+agreed_id: TASK-3368
+title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
+description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T10:46:47.827833836Z
+modified_at: 2026-11-07T10:46:47.827833836Z
+req_type: Task
+filed_at:
+  code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b39018a304
+  vendor: claude
+  session: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
