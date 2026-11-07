@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:44:49.448858538Z
+modified_at: 2026-11-07T06:44:59.618589408Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -342,6 +342,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 vendor_exit finding fixed (pre-deadline failures keep their status, post-deadline ones map to RELAUNCH) and the OVERVIEW rewrap is done. Blocking: CI gates ''Store mutation channel tests'' is red at this head, because the merge from main brought in a BUG-2480 test that runs the supervisor loop without the new credential_deadline closure. AC1 verified; AC2/AC3 belong to the advisor (steps 4-5).. No triage reason was given.'
   created_at: 2026-11-07T06:44:49.448854779Z
   modified_at: 2026-11-07T06:44:49.448854779Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4c0-ceb5-7992-b9b0-da03402e1bff
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3575):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 99b16162d3eb
+    Recorded: 2026-11-07T06:41:55.578478259+00:00
+    Findings:
+    1. 1. [major, CI-blocking] CI (gates) step 'Store mutation channel tests' (python3 -m unittest tests/test_store_mutation.py) fails at 99b16162d3eb. Cause: contained_host.py's 'while process.poll() is None' loop now calls credential_deadline() (contained_host.py:743), a closure nested in host_contained. tests/test_store_mutation.py shutdown_helper (from BUG-2480 #3573, merged in at 80c69c6) pulls out only that While node with ast and exec's it with a context dict (process, notification, proxy, watch, mutation, ...). That dict has no credential_deadline, so the loop raises NameError and the notification-shutdown regression fails. Fix one of two ways: (a) move the deadline check to a module-level helper that takes the deadline value, and add that value to the shutdown_helper context; or (b) add credential_deadline=lambda: None to the shutdown_helper context and keep a separate test for the live deadline path (story_2593_live_host_deadline_stops_lane). Either way, re-run tests/test_store_mutation.py with AIDA_REQUIRE_STORE_MUTATION_LIVE=1.
+    2. 2. [minor] Interface ruling req (2) says that when the lane attempts a refresh, it 'fails closed with the relaunch diagnostic'. The boundary refusal is proven (story_2593_live_credential_and_refresh_sentinels CONNECT auth.openai.com refused; story_2593_oauth_policy_denies_before_resolution). But since round 9, vendor_exit (contained.rs:1546-1550) maps a failure to RELAUNCH only at or after the deadline. A pre-deadline refresh attempt (upstream 401, then a refused OAuth CONNECT, then codex exits 1) now surfaces as a plain exit 1 with no reauthenticate/relaunch hint. Fix: have the host record a denied OAuth-host CONNECT as a distinct signal (receipt or state file), map a failed exit with that signal to RELAUNCH, and add a test. Alternatively, record on STORY-2593 that the deadline-only mapping satisfies req (2).
+    3. 3. [cosmetic] story_2593_reduced_sealed_leaf_and_lifetime (codex_auth_tests.rs:73-77) checks only is_err() for version None / 'codex-cli 0.166.1' / '0.166.0'. Assert that the error contains 're-probe this codex version' (ruling req 3 names that refusal), as the production-prepare test already does at :474.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T06:44:57.141798060Z
+  modified_at: 2026-11-07T06:44:57.141798060Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
