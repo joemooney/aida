@@ -731,7 +731,8 @@ pub(crate) struct PreparedLaunch {
     accept_writer: File,
     /// Expiry captured from the exact read-only bound Claude leaf.
     credentials: Option<i64>,
-    chatgpt: bool,
+    /// Absolute ChatGPT lane deadline in Unix seconds, shared with the supervisor.
+    chatgpt_deadline: Option<i64>,
     outer_only: Option<&'static str>,
     mutation: Option<store_mutation::Session>,
 }
@@ -1038,7 +1039,6 @@ impl PreparedLaunch {
         let lane_tmp = state.path().join("tmp");
         ensure_dir(&lane_tmp)?;
         std::fs::set_permissions(&lane_tmp, std::fs::Permissions::from_mode(0o700))?;
-        let chatgpt = matches!(&auth, Auth::ChatGpt(_));
         let mut codex_deadline = None;
         let credentials = match &auth {
             Auth::ChatGpt(_) => None,
@@ -1198,7 +1198,7 @@ impl PreparedLaunch {
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.mutation = mutation;
         prepared.credentials = credentials;
-        prepared.chatgpt = chatgpt;
+        prepared.chatgpt_deadline = codex_deadline;
         prepared.outer_only = runtime_policy.map(|_| vendor.key);
         Ok(prepared)
     }
@@ -1405,7 +1405,7 @@ impl PreparedLaunch {
             accept_reader,
             accept_writer,
             credentials: None,
-            chatgpt: false,
+            chatgpt_deadline: None,
             outer_only: None,
             mutation: None,
         })
@@ -1451,7 +1451,7 @@ impl PreparedLaunch {
             acceptance: None,
             receipt: None,
             credentials: self.credentials,
-            chatgpt: self.chatgpt,
+            chatgpt_deadline: self.chatgpt_deadline,
             mutation: self.mutation,
             _state: self._state,
         };
@@ -1530,20 +1530,24 @@ pub(crate) struct ContainedChild {
     receipt: Option<ContainmentReceipt>,
     acceptance: Option<File>,
     credentials: Option<i64>,
-    chatgpt: bool,
+    /// Absolute ChatGPT lane deadline in Unix seconds, shared with the supervisor.
+    chatgpt_deadline: Option<i64>,
     mutation: Option<store_mutation::Session>,
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
-    /// The vendor's exit, unless it failed because its read-only Claude
-    /// credentials expired inside the lane: that is the named refusal
-    /// (05:47 ruling), never a silent failure or a writable retry.
+    /// Preserve vendor exits unless a failed lane has reached its captured
+    /// credential deadline. Expiry is a named refusal, never a writable retry.
     // trace:TASK-2708 | ai:claude
+    // trace:STORY-2593 | ai:codex
     pub(crate) fn vendor_exit(
         &self,
         status: std::process::ExitStatus,
     ) -> Result<std::process::ExitStatus> {
-        anyhow::ensure!(!self.chatgpt || status.success(), codex_auth::RELAUNCH);
+        if let Some(deadline) = self.chatgpt_deadline {
+            let expired = chrono::Utc::now().timestamp() >= deadline;
+            anyhow::ensure!(status.success() || !expired, codex_auth::RELAUNCH);
+        }
         if let Some(credentials) = &self.credentials {
             let expired = *credentials <= chrono::Utc::now().timestamp_millis();
             anyhow::ensure!(status.success() || !expired, CLAUDE_EXPIRED_IN_LANE);

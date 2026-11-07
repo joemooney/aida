@@ -132,6 +132,44 @@ fn story_2593_credential_identity_schema_and_redaction() {
     assert!(error(home.path()).contains("routing mismatch"));
 }
 
+/// Ordinary failures retain their status until the captured lane deadline.
+// trace:STORY-2593 | ai:codex
+#[test]
+fn story_2593_vendor_exit_preserves_status_before_deadline() {
+    use std::os::unix::process::ExitStatusExt;
+    let mut run = ContainedChild {
+        child: Command::new("/bin/true").spawn().unwrap(),
+        receipt: None,
+        acceptance: None,
+        credentials: None,
+        chatgpt_deadline: Some(chrono::Utc::now().timestamp() + 3600),
+        mutation: None,
+        _state: tempfile::tempdir().unwrap(),
+    };
+    let success = std::process::ExitStatus::from_raw(0);
+    let statuses = [
+        std::process::ExitStatus::from_raw(1 << 8),
+        std::process::ExitStatus::from_raw(31 << 8),
+        std::process::ExitStatus::from_raw(libc::SIGTERM),
+    ];
+    for status in statuses {
+        assert_eq!(run.vendor_exit(status).unwrap(), status);
+    }
+    assert_eq!(run.vendor_exit(success).unwrap(), success);
+    run.chatgpt_deadline = Some(chrono::Utc::now().timestamp());
+    for status in statuses {
+        assert_eq!(
+            run.vendor_exit(status).unwrap_err().to_string(),
+            codex_auth::RELAUNCH
+        );
+    }
+    assert_eq!(run.vendor_exit(success).unwrap(), success);
+    run.chatgpt_deadline = None;
+    for status in statuses {
+        assert_eq!(run.vendor_exit(status).unwrap(), status);
+    }
+}
+
 /// Real common wrapper: terminal reads only the reduced leaf, cannot modify
 /// it, cannot recover host credentials through the masked relocation, and
 /// cannot connect to the OAuth token endpoint even when policy listed it.
@@ -169,7 +207,7 @@ print('credential and refresh sentinels passed')
     let private = plan._state.path().join("private-codex");
     std::fs::create_dir(&private).unwrap();
     let credential = prepare_auth(host.path(), 3600).unwrap();
-    codex_auth::bind(&mut plan.profile, &private, credential).unwrap();
+    let deadline = codex_auth::bind(&mut plan.profile, &private, credential).unwrap();
     let empty = plan._state.path().join("empty-mask");
     std::fs::create_dir(&empty).unwrap();
     plan.profile.add(host.path(), false).unwrap(); // readable positive control before masking
@@ -200,6 +238,7 @@ print('credential and refresh sentinels passed')
         &root,
     )
     .unwrap();
+    plan.chatgpt_deadline = Some(deadline);
     let mut output = tempfile::tempfile().unwrap();
     plan.command.stderr(output.try_clone().unwrap());
     let mut run = match plan.spawn(output.try_clone().unwrap().into()) {
@@ -226,7 +265,9 @@ print('credential and refresh sentinels passed')
         std::fs::read(host.path().join("auth.json")).unwrap()
     );
     let failed = Command::new("/bin/false").status().unwrap();
-    run.chatgpt = true;
+    assert_eq!(run.chatgpt_deadline, Some(deadline));
+    assert_eq!(run.vendor_exit(failed).unwrap(), failed);
+    run.chatgpt_deadline = Some(chrono::Utc::now().timestamp() - 1);
     assert_eq!(
         run.vendor_exit(failed).unwrap_err().to_string(),
         codex_auth::RELAUNCH
@@ -349,6 +390,7 @@ fn story_2593_bind_keeps_secrets_off_disk_and_out_of_command() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     if crate::test_env::run_path_isolated_test() {
         return;
@@ -388,7 +430,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         .env("AIDA_ROLE_INSTANCE", "companion")
         .env("OPENAI_API_KEY", "alternate-credential-sentinel");
     let plan = PreparedLaunch::prepare(&child, root.path(), None).unwrap();
-    assert!(plan.chatgpt);
+    assert!(plan.chatgpt_deadline.is_some());
     let env: BTreeMap<_, _> = plan
         .command
         .get_envs()
@@ -414,7 +456,8 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     }
     let args: Vec<_> = plan.command.get_args().collect();
     let cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
-    assert!(cfg["chatgpt_deadline"].as_i64().unwrap() > chrono::Utc::now().timestamp());
+    assert_eq!(cfg["chatgpt_deadline"].as_i64(), plan.chatgpt_deadline);
+    assert!(plan.chatgpt_deadline.unwrap() > chrono::Utc::now().timestamp());
     let diagnostic = format!("{:?}", plan.command);
     for secret in [
         original["tokens"]["access_token"].as_str().unwrap(),
@@ -472,7 +515,7 @@ fn story_2593_fifo_reader_child() {
 
 #[test]
 fn story_2593_fifo_refusal_has_watchdog() {
-    let mut child = Command::new(std::env::current_exe().unwrap())
+    let mut child = Command::new(crate::aida_bin::current_executable_path().unwrap())
         .args([
             "--exact",
             "launch::contained::tests::codex_auth_tests::story_2593_fifo_reader_child",

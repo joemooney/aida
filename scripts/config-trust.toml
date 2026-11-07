@@ -970,3 +970,9 @@ sites = 1
 [keys.trusted.contained]
 allowed_hosts = "policy"
 read_allowlist = "policy"
+
+# Generated private Codex config only; no branch-local authority read.
+# trace:STORY-2593 | ai:codex
+[readers."aida-cli-lib/src/launch/codex_auth.rs"]
+channels = ["write"]
+sites = 1

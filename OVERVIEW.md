@@ -1581,12 +1581,14 @@ the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
 access-token expiry and identity account routing, and requires grant lifetime
 plus a 300-second margin. A sealed memfd supplies only the access token, host ID
 token and `refresh_token=""`, plus derived account routing and a generated
-delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth leaf; no full cache or
-host refresh token enters the lane. Baseline lanes last at most one hour.
+delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
+leaf; no full cache or host refresh token enters the lane. Baseline lanes last
+at most one hour.
 Unsupported versions, malformed or insufficient validity and keyring logins
 refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
 there is no renewal. The host supervisor enforces the absolute deadline and
-failed ChatGPT exits request host reauthentication/relaunch. Readable bearer
+failed ChatGPT exits at or after that deadline request host reauthentication
+and relaunch; earlier failures preserve the vendor exit status. Readable bearer
 exposure remains an accepted risk. These changes have no live ChatGPT C0-C4
 pass credit until the advisor runs that evidence; see the
 [credential boundary plan](docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md).
