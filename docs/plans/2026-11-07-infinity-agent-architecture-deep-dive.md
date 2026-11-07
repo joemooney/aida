@@ -41,7 +41,7 @@ supports the necessary operation.
 
 ## 2. Current AIDA adapter descriptors vs. available vendor CLI surfaces
 
-Must distinguish **what AIDA's checked-in [`VendorProfile`](../../aida-core/src/vendors/mod.rs) table currently wires** from **what the underlying vendor CLIs/runtimes expose for investigation**. Descriptors in [`aida-core/src/vendors/mod.rs`](../../aida-core/src/vendors/mod.rs) describe admitted AIDA adapters today; they do not grant authority or containment credit, nor do they represent the ceiling of what each vendor binary supports.
+This section distinguishes **what AIDA's checked-in [`VendorProfile`](../../aida-core/src/vendors/mod.rs) table currently wires** from **what the underlying vendor CLIs/runtimes expose for investigation**. Descriptors in [`aida-core/src/vendors/mod.rs`](../../aida-core/src/vendors/mod.rs) describe admitted AIDA adapters today; they do not grant authority or containment credit, nor do they represent the ceiling of what each vendor binary supports.
 
 | Vendor | Wired in `VendorProfile` today (`aida-core/src/vendors/mod.rs`) | Verified vendor CLI / runtime capabilities available to test | Consequence for this track |
 |---|---|---|---|
@@ -94,9 +94,9 @@ and launch-policy admission.
 
 ### 3.4 Bounded context packets, pre-compaction handoffs, and turn-boundary forks
 
-* **Proactive output bounds:** Infinity's [`recover_from_overflow`](file:///home/joe/ai/infinity/crates/infinity-agent-core/src/event_processor.rs#L1444-L1454) only recovers when a single unvalidated tool result overflows (`history.unvalidated_len() == 1`). AIDA should proactively bound AIDA-owned CLI/tool outputs (launch context, mail excerpts, search/query results) and write oversized diagnostics to artifact files with path + byte-range references.
+* **Proactive output bounds:** Infinity's `recover_from_overflow` (`crates/infinity-agent-core/src/event_processor.rs:1444-1454`) only recovers when a single unvalidated tool result overflows (`history.unvalidated_len() == 1`). AIDA should proactively bound AIDA-owned CLI/tool outputs (launch context, mail excerpts, search/query results) and write oversized diagnostics to artifact files with path + byte-range references.
 * **Pre-compaction handoff capture:** Unlike Infinity's background compaction child (`apply_compaction`), vendor compaction in Claude/Codex/AGY is opaque to AIDA once it runs. However, AIDA can wire Claude's `PreCompact` hook (and `--autocompact` threshold) plus turn-count/grant-expiry hooks (`aida-grant-expiry-notice.sh`) to automatically snapshot durable state (active spec, decisions, git diff summary, open questions) into AIDA's store *before* vendor compaction summarizes the transcript.
-* **Turn-boundary context forks (testing CLI forks against the `safe_spawn_point` invariant):** Infinity's [`HistoryManager::safe_spawn_point`](file:///home/joe/ai/infinity/crates/infinity-agent-core/src/event_processor.rs#L1845) cuts inherited history immediately before an unanswered tool call so the child never inherits a dangling `tool_use`. Because `claude --resume <id> --fork-session` and `codex fork <id>` operate on vendor-persisted session transcripts, AIDA should test whether invoking them from a `Stop` hook or idle boundary reliably observes a fully flushed transcript with no concurrent user input or in-flight subagent work before relying on CLI forks for helper/triage tasks.
+* **Turn-boundary context forks (testing CLI forks against the `safe_spawn_point` invariant):** Infinity's `HistoryManager::safe_spawn_point` (`crates/infinity-agent-core/src/event_processor.rs:1845`) cuts inherited history immediately before an unanswered tool call so the child never inherits a dangling `tool_use`. Because `claude --resume <id> --fork-session` and `codex fork <id>` operate on vendor-persisted session transcripts, AIDA should test whether invoking them from a `Stop` hook or idle boundary reliably observes a fully flushed transcript with no concurrent user input or in-flight subagent work before relying on CLI forks for helper/triage tasks.
 
 ### 3.5 Deterministic adapter tests
 

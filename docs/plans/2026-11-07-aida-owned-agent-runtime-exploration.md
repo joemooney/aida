@@ -28,11 +28,13 @@ The potential advantage is exact control of suspension, event admission,
 context inheritance, and bounded execution. The ongoing cost includes provider
 compatibility, coding-tool quality, credential handling, cancellation, migration,
 and debugging a new execution engine. In Infinity (`e1a3e4b36e5`),
-`crates/infinity-agent-core/src` totals 12,930 lines—of which 6,620 lines are
-production runtime code (including 2,000 production lines in
-`event_processor.rs:1-2000`) and 6,310 lines are inline `#[cfg(test)]` suites
-(including 3,208 test lines in `event_processor.rs:2001-5209` and 2,652 lines in
-`system/tests.rs` + `test_support.rs`)—before counting `infinity-daemon`
+`crates/infinity-agent-core/src` totals 15,050 lines (`wc -l` over every `.rs`
+file). About 7,850 of them are production runtime code (counted as the lines
+before each file's first `#[cfg(test)]`, excluding `system/tests.rs` and
+`system/test_support.rs`; 2,000 of them in `event_processor.rs:1-2000`). The
+other 7,196 are tests, including 3,209 lines in `event_processor.rs:2001-5209`
+and 2,652 lines in `system/tests.rs` + `system/test_support.rs`. All of that is
+before counting `infinity-daemon`
 (7,490 lines), provider adapters, RAP/MCP bridges, CLI surfaces, and sandboxing.
 
 AIDA's existing positioning in
