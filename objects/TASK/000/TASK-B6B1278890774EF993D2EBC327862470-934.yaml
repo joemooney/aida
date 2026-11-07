@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-07T22:51:09.590134603Z
+modified_at: 2026-11-07T22:58:11.536001937Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -111,6 +111,33 @@ comments:
     Validation so far: make check-ci-fast PASS, 43/43 fast gates, including no-default-features build, TUI all-target check, portability, formatting, ExecContext and store-writer inventory. Standalone rustfmt --check, git diff --check and check-store-writers.py also PASS. Executed Rust tests remain pending: first lane job j20261107T223825068-2-0 is compiling; j20261107T223837556-3-0 (core S4), j20261107T224303638-3244950-0 (both crates' proc_identity_ and ratchet on final source) and j20261107T224519961-2-0 (existing registry/mail-wake/grant-binding families) are queued. No executed Rust test success is claimed yet.
   created_at: 2026-11-07T22:51:09.590134603Z
   modified_at: 2026-11-07T22:51:09.590134603Z
+  session_id: 01a1b827cdad
+- id: 01a1b83b-d5d0-7841-b84b-e343b1c6e946
+  author: joe
+  content: |
+    Round 2 final validation handoff: untested=true for executed Rust tests; source rework is ready, not completion credit. No review finding is disputed.
+
+    PASS: make check-ci-fast completed all 43 fast gates. Standalone rustfmt --check on changed Rust, git diff --check, and scripts/check-store-writers.py passed (3359 reconciled sink sites, 293 operation mappings; no runtime authority granted).
+
+    The CLI S4 test job j20261107T223825068-2-0 timed out after 900 seconds (exit 124), before any executed-test result; no compiler error was emitted. Core job j20261107T223837556-3-0 is still compiling. Combined final-source ProcIdentity/ratchet job j20261107T224303638-3244950-0 and affected registry/mail-wake/grant-binding job j20261107T224519961-2-0 remain queued. These states are not passing test evidence. Lane lifecycle owns those jobs; host must inspect or rerun after this seat exits. Consider AIDA_CARGO_TIMEOUT=1800 on the CLI retry because the seeded-target 900-second build was insufficient. No target seed or limiter bypass was attempted.
+
+    Finding 6 remains OPEN for executed Rust test results and green CI at the reworked head. Host publication must create a NEW commit for this round, run the targeted suites and CI, and retain the merge hold until its separately authorized clearance. Native declaration recorded: [AI:codex] fix(identity): preserve sandbox inboxes and live registry upgrades (Refs TASK-3366). No seat commit/push/PR/merge/queue-done was attempted.
+
+    Changed files:
+    AGENTS.md
+    OVERVIEW.md
+    aida-cli-lib/src/agent_registry.rs
+    aida-cli-lib/src/gate/seat_authority.rs
+    aida-cli-lib/src/gate/tests/bug_1934_grant_binding_tests.rs
+    aida-cli-lib/src/mailbox_wake_run.rs
+    aida-cli-lib/src/mailbox_wake_run_tests.rs
+    aida-cli-lib/src/session_start.rs
+    aida-core/src/mailbox_identity.rs
+    aida-core/src/mailbox_identity_tests.rs
+    aida-core/src/proc_identity.rs
+    docs/internal/testing/proc-identity-s4.md
+  created_at: 2026-11-07T22:58:11.536001937Z
+  modified_at: 2026-11-07T22:58:11.536001937Z
   session_id: 01a1b827cdad
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
