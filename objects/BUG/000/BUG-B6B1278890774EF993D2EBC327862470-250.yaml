@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-250
 agreed_id: BUG-2485
 title: Conformance harness kills the interactive role-enter prompt after 30s
 description: 'scripts/containment/conformance.py runs ''aida role enter advisor --no-resume --no-title'' with a 30s subprocess timeout. That command can stop at an interactive y/N prompt (''Include it in the TTY-issued delegation set?''). When the operator doesn''t answer within 30s, the harness reports rc=2 with ''timed out after 30 seconds'' and leaves the terminal in a broken mode (the staircase output). Repro 2026-11-07 16:44Z, out=~/.aida/conformance-codex-aida-1794069894. Acceptance: role-enter prompts run without a deadline (or with a long one, minutes, that says it is waiting for the operator), or the harness pre-answers the delegation-set question non-interactively when it is the expected answer. The terminal state is restored on every exit path.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T18:19:01.032113922Z
+modified_at: 2026-11-07T19:10:04.510004234Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -186,6 +186,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b76a-fcb9-78f0-b6d4-2afbb74906da
+  author: aida-auto-bump
+  timestamp: 2026-11-07T19:10:04.473691038Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b76a-fcdd-7df1-a8f9-3d913dc931e2
+  timestamp: 2026-11-07T19:10:04.510000817Z
+  agent: aida
+  commit_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
+  summary: 'Round 3: both prior findings fixed (test uses explicit PATH env, ExecContext ratchet green; foreground Ctrl+C recorded as harness-interrupted: SIGINT in setup/continue/outer with controlling-tty regression). All BUG-2485 acceptance verified; PR CI green at 7dfe768 (merge-hold-gate is the human/advisor hold, not a code failure).'
+  review_verdict: approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -195,3 +209,7 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T19:10:04.473685170Z
+  completion_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
