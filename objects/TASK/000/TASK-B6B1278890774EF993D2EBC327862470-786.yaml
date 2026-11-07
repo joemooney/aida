@@ -359,6 +359,20 @@ comments:
   modified_at: 2026-11-07T23:30:38.171659084Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b863-d4fd-7f80-9142-5b0b3038c250
+  author: dirtlab
+  content: |
+    Partial follow-up to the binding 2026-11-07 16:40 MST ruling; TASK-3048 is not complete. Seven source/test/docs files changed, left uncommitted for the native host. AIDA fixture accepts AGY and selects vendor-specific trusted policy/auth-host data; outer-only candidate argv now has receipt-barrier-gated --dangerously-skip-permissions, no --sandbox or --settings permission profile; private runtime settings are empty and inode-pinned read-only credentials remain unchanged. Adapter::require_conformance still refuses production launches.
+
+    Inventory evidence: measured host remains daily-cloudcode-pa.googleapis.com from the prior attached host run. Installed /home/dirtlab/.local/bin/agy contains https://oauth2.googleapis.com/token, so oauth2.googleapis.com was added as a candidate refresh host in runtime_policy.auth_hosts. This is static evidence, not a measured refresh inventory; auth_inventory_complete remains false. No real vendor model was run.
+
+    Remaining work for the requested slice: a diagnostic-only entry point through the shared wrapper (the current fixture still reaches the production conformance refusal), verified MCP/browser/URL disabling, explicit credential-source transport across fixture HOME relocation, and advisor-measured refresh inventory. Native diagnostic reports still grant no production_launcher_credit or whole_lane_pass. Do not mistake the fixture accepting --vendor agy for a successful AIDA-boundary execution.
+
+    Validation so far: 52 offline conformance tests passed; separate production fixture test passed under umask 022. Targeted Rust task_3048 lane job j20261107T233740281-2-0 and make check-ci-fast are running. Initial fast gate run failed unrelated mail-wake fixture ownership checks with shared-write temp directories; rerunning under umask 022. Refs-only publication subject declared; no commit, push, PR, ship merge, review record or queue completion performed.
+  created_at: 2026-11-07T23:41:52.765829056Z
+  modified_at: 2026-11-07T23:41:52.765829056Z
+  session_id: 01a1b85e95ed
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
@@ -638,6 +652,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b864-3524-73c2-ae15-3c03f1686f00
+  author: dirtlab
+  timestamp: 2026-11-07T23:42:17.380088104Z
+  session_id: 01a1b85e95ed
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1b86f-74de-7ef3-bbc5-66ebe28c748b
   author: aida-orchestrator
   timestamp: 2026-11-07T23:54:34.590744453Z
