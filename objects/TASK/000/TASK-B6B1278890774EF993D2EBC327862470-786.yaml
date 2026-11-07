@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T16:57:36.578293732Z
+modified_at: 2026-11-07T16:59:26.468668799Z
 req_type: Task
 tags:
 - area:containment
@@ -337,6 +337,12 @@ comments:
   content: 'Final isolated rerun (no inherited operator settings): /home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/report.json; attached report updated to that exact run. Same AGY 1.5.3 native sandbox glob configuration refusal, C0-C4 unknown, no terminal receipt. All 44 offline conformance tests pass after settings-isolation assertions. Rust initial 13-test run passed 12 and found an obsolete empty-settings assertion in the live regression; corrected to assert the exact workspace permission and rerunning.'
   created_at: 2026-11-07T16:57:36.578293732Z
   modified_at: 2026-11-07T16:57:36.578293732Z
+  session_id: 01a1b6e79dd6
+- id: 01a1b6f3-6384-7400-bfda-f6111e794c0d
+  author: joe
+  content: 'Final validation: cargo test -p aida-cli-lib --lib -- task_3048 agy_private_permissions_are_workspace_only agy_adapter_ --nocapture passed all 16 tests, including the live common-wrapper private-runtime/credential/tool-descendant regression. Python conformance suite passed all 44 tests. cargo fmt --all -- --check and git diff --check passed. Nine files left uncommitted for native host publication; Refs subject already declared. TASK-3048 remains incomplete with the isolated AGY report attached and production admission closed.'
+  created_at: 2026-11-07T16:59:26.468668799Z
+  modified_at: 2026-11-07T16:59:26.468668799Z
   session_id: 01a1b6e79dd6
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
