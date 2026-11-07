@@ -5,6 +5,10 @@
     {
       "at": "2026-11-07T15:36:42.282417483Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-07T18:30:56.872887865Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -24,6 +28,25 @@
         "event": "SpecCompleted",
         "commit": "1220b5d94cc96afed81065dab2929a39cc3c72b8",
         "pr": 3601,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-07T18:30:05.726550817Z",
+      "spec": "BUG-2483",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3605
+      }
+    },
+    {
+      "ts": "2026-11-07T18:30:56.538523520Z",
+      "spec": "BUG-2483",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4684da6301a91be054e3a0d74f71afb6ba1ec180",
+        "pr": 3605,
         "closed_by": "auto-bump"
       }
     }
