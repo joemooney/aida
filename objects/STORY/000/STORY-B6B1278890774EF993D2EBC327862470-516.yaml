@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:46:10.563774194Z
+modified_at: 2026-11-07T06:50:05.078996761Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -360,6 +360,12 @@ comments:
   modified_at: 2026-11-07T06:44:57.141798060Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4c5-8196-7021-bfd8-6c875ad594f7
+  author: joe
+  content: 'Round 10 rework for PR #3575 at 99b16162d3eb: addressing all three findings. The BUG-2480 extracted-loop fixture now supplies credential_deadline and the optional OAuth channel context. A host-only unlinked descriptor records denied OAuth CONNECTs before replying; failed ChatGPT exits with that evidence map to RELAUNCH even before expiry, while ordinary failures retain ExitStatus. Added all-four-host/other-host signal checks and a real contained denied-CONNECT then exit-1 regression; version refusal assertions now require re-probe this codex version. Store mutation tests passed with AIDA_REQUIRE_STORE_MUTATION_LIVE=1 (22 tests); Python containment suites passed (44 tests), fmt/diff/portability checks passed. Rust launcher suite is compiling. This remains the authorized Refs implementation slice, not real ChatGPT C0-C4 acceptance; preserve the existing merge hold. Native-seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-07T06:50:05.078996761Z
+  modified_at: 2026-11-07T06:50:05.078996761Z
+  session_id: 01a1b4c1e52e
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
