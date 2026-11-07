@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T01:10:54.153190402Z
+modified_at: 2026-11-07T01:28:13.469183340Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,12 @@ comments:
   modified_at: 2026-11-07T01:09:58.583140011Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b39e-d59d-71a1-91d9-3139db59aa51
+  author: joe
+  content: 'Round 2 rework: scan and reap dispatch recognize physical seat clones even when legacy leases default to Worktree. Empty branches resolve via dispatch_snapshot before shipped-head lookup and origin counting; inferred protected branches refuse. Regression persists a lease without tree_kind, asserts the actual hygiene scan reports it reapable, verifies unpublished work stays, and verifies clone reap dispatch refuses without a pinned HEAD. Added bug_2473_bwrap_ to required-live selection and expected/ran patterns. Remote-coverage diagnostics retain the complete formatted cause once. Validation: four targeted Rust tests pass with AIDA_REQUIRE_BWRAP_LIVE=1 and test-only AIDA_TRUST_PID_NAMESPACE=1; cargo fmt --all -- --check and git diff --check pass. Mail-retention host-binding checks and merge hold remain intact. Native-seat edits left uncommitted for host publication.'
+  created_at: 2026-11-07T01:28:13.469183340Z
+  modified_at: 2026-11-07T01:28:13.469183340Z
+  session_id: 01a1b38eef14
 history:
 - id: 01a1b368-f22a-7ab3-bbec-f4bcc959f0e9
   author: aida-session-start
