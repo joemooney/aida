@@ -2557,7 +2557,7 @@ pub(crate) fn pr_publication_spec_guard_violation(
     store: Option<&aida_core::RequirementsStore>,
 ) -> Option<Vec<String>> {
     let resolve = |id: &str| store.and_then(|s| s.resolve_unambiguous_index(id).ok().flatten());
-    let expected = resolve(expected_spec);
+    let expected = store.map(|s| s.resolve_unambiguous_index(expected_spec));
     let mut other_ids = Vec::new();
     for (_, subject) in commits {
         if is_plan_commit_subject(subject) {
@@ -2566,9 +2566,11 @@ pub(crate) fn pr_publication_spec_guard_violation(
         for id in extract_spec_ids_from_commit(subject).into_iter().chain(
             crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject),
         ) {
-            let matches = match store {
-                Some(_) => expected.is_some() && resolve(&id) == expected,
-                None => id.eq_ignore_ascii_case(expected_spec),
+            let matches = match &expected {
+                Some(Ok(Some(index))) => resolve(&id) == Some(*index),
+                // A stale store may not contain the leased spec yet.
+                Some(Ok(None)) | None => id.eq_ignore_ascii_case(expected_spec),
+                Some(Err(_)) => false,
             };
             if matches {
                 return None;
@@ -2790,33 +2792,39 @@ pub(crate) fn classify_branch_swap_attribution(
     decide_shelve_attribution(&commits, expected_spec)
 }
 
-/// TASK-1442 follow-up: the same PR-spec attribution check as
-/// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
-/// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
-/// top level; the autonomous drain's PR-open recovery paths
-/// (`open_orchestrator_pr_for_implementer_worktree`,
-/// `open_orchestrator_pr_for_pushed_branch`) run INSIDE the orchestrator
-/// process, where `std::process::exit` would kill the whole drain instead of
-/// failing just the one phase. `repo` is the directory to run git in (the
-/// implementer worktree, or the main project root for a pushed branch);
-/// `branch_ref` is whatever ref names the branch's commits from there (a
-/// local branch name or `origin/<branch>`). A no-op when the default branch
-/// or commit range can't be resolved (soft — a git hiccup shouldn't block
-/// recovery) or when there are no commits to check.
-///
-/// TASK-1457: this collapses `Reattributed` and `Uncertain` (see
-/// `classify_branch_swap_attribution` above) into the same `Err` — a
-/// deliberate, kept decision for THIS gate. `ensure_spec_done_after_pr`
-/// (its only status-writing caller) must not flip a spec to Done on
-/// EITHER absent or contrary trailer evidence; per PRIN-5, "cannot
-/// determine" is not license to proceed on a Done write any more than
-/// "determined otherwise" is. The two PR-open recovery callers
-/// (`open_orchestrator_pr_for_implementer_worktree`,
-/// `open_orchestrator_pr_for_pushed_branch`) inherit the same fail-safe
-/// for the same reason: opening a PR under an unconfirmed identity is a
-/// second write worth refusing on absent evidence too. Only the
-/// branch-swap seam needs the finer three-way split, because only it has
-/// to tell an operator whether to look for a swap or a missing trailer.
+/// Result-returning publication guard for drain PR-open recovery. Refs and
+/// unambiguous aliases establish publication attribution, never completion.
+// trace:BUG-2483 | ai:codex
+pub(crate) fn ensure_pr_publication_spec_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> Result<()> {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return Ok(());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let Ok(commits) = read_commits_in_range(repo, &range) else {
+        return Ok(());
+    };
+    if commits.is_empty() {
+        return Ok(());
+    }
+    let store = load_store_for_lookup(repo);
+    if let Some(other_ids) =
+        pr_publication_spec_guard_violation(&commits, expected_spec, store.as_ref())
+    {
+        anyhow::bail!(
+            "refusing to open a PR for {expected_spec} on `{branch_ref}` — no commit on it \
+             carries a `({expected_spec})` or `(Refs {expected_spec})` trailer; other IDs: {}",
+            other_ids.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Completion-only attribution for Done writes and phase handshakes.
+/// Missing default/range evidence retains the existing soft recovery behavior.
 // trace:TASK-1442 trace:TASK-1457 | ai:claude
 pub(crate) fn ensure_pr_open_spec_attribution(
     repo: &std::path::Path,
