@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T21:14:20.306348587Z
+modified_at: 2026-11-07T21:14:27.207730252Z
 req_type: Story
 comments:
 - id: 01a1b7a6-d350-7e21-b918-65fab0b15f35
@@ -89,6 +89,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Gate design follows the advisor sandbox ruling and the native/self-push round logic is unit-tested, but lane receipts wedge review permanently on held/punted/no-PR lanes, gate errors abort the lane before the lease end and result line, and aida ship --from-seat now refuses any branch with a non-native-ready receipt. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T21:14:20.306346016Z
   modified_at: 2026-11-07T21:14:20.306346016Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7dc-db95-7703-841a-6d00caacdc29
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 09a8cc611357
+    Recorded: 2026-11-07T21:07:42.481363486+00:00
+    Findings:
+    1. [major] Permanent review wedge: begin() writes a pending receipt for every implementer lane (standalone_implementer.rs:673, session.rs:6681, queue_cmd.rs:9070), but only pushed()/published() ever clear pending. Lanes that end Held, Punted, NoPr, or (session.rs:6760 / queue_cmd.rs:9101) whose PR lookup lags and returns None leave pending=true with head=None, and nothing removes .aida/fast-gates receipts. review_watch.rs:2418 blocks_review() then skips that branch forever: a held lane later shipped by the operator, or a punted branch opened by hand, never gets a reviewer. Fix: clear or settle the receipt on Held/Punted/NoPr exits (or make blocks_review ignore receipts with head=None once the lane lease has ended), and add a test for a held lane whose PR is opened later.
+    2. [major] Gate errors abort the lane with no result line and a kept lease (AC2/AC3): in standalone_implementer.rs:876 pushed(...)? and :826 native(...)? return early before end_finished_lease (BUG-2436) and the println of the result line. Reachable failures include snapshot() on a dirty seat ('fast gate needs a clean committed seat'), annotate_fast_gate() forge flakes or a PR head that differs from the local seat head (unpushed commits), lookup_pr misses in the skipped path, and 'seat changed during fast gate'. A passing lane that hits a gh flake during annotation now fails outright, which breaks AC3 ('a lane that passes behaves exactly as today, plus the marker'). session.rs:6757 and queue_cmd.rs:9102 propagate the same errors. Fix: map gate infrastructure errors to a marker such as fast_gate=skipped(<reason>) or fail, always print the result line, end the lease, and add a test for the error path.
+    3. [major] check_import regression for operator ships (ship_from_seat.rs:1629): check_import refuses any branch that has a receipt unless native_ready is true and its head matches. native_ready is true only between native_rounds() and published(). So 'aida ship --from-seat' on a branch whose lane ended Held, Punted, or NoPr, or that a self-pushing lane gated, or that was already published once (published() resets native_ready=false), now fails with 'imported lane head differs from the host fast gate; rerun the lane'. That breaks the operator's held-ship and recovery path. Fix: apply check_import only on the publish_queue_exit path (pass a flag), or only while a native round is in flight, and test a manual from-seat ship of a lane branch.
+    4. [minor] AC4 test coverage is unit-level only. The timeout test (lane_job.rs fast_gate_timeout_writes_host_result_and_retains_untested) proves TIMEOUT_RC is written, but no test proves the gate attempt maps a timeout to a fast_gate marker or a repair round. The 'Codex native-publication path' is covered only through native_rounds with injected closures plus publication_ready/check_import. Nothing exercises the wiring in standalone_implementer::run, session::run_vendor_headless_to_exit, run_queue_resume_to_exit, or publish_queue_exit (annotate + published), and no test asserts the result line carries fast_gate= (AC2). No test carries an AC trace, so 'aida criteria' reports all five criteria as untraced. Add trace-tagged tests per criterion, including one that asserts the result-line marker.
+    5. [minor] native() no-sandbox branch (lane_fast_gate.rs native, bwrap unavailable) records skipped(no-sandbox) but leaves native_ready=false and pending=true. publish_queue_exit -> publication_ready then refuses, so the lane never publishes rather than 'publishing with fast_gate=skipped(no-sandbox)' as the ruling describes. If contained Codex publication truly cannot run without bwrap, say so in a comment and settle the receipt (pending=false). Otherwise set native_ready with the seat head so publication proceeds with the skipped marker.
+    6. [cosmetic] lane_job.rs run_one_timed: when make is missing, the refusal still says '`cargo` is not on the job's PATH' (it uses lane.program) and the spawn error says 'start cargo:'. Use job.argv[0] in both messages.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T21:14:27.093137654Z
+  modified_at: 2026-11-07T21:14:27.093137654Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
