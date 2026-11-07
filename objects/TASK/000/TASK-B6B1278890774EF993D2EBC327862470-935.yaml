@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-935
 agreed_id: TASK-3367
 title: 'STORY-2537 S5: close the liveness inventory and tighten the TASK-1750 ratchet to zero legacy sites'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-07T10:46:16.888539142Z
+modified_at: 2026-11-07T10:47:17.436715761Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,6 +21,15 @@ history:
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b59e-acbc-71d3-884f-05e8dc53e9f5
+  author: joe
+  timestamp: 2026-11-07T10:47:17.436712895Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
