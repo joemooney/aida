@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-07T09:24:28.562721952Z
+modified_at: 2026-11-07T09:25:08.977710793Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -66,6 +66,12 @@ comments:
   modified_at: 2026-11-07T00:29:45.044922021Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b553-78f1-7b03-9255-39e95e29750d
+  author: joe
+  content: 'Native pickup verification (2026-11-07): found the fix already merged as 9ac1e87d7c6 / PR #3524, and the advisor note explicitly reserves completion for the post-deployment guard window. No source changes were needed. Re-ran python3 tests/test_show_latency.py --aida /home/joe/.local/bin/aida against live SHA 8b39018a304: PASS. Held refresh locks returned in 89-156ms, held request locks in 206-240ms, SQLite-writer/full-rebuild fallback in 159ms, slow Git log in 1296ms; dispenser lock and strict recovery assertions passed. Working tree remains clean. Acceptance 3 is still pending the full 24-hour window ending approximately 2026-11-08 00:10Z (Nov 7 17:10 MST); no budget changes, publication, queue completion, or new monitoring were performed.'
+  created_at: 2026-11-07T09:25:08.977710793Z
+  modified_at: 2026-11-07T09:25:08.977710793Z
+  session_id: 01a1b5527fbf
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
