@@ -1,0 +1,36 @@
+id: 01a1b6f4-34d0-79a0-9bd4-e9876e16c594
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-557
+agreed_id: STORY-2634
+title: 'Review PR-3610: [AI:codex] fix(containment): scope agy workspace permissions; Refs STORY-2460 (Refs TASK-3048)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b6e7`) for branch `task-3048-r0944`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3610>
+  - Branch: `task-3048-r0944` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3048
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3610` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T17:00:20.048000656Z
+modified_at: 2026-11-07T17:00:20.048000656Z
+req_type: Story
+filed_at:
+  code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
+  session: 01a1b6e79dd6
