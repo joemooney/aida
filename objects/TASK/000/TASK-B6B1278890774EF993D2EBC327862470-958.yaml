@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-07T22:46:40.905334760Z
+modified_at: 2026-11-07T23:33:05.621383713Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,6 +21,13 @@ comments:
   created_at: 2026-11-07T22:13:58.231030055Z
   modified_at: 2026-11-07T22:13:58.231030055Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b85b-c9d5-7943-ba4e-106f9d7ef29f
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 16:50 MST (rework for PR #3635, CI gates red): ''Help golden snapshot co-change guard'' fails because command_registry.rs changed without the golden. The move is meant to leave --help unchanged, so add a ''Help-Golden: unchanged'' trailer line to the commit message (scripts/check-help-golden-cochange.sh:34). If you find help output DID change, regenerate aida-cli-lib/src/tests/golden/cli_help_snapshot.txt instead. Gate: make check-ci-fast. Push to the same branch.'
+  created_at: 2026-11-07T23:33:05.621383713Z
+  modified_at: 2026-11-07T23:33:05.621383713Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b811-df16-79c0-9152-0fbdcca89083
