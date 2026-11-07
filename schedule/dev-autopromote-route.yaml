@@ -1,14 +1,8 @@
 job: dev-autopromote-route
-last_run: 2026-11-06T14:22:27.686407390Z
+last_run: 2026-11-07T09:24:26.311962378Z
 last_by:
   seat: advisor
-  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  session: 01a1b441-8158-7162-ad75-f7915b45ee33
   vendor: claude
 result: done
-note: 'Benign race: main moved during the 04:23 build (staged 44f957f vs HEAD a79a053). The later promotion at 12:48 of dd852f7 succeeded and the live binary is ACTIVE. +dirty comes from the untracked docs/presentation/.'
-due_since: 2026-11-07T07:47:37.958344654Z
-due_reason: on CronJobFailed:dev-autopromote
-due_failure:
-  trip_id: dev-autopromote@2026-11-07T07:36:16.926751334Z
-  job: dev-autopromote
-  error: 'exit 1: build of a7bda6eabe09e52cfd5e0749aed88fdd26cf0370 failed; log /home/joe/.aida/dev-autopromote/20261107T071433Z-a7bda6eabe09.log; tail:    Compiling cmov v0.5.4 |    Compiling unsafe-libyaml-norway v0.2.15 |    Compiling serde_norway v0.9.42 |    Compiling rusqlite v0.31.0 |    Compiling ctutils v0.4.7 |    Compiling reqwest v0.12.28 |    Compiling ts-rs v12.0.1 |    Compiling etcetera v0.11.0 |    Compiling aida-core v0.16.0 (/home/joe/ai/aida/aida-core) |    Compiling crossterm v0.29.0 |    Compiling terminal_size v0.4.4 |    Compiling line-clipping v0.3.7 |    Compiling tempfile v3.25.0 |    Compiling clap_builder v4.5.60 |    Compiling ratatui-widgets v0.3.2 |    Compiling prost-build v0.13.5 |    Compiling clap v4.5.60 |    Compiling nix v0.28.0 |    Compiling nix v0.31.2 |    Compiling ratatui-macros v0.7.2 |    Compiling ratatui-crossterm v0.1.2 |    Compiling portable-pty v0.9.0 |    Compiling ratatui v0.30.2 |    Compiling ctrlc v3.5.2 |    Compiling tui-markdown v0.3.7 |    Compiling tonic-build v0.12.3 |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling inquire v0.9.4 |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-tui v0.16.0 (/home/joe/ai/aida/aida-tui) |    Compiling tower-http v0.5.2 |    Compiling nucleo-matcher v0.3.1 |    Compiling tonic-web v0.12.3 |    Compiling aida-generate-types v0.16.0 (/home/joe/ai/aida/aida-generate-types) |    Compiling aida v0.16.0 (/home/joe/ai/aida/aida-crate) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 10m 54s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha a7bda6eabe0, but HEAD is bb6eef8efe4999767677c9c822ae26a35966b6e8." | help: aida --version'
+note: a7bda6e build was refused only because main moved mid-build; the 08:24Z run promoted 8b39018 == origin/main
