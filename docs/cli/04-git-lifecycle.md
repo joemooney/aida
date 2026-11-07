@@ -447,6 +447,57 @@ failures: the train PR is closed and its members are ejected with that reason.
 
 ---
 
+#### Merge serialization and recovery
+
+<!-- trace:TASK-3364 | ai:codex -->
+
+The branch merge lease at `.aida/merge-locks/<branch>` records a cooperative
+`ProcIdentity` holder generation. The shared judge reports **Alive**, **Dead**,
+**ForeignUnknown(reason)** or **Refused(reason)**. Dead holders are reclaimable
+immediately. Alive holders are never stolen, even after expiry or a wall-clock
+jump. Separately, a persisted `deadline_boot` plus `deadline_boottime` uses
+Linux `CLOCK_BOOTTIME` (including suspend): non-Alive holders become **Expired**
+after 600 seconds, or after the deadline's boot ends. This local-file deadline
+is not process death and does not authorize signaling. A failed clock read
+retains the lease. Incomplete publications keep their 30-second mtime grace.
+
+Writers preserve the line-oriented format and add JSON `process` evidence.
+`pid_ns=proc-identity-v1:<inode>` and the compatibility
+`ttl_secs=9223372036854775807` fence older readers' PID probes and wall-time
+expiry; the new boot deadline governs recovery independently. Upgrade all
+mergers and `scripts/release.sh` together and retire older processes before
+rollback: older writers do not share the permanent mutation guard.
+
+At Rust acquisition, a complete record lacking both deadline fields is
+rewritten once under the branch mutation guard, with a fresh boot deadline
+bounded by 600 seconds. No wall-clock age is converted to elapsed boot time,
+and no old PID is recaptured as an admitted holder. Unrebindable legacy process
+evidence stays ForeignUnknown(MissingIdentity). Repeated acquisitions do not
+extend that deadline. To migrate before train/release admission checks, run
+`aida merge-lock --migrate-legacy` once on upgrade. This explicit guarded repair
+also handles legacy records that prevent a caller from reaching acquisition.
+Read-only inspection never rewrites records.
+
+`aida merge-lock` text and JSON expose the holder verdict, reason, lease state,
+and operator repair hint; JSON also exposes `reclaimable`. Incomplete records
+report `lease_state: Incomplete`, with reclamation controlled by the 30-second
+grace independently. The read-only
+`aida merge-lock --check-file <path> --json` helper applies the same judge and
+expiry policy for `scripts/release.sh`. The script fails closed if that helper
+is unavailable or fails, preserves the helper error, and asks for an up-to-date
+CLI rather than asserting that a merger is alive. Retained-lease refusals include
+the observation and legacy migration guidance. The script stamps its own
+unadmitted shell records with a one-hour boot deadline. Normal exit removes
+only its exact publication, with a bounded five-second guard wait and an
+explicit recovery warning on failure.
+`AIDA_RELEASE_LEASE_TTL_SECS` does not change recovery policy.
+
+For manual repair, stop all mergers for that branch, inspect the record on its
+owning node and establish that no merge is running, then remove only that
+branch's inspected lease file. Preserve `.guard-<branch>`: this permanent
+sidecar serializes publication and generation-fenced deletion. Never infer
+process death from wall-clock age or a numeric PID absent in another view.
+
 ### `aida review`
 
 **One line** — drive human review of a spec against its acceptance criteria.
