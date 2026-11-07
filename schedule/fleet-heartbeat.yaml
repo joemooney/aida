@@ -1,9 +1,8 @@
 job: fleet-heartbeat
-last_run: 2026-11-07T15:49:23.003247884Z
+last_run: 2026-11-07T23:46:03.860094783Z
 last_by:
   seat: advisor
-  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   vendor: claude
 result: done
-due_since: 2026-11-07T16:51:14.073111300Z
-due_reason: every 1h
+note: 'PRs 14 open (4 green awaiting review, 10 red in rework); lanes: 4 local codex + 4 dell1 codex. Oldest stall: review watcher dead on stale grant 16:13-16:38, fixed (relaunched on current grant, concurrency arg fixed). Acted: PR-3611 seat ended+review released; PR-3619 conflict merged; TASK-3048/3424/3425/3368/2539/2538/3426 ruled; STORY-2326 + SPIKE-713 completed. Human: none. Next: next hourly tick.'
