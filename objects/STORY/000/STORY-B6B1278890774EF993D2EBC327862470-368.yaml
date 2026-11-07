@@ -24,12 +24,12 @@ description: |-
   - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
 
   Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T22:16:16.547425213Z
+modified_at: 2026-11-07T22:49:32.585708939Z
 req_type: Story
 relationships:
 - rel_type:
@@ -935,6 +935,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b833-eaa9-7a63-a6bc-7e9ba5682364
+  author: aida-orchestrator
+  timestamp: 2026-11-07T22:49:32.585734943Z
+  session_id: 01a1b82fb704
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -943,3 +952,11 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: S5 logic meets the signed-off brief (typed --until on session handoff and findings recur via shared condition_cmd::canonical_condition, free text refused, manual needs --reason, parked rows resurface through the hourly defer-resurface sweep, story2402_s5_* tests), but the new clap flags were added without regenerating the CLI golden fixtures, so lib CI will fail; CI was still queued at review time.
+  recovery_hint: address the review findings, move STORY-2402 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T22:49:32.585708939Z
