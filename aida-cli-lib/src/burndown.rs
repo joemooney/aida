@@ -1412,9 +1412,8 @@ pub(crate) fn sweep_walk_order(mut lines: Vec<UnblockLine>) -> Vec<UnblockLine> 
 }
 
 #[cfg(test)]
-mod story_750_sweep_tests {
-    include!("tests/burndown_story_750_sweep_tests.rs");
-}
+#[path = "tests/burndown_story_750_sweep_tests.rs"]
+mod story_750_sweep_tests;
 
 /// STORY-563: assemble the PASTE-READY advisor prompt from the classified set.
 /// DETERMINISTIC + side-effect-free — this is the SPIKE-55 prompt-assembler
@@ -2081,9 +2080,8 @@ fn is_drift(bucket: OpenBucket) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("tests/burndown_tests.rs");
-}
+#[path = "tests/burndown_tests.rs"]
+mod tests;
 
 // ── BUG-755: the drain process must not exit with residual work ──
 //
@@ -2518,6 +2516,5 @@ pub(crate) fn render_integration_report(rows: &[IntegrationOutcome]) -> String {
 }
 
 #[cfg(test)]
-mod bug_755_residual_tests {
-    include!("tests/burndown_bug_755_residual_tests.rs");
-}
+#[path = "tests/burndown_bug_755_residual_tests.rs"]
+mod bug_755_residual_tests;

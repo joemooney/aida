@@ -6474,6 +6474,5 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    include!("tests/auto_complete_tests.rs");
-}
+#[path = "tests/auto_complete_tests.rs"]
+mod tests;

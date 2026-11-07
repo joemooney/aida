@@ -246,9 +246,8 @@ fn owned_channel_visible(seat: Option<AwaitingSeat>, owner: AwaitingSeat) -> boo
 }
 
 #[cfg(test)]
-mod bug_1530_review_fix_tests {
-    include!("tests/awaiting_you_bug_1530_review_fix_tests.rs");
-}
+#[path = "tests/awaiting_you_bug_1530_review_fix_tests.rs"]
+mod bug_1530_review_fix_tests;
 
 /// BUG-1564: one In-Progress spec with no live session/lease/process behind
 /// it. `abandoned = true` means a spec-scoped lease existed but its holder
@@ -3611,6 +3610,5 @@ pub(crate) fn classify_open_prs(
 }
 
 #[cfg(test)]
-mod tests {
-    include!("tests/awaiting_you_tests.rs");
-}
+#[path = "tests/awaiting_you_tests.rs"]
+mod tests;

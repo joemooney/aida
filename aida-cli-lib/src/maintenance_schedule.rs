@@ -4305,9 +4305,8 @@ fn shell_quote(s: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("tests/maintenance_schedule_tests.rs");
-}
+#[path = "tests/maintenance_schedule_tests.rs"]
+mod tests;
 
 /// Per-seat job registry: substrate jobs run by the tick, seat jobs
 /// delivered to whoever holds the seat (alias: `aida cron`).

@@ -9314,9 +9314,8 @@ fn mcp_mail_entry(m: &aida_core::mailbox::Message) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("tests/mcp_tests.rs");
-}
+#[path = "tests/mcp_tests.rs"]
+mod tests;
 
 /// Start MCP (Model Context Protocol) server over stdio
 ///
@@ -9403,6 +9402,5 @@ pub(crate) static MCP_SERVE: crate::command_registry::CommandReg =
 
 // trace:BUG-2017 | ai:codex
 #[cfg(test)]
-mod bug_2017_schema_tests {
-    include!("tests/mcp_bug_2017_schema_tests.rs");
-}
+#[path = "tests/mcp_bug_2017_schema_tests.rs"]
+mod bug_2017_schema_tests;
