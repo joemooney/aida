@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T10:02:54.008950274Z
+modified_at: 2026-11-07T10:03:41.440035549Z
 req_type: Story
 tags:
 - architecture
@@ -718,6 +718,13 @@ comments:
   created_at: 2026-11-07T00:55:35.635768298Z
   modified_at: 2026-11-07T00:55:35.635768298Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b576-c200-7442-8ad1-98bbe3285702
+  author: joe
+  content: 'Pickup 2026-11-07 (claude, implementer, branch story-2326-r0300 at 5a0dff1aa07): the 2026-11-06 15:30 PR-C advisor brief is already satisfied on origin/main. PR #3531 landed as squash commit 4f3096cf0cb (2026-11-06 18:44 -0700). GitHub shows the PR as CLOSED because the train merges by squash. The commit is an ancestor of HEAD. On main, prepare_launch exists only inside launch/profile.rs (the one other mention is a doc comment in codex_tool_env.rs:102), and grant issuance goes through launch::issue_launch_child. No edits, commit or PR this session, so as not to fabricate a slice outside the brief. Still open for the story, per the PR-C handoff: resource renderers (TASK-2772 settings rendering), the environment allowlist/env-clear cutover, remaining legacy posture/resume work (TASK-1788 cross-root resume refusal, AIDA_AGENT_CMD program resolution inside the launcher, L5), aida launch explain, default_flags refusal wiring, and the accepted minor follow-ups (ratchet forbidding direct issue_launch_child_with_delegation outside launch/, stale ''slice C'' ledger labels). Needs an advisor brief for PR-D.'
+  created_at: 2026-11-07T10:03:41.440035549Z
+  modified_at: 2026-11-07T10:03:41.440035549Z
+  session_id: 01a1b575fecb
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
