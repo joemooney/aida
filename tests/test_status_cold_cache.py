@@ -3,6 +3,7 @@
 
 Run with an optimized binary:
   python3 tests/test_status_cold_cache.py --aida target/agent/aida
+For debug CI, use --cold-budget 30 --warm-budget 10.
 No real store, cache, network credentials or user HOME is used.
 trace:BUG-2481 | ai:codex
 """
@@ -27,7 +28,7 @@ def run(args, root, env, timeout=30):
     return result
 
 
-def check(binary):
+def check(binary, cold_budget=15, warm_budget=5):
     with tempfile.TemporaryDirectory(prefix="aida-status-cold-") as temp:
         root, home = Path(temp) / "project", Path(temp) / "home"
         root.mkdir()
@@ -79,7 +80,7 @@ def check(binary):
             if path.is_file():
                 path.unlink()
         assert not cache.exists()
-        for label, budget in (("cold", 15), ("warm", 5)):
+        for label, budget in (("cold", cold_budget), ("warm", warm_budget)):
             print(f"Running {label} full status ({ROWS} rows, budget {budget}s)", flush=True)
             started = time.monotonic()
             # No remote is configured. Exercise full status including hygiene;
@@ -104,5 +105,9 @@ def check(binary):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aida", required=True, type=Path)
+    parser.add_argument("--cold-budget", type=float, default=15,
+                        help="cold status timeout in seconds (default: 15 for optimized builds)")
+    parser.add_argument("--warm-budget", type=float, default=5,
+                        help="warm status timeout in seconds (default: 5 for optimized builds)")
     args = parser.parse_args()
-    check(args.aida.resolve())
+    check(args.aida.resolve(), args.cold_budget, args.warm_budget)
