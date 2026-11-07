@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-248
 agreed_id: BUG-2483
 title: 'aida ship PR-open guard refuses Refs-only slices: (Refs ID) trailers are not counted as attribution'
 description: 'run_pr_open_spec_guard (aida-cli-lib/src/trace.rs) refuses to open a PR unless a commit carries a completing (SPEC-ID) trailer. extract_spec_ids_from_commit does not count ''(Refs SPEC-ID)'', so every Refs slice (the normal multi-PR pattern) is refused with ''no commit on this branch carries a (SPEC-ID) trailer at all''. Repro 2026-11-07: branch story-2325-prc, commit 7408ec769f ''[AI:codex] refactor(ownership): cut over train and review readers (Refs STORY-2325)''. The dell1 codex lane punted on it and ''aida ship STORY-2325 --no-merge'' on the home host refused the same way; the advisor opened the PR with gh. Also check: the comparison is a literal case-insensitive string match, so a node-local friendly label (STORY-2325) never matches a canonical lease scope (STORY-b6b...-323) on another node. Acceptance: a Refs trailer naming the leased spec, by friendly label or canonical id, passes the guard; a trailer naming a different spec still refuses; tests for both.'
-status: Completed
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T14:38:50.271312640Z
-modified_at: 2026-11-07T15:45:08.931649960Z
+modified_at: 2026-11-07T15:45:13.576360857Z
 req_type: Bug
 comments:
 - id: 01a1b678-d06e-7c30-a326-48a454771ec9
@@ -62,6 +62,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1b6af-727e-7420-aaca-badae59fbbd5
+  author: joe
+  timestamp: 2026-11-07T15:45:13.854394206Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Completed
+    new_value: Approved
 processing_record:
 - id: 01a1b6a7-964c-7782-8075-b4997929bc04
   timestamp: 2026-11-07T15:36:38.732866520Z
@@ -80,5 +89,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-07T15:36:38.696414367Z
   completion_sha: 1220b5d94cc96afed81065dab2929a39cc3c72b8
+  reopened_at_sha: 1220b5d94cc96afed81065dab2929a39cc3c72b8
