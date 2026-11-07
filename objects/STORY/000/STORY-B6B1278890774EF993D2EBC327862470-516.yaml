@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T07:33:54.141300488Z
+modified_at: 2026-11-07T08:31:04.767964241Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -400,6 +400,13 @@ comments:
   created_at: 2026-11-07T07:33:54.141300488Z
   modified_at: 2026-11-07T07:33:54.141300488Z
   session_id: 01a1b4e54cbd
+- id: 01a1b521-f83f-7c30-af0c-dfdb1acf7c56
+  author: joe
+  content: '[advisor 01:22] Hand-merged origin/main into #3575 at ce63aa8: both conflicts were additive (codex_auth module and tests vs TASK-3219''s LaunchIo and PTY tests), so both were kept. Classified the 3 new store-writer sinks in codex_auth.rs (bind fs::write, prepare OpenOptions/write_all) as host_only: they write only the lane-private CODEX_HOME (config.toml and the access-only auth.json leaf), never the AIDA store. dell1 cargo check --profile agent -p aida-cli-lib --tests OK; make check-ci-fast 43/43; ExecContext ratchet zero additions.'
+  created_at: 2026-11-07T08:31:04.767964241Z
+  modified_at: 2026-11-07T08:31:04.767964241Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
