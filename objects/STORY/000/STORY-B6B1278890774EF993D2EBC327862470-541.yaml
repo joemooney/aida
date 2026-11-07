@@ -1,0 +1,34 @@
+id: 01a1b4d4-194b-7043-ae14-b0f8d5205e67
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-541
+agreed_id: STORY-2618
+title: 'Review PR-3581: [AI:codex] fix: Full aida status with no derived cache exceeds 50s on a ~7k-row store: the first-use cache rebuild is unbounded (BUG-2481)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b4c7`) for branch `bug-b6b1278890774ef993d2ebc327862470-246`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3581>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-246` → `main`
+
+  ## Covers
+
+  - BUG-2481
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3581` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T07:06:01.419843875Z
+modified_at: 2026-11-07T07:06:01.419843875Z
+req_type: Story
+filed_at:
+  code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b11ebbd4c25
+  vendor: claude
+  session: 01a1b4c79430
