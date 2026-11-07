@@ -21,7 +21,8 @@ test-threads = "num-cpus"
 # against the JUnit report below. A test is killed after 18 periods (180 s), a
 # hang guard rather than a performance limit: the slowest test measured on
 # main (contained_boundary's bug_1985_host_status_guard) takes about 103 s,
-# and no budget entry may exceed the kill.
+# and ordinary budget entries stay below that kill. The AIDA-sized relay
+# contract has the explicit bounded exception below.
 slow-timeout = { period = "10s", terminate-after = 18 }
 # Show the output of failing tests at the end of the run, where the log is read.
 failure-output = "immediate-final"
@@ -54,3 +55,12 @@ serial = { max-threads = 1 }
 [[profile.ci.overrides]]
 filter = 'package(aida-cli) & binary(task_1283_protocol_cli)'
 test-group = "serial"
+
+# Three 48+ MiB source commits cross the full relay and cold inventory boundary.
+# Reserve the runner while measuring this CPU-heavy fixture. Its subprocess
+# has its own 480s cap; other tests retain 180s.
+# trace:TASK-3232 | ai:codex
+[[profile.ci.overrides]]
+filter = 'test(aida_sized_relay_native_statuses_reach_required_pr_and_train_gates)'
+threads-required = "num-test-threads"
+slow-timeout = { period = "10s", terminate-after = 54 }

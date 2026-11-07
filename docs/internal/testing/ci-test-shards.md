@@ -53,7 +53,13 @@ The test lanes run their selections under cargo-nextest
 (`scripts/ci-test-shards.py --runner nextest`, the `ci` profile in
 `.config/nextest.toml`): every test in its own process, no fail-fast, no
 retries, a `serial` test-group for tests that guard a resource outside the
-process, and a 180-second hang guard. Doctests stay on `cargo test`, which
+process, and a 180-second hang guard. The AIDA-sized relay/native-gate contract has a
+540-second nextest guard around its separately bounded 480-second fixture
+subprocess, and reserves all nextest test slots to avoid CPU contention
+(TASK-3232). The test-speed tooling gate pins that single exception's filter,
+slot reservation and timeout, checks its 480-second timing budget against the
+540-second kill, and keeps every other timing budget under the ordinary kill.
+Doctests stay on `cargo test`, which
 nextest cannot run. Before the swap, a non-gating shadow lane ran nextest
 beside cargo test; on main runs 39455014512, 39475194172 and 39476669725 each
 lane ran the same tests, by name, under both runners.

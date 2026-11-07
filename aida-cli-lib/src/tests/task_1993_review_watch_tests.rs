@@ -1336,12 +1336,8 @@ fn task1993_continuous_mode_continues_past_change_errors_and_stops_on_corrupt_st
         .unwrap();
     let drift = select(&store, &c, None, 2).unwrap_err();
     assert!(
-        !stops_watcher(&drift, false),
+        !stops_watcher(&drift),
         "one change's drift stopped the daemon"
-    );
-    assert!(
-        stops_watcher(&drift, true),
-        "--once still reports the refusal"
     );
     // Other changes still dispatch.
     dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
@@ -1349,7 +1345,7 @@ fn task1993_continuous_mode_continues_past_change_errors_and_stops_on_corrupt_st
     std::fs::write(&path, b"{\"version\":999}").unwrap();
     let corrupt = select(&store, &change(3, 3, false), None, 2).unwrap_err();
     assert!(
-        stops_watcher(&corrupt, false),
+        stops_watcher(&corrupt),
         "corrupt state must stop the watcher"
     );
 }
@@ -2433,4 +2429,159 @@ fn story2492_early_admission_error_frees_the_local_reservation() {
         Phase::Failed
     );
     dispatch(select(&store, &c, None, 2).unwrap());
+}
+
+// trace:BUG-2471 | ai:codex
+#[test]
+fn bug2471_pickup_refusal_does_not_abort_this_tick_or_the_next() {
+    let (_temp, store) = fixture();
+    let refused = change(1, 1, false);
+    let other = change(2, 2, false);
+    let mut admitted = Vec::new();
+    watch_changes(&store, vec![refused.clone(), other.clone()], |c| {
+        let attempt = dispatch(select(&store, &c, None, 1)?);
+        execute_reservation(
+            &store,
+            &c.key(),
+            &attempt.token,
+            |_| Ok(()),
+            |_| {
+                if c.id == refused.id {
+                    anyhow::bail!("branch pr-1 is held by worktree");
+                }
+                admitted.push(c.key());
+                Ok(())
+            },
+        )
+    })
+    .unwrap();
+    assert_eq!(admitted, [other.key()]);
+    let state = store.load().unwrap();
+    let entry = &state.entries[&refused.key()];
+    assert_eq!(entry.attempts[0].phase, Phase::Failed);
+    assert!(entry.attempts[0]
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("held by worktree"));
+    assert!(entry
+        .skipped
+        .as_ref()
+        .unwrap()
+        .line
+        .contains("held by worktree"));
+    assert_eq!(
+        state.entries[&other.key()].attempts[0].phase,
+        Phase::Completed
+    );
+
+    // The next discovery tick can still admit new work.
+    let later = change(3, 3, false);
+    watch_changes(&store, vec![later.clone()], |c| {
+        let attempt = dispatch(select(&store, &c, None, 1)?);
+        complete(&store, &c, &attempt);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        store.load().unwrap().entries[&later.key()].attempts[0].phase,
+        Phase::Completed
+    );
+}
+
+// trace:BUG-2471 | ai:codex
+#[test]
+fn bug2471_busy_diagnostic_write_does_not_stop_the_pass() {
+    let (_temp, store) = fixture();
+    let mut held = Some(store.dir.lock("PR-1.lock").unwrap());
+    let mut visited = Vec::new();
+    watch_changes(
+        &store,
+        vec![change(1, 1, false), change(2, 2, false)],
+        |c| {
+            visited.push(c.key());
+            if c.id == 1 {
+                // Keep the change lock held throughout record_skip's retry
+                // deadline, without a timing-dependent helper thread.
+                anyhow::bail!("branch pr-1 is held by worktree");
+            }
+            drop(held.take());
+            let attempt = dispatch(select(&store, &c, None, 1)?);
+            complete(&store, &c, &attempt);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(visited, ["PR-1", "PR-2"]);
+    let state = store.load().unwrap();
+    assert!(!state.entries.contains_key("PR-1"));
+    assert_eq!(state.entries["PR-2"].attempts[0].phase, Phase::Completed);
+}
+
+// trace:BUG-2471 | ai:codex
+#[test]
+fn bug2471_busy_error_precedes_global_state_context() {
+    let (_temp, store) = fixture();
+    let mut visited = Vec::new();
+    watch_changes(
+        &store,
+        vec![change(1, 1, false), change(2, 2, false)],
+        |c| {
+            visited.push(c.key());
+            if c.id == 1 {
+                return Err(anyhow::Error::new(std::io::Error::from(
+                    std::io::ErrorKind::WouldBlock,
+                ))
+                .context(GlobalState));
+            }
+            let attempt = dispatch(select(&store, &c, None, 1)?);
+            complete(&store, &c, &attempt);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(visited, ["PR-1", "PR-2"]);
+    assert_eq!(
+        store.load().unwrap().entries["PR-2"].attempts[0].phase,
+        Phase::Completed
+    );
+}
+
+// trace:BUG-2471 | ai:codex
+#[test]
+fn bug2471_unusable_state_during_diagnostic_write_stops_the_pass() {
+    let (_temp, store) = fixture();
+    store.dir.write(STATE, b"invalid state").unwrap();
+    let mut visited = Vec::new();
+    let error = watch_changes(
+        &store,
+        vec![change(1, 1, false), change(2, 2, false)],
+        |c| {
+            visited.push(c.key());
+            anyhow::bail!("branch pr-1 is held by worktree");
+        },
+    )
+    .unwrap_err();
+    assert!(stops_watcher(&error));
+    assert!(format!("{error:#}").contains("invalid review-watch state"));
+    assert_eq!(visited, ["PR-1"]);
+}
+
+// trace:BUG-2471 | ai:codex
+#[test]
+fn bug2471_unusable_state_stops_before_admitting_another_change() {
+    let (_temp, store) = fixture();
+    std::fs::write(store.dir.path().join(STATE), b"invalid state").unwrap();
+    let mut visited = Vec::new();
+    let error = watch_changes(
+        &store,
+        vec![change(1, 1, false), change(2, 2, false)],
+        |c| {
+            visited.push(c.key());
+            select(&store, &c, None, 1).map(|_| ())
+        },
+    )
+    .unwrap_err();
+    assert!(stops_watcher(&error));
+    assert_eq!(visited, ["PR-1"]);
 }
