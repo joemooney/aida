@@ -106,7 +106,10 @@ fn fixture() -> Fixture {
     let claude = bin.join("claude");
     std::fs::write(
         &claude,
-        "#!/bin/sh\nenv -0 > \"$BUG2139_ENV_DUMP\"\nexit 97\n",
+        format!(
+            "#!/bin/sh\nenv -0 > '{}'\nexit 97\n",
+            base.join("child-env").display()
+        ),
     )
     .unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();

@@ -4757,7 +4757,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
     assert!(
         envs_uncontained
             .iter()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .all(|(k, v)| *k != "AIDA_CONTAINED" || v.is_none()),
         "uncontained build_agent_new_bg_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
     );
 }
