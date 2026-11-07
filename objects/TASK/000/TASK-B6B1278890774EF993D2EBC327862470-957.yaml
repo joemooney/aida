@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T22:53:55.393835706Z
+modified_at: 2026-11-07T23:02:30.705931456Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -45,6 +45,12 @@ comments:
   modified_at: 2026-11-07T22:44:08.131227476Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b83f-ca31-7f50-acd7-8d1c3a790823
+  author: joe
+  content: 'Round 2: changed all nine moved suites from include! to cfg(test) path modules and formatted them at module scope while preserving raw-string fixtures. Parent production text is unchanged outside test declarations. ADR9 now recognizes explicit file-level test cfgs; the auto_complete suite carries that cfg, with scanner regression coverage and no engine allowlist expansion. Static counts remain auto_complete 256, awaiting_you 85, burndown 117, maintenance_schedule 74, mcp 157: 689 before and after. PR #3637 body now contains counts and validation. CI formatting passed; ExecContext, store-writer inventory, standalone portability and diff checks passed. untested=true: lane job j20261107T224642702-3270247-0 timed out after 900 seconds compiling (exit 124, seed overlay-stale generation agent-a05f34e45f942f7e); no tests executed. Other targeted jobs submitted; ADR9 running and other parent filters queued at handoff. Fast gates also expose a scope blocker: origin/main check-portability-growth.py rejects the five existing ledger path relocations src/mcp.rs -> src/tests/mcp_tests.rs as additions. Reproduced directly against origin/main baseline; changing current checker alone cannot fix the base-pinned gate. All 15 source edits remain uncommitted for host custody. Full file list, job IDs and evidence: /tmp/task-3424-handoff.md.'
+  created_at: 2026-11-07T23:02:30.705931456Z
+  modified_at: 2026-11-07T23:02:30.705931456Z
+  session_id: 01a1b83046f6
 history:
 - id: 01a1b811-8c0e-7771-8649-78ed09e623f5
   author: joe
