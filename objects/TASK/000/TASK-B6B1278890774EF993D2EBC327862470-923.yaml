@@ -8,13 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T05:14:30.569456462Z
-modified_at: 2026-11-07T13:56:07.146139262Z
+modified_at: 2026-11-07T13:56:09.353205324Z
 req_type: Task
 tags:
 - from-advisor:BUG-2479
 - kind:observation
 - linked:BUG-2479
 - severity:major
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1b4c2-543f-7231-a078-13090adccece
+  created_at: 2026-11-07T13:56:09.353200646Z
+  created_by: joe
 comments:
 - id: 01a1b64b-645c-7403-a800-b2439798a455
   author: joe
@@ -37,6 +42,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1b64b-9bc2-7da2-8e7a-ec5b999f3598
+  author: joe
+  timestamp: 2026-11-07T13:56:10.818166015Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 110130adbc7
