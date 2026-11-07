@@ -1849,6 +1849,10 @@ fn merge_gate_live_head(forge: &dyn Forge, c: &ChangeRef) -> Option<String> {
 /// Unlike the informational trait accessor, authorization cannot turn a failed
 /// required-check read into an empty list.
 pub(crate) fn github_required_checks(root: &Path, change: &ChangeRef) -> Result<Vec<String>> {
+    // The verified train proof reads this again before each merge attempt.
+    // An earlier successful checkpoint cannot cover this nested call.
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("GitHub required checks")?;
     let out = Command::new("gh")
         .current_dir(root)
         .args([
@@ -1970,6 +1974,8 @@ impl GitHubForge {
                         .enforce(self, &self.project_root, c, opts)
                         .map_err(std::io::Error::other)?;
                 }
+                crate::pr_train::before_train_forge_call("GitHub merge attempt")
+                    .map_err(std::io::Error::other)?;
                 let mut cmd = Command::new("gh");
                 cmd.current_dir(&project_root)
                     .args(args.iter().map(String::as_str));
@@ -1997,6 +2003,8 @@ impl GitHubForge {
     }
 
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("GitHub command")?;
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
@@ -2323,11 +2331,15 @@ impl Forge for GitHubForge {
         id: u64,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Observed<std::result::Result<ChangeMetadata, String>> {
+        if let Err(error) = crate::pr_train::before_train_forge_call("GitHub metadata") {
+            return Observed::Transient(format!("{error:#}"));
+        }
         let Some(gh) = crate::resolve_gh_binary() else {
             return Observed::Transient("gh executable unavailable".into());
         };
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         observe_metadata_with_retry(id, &cfg, sink, || {
+            crate::pr_train::before_train_forge_call("GitHub metadata").ok()?;
             let mut cmd = Command::new(&gh);
             cmd.current_dir(&self.project_root).args([
                 "pr", "view", &id.to_string(), "--json",
@@ -2354,7 +2366,12 @@ impl Forge for GitHubForge {
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let label = format!("gh pr view {id} --json metadata");
         let project_root = self.project_root.clone();
-        let out = crate::network_retry::run_with_retry(&label, &cfg, sink, || {
+        let out = crate::network_retry::run_with_retry_checked(&label, &cfg, sink, || {
+            // The final verified-train gate also uses this legacy reader.
+            // Checkpoint every attempt, including retries after transport errors.
+            // trace:STORY-2401 | ai:codex
+            crate::pr_train::before_train_forge_call("GitHub metadata attempt")
+                .map_err(std::io::Error::other)?;
             let mut c = Command::new(&gh);
             c.current_dir(&project_root).args([
                 "pr",
@@ -2363,7 +2380,7 @@ impl Forge for GitHubForge {
                 "--json",
                 "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]);
-            c
+            Ok(c)
         })
         .context("could not invoke `gh pr view`")?;
         anyhow::ensure!(
@@ -2729,6 +2746,9 @@ impl GitLabForge {
         let mut cmd = Command::new(&glab);
         cmd.current_dir(&self.project_root)
             .args(args.iter().map(String::as_str));
+        // Nested pipeline/job reads each need durable train intent.
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("read GitLab API")?;
         crate::forge_lookup_output(cmd)
             .context("could not invoke `glab` — is the GitLab CLI installed?")?
             .ok_or_else(|| anyhow::anyhow!(crate::FORGE_LOOKUP_TIMED_OUT))
@@ -4440,6 +4460,7 @@ fn glab_ci_state_from_status(status: &str) -> CiState {
 /// still prints the rows, so the exit status is ignored when stdout is JSON.
 // trace:STORY-1166 | ai:claude
 pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) -> Result<String> {
+    crate::pr_train::before_train_forge_call("GitHub checks")?;
     let mut cmd = Command::new("gh");
     cmd.current_dir(project_root)
         .args(["pr", "checks", &pr.to_string()])
@@ -4577,6 +4598,11 @@ const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
 fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    // The verified train gate reads check-run pages and commit statuses here,
+    // independently of the ordinary PR checks runner. Each request needs its
+    // own durable checkpoint. Outside an active train this is a no-op.
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("commit CI API read")?;
     let mut command = Command::new(cli);
     command
         .args(["api", "-X", "GET", endpoint])
@@ -5137,6 +5163,8 @@ pub(crate) mod fake {
         pub(crate) metadata_state: ChangeState,
         // trace:STORY-2401 | ai:codex — pin live train reconciliation fixtures.
         pub(crate) metadata_head: String,
+        pub(crate) metadata_branch: String,
+        pub(crate) metadata_base: String,
         /// When set, `change_metadata` fails with this message — the
         /// unreadable-forge path of the retraction ownership probe.
         // trace:TASK-1552 | ai:claude
@@ -5175,6 +5203,8 @@ pub(crate) mod fake {
                 is_draft: false,
                 metadata_state: ChangeState::Open,
                 metadata_head: "abc".into(),
+                metadata_branch: "codex/task".into(),
+                metadata_base: "main".into(),
                 metadata_error: None,
                 close_error: None,
                 closed: Arc::new(Mutex::new(Vec::new())),
@@ -5282,8 +5312,8 @@ pub(crate) mod fake {
                 title: "fake change".into(),
                 author: self.author.clone(),
                 merged_at: None,
-                base_ref: "main".into(),
-                head_ref: "codex/task".into(),
+                base_ref: self.metadata_base.clone(),
+                head_ref: self.metadata_branch.clone(),
                 head_sha: self.metadata_head.clone(),
                 is_draft: self.is_draft,
                 is_cross_repository: false,

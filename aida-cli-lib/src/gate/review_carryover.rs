@@ -108,6 +108,9 @@ pub(crate) enum CarryOverRefusal {
     BaseNotProtected { base: String, protected: String },
     /// git itself failed.
     Git { detail: String },
+    /// An active train could not persist its intent before a remote call.
+    // trace:STORY-2401 | ai:codex
+    IntentUnavailable { detail: String },
 }
 
 impl CarryOverRefusal {
@@ -156,6 +159,7 @@ impl CarryOverRefusal {
                  there is no protected base to prove the merges against"
             ),
             Self::Git { detail } => format!("git failed: {detail}"),
+            Self::IntentUnavailable { detail } => detail.clone(),
         }
     }
 }
@@ -169,7 +173,10 @@ impl CarryOverRefusal {
     pub(crate) fn is_deterministic(&self) -> bool {
         !matches!(
             self,
-            Self::Unresolvable { .. } | Self::Git { .. } | Self::BaseNotProtected { .. }
+            Self::Unresolvable { .. }
+                | Self::Git { .. }
+                | Self::BaseNotProtected { .. }
+                | Self::IntentUnavailable { .. }
         )
     }
 }
@@ -543,7 +550,9 @@ pub(crate) fn prove_carry_over(
         });
     }
     let base_ref = format!("origin/{base_branch}");
-    let _ = origin_git(
+    // Preserve the ordinary fetch-error fallback, but a train intent failure
+    // cannot use cached refs to continue. trace:STORY-2401 | ai:codex
+    if let Err(error @ CarryOverRefusal::IntentUnavailable { .. }) = origin_git(
         repo,
         &[
             "fetch",
@@ -552,7 +561,9 @@ pub(crate) fn prove_carry_over(
             "origin",
             &format!("+refs/heads/{base_branch}:refs/remotes/origin/{base_branch}"),
         ],
-    );
+    ) {
+        return Err(error);
+    }
     let base_tip =
         resolve_commit(repo, &format!("refs/remotes/origin/{base_branch}")).ok_or_else(|| {
             CarryOverRefusal::Unresolvable {
@@ -830,6 +841,14 @@ fn git_raw_via(
     let mut cmd = std::process::Command::new("git");
     cmd.arg("-C").arg(repo).args(args);
     if let Some(remote) = remote {
+        // Nested approval/corpus proofs can fetch after the outer train gate
+        // checkpoint. Persist the same pinned intent before every remote call.
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("approval carry-over remote git").map_err(
+            |e| CarryOverRefusal::IntentUnavailable {
+                detail: format!("{e:#}"),
+            },
+        )?;
         aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, remote);
     }
     cmd.stdin(std::process::Stdio::null())
