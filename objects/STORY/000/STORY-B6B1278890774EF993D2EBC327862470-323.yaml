@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T14:06:52.429246383Z
+modified_at: 2026-11-07T14:39:09.226361285Z
 req_type: Story
 tags:
 - architecture
@@ -310,6 +310,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 07:10: PR-C0 landed (#3592). ''aida own migrate --execute'' ran 14:06Z through the deputy (rc 0, 26 additive records). compare now shows 1 unexplained of 900, a fresh dead session (01a1b6472b3e) with no lease, which is the rule''s normal case and not legacy debt. PR-C precondition MET. NEXT = PR-C, the cutover from the signed-off sketch: readers query the ownership record (trains, reviewers, relaunch); seat-HEAD-in-PR detaches ownership from the lease to the PR; staged writes. Refs STORY-2325 unless every AC is met. LIGHT gate. Runs on dell1 (operator 07:00).'
   created_at: 2026-11-07T14:06:52.429246383Z
   modified_at: 2026-11-07T14:06:52.429246383Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b672-f3aa-7933-b572-2846168da6b0
+  author: joe
+  content: 'ADVISOR 2026-11-07 07:50: PR-C opened as #3600 (dell1 codex lane, commit 7408ec769f). Opened with gh because of BUG-2483 (ship guard ignores Refs trailers).'
+  created_at: 2026-11-07T14:39:09.226361285Z
+  modified_at: 2026-11-07T14:39:09.226361285Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
