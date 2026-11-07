@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T09:53:38.185284122Z
+modified_at: 2026-11-07T10:39:17.581394427Z
 req_type: Story
 relationships:
 - rel_type:
@@ -479,6 +479,13 @@ comments:
   created_at: 2026-11-07T09:53:38.185284122Z
   modified_at: 2026-11-07T09:53:38.185284122Z
   session_id: 01a1b557724e
+- id: 01a1b597-59ef-7093-b50b-ef2d5be81fc1
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 03:35: AC1-AC3 have landed (#3427, #3493, #3533). NEXT = slice 5 (AC4): a workflow digest helper (git rev-parse <rev>:.github/workflows; the .gitlab-ci.yml blob for GitLab); thread head_digest/base_digest through pr_stale_check_warning (lib_part3.rs ~204) and key CI evidence by (head_sha, digest); gate/ci_freshness.rs behind_base_refusal returns StaleDefinition only when the digests differ. Test story_2401_ci_digest_tests (touch then revert = equal digest, no refusal; a real edit refuses). This closes AC4, so title it with a completing (STORY-2401) trailer.'
+  created_at: 2026-11-07T10:39:17.487710357Z
+  modified_at: 2026-11-07T10:39:17.487710357Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
