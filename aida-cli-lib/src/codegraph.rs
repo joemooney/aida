@@ -62,11 +62,9 @@ fn finding(id: &str, summary: String, action: &str) -> DoctorFinding {
 /// the database mtime for freshness; a WAL write can be newer than its db.
 fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
-    let index_present = root.join(".codegraph").is_dir();
-    if !index_present && !binary_present {
-        return findings;
-    }
-    if index_present && !binary_present {
+    // A new host without either tool or index still needs setup guidance.
+    // trace:STORY-2630 | ai:codex
+    if !binary_present {
         findings.push(finding(
             "missing",
             "codegraph is missing from PATH".into(),
@@ -182,7 +180,11 @@ mod tests {
     fn doctor_reports_missing_unreachable_stale_and_corrupt() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        assert!(assess(root, false, SystemTime::now()).is_empty());
+        let absent = assess(root, false, SystemTime::now());
+        assert_eq!(
+            absent.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(),
+            ["missing", "unreachable"]
+        );
         assert_eq!(assess(root, true, SystemTime::now())[0].id, "unreachable");
         assert!(
             !root.join(".codegraph").exists(),
