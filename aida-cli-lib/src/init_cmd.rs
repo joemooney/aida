@@ -2200,6 +2200,9 @@ fn complete_init_scaffolding(
         println!();
     }
 
+    // trace:STORY-2642 | ai:codex — report readiness without blocking project setup.
+    crate::lane_host::report(root);
+
     // TASK-860: report the forge CLI (`gh`/`glab`) availability so a new user
     // learns up front whether PR/review automation will work — instead of the
     // "silent until you hit a `pr` command" failure (`aida pr auto-queue-review`

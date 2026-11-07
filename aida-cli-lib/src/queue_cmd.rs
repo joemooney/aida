@@ -5814,6 +5814,14 @@ pub(crate) fn handle_queue_command(
             // operator-supplied value there. trace:TASK-578 | ai:claude
             let auto_complete = &drain_resolution.auto_complete;
             let no_human = &drain_resolution.no_human;
+            // trace:STORY-2642 | ai:codex
+            // Check before queue/lease/worktree mutations, including drain routes.
+            if no_human.is_some() && !*dry_run && !*no_launch && !*list_sessions && resume.is_none()
+            {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let lane_vendor = session::resolve_enabled_headless_vendor(&root)?;
+                crate::lane_host::preflight(&root, lane_vendor.as_str())?;
+            }
             // TASK-966: assemble the hard budget caps once, up front, so a bad
             // `--max-runtime` value bails before any drain work starts. The caps
             // are threaded into the multi-spec drain loops (nextN / batch /
@@ -12343,6 +12351,13 @@ pub(crate) fn handle_queue_work(
         .map(load_agents_contained)
         .transpose()?
         .unwrap_or(false);
+    // trace:STORY-2642 | ai:codex — a resume uses its recorded vendor.
+    if no_human && resume.is_some() && !no_launch && !list_sessions && !dry_run {
+        let root = project_root_for_config
+            .as_deref()
+            .context("cannot resolve lane host root")?;
+        crate::lane_host::preflight(root, launch_vendor.as_str())?;
+    }
     // trace:BUG-2146 | ai:claude
     let contained_env = session::aida_contained_env()?;
     // BUG-2166: a contained parent's env always wins (monotonic containment,

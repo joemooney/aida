@@ -797,3 +797,39 @@ token expiry and host `codex login` guidance; an already shorter grant with an a
 token remains valid. `aida config show/menu` displays this trusted, read-only key.
 `aida doctor` reports remaining token life or “expired” without refreshing or exposing
 tokens, both unfiltered and under `--category permission-posture`.
+
+## Lane host readiness
+
+<!-- trace:STORY-2642 | ai:codex -->
+Run `aida doctor --lane-host` on a machine before starting automated lanes.
+It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
+same checks as one array. A failure or unverified requirement exits nonzero.
+`aida init` also prints this report without blocking project setup.
+
+`aida doctor --lane-host --fix` applies the existing contained permission
+preset to the **user** agents and Codex config files. It clears old extra
+Codex writable roots. It also configures Cargo to use an already installed
+`~/.cargo/bin/sccache` when no rustc wrapper is configured; custom wrappers
+and the legacy `~/.cargo/config` are left for manual review. Repeating the fix
+preserves the resulting content. No system settings or project policy are
+written. Use `aida doctor --fix-sandbox` for the host-specific bubblewrap
+setup instructions and run any sudo commands yourself.
+
+Real `queue work --no-human` launches check containment before queue,
+lease or worktree changes, including drain routes. Dry-run previews remain
+read-only previews. The existing vendor admission checks still apply. A trusted
+native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
+
+The report checks every enabled lane vendor (or the selected headless vendor
+when no enabled list is configured). Auth rows establish
+credential-source presence only. Binary comparison uses the locally known
+origin default-branch SHA; release freshness is unverified. Store connectivity
+uses a bounded read-only probe against origin's `aida-store` branch.
+Lane-job cache reachability is reported as unverified until the separate cache
+transport supplies an in-sandbox probe; a host sccache installation cannot make
+that check pass. These limitations mean the command cannot yet certify full
+host readiness.
+
+Manual setup remains: configure SSH access and any required host/DNS entries,
+clone the project, put AIDA on the login-shell PATH, and log in to the selected
+vendor CLI. Fetch dependencies on the host before starting a lane.

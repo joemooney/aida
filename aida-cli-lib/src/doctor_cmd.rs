@@ -16094,6 +16094,11 @@ mod bug_1505_review_verdict_doctor_tests {
 #[derive(clap::Parser, Debug)]
 #[clap(name = "doctor")]
 pub(crate) struct DoctorArgs {
+    /// Check this machine before running automated lanes.
+    // trace:STORY-2642 | ai:codex
+    #[clap(long, conflicts_with_all = ["heal", "fix_sandbox", "contradictions"])]
+    pub lane_host: bool,
+
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
     #[clap(long)]
     pub heal: bool,
@@ -16151,7 +16156,7 @@ pub(crate) struct DoctorArgs {
     /// resolving. Needs --dry-run (preview) or --yes (apply).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions", "agreed-ids"])]
+    #[clap(long, value_name = "CATEGORY", num_args = 0..=1, default_missing_value = "lane-host", value_parser = ["id-collisions", "agreed-ids", "lane-host"])]
     pub fix: Option<String>,
 
     /// With --fix: show the plan and write nothing to the store.
@@ -16208,6 +16213,7 @@ fn run_doctor(
 ) -> anyhow::Result<()> {
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
+        lane_host,
         heal,
         yes,
         category,
@@ -16226,6 +16232,17 @@ fn run_doctor(
         contradictions_offset,
         cmd,
     } = &args;
+    // trace:STORY-2642 | ai:codex
+    if *lane_host {
+        if fix.as_deref().is_some_and(|v| v != "lane-host") || *dry_run || cmd.is_some() {
+            anyhow::bail!("use `aida doctor --lane-host [--fix]` for host setup");
+        }
+        let root = crate::main_worktree_root_from(&crate::find_project_root()?);
+        return crate::lane_host::run(&root, fix.is_some(), *json);
+    }
+    if fix.as_deref() == Some("lane-host") {
+        anyhow::bail!("bare --fix requires --lane-host; store repairs require a category");
+    }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     if let Some(category) = fix.as_deref() {
         if *json {

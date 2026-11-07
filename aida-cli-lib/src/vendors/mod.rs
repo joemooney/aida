@@ -366,3 +366,6 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
         ),
     }
 }
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;

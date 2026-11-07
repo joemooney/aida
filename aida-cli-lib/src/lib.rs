@@ -208,6 +208,7 @@ mod docs_sweep;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 mod doctor_backfill_agreed;
 mod doctor_cmd;
+mod lane_host;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
 mod doctor_renumber;
 // trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
