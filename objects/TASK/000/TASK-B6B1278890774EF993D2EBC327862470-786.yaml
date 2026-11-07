@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T15:43:47.480701678Z
+modified_at: 2026-11-07T16:39:54.476740066Z
 req_type: Task
 tags:
 - area:containment
@@ -287,6 +287,13 @@ comments:
   content: 'ADVISOR 2026-11-07 08:50 BLOCKER (live evidence): integrated agy conformance at origin/main 1220b5d94cc (agy 1.5.3; deputy job 20261107T084217-d1df47; report ~/aida-conformance-agy-main-1220b5d94cc-20261107b/report.json): C0-C4 all unknown, whole_lane_pass=false. agy reports ''--mode auto is not available for this account'' and headless auto-denies write_file before permissions.allow is consulted (same as the 11-05 agy_tool_safety finding). The acceptance ''conformance harness passes for agy'' cannot be met from AIDA''s side with this account. Operator decision needed: an agy account/mode that allows headless writes, or reject the STORY-2460 agy-lane goal.'
   created_at: 2026-11-07T15:43:47.480701678Z
   modified_at: 2026-11-07T15:43:47.480701678Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6e1-80cb-7b42-bd2e-5325ee801dfa
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 09:50 (supersedes the 08:50 blocker). New evidence: agy 1.5.3 on the operator''s Google AI Ultra account. Interactive ''--mode auto'' works. Headless ''-p'' warns that ''--mode auto is not available for this account'', but default-mode headless writes still SUCCEED: agy_tool_safety flags write_file (unsupported_tool), then the sir_flash_lite LLM monitor allows routine workspace writes (probe 16:38Z, ~/.gemini/antigravity-cli/cli.log lines 135-150). The harness run at 1220b5d94cc failed C0-C4 ''unknown'' because, in the fixture''s private agy runtime/home, headless write_file was auto-denied (''add an allow-rule under permissions.allow ... write_file(<target>)''). NEXT: in the S2 adapter and conformance fixture, give the private agy runtime a fixture-scoped permissions.allow for write_file(<workspace>/**) only, never host paths or canaries. Keep the 11-05 posture ruling: no blanket --dangerously-skip-permissions inside a claimed boundary, no --mode auto dependency. Then rerun ''python3 scripts/containment/conformance.py --vendor agy --output <fresh> --timeout 600'' and attach the report. Completing (TASK-3048) only if C0-C4 pass; otherwise Refs with the report. LIGHT gate.'
+  created_at: 2026-11-07T16:39:54.315078424Z
+  modified_at: 2026-11-07T16:39:54.315078424Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
