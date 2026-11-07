@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T05:11:38.306221525Z
+modified_at: 2026-11-07T05:14:30.185158117Z
 req_type: Task
 tags:
 - architecture
@@ -193,6 +193,24 @@ comments:
   modified_at: 2026-11-07T05:01:11.180511042Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b46d-ffa9-7b62-8059-951857b643cf
+  author: mcp
+  content: |-
+    Round 4 re-audit at fresh branch task-3223-r2207 (base 36fc675baec): recovered docs/plans/2026-11-06-task-3223-mediated-transactions.md from reviewed 621c83395e48 and incorporated the independent advisor ruling recorded 2026-11-07T04:55:39.522648898Z. Marked DESIGN APPROVED / IMPLEMENTATION PENDING; selected canonical-object redo transaction, recovery on shared writer-lock acquisition, lock-free per-file readers, one-live-binary assumption and unknown-version refusal. Removed obsolete reader/old-binary admission requirements. S2b own_claim/queue_done and multi-root validation explicitly belong to TASK-3326; no runtime implementation or acceptance completion claimed.
+
+    Findings 1-3: gh pr view confirms #3563 CLOSED, unmerged, at 621c83395e48671e1d8d78fee3b1e31c39fb62ee. Its old closing title and bare seat-publication body remain unchanged. Advisor explicitly chose closure instead of merging those commit subjects. Do not reopen or merge that history. No PR mutation or history rewrite from this seat. If the host elects to revive that PR instead, findings 1-3 still require the exact requested Refs-only title, documentation-only body and explicit empty squash body; this seat has not performed those host actions.
+
+    Finding 4 disputed as a current-state assertion: independent signoff now exists, with the narrower canonical-object ruling and explicit S2b split. The original absence was accurate at review time. I have not cleared merge-hold-gate or substituted a reviewer verdict for human/advisor clearance.
+
+    Finding 5 accepted: service.py still only accepts session_probe/request_status, and contained_store_write_paths still grants store/cache. All runtime routing/boundary/cache/profile/concurrency acceptance remains pending. TASK-3223 must remain open. This round is documentation only; a Refs declaration is not publication permission.
+
+    Finding 6 verified: gates SUCCESS at 2026-11-07T04:23:25Z; contracts SUCCESS at 04:24:23Z; Build SUCCESS at 04:24:29Z for 621c83395e48. https://github.com/joemooney/aida/actions/runs/42337834239 . merge-hold-gate remains FAILURE, not cleared. Any new head requires fresh CI.
+
+    Validation: python3 scripts/check-doc-links.py passed, 1458 paths / 0 missing. Explicit recovered-file whitespace validation and git diff --no-index --check passed (exit 1 denotes the new file differs from /dev/null, no whitespace diagnostics). make check-ci-fast was interrupted during a cold dependency build in its first CLI feature-disabled check; full fast gate INCOMPLETE. No runtime tests added/run for this documentation change. No pending Codex briefs.
+
+    Dispute the mandatory-new-commit clause in this seat: user's standalone native override forbids commits, push, PR creation and queue completion. New uncommitted document changes are supplied for the host. Native declaration recorded: [AI:codex] docs(plans): record advisor transaction ruling (Refs TASK-3223). This accurately reflects the newer ruling; labeling the recovered design unapproved would contradict it. Punt the stale closed-PR review assignment for host reconciliation rather than silently claim findings 1-3 were performed or start the full S2a implementation under this review-only instruction. This is not a repeat of the resolved transaction design-fork. Preserve existing holds and publication vetoes.
+  created_at: 2026-11-07T05:14:30.185141245Z
+  modified_at: 2026-11-07T05:14:30.185141245Z
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe

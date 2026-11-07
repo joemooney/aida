@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:43.460416454Z
-modified_at: 2026-11-07T05:01:56.112904331Z
+modified_at: 2026-11-07T05:14:17.628991999Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -27,6 +27,12 @@ comments:
   content: 'Implementation uses get_requirement_unambiguous_for_read for idle candidates, preserving canonical-object validation while avoiding repeated agreed-ID YAML scans. Ported the scoped reference regression cases for canonical timestamps, ambiguous IDs, and missing IDs. CI decision: retain the unchanged 10-second cold-first-run budget; do not port the work-only prepare-status-fixture.sh warm-up. The exact work full-status timed test is absent from this checkout; preparing an isolated 7,246-object real-store snapshot for a local cold-cache measurement.'
   created_at: 2026-11-07T05:01:56.112904331Z
   modified_at: 2026-11-07T05:01:56.112904331Z
+  session_id: 01a1b45e3bac
+- id: 01a1b46d-ce9c-70a0-bea5-9a6d32b8e739
+  author: joe
+  content: 'Validation: cargo test --offline -p aida-cli-lib --lib story_1680_idle_in_progress_tests -- --nocapture passed all 20 tests, including the three new cases; cargo fmt --all -- --check and git diff --check pass; cargo build --offline -p aida-cli --bin aida passed. Isolated committed real-store snapshot with normal [deployment] configuration: installed-binary prepared-cache baseline 14.159s for 7,247 rows, 2 idle and 17 orphaned; patched unoptimized debug binary 5.291s with the same row/channel counts. This is a diagnostic comparison across different builds, not a controlled before/after speedup claim. Stronger no-derived-cache run on a separate 7,246-row snapshot exceeded the 50s watchdog while cache rows remained zero. Cold-cache 10s acceptance is NOT established; original work timed test and CI fixture script are absent from this checkout. Keep requirement open; partial resolver fix should publish with Refs only. No CI warm-up was ported.'
+  created_at: 2026-11-07T05:14:17.628991999Z
+  modified_at: 2026-11-07T05:14:17.628991999Z
   session_id: 01a1b45e3bac
 history:
 - id: 01a1b445-1a9b-7601-8f9e-747ef8aa1341
