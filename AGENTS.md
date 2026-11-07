@@ -471,6 +471,7 @@ Pure vendor descriptors and headless argv/settings composition live in
 `aida-core/src/vendors/`; `launch_policy` re-exports the existing key. The
 STORY-2539 token ratchet inventories remaining vendor literals and typed
 references outside `vendors/` by path and enclosing item; its ledger only shrinks.
+Test-only exclusions include compound `cfg(all(test, ...))` and qualified test attributes.
 `aida-cli-lib/src/vendors/` renders hints from that registry; `launch/profile.rs` keeps effectful finalization. Capability lookup
 never grants launch admission or containment credit.
 <!-- trace:STORY-2539 | ai:codex -->

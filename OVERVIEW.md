@@ -427,7 +427,9 @@ inputs; compatibility session helpers and the AI client's posture exports keep
 their existing interfaces. A token-aware test inventories production vendor
 strings and typed references outside `vendors/` by path and enclosing item.
 Its checked-in ledger permits reductions only and excludes tests, fixtures and
-docs; mutant fixtures exercise new literals, match arms and aliases.
+docs, including `cfg(all(test, ...))` and qualified test attributes. Cheap
+source/literal candidate checks retain escaped strings before decoding; mutant
+fixtures exercise new literals, match arms and aliases.
 The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
 still refuses pending conformance. Hook event/backend and resume/fork backend

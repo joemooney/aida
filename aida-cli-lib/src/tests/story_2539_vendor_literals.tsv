@@ -320,7 +320,6 @@ aida-cli-lib/src/init_cmd.rs|agent_selection_from_file|literal:antigravity	1
 aida-cli-lib/src/init_cmd.rs|agent_selection_from_file|literal:claude	1
 aida-cli-lib/src/init_cmd.rs|agent_selection_from_file|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|antigravity_binary_detected|literal:antigravity	1
-aida-cli-lib/src/init_cmd.rs|bug_1645_agents_md_link_tests::init_with_agents_link|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|complete_init_scaffolding|literal:codex	3
 aida-cli-lib/src/init_cmd.rs|detected_agent_selection|literal:agy	1
 aida-cli-lib/src/init_cmd.rs|detected_agent_selection|literal:antigravity	1

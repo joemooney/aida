@@ -19,12 +19,37 @@ struct Items {
     scopes: Vec<(Span, String)>,
     excluded: Vec<Span>,
 }
+// Only predicates that require `test` are test-only; any(test, unix) and
+// not(test) can still compile in production.
+fn requires_test(meta: &syn::Meta) -> bool {
+    match meta {
+        syn::Meta::Path(path) => path.is_ident("test"),
+        syn::Meta::List(list) if list.path.is_ident("all") => list
+            .parse_args_with(
+                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+            )
+            .is_ok_and(|args| args.iter().any(requires_test)),
+        _ => false,
+    }
+}
 fn test_attrs(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|a| {
-        a.path().is_ident("test")
+        a.path().segments.last().is_some_and(|s| s.ident == "test")
             || (a.path().is_ident("cfg")
-                && matches!(&a.meta, syn::Meta::List(l) if l.tokens.to_string() == "test"))
+                && a.parse_args::<syn::Meta>()
+                    .is_ok_and(|meta| requires_test(&meta)))
     })
+}
+
+// Aliases must name their original vendor in this file. Keep escaped strings
+// as candidates too: decoded literals (including line continuations) can spell
+// a vendor without containing its raw name.
+fn vendor_candidate(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains('\\')
+        || ["claude", "codex", "agy", "antigravity", "vendor"]
+            .iter()
+            .any(|name| lower.contains(name))
 }
 fn inside(pos: proc_macro2::LineColumn, span: Span) -> bool {
     (pos.line, pos.column) >= (span.start().line, span.start().column)
@@ -142,7 +167,44 @@ fn flatten(tokens: TokenStream, out: &mut Vec<TokenTree>) {
         }
     }
 }
+const TYPED_VENDORS: &[&str] = &[
+    "LaunchVendor",
+    "HeadlessVendor",
+    "Claude",
+    "Codex",
+    "Agy",
+    "Antigravity",
+];
+fn vendor_literal(literal: &proc_macro2::Literal) -> Option<String> {
+    let raw = literal.to_string();
+    if !vendor_candidate(&raw) {
+        return None;
+    }
+    syn::parse_str::<syn::LitStr>(&raw)
+        .ok()
+        .map(|l| l.value())
+        .filter(|v| ["claude", "codex", "agy", "antigravity"].contains(&v.as_str()))
+}
 fn scan(path: &str, src: &str) -> Inventory {
+    if !vendor_candidate(src) {
+        return Inventory::new();
+    }
+    let mut tokens = Vec::new();
+    flatten(
+        src.parse()
+            .unwrap_or_else(|e| panic!("{path}: cannot lex Rust: {e}")),
+        &mut tokens,
+    );
+    // Trace comments often name the author vendor even in unrelated files.
+    // Lex once and require a real candidate token before building an AST.
+    // Alias declarations necessarily contain one of these original names.
+    if !tokens.iter().any(|t| match t {
+        TokenTree::Ident(i) => TYPED_VENDORS.contains(&ident_name(i).as_str()),
+        TokenTree::Literal(l) => vendor_literal(l).is_some(),
+        _ => false,
+    }) {
+        return Inventory::new();
+    }
     let file =
         syn::parse_file(src).unwrap_or_else(|e| panic!("{path}: cannot attribute Rust: {e}"));
     if test_attrs(&file.attrs) {
@@ -150,8 +212,6 @@ fn scan(path: &str, src: &str) -> Inventory {
     }
     let mut items = Items::default();
     items.visit_file(&file);
-    let mut tokens = Vec::new();
-    flatten(src.parse().unwrap(), &mut tokens);
     // Precompute ordered source ranges: repeatedly resolving every excluded
     // doc/test span for every token makes large source files quadratic.
     let mut excluded: Vec<_> = items
@@ -169,17 +229,10 @@ fn scan(path: &str, src: &str) -> Inventory {
         let n = excluded.partition_point(|(start, _)| *start <= p);
         n == 0 || p >= excluded[n - 1].1
     });
-    let mut names: BTreeMap<String, String> = [
-        "LaunchVendor",
-        "HeadlessVendor",
-        "Claude",
-        "Codex",
-        "Agy",
-        "Antigravity",
-    ]
-    .into_iter()
-    .map(|s| (s.into(), s.into()))
-    .collect();
+    let mut names: BTreeMap<String, String> = TYPED_VENDORS
+        .iter()
+        .map(|s| ((*s).into(), (*s).into()))
+        .collect();
     // Imports may rename both enum types and individual variants. Count uses of
     // the alias as the original token, so an already imported alias cannot hide
     // an added match arm. Iterate to cover chains of aliases.
@@ -202,11 +255,7 @@ fn scan(path: &str, src: &str) -> Inventory {
     for token in tokens {
         let pos = token.span().start();
         let kind = match token {
-            TokenTree::Literal(l) => syn::parse_str::<syn::LitStr>(&l.to_string())
-                .ok()
-                .map(|l| l.value())
-                .filter(|v| ["claude", "codex", "agy", "antigravity"].contains(&v.as_str()))
-                .map(|v| format!("literal:{v}")),
+            TokenTree::Literal(l) => vendor_literal(&l).map(|v| format!("literal:{v}")),
             TokenTree::Ident(i) => names.get(&ident_name(&i)).map(|n| format!("typed:{n}")),
             _ => None,
         };
@@ -316,4 +365,52 @@ fn story_2539_vendor_literal_ratchet_mutants() {
         .sum::<usize>(),
         3
     );
+}
+
+#[test]
+fn story_2539_test_only_attributes_are_excluded() {
+    for attr in [
+        "#[cfg(all(test, unix))]",
+        "#[cfg(all(unix, all(test, feature = \"x\")))]",
+        "#[tokio::test]",
+    ] {
+        assert!(
+            scan(
+                "src/example.rs",
+                &format!("{attr} fn f() {{ m!(\"codex\", LaunchVendor::Claude); }}")
+            )
+            .is_empty(),
+            "{attr}"
+        );
+    }
+    assert!(scan(
+        "src/example.rs",
+        "#[cfg(all(test, unix))] mod t { fn f() { m!(\"codex\"); } }"
+    )
+    .is_empty());
+    assert!(scan(
+        "src/example.rs",
+        "#![cfg(all(unix, test))] fn f() { m!(\"codex\"); }"
+    )
+    .is_empty());
+    for attr in ["#[cfg(any(test, unix))]", "#[cfg(not(test))]"] {
+        assert_eq!(
+            scan(
+                "src/example.rs",
+                &format!("{attr} fn f() {{ m!(\"codex\"); }}")
+            )
+            .values()
+            .sum::<usize>(),
+            1,
+            "{attr}"
+        );
+    }
+    // The fast path must preserve encoded literals even without a raw name.
+    assert_eq!(
+        scan("src/example.rs", r#"fn f() { m!("\u{61}gy"); }"#)
+            .values()
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(scan("src/example.rs", "fn f() { let _ = 42; }").len(), 0);
 }
