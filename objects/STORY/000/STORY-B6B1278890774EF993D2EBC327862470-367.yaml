@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T04:19:24.352563819Z
+modified_at: 2026-11-07T04:37:04.844866371Z
 req_type: Story
 relationships:
 - rel_type:
@@ -419,6 +419,12 @@ comments:
   created_at: 2026-11-07T03:40:59.801397830Z
   modified_at: 2026-11-07T03:40:59.801397830Z
   session_id: 01a1b417933b
+- id: 01a1b44b-bccc-72c0-b2c8-ffd61b8764af
+  author: joe
+  content: 'Slice-4 integration follow-up: checkpointed the final verified train proof required-check read before its forge call. Added a PATH-isolated regression covering unavailable initial intent and journal loss between proof reads, with exact call counts and retained Merge/head/member pins. Reconciled the existing journal and moved activity-writer rows with main TASK-3222 inventory, retaining blocked S2 dispositions. Validation: cargo test -p aida-cli-lib --lib pr_train passed 178 tests including both SIGKILL recovery seams; make check-ci-fast passed all 41 gates after inventory repair; formatting and diff checks passed. Four files remain uncommitted for native host publication. Accepted subject: [AI:codex] fix(train): checkpoint verified required-check reads (Refs STORY-2401). Slice 5 remains outstanding; existing holds and punts remain authoritative.'
+  created_at: 2026-11-07T04:37:04.844866371Z
+  modified_at: 2026-11-07T04:37:04.844866371Z
+  session_id: 01a1b439f368
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
