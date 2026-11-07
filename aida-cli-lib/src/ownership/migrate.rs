@@ -760,9 +760,8 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> Result<MigrationPlan> 
     for (branch, h) in crate::merge_lock::status(main) {
         match h.pr.filter(|_| h.note == crate::pr_train::TRAIN_LEASE_NOTE) {
             Some(train) => {
-                let live_witness = (h.host == writer.host)
-                    .then(|| writer.witness(h.pid, h.pid_start.as_deref(), now))
-                    .flatten()
+                // trace:TASK-3364 | ai:codex
+                let live_witness = crate::merge_lock::holder_witness(&h, now)
                     .filter(|w| super::judge_witness(w, &host, now) == WitnessReading::Alive);
                 trains.push(TrainLeaseFacts {
                     train,

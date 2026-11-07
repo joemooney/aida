@@ -6857,6 +6857,12 @@ Options:
       --json
           Machine-readable JSON output
 
+      --check-file <CHECK_FILE>
+          Inspect one lease with the shared judge (read-only; for shell consumers)
+
+      --migrate-legacy
+          Explicitly arm a boot-clock deadline on complete pre-upgrade records once
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -38263,6 +38269,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "check-file",
+        "takes_value": true,
+        "help": "Inspect one lease with the shared judge (read-only; for shell consumers)"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -38276,6 +38287,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Machine-readable JSON output"
+      },
+      {
+        "name": "migrate-legacy",
+        "takes_value": false,
+        "help": "Explicitly arm a boot-clock deadline on complete pre-upgrade records once"
       }
     ],
     "hidden": false
