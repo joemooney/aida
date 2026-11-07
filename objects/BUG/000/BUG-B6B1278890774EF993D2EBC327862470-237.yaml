@@ -8,12 +8,12 @@ description: |-
   Acceptance:
   1. A per-PR refusal or setup failure is recorded against that PR (as 'exited without completing' already is) and the watch continues with the other PRs. Only a watch-level failure (grant invalid, state file unusable) exits nonzero.
   2. A test drives two PRs, one refusing at pickup, and asserts the other is admitted in the same tick and the watch keeps running.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:09:15.256349997Z
-modified_at: 2026-11-06T22:24:26.972224143Z
+modified_at: 2026-11-07T00:38:55.151568317Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -104,6 +104,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b371-b18b-7532-ac3c-ed4273129c39
+  author: aida-auto-bump
+  timestamp: 2026-11-07T00:38:55.115168684Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b371-b1af-7522-a38b-7bd2e05a2bed
+  timestamp: 2026-11-07T00:38:55.151565153Z
+  agent: aida
+  commit_sha: 37c695e340639ae667426824967c5ca3c708e25e
+  summary: Per-change refusals now go through watch_changes (busy first, then GlobalState-only fatal, else log + record_skip for aida awaiting), in continuous and --once mode. All three round-1 findings fixed (busy diagnostic write is non-fatal, busy-before-GlobalState order, regression tests). The advisor's main merge keeps the 'program' argument. AC1 verified by bug2471_pickup_refusal_does_not_abort_this_tick_or_the_next, bug2471_busy_diagnostic_write_does_not_stop_the_pass, bug2471_busy_error_precedes_global_state_context and bug2471_unusable_state_* (fatal paths). AC2 verified by bug2471_pickup_refusal_does_not_abort_this_tick_or_the_next (two PRs, PR-1 refuses at launch, PR-2 admitted and Completed in the same pass, a later pass admits PR-3). CI run 42304476038 is green at the head. merge-hold-gate fails only on the supervised merge-hold, not on the code.
+  review_verdict: approved
 filed_at:
   code_sha: b34755f19c72d2b6f29b28c59df061a8304cd0df
   branch: main
@@ -112,3 +126,7 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T00:38:55.115162884Z
+  completion_sha: 37c695e340639ae667426824967c5ca3c708e25e
