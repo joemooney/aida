@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T17:19:09.387931779Z
+modified_at: 2026-11-07T17:22:52.093136879Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-07T17:17:55.485964430Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b708-d63d-71a1-8094-1c92f0709469
+  author: joe
+  content: 'Round 2 fixes all five review findings: terminal attribute restores now skip background groups; continuation supervisors lend controlling-terminal foreground ownership before releasing the private script and reclaim it with SIGTTOU blocked after nested cleanup. Added controlling-terminal (setsid/TIOCSCTTY) implementer and nested prompt coverage plus forced-cleanup restoration, a background restore skip regression, and main SIGTERM handler installation/diagnostic tests for both boundaries. Top-level termination now reports harness-terminated: SIGTERM. Corrected the setup-budget comment and updated conformance documentation. Targeted suite and formatting verification recorded in native-seat handoff; host publication required.'
+  created_at: 2026-11-07T17:22:52.093136879Z
+  modified_at: 2026-11-07T17:22:52.093136879Z
+  session_id: 01a1b70567b8
 history:
 - id: 01a1b6e9-7c41-7821-b0b6-d68fe217481a
   author: joe
