@@ -1,5 +1,6 @@
 id: 01a1b554-c5fa-7fa3-9459-5d5b2442c1b2
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-929
+agreed_id: TASK-2977
 title: 'minor (non-blocking, carried from the prior round, still open): this PR reverse…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2964, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:02cb13f4
 - from-review:PR-3572
 - kind:carried-forward
+history:
+- id: 01a1b56b-f939-72b3-b361-2f19f4b8df09
+  author: joe
+  timestamp: 2026-11-07T09:51:54.681231769Z
+  changes: []
 filed_at:
   code_sha: a54530cb6e1d90d35c4acbea3057b6d1fb4124ac
   branch: main
