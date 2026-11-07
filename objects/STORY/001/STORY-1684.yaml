@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:05.317476642Z
-modified_at: 2026-11-07T20:56:50.046090555Z
+modified_at: 2026-11-07T20:56:52.501955401Z
 req_type: Story
 tags:
 - cycle-time
@@ -42,6 +42,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:28:04.494254920Z
   modified_at: 2026-11-07T20:28:04.494254920Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cc-c415-7302-9994-42b6cf55d2e1
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Fasttrack and LIGHT risk-scaled review rulings cover it.'
+  created_at: 2026-11-07T20:56:52.501955401Z
+  modified_at: 2026-11-07T20:56:52.501955401Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
