@@ -8,12 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:19.695580202Z
-modified_at: 2026-10-21T04:32:13.123018185Z
+modified_at: 2026-11-07T20:28:17.495173198Z
 req_type: Bug
 tags:
 - capture
 - coordination
 - operator-held
+comments:
+- id: 01a1b7b2-98d7-7093-bda1-90df7d7b08cd
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-21T04:32:13.123018185Z","deferred_until":"Single incident (2026-10-14), investigation-only AC. Revisit if a claimed spec gets a duplicate PR again, or after STORY-1662 moves fixers to separate processes.","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:28:17.495167767Z
+  modified_at: 2026-11-07T20:28:17.495167767Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a15cbb-2f23-7d50-a3d1-23a6d0a257a7
   author: joe
@@ -22,7 +33,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-21T04:32:13.123018185Z
-deferred_until: Single incident (2026-10-14), investigation-only AC. Revisit if a claimed spec gets a duplicate PR again, or after STORY-1662 moves fixers to separate processes.
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
