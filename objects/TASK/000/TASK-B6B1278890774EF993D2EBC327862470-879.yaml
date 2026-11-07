@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-879
 agreed_id: TASK-3222
 title: 'STORY-2561 S1a: checked-in store-writer inventory and ratchet guard'
 description: 'Slice 1 of STORY-2561 (read its operator rulings). Build the host-owned synchronous typed service endpoint and its lifecycle: started before child tools, torn down with the child or lease, and refusing launch when it is unavailable. Add launch-bound identity (project, store, spec, role, verbs fixed by the host) and the request and response framing with request-identity retry semantics. Produce a checked-in inventory of every CLI and MCP store and cache writer (claim, edit, comment, queue done, findings, handoff, mailbox, etc.). No routing cutover yet: grants stay unchanged. Tests: malformed, oversized and path-bearing requests, wrong, expired, revoked or sibling identity, replay and endpoint replacement, and service absence. Post a sketch for advisor signoff before coding; BUG-2448''s generic host-IPC defect is a separate owner and must not be widened.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-06T23:58:48.681127904Z
+modified_at: 2026-11-07T00:00:02.053250121Z
 req_type: Task
 tags:
 - architecture
@@ -467,6 +467,12 @@ comments:
   content: 'Round-5 rework on merged HEAD 582daacbd0dd: regenerated scripts/store-writers.toml and reviewed all four additions/four stale removals. leases.rs now records adopt_spec_lease_for_subagent''s with_lease_write_lock wrapper and adopt_spec_lease_unlocked''s write_atomic; session.rs moves the atomic sinks to stamp_lease_holder_at and stamp_lease_detached_worker_with_holder_at. Removed the obsolete standalone_implementer wrapper row after the callee became a bare-name forwarding wrapper (documented static-analysis limit). All four new sites remain blocked for TASK-3223; retained policies and all 292 operation mappings are byte-for-byte unchanged as parsed. Prior F2 fixes/fixtures and accepted Limits documentation already exist at this head and were verified. Validation: standalone guard PASS (3299 sink sites / 292 operations), 40 mutation fixtures PASS, CI gate audit PASS (73 classified), git diff --check PASS. make check-ci-fast: no-default-features check PASS; stopped with exit 130 while subsequent TUI seam guard waited for a shared build slot. Aggregate fast result incomplete, not green. Exact-head remote Gates/contracts/full CI remains unverified until host commits/publishes this native-seat change; supervised merge hold requires its separate human/advisor path. Only scripts/store-writers.toml changed, left uncommitted per native-seat instructions.'
   created_at: 2026-11-06T23:00:00.996396446Z
   modified_at: 2026-11-06T23:00:00.996396446Z
+- id: 01a1b34e-1805-7340-893d-61f20a42a4d7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 9 (post-merge refresh): S1a design, mutants, F2-F4 and CI wiring remain met, but merge 01383fd pulled #3506 (defer resurface) and the store-writer ratchet is stale at head; CI Gates step 73 ''Store writer inventory ratchet'' FAILED (job 128215644218), step 74 mutation fixtures SKIPPED.. No triage reason was given.'
+  created_at: 2026-11-07T00:00:02.053248443Z
+  modified_at: 2026-11-07T00:00:02.053248443Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
@@ -697,6 +703,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b34e-1805-7340-893d-61ed89603cb2
+  author: joe
+  timestamp: 2026-11-07T00:00:02.053239811Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -706,11 +720,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 9 (post-merge refresh): S1a design, mutants, F2-F4 and CI wiring remain met, but merge 01383fd pulled #3506 (defer resurface) and the store-writer ratchet is stale at head; CI Gates step 73 ''Store writer inventory ratchet'' FAILED (job 128215644218), step 74 mutation fixtures SKIPPED.'
-  recovery_hint: address the review findings, move TASK-3222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-06T23:58:48.681127904Z
