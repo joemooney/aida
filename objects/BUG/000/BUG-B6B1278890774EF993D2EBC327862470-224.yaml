@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-06T16:07:54.246406864Z
+modified_at: 2026-11-07T00:21:10.086554375Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -242,6 +242,13 @@ comments:
   created_at: 2026-11-06T16:07:54.246406864Z
   modified_at: 2026-11-06T16:07:54.246406864Z
   session_id: 01a1b1643ab6
+- id: 01a1b361-7146-72b0-8c38-ff7edf4040fe
+  author: joe
+  content: '[advisor 2026-11-06 17:25] Delivered by #3483 (c4c0461, STORY-2537 slice 1, round 3): the persisted holder is the setsid worker, not its subreaper, with the end-to-end lease/ownership regression (ownership/writer_tests.rs, proc_identity_tests.rs). The squash subject dropped the (BUG-2458) trailer, so merge-time completion never fired. Completing by advisor ruling; STORY-2537''s later slices stay open on the keystone.'
+  created_at: 2026-11-07T00:21:10.086554375Z
+  modified_at: 2026-11-07T00:21:10.086554375Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
