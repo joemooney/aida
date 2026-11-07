@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T01:45:38.974889874Z
+modified_at: 2026-11-07T01:59:48.388678441Z
 req_type: Story
 relationships:
 - rel_type:
@@ -401,6 +401,12 @@ comments:
   created_at: 2026-11-07T01:24:44.852088139Z
   modified_at: 2026-11-07T01:24:44.852088139Z
   session_id: 01a1b388d365
+- id: 01a1b3bb-bfa4-7263-8203-dafc67ccd0c5
+  author: joe
+  content: 'Slice-4 integration follow-up: the resumable journal and BUG-2463 were already integrated. Fixed the nested released-hold CI poll so journal persistence failures propagate before its legacy unsupported-rows success fallback. Added a PATH-isolated production-adapter regression covering failure before first poll and after a pending response, requiring zero/one forge calls and retained pinned Gate intent. Changed ci_gate.rs, tests/story_1690_train_tests.rs and the existing boundary plan. Validation: cargo test -p aida-cli-lib --lib pr_train passed 173 tests, including both SIGKILL recovery seams; make check-ci-fast passed all 38 gates; git diff --check passed. Native edits remain uncommitted for host publication with Refs STORY-2401; slice 5 remains outstanding. Logs: /tmp/story2401-hold-poll-train.log and /tmp/story2401-hold-poll-fast.log.'
+  created_at: 2026-11-07T01:59:48.388678441Z
+  modified_at: 2026-11-07T01:59:48.388678441Z
+  session_id: 01a1b3aec16e
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
