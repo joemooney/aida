@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T10:27:35.748647054Z
+modified_at: 2026-11-07T13:45:05.196486758Z
 req_type: Task
 tags:
 - architecture
@@ -364,6 +364,13 @@ comments:
   created_at: 2026-11-07T10:27:35.748647054Z
   modified_at: 2026-11-07T10:27:35.748647054Z
   session_id: 01a1b575d3f5
+- id: 01a1b641-7345-7513-b7f1-7f4698b2b8f8
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 06:50: S2a part 1 (redo transaction + canonical-object verbs) landed as #3584 (095c9efa83). NEXT = S2a part 2: deny raw store/authority-metadata/shared-cache writes in the shared contained boundary for the mediated profile (contained_boundary.rs contained_store_write_paths), provide lane-private derived caches, and gate the mediated profile (Claude/native compatibility unchanged until it validates). Add same-profile raw create/append/rename negatives with parent-observed unchanged sentinels, plus host-read mediated comment/edit positives. Completing (TASK-3223) only if every S2a criterion is then met; otherwise Refs.'
+  created_at: 2026-11-07T13:45:05.093719016Z
+  modified_at: 2026-11-07T13:45:05.093719016Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
