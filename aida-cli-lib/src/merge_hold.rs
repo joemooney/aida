@@ -1432,6 +1432,10 @@ fn run_forge_cli(
     cli: &str,
     args: &[String],
 ) -> Result<(bool, String), String> {
+    // Hold release/re-arm can run inside a train's live gate. Persist each
+    // mutation attempt, including retries after a successful label probe.
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("write hold labels").map_err(|e| format!("{e:#}"))?;
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)
@@ -1448,6 +1452,8 @@ fn run_forge_cli_stdout(
     cli: &str,
     args: &[String],
 ) -> Result<(bool, String), String> {
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("read hold labels").map_err(|e| format!("{e:#}"))?;
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)

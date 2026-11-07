@@ -520,3 +520,41 @@ No implementation or validation blocker remains. The three changed files remain
 uncommitted for the host launcher; no commit, push, PR creation, merge, review
 record or queue completion occurred in this seat. Slice 5 remains outstanding;
 existing punt/hold signals remain publication vetoes. Turn ends with this handoff.
+
+
+## Slice-4 integration follow-up: hold-label calls (2026-11-06)
+
+The starting checkout already contains the resumable journal, both SIGKILL
+recovery fixtures and BUG-2463. Shared hold-label runners still issued nested
+reads and writes without persisting active train intent. The production read
+and write runners now checkpoint immediately before each call, including label
+mutation retries. Outside an active train these checkpoints are no-ops.
+
+A PATH-isolated production-runner regression makes the journal unavailable
+before a label read, after a successful probe but before label mutation, and
+after a failed mutation but before retry. It asserts zero/one/one actual forge
+calls and retains the pinned Gate entry in each case. Slice 5 remains excluded.
+
+Changed files: `aida-cli-lib/src/merge_hold.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, and this plan.
+Native-seat edits remain uncommitted for the host. Validation results and the
+Refs publication declaration follow below.
+
+Validation passed:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **172 passed, zero failures**, 12,595 filtered out; runtime **139.85s**,
+  fresh unoptimized build **10m 33s**. Both SIGKILL recovery cases and the
+  new hold-label read/write/retry regression passed.
+  Log: `/tmp/story2401-label-train.log`.
+- `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`: **all 38 gates passed**.
+  Log: `/tmp/story2401-label-fast.log`.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint hold label reads and mutation retries (Refs STORY-2401)`.
+The three changed files remain uncommitted for the host launcher. BUG-2463
+(#3519, `b815ab24313`) is already integrated. No commit, push, PR creation,
+merge, review record, hold clearance or queue completion occurred in this seat.
+No implementation or validation blocker remains. Slice 5 stays outstanding;
+existing punt/hold signals remain publication vetoes. Turn ends with this handoff.

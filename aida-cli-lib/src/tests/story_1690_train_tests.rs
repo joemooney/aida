@@ -4270,6 +4270,78 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_hold_label_calls_refuse_when_checkpoint_fails() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for seam in ["read", "write", "retry"] {
+        let root = repo();
+        let r = root.path();
+        git(
+            r,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/test/train.git",
+            ],
+        );
+        crate::test_exec::write_executable(
+            &r.join("gh"),
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+mv intent intent-saved || exit 2
+printf 'unavailable' > intent
+case "$*" in
+  'pr view '*)
+    printf '%s\n' '{"url":"https://github.com/test/train/pull/1","state":"OPEN","headRefOid":"head1","labels":[{"name":"aida:merge-hold-recorded"}]}'
+    ;;
+  *) echo 'error connecting to api.github.com' >&2; exit 1 ;;
+esac
+"#,
+        );
+        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/labels-1".into());
+        entry.step = journal::Step::Gate;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        let error = if seam == "read" {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+            crate::merge_hold::fetch_pinned_change(r, crate::forge::ForgeKind::GitHub, 1)
+                .unwrap_err()
+        } else {
+            // Unhold probes first; re-arm writes directly. Either response
+            // makes the journal unavailable before the next call/retry.
+            crate::merge_hold::sync_label(r, 1, seam == "retry")
+                .unwrap_err()
+                .to_string()
+        };
+        assert!(
+            error.contains("could not persist train intent"),
+            "{seam}: {error}"
+        );
+        let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap_or_default();
+        assert_eq!(
+            calls.lines().count(),
+            usize::from(seam != "read"),
+            "{seam}: {calls}"
+        );
+        if seam == "write" {
+            assert!(calls.starts_with("pr view "), "no edit after the probe");
+        }
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Gate);
+        assert_eq!(saved[0].train.tip, "car1");
+    }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_metadata_retry_refuses_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;
