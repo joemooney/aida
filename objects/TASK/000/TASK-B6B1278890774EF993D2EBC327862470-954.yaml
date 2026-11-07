@@ -1,0 +1,29 @@
+id: 01a1b7de-c98f-7092-8a19-78a031178c88
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-954
+title: 'MINOR (non-blocking) review_watch.rs Identity::alive: ForeignUnknown(Incomplete…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3365, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MINOR (non-blocking) review_watch.rs Identity::alive: ForeignUnknown(IncompleteProcfs|Unreadable) on an observable host takes the '=> true' arm with no reboot/TTL backstop, so a transient or persistent procfs read failure holds a capacity slot indefinitely (old code freed it). Fail-safe direction, but the existing within_foreign_backstop could apply to every ForeignUnknown arm.
+
+  PR: #3615
+  Reviewed sha: f98e1d8d69cb4e460c202fb9f7aca819c53684ca
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T21:16:33.551709008Z
+modified_at: 2026-11-07T21:16:33.551709008Z
+req_type: Task
+tags:
+- carried-from:TASK-3365
+- finding-hash:6f6bdcbc
+- from-review:PR-3615
+- kind:carried-forward
+filed_at:
+  code_sha: 79603aff6b027dc2e6e68a808ea800c353af9cc2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e278eeb1d8f
+  vendor: claude
