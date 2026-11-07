@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ae38-489b-7db0-b752-9a823300b6e5
+  position: -40000
+  added_by: role:implementer
+  note: 'stale sketch-only directive from closed #3512; advisor ruling supersedes'
+  added_at: 2026-11-07T01:54:59.882027928Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1b360-6482-7631-b3d7-e12de9408e09
   position: -39000
   added_by: role:implementer
