@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T19:16:23.597214607Z
+modified_at: 2026-11-07T19:34:55.558954973Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -100,6 +100,11 @@ comments:
   created_at: 2026-11-07T18:49:50.645203256Z
   modified_at: 2026-11-07T18:49:50.645203256Z
   session_id: 01a1b73be9c5
+- id: 01a1b781-bd46-7692-a356-8942b30fdc3b
+  author: mcp
+  content: 'Slice 2 investigation from native Codex seat at 34dc5896bbdc: Slice 1 already has round-3 approval in PR #3607. Created only the ignored runtime .codegraph symlink to primary; no index copied/built. Both default-seat and explicit primary -p callers commands fail with unable to open database file. strace proves primary DB readable but O_RDWR DB and WAL creation denied EROFS, then read-only WAL open ENOENT. Primary DB is WAL format; Python SQLite mode=ro query fails too. Installed codegraph 1.6.0 query path uses writable DatabaseConnection.open and migrations/healing; the adapter''s internal readOnly option is not exposed by that path. Evidence and reproduction saved in docs/internal/testing/story-2630-read-only-client-blocker.md (sole tracked-file addition, uncommitted). Punted design-fork to Needs Attention: decide a supported WAL-safe read-only upstream client vs authorized AIDA query adapter and host WAL prerequisites. Do not grant writable DB/WAL/SHM or mark the active index immutable to obtain AC5. No containment or launcher code changed. Validation finished: 7 codegraph unit tests pass; make check-ci-fast all 43 gates pass; make check-templates, formatting and git diff --check pass. Installed doctor predates Slice 1 and rejects codegraph category. AC2/AC5 remain incomplete. Punt/publication veto retained; no ship declaration, commit, push, PR, queue done, merge, or review record.'
+  created_at: 2026-11-07T19:34:55.558940086Z
+  modified_at: 2026-11-07T19:34:55.558940086Z
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
