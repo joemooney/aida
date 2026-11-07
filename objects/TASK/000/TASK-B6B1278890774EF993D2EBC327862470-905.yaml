@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T23:28:33.543848762Z
-modified_at: 2026-11-07T00:25:45.601742372Z
+modified_at: 2026-11-07T00:32:02.528538576Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-897
@@ -33,6 +33,12 @@ comments:
   modified_at: 2026-11-07T00:22:29.935846289Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b36b-65e0-7fe3-a102-d7fc9b37bbeb
+  author: joe
+  content: 'Implemented native submit refusal diagnostics for RunnerStatus::Unknown: includes the exact observation reason and host-terminal guidance, preserving legacy and stopped-runner behavior. Added regression coverage for hidden processes, unreadable information, invalid runner metadata, stopped-runner guidance, and absence of queued jobs/output/socket creation on refusal. Updated docs/cli/06-roles-sessions.md. Validation: cargo test -p aida-cli-lib --lib deputy_shell::tests:: --offline (45 passed); cargo fmt --all -- --check; git diff --check. Native seat: edits left uncommitted for host launcher publication; no queue completion or publication attempted.'
+  created_at: 2026-11-07T00:32:02.528538576Z
+  modified_at: 2026-11-07T00:32:02.528538576Z
+  session_id: 01a1b36539ce
 history:
 - id: 01a1b362-b43e-74e3-b346-c916553c729c
   author: joe
