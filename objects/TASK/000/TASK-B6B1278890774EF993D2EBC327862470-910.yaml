@@ -7,13 +7,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T00:41:27.298433170Z
-modified_at: 2026-11-07T00:41:27.298433170Z
+modified_at: 2026-11-07T01:07:41.204157699Z
 req_type: Task
 tags:
 - from-advisor:BUG-2473
 - kind:observation
 - linked:BUG-2473
+- recurrence:2
 - severity:minor
+comments:
+- id: 01a1b38c-0814-75f1-b34d-64f1af6fa2c4
+  author: joe
+  content: 'Recurrence #2 by joe 2026-11-07: While validating BUG-2474 in a native PID-isolated seat, leases::bug_1772_harness_worktree_lease_tests::bug_1772_prune_stale_reaps_immortal_harness_leases also fails alone: fixture has no pid_namespace, prune reports No stale leases to release, expected 0 leases but sees 1. The unchanged session_leases_prune_stale path requires PidObserver::can_observe(lease.pid_namespace); an unstamped legacy row is deliberately unobservable in this sandbox. This is another fixture instance of the existing namespace-evidence finding. No lease code was changed for BUG-2474.'
+  created_at: 2026-11-07T01:07:41.204157699Z
+  modified_at: 2026-11-07T01:07:41.204157699Z
+  session_id: 01a1b37ca493
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e94aeb3d
