@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T18:58:14.303155860Z
+modified_at: 2026-11-07T23:44:27.289390010Z
 req_type: Story
 tags:
 - architecture
@@ -872,6 +872,13 @@ comments:
   created_at: 2026-11-07T18:58:14.303155860Z
   modified_at: 2026-11-07T18:58:14.303155860Z
   session_id: 01a1b7495ec2
+- id: 01a1b866-3099-75c0-a68d-143f316df418
+  author: joe
+  content: 'ADVISOR 2026-11-07 17:15 MST: COMPLETE. PR-D (#3603) landed every slice; review findings are fixed (the grant-issuance ratchet now has import and alias mutants, story_2326_launch_ratchet_tests.rs:465-467), except the declared-resources wiring (spawn.rs:40 passes None), which PR-D shipped as a documented known limitation. That remainder moves to STORY-2641 acceptance (0) by ruling, with the sccache work that depends on it.'
+  created_at: 2026-11-07T23:44:27.289390010Z
+  modified_at: 2026-11-07T23:44:27.289390010Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
