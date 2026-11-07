@@ -1,0 +1,29 @@
+id: 01a1b400-f6e2-7b71-b439-950f873f976c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-917
+title: 'non-blocking (minor): seat_clone.rs:228 dispatch_snapshot falls back to printf …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2473, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): seat_clone.rs:228 dispatch_snapshot falls back to printf '0' for ahead when both rev-list calls fail, so an unresolvable origin/main reads as 0 commits ahead. It does not affect the salvage/reap gates (Salvageable is dirt-only; reap uses probe_counting_origin).
+
+  PR: #3551
+  Reviewed sha: d4d06def3481fdc01b966835b84ba7f392fb6d4d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T03:15:24.514156988Z
+modified_at: 2026-11-07T03:15:24.514156988Z
+req_type: Task
+tags:
+- carried-from:BUG-2473
+- finding-hash:314936ae
+- from-review:PR-3551
+- kind:carried-forward
+filed_at:
+  code_sha: 0d32a3c45bcc6e0c835eaa1488a68ade19bc1a2a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eaebcf25a0b
+  vendor: claude
