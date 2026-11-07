@@ -1118,6 +1118,9 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
             AIDA_RUNTIME_EXCLUDE,
             ".aida-store",
             ".aida-store/",
+            // Include symlinks on older bases whose ignore only has .codegraph/.
+            // trace:STORY-2630 | ai:codex
+            ".codegraph",
             ".aida-compete-*.log",
         ],
         &[(LEGACY_AIDA_RUNTIME_EXCLUDE, AIDA_RUNTIME_EXCLUDE)],
@@ -7629,6 +7632,10 @@ mod tests {
 
         std::fs::create_dir_all(worktree.join(".aida/sessions")).unwrap();
         std::fs::create_dir_all(worktree.join(".aida-store/objects")).unwrap();
+        // trace:STORY-2630 | ai:codex
+        std::fs::create_dir(repo.join(".codegraph")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(repo.join(".codegraph"), worktree.join(".codegraph")).unwrap();
 
         assert!(
             !worktree.join(".gitignore").exists(),

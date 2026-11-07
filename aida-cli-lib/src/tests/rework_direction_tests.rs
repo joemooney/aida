@@ -341,10 +341,14 @@ fn conflicting_pr_adds_resolve_conflicts_first() {
     assert!(prompt.find("ADVISOR BRIEF").unwrap() > prompt.find("FIRST TASK").unwrap());
     assert!(prompt.ends_with("/aida-pickup BUG-051"));
 
-    // No conflict, no direction: the prompt is untouched.
+    // No conflict or direction: retain shared navigation before pickup.
+    // trace:STORY-2630 | ai:codex
     assert_eq!(
         assemble(&item_plan(), None, &[], None),
-        "/aida-pickup BUG-051"
+        format!(
+            "{}\n\n/aida-pickup BUG-051",
+            include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
+        )
     );
 }
 

@@ -61,7 +61,11 @@ fn finding(id: &str, summary: String, action: &str) -> DoctorFinding {
 /// the database mtime for freshness; a WAL write can be newer than its db.
 fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
-    if !binary_present {
+    let index_present = root.join(".codegraph").is_dir();
+    if !index_present && !binary_present {
+        return findings;
+    }
+    if index_present && !binary_present {
         findings.push(finding(
             "missing",
             "codegraph is missing from PATH".into(),
@@ -142,25 +146,52 @@ mod tests {
         assert!(!seat.join(".codegraph").exists());
         index(&primary);
         index(&seat);
-        assert!(crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).is_err());
+        std::fs::create_dir(primary.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(primary.join(".aida/sessions")).unwrap();
+        crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).unwrap();
+        assert!(seat.join(".aida-store").is_symlink());
+        assert!(seat.join(".aida/sessions").is_symlink());
         assert!(seat.join(INDEX).is_file());
         assert!(!seat.join(".codegraph").is_symlink());
+        // A foreign link (including a dangling one) is preserved too.
+        std::fs::remove_dir_all(seat.join(".codegraph")).unwrap();
+        let foreign = tmp.path().join("foreign");
+        for exists in [false, true] {
+            if exists {
+                std::fs::create_dir(&foreign).unwrap();
+            }
+            std::os::unix::fs::symlink(&foreign, seat.join(".codegraph")).unwrap();
+            std::fs::remove_file(seat.join(".aida-store")).unwrap();
+            std::fs::remove_file(seat.join(".aida/sessions")).unwrap();
+            crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).unwrap();
+            assert_eq!(
+                std::fs::read_link(seat.join(".codegraph")).unwrap(),
+                foreign
+            );
+            assert!(seat.join(".aida-store").is_symlink());
+            assert!(seat.join(".aida/sessions").is_symlink());
+            std::fs::remove_file(seat.join(".codegraph")).unwrap();
+        }
     }
 
     #[test]
     fn doctor_reports_missing_unreachable_stale_and_corrupt() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        assert!(assess(root, false, SystemTime::now()).is_empty());
+        assert_eq!(assess(root, true, SystemTime::now())[0].id, "unreachable");
+        assert!(
+            !root.join(".codegraph").exists(),
+            "doctor must not create an index"
+        );
+        std::fs::create_dir(root.join(".codegraph")).unwrap();
         let findings = assess(root, false, SystemTime::now());
         assert_eq!(
             findings.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(),
             ["missing", "unreachable"]
         );
-        assert!(
-            !root.join(".codegraph").exists(),
-            "doctor must not create an index"
-        );
         index(root);
+        assert_eq!(assess(root, false, SystemTime::now())[0].id, "missing");
         let modified = std::fs::metadata(root.join(INDEX))
             .unwrap()
             .modified()

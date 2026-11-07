@@ -1072,14 +1072,10 @@ pub(crate) fn link_worktree_runtime_state(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
 ) -> Result<()> {
-    // trace:STORY-2630 | ai:codex
-    let codegraph_link = crate::codegraph::primary_index_link(project_root, worktree_path)?;
     let store_src = project_root.join(".aida-store");
     let store_dst = worktree_path.join(".aida-store");
     let store_link = (store_src.exists() && !store_dst.exists()).then_some((store_src, store_dst));
-    // Route navigation through the same setup writer as the store link.
-    // trace:STORY-2630 | ai:codex
-    for (source, destination) in store_link.into_iter().chain(codegraph_link) {
+    if let Some((source, destination)) = store_link {
         std::os::unix::fs::symlink(&source, &destination).with_context(|| {
             format!(
                 "symlink {} -> {} failed",
@@ -1120,6 +1116,26 @@ pub(crate) fn link_worktree_runtime_state(
         // worktree may still hold an older binary's per-worktree sidecar;
         // retire it when its owner is dead. trace:BUG-1644 | ai:claude
         retire_stray_worktree_lock_info(&worktree_aida);
+    }
+    // Navigation is optional: restore all AIDA links first and never let an
+    // index conflict or I/O failure prevent session setup or recovery.
+    // trace:STORY-2630 | ai:codex
+    let navigation = (|| -> Result<()> {
+        if let Some((source, destination)) =
+            crate::codegraph::primary_index_link(project_root, worktree_path)?
+        {
+            std::os::unix::fs::symlink(&source, &destination).with_context(|| {
+                format!(
+                    "symlink {} -> {} failed",
+                    destination.display(),
+                    source.display()
+                )
+            })?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = navigation {
+        eprintln!("warning: skipping primary codegraph index link: {error:#}");
     }
     Ok(())
 }

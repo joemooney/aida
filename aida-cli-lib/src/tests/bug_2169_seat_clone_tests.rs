@@ -1831,3 +1831,25 @@ fn seat_clone_origin_callers_never_read_a_refusal_as_no_origin() {
         .to_string();
     assert!(err.contains("remote get-url origin"), "{err}");
 }
+
+// trace:STORY-2630 | ai:codex
+#[cfg(unix)]
+#[test]
+fn codegraph_runtime_link_is_clean_on_an_older_clone_base() {
+    let fx = fixture();
+    // The historical directory-only pattern does not ignore a symlink.
+    std::fs::write(fx.main.join(".gitignore"), ".codegraph/\n").unwrap();
+    git_ok(&fx.main, &["add", ".gitignore"]);
+    git_ok(&fx.main, &["commit", "-qm", "old ignore"]);
+    std::fs::create_dir(fx.main.join(".codegraph")).unwrap();
+    std::fs::write(fx.main.join(".codegraph/codegraph.db"), "index").unwrap();
+    let dest = fx.root.join("seats/aida-seat-aida-codegraph");
+    create(&fx.main, &dest, "feat", "HEAD").unwrap();
+    crate::worktree_gc::link_worktree_runtime_state(&fx.main, &dest).unwrap();
+    assert!(dest.join(".codegraph").is_symlink());
+    assert_eq!(
+        std::fs::read_to_string(dest.join(".gitignore")).unwrap(),
+        ".codegraph/\n"
+    );
+    assert_eq!(git_ok(&dest, &["status", "--porcelain"]), "");
+}
