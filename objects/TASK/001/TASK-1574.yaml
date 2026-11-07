@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-11T01:44:25.280624998Z
+modified_at: 2026-11-07T20:27:22.830028165Z
 req_type: Task
 tags:
 - operator-held
@@ -100,6 +100,16 @@ comments:
   created_at: 2026-10-08T19:18:25.392833190Z
   modified_at: 2026-10-08T19:18:25.392833190Z
   relayed_from: task1574-consumer-supplement-independent-review
+- id: 01a1b7b1-c34e-7203-a5ba-d424cb3f5d9e
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-08T19:17:49.561975795Z","deferred_until":"When legitimate bound recording and clearance actors exist through the ordinary supported workflow, run only the two remaining witnesses and obtain new independent full acceptance review; no stale binary, forged actor or hold-clear workaround.","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:22.830023584Z
+  modified_at: 2026-11-07T20:27:22.830023584Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a0fffb-e757-73d0-b0f5-64dead4d474a
   author: joe
@@ -152,7 +162,7 @@ history:
     new_value: Approved
 deferred: true
 deferred_at: 2026-10-08T19:17:49.561975795Z
-deferred_until: When legitimate bound recording and clearance actors exist through the ordinary supported workflow, run only the two remaining witnesses and obtain new independent full acceptance review; no stale binary, forged actor or hold-clear workaround.
+deferred_until: manual:operator
 deferred_reason: 'Full verification remains incomplete: bounded consumer/pin/MET evidence accepted, but the authorized protected request-changes producer with exact PR/full SHA and actual authorized human-clear-to-ship witness are unavailable. Refused producer/clear attempts stay failures.'
 implementation_info:
   implemented: true
