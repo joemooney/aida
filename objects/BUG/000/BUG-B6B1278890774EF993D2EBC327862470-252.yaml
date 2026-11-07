@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T19:37:08.731128669Z
+modified_at: 2026-11-07T19:52:04.388400872Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -133,6 +133,11 @@ comments:
   content: 'Round 4 implementation follows binding 2026-11-07 advisor ruling: retain codex-cli 0.166.0 / b8a11fed... pin; replace exec -P aida with -c default_permissions="aida" and retain -P aida only on codex sandbox seat preflight. Added pre-exec scope-specific flag validation from exact-pin help fixture and builder/pin regression. Empty-HOME synthetic Responses probe passed exec allowed-write + denied-write (EROFS), with both paths writable in outer control; sandbox preflight passed the same probe. No real credentials, inference or C0-C4 credit. Rust targeted tests compiling from scratch; native-seat edits remain uncommitted for host publication to #3611. Existing merge hold remains untouched; old upgrade demands and blocker are superseded by advisor ruling.'
   created_at: 2026-11-07T19:37:08.731106924Z
   modified_at: 2026-11-07T19:37:08.731106924Z
+- id: 01a1b791-7024-71d2-8b65-2d0656cce1a1
+  author: mcp
+  content: 'Final Round 4 validation: AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1 cargo test -p aida-cli-lib --lib bug_2487 -- --nocapture passed both tests (2 passed, 0 failed). Actual Rust-builder exec flags accepted by pinned 0.166.0; generated sandbox preflight and exec model tool both pass allowed-write/denied-write probes, with passing outer controls. cargo fmt --all -- --check, git diff --check, and check-exec-context.py pass (1241 exact legacy sites; zero additions). Fixture corrected to inspect both diagnostic streams, use explicit /tmp instead of Cargo''s RAM TMPDIR, and bound Codex startup at 40s. Native publication declaration recorded: [AI:codex] fix(containment): select and validate pinned Codex exec profile (BUG-2487). Five files remain uncommitted for host publication to #3611; no Git publication, queue completion, review verdict or hold clearance was performed. Host must use corrected PR title/squash attribution; existing merge hold remains.'
+  created_at: 2026-11-07T19:52:04.388392322Z
+  modified_at: 2026-11-07T19:52:04.388392322Z
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
   author: joe
