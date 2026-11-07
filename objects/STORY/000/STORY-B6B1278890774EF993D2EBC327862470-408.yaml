@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-06T17:29:33.465314333Z
+modified_at: 2026-11-07T04:30:43.939762462Z
 req_type: Story
 relationships:
 - rel_type:
@@ -265,6 +265,13 @@ comments:
   created_at: 2026-11-06T17:29:33.465314333Z
   modified_at: 2026-11-06T17:29:33.465314333Z
   session_id: 01a1b1c17890
+- id: 01a1b445-ece3-7891-8d26-4befecbf7b32
+  author: joe
+  content: 'Advisor triage 2026-11-06 of the operator''s work GDMS CI reports (report.html, git-delta-report.html: work/spock@73823b4 -> work/gdma-runners@256dd2fe, 313 files, 54 commits). Filed and approved: TASK-3325 (replace quarantined crates), BUG-2475 (mawk escaping in mail-notice hook), BUG-2476 (container-portable fixtures), BUG-2477 (status_awaiting label collision), BUG-2479 (status 36s vs 10s budget), BUG-2480 (contained_host shutdown hang), STORY-2606 (upstream the ci/gdma adapter; Nexus URLs, gitleaks entry and runner config stay work-only). The rest of the delta is upstream work already flowing to home main, or work-environment setup (runners, seccomp/procfs, CA bundle, E-core pinning).'
+  created_at: 2026-11-07T04:30:43.939762462Z
+  modified_at: 2026-11-07T04:30:43.939762462Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
   author: joe
