@@ -162,6 +162,118 @@ mod tests {
                 }
             }
         }
+        // Headless argv and settings remain profile-owned data composition.
+        // Golden vectors preserve option ordering and flag-shaped prompt data.
+        for prompt in ["--settings", "'quoted' $value\nnext", ""] {
+            let args = profile(LaunchVendor::Codex)
+                .headless_args(prompt, "sid", Some("model"), Some("high"), None)
+                .unwrap();
+            assert_eq!(
+                args,
+                [
+                    "exec",
+                    "--json",
+                    "--dangerously-bypass-approvals-and-sandbox",
+                    "--model",
+                    "model",
+                    "-c",
+                    "model_reasoning_effort=high",
+                    prompt
+                ]
+            );
+            let native = profile(LaunchVendor::Codex)
+                .headless_args(
+                    prompt,
+                    "sid",
+                    None,
+                    None,
+                    Some(vec!["--sandbox".into(), "workspace-write".into()]),
+                )
+                .unwrap();
+            assert_eq!(
+                native,
+                ["--sandbox", "workspace-write", "exec", "--json", prompt]
+            );
+            let agy = profile(LaunchVendor::Agy)
+                .headless_args(prompt, "ignored", Some("ignored"), Some("high"), None)
+                .unwrap();
+            assert_eq!(
+                agy,
+                [
+                    "--dangerously-skip-permissions",
+                    "--output-format",
+                    "stream-json",
+                    "--effort",
+                    "high",
+                    "-p",
+                    prompt
+                ]
+            );
+            for contained in [false, true] {
+                let flags = contained.then(|| vec!["--setting-sources".into(), "project".into(),
+                    "--settings".into(), r#"{"sandbox":{"enabled":true},"env":{"KEEP":"yes"},"permissions":{"deny":["existing"]}}"#.into()]);
+                let args = profile(LaunchVendor::Claude)
+                    .headless_args(prompt, "sid", Some("model"), Some("high"), flags)
+                    .unwrap();
+                crate::session::assert_headless_posture(&args, contained, "profile");
+                let at = args.iter().position(|a| a == "--settings").unwrap();
+                let settings: serde_json::Value = serde_json::from_str(&args[at + 1]).unwrap();
+                if contained {
+                    assert_eq!(settings["env"]["KEEP"], "yes");
+                    assert!(settings["permissions"]["deny"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|r| r == "existing"));
+                }
+                let mut expected: Vec<String> = [
+                    "-p",
+                    "--permission-mode",
+                    if contained {
+                        "dontAsk"
+                    } else {
+                        "bypassPermissions"
+                    },
+                ]
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+                if contained {
+                    expected.extend(["--setting-sources".into(), "project".into()]);
+                }
+                expected.extend(
+                    [
+                        "--settings",
+                        &settings.to_string(),
+                        "--disallowed-tools",
+                        "AskUserQuestion",
+                        "Monitor",
+                        "--output-format",
+                        "stream-json",
+                        "--verbose",
+                        "--session-id",
+                        "sid",
+                        "--model",
+                        "model",
+                        "--effort",
+                        "high",
+                        prompt,
+                    ]
+                    .into_iter()
+                    .map(str::to_string),
+                );
+                assert_eq!(args, expected);
+            }
+        }
+        assert!(profile(LaunchVendor::Claude)
+            .headless_args(
+                "p",
+                "sid",
+                None,
+                None,
+                Some(vec!["--settings".into(), "invalid JSON".into()])
+            )
+            .is_err());
         for refused in ["", "bash", "gemini", "opencode", "claude-code"] {
             assert!(LaunchVendor::parse(refused).is_err());
             assert!(HeadlessVendor::parse(refused).is_none());
@@ -226,3 +338,5 @@ mod tests {
         );
     }
 }
+
+pub(crate) mod headless;
