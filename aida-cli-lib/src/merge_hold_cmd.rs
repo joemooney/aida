@@ -31,6 +31,7 @@ pub(crate) fn slugify(s: &str) -> String {
 /// don't use git_ops::is_git_repo here because we need the *path*, not
 /// just a yes/no.
 // trace:STORY-1171 | ai:claude
+// trace:TASK-3364 | ai:codex
 pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
     let root = find_project_root()?;
     let leases = merge_lock::status(&root);
@@ -39,17 +40,22 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     if json {
-        let items: Vec<String> = leases
+        let items: Vec<_> = leases
             .iter()
             .map(|(b, h)| {
-                let pr = h.pr.map(|p| p.to_string()).unwrap_or_else(|| "null".to_string());
-                format!(
-                    "{{\"branch\":{b:?},\"pr\":{pr},\"host\":{:?},\"pid\":{},\"acquired_at\":{},\"age_secs\":{},\"note\":{:?}}}",
-                    h.host, h.pid, h.acquired_at, now.saturating_sub(h.acquired_at), h.note
-                )
+                let path = merge_lock::lock_path(&root, b);
+                let mut item = merge_lock::inspect_file(&path);
+                item["branch"] = b.clone().into();
+                item["pr"] = h.pr.into();
+                item["host"] = h.host.clone().into();
+                item["pid"] = h.pid.into();
+                item["acquired_at"] = h.acquired_at.into();
+                item["age_secs"] = now.saturating_sub(h.acquired_at).into();
+                item["note"] = h.note.clone().into();
+                item
             })
             .collect();
-        println!("{{\"merge_locks\":[{}]}}", items.join(","));
+        println!("{}", serde_json::json!({"merge_locks": items}));
         return Ok(());
     }
     if leases.is_empty() {
@@ -61,6 +67,8 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
         let pr =
             h.pr.map(|p| p.to_string())
                 .unwrap_or_else(|| "-".to_string());
+        let path = merge_lock::lock_path(&root, &branch);
+        let (verdict, reason) = merge_lock::diagnostic(&h);
         println!(
             "  {branch}  pr={pr}  host={}  pid={}  age={}s  {}",
             h.host,
@@ -68,6 +76,18 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
             now.saturating_sub(h.acquired_at),
             h.note
         );
+        let detail = if reason.is_empty() {
+            verdict.clone()
+        } else {
+            format!("{verdict}({reason})")
+        };
+        println!(
+            "    holder_verdict={detail}; lease={}",
+            merge_lock::stale_reason(&h, "").unwrap_or_else(|| "retained".into())
+        );
+        if verdict != "Alive" {
+            println!("    repair: {}", merge_lock::repair_hint(&path));
+        }
     }
     Ok(())
 }
@@ -1278,6 +1298,13 @@ pub(crate) struct MergeLockArgs {
     /// Machine-readable JSON output.
     #[clap(long)]
     pub json: bool,
+    /// Inspect one lease with the shared judge (read-only; for shell consumers).
+    // trace:TASK-3364 | ai:codex
+    #[clap(long, conflicts_with = "migrate_legacy")]
+    pub check_file: Option<std::path::PathBuf>,
+    /// Explicitly arm a boot-clock deadline on complete pre-upgrade records once.
+    #[clap(long)]
+    pub migrate_legacy: bool,
 }
 
 // `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
@@ -1288,8 +1315,15 @@ fn run_merge_lock(
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeLockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let MergeLockArgs { json } = &args;
-    return handle_merge_lock_status(*json);
+    if let Some(path) = &args.check_file {
+        println!("{}", merge_lock::inspect_file(path));
+        return Ok(());
+    }
+    if args.migrate_legacy {
+        let changed = merge_lock::migrate_legacy(&find_project_root()?)?;
+        eprintln!("Migrated {changed} merge-lease deadline(s); no legacy process was rebound.");
+    }
+    handle_merge_lock_status(args.json)
 }
 
 // trace:STORY-1728 | ai:claude

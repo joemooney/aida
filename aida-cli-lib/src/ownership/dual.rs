@@ -661,21 +661,23 @@ pub(crate) fn merge_lease_session(pid: u32) -> String {
 
 /// The train for PR `train` took its merge lease in this process.
 // trace:STORY-2325 | ai:claude
-pub(crate) fn train_lease_taken(project_root: &Path, train: u64) {
+// trace:TASK-3364 | ai:codex
+pub(crate) fn train_lease_taken(
+    project_root: &Path,
+    train: u64,
+    lease: &crate::merge_lock::Holder,
+) {
     let Some(store) = store_for(project_root) else {
         return;
     };
-    let writer = WriterFacts::here();
     let now = Utc::now();
     let pid = std::process::id();
-    let start = aida_core::liveness::process_start_identity(pid);
     let holder = Holder {
         seat: "train".to_string(),
         role: Role::Train,
         session: merge_lease_session(pid),
         tree: None,
-        witnesses: writer
-            .witness(pid, start.as_deref(), now)
+        witnesses: crate::merge_lock::holder_witness(lease, now)
             .into_iter()
             .collect(),
     };
