@@ -1,13 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-07T15:49:29.847666377Z
+last_run: 2026-11-07T23:17:53.026125069Z
 last_by:
   seat: advisor
-  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   vendor: claude
 result: done
-due_since: 2026-11-07T21:29:09.229866159Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-07T21:23:24.180511706Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: aida-store union-reconciled c764520667a7
