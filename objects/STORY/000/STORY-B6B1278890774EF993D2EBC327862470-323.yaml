@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-323
 agreed_id: STORY-2325
 title: One ownership and liveness record per piece of work (lease, PR, train, reviewer, mailbox scope)
 description: 'Regroup target 2, 2026-11-02. One typed ownership record with a single liveness rule: pid plus start identity, a heartbeat, or ''the seat HEAD is already in the PR''. Ownership passes from lease to PR when the PR opens. Dead owners are reclaimed by rule, never with --force. Trains, reviewers and relaunches query it. Mail retention is checked against message state, not the build id. Evidence: STORY-2315, BUG-2412, BUG-2220, BUG-2411, BUG-2327, TASK-1715, TASK-2021, BUG-2138, STORY-1665. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T20:27:37.652713258Z
+modified_at: 2026-11-07T20:30:55.294112018Z
 req_type: Story
 tags:
 - architecture
@@ -549,6 +549,13 @@ comments:
     Logs: /tmp/story2325-fast-verified.log, /tmp/story2325-final-targeted.log, /tmp/story2325-reclaim-bwrap-verified.log, /tmp/story2325-source-manual.log, /tmp/story2325-final-check.log, /tmp/story2325-python-final.log.
   created_at: 2026-11-07T20:13:32.375938586Z
   modified_at: 2026-11-07T20:13:32.375938586Z
+- id: 01a1b7b5-013e-76e0-b0b7-94588c31f81c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-D slice: rotation, review retirement, queue recover, re-entry and the queue-work sweep now use the ownership judge, and the ratchet is in. Not mergeable yet: ruling (2) mail retention is unmet (punt with no advisor ruling), ruling (1) is partial, dead+clean unpushed leases now block pickup, and the probe-ref sweep change breaks an existing test. CI lib/contracts/gates were still pending at the reviewed head.. It was punted on: design-fork: Round 6 finding 3 remains blocking. The latest PR-D ruling requires mail retirement to check delivered/acknowledged message state, while the signed sketch requires a complete fresh writer-admission scan after fencing under the lifecycle lock. The existing barrier preserves unread and pending mail for logical readers. Please rule whether delivered-but-unacknowledged mail permits source retirement after durable preservation, whether queued/undelivered mail must retain its source, and whether the fresh writer-admission scan remains mandatory. These choices change teardown safety and inbox delivery semantics; this seat has not removed the build gate or claimed completion. Other round-6 ownership/refusal/CI fixes are being left as uncommitted edits for host review.. No triage reason was given.'
+  created_at: 2026-11-07T20:30:55.294107902Z
+  modified_at: 2026-11-07T20:30:55.294107902Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
@@ -837,6 +844,15 @@ history:
   session_id: 01a1b7acfb22
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7b5-013e-76e0-b0b7-9440f97194fc
+  author: joe
+  timestamp: 2026-11-07T20:30:55.294096408Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -845,17 +861,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-attention_reason:
-  category: design-fork
-  detail: Round 6 finding 3 remains blocking. The latest PR-D ruling requires mail retirement to check delivered/acknowledged message state, while the signed sketch requires a complete fresh writer-admission scan after fencing under the lifecycle lock. The existing barrier preserves unread and pending mail for logical readers. Please rule whether delivered-but-unacknowledged mail permits source retirement after durable preservation, whether queued/undelivered mail must retain its source, and whether the fresh writer-admission scan remains mandatory. These choices change teardown safety and inbox delivery semantics; this seat has not removed the build gate or claimed completion. Other round-6 ownership/refusal/CI fixes are being left as uncommitted edits for host review.
-  lean: Keep writer fencing, permit quiescence and the fresh admission scan; preserve pending/unacknowledged messages with delivery and receipt evidence, independently of activation build identity. Require explicit advisor acceptance of the retirement-state matrix before removing the build gate.
-  raised_by: implementer
-  raised_at: 2026-11-07T19:30:11.478091676Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PR-D slice: rotation, review retirement, queue recover, re-entry and the queue-work sweep now use the ownership judge, and the ratchet is in. Not mergeable yet: ruling (2) mail retention is unmet (punt with no advisor ruling), ruling (1) is partial, dead+clean unpushed leases now block pickup, and the probe-ref sweep change breaks an existing test. CI lib/contracts/gates were still pending at the reviewed head.'
-  recovery_hint: address the review findings, move STORY-2325 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T20:27:37.652713258Z
