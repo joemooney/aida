@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use ts_rs_forge::TS;
+use ts_rs::TS;
 
 use crate::node::NodeRegistry;
 

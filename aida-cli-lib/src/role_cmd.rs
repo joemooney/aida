@@ -563,7 +563,7 @@ fn pick_recent_session_for_role(
         sessions.len(),
         role
     );
-    let pick = match inquire::Select::new(&prompt, labels.clone())
+    let pick = match crate::prompt_select::select(&prompt, labels.clone())
         .with_help_message("arrows to move, type to filter, Enter to choose, Esc to skip")
         .prompt()
     {

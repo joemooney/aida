@@ -222,7 +222,7 @@ pub(super) fn path(store: &Path) -> Option<PathBuf> {
     hash.update(store.as_os_str().as_encoded_bytes());
     hash.update(build());
     Some(
-        dirs::cache_dir()?
+        aida_core::home::cache_dir()?
             .join("aida/regen-display")
             .join(format!("{:x}.jsonl", hash.finalize())),
     )

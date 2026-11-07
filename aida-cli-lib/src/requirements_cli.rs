@@ -2022,7 +2022,7 @@ pub(crate) fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> R
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
-    if let Ok(new_status) = inquire::Select::new("Status:", status_options).prompt() {
+    if let Ok(new_status) = crate::prompt_select::select("Status:", status_options).prompt() {
         if new_status != req.status {
             // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
             if let Some(msg) = deferred_status_edit_refusal(req) {
@@ -2053,7 +2053,7 @@ pub(crate) fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> R
         RequirementPriority::Medium,
         RequirementPriority::Low,
     ];
-    if let Ok(new_priority) = inquire::Select::new("Priority:", priority_options).prompt() {
+    if let Ok(new_priority) = crate::prompt_select::select("Priority:", priority_options).prompt() {
         if new_priority != req.priority {
             changes.push(Requirement::field_change(
                 "priority",
@@ -2862,7 +2862,7 @@ fn run_add(
                             "folder",
                             "meta",
                         ];
-                        let pick = inquire::Select::new("Type:", choices)
+                        let pick = crate::prompt_select::select("Type:", choices)
                         .with_help_message("task for most things · bug for defects · story/epic to group work. The rest are for larger or docs-heavy projects.")
                         .prompt()
                         .context("Type prompt cancelled")?;
@@ -2910,20 +2910,19 @@ fn run_add(
                     };
 
                     // Priority — picker when not provided.
-                    let interactive_priority: Option<String> = if priority.is_none()
-                        && interactive_mode
-                        && !is_faq
-                    {
-                        let pick = inquire::Select::new("Priority:", vec!["medium", "high", "low"])
-                            .with_help_message(
-                                "medium covers most things; high for blockers; low for nice-to-haves.",
-                            )
-                            .prompt()
-                            .context("Priority prompt cancelled")?;
-                        Some(pick.to_string())
-                    } else {
-                        None
-                    };
+                    let interactive_priority: Option<String> =
+                        if priority.is_none() && interactive_mode && !is_faq {
+                            let choices = vec!["medium", "high", "low"];
+                            let pick = crate::prompt_select::select("Priority:", choices)
+                        .with_help_message(
+                            "medium covers most things; high for blockers; low for nice-to-haves.",
+                        )
+                        .prompt()
+                        .context("Priority prompt cancelled")?;
+                            Some(pick.to_string())
+                        } else {
+                            None
+                        };
                     let effective_priority: Option<String> =
                         priority.clone().or(interactive_priority);
 

@@ -135,6 +135,7 @@ mod hypothesis;
 mod store_hooks;
 // trace:TASK-1513 | ai:claude
 pub mod home;
+pub mod typescript;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric ID identity.
