@@ -11,11 +11,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T03:06:29.471718069Z
-modified_at: 2026-06-11T12:48:31.383831391Z
+modified_at: 2026-11-07T20:25:54.562814798Z
 req_type: Task
 tags:
 - aida:help
-- deferred:post-stability
 - discoverability
 - docs
 - glossary
@@ -25,8 +24,21 @@ comments:
   content: Commit b4fc48605 references this requirement
   created_at: 2026-05-31T17:14:22.314427833Z
   modified_at: 2026-05-31T17:14:22.314427833Z
+- id: 01a1b7b0-6a82-7951-8380-150fac8ee07a
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:post-stability"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:25:54.562805647Z
+  modified_at: 2026-11-07T20:25:54.562805647Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-11T12:48:31.383831391Z
+deferred: true
+deferred_at: 2026-06-11T12:48:31.383831391Z
+deferred_until: manual:operator
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T17:19:23.314428324Z
