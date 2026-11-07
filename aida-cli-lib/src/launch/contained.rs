@@ -201,6 +201,58 @@ impl WriteProfile {
     fn new() -> Self {
         Self { mounts: Vec::new() }
     }
+    /// Seal after every ordinary grant, including seat-clone and cache grants.
+    /// Pin resolved targets as well as protecting their writable ancestors:
+    /// removing grants alone would leave primary-checkout launches writable.
+    /// Returns a fresh cache location for explicitly routed derived readers;
+    /// it is never mounted over the shared cache or populated from its bytes.
+    // trace:TASK-3223 | ai:codex
+    fn seal_mediated_store(&mut self, root: &Path, main: &Path, state: &Path) -> Result<PathBuf> {
+        let mut protected = Vec::new();
+        for base in [root, main] {
+            for path in [
+                base.join(".aida-store"),
+                base.join(".aida"),
+                aida_core::db::cache_dir_in(&base.join(".aida")),
+                base.join(".git"),
+            ] {
+                // Absence is not safe under a writable ancestor: require the
+                // host to provision mountpoints before admitting this profile.
+                let path = std::fs::canonicalize(&path).with_context(|| {
+                    format!("mediated protected path unavailable: {}", path.display())
+                })?;
+                if !protected.contains(&path) {
+                    protected.push(path);
+                }
+            }
+            let gitdir = aida_core::git_ops::worktree_gitdir_path(base);
+            anyhow::ensure!(
+                !base.join(".git").is_file() || gitdir.is_some(),
+                "mediated Git metadata target unavailable"
+            );
+            if let Some(gitdir) = gitdir {
+                let gitdir = std::fs::canonicalize(gitdir)?;
+                if !protected.contains(&gitdir) {
+                    protected.push(gitdir);
+                }
+            }
+        }
+        let state = std::fs::canonicalize(state)?;
+        anyhow::ensure!(
+            !protected.iter().any(|path| state.starts_with(path)),
+            "private cache overlaps protected store state"
+        );
+        // Parent mounts first; otherwise rebinding a parent hides a previously
+        // protected child mount (notably a cache symlink's external target).
+        protected.sort_by_key(|path| path.components().count());
+        for path in protected {
+            self.add(&path, false)?;
+        }
+        let cache = state.join("derived-cache");
+        std::fs::create_dir(&cache)?;
+        self.add(&cache, true)?;
+        Ok(cache.join(aida_core::db::CACHE_FILE_NAME))
+    }
     fn add(&mut self, path: &Path, writable: bool) -> Result<()> {
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -723,10 +775,26 @@ fn pipe() -> Result<(File, File)> {
 // trace:TASK-3225 | ai:codex
 pub(crate) fn require_store_service_surface(child: &Command, wrapped: bool) -> Result<()> {
     anyhow::ensure!(
-        wrapped || explicit(child, "AIDA_STORE_MUTATION_REQUIRED").is_none(),
+        wrapped
+            || (explicit(child, "AIDA_STORE_MUTATION_REQUIRED").is_none()
+                && explicit(child, "AIDA_STORE_MUTATION_PROFILE").is_none()),
         "required store service is unavailable outside the shared contained headless launcher"
     );
     Ok(())
+}
+
+/// An explicit child selection is input, not admission. Do not infer this
+/// profile from the read-only S1 service requirement or inherited environment.
+// trace:TASK-3223 | ai:codex
+fn selected_store_profile(child: &Command) -> Result<crate::contained_boundary::StoreWriteProfile> {
+    use crate::contained_boundary::StoreWriteProfile;
+    match explicit(child, "AIDA_STORE_MUTATION_PROFILE").as_deref() {
+        None | Some("compatibility") => Ok(StoreWriteProfile::Compatibility),
+        Some("mediated") => anyhow::bail!(
+            "mediated store profile is gated pending CLI/MCP routing, durable publication and boundary validation"
+        ),
+        Some(_) => anyhow::bail!("invalid explicit store mutation profile"),
+    }
 }
 
 pub(crate) struct PreparedLaunch {
@@ -795,6 +863,7 @@ impl PreparedLaunch {
         io: LaunchIo,
         codex_sha256: &str,
     ) -> Result<Self> {
+        let store_profile = selected_store_profile(child)?;
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
         let required = explicit(child, "AIDA_STORE_MUTATION_REQUIRED");
@@ -944,7 +1013,7 @@ impl PreparedLaunch {
         profile.add(&root, true)?;
         let main = crate::main_worktree_root_from(&root);
         crate::session::verify_linked_worktree_main(host_main, &root, &main)?;
-        for p in crate::contained_boundary::contained_store_write_paths(&main) {
+        for p in crate::contained_boundary::contained_store_write_paths_for(&main, store_profile) {
             let p =
                 std::fs::canonicalize(p).context("required store/cache directory unavailable")?;
             profile.add(&p, runtime_policy.is_none())?;
@@ -1067,6 +1136,11 @@ impl PreparedLaunch {
             let notices = crate::grant_expiry_notice::notice_leaf(&grant)?;
             ensure_dir(&notices)?;
             profile.add(&notices, true)?;
+        }
+        if store_profile == crate::contained_boundary::StoreWriteProfile::Mediated {
+            // Admission above remains closed until callers use this explicit
+            // cache path and canonical verbs provide durable publication.
+            let _cache = profile.seal_mediated_store(&root, &main, state.path())?;
         }
         // HOME remains the issuer's canonical AIDA home (read-only). Core
         // tool filtering retains HOME but not AIDA_HOME; relocating HOME would
@@ -1698,3 +1772,7 @@ impl Drop for ContainedChild {
 #[cfg(test)]
 #[path = "../containment/tests/launch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../containment/tests/mediated_store_tests.rs"]
+mod mediated_store_tests;
