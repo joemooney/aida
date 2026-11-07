@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T15:53:42.350420332Z
+modified_at: 2026-11-07T16:07:13.960105021Z
 req_type: Story
 tags:
 - architecture
@@ -785,6 +785,12 @@ comments:
   modified_at: 2026-11-07T15:48:52.079557451Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6c3-9728-7dd1-b862-f7a5601cc031
+  author: joe
+  content: 'Round 7 native-seat rework: wrapper-owned launches retain environment provenance by bypassing ambient projection; reviewer seat assignment deliberately transports the standalone verdict path without replacing an explicit site path. Added wrapper/session/rotation/PATH and cleared-reviewer regressions, backend-import/alias mutants, env-clear-compatible fixture captures and absence assertions, and a narrow grant-file inventory exemption. Cargo resource projection remains plumbing only, and dropped-key reporting remains an accepted known limitation; both are recorded for the PR body in docs/plans/2026-11-07-story-2326-prd-round7.md. Targeted validation and LIGHT gate are running. No commit, publication, hold clearance or queue completion from this native seat.'
+  created_at: 2026-11-07T16:07:13.960105021Z
+  modified_at: 2026-11-07T16:07:13.960105021Z
+  session_id: 01a1b6b729b4
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
