@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-07T10:18:22.573998099Z
+modified_at: 2026-11-07T10:19:13.928416299Z
 req_type: Task
 tags:
 - architecture
@@ -625,6 +625,13 @@ comments:
   created_at: 2026-11-06T15:00:05.767722974Z
   modified_at: 2026-11-06T15:00:05.767722974Z
   session_id: 01a1b146ae69
+- id: 01a1b584-fc88-7763-a444-fc5a6c4734c8
+  author: joe
+  content: 'Pickup 2026-11-07 (claude, seat 658-2): the 2026-11-06 14:26 rework brief (Test time budget, bug_2157_2158 refusal tests at ~17s) is already resolved. fcb1019228 ''refuse widening flags before boundary setup'' moved the refusal ahead of wrapper/broker setup; CI run 42239066509 on that head passed, including the time budget gate. The delta review approved it and it landed on main as 8dcb86ca85d via PR #3449. No budget entry was added. No new change needed; AC1 finishes in TASK-3219.'
+  created_at: 2026-11-07T10:19:13.928416299Z
+  modified_at: 2026-11-07T10:19:13.928416299Z
+  session_id: 01a1b58427f1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
