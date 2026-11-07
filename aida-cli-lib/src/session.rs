@@ -6658,6 +6658,8 @@ pub(crate) fn run_vendor_headless_to_exit(
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    let host_published = vendor == HeadlessVendor::Codex && contained;
+    let publish_native = std::cell::Cell::new(host_published);
     // trace:TASK-2902 | ai:codex
     if vendor == HeadlessVendor::Codex {
         if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
@@ -6674,6 +6676,10 @@ pub(crate) fn run_vendor_headless_to_exit(
     // This process is the seat's host side (it launches the sandboxed
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
+    // trace:STORY-2640 | ai:codex
+    if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        crate::lane_fast_gate::begin(&main_root, branch)?;
+    }
     let result = with_implementer_jobs(
         &main_root,
         seat,
@@ -6719,7 +6725,55 @@ pub(crate) fn run_vendor_headless_to_exit(
                     |p, l, r, h| run_once(p, l, r, Some(h)),
                 ),
             };
-            result
+            // trace:STORY-2640 | ai:codex — gate before revoking the repair grant.
+            let mut status = result?;
+            if let Some((lease, (tree, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
+                let scope = crate::list_leases(&main_root)
+                    .into_iter()
+                    .find(|l| l.id == lease)
+                    .context("fast gate lease disappeared")?
+                    .scope;
+                if host_published {
+                    publish_native.set(crate::lane_fast_gate::native(
+                        &main_root,
+                        tree,
+                        &scope,
+                        lease,
+                        branch,
+                        status.success(),
+                        |p| {
+                            status = run_once(
+                                p,
+                                &log_path.with_extension("fast-fix.jsonl"),
+                                true,
+                                None,
+                            )?;
+                            Ok(status.success())
+                        },
+                    )?);
+                } else if let Some((pr, _)) =
+                    crate::standalone_implementer::lookup_pr(&main_root, branch)
+                {
+                    let queued = crate::lane_fast_gate::pushed(
+                        &main_root,
+                        tree,
+                        &scope,
+                        lease,
+                        branch,
+                        pr,
+                        vendor.as_str(),
+                    )?;
+                    eprintln!(
+                        "fast_gate={}",
+                        crate::lane_fast_gate::marker(&main_root, branch)
+                    );
+                    anyhow::ensure!(
+                        !queued,
+                        "fast gate failed; one rework round queued before review"
+                    );
+                }
+            }
+            Ok::<_, anyhow::Error>(status)
         },
     );
     // BUG-2139: the child's grant dies with the child — on a normal or
@@ -6731,7 +6785,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     }
     let status = result?;
     // trace:STORY-2475 | ai:codex
-    if vendor == HeadlessVendor::Codex && contained {
+    if publish_native.get() {
         if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
             let scope = crate::list_leases(&main_root)
                 .into_iter()
@@ -6748,6 +6802,13 @@ pub(crate) fn run_vendor_headless_to_exit(
         }
     }
 
+    // trace:STORY-2640 | ai:codex
+    if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        println!(
+            "implementer: fast_gate={}",
+            crate::lane_fast_gate::marker(&main_root, branch)
+        );
+    }
     Ok(status)
 }
 

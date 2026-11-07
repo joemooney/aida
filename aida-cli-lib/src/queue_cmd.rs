@@ -9056,13 +9056,66 @@ pub(crate) fn run_queue_resume_to_exit(
     role: &str,
     publication: (&std::path::Path, &str, &str),
 ) -> Result<std::process::ExitStatus> {
-    let status = session::spawn_vendor_headless_resume(
+    // trace:STORY-2640 | ai:codex — explicit resumes retain the same host gate.
+    let implementing = crate::canonical_role_name(role) == "implementer";
+    let host_published =
+        target.vendor == session::HeadlessVendor::Codex && contained && implementing;
+    let mut publish_native = host_published;
+    let main = crate::main_worktree_root_from(publication.0);
+    let branch = if implementing {
+        let lease = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == publication.2)
+            .context("fast gate resume lease disappeared")?;
+        crate::lane_fast_gate::begin(&main, &lease.branch)?;
+        Some(lease.branch)
+    } else {
+        None
+    };
+    let mut status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
-    if target.vendor == session::HeadlessVendor::Codex
-        && contained
-        && crate::canonical_role_name(role) == "implementer"
-    {
+    if let Some(branch) = branch.as_deref() {
+        if host_published {
+            publish_native = crate::lane_fast_gate::native(
+                &main,
+                tree,
+                publication.1,
+                publication.2,
+                branch,
+                status.success(),
+                |p| {
+                    status = session::spawn_vendor_headless_resume(
+                        host_main,
+                        target,
+                        p,
+                        &log.with_extension("fast-fix.jsonl"),
+                        tree,
+                        tee,
+                        contained,
+                        role,
+                    )?;
+                    Ok(status.success())
+                },
+            )?;
+        } else if let Some((pr, _)) = crate::standalone_implementer::lookup_pr(&main, branch) {
+            let queued = crate::lane_fast_gate::pushed(
+                &main,
+                tree,
+                publication.1,
+                publication.2,
+                branch,
+                pr,
+                target.vendor.as_str(),
+            )?;
+            eprintln!("fast_gate={}", crate::lane_fast_gate::marker(&main, branch));
+            anyhow::ensure!(
+                !queued,
+                "fast gate failed; one rework round queued before review"
+            );
+        }
+    }
+    if publish_native {
         crate::ship_from_seat::publish_queue_exit(
             publication.0,
             tree,

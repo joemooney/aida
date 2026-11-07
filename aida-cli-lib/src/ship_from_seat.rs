@@ -503,6 +503,9 @@ pub(crate) fn publish_queue_exit(
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
     let publish = || {
+        // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
+        let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+        crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
         run_at(
             &main,
             FromSeatOptions {
@@ -513,7 +516,23 @@ pub(crate) fn publish_queue_exit(
                 dry_run: false,
                 commit_pending: None,
             },
-        )
+        )?;
+        let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+            .context("published PR unavailable for fast gate annotation; review remains blocked")?;
+        let head =
+            crate::lane_fast_gate::head(&main, &branch).context("fast gate head unavailable")?;
+        crate::lane_fast_gate::annotate(
+            &main,
+            pr,
+            &head,
+            &crate::lane_fast_gate::marker(&main, &branch),
+        )?;
+        crate::lane_fast_gate::published(&main, &branch)?;
+        eprintln!(
+            "fast_gate={}",
+            crate::lane_fast_gate::marker(&main, &branch)
+        );
+        Ok(())
     };
     publish_queue_exit_with(
         &main,
@@ -522,6 +541,23 @@ pub(crate) fn publish_queue_exit(
         || crate::seat_clone::probe(&main, tree),
         publish,
         || {
+            // An unchanged rework can still have an existing PR. Its gate
+            // result must be visible before releasing review admission.
+            // trace:STORY-2640 | ai:codex
+            let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+            crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+            if let Some((pr, _)) = crate::standalone_implementer::lookup_pr(&main, &branch) {
+                let head = crate::lane_fast_gate::head(&main, &branch)
+                    .context("fast gate head unavailable")?;
+                crate::lane_fast_gate::annotate(
+                    &main,
+                    pr,
+                    &head,
+                    &crate::lane_fast_gate::marker(&main, &branch),
+                )?;
+                crate::lane_fast_gate::published(&main, &branch)?;
+            }
+            // An absent/unknown PR observation grants no review release.
             advisor_request(
                 &main,
                 "Queue-work lane exited without changes",
@@ -1586,6 +1622,12 @@ fn run_from_with_reconciliation(
         return Ok(());
     }
 
+    // trace:STORY-2640 | ai:codex — bind evidence to the actual imported tip.
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        crate::lane_fast_gate::check_import(&main, &branch, tip),
+    )?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);
     let push = aida_core::git_ops::host_git_command(&main)

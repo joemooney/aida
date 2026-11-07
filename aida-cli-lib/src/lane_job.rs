@@ -26,9 +26,9 @@
 //!
 //! Containment (advisor rulings on BUG-2383, rounds 1 and 2):
 //!
-//! - Only an allow-listed cargo argv runs: `cargo test|check|build --profile
+//! - Only an allow-listed argv runs: `cargo test|check|build --profile
 //!   agent ...`, with no option that points cargo at other code, config or
-//!   output.
+//!   output, or the exact `make check-ci-fast` job used by the host gate.
 //! - A job still runs code the seat wrote (build scripts, tests, a
 //!   seat-written `.cargo/config.toml` runner), so it always runs inside its
 //!   own minimal bubblewrap profile
@@ -255,7 +255,7 @@ pub(crate) const REQUIRED_PROFILE: &str = "agent";
 /// One job, as the seat writes it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct JobRequest {
-    /// The full argv, starting with `cargo`.
+    /// The full argv, starting with `cargo` or exact `make check-ci-fast`.
     pub(crate) argv: Vec<String>,
     /// Extra environment, only [`ALLOWED_ENV`] names.
     #[serde(default)]
@@ -286,6 +286,14 @@ const REFUSED_OPTIONS: &[&str] = &[
 /// Check a job against the allow-list. `Err` names the reason.
 pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
     let argv = &job.argv;
+    // trace:STORY-2640 | ai:codex — one exact additional job kind.
+    if fast_gate_job(job) {
+        return if job.env.is_empty() {
+            Ok(())
+        } else {
+            Err("the fast gate accepts no environment overrides".into())
+        };
+    }
     if argv.first().map(String::as_str) != Some("cargo") {
         return Err("a lane job must start with `cargo`".into());
     }
@@ -338,6 +346,9 @@ pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
 /// (ext4) the default would time every first job out (round-3 finding 7).
 // trace:BUG-2383 | ai:claude
 pub(crate) fn timeout_for(job: &JobRequest, cold: bool) -> Duration {
+    if fast_gate_job(job) {
+        return Duration::from_secs(300);
+    }
     let default = if cold {
         MAX_TIMEOUT_SECS
     } else {
@@ -1328,6 +1339,19 @@ fn run_one(
     tally: &Tally,
     seed: &SeedNote,
 ) {
+    run_one_timed(lane, id, job, stop, tally, seed, timeout_for)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_one_timed(
+    lane: &LaneJobs,
+    id: &str,
+    job: std::result::Result<JobRequest, String>,
+    stop: &AtomicBool,
+    tally: &Tally,
+    seed: &SeedNote,
+    timeout: impl FnOnce(&JobRequest, bool) -> Duration,
+) {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -1341,7 +1365,14 @@ fn run_one(
         Err(why) => return refuse(&why),
     };
     let env = lane.job_env(&job);
-    let Some(cargo) = resolve_program(&lane.program, &env) else {
+    let Some(cargo) = resolve_program(
+        if fast_gate_job(&job) {
+            "make"
+        } else {
+            &lane.program
+        },
+        &env,
+    ) else {
         return refuse(&format!("`{}` is not on the job's PATH", lane.program));
     };
     let args = job.argv[1..].to_vec();
@@ -1368,10 +1399,17 @@ fn run_one(
                 &cargo.to_string_lossy(),
                 args,
             ) {
-                Ok((program, args)) => match overlay_wrapped(seed, program, args) {
-                    Ok((program, args, how)) => (program, args, how),
-                    Err(why) => return refuse(&why),
-                },
+                Ok((program, mut args)) => {
+                    // trace:STORY-2640 | ai:codex — Cargo's offline flag alone
+                    // cannot keep a Makefile's arbitrary children offline.
+                    if fast_gate_job(&job) {
+                        args = fast_gate_namespaces(args);
+                    }
+                    match overlay_wrapped(seed, program, args) {
+                        Ok((program, args, how)) => (program, args, how),
+                        Err(why) => return refuse(&why),
+                    }
+                }
                 Err(e) => return refuse(&format!("{e:#}")),
             }
         }
@@ -1390,7 +1428,7 @@ fn run_one(
         Ok(f) => f,
         Err(e) => return refuse(&format!("create {}: {e}", out_file.display())),
     };
-    let ran_with = format!("cargo is {}, run {how_wrapped}", cargo.display());
+    let ran_with = format!("{} is {}, run {how_wrapped}", job.argv[0], cargo.display());
     {
         use std::io::Write;
         let _ = writeln!(out, "lane job: {seed_note}\nlane job: {ran_with}");
@@ -1414,7 +1452,7 @@ fn run_one(
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    let timeout = timeout_for(&job, seed.cold);
+    let timeout = timeout(&job, seed.cold);
     lane.log(&format!(
         "{id} started: {} (timeout {}s; {ran_with})",
         job.argv.join(" "),
@@ -1425,6 +1463,7 @@ fn run_one(
         Ok(child) => child,
         Err(e) => return refuse(&format!("start cargo: {e}")),
     };
+    let mut progress = Instant::now();
     let (rc, how) = loop {
         match child.try_wait() {
             // A run killed by a signal has no exit code of its own: it is not
@@ -1443,6 +1482,13 @@ fn run_one(
         if stop.load(Ordering::Relaxed) {
             kill_group(&mut child);
             break (STOPPED_RC, "stopped at lane end");
+        }
+        if progress.elapsed() >= Duration::from_secs(15) {
+            lane.log(&format!(
+                "{id} still running ({}s)",
+                started.elapsed().as_secs()
+            ));
+            progress = Instant::now();
         }
         std::thread::sleep(POLL);
     };
@@ -1723,3 +1769,145 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/bug_2434_lane_os_wrap_tests.rs"]
 mod bug_2434_tests;
+
+// trace:STORY-2640 | ai:codex
+pub(crate) fn fast_gate_job(job: &JobRequest) -> bool {
+    job.argv == ["make", "check-ci-fast"]
+}
+
+/// Host-created id and host-only result, never a receipt supplied by the seat.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn run_fast_gate(
+    main: &Path,
+    seat: &Path,
+    lease: &str,
+) -> Result<Option<(i32, String)>> {
+    if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
+        return Ok(None);
+    }
+    let mut lane = LaneJobs::for_lease(main, seat, lease);
+    // The host gate requires its own sandbox even when the vendor's outer wrap is off.
+    lane.sandbox = Sandbox::BwrapDefaultOn;
+    lane.prepare()?;
+    check_fast_gate_results(&lane)?;
+    let id = format!("fast-{}", uuid::Uuid::new_v4());
+    let job = JobRequest {
+        argv: vec!["make".into(), "check-ci-fast".into()],
+        env: BTreeMap::new(),
+    };
+    run_one(
+        &lane,
+        &id,
+        Ok(job),
+        &AtomicBool::new(false),
+        &Tally::default(),
+        &SeedNote::new(None, "host fast gate (no target seed)".into(), false),
+    );
+    let rc = read_rc(&lane.results, &id).context("host fast gate produced no result")?;
+    use std::io::Read;
+    let mut output = String::new();
+    std::fs::File::open(out_path(&lane.results, &id))?
+        .take(1024 * 1024)
+        .read_to_string(&mut output)?;
+    Ok(Some((rc, tail(&output, 100))))
+}
+
+#[cfg(test)]
+mod fast_gate_job_tests {
+    use super::*;
+
+    // The unwrapped fixture is test-only. Production run_fast_gate always
+    // selects BwrapDefaultOn before calling the same execution engine.
+    #[test]
+    fn fast_gate_timeout_writes_host_result_and_retains_untested() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let seat = tmp.path().join("seat");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&seat).unwrap();
+        crate::test_exec::write_executable(
+            &bin.join("make"),
+            "#!/bin/sh\necho fast-gate-started\nwhile :; do :; done\n",
+        );
+        let lane = LaneJobs {
+            inbox: seat.join(INBOX_RELATIVE),
+            seat,
+            results: tmp.path().join("host-results"),
+            lease_id: "timeout".into(),
+            build_env: Vec::new(),
+            host_env: vec![
+                ("PATH".into(), bin.display().to_string()),
+                ("GH_TOKEN".into(), "must-be-dropped".into()),
+            ],
+            program: "cargo".into(),
+            sandbox: Sandbox::TestUnwrapped,
+        };
+        lane.prepare().unwrap();
+        check_fast_gate_results(&lane).unwrap();
+        let mut unsafe_lane = lane.clone();
+        unsafe_lane.results = unsafe_lane.seat.join("host-results");
+        std::fs::create_dir_all(&unsafe_lane.results).unwrap();
+        assert!(check_fast_gate_results(&unsafe_lane).is_err());
+        let flags = fast_gate_namespaces(crate::session::lane_job_bwrap_argv(
+            &lane.seat,
+            &[],
+            &[],
+            "make",
+            vec!["check-ci-fast".into()],
+        ));
+        for flag in ["--unshare-net", "--unshare-ipc", "--unshare-pid"] {
+            assert!(flags.iter().any(|arg| arg == flag));
+        }
+        let job = JobRequest {
+            argv: vec!["make".into(), "check-ci-fast".into()],
+            env: BTreeMap::new(),
+        };
+        assert!(!lane.job_env(&job).contains_key("GH_TOKEN"));
+        let tally = Tally::default();
+        let start = Instant::now();
+        run_one_timed(
+            &lane,
+            "host-gate",
+            Ok(job),
+            &AtomicBool::new(false),
+            &tally,
+            &SeedNote::new(None, "fixture".into(), false),
+            |_, _| Duration::from_millis(50),
+        );
+        assert_eq!(read_rc(&lane.results, "host-gate"), Some(TIMEOUT_RC));
+        let output = std::fs::read_to_string(out_path(&lane.results, "host-gate")).unwrap();
+        assert!(output.contains("fast-gate-started"), "{output}");
+        assert!(output.contains("timed out"), "{output}");
+        assert!(start.elapsed() < Duration::from_secs(5));
+        assert!(tally.untested());
+    }
+}
+
+// trace:STORY-2640 | ai:codex
+fn fast_gate_namespaces(mut args: Vec<String>) -> Vec<String> {
+    args.splice(
+        0..0,
+        ["--unshare-net", "--unshare-ipc", "--unshare-pid"].map(String::from),
+    );
+    args
+}
+
+// A missing or overbroad lane binding must never make its own result writable.
+// trace:STORY-2640 | ai:codex
+fn check_fast_gate_results(lane: &LaneJobs) -> Result<()> {
+    let results = lane.results.canonicalize()?;
+    let mut writable = lane.sandbox_rw_paths(&lane.job_env(&JobRequest {
+        argv: vec!["make".into(), "check-ci-fast".into()],
+        env: BTreeMap::new(),
+    }));
+    writable.push(lane.seat.clone());
+    for path in writable {
+        if let Ok(path) = path.canonicalize() {
+            anyhow::ensure!(
+                !results.starts_with(path),
+                "fast gate results overlap a writable job path"
+            );
+        }
+    }
+    Ok(())
+}

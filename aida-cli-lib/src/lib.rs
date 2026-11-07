@@ -160,6 +160,8 @@ mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
 mod lane_cmd;
 mod lane_job;
+// trace:STORY-2640 | ai:codex
+mod lane_fast_gate;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 mod leases;
