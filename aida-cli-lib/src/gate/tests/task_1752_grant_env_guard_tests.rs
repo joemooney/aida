@@ -27,6 +27,11 @@ const OWNER: &str = "aida-cli-lib/src/gate/seat_authority.rs";
 // trace:STORY-2326 | ai:claude
 const ALLOWED_LITERAL_LINES: &[(&str, &str, &str)] = &[
     (
+        "aida-core/src/launch_policy.rs",
+        "\"AIDA_SESSION_GRANT_FILE\",",
+        "the dropped-key inventory names a distinct file key, never reads the grant selector",
+    ),
+    (
         "aida-cli-lib/src/role_cmd_args.rs",
         "/// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its",
         "clap help text for `aida role expiry`: users set the variable by name",

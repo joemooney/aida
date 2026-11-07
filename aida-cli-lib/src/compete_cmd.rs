@@ -1165,6 +1165,9 @@ pub(crate) fn build_compete_arm_command(
     // BUG-050: belt and braces alongside the `--settings` env.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     if vendor == "claude" {
+        // No delegated seat: Claude's cleared projection deliberately drops
+        // parent role/grant/purpose. Compete does not become the parent session.
+        // trace:STORY-2326 | ai:codex
         cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
     }
     if vendor == "codex" {

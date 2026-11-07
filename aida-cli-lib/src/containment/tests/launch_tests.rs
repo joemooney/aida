@@ -1510,11 +1510,10 @@ fn task_2708_claude_prepare_fake_home() {
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_GRANT", "")
         .env("AIDA_SESSION_ROLE", "companion");
-    let prepare = || PreparedLaunch::prepare(&child, root.path(), None);
     // Synthetic foreign-owner seam: exercise the same prepare path with a
     // mismatching issuer uid, without requiring host chown authority.
     assert!(PreparedLaunch::prepare_for_owner(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() } + 1
@@ -1523,7 +1522,8 @@ fn task_2708_claude_prepare_fake_home() {
     .unwrap()
     .to_string()
     .contains("credentials identity refused"));
-    let plan = prepare().unwrap_or_else(|e| panic!("prepare: {e:#}"));
+    let plan = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .unwrap_or_else(|e| panic!("prepare: {e:#}"));
     let cfg: serde_json::Value =
         serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
     let vendor = ContainedVendor::for_program(std::ffi::OsStr::new("claude")).unwrap();
@@ -1632,7 +1632,7 @@ print('Claude prepare live mounts ok')
     let saved = config.join("saved");
     std::fs::rename(&path, &saved).unwrap();
     std::os::unix::fs::symlink(&saved, &path).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -1640,20 +1640,20 @@ print('Claude prepare live mounts ok')
     std::fs::remove_file(&path).unwrap();
     std::fs::rename(&saved, &path).unwrap();
     std::fs::hard_link(&path, &saved).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("credentials identity refused"));
     std::fs::remove_file(&saved).unwrap();
     std::fs::write(&path, "not json").unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("CLAUDE_CREDENTIALS_INVALID"));
     credentials_expiring_in(&config, -60);
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -2565,7 +2565,7 @@ fn task_3225_service_required_refuses_absent_and_empty_binding_before_setup() {
         if let Some(grant) = grant {
             command.env(crate::gate::seat_authority::GRANT_ENV, grant);
         }
-        let error = match PreparedLaunch::prepare(&command, root.path(), None) {
+        let error = match PreparedLaunch::prepare(&mut command, root.path(), None) {
             Ok(_) => panic!("service admitted missing binding"),
             Err(error) => error,
         };
@@ -3355,9 +3355,10 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
     ] {
         let mut cmd = Command::new("claude");
         cmd.arg(flag);
-        let error = PreparedLaunch::prepare_interactive(&cmd, Path::new("/nonexistent/3219"), None)
-            .err()
-            .expect("unsupported surface");
+        let error =
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/3219"), None)
+                .err()
+                .expect("unsupported surface");
         assert!(
             error.to_string().contains(if flag == "--bg" {
                 "supervisor"
@@ -3405,4 +3406,161 @@ print('bounded version cases: 6 passed')
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("6 passed"));
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_environment_keeps_ambient_values_implicit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::launch::context::{LaunchContext, LaunchRequest};
+    use aida_core::launch_policy::{LaunchKind, LaunchVendor};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some("/parent/bin:/usr/bin:/bin")),
+        ("AIDA_SESSION_ID", Some("parent-session")),
+        ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    let req = LaunchRequest {
+        vendor: LaunchVendor::Claude,
+        kind: LaunchKind::Fresh,
+        program: "claude".into(),
+        args: vec![],
+        tail: vec![],
+        posture: crate::session::ContainmentPosture::Aida,
+        cwd: std::env::temp_dir(),
+        set_cwd: false,
+        host_main: None,
+    };
+    let ctx = LaunchContext::resolve_under(req, false)
+        .unwrap()
+        .with_wrapper_environment(true);
+    let mut cmd = crate::launch::spawn_agent(&ctx).unwrap();
+    let env = selected_environment(&cmd);
+    for key in ["PATH", "AIDA_SESSION_ID", "AIDA_ROTATION_HANDOFF"] {
+        assert!(
+            !env.contains_key(key),
+            "ambient {key} crossed wrapper selection"
+        );
+        assert!(explicit(&cmd, key).is_none());
+    }
+    cmd.env("PATH", "/site/bin")
+        .env("AIDA_SESSION_ID", "child-session")
+        .env("AIDA_ROTATION_HANDOFF", "child-handoff")
+        .env("AIDA_REVIEW_VERDICT_FILE", "/site/verdict.json");
+    assert_eq!(selected_environment(&cmd)["PATH"], "/site/bin");
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_SESSION_ID"],
+        "child-session"
+    );
+    assert_eq!(
+        explicit(&cmd, "AIDA_ROTATION_HANDOFF").as_deref(),
+        Some("child-handoff")
+    );
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_REVIEW_VERDICT_FILE"],
+        "/site/verdict.json"
+    );
+}
+
+/// Exercise both callers of the shared command builder under real trusted
+/// wrapper policy, rather than setting LaunchContext's flag in the test.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_headless_builders_keep_parent_context_out_of_selection() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{self, HeadlessVendor};
+    use aida_core::agents_config::AgentSeat;
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_SESSION_ID", Some("parent-session")),
+            ("AIDA_HARNESS_VERSION", Some("parent-harness")),
+            ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+            ("AIDA_AGENT_CONTEXT_FILE", Some("/parent/context")),
+        ],
+    );
+    let coordinator = session::build_coordinator_headless_command(
+        None,
+        HeadlessVendor::Claude,
+        "prompt",
+        "dontAsk",
+        AgentSeat::Advisor,
+        "",
+        true,
+        false,
+    )
+    .unwrap();
+    let exec = {
+        let _composition = session::ClaudeWrapperComposition::enter();
+        session::build_exec_vendor_headless_command(
+            None,
+            HeadlessVendor::Claude,
+            "prompt",
+            "child-session",
+            true,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap()
+    };
+    for mut cmd in [coordinator, exec] {
+        let env = selected_environment(&cmd);
+        for key in [
+            "AIDA_SESSION_ID",
+            "AIDA_ROTATION_HANDOFF",
+            "AIDA_AGENT_CONTEXT_FILE",
+        ] {
+            assert!(
+                explicit(&cmd, key).is_none(),
+                "ambient {key} became explicit"
+            );
+            assert!(
+                !env.contains_key(key),
+                "ambient {key} crossed wrapper selection"
+            );
+        }
+        assert_ne!(
+            env.get("AIDA_HARNESS_VERSION").map(String::as_str),
+            Some("parent-harness")
+        );
+        // A child lease assigned by the owner remains transportable.
+        cmd.env("AIDA_SESSION_ID", "child-lease");
+        assert_eq!(selected_environment(&cmd)["AIDA_SESSION_ID"], "child-lease");
+    }
+}
+
+// Both wrapper entrypoints reject an accidental env_clear/projection before
+// touching the root, credentials, store or broker. This protects future sites
+// that omit LaunchContext's wrapper_environment decision.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_refuses_projected_commands_before_io() {
+    for interactive in [false, true] {
+        let mut cmd = Command::new("claude");
+        cmd.env_clear().env("AIDA_SESSION_ID", "projected-parent");
+        let result = if interactive {
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/2326"), None)
+        } else {
+            PreparedLaunch::prepare(&mut cmd, Path::new("/nonexistent/2326"), None)
+        };
+        let error = result.err().expect("projected command must refuse");
+        assert!(
+            error
+                .to_string()
+                .contains("unprojected command environment"),
+            "{error:#}"
+        );
+    }
 }
