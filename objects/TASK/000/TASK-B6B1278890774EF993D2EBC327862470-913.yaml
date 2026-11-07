@@ -1,5 +1,6 @@
 id: 01a1b397-696d-7a43-903d-8dcc4cbf98c5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-913
+agreed_id: TASK-2961
 title: '[cosmetic, non-blocking] docs/advanced/authority-and-seats.md:52 / authority.ht…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-903, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,10 @@ history:
   timestamp: 2026-11-07T01:30:04.140287315Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1b3ae-0494-7eb1-85c0-989badf9791c
+  author: joe
+  timestamp: 2026-11-07T01:44:48.532584748Z
   changes: []
 filed_at:
   code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8

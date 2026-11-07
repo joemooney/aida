@@ -1,5 +1,6 @@
 id: 01a1b397-49fb-7f52-b9c3-052f439672ff
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-911
+agreed_id: TASK-2962
 title: '[minor, non-blocking] docs/advanced/authority-and-seats.md:59 (generated into d…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-903, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -86,6 +87,10 @@ history:
   author: joe
   timestamp: 2026-11-07T01:38:57.028289748Z
   session_id: 01a1b3a6e557
+  changes: []
+- id: 01a1b3ae-04c5-75f2-8d97-58bd9412ef3d
+  author: joe
+  timestamp: 2026-11-07T01:44:48.581770075Z
   changes: []
 filed_at:
   code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
