@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T04:09:19.522273862Z
+modified_at: 2026-11-07T09:19:20.654940519Z
 req_type: Story
 tags:
 - architecture
@@ -702,6 +702,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b54e-284e-7d93-8d4b-794786422257
+  author: joe
+  timestamp: 2026-11-07T09:19:20.654935047Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
