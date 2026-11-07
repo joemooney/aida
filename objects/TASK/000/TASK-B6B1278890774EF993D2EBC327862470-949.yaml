@@ -1,5 +1,6 @@
 id: 01a1b747-43f6-7d82-8757-5dd2bea940bc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-949
+agreed_id: TASK-2991
 title: 'cosmetic (non-blocking): ensure_pr_publication_spec_attribution (trace.rs ~2818…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2483, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:2f6c309e
 - from-review:PR-3605
 - kind:carried-forward
+history:
+- id: 01a1b76a-c68d-73d2-9744-19af27ce2d8b
+  author: joe
+  timestamp: 2026-11-07T19:09:50.605142986Z
+  changes: []
 filed_at:
   code_sha: 292b23703691d95919fdec7e5e61228260101b4c
   branch: main
