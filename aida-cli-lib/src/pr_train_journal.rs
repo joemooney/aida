@@ -172,7 +172,17 @@ pub(super) fn entries(dir: &Path) -> Result<Vec<Entry>> {
     Ok(entries)
 }
 
-/// Permanent sidecar: serializes recovery and admission across linked worktrees.
+// trace:STORY-2401 | ai:codex
+#[derive(Debug)]
+pub(crate) struct TrainJournalBusy;
+impl std::fmt::Display for TrainJournalBusy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("another train owns the train journal; retry when it exits")
+    }
+}
+impl std::error::Error for TrainJournalBusy {}
+
+/// Permanent sidecar: serializes entire train runs across linked worktrees.
 pub(super) fn lock(dir: &Path) -> Result<File> {
     use fs2::FileExt;
     std::fs::create_dir_all(dir)?;
@@ -182,8 +192,12 @@ pub(super) fn lock(dir: &Path) -> Result<File> {
         .create(true)
         .truncate(false)
         .open(dir.join("run.lock"))?;
-    lock.try_lock_exclusive()
-        .context("another train owns the train journal; retry when it exits")?;
+    if let Err(err) = lock.try_lock_exclusive() {
+        if err.kind() == std::io::ErrorKind::WouldBlock {
+            return Err(TrainJournalBusy.into());
+        }
+        return Err(err).context("could not lock train journal");
+    }
     Ok(lock)
 }
 

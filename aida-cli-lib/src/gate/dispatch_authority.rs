@@ -515,6 +515,22 @@ impl DispatchResult {
         true
     }
 
+    /// Release a running claim after a retryable train contention. Admission
+    /// and authority are checked again when the pending request is picked up.
+    // trace:STORY-2401 | ai:codex
+    pub(crate) fn defer_running(&mut self, reason: String) -> Result<()> {
+        anyhow::ensure!(
+            self.status == DispatchStatus::Running,
+            "only running requests can defer"
+        );
+        self.status = DispatchStatus::Pending;
+        self.started_at = None;
+        self.finished_at = None;
+        self.clear_claim();
+        self.summary = reason;
+        Ok(())
+    }
+
     /// Which execution path a record admits; a terminal record refuses.
     pub(crate) fn execution_entry(&self, id: &str) -> Result<ExecutionEntry> {
         match self.status {

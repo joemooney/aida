@@ -727,16 +727,11 @@ Review queue cleanup and stranded review-story completion require the stable
 metadata/Git confirmation too.
 
 Train intent is stored as versioned JSON under the main worktree's `.aida/train/`,
-with a permanent `run.lock` serializing recovery and admission. Atomic replacement,
-file fsync and directory fsync precede forge operations. Each entry pins the tested
-head, base and member heads, records its lifecycle step and completed member cleanup,
-and checkpoints nested forge reads and transport attempts, including the final
-merge gate's legacy metadata retries and confirmation's independent base/head
-fetches. GitLab CI registration, watch, post-watch rows and each nested
-pipeline/job API read also checkpoint; unavailable post-watch rows suspend instead
-of becoming a red verdict. Commit-keyed CI API reads checkpoint each check-run
-page and commit-status request, including reads nested in the final merge proof.
-A failed write refuses the call. A later
+with a permanent `run.lock` serializing entire train runs, including CI waits,
+across linked worktrees. Atomic replacement, file fsync and directory fsync precede
+forge operations. Each entry pins the tested head, base and member heads, records
+its lifecycle step and completed member cleanup, and checkpoints nested forge
+reads and transport attempts. A failed write refuses the call. A later
 non-dry train invocation reconciles unfinished entries before admitting new riders:
 exact-number metadata and fresh `forge_confirmation` evidence
 recognize completed merges, finish outstanding member closes, or complete a recorded
@@ -745,9 +740,11 @@ Completed closes are recognized from forge state, and completed journal entries 
 durably marked Done then pruned. Recovery reuses an existing PR and tested head,
 rechecks CI and live gates under the ordinary merge lease, and never restores
 persisted mandate authority.
-Remote branches are retained by journaled retirement, avoiding deletion after an
-uncertain close or a moved branch. Legacy trains without journals retain their
-confirmed owner-liveness cleanup. Workflow-definition digest evidence remains slice 5.
+Journaled retirement confirms closure before deleting the remote branch using
+an explicit lease against the pinned train tip. Uncertain closure or a moved
+branch retains the recovery entry and branch. Dispatch train fallback defers
+journal-lock contention to a later serve pass without recording a ship failure.
+Legacy trains without journals retain their confirmed owner-liveness cleanup. Workflow-definition digest evidence remains slice 5.
 <!-- trace:STORY-2401 | ai:codex -->
 
 ### Autonomy & escalation

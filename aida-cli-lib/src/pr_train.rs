@@ -23,6 +23,7 @@
 
 #[path = "pr_train_journal.rs"]
 mod journal;
+pub(crate) use journal::TrainJournalBusy;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -2700,8 +2701,49 @@ impl TrainForge for LiveTrainForge<'_> {
             crate::forge::ChangeState::Closed => {}
             _ => anyhow::bail!("train landed during retirement; reconcile before retrying"),
         }
-        // A remote branch may have moved since the decision. Retain it: branch
-        // cleanup is separate from retiring the PR and grants no replay authority.
+        // Confirm the close before branch cleanup, including the close/receipt
+        // crash window. A successful close command alone is not confirmation.
+        // trace:STORY-2401 | ai:codex
+        journal::before("confirm retired train closed")?;
+        let closed = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        anyhow::ensure!(
+            matches!(closed, crate::forge_observed::Observed::Known(ref m)
+                if m.state == crate::forge::ChangeState::Closed
+                    && m.head_sha == train.tip
+                    && m.head_ref == change.branch
+                    && m.base_ref == change.base),
+            "retired train closure unavailable or identity changed"
+        );
+        let reference = format!("refs/heads/{}", change.branch);
+        journal::before("read retired train branch")?;
+        if origin_git(
+            &self.main_worktree,
+            &["ls-remote", "--refs", "origin", &reference],
+        )?
+        .is_empty()
+        {
+            // A previous deletion may have completed before its receipt.
+            return Ok(());
+        }
+        journal::before("delete retired train branch")?;
+        // The explicit expected tip never borrows a tracking ref. A branch
+        // moved by another actor survives, even after confirmed PR closure.
+        origin_git(
+            &self.main_worktree,
+            &[
+                "push",
+                "--quiet",
+                &format!("--force-with-lease={reference}:{}", train.tip),
+                "origin",
+                &format!(":{reference}"),
+            ],
+        )?;
         Ok(())
     }
 

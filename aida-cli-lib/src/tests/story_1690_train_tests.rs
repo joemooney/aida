@@ -3648,10 +3648,11 @@ fn story_2401_positive_during_abort_keeps_landing_credit() {
     assert!(f.retired.is_empty());
 }
 
-// Settled live policy refusals eject the member while preserving its hold.
+// Settled policy refusal cannot finish retirement while the forge still
+// reports Open after accepting a close; retain the member and its hold.
 // trace:STORY-2401 | ai:codex
 #[test]
-fn story_2401_live_preland_gate_refusal_ejects() {
+fn story_2401_live_preland_gate_refusal_retains_unconfirmed_close() {
     let tmp = repo();
     let mut forge = crate::forge::fake::RecordingForge::new();
     forge.metadata_state = crate::forge::ChangeState::Open;
@@ -3700,13 +3701,16 @@ fn story_2401_live_preland_gate_refusal_ejects() {
     rails.opened.push((train.tip.clone(), change.clone()));
     rails.built.insert(change.id, train.clone());
     rails.live.push(change);
-    let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
-        panic!("settled draft refusal must eject");
-    };
-    assert_eq!(ejected.len(), 1);
-    assert_eq!(ejected[0].pr, 42);
-    assert!(ejected[0].reason.contains("it is a draft"));
-    assert!(rails.live.is_empty(), "refused train is retired");
+    let err = rails.land(&train).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("closure unavailable"),
+        "{err:#}"
+    );
+    assert_eq!(
+        rails.live.len(),
+        1,
+        "unconfirmed close retains recovery work"
+    );
     assert!(rails.landed_on_main.is_empty());
     drop(rails);
     assert_eq!(forge.closed.lock().unwrap()[0].0, 100);
@@ -3761,7 +3765,7 @@ fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
         .to_string();
     for stage in ["merge", "retire"] {
         let dir = tempfile::tempdir().unwrap();
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        let mut child = std::process::Command::new(crate::aida_exe_path())
             .args(["--exact", &name, "--nocapture"])
             .env(CHILD, stage)
             .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
@@ -3882,12 +3886,23 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
 // trace:STORY-2401 | ai:codex
 #[test]
 fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
-    let root = tempfile::tempdir().unwrap();
+    let root = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--bare", "--quiet"]);
+    git(
+        root.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    let tip = git(root.path(), &["rev-parse", "HEAD"]);
+    git(
+        root.path(),
+        &["push", "--quiet", "origin", "HEAD:refs/heads/codex/task"],
+    );
     let mut forge = crate::forge::fake::RecordingForge::new();
-    forge.metadata_head = "head1".into();
+    forge.metadata_head = tip.clone();
     forge.metadata_state = crate::forge::ChangeState::Closed;
-    let mut train = train_of("main", &[member(1, "head1", "s")]);
-    train.tip = "head1".into();
+    let mut train = train_of("main", &[member(1, &tip, "s")]);
+    train.tip = tip.clone();
     let change = crate::forge::ChangeRef {
         id: 901,
         url: String::new(),
@@ -3905,6 +3920,26 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         dispatch_abort: None,
     };
     host.retire_checked(&change, &train, "retire").unwrap();
+    assert!(git(
+        root.path(),
+        &["ls-remote", "origin", "refs/heads/codex/task"]
+    )
+    .is_empty());
+    host.retire_checked(&change, &train, "retire").unwrap();
+    // A moved remote branch must survive even though forge metadata still
+    // confirms the retired PR's pinned head. The journal remains retryable.
+    write(root.path(), "moved", "another actor");
+    let moved = commit(root.path(), "move remote train branch");
+    git(
+        root.path(),
+        &["push", "--quiet", "origin", "HEAD:refs/heads/codex/task"],
+    );
+    assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(git(
+        root.path(),
+        &["ls-remote", "origin", "refs/heads/codex/task"]
+    )
+    .contains(&moved));
     host.member_landed_checked(&change, &train, &train.cars[0], Some("landed1"))
         .unwrap();
     assert!(
@@ -3912,6 +3947,23 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         "a completed close must not be replayed"
     );
     forge.metadata_state = crate::forge::ChangeState::Open;
+    let mut host = LiveTrainForge {
+        project_root: root.path().into(),
+        main_worktree: root.path().into(),
+        base: "main".into(),
+        forge: &forge,
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    // RecordingForge accepts the close but still reports Open. A successful
+    // command without confirmed closure cannot authorize branch deletion.
+    assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(git(
+        root.path(),
+        &["ls-remote", "origin", "refs/heads/codex/task"]
+    )
+    .contains(&moved));
     forge.close_error = Some("HTTP 503 after close".into());
     let mut host = LiveTrainForge {
         project_root: root.path().into(),
@@ -3926,6 +3978,14 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
     assert!(host
         .member_landed_checked(&change, &train, &train.cars[0], None)
         .is_err());
+    assert!(
+        git(
+            root.path(),
+            &["ls-remote", "origin", "refs/heads/codex/task"]
+        )
+        .contains(&moved),
+        "failed close must retain remote branch"
+    );
     let attempts = forge.closed.lock().unwrap().len();
     forge.metadata_head = "new-head".into();
     let mut host = LiveTrainForge {
@@ -4815,4 +4875,15 @@ cat check-runs.json
         assert_eq!(saved[0].train.tip, head);
         assert_eq!(saved[0].train.members()[0].head, "head1");
     }
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_lock_contention_is_typed_and_releases_on_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let lock = journal::lock(dir.path()).unwrap();
+    let err = journal::lock(dir.path()).unwrap_err();
+    assert!(err.downcast_ref::<TrainJournalBusy>().is_some(), "{err:#}");
+    drop(lock);
+    assert!(journal::lock(dir.path()).is_ok());
 }

@@ -379,9 +379,12 @@ train reads its intent journals under the main worktree's `.aida/train/` and
 reconciles the pinned heads with fresh forge confirmation. A completed merge is
 not repeated; remaining member closes finish from forge state. Recorded retirement
 decisions are confirmed again before closure. Unknown evidence stops admission and
-retains the PR and journal for inspection. A permanent run lock prevents concurrent
-recovery. Dry runs do not recover or write journals. Trains predating the journal
-retain the confirmed owner-liveness cleanup path.
+retains the PR and journal for inspection. A permanent run lock serializes whole
+train runs on one main worktree, including CI waits. Concurrent `pr train` calls
+refuse with a retry diagnostic. Dispatch flow/train fallback returns its request
+to Pending on this contention so a later serve pass can retry. Dry runs do not
+recover or write journals. Trains predating the journal retain the confirmed
+owner-liveness cleanup path.
 
 Recovery does not inherit terminal consent from the new invocation: recovered
 supervised members still need a current mandate cover, even when a human names
@@ -406,6 +409,13 @@ interrupted open without a number, search all states with
 `gh pr list --state all --head BRANCH`. A malformed entry may need its branch
 recovered from the filename and forge history. Resolve remaining open train PRs
 and member cleanup deliberately before discarding their recovery intent.
+
+A crash during atomic journal replacement can leave `.<uuid>.tmp` files in this
+directory. They carry no admitted intent and are ignored by recovery. While holding
+`run.lock`, these temporary files can be removed; keep the `.json` entries until
+reconciled. Retirement deletes a remote train branch only after confirmed closure,
+with an explicit lease against its journaled tip. A moved branch or failed deletion
+retains the journal for inspection and retry.
 
 Once reconciled, move only that entry out of the live scan, retaining the file
 for inspection (replace `<id>` with the reported filename stem):
