@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T18:02:44.207055208Z
-modified_at: 2026-11-07T18:02:44.207055208Z
+modified_at: 2026-11-07T19:28:08.978775975Z
 req_type: Task
 tags:
 - carried-from:BUG-2484
 - finding-hash:70ac8949
 - from-review:PR-3609
 - kind:carried-forward
+comments:
+- id: 01a1b77b-8913-7f91-a8d2-10acc5bb7127
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 12:30 (10-28 order, non-blocking findings ruled once): accepted, not filed as follow-up. Reason: doctor is diagnostic only; launch path (resolve_program) is authoritative and refuses loudly on mismatch.'
+  created_at: 2026-11-07T19:28:08.978775975Z
+  modified_at: 2026-11-07T19:28:08.978775975Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b72d-8dde-72f1-888a-9fdb9396e1d2
   author: joe
