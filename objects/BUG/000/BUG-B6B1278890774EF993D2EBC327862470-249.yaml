@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-249
 agreed_id: BUG-2484
 title: 'Contained Codex refuses the npm/nvm codex.js wrapper: resolve it to the pinned native vendor binary'
 description: 'STORY-2593 pins the native codex binary by SHA-256 (codex-cli 0.166.0, b8a11fed...). With a standard npm/nvm install, the first codex on PATH is the JS wrapper (~/.nvm/.../bin/codex -> @openai/codex/bin/codex.js), so the launch refuses (''contained ChatGPT auth refused: re-probe this codex binary ... put the probed native codex binary first on PATH''). The wrapper''s own native binary, @openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex, matches the pin. Repro 2026-11-07: the operator ran conformance --vendor codex --boundary aida, report ~/.aida/conformance-codex-aida-1794069161. Acceptance: when the PATH codex is the npm wrapper, the launcher resolves it to the package''s vendored native binary, verifies the SHA pin against that, and executes it directly; an unpinned binary still refuses; aida doctor names the resolved binary; a test uses a fake wrapper layout.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:34:40.502347183Z
-modified_at: 2026-11-07T16:50:51.750976570Z
+modified_at: 2026-11-07T18:02:31.768026495Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,20 @@ history:
   timestamp: 2026-11-07T16:50:52.953738147Z
   session_id: 01a1b6e0223a
   changes: []
+- id: 01a1b72d-252e-77e3-89f9-8fd242eedbe6
+  author: aida-auto-bump
+  timestamp: 2026-11-07T18:02:31.598581661Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b72d-25d8-7d22-a422-e0f1f0a0c780
+  timestamp: 2026-11-07T18:02:31.768022303Z
+  agent: aida
+  commit_sha: 9a9d2bdab8c27097e5f6fc80bd57c5a686895a68
+  summary: 'All BUG-2484 acceptance met: npm wrapper (nested/hoisted/bundled) resolves to native leaf without executing JS, SHA pin checked on and argv[0] set to that same leaf, unpinned/changed/non-exec/missing refuse, doctor names resolved binary; CI run 42393312695 all 7 jobs green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -59,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T18:02:31.598575674Z
+  completion_sha: 9a9d2bdab8c27097e5f6fc80bd57c5a686895a68
