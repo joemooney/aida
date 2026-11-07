@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "../store_mutation/mod.rs"]
+mod store_mutation;
+
 const COMMON: &str = include_str!("../containment/egress_probe.py");
 const LANE: &str = include_str!("../containment/contained_lane.py");
 const HOST: &str = include_str!("../containment/contained_host.py");
@@ -88,10 +91,17 @@ pub struct ContainmentReceipt {
     relay_port: u16,
     policy_sha: String,
     keyring: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mutation_epoch: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    mutation_ready: bool,
 }
 impl ContainmentReceipt {
     pub(crate) fn is_accepted(&self) -> bool {
         self.accepted
+    }
+    pub(crate) fn requires_store_service(&self) -> bool {
+        self.mutation_epoch.is_some()
     }
     pub(crate) fn worker_pid(&self) -> u32 {
         self.worker_pid
@@ -698,6 +708,15 @@ fn pipe() -> Result<(File, File)> {
     Ok(unsafe { (File::from_raw_fd(fds[0]), File::from_raw_fd(fds[1])) })
 }
 
+// trace:TASK-3225 | ai:codex
+pub(crate) fn require_store_service_surface(child: &Command, wrapped: bool) -> Result<()> {
+    anyhow::ensure!(
+        wrapped || explicit(child, "AIDA_STORE_MUTATION_REQUIRED").is_none(),
+        "required store service is unavailable outside the shared contained headless launcher"
+    );
+    Ok(())
+}
+
 pub(crate) struct PreparedLaunch {
     command: Command,
     profile: WriteProfile,
@@ -710,6 +729,7 @@ pub(crate) struct PreparedLaunch {
     /// Expiry captured from the exact read-only bound Claude leaf.
     credentials: Option<i64>,
     outer_only: Option<&'static str>,
+    mutation: Option<store_mutation::Session>,
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
@@ -727,6 +747,19 @@ impl PreparedLaunch {
     ) -> Result<Self> {
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
+        let required = explicit(child, "AIDA_STORE_MUTATION_REQUIRED");
+        anyhow::ensure!(
+            required.is_none() || required.as_deref() == Some("1"),
+            "invalid explicit store service selection"
+        );
+        let mutation = if required.is_some() {
+            Some(store_mutation::Session::prepare(
+                child,
+                &std::fs::canonicalize(root)?,
+            )?)
+        } else {
+            None
+        };
         let vendor = ContainedVendor::for_program(child.get_program())?;
         let label = vendor.label;
         anyhow::ensure!(
@@ -1078,6 +1111,12 @@ impl PreparedLaunch {
         let port = reservation.local_addr()?.port();
         drop(reservation);
         env.extend(relay_environment(port));
+        if let Some(service) = &mutation {
+            env.insert(
+                "AIDA_STORE_MUTATION_ENDPOINT".into(),
+                service.endpoint.clone(),
+            );
+        }
         let program = resolve_program(child, &env)?;
         let original: Vec<_> = child
             .get_args()
@@ -1111,7 +1150,12 @@ impl PreparedLaunch {
         argv.extend(args);
         let cfg = serde_json::json!({"grant":grant,"ttl":ttl,"mode":"normal","port":port,"allowed":allowed,
             "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"nested_userns":vendor.nested_userns,"argv":argv});
+        let mut cfg = cfg;
+        if let Some(service) = &mutation {
+            cfg["mutation"] = service.config.clone();
+        }
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
+        prepared.mutation = mutation;
         prepared.credentials = credentials;
         prepared.outer_only = runtime_policy.map(|_| vendor.key);
         Ok(prepared)
@@ -1146,6 +1190,15 @@ fn codex_argv(
     let mut final_child = Command::new(program);
     final_child.env_clear().envs(env);
     let mut args = crate::codex_tool_env::codex_tool_env_overrides(&final_child)?;
+    if let Some(endpoint) = env.get("AIDA_STORE_MUTATION_ENDPOINT") {
+        args.extend([
+            "-c".into(),
+            format!(
+                "shell_environment_policy.set.AIDA_STORE_MUTATION_ENDPOINT={}",
+                toml::Value::String(endpoint.clone())
+            ),
+        ]);
+    }
     for name in TOOL_NET_ENV.iter().chain(TOOL_BUILD_ENV) {
         args.extend([
             "-c".into(),
@@ -1292,9 +1345,12 @@ impl PreparedLaunch {
         env.insert("PWD".into(), root.to_string_lossy().into_owned());
         let (reader, writer) = pipe()?;
         let (accept_reader, accept_writer) = pipe()?;
-        let source = format!("{COMMON}\n{LANE}");
+        let source = format!(
+            "{COMMON}\n{LANE}\n{}",
+            include_str!("../store_mutation/client.py")
+        );
         let mut command = Command::new("/usr/bin/python3");
-        command.args(["-I","-S","-c"]).arg(format!("{COMMON}\n{LANE}\n{HOST}\nSOURCE = sys.argv[1]\ntry:\n    sys.exit(host_contained(json.loads(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))\nexcept Exception as error:\n    print('contained launch refused: ' + str(error), file=sys.stderr)\n    sys.exit(1)"))
+        command.args(["-I","-S","-c"]).arg(format!("{COMMON}\n{LANE}\n{}\n{HOST}\nSOURCE = sys.argv[1]\ntry:\n    sys.exit(host_contained(json.loads(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))\nexcept Exception as error:\n    print('contained launch refused: ' + str(error), file=sys.stderr)\n    sys.exit(1)", store_mutation::SOURCE))
             .arg(source).arg(serde_json::to_string(&cfg)?).arg(writer.as_raw_fd().to_string())
             .arg(accept_reader.as_raw_fd().to_string()).env_clear().envs(env).current_dir(&root);
         Ok(Self {
@@ -1308,6 +1364,7 @@ impl PreparedLaunch {
             accept_writer,
             credentials: None,
             outer_only: None,
+            mutation: None,
         })
     }
     pub(crate) fn spawn(mut self, stdout: Stdio) -> Result<ContainedChild> {
@@ -1318,6 +1375,9 @@ impl PreparedLaunch {
             .map(|m| m.file.as_raw_fd())
             .collect();
         fds.extend([self.writer.as_raw_fd(), self.accept_reader.as_raw_fd()]);
+        if let Some(service) = &self.mutation {
+            fds.push(service.fd());
+        }
         let parent = std::process::id();
         unsafe {
             self.command.pre_exec(move || {
@@ -1348,6 +1408,7 @@ impl PreparedLaunch {
             acceptance: None,
             receipt: None,
             credentials: self.credentials,
+            mutation: self.mutation,
             _state: self._state,
         };
         drop((self.writer, self.accept_reader));
@@ -1376,6 +1437,7 @@ impl PreparedLaunch {
         let mut receipt: ContainmentReceipt =
             serde_json::from_slice(&bytes).context("invalid containment receipt")?;
         receipt.validate(&self.policy_sha)?;
+        validate_service_receipt(&receipt, run.mutation.as_ref().map(|s| s.epoch.as_str()))?;
         receipt.accepted = true;
         if let Some(vendor) = self.outer_only {
             require_outer_only_receipt(vendor, Some(&receipt))?;
@@ -1388,6 +1450,19 @@ impl PreparedLaunch {
         Ok(run)
     }
 }
+// trace:TASK-3225 | ai:codex
+fn validate_service_receipt(receipt: &ContainmentReceipt, epoch: Option<&str>) -> Result<()> {
+    anyhow::ensure!(
+        match epoch {
+            Some(expected) =>
+                receipt.mutation_epoch.as_deref() == Some(expected) && receipt.mutation_ready,
+            None => receipt.mutation_epoch.is_none() && !receipt.mutation_ready,
+        },
+        "store service receipt absent or mismatched"
+    );
+    Ok(())
+}
+
 // The conformance harness consumes this standalone stderr line.
 // trace:TASK-3194 | ai:codex
 fn receipt_diagnostic(receipt: &ContainmentReceipt, policy_sha: &str) -> Result<String> {
@@ -1411,6 +1486,7 @@ pub(crate) struct ContainedChild {
     receipt: Option<ContainmentReceipt>,
     acceptance: Option<File>,
     credentials: Option<i64>,
+    mutation: Option<store_mutation::Session>,
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
@@ -1430,6 +1506,12 @@ impl ContainedChild {
     }
     /// Caller finishes host registry/lease binding while exec is still blocked.
     pub(crate) fn release(&mut self) -> Result<()> {
+        // trace:TASK-3225 | ai:codex — bind through the existing authority
+        // owner first; an absent/empty/foreign binding cannot release tools.
+        if let Some(service) = &mut self.mutation {
+            let receipt = self.receipt.as_ref().context("service receipt absent")?;
+            service.bind_worker(receipt.worker_pid, &receipt.worker_start)?;
+        }
         self.acceptance
             .take()
             .context("contained exec barrier already released")?
