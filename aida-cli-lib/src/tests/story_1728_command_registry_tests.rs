@@ -802,6 +802,7 @@ fn is_hot_file(name: &str) -> bool {
     matches!(
         name,
         "cli.rs"
+            | "cmdkit.rs"
             | "lib.rs"
             | "command_registry.rs"
             | "git_backend_cmd.rs"
