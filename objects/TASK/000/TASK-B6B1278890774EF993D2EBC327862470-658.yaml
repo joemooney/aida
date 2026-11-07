@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-06T15:00:05.767722974Z
+modified_at: 2026-11-07T09:19:40.625576351Z
 req_type: Task
 tags:
 - architecture
@@ -1188,6 +1188,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b54e-7651-7e43-bea8-b1a7820b5c03
+  author: joe
+  timestamp: 2026-11-07T09:19:40.625572724Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
