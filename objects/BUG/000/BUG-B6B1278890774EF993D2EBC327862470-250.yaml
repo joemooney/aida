@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T17:17:53.334854943Z
+modified_at: 2026-11-07T17:17:55.615880460Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -28,6 +28,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor-path fix is right (300s window, announcement, outer terminal restore, SIGTERM unwind), but the new restore also runs inside the continuation''s background process group, where tcsetattr on the controlling tty raises SIGTTOU and stops the whole setup group. Bug protocol (touches a test file): met. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T17:17:53.334850462Z
   modified_at: 2026-11-07T17:17:53.334850462Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b704-4f9d-77d2-845c-c4f5ebffd04b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2485):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 31ac51e464ed
+    Recorded: 2026-11-07T17:04:16.412457881+00:00
+    Findings:
+    1. MAJOR scripts/containment/conformance.py:537-556,750,562: @preserved_terminal() also wraps fixture_role_enter(implementer) and launch_aida_continuation when they run inside setup_aida. setup_aida runs in the continuation's own process group (Popen process_group=0, conformance.py:574), which is a background group on the operator's controlling tty. There, termios.tcsetattr raises SIGTTOU and stops the process group (Linux __tty_check_change). Probe: under script(1), a process_group=0 child that calls tcsetattr(0, TCSANOW, tcgetattr(0)) stops in state T. So every real implementer role entry (success or failure) stops the setup group, and the outer supervisor waits timeout+600s and then SIGKILLs it. Fix: restore only when os.tcgetpgrp(fd) == os.getpgrp(), or block/ignore SIGTTOU around tcsetattr. Alternatively, drop the inner restores and rely on the outer launch_aida_continuation restore, which runs in the foreground group and covers the whole tree.
+    2. MAJOR tests/test_containment_conformance.py:206-284: the new terminal tests use pty.openpty() fds that are not the test process's controlling terminal, so tcsetattr never goes through job-control checks. They pass while the real background-group path stops. Add a test where the tty is the controlling terminal (setsid + TIOCSCTTY in a child) and the restore runs from a non-foreground process group, or mock os.tcgetpgrp to differ from os.getpgrp, and assert the process is not stopped and the restore is skipped or safe.
+    3. MINOR scripts/containment/conformance.py:763,803 (unverified acceptance): the implementer role entry runs inside the background continuation group. If 'aida role enter implementer --delegate-seat implementer' asks the operator something on the tty, the read gets SIGTTIN and stops, so the new 5-minute window and 'Waiting for operator' message cannot be answered there. Either show that the implementer entry never prompts, or hand the terminal foreground to the continuation group (tcsetpgrp) for the prompt, and cover it with a test. Acceptance 'role-enter prompts run without a deadline / with a long one' is verified only for the advisor entry.
+    4. MINOR scripts/containment/conformance.py:1177: the new top-level SIGTERM handler reuses continuation_terminated, which raises 'aida-boundary-continuation-timeout: cleanup requested'. A SIGTERM to the outer harness, including the native boundary that has no continuation, is then reported as a continuation timeout, and run_aida's except branch records it as the aida_refuse reason. Use a distinct handler/message (e.g. 'harness-terminated: SIGTERM'). Also add a test that main() installs it for the top-level run; the current 'termination' subtest calls continuation_terminated directly.
+    5. COSMETIC tests/test_containment_conformance.py:439-440: the comment still says 'Cover all four 30s setup calls' while the assertion is now 3*30 + 300 + 180 + 30. Update the comment to match.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:17:55.485964430Z
+  modified_at: 2026-11-07T17:17:55.485964430Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
