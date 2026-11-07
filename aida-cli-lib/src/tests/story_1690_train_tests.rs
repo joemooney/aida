@@ -3197,6 +3197,37 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("main");
     write_retry_config(&root);
+    crate::test_git::git_command()
+        .arg("-C")
+        .arg(&root)
+        .args(["init", "-q"])
+        .status()
+        .unwrap();
+    let ownership = crate::ownership::store::OwnershipStore::at(root.join(".aida/ownership"));
+    let key = crate::ownership::WorkKey::Train {
+        train: crate::ownership::dual::change(3248),
+    };
+    ownership
+        .update(
+            &key,
+            "release",
+            crate::ownership::store::Expect::Absent,
+            |_| {
+                Some((
+                    crate::ownership::Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        holder: None,
+                        phase: crate::ownership::Phase::Closed {
+                            why: "released".into(),
+                        },
+                    },
+                    None,
+                ))
+            },
+        )
+        .unwrap();
+    let ended = ownership.load(&key).unwrap().unwrap();
     let dead = bug_2412_local_owner("train-host", 999_999_999, "linux-starttime:1");
     let foreign = TrainOwner {
         pid_ns: Some("1".into()),
@@ -3247,10 +3278,19 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
         ("PATH", Some(path.as_str())),
         ("AIDA_HOST_OVERRIDE", Some("train-host")),
     ]);
+    // A malformed train remains blocking without aborting observation of the others.
+    // trace:STORY-2325 | ai:codex
+    std::fs::write(
+        ownership.path_for(&crate::ownership::WorkKey::Train {
+            train: crate::ownership::dual::change(3249),
+        }),
+        "{broken",
+    )
+    .unwrap();
     let (open, leased, abandoned) = live_trains(&root).unwrap();
     assert_eq!(
         abandoned,
-        vec![(3248, "train/killed-1".to_string(), dead.clone())]
+        vec![(3248, "train/killed-1".to_string(), ended.clone())]
     );
     assert_eq!(
         open,
@@ -3271,13 +3311,13 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
         train_rider_refusal(3214, &open, &leased).is_some(),
         "an ownerless train is not judged dead and still blocks"
     );
-    close_abandoned_train(&root, 3248, "train/killed-1", &dead, true).unwrap();
+    close_abandoned_train(&root, 3248, "train/killed-1", &ended, true).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(
         !calls.contains("pr close"),
         "a dry run closes nothing: {calls}"
     );
-    assert!(close_abandoned_train(&root, 3248, "train/killed-1", &dead, false).is_err());
+    assert!(close_abandoned_train(&root, 3248, "train/killed-1", &ended, false).is_err());
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(!calls.contains("pr close"), "{calls}");
     // A live train merge-lease still naming #3248 means a train is landing
@@ -4893,4 +4933,92 @@ fn pr_train_journal_lock_contention_is_typed_and_releases_on_exit() {
     assert!(err.downcast_ref::<TrainJournalBusy>().is_some(), "{err:#}");
     drop(lock);
     assert!(journal::lock(dir.path()).is_ok());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead() {
+    use crate::ownership::{
+        dual,
+        store::{Expect, OwnershipStore},
+        Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey,
+    };
+    let dir = repo();
+    let p = dir.path();
+    let store = OwnershipStore::for_project(p).unwrap().unwrap();
+    assert!(ownership_rider_refusal(p, 9).unwrap().is_none());
+    let key = WorkKey::Change {
+        change: dual::change(9),
+    };
+    let train = dual::change(12);
+    store
+        .update(&key, "ride", Expect::Absent, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: None,
+                    phase: Phase::Training {
+                        train: train.clone(),
+                    },
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        ownership_rider_refusal(p, 9).unwrap().is_some(),
+        "missing train retains rider"
+    );
+    let key = WorkKey::Train { train };
+    for state in ["unknown", "alive", "dead", "closed"] {
+        let witnesses = match state {
+            "alive" | "dead" => vec![Witness {
+                admission: None,
+                kind: WitnessKind::Heartbeat {
+                    at: if state == "alive" {
+                        chrono::Utc::now()
+                    } else {
+                        chrono::Utc::now() - chrono::Duration::days(1)
+                    },
+                    every_secs: 10,
+                },
+                recorded_at: chrono::Utc::now(),
+            }],
+            _ => vec![],
+        };
+        let holder = Holder {
+            seat: "train".into(),
+            session: "train-owner".into(),
+            role: Role::Train,
+            tree: None,
+            witnesses,
+        };
+        store
+            .update(&key, "seed", Expect::Any, |_| {
+                Some((
+                    Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        holder: Some(holder),
+                        phase: if state == "closed" {
+                            Phase::Closed {
+                                why: "released".into(),
+                            }
+                        } else {
+                            Phase::Leased
+                        },
+                    },
+                    None,
+                ))
+            })
+            .unwrap();
+        assert_eq!(
+            ownership_rider_refusal(p, 9).unwrap().is_some(),
+            matches!(state, "unknown" | "alive"),
+            "{state}"
+        );
+    }
+    std::fs::write(store.path_for(&key), "malformed").unwrap();
+    assert!(ownership_rider_refusal(p, 9).is_err());
 }
