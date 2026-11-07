@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-07T02:54:36.133379118Z
+modified_at: 2026-11-07T02:56:46.546026185Z
 req_type: Task
 tags:
 - architecture
@@ -514,6 +514,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-07T02:53:07.716168780Z
   modified_at: 2026-11-07T02:53:07.716168780Z
+- id: 01a1b3ef-e7d2-7de3-97ec-0366b4235812
+  author: joe
+  content: 'Round 7 at 49a2cd66ed69: regenerated scripts/store-writers.toml and reviewed all six additions. install_private_runtime fs::write covers settings.json and policy.credential placeholders; mutation_probe os.write sends the session probe; Session::prepare and bind_worker write_all use authority sockets; read_lease OpenOptions and MutationIdentity os.open are conservative read-open candidates. All six remain blocked for TASK-3223; no stale rows, existing row policy changes, or operation mapping changes. Regeneration guard passed (3307 sites, 293 operations); all 41 inventory fixtures passed; CI gate classification audit and git diff --check passed. make check-ci-fast was interrupted (exit 130) during its initial feature-disabled Cargo compilation; no aggregate fast-tier pass claimed. Exact-head remote Gates (both store-writer steps) remains pending host commit/publication; supervised merge hold remains untouched. Native-seat instructions require leaving the one-file edit uncommitted for the host launcher.'
+  created_at: 2026-11-07T02:56:46.546026185Z
+  modified_at: 2026-11-07T02:56:46.546026185Z
+  session_id: 01a1b3ede0b6
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
