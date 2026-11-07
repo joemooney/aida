@@ -1,0 +1,19 @@
+{
+  "id": "14bb0b77-d381-464f-b4a3-9335ddd57c2a",
+  "thread_id": "14bb0b77-d381-464f-b4a3-9335ddd57c2a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794079665573,
+  "body": "BUG-b6b1278890774ef993d2ebc327862470-251 PR #3613 conflicts with origin/main in: aida-cli-lib/src/doctor_cmd.rs, aida-cli-lib/src/launch/contained.rs, aida-cli-lib/src/vendors/mod.rs. The host aborted the merge. Conflict resolution requires Claude on branch bug-b6b1278890774ef993d2ebc327862470-251. Fresh route: aida queue work BUG-b6b1278890774ef993d2ebc327862470-251 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
