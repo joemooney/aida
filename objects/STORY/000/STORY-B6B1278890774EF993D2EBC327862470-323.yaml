@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T21:49:59.418079115Z
+modified_at: 2026-11-07T22:14:51.590894592Z
 req_type: Story
 tags:
 - architecture
@@ -617,6 +617,14 @@ comments:
   content: 'Round 7 verification: 217 mailbox/logical/delivery tests pass, including retained unique unread body visibility, retained ACK validation/anchoring, compatibility receipts, symlink refusal and existing per-ID retained-sidecar fault isolation. The corrected 270-case CLI run passes 269 cases; the remaining existing TASK-1993 forge test passes alone but reproduces a deleted inherited cwd at its first current_dir unwrap in both parallel and serial suites. Its isolated startup now keeps the explicit process-ticket branch, otherwise normalizes to the parent-owned unique TMPDIR before fixtures. All forge assertions and leaked_probe_refs_are_swept_and_live_ones_kept remain unchanged. Final serial rerun j20261107T214926212-2-0 is active. Completing native publication declaration recorded; no commit, push, PR ship, verdict or queue-done action was performed from this seat.'
   created_at: 2026-11-07T21:49:59.418079115Z
   modified_at: 2026-11-07T21:49:59.418079115Z
+  session_id: 01a1b7b65058
+- id: 01a1b814-29c6-7ee2-997b-e16a59f72051
+  author: joe
+  content: |
+    Correction to my earlier round-7 implementation updates: the advisor ruling posted by joe at 2026-11-07T20:45:51.848380266Z (13:50 ruling, comment 01a1b7c2-af68-71b3-9b3e-b485dda720f7) supersedes the original completing scope. Findings 1 and 2 are now TASK-3420. I restored the mail build-identity gate and the four legacy reader paths to HEAD, with ownership-liveness-legacy.json unchanged. The nonshipping mail foundation and full pre-split work are saved under /home/joe/.aida/handoffs/task-3420-mail-foundation.patch and story-2325-round7-before-split.patch; these are not TASK-3420 completion evidence and still need canonical-store durable publication and a fresh locked writer scan.
+    PR-D now contains findings 3-8 and CI fixture fixes only, with a native publication declaration of [AI:codex] fix(ownership): repair PR-D reclaim and regression gates (Refs STORY-2325). No completion claim. Two Python ratchet tests, rustfmt and diff-check pass. Post-scope eight-test Rust run j20261107T221225629-2-0 is compiling; final result will follow. Existing merge hold remains; fresh clean LIGHT validation on dell1 remains required. No Git metadata mutation or publication from this seat.
+  created_at: 2026-11-07T22:14:51.590894592Z
+  modified_at: 2026-11-07T22:14:51.590894592Z
   session_id: 01a1b7b65058
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
