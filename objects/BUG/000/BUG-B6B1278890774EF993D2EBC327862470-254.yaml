@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:15:44.102546116Z
-modified_at: 2026-11-07T22:33:07.926949018Z
+modified_at: 2026-11-07T22:42:09.534075920Z
 req_type: Bug
 comments:
 - id: 01a1b824-e456-76c0-bdf5-eb3cb2e21387
@@ -21,6 +21,12 @@ comments:
   content: 'Implementation in native lane: pickup prompts compare newest brief/ruling created_at, render only the newest as binding, and retain older advisor direction as explicitly superseded background. Existing brief-versus-verdict standing and agent-gate/conflict behavior are preserved. Added both ordering regressions including nested replies, plus the pre-verdict-brief/older-ruling boundary; updated the prior BUG-057 precedence assertion that required an older brief to lead a newer ruling. Targeted lane tests are running; final validation will follow. Codegraph doctor reports the shared index unreachable, so callers were confirmed with rg. Edits remain uncommitted for host publication.'
   created_at: 2026-11-07T22:33:07.926949018Z
   modified_at: 2026-11-07T22:33:07.926949018Z
+  session_id: 01a1b81d53c1
+- id: 01a1b82d-27fe-7ce3-9282-ec52b4445e74
+  author: joe
+  content: 'Final native-lane handoff: changed aida-cli-lib/src/rework_direction.rs and aida-cli-lib/src/tests/rework_direction_tests.rs. Timestamp precedence, superseded advisor background, and 14 targeted tests are in place. rustfmt --edition 2021 --check on both changed Rust files and git diff --check pass. Validation blocker: aida lane job j20261107T222653990-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- rework_direction::tests, but timed out after 900 seconds during compilation (exit 124); no executed-test result, untested=true. Full output: /home/joe/ai/aida/.aida/lane-jobs/01a1b81d53c1/j20261107T222653990-2-0.out. Host should rerun the targeted tests with a suitable build timeout. Edits remain uncommitted; no publication or queue completion attempted. Codegraph shared index remained unreachable; rg confirmed callers.'
+  created_at: 2026-11-07T22:42:09.534075920Z
+  modified_at: 2026-11-07T22:42:09.534075920Z
   session_id: 01a1b81d53c1
 history:
 - id: 01a1b81d-6072-7322-a321-c34e2330c3fc
