@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T07:26:46.380967295Z
+modified_at: 2026-11-07T07:31:24.329127969Z
 req_type: Story
 relationships:
 - rel_type:
@@ -456,6 +456,12 @@ comments:
   modified_at: 2026-11-07T07:25:46.586025303Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4eb-5629-7761-9ae7-4cccd1274b3f
+  author: joe
+  content: 'Round 8 PR #3533: addressing the current-executable ratchet, removing the AGENTS prepend and trimming architecture prose, adding confirmed lease-bound retired-branch deletion with absent-branch recovery, and typed journal contention returned to Pending by dispatch. Crash-left dot-tmp files are documented under the existing run-lock inspection procedure. Native-seat edits and validation are in progress; Git publication remains host-owned.'
+  created_at: 2026-11-07T07:31:24.329127969Z
+  modified_at: 2026-11-07T07:31:24.329127969Z
+  session_id: 01a1b4e70e9b
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
