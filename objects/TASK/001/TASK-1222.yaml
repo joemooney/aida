@@ -10,12 +10,12 @@ description: |-
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-07T21:07:58.184967882Z
+modified_at: 2026-11-07T21:08:35.466134158Z
 req_type: Task
 tags:
 - cleanup
@@ -66,3 +66,18 @@ history:
   session_id: 01a1b7d6a3ff
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b7d7-7e0a-7f02-88c4-79215286f0ea
+  author: dirtlab
+  timestamp: 2026-11-07T21:08:35.466143135Z
+  session_id: 01a1b7d6a3ff
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: missing-context
+  detail: 'Native headless seat cannot reach the cleanup inventory: task advisor comment reports 3474 remote branches, 236 worktrees and 147 sibling directories; this isolated seat has only main/task-1222 and one worktree, local host clone lists four worktrees, and /home/joe/ai is absent. Git metadata is read-only. Per-item salvage/discard and destructive GC require operator review; OVERVIEW.md TASK-1596 requires a human TTY for worktree gc --yes --force. Recurring read-only guard already documented at 30 days; adding destructive recurring cleanup conflicts with that policy. No branches/worktrees deleted and no source edits made.'
+  lean: Route to an operator on the inventory-owning host for a read-only per-item branch/PR/spec/dirty-worktree inventory, then approve salvage/discard and execute reviewed cleanup; retain scheduled read-only GC guard.
+  raised_by: implementer
+  raised_at: 2026-11-07T21:08:35.466134158Z
