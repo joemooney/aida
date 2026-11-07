@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T13:55:14.221391421Z
+modified_at: 2026-11-07T13:55:14.071733451Z
 req_type: Task
 tags:
 - architecture
@@ -51,6 +51,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1b4c4-4b32-7452-866c-24827da5ceda
   created_at: 2026-11-07T13:55:01.571922044Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1b4ec-a1e6-77b2-aa46-d0ddfeacd332
+  created_at: 2026-11-07T13:55:14.071723621Z
   created_by: joe
 comments:
 - id: 01a1b41d-62d4-7f50-8550-801cd4fe6f58
@@ -793,13 +797,12 @@ history:
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes: []
-- id: 01a1b64a-bead-76b1-9ac0-38be3092d9ad
-  author: aida-session-start
-  timestamp: 2026-11-07T13:55:14.221385515Z
-  changes:
-  - field_name: status
-    old_value: Approved
-    new_value: InProgress
+- id: 01a1b64a-cbc7-7370-8d61-f3dce2c89946
+  author: joe
+  timestamp: 2026-11-07T13:55:17.575553043Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
