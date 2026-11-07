@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:54.525722236Z
-modified_at: 2026-11-07T05:22:31.423663478Z
+modified_at: 2026-11-07T05:24:09.147743419Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ comments:
   modified_at: 2026-11-07T04:39:18.852652594Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b476-d53b-7f11-b88e-f5ebc390373b
+  author: joe
+  content: 'Implemented the host run-loop fix: check listener POLLHUP/POLLERR before entering seccomp notification receive, removing hung-up listeners from the watch set. Added a subprocess-watchdog regression using the production loop, real socket readiness/hang-up, and a child lane process; covers hang-up, normal notifications, and cancelled notifications. The regression reproduces the original failure against HEAD. Validation: all 22 tests in tests.test_store_mutation passed (including live fixtures); the final synchronized shutdown regression passed; cargo fmt --all -- --check and git diff --check passed. Native-seat handoff: changes remain uncommitted in contained_host.py and tests/test_store_mutation.py; host publication and queue completion remain pending. No implementation blockers.'
+  created_at: 2026-11-07T05:24:09.147743419Z
+  modified_at: 2026-11-07T05:24:09.147743419Z
+  session_id: 01a1b47508f1
 history:
 - id: 01a1b445-4610-70a1-bad0-885180c60a42
   author: joe
