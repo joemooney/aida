@@ -1521,7 +1521,8 @@ pub(crate) struct HumanFinishOptions {
     pub(crate) no_trailer_check: bool,
 }
 
-/// Resume this session's handed-off branch only at its recorded PR head.
+/// Resume this session's handed-off branch at its recorded PR head or a
+/// detached descendant containing in-seat rework commits.
 /// Git switch enforces worktree occupancy; unrelated detached checkouts refuse.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn ship_branch(
@@ -1564,14 +1565,24 @@ pub(crate) fn ship_branch(
         anyhow::ensure!(out.status.success(), "cannot read handed-off branch tip");
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
+    let branch_ref = format!("refs/heads/{}", lease.branch);
+    let seat_head = tip("HEAD")?;
     anyhow::ensure!(
-        tip("HEAD")? == *head && tip(&format!("refs/heads/{}", lease.branch))? == *head,
-        "detached seat or branch moved beyond the recorded PR head"
+        tip(&branch_ref)? == *head,
+        "handed-off branch moved beyond the recorded PR head; inspect the branch before resuming"
+    );
+    let ancestry = aida_core::git_ops::host_git_command(project)
+        .args(["merge-base", "--is-ancestor", head, &seat_head])
+        .output()?;
+    anyhow::ensure!(
+        ancestry.status.success(),
+        "detached seat does not descend from the recorded PR head; inspect HEAD before resuming"
     );
     if !resume {
         return Ok(lease.branch);
     }
     let mut attached = false;
+    let mut advanced = false;
     let result = store.update_all_checked(
         vec![crate::ownership::store::Step {
             key: record.key.clone(),
@@ -1592,9 +1603,32 @@ pub(crate) fn ship_branch(
         }],
         || {
             anyhow::ensure!(
-                tip("HEAD")? == *head && tip(&format!("refs/heads/{}", lease.branch))? == *head,
+                tip("HEAD")? == seat_head && tip(&branch_ref)? == *head,
                 "seat or branch moved before resume"
             );
+            let worktrees = aida_core::git_ops::host_git_command(project)
+                .args(["worktree", "list", "--porcelain"])
+                .output()?;
+            anyhow::ensure!(
+                worktrees.status.success(),
+                "cannot inspect branch occupancy"
+            );
+            let occupied = format!("branch {branch_ref}");
+            anyhow::ensure!(
+                !String::from_utf8_lossy(&worktrees.stdout)
+                    .lines()
+                    .any(|line| line == occupied),
+                "handed-off branch is checked out in another worktree"
+            );
+            // Preserve detached rework with a compare-and-swap fast-forward.
+            // trace:STORY-2325 | ai:codex
+            if seat_head != *head {
+                let out = aida_core::git_ops::host_git_command(project)
+                    .args(["update-ref", &branch_ref, &seat_head, head])
+                    .output()?;
+                anyhow::ensure!(out.status.success(), "branch moved before rework recovery");
+                advanced = true;
+            }
             let out = aida_core::git_ops::host_git_command(project)
                 .args([
                     "-c",
@@ -1613,14 +1647,25 @@ pub(crate) fn ship_branch(
             Ok(())
         },
     );
-    if result.is_err() && attached && !store.dir().join(".pending.json").exists() {
-        let out = aida_core::git_ops::host_git_command(project)
-            .args(["update-ref", "--no-deref", "HEAD", head, head])
-            .output()?;
-        anyhow::ensure!(
-            out.status.success(),
-            "resume failed and HEAD restoration failed"
-        );
+    if result.is_err() && !store.dir().join(".pending.json").exists() {
+        if attached {
+            let out = aida_core::git_ops::host_git_command(project)
+                .args(["update-ref", "--no-deref", "HEAD", &seat_head, &seat_head])
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "resume failed and HEAD restoration failed"
+            );
+        }
+        if advanced {
+            let out = aida_core::git_ops::host_git_command(project)
+                .args(["update-ref", &branch_ref, head, &seat_head])
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "resume failed and branch restoration failed; inspect the branch before retrying"
+            );
+        }
     }
     result?;
     Ok(lease.branch)

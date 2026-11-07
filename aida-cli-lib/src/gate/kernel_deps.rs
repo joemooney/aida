@@ -434,7 +434,8 @@ pub(crate) fn bounded_review_output(
 
 /// Only evidence for this marker's process may override its TTL. Closed
 /// records have no holder binding and cannot end a later manual claim.
-/// Outer None means there is no attributable evidence: use the marker's TTL.
+/// Outer None means there is no attributable evidence: use the marker's own
+/// process identity, then its TTL.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn review_ownership_ended(
     root: &std::path::Path,

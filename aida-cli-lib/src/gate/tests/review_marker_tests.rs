@@ -148,6 +148,34 @@ fn claim_ttl_above_cap_is_clamped_and_flagged() {
     assert_eq!(clamp_claim_ttl_mins(u64::MAX), (MAX_CLAIM_TTL_MINS, true));
 }
 
+// trace:STORY-2325 TASK-1750 | ai:codex
+#[test]
+fn prc_dead_or_recycled_marker_without_ownership_clears_at_merge_gate() {
+    let dir = tempfile::tempdir().unwrap();
+    let live = Marker::for_this_process(7, Some("abc"), None, "drain reviewer");
+    let mut dead = live.clone();
+    dead.pid = 4_000_000_000;
+    let mut recycled = live.clone();
+    recycled.pid_start = Some("linux-starttime:0".into());
+    for marker in [dead, recycled] {
+        write(dir.path(), &marker).unwrap();
+        assert!(!is_live_at(dir.path(), &marker));
+        let MergeGate::ExpiredCleared(_, reason) = merge_gate(dir.path(), 7, || {
+            panic!("dead reviewer needs no forge probe")
+        }) else {
+            panic!("dead reviewer must clear immediately");
+        };
+        assert!(reason.contains("no longer running"), "{reason}");
+        assert!(read(dir.path(), 7).is_none());
+    }
+    write(dir.path(), &live).unwrap();
+    assert!(is_live_at(dir.path(), &live));
+    assert_eq!(
+        merge_gate(dir.path(), 7, || Some("abc".into())),
+        MergeGate::UnderReview(live)
+    );
+}
+
 // trace:STORY-2325 | ai:codex
 #[test]
 fn prc_manual_claim_expires_without_ownership() {

@@ -825,6 +825,17 @@ fn prc_safe_end_retires_dead_pushed_seat_without_force() {
 // trace:STORY-2325 | ai:codex
 #[test]
 fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
+    ship_handoff_resume_case(false);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_ship_handoff_resumes_detached_rework() {
+    ship_handoff_resume_case(true);
+}
+
+// trace:STORY-2325 | ai:codex
+fn ship_handoff_resume_case(detached_rework: bool) {
     let fx = shipped_lane();
     let lease = {
         let _ambient = crate::test_env::AmbientGuard::hermetic_and(
@@ -935,6 +946,29 @@ fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
         git(&fx.seat, &["branch", "--show-current"]).is_empty(),
         "dry-run stays detached"
     );
+    let rework_head = if detached_rework {
+        // An unrelated detached commit must never replace the handed-off branch.
+        git(&fx.seat, &["checkout", "--detach", "HEAD~1"]);
+        git(&fx.seat, &["commit", "--allow-empty", "-m", "unrelated"]);
+        assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+        assert_eq!(git(&fx.seat, &["rev-parse", "refs/heads/feat"]), head);
+        git(&fx.seat, &["checkout", "--detach", &head]);
+        // Rework agents keep running after handoff and commit on detached HEAD.
+        std::fs::write(fx.seat.join("rework.txt"), "review fixes").unwrap();
+        git(&fx.seat, &["add", "rework.txt"]);
+        git(&fx.seat, &["commit", "-m", "detached rework"]);
+        let rework_head = git(&fx.seat, &["rev-parse", "HEAD"]);
+        assert_ne!(rework_head, head);
+        assert_eq!(
+            crate::pr_cmd::ship_branch(&fx.seat, &fx.main, false).unwrap(),
+            "feat"
+        );
+        assert_eq!(git(&fx.seat, &["rev-parse", "refs/heads/feat"]), head);
+        assert!(git(&fx.seat, &["branch", "--show-current"]).is_empty());
+        rework_head
+    } else {
+        head.clone()
+    };
     // Both ship entry points use this recovery seam after --no-merge or a hold.
     assert_eq!(
         crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
@@ -945,6 +979,18 @@ fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
         crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
         "feat"
     );
+    assert_eq!(
+        git(&fx.seat, &["rev-parse", "refs/heads/feat"]),
+        rework_head
+    );
+    assert_eq!(git(&fx.seat, &["rev-parse", "HEAD"]), rework_head);
+    if detached_rework {
+        assert_eq!(
+            std::fs::read_to_string(fx.seat.join("rework.txt")).unwrap(),
+            "review fixes"
+        );
+    }
+    git(&fx.seat, &["push", "origin", "feat"]);
     // The resumed branch can hand off again, then take the ordinary cleanup path.
     crate::ownership::dual::handed_off(&fx.main, &fx.seat, "feat", &lease.scope, 42).unwrap();
     assert_eq!(

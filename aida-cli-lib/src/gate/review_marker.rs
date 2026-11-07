@@ -231,7 +231,6 @@ pub(crate) fn list(root: &Path) -> Vec<Marker> {
 }
 
 /// `Some(reason)` when the marker no longer stands for a live review.
-#[cfg(test)]
 pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<String> {
     if m.pid != 0
         && !m.host.is_empty()
@@ -253,7 +252,7 @@ pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<Str
 }
 
 /// Recorded ownership controls reviews; legacy/manual markers without a
-/// matching record retain their promised TTL expiry.
+/// matching record retain their own process-identity check and TTL expiry.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
     ownership_ended(root, m).is_none()
@@ -262,20 +261,8 @@ pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
 fn ownership_ended(root: &Path, m: &Marker) -> Option<String> {
     match super::kernel_deps::review_ownership_ended(root, m) {
         Some(ended) => ended,
-        None => ttl_expired(m),
+        None => expired_reason(m, &crate::coordination::hostname(), now_secs()),
     }
-}
-
-// trace:STORY-2325 | ai:codex
-fn ttl_expired(m: &Marker) -> Option<String> {
-    let age = now_secs().saturating_sub(m.started_at);
-    (age > m.ttl_secs).then(|| {
-        format!(
-            "it is {}m old, past its {}m expiry",
-            age / 60,
-            m.ttl_secs / 60
-        )
-    })
 }
 
 #[cfg(test)]
