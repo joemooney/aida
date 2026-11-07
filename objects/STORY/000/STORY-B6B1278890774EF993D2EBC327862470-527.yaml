@@ -1,0 +1,34 @@
+id: 01a1b3dd-708e-7b02-b88c-bb539171a0f8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-527
+agreed_id: STORY-2604
+title: 'Review PR-3560: [AI:codex] feat: Contained Codex on the AIDA boundary with ChatGPT login: replace the ''contained ChatGPT auth waits for P3 (PR2)'' refusal with a brokered credential path (STORY-2593)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b3d3`) for branch `story-2593-r1923`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3560>
+  - Branch: `story-2593-r1923` → `main`
+
+  ## Covers
+
+  - STORY-2593
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3560` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T02:36:36.366121645Z
+modified_at: 2026-11-07T02:36:36.366121645Z
+req_type: Story
+filed_at:
+  code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b8fe51ef0f4
+  vendor: claude
+  session: 01a1b3d35e1a
