@@ -37,6 +37,7 @@ auth_hosts = ["daily-cloudcode-pa.googleapis.com"]
 auth_inventory_complete = false
 raw_store_writes = false
 raw_git_writes = false
-argv_prefix = ["--dangerously-skip-permissions", "--output-format", "stream-json", "--disable-slash-commands"]
+workspace_permission = "write_file"
+argv_prefix = ["--output-format", "stream-json", "--disable-slash-commands"]
 # Value-taking prompt options are data too: prompt text cannot select posture.
 prompt_options = ["-p", "--print", "--prompt", "--prompt-interactive"]

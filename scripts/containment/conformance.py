@@ -84,7 +84,7 @@ def agy_fixture_settings(workspace, runner, manifest):
             runner.parent.parent != workspace.parent):
         raise ValueError("AGY payload must be a read-only sibling of the fixture workspace")
     invocation = shlex.join([sys.executable, str(runner), "--payload", str(manifest)])
-    return {"permissions": {"allow": [f"write_file({workspace})", f"command({invocation})"]}}
+    return {"permissions": {"allow": [f"write_file({workspace}/**)", f"command({invocation})"]}}
 
 
 # These endpoints deliberately DO NOT enforce an allow list. The vendor must.
@@ -452,6 +452,10 @@ def agy_unsupported_reason(root):
         if not remaining:
             break
     text = "\n".join(texts)
+    # This failure prevents the exact runner from starting. Prefer it over a
+    # monitor flag: AGY may allow a flagged tool through its later LLM monitor.
+    if "sandbox configuration error: readwrite " in text and "globs not supported" in text:
+        return "agy native sandbox configuration: workspace write_file glob is unsupported"
     refusal = re.search(r"unsupported_tool:\s*([a-zA-Z_][a-zA-Z_0-9]*)", text)
     if refusal:
         mode = "default-mode" if "continuing in the default mode" in text else "agy"
@@ -1038,7 +1042,7 @@ def run(args):
             (runtime / "antigravity-oauth-token").touch()
             settings = runtime / "conformance-settings.json"
             write_json(settings, agy_fixture_settings(workspace, runner, manifest))
-            vendor = [str(executable), "--sandbox", "--mode", "auto", "--settings", str(original / settings.name),
+            vendor = [str(executable), "--sandbox", "--settings", str(original / settings.name),
                       "--output-format", "stream-json", "--print-timeout", str(args.timeout) + "s", "-p", prompt]
             wrapper = ["bwrap", "--die-with-parent", "--dev-bind", "/", "/", "--bind", str(runtime), str(original),
                        "--chdir", str(workspace)]
@@ -1064,11 +1068,6 @@ def run(args):
         # O_PATH binds the original inode after the private overlay without
         # reading, copying or logging credential contents.
         inputs = [token]
-        if args.vendor == "agy" and (original / "settings.json").exists():
-            # Preserve operator settings read-only; the experiment must not
-            # silently discard a stricter user policy with the runtime overlay.
-            inputs.append(original / "settings.json")
-            (runtime / "settings.json").touch()
         descriptors = []
         try:
             mounts = ["--ro-bind", str(payload_dir), str(payload_dir)]

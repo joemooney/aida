@@ -60,7 +60,7 @@ A private vendor runtime is bind-mounted over the normal runtime directory;
 this overlay is **not** the tested enforcement boundary. Host filesystem and
 device access otherwise remain unchanged. AGY gets `--sandbox`, a session-local
 exact payload-command permission and a `write_file` permission
-for only the canonical fixture workspace (AGY uses that permission for native
+for only `<canonical fixture workspace>/**` (AGY uses that permission for native
 writes and edits). These two rules live in `conformance-settings.json` in the
 private runtime; `--settings` points at its overlay path. The command executes
 only the immutable sibling payload and manifest, with its requested Cwd set to
@@ -68,7 +68,7 @@ the fixture workspace. The payload intentionally attempts negative operations
 on disposable fixture siblings; this permission is probe admission, not proof
 of a shell write boundary. No arbitrary command prefix, outside file-tool
 grant, or `--dangerously-skip-permissions` is provided. AGY has read-only mounts
-of its existing token and operator settings. Codex gets AIDA's
+of its existing token only; operator settings are not inherited. Codex gets AIDA's
 workspace-write/never/network-enabled
 preset and disposable equivalents of the TASK-2712 store/cache/mail/deputy
 write grants. Credentials are opened with `O_PATH` and mounted read-only,
@@ -93,16 +93,17 @@ provides and independently proves the selected adapter.
 
 <!-- trace:TASK-3048 | ai:codex -->
 The binding 2026-11-05 12:20 MST advisor ruling supersedes the earlier native
-permission experiment: AGY is **outer-only**. Its default-mode tool-safety
-monitor rejects `write_file` before fixture permissions can admit it, and auto
-mode is unavailable on the measured account. The shipped `vendors.toml` row
+permission experiment: AGY is **outer-only**. The 2026-11-07 advisor ruling supplies newer AGY 1.5.3 evidence: default-mode
+headless workspace writes can succeed when private settings allow the target.
+Neither the adapter nor the fixture depends on `--mode auto`. The shipped `vendors.toml` row
 records `native_layer = "none"`; omitted declarations retain a required native
 layer, so Claude, Codex and unverified OpenCode receive no outer-only opt-in.
 The advisor owns fresh host measurements. The common wrapper's `RuntimeCredentialsFile` mechanism now consumes the
 `[vendor.agy.runtime]` data in `containment/vendors.toml`. It provisions a mode
 0700 runtime under launch-owned state and binds it at the vendor's conventional
 `~/.gemini/antigravity-cli` path. The host `.gemini` tree is masked first; the
-runtime starts with empty settings, without inherited plugins, MCP servers,
+runtime starts with private settings allowing only `write_file(<workspace>/**)`,
+without inherited plugins, MCP servers,
 hooks, logs or daemon endpoints. The OAuth token is opened with the common
 non-following regular-file/owner/single-link checks and bound read-only by
 handle, never copied into writable state. Refresh and expiry behavior of this
@@ -137,7 +138,7 @@ access. Completing the inventory requires advisor-owned refresh/login evidence;
 this change does not assume that a Google wildcard is safe or sufficient.
 
 Options precede the final `-p <prompt>`. The shipped argv omits both `--sandbox`
-and the unavailable `--mode auto`. Candidate permission-bypass argv still
+and the unavailable `--mode auto`. Candidate argv also omits blanket permission bypass and still
 requires a host-accepted `ContainmentReceipt`; deserialized or missing receipts
 refuse. Within the common wrapper, argv preparation stays behind its exec
 barrier, and receipt acceptance checks the outer-only descriptor before exec
@@ -156,8 +157,9 @@ remain available.
 
 Production AGY admission remains closed in `launch/agy.rs`, and direct wrapper
 preparation also refuses its incomplete auth inventory. Trusted `agy = "aida"`
-or `"native"` settings cannot unlock it. The native diagnostic retains the old
-auto request as a historical measurement, never adds permission bypass, and
+or `"native"` settings cannot unlock it. The native diagnostic uses default mode with a fixture-scoped
+`write_file(<workspace>/**)` allow rule and an exact frozen runner command,
+never adds permission bypass, and
 reports bounded stream/stderr/private-log tool-safety diagnostics as
 `unsupported_reason` on the report and each C0–C4 check. Measured violations
 remain failures.
@@ -169,6 +171,30 @@ mediated-write positive controls, wire and run the production all-tool AGY
 conformance path, then change the admission gate only with fresh passing host
 evidence. The shared-boundary harness still refuses AGY by name; native fixture
 or model-free wrapper tests cannot substitute for that integrated host run.
+
+### 2026-11-07 workspace-only permission rerun
+
+<!-- trace:TASK-3048 | ai:codex -->
+The fresh [AGY 1.5.3 report](containment-conformance-agy-2026-11-07.json)
+was produced with:
+
+```bash
+python3 scripts/containment/conformance.py --vendor agy \
+  --output /home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated --timeout 600
+```
+
+C0–C4 remain **unknown**, with no verified terminal receipt and no whole-lane
+or production-launcher credit. The terminal's completed event reports
+`sandbox configuration error: readwrite <workspace>/**: globs not supported`.
+The reporter names this configuration failure ahead of the tool-safety monitor
+flag; the later LLM monitor can allow flagged workspace writes. The workspace
+file-tool sentinel was not created either. The fixture retains `--sandbox` for
+its native diagnostic measurement, the requested workspace-only recursive rule,
+and the exact runner command; it never grants host paths, canaries or blanket
+permission bypass. Full stdout, stderr and private logs remain beside the host
+report. The production shared-boundary AGY gate remains closed. This evidence
+does not justify completion of TASK-3048 or resolve the remaining integrated
+all-tool, auth/refresh inventory and mediated-write positive-control work.
 
 ### Non-completing adapter handoff
 
