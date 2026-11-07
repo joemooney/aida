@@ -9,12 +9,17 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T09:53:00.268648146Z
+modified_at: 2026-11-07T10:44:34.235403847Z
 req_type: Story
 tags:
 - architecture
 - regroup
 - sketch-first
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a19db5-2e75-75f3-a290-1be07eaf1692
+  created_at: 2026-11-07T10:44:34.235400670Z
+  created_by: joe
 comments:
 - id: 01a1b17b-05d7-77a2-98fb-1e57fc2f7278
   author: joe
@@ -724,6 +729,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b59c-342d-7921-adf1-d142f7e654fe
+  author: joe
+  timestamp: 2026-11-07T10:44:35.501189829Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
