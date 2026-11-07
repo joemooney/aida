@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T02:36:53.298696615Z
+modified_at: 2026-11-07T02:39:12.332315664Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -320,6 +320,12 @@ history:
   timestamp: 2026-11-07T02:36:54.385879009Z
   session_id: 01a1b3d35e1a
   changes: []
+- id: 01a1b3df-d222-7551-b847-c87237c3682b
+  author: joe
+  timestamp: 2026-11-07T02:39:12.418738036Z
+  session_id: 01a1b3df2437
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -335,3 +341,11 @@ attention_reason:
   lean: Review whether synthetic ID-token routing plus an empty refresh field is admissible under option (a), or provide a supported access-only exec interface. Do not copy refresh material, switch to app-server or remove the refusal without resolving the interface gate.
   raised_by: implementer
   raised_at: 2026-11-07T02:32:53.139974255Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Docs-only evidence update (61 lines in the plan file) recording the failed step-1 interface gate; STORY-2593 AC1-AC3 remain unmet, and the commit/PR again carry a feat subject with a completing (STORY-2593) trailer.
+  recovery_hint: address the review findings, move STORY-2593 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T02:39:12.332315664Z
