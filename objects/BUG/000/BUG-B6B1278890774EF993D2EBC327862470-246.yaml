@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:56:12.521997458Z
+modified_at: 2026-11-07T08:07:56.770497342Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -56,6 +56,12 @@ comments:
   content: 'Round 2 native-seat changes: wired tests/test_status_cold_cache.py into CI contracts shard immediately after single-spec show latency, with --cold-budget 30 --warm-budget 10 against target/debug/aida. Added optional budget flags retaining optimized 15s/5s defaults. Validation: current-source cargo build -p aida-cli --profile agent passed; optimized default regression passed cold 7.88s / warm 2.43s; explicit 30s/10s flags passed on that optimized binary cold 6.79s / warm 1.78s. Both verify exactly 7000 cached rows, 999 InProgress epics and one Completed epic. Older shared optimized binary timed out at 15s (run overlapped compilation). Workflow YAML/condition/command verified; cargo fmt --all -- --check and git diff --check passed. Edits remain uncommitted per native-seat contract. Finding 2 publication follow-up remains for host: after committing/pushing and CI completes, cite the contracts job''s ''Run full-status cold-cache latency regression'' step URL and actual printed cold/warm timings in PR #3581 body. Local optimized timings are not CI evidence; do not claim the debug 30s/10s gate proves optimized 15s/5s acceptance. Existing merge hold untouched.'
   created_at: 2026-11-07T07:27:29.596282287Z
   modified_at: 2026-11-07T07:27:29.596282287Z
+- id: 01a1b50c-ca62-7b83-93ec-e7c21374536f
+  author: joe
+  content: 'Native-seat validation at a56e1fbf511: checkout already contains implementation d2ce529e8dd and CI follow-up 3555c8cce36, with approved review; no further source edits needed and working tree remains clean. Existing changed files versus origin/main: aida-core/src/db/cache.rs, aida-core/src/graph_walk.rs, tests/test_status_cold_cache.py, .github/workflows/ci.yml. Fresh current-source cargo build -p aida-cli --profile agent passed. Generated exactly-7000-row regression with optimized default budgets passed cold 7.97s (<15s), warm 1.68s (<5s), with all rows persisted and expected 999 InProgress / 1 Completed epic statuses. Older shared optimized binary timed out at 15s. Current-source graph_walk tests: 22 passed; db::cache tests: 109 passed. cargo fmt --all -- --check, git diff --check, and CI contracts-shard regression wiring check passed. No implementation blockers. Host follow-up: cite actual contracts CI step timings/link in PR body as previously requested; local optimized timings are not CI evidence. No commit, push, PR creation, queue completion, ship, or review record performed. Existing hold/punt signals remain unchanged; publication and completion belong to host.'
+  created_at: 2026-11-07T08:07:56.770497342Z
+  modified_at: 2026-11-07T08:07:56.770497342Z
+  session_id: 01a1b501b7fb
 history:
 - id: 01a1b4c2-b43b-7d73-b618-1f11ca67da92
   author: joe
