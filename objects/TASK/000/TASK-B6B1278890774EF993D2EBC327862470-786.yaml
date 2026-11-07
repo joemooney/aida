@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T16:41:26.424569526Z
+modified_at: 2026-11-07T16:43:26.273411137Z
 req_type: Task
 tags:
 - area:containment
@@ -311,6 +311,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-07T16:41:23.554170491Z
   modified_at: 2026-11-07T16:41:23.554170491Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6e4-bcc1-7bd2-a1f3-8265459f6289
+  author: joe
+  content: 'ADVISOR 2026-11-07 09:45, addendum to the 09:50 ruling (operator-confirmed mechanism): agy headless writes pass a deterministic rule check (agy_tool_safety), then a nondeterministic LLM judge (sir_flash_lite). AIDA must NOT rely on the LLM judge. Conformance passes must come from the fixture-scoped permissions.allow write_file(<workspace>/**) plus the AIDA boundary. Record in the report which layer allowed each positive write (rule allow vs judge allow), and treat a judge-only allow as non-conformant.'
+  created_at: 2026-11-07T16:43:26.273411137Z
+  modified_at: 2026-11-07T16:43:26.273411137Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
