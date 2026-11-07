@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T06:41:28.480490395Z
+modified_at: 2026-11-07T20:48:20.285002870Z
 req_type: Task
 tags:
 - architecture
@@ -296,6 +296,13 @@ comments:
   created_at: 2026-11-07T06:41:28.480490395Z
   modified_at: 2026-11-07T06:41:28.480490395Z
   session_id: 01a1b49f1d8f
+- id: 01a1b7c4-f33d-7a72-9607-58f2edf8f706
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-07 14:10 (S3 of 4). S1 (#3522) and S2 (#3547) have landed. Implement S3 only, per the signed sketch docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md, decision (b): an AIDA-owned detached supervisor for opted-in background launches, running a foreground Claude inside the shared contained wrapper. Logs and attach go through AIDA; ''claude attach'' under the opt-in refuses with an explicit hint; native --bg is unchanged byte-for-byte when the opt-in is unset. Resume (S4) keeps refusing. One PR, Refs TASK-3219. First check whether commit 31a4e2b9713 (store-writers inventory reconcile for the PTY sites, from branch task-3219-r1548) is already reflected on origin/main; if not, include it. LIGHT gate: one targeted cargo test on the supervisor module, plus a live regression (report the live count separately), plus make check-ci-fast. Note: BUG-2486/BUG-2487 are editing launch/contained.rs in parallel. Keep your edits there minimal and rebase before pushing.'
+  created_at: 2026-11-07T20:48:20.285002870Z
+  modified_at: 2026-11-07T20:48:20.285002870Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
