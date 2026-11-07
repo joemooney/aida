@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-11-06T00:16:07.408715354Z
+modified_at: 2026-11-07T20:27:24.698307431Z
 req_type: Task
 tags:
 - operator-held
@@ -37,6 +37,16 @@ comments:
   created_at: 2026-11-06T00:16:07.408715354Z
   modified_at: 2026-11-06T00:16:07.408715354Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-ca9a-7cd1-809a-0a6853001e7b
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-05T04:16:48.441119506Z","deferred_until":"a second human works this repo; seats run on hosts the operator does not control; the product serves external users","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:24.698296065Z
+  modified_at: 2026-11-07T20:27:24.698296065Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-10-05T04:16:48.441119506Z
-deferred_until: a second human works this repo; seats run on hosts the operator does not control; the product serves external users
+deferred_until: manual:operator
