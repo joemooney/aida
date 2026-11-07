@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T15:44:26.496090469Z
+modified_at: 2026-11-07T16:34:56.846486291Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -481,6 +481,13 @@ comments:
   content: 'ADVISOR 2026-11-07 08:50: steps 4-5 attempted via deputy 2 (job 20261107T084217-5367e4): the harness refused with ''role grants require a human at an interactive TTY'' (fixture-roster-allow-seat-refused). The live C0-C4 run must come from the operator''s own terminal: ~/.local/share/aida/ops/advisor-scripts/conformance-codex-aida-0850.job.sh. BUG-2447/2448 are decided from its report.'
   created_at: 2026-11-07T15:44:26.496090469Z
   modified_at: 2026-11-07T15:44:26.496090469Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6dc-f6ce-7ba3-b696-c5eccf8bb868
+  author: joe
+  content: 'ADVISOR 2026-11-07 09:40: the operator ran the live C0-C4 job at 16:33Z (grant OK). The launch refused because the PATH codex is the nvm codex.js wrapper, not the pinned native binary (BUG-2484 filed). The job script now puts the vendored native binary first on PATH; rerun pending.'
+  created_at: 2026-11-07T16:34:56.846486291Z
+  modified_at: 2026-11-07T16:34:56.846486291Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
