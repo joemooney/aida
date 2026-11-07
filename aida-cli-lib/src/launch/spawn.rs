@@ -137,3 +137,24 @@ pub(crate) fn assign_seat(
     }
     Ok(())
 }
+
+/// Replace this process with `cmd` (spawn + wait where exec is unavailable).
+// trace:BUG-2157 | ai:claude
+// trace:STORY-2326 | ai:codex
+pub(crate) fn exec_agent(cmd: &mut std::process::Command) -> Result<()> {
+    // BUG-2386: a Codex resume execs through here too; name the real program.
+    let program = cmd.get_program().to_string_lossy().into_owned();
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec {program}: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd
+            .status()
+            .with_context(|| format!("failed to spawn {program}"))?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+}

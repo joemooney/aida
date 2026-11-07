@@ -314,15 +314,9 @@ fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-/// BUG-1686: the launch regression — the argv the REAL headless spawn path
-/// (`session::spawn_vendor_headless`, which `aida queue work --vendor agy
-/// --no-human` reaches through `compose_headless_command` →
-/// `headless_vendor_args`) hands to the process, recorded by the fixture and
-/// asserted as an ordered vector.
-///
-/// This proves the process is reached AND that what it receives is ordered
-/// correctly — the failure mode was a process that started and then rejected
-/// its own argv, which a bare "the launch succeeded" assertion would miss.
+/// The real headless spawn path must now refuse the historical bypass vector
+/// before the vendor runs. Parser-only tests above retain the argv-order proof.
+// trace:TASK-3048 | ai:codex
 // The fixture is a `#!/bin/sh` script, unspawnable on Windows (os error 193);
 // same unix gating as the other shell-mock launch tests. trace:BUG-1646
 // trace:BUG-1686 | ai:claude
@@ -332,7 +326,7 @@ fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
 #[cfg(unix)]
 // trace:TASK-1748 | ai:antigravity
 #[test]
-fn spawned_agy_process_receives_the_ordered_argv() {
+fn task_3048_spawned_agy_bypass_refuses_before_vendor_exec() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -388,34 +382,12 @@ fn spawned_agy_process_receives_the_ordered_argv() {
         false,
     );
     crate::test_ambient::replace(outer);
-    let status = spawned.expect("spawning the argv-recording fixture must succeed");
-    assert_eq!(
-        status.code(),
-        Some(crate::agy_outcome::INCOMPLETE),
-        "exit 0 without terminal evidence is incomplete"
-    );
-
-    let argv = read_captured_argv(&capture);
-    assert_eq!(
-        argv,
-        vec![
-            AGY_PERMISSION_FLAG.to_string(),
-            "--output-format".to_string(),
-            "stream-json".to_string(),
-            "--effort".to_string(),
-            "high".to_string(),
-            "-p".to_string(),
-            prompt.to_string(),
-        ],
-        "the spawned agy process must receive option flags BEFORE -p, with the \
-         prompt as -p's value"
-    );
-
-    // And the recorded argv parses the way agy 1.2.12 parses it.
-    let (print_value, saw_permission_flag, leftovers) = parse_like_go_flags(&argv);
-    assert_eq!(print_value.as_deref(), Some(prompt), "{argv:?}");
-    assert!(saw_permission_flag, "{argv:?}");
-    assert!(leftovers.is_empty(), "{leftovers:?}");
+    // The historical ordered vector still has parser regressions above,
+    // but the signed outer-only ruling forbids executing it without a receipt.
+    // trace:TASK-3048 | ai:codex
+    let error = spawned.expect_err("legacy bypass cannot spawn outside the shared wrapper");
+    assert!(format!("{error:#}").contains("applied AIDA ContainmentReceipt"));
+    assert!(read_captured_argv(&capture).is_empty());
 }
 
 /// BUG-1686: `compose_headless_command` — the single function every headless
@@ -477,12 +449,11 @@ fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
 }
 
 /// BUG-1686: the operator-facing `--no-launch` / deferred handoff line for agy
-/// — the command a human is told to paste when AIDA prepares a session but does
-/// not launch it. It renders from the same builder, so before the fix the manual
-/// workaround was broken in exactly the same way as the automatic launch.
+/// must not offer a pasteable bypass command outside the shared boundary.
+// trace:TASK-3048 | ai:codex
 // trace:BUG-1686 | ai:claude
 #[test]
-fn deferred_agy_launch_hint_renders_the_ordered_command() {
+fn task_3048_deferred_agy_hint_does_not_offer_unreceipted_bypass() {
     let prompt = "/aida-pickup BUG-1680";
     let hint = crate::queue_cmd::deferred_headless_launch_hint(
         HeadlessVendor::Agy,
@@ -491,8 +462,6 @@ fn deferred_agy_launch_hint_renders_the_ordered_command() {
         false,
         None,
     );
-    assert_eq!(
-        hint, "AIDA_HEADLESS=1 agy --dangerously-skip-permissions --output-format stream-json -p '/aida-pickup BUG-1680'",
-        "the pasteable agy command must carry the fixed flag order"
-    );
+    assert!(hint.contains("fresh all-tool conformance"), "{hint}");
+    assert!(!hint.contains("--dangerously-skip-permissions"), "{hint}");
 }

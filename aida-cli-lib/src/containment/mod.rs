@@ -110,6 +110,155 @@ pub(crate) fn native_layer(vendor: &str) -> anyhow::Result<NativeLayer> {
         .native_layer)
 }
 
+/// Data for an outer-only vendor on the common boundary. Host inventories are
+/// evidence, not implicit egress grants: trusted policy must allow each host.
+// trace:TASK-3048 | ai:codex
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RuntimePolicy {
+    pub relative: String,
+    pub credential: String,
+    pub auth_hosts: Vec<String>,
+    pub auth_inventory_complete: bool,
+    pub raw_store_writes: bool,
+    pub raw_git_writes: bool,
+    pub argv_prefix: Vec<String>,
+    pub prompt_options: Vec<String>,
+}
+
+/// Legacy launchers may not supply an outer-only vendor's permission bypass.
+/// Only the common wrapper adds it, behind its receipt/exec barrier. Inspect
+/// option names, never value-taking prompt contents (including joined forms).
+// trace:TASK-3048 | ai:codex
+pub(crate) fn refuse_unreceipted_bypass(vendor: &str, args: &[String]) -> anyhow::Result<()> {
+    if native_layer(vendor)? != NativeLayer::None {
+        return Ok(());
+    }
+    let policy = runtime_policy(vendor)?;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let (name, joined) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), false), |(name, _)| (name, true));
+        if !name.starts_with('-') {
+            continue;
+        }
+        // Go flags accept one or two leading dashes. Normalize both the
+        // forbidden options and value-taking prompt options before matching.
+        let name = name.trim_start_matches('-');
+        if policy
+            .prompt_options
+            .iter()
+            .any(|option| option.trim_start_matches('-') == name)
+        {
+            if !joined {
+                let _ = args.next();
+            }
+            continue;
+        }
+        anyhow::ensure!(
+            !name.starts_with("dangerously-"),
+            "{vendor} permission bypass requires an applied AIDA ContainmentReceipt from the shared wrapper; legacy launch refused"
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn runtime_policy(vendor: &str) -> anyhow::Result<RuntimePolicy> {
+    let data: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
+    anyhow::ensure!(data.version == 1, "unsupported capability schema");
+    let capability = data
+        .vendor
+        .get(vendor)
+        .ok_or_else(|| anyhow::anyhow!("unsupported vendor capability: {vendor}"))?;
+    anyhow::ensure!(
+        capability.native_layer == NativeLayer::None,
+        "private runtime policy requires an outer-only descriptor"
+    );
+    let runtime = capability
+        .runtime
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("{vendor} has no private runtime policy"))?;
+    runtime.validate()?;
+    Ok(runtime)
+}
+
+/// Mask the host parent of every shipped private runtime for every vendor.
+/// A new descriptor cannot leave its credentials visible to an older vendor.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn runtime_host_parents(home: &Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    let data: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
+    anyhow::ensure!(data.version == 1, "unsupported capability schema");
+    let mut paths = Vec::new();
+    for capability in data.vendor.values() {
+        if let Some(runtime) = &capability.runtime {
+            runtime.validate()?;
+            let parent = Path::new(&runtime.relative)
+                .components()
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("runtime parent missing"))?;
+            paths.push(home.join(parent.as_os_str()));
+        }
+    }
+    Ok(paths)
+}
+
+impl RuntimePolicy {
+    pub(crate) fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.prompt_options.is_empty()
+                && self
+                    .prompt_options
+                    .iter()
+                    .all(|option| option.starts_with('-')
+                        && !option.trim_start_matches('-').starts_with("dangerously-")
+                        && !option.contains('=')
+                        && !option.chars().any(char::is_whitespace)),
+            "runtime prompt options must be option names"
+        );
+        for path in [&self.relative, &self.credential] {
+            anyhow::ensure!(
+                !path.is_empty()
+                    && Path::new(path)
+                        .components()
+                        .all(|c| matches!(c, std::path::Component::Normal(_))),
+                "runtime paths must be relative normal components"
+            );
+        }
+        anyhow::ensure!(
+            Path::new(&self.credential).components().count() == 1,
+            "runtime credential must be a single leaf"
+        );
+        anyhow::ensure!(
+            !self.raw_store_writes && !self.raw_git_writes,
+            "outer-only runtime requires mediated Git/store writes"
+        );
+        anyhow::ensure!(
+            !self.auth_hosts.is_empty(),
+            "runtime auth host inventory is empty"
+        );
+        for host in &self.auth_hosts {
+            crate::launch::contained::validate_allowed_host(host)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn require_auth_policy(&self, allowed: &[String]) -> anyhow::Result<()> {
+        self.validate()?;
+        anyhow::ensure!(
+            self.auth_inventory_complete,
+            "outer-only auth/refresh host inventory is incomplete; refusing to launch"
+        );
+        for host in &self.auth_hosts {
+            anyhow::ensure!(
+                allowed.contains(host),
+                "outer-only auth host {host} requires trusted contained.allowed_hosts approval"
+            );
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Capability {
@@ -118,6 +267,8 @@ struct Capability {
     native_layer: NativeLayer,
     ipc: IpcLayout,
     credentials: CredentialLayout,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    runtime: Option<RuntimePolicy>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -2584,6 +2584,12 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
     config: &AgentLaunchConfig,
 ) -> Result<()> {
     if !session::aida_contained_env()? {
+        // Final defaults and explicit bypass options are checked before a
+        // role, lease, worktree or registry row can be created.
+        // trace:TASK-3048 | ai:codex
+        if let Some(vendor) = session::HeadlessVendor::parse(config.agent_type) {
+            crate::containment::refuse_unreceipted_bypass(vendor.as_str(), &config.default_args)?;
+        }
         return Ok(());
     }
     let containable = session::HeadlessVendor::parse(config.agent_type)
@@ -2899,7 +2905,13 @@ pub(crate) fn agent_new_antigravity(
         delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
-        default_args: Vec::new(),
+        // Refuse the explicit legacy bypass before the role picker too.
+        // trace:TASK-3048 | ai:codex
+        default_args: if bypass_sandbox {
+            tool_bypass_flags("antigravity")
+        } else {
+            Vec::new()
+        },
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
         contained: false,
     })?;
@@ -3615,7 +3627,7 @@ pub(crate) fn agent_new_bg_dispatch(
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     if config.agent_type == "codex" {
         command.env(crate::gate::seat_authority::GRANT_ENV, "");
-        crate::codex_tool_env::prepare_launch(&mut command)?;
+        crate::launch::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::null())
@@ -7349,7 +7361,7 @@ pub(crate) fn run_agent_generation(
     if let Some(role) = &plan.role {
         // A contained role launch is sandboxed the same way a contained
         // reviewer is. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-        let grant = crate::gate::seat_authority::issue_launch_child_with_delegation(
+        let grant = crate::launch::issue_launch_child_with_delegation(
             &plan.project_root,
             &canonical_role_name(role),
             &plan.name,
@@ -7380,7 +7392,7 @@ pub(crate) fn run_agent_generation(
         if plan.role.is_none() {
             command.env(crate::gate::seat_authority::GRANT_ENV, "");
         }
-        crate::codex_tool_env::prepare_launch(&mut command)?;
+        crate::launch::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::inherit())
