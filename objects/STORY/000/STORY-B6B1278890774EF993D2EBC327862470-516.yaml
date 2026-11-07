@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T03:09:54.415144475Z
+modified_at: 2026-11-07T03:20:57.841765980Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -470,6 +470,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b406-0d3f-7d62-9424-02c05b4f087b
+  author: joe
+  timestamp: 2026-11-07T03:20:57.919251251Z
+  session_id: 01a1b4054873
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -484,3 +490,11 @@ attention_reason:
   detail: 'Review of 14ef038e232f / PR #3560: factual findings 1-6 accepted. Explicitly dispute treating findings 1-3 as implementer-actionable before finding 5 is resolved: the signed step-1 stop condition failed for installed codex-cli 0.166.0, so removing refuse_chatgpt or claiming containment evidence would violate the advisor decision. AC1-AC3 remain unmet; BUG-2447/2448 are Approved and blocked, without C3/C4 evidence. Finding 5 requires an advisor/operator decision recorded on STORY-2593: authorize the ID-token-shaped/empty-refresh schema with explicit compatibility/security requirements, or name another supported codex exec interface. No later interface decision exists in the current story comments; prior risk approval and requeue without a triage reason do not resolve this fork. Escalate to advisor/operator instead of another docs-only implementation round. Finding 4 remains a host action: 14ef038e232f regressed from docs/Refs to feat/completion, and e58b7e8cafc and PR #3560 also claim completion. Retitle PR #3560 to [AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593), or close it unmerged. Future commits must use that docs/Refs subject. Recorded that exact native publication declaration; it is descriptive intent only, and this punt vetoes host publication and completion. Finding 6 fixed locally: reflowed the ownership paragraph and removed review-round numbering from section headings. Only docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md changed, left uncommitted. git diff --check passed; verified production refusal/API-key preflight and both blocked bug statuses with read-only inspection. No production code or credentials changed and no live conformance run claimed. Preserve the merge hold. Git metadata and PR operations remain outside this native seat.'
   raised_by: implementer
   raised_at: 2026-11-07T03:09:54.415144475Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 7: docs-only plan update (reflow + descriptive headings + handoff text); STORY-2593 AC1-AC3 remain unmet and the PR title still carries a feat subject with a completing (STORY-2593) trailer; interface decision (finding 5) still unrecorded.'
+  recovery_hint: address the review findings, move STORY-2593 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T03:20:57.841765980Z
