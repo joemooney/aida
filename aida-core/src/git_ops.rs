@@ -1100,6 +1100,8 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// resolves the exclude file, which lives in the COMMON git dir: it is one
 /// file shared by the main checkout and every linked worktree, so every
 /// pattern written here applies repository-wide.
+/// Private seat clones instead use their own real `.git/info/exclude`
+/// directly, preserving the refusal to execute host Git inside a clone.
 ///
 /// The `.aida` pattern is therefore anchored and narrow: `/.aida/*` hides the
 /// root runtime directory's contents (BUG-914: a repository that does not
@@ -1111,7 +1113,20 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// line, which shadowed both, is rewritten in place.
 // trace:BUG-914 trace:BUG-2141 | ai:claude
 pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
-    let exclude_path = resolve_exclude_path(worktree)?;
+    // Private seat clones have their own real .git directory. Never spawn
+    // host Git there: its seat-writable config/hooks are deliberately refused.
+    // This setup writer needs only the clone-local runtime exclude file.
+    // trace:STORY-2630 | ai:codex
+    let exclude_path = if let Some(clone) = crate::seat_clone_detect::seat_clone_root(worktree) {
+        anyhow::ensure!(
+            crate::seat_clone_detect::has_real_git_dir(&clone),
+            "seat clone has no real .git directory: {}",
+            clone.display()
+        );
+        clone.join(".git/info/exclude")
+    } else {
+        resolve_exclude_path(worktree)?
+    };
     update_exclude_entries(
         &exclude_path,
         &[
