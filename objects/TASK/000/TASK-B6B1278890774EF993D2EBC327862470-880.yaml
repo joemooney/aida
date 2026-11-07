@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T07:32:46.474400341Z
+modified_at: 2026-11-07T07:33:01.534451778Z
 req_type: Task
 tags:
 - architecture
@@ -273,6 +273,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: ambiguous-spec: Dispute finding 4 as a current-state assertion: advisor signoff is recorded in TASK-3223 comment 10 and approved design landed via d6c6e961d48. Findings 1-3 target CLOSED UNMERGED PR 3563; advisor explicitly chose closure, while current user calls the old review AUTHORITATIVE. The exact unapproved-v1 title now contradicts approved design. Host must reconcile that review assignment with later comment 14 implementation directive. Also dispute mandatory-new-commit clause because explicit native-seat override prohibits commits. No edits can repair host PR state or resolve this assignment conflict; no implementation substituted. Finding 5 accepted: all runtime acceptance pending, keep TASK-3223 open. Finding 6 verified green gates/contracts/Build at reviewed head; merge-hold-gate still failed, untouched. No repository changes, diff check passed, no runtime tests. Preserve hold and punt publication vetoes; do not publish or queue-complete this run.. No triage reason was given.'
   created_at: 2026-11-07T07:31:05.077808418Z
   modified_at: 2026-11-07T07:31:05.077808418Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4ec-d1de-7c80-9e05-7764f5033e66
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-07T07:33:01.534445779Z
+  modified_at: 2026-11-07T07:33:01.534445779Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -545,6 +552,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1b4ec-d1de-7c80-9e05-77532596fd17
+  author: joe
+  timestamp: 2026-11-07T07:33:01.534438509Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
