@@ -3,12 +3,12 @@ spec_id: STORY-705
 agreed_id: STORY-705
 title: 'Book-chapter composition: group feature clusters into chapters with cross-refs'
 description: Roll child stories + their Doc entries under each EPIC into a chapter index; render uses/composes-with edges as in-page links. Consumes the same Doc-entry read path as the tutorial projection.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:54:43.444516329Z
-modified_at: 2026-11-07T21:05:42.830547633Z
+modified_at: 2026-11-07T21:05:44.510028481Z
 req_type: Story
 tags:
 - doc-projection
@@ -44,3 +44,12 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7d4-e23e-7321-ad6a-725ac1889b96
+  author: joe
+  timestamp: 2026-11-07T21:05:44.510022159Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
