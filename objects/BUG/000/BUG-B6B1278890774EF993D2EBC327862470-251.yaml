@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-251
 agreed_id: BUG-2486
 title: Contained Codex launch refuses when the ChatGPT token expires before the grant; cap the child grant at the token's life instead
 description: 'STORY-2593 delivers pinned, non-renewing ChatGPT credentials and requires the access token to stay valid for the grant TTL plus 300s. Role grants default to 24h, so any token with less than 24h05m left refuses: ''contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch (grant plus 300s margin required)''. Repro 2026-11-07 16:47Z: the operator''s token had 10.8h left; conformance out=~/.aida/conformance-codex-aida-1794070028. Acceptance: the contained Codex launch caps the delegated child grant at (token exp - 300s) and records the cap in launch diagnostics. It refuses only when the capped TTL falls below a configured floor (default 30 min), naming the token expiry and ''codex login'' as the fix. aida doctor shows the token''s remaining life. Tests for capped, floor-refused and unchanged-when-ample cases.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T20:54:14.266066163Z
+modified_at: 2026-11-07T21:02:36.798510922Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -151,6 +151,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b7d2-04fe-7d20-8e61-e8a4dad485c6
+  author: aida-orchestrator
+  timestamp: 2026-11-07T21:02:36.798533320Z
+  session_id: 01a1b7ce8660
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -160,3 +169,11 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-1 findings 1-4 fixed (floor applies only when token binds, shared MARGIN, doctor category gating + expired wording, read-only knob row). But the new doctor test cannot pass: its expired-token fixture omits auth_mode, so it renders ''unavailable'' rather than ''expired''. CI lib shards were still running at review time.'
+  recovery_hint: address the review findings, move BUG-2486 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T21:02:36.798510922Z
