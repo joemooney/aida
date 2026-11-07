@@ -1,0 +1,33 @@
+id: 01a1b7a9-fdfc-7391-be7e-4103bd326cb7
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-253
+agreed_id: BUG-2488
+title: 'Native Codex seat: punt signal cannot be written (read-only FS), so the host publishes anyway and fails with ''Refusing to create empty bundle''; no-commit seats hit the same error'
+description: |
+  ## Observed (dell1, 2026-11-07 ~12:50)
+  A Codex native-sandbox implementer lane (STORY-2640) punted to Needs Attention on a design fork, as it should. But its punt signal file "could not be written because the filesystem is read-only". The host saw no punt signal, went ahead with `aida ship --from-seat`, and failed with `could not bundle refs/heads/<branch> ... Refusing to create empty bundle`. The lane result line was an error instead of a punt.
+
+  Two lanes that found nothing to do (STORY-2402, STORY-2571: their briefs had already landed) hit the same empty-bundle error.
+
+  ## Expected
+  1. The punt signal reaches the host from a native Codex seat. Write it inside the seat's writable area (a path the host reads from the lease) instead of a host-only path.
+  2. When the seat branch has no commits beyond its base, the host does not try to publish. It reports `implementer: no-change` (or `punted` when a punt exists) with exit 0 and a clear line, never a bundle error.
+
+  ## Acceptance
+  - A test for the native-seat punt that reaches the host and suppresses publication.
+  - A test for a no-commit seat that yields `no-change` without invoking bundle.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T20:18:53.564500330Z
+modified_at: 2026-11-07T20:18:53.564500330Z
+req_type: Bug
+filed_at:
+  code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cd520a47e97
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
