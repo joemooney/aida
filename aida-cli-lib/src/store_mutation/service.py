@@ -7,7 +7,9 @@ import uuid
 # Linux UAPI: a kernel-held sender pidfd closes the queued-packet PID reuse race.
 SO_PASSPIDFD, SCM_PIDFD = 76, 4
 MUTATION_LIMIT = 65536
-MUTATION_VERBS = ('session_probe', 'request_status', 'comment_add', 'spec_edit')
+# Canonical schemas are staged until Git/oplog publication is transactional.
+MUTATION_VERBS = ('session_probe', 'request_status')
+CANONICAL_VERBS = ('comment_add', 'spec_edit')
 # trace:TASK-3223 | ai:codex
 MUTATION_ERRORS = frozenset(('InvalidRequest', 'UnsupportedVersion', 'UnsupportedOperation',
                             'Unauthorized', 'Expired', 'Revoked', 'Conflict', 'Busy',
@@ -35,7 +37,7 @@ def mutation_request(raw):
         if depth > 16:
             raise ValueError('depth')
         if isinstance(value, str):
-            if len(value.encode('utf-8')) > 16384 or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value):
+            if len(value.encode('utf-8')) > 16384 or any((ord(c) < 32 or 127 <= ord(c) <= 159) and c not in '\n\t' for c in value):
                 raise ValueError('string bounds')
         elif isinstance(value, dict):
             for k, v in value.items():
@@ -59,7 +61,7 @@ def mutation_request(raw):
         # Closed schemas also exclude paths, authority selectors and replacement objects.
         if obj['version'] != 1:
             raise MutationRefusal('UnsupportedVersion')
-        if obj['op'] not in MUTATION_VERBS:
+        if obj['op'] not in MUTATION_VERBS + CANONICAL_VERBS:
             raise MutationRefusal('UnsupportedOperation')
         if obj['op'] == 'session_probe':
             if set(obj['data']) != {'challenge'} or not isinstance(obj['data']['challenge'], str) or len(obj['data']['challenge'].encode()) > 128:
@@ -260,6 +262,8 @@ class StoreMutationSession:
         if not self.identity.check(*credentials, sender_fd=sender_fd):
             raise MutationRefusal('Unauthorized')
         request = mutation_request(raw)
+        if request['op'] not in MUTATION_VERBS:
+            raise MutationRefusal('UnsupportedOperation')
         if request['launch_epoch'] != self.epoch:
             raise MutationRefusal('Unauthorized')
         key = request['request_id']

@@ -12,8 +12,8 @@ use std::{
 
 const LIMIT: usize = 8 * 1024 * 1024;
 #[derive(Debug, thiserror::Error)]
-#[error("OutcomeUnknown: canonical transaction requires operator recovery")]
-pub struct OutcomeUnknown;
+#[error("OutcomeUnknown: canonical transaction requires operator recovery at {}; see docs/advanced/store-redo-recovery.md", .0.display())]
+pub struct OutcomeUnknown(pub PathBuf);
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Image {
@@ -112,13 +112,26 @@ pub fn object_bytes(root: &Path, sid: &str) -> Result<Vec<u8>> {
     }
     read(&path)
 }
+/// Separate from Git HEAD: canonical installs can precede publication.
+pub(crate) fn cache_generation(root: &Path) -> Result<String> {
+    let path = root.join(".aida/redo/cache-dirty");
+    if !present(&path)? {
+        return Ok(String::new());
+    }
+    Ok(hash(&read(&path)?))
+}
 fn known_decision(path: &Path) -> Result<Decision> {
     match decode(path) {
         Ok(d) => Ok(d),
         Err(_) => {
-            let _ = fs::rename(path, path.with_extension("unknown"));
+            let quarantined = path.with_extension("unknown");
+            let diagnostic = if fs::rename(path, &quarantined).is_ok() {
+                quarantined
+            } else {
+                path.to_path_buf()
+            };
             let _ = sync(path.parent().unwrap());
-            Err(OutcomeUnknown.into())
+            Err(OutcomeUnknown(diagnostic).into())
         }
     }
 }
@@ -185,7 +198,7 @@ fn validate(d: &Decision) -> Result<()> {
 fn install(root: &Path, d: &Decision, fault: &mut impl FnMut(&str) -> Result<()>) -> Result<()> {
     // Check ALL preconditions before the first replacement, including recovery.
     for i in &d.images {
-        let path = crate::object_store::object_path(&root.join("objects"), &i.spec_id)?;
+        crate::object_store::object_path(&root.join("objects"), &i.spec_id)?;
         let now = object_bytes(root, &i.spec_id)?;
         ensure!(
             hash(&now) == i.before || now == i.after.as_bytes(),
@@ -202,9 +215,9 @@ fn install(root: &Path, d: &Decision, fault: &mut impl FnMut(&str) -> Result<()>
         fault("install")?;
     }
     // Derived cache must not remain authoritative after an uncommitted install.
-    // Readers already compare canonical contents/mtime; this marker also lets
-    // future cache routing recognize recovered changes without treating Git HEAD
-    // or a cache acknowledgement as the transaction commit point.
+    // Readers compare this generation separately from Git HEAD. A second stamp
+    // invalidates snapshots that raced the installation; neither stamp is the
+    // transaction commit point.
     replace(
         &root.join(".aida/redo/cache-dirty"),
         uuid::Uuid::new_v4().to_string().as_bytes(),
@@ -214,7 +227,13 @@ fn install(root: &Path, d: &Decision, fault: &mut impl FnMut(&str) -> Result<()>
 }
 /// Called once at the OUTERMOST shared lock acquisition, before any writer acts.
 pub(crate) fn recover(root: &Path) -> Result<()> {
-    recover_inner(root).map_err(|_| OutcomeUnknown.into())
+    recover_inner(root).map_err(|error| {
+        if error.downcast_ref::<OutcomeUnknown>().is_some() {
+            error
+        } else {
+            OutcomeUnknown(root.join(".aida/redo")).into()
+        }
+    })
 }
 fn recover_inner(root: &Path) -> Result<()> {
     let dir = root.join(".aida/redo");
@@ -228,7 +247,7 @@ fn recover_inner(root: &Path) -> Result<()> {
     for entry in fs::read_dir(&dir)? {
         let path = entry?.path();
         if path.extension().is_some_and(|s| s == "unknown") {
-            return Err(OutcomeUnknown.into());
+            return Err(OutcomeUnknown(path).into());
         }
         if path.extension().is_some_and(|s| s == "pending") {
             pending.push(path);
@@ -249,7 +268,7 @@ fn recover_inner(root: &Path) -> Result<()> {
             // Preserve the decision, and fence future writers. Never discard it.
             fs::rename(&path, path.with_extension("unknown"))?;
             sync(&dir)?;
-            return Err(OutcomeUnknown.into());
+            return Err(OutcomeUnknown(path.with_extension("unknown")).into());
         }
     }
     Ok(())
@@ -310,13 +329,18 @@ fn commit_with_fault(
         return Ok(r);
     }
     let dir = journal(root)?;
-    // Retain all durable retry evidence; never evict an unresolved request.
+    // Quota is per launch epoch. Retain old retry evidence without blocking
+    // new launches; never evict an unresolved request.
     let mut retained = 0;
     for entry in fs::read_dir(&dir)? {
         let path = entry?.path();
         if path
-            .extension()
-            .is_some_and(|s| s == "pending" || s == "done" || s == "unknown")
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with(&format!("{}-", d.epoch)))
+            && path
+                .extension()
+                .is_some_and(|s| s == "pending" || s == "done" || s == "unknown")
         {
             retained += 1;
         }
@@ -326,7 +350,7 @@ fn commit_with_fault(
     ensure!(bytes.len() <= LIMIT, "decision too large");
     let path = dir.join(format!("{}.pending", name(&d)));
     ensure!(!present(&path)?, "OutcomeUnknown");
-    replace(&path, &bytes).map_err(|_| OutcomeUnknown)?; // file AND directory fsynced before any canonical write
+    replace(&path, &bytes).map_err(|_| OutcomeUnknown(path.clone()))?; // file AND directory fsynced before any canonical write
     let accepted = (|| -> Result<()> {
         fault("journal")?;
         install(root, &d, fault)?;
@@ -336,7 +360,13 @@ fn commit_with_fault(
         Ok(())
     })();
     if accepted.is_err() {
-        return Err(OutcomeUnknown.into());
+        let done = path.with_extension("done");
+        let diagnostic = if present(&done).unwrap_or(false) {
+            done
+        } else {
+            path
+        };
+        return Err(OutcomeUnknown(diagnostic).into());
     }
     Ok(d.result)
 }

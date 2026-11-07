@@ -72,10 +72,7 @@ fn host_operation(
         request.version == 1 && request.launch_epoch == epoch,
         "Unauthorized"
     );
-    anyhow::ensure!(
-        ["comment_add", "spec_edit", "request_status"].contains(&request.op.as_str()),
-        "UnsupportedOperation"
-    );
+    anyhow::ensure!(request.op == "request_status", "UnsupportedOperation");
     let op: HostOperation =
         serde_json::from_value(serde_json::json!({"op":request.op,"data":request.data}))
             .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
@@ -515,3 +512,28 @@ mod tests {
 
 #[cfg(test)]
 mod owner_tests;
+
+#[cfg(test)]
+#[test]
+fn staged_writes_cannot_reach_host_mutation_or_authorization() {
+    for op in ["comment_add", "spec_edit", "own_claim", "queue_done"] {
+        let request = HostRequest {
+            version: 1,
+            launch_epoch: uuid::Uuid::nil(),
+            request_id: uuid::Uuid::new_v4(),
+            op: op.into(),
+            data: serde_json::json!({}),
+        };
+        let error = host_operation(
+            Path::new("/nonexistent-store"),
+            "binding",
+            uuid::Uuid::nil(),
+            &[],
+            "author",
+            &request,
+            || panic!("staged writes must not reach authority or store access"),
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "UnsupportedOperation");
+    }
+}

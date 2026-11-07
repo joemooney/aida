@@ -160,6 +160,26 @@ class StoreMutationTests(unittest.TestCase):
             self.refuses('InvalidRequest', self.request('spec_edit', dict(spec_id='TASK-1', expected_revision='a' * 64, fields=fields)))
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='stale', content='hi')))
 
+    def test_staged_canonical_verbs_refuse_without_calling_host(self):
+        for op, extra in [('comment_add', {'content': 'hello'}),
+                          ('spec_edit', {'fields': {'description': 'text'}}),
+                          ('own_claim', {}), ('queue_done', {})]:
+            self.refuses('UnsupportedOperation', self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)))
+        probe = self.dispatch(self.request())
+        self.assertEqual(probe['result']['permitted_verbs'], ['session_probe', 'request_status'])
+        self.assertEqual(len(self.service.accepted), 1)
+
+    def test_multiline_canonical_schemas_reject_only_other_controls(self):
+        for text in ('first\n\tsecond', 'bad\r', 'bad\x00', 'bad\x7f', 'bad\x85'):
+            for op, extra in [('comment_add', {'content': text}),
+                              ('spec_edit', {'fields': {'description': text}})]:
+                request = self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra))
+                if text.startswith('first'):
+                    self.assertEqual(parse(self.wire(request))['data'], request['data'])
+                else:
+                    with self.assertRaisesRegex(Refusal, 'InvalidRequest'):
+                        parse(self.wire(request))
+
     # trace:TASK-3223 | ai:codex
     def test_mutations_use_correlated_framed_host_rpc_and_do_not_replay_locally(self):
         helper, host = socket.socketpair()
@@ -192,8 +212,10 @@ class StoreMutationTests(unittest.TestCase):
                 errors.append(error)
         thread = threading.Thread(target=responder); thread.start()
         try:
-            first = self.dispatch(request)
-            self.assertEqual(self.dispatch(request), first)
+            # Exercise staged framing only; production admission remains disabled.
+            with patch.dict(ns, MUTATION_VERBS=ns['MUTATION_VERBS'] + ns['CANONICAL_VERBS']):
+                first = self.dispatch(request)
+                self.assertEqual(self.dispatch(request), first)
         finally:
             thread.join(4)
         self.assertFalse(thread.is_alive())

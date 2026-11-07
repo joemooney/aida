@@ -112,7 +112,7 @@ impl CachedGitBackend {
     /// Whether the unrefreshed cache snapshot differs from canonical HEAD.
     // trace:BUG-1569 | ai:codex
     pub fn cache_snapshot_is_stale(&self) -> Result<bool> {
-        self.cache.is_stale(&self.current_head_sha())
+        self.cache_is_stale(&self.current_head_sha())
     }
 
     /// Default cache location for a project's git store at `git_root`:
@@ -438,16 +438,16 @@ impl CachedGitBackend {
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.
     fn current_head_sha(&self) -> String {
-        let head = crate::git_ops::head_sha(self.inner.path()).unwrap_or_default();
-        // A durable redo decision can change canonical bytes without a Git
-        // commit. Include its generation in the cache identity. Such identities
-        // deliberately decline Git incremental refresh and use a full rebuild.
-        // trace:TASK-3223 | ai:codex
-        match std::fs::read(self.inner.path().join(".aida/redo/cache-dirty")) {
-            Ok(bytes) => format!("{head}-redo-{}", super::redo::hash(&bytes)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => head,
-            Err(_) => format!("{head}-redo-unreadable-{}", uuid::Uuid::new_v4()),
-        }
+        crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
+    }
+
+    // trace:TASK-3223 | ai:codex
+    fn redo_generation_matches(&self) -> Result<bool> {
+        Ok(self.cache.redo_generation()? == super::redo::cache_generation(self.inner.path())?)
+    }
+
+    fn cache_is_stale(&self, head: &str) -> Result<bool> {
+        Ok(!self.redo_generation_matches()? || self.cache.is_stale(head)?)
     }
 
     /// Resolve one UUID using the cache as a locator and canonical YAML as truth.
@@ -562,7 +562,7 @@ impl CachedGitBackend {
         const INCREMENTAL_ATTEMPTS: usize = 3;
         let mut head = self.current_head_sha();
         for _ in 0..INCREMENTAL_ATTEMPTS {
-            if !self.cache.is_stale(&head)? {
+            if !self.cache_is_stale(&head)? {
                 return Ok(());
             }
             // Non-git fixture (empty HEAD): nothing to diff — full rebuild is
@@ -612,7 +612,7 @@ impl CachedGitBackend {
         // trace:TASK-1515 | ai:claude
         // trace:BUG-1663 | ai:claude
         let head = self.current_head_sha();
-        if !self.cache.is_stale(&head)? {
+        if !self.cache_is_stale(&head)? {
             return Ok(());
         }
         self.full_rebuild(true)
@@ -649,7 +649,7 @@ impl CachedGitBackend {
         match result {
             Ok(()) => Ok(None),
             Err(e) if is_cache_lock_error(&e) => {
-                Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                Ok(if self.cache_is_stale(&self.current_head_sha())? {
                     Some(super::cache_refresh::RefreshState::WriterBusy)
                 } else {
                     None
@@ -723,7 +723,7 @@ impl CachedGitBackend {
             if migration && budget.0.is_zero() {
                 return Err(cache_refresh::AdvisoryCacheUnavailable.into());
             }
-            if !migration && !self.cache.is_stale(&head)? {
+            if !migration && !self.cache_is_stale(&head)? {
                 return Ok(None);
             }
             match RefreshLock::try_acquire(self.cache.path()) {
@@ -734,7 +734,7 @@ impl CachedGitBackend {
                         return Ok(None);
                     }
                     // The lock winner always checks again after acquiring it.
-                    if !self.cache.is_stale(&self.current_head_sha())? {
+                    if !self.cache_is_stale(&self.current_head_sha())? {
                         return Ok(None);
                     }
                     if migration || !self.cache.has_usable_snapshot() {
@@ -775,7 +775,7 @@ impl CachedGitBackend {
                                 Ok(false) => {}
                                 Err(e) if super::cache::is_cache_lock_error(&e) => {
                                     drop(guard);
-                                    return Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                                    return Ok(if self.cache_is_stale(&self.current_head_sha())? {
                                         Some(RefreshState::WriterBusy)
                                     } else {
                                         None
@@ -841,7 +841,7 @@ impl CachedGitBackend {
                                 // the work to the detached worker rather than
                                 // inheriting it past the read budget.
                                 // trace:TASK-1527 | ai:claude
-                                if !self.cache.is_stale(&self.current_head_sha())? {
+                                if !self.cache_is_stale(&self.current_head_sha())? {
                                     return Ok(None);
                                 }
                                 match self.file_and_spawn_refresh()? {
@@ -855,7 +855,7 @@ impl CachedGitBackend {
                                 Some(state) => state,
                             },
                         };
-                        return Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                        return Ok(if self.cache_is_stale(&self.current_head_sha())? {
                             Some(state)
                         } else {
                             None
@@ -867,7 +867,7 @@ impl CachedGitBackend {
                     // detached worker inherits it instead (TASK-1527).
                     match RefreshLock::try_acquire(self.cache.path()) {
                         Ok(Some(_guard)) if !migration => {
-                            if !self.cache.is_stale(&self.current_head_sha())? {
+                            if !self.cache_is_stale(&self.current_head_sha())? {
                                 return Ok(None);
                             }
                             // trace:TASK-1527 | ai:claude
@@ -1011,6 +1011,7 @@ impl CachedGitBackend {
     // trace:BUG-636
     // trace:BUG-1663 | ai:claude
     fn full_rebuild(&self, refresh_only: bool) -> Result<()> {
+        let generation = super::redo::cache_generation(self.inner.path())?;
         #[cfg(test)]
         super::cache_refresh::test_count("full_rebuild");
         let (store, head) = self.load_at_stable_head()?;
@@ -1018,12 +1019,17 @@ impl CachedGitBackend {
         // may have preserved unloaded objects, including uncommitted fixtures.
         // Only freshness-driven refreshes may skip an already committed refill.
         // trace:TASK-1526 | ai:codex
-        if refresh_only {
-            self.cache
-                .rebuild_for_refresh(&store, &head, self.inner.path())?;
-        } else {
-            self.cache.rebuild_from_store(&store, &head)?;
-        }
+        self.cache.rebuild_with_redo(
+            &store,
+            &head,
+            &generation,
+            false,
+            if refresh_only {
+                Some(self.inner.path())
+            } else {
+                None
+            },
+        )?;
         Ok(())
     }
 
@@ -1031,9 +1037,10 @@ impl CachedGitBackend {
     /// git store after a cache operation discovers schema drift.
     // trace:BUG-1097 | ai:codex
     fn rebuild_after_cache_schema_drift(&self) -> Result<()> {
+        let generation = super::redo::cache_generation(self.inner.path())?;
         // trace:BUG-1663 | ai:claude
         let (store, head) = self.load_at_stable_head()?;
-        self.cache.rebuild_from_store_after_schema_drift(&store, &head)
+        self.cache.rebuild_with_redo(&store, &head, &generation, true, None)
             .map_err(|err| {
                 if super::cache::is_cache_read_only_error(&err) || super::cache::is_cache_unwritable_error(&err) {
                     anyhow::anyhow!(
@@ -1114,6 +1121,10 @@ impl CachedGitBackend {
     /// WRONG about the set of rows or a row's own summary content.
     // trace:BUG-636
     fn try_incremental_update(&self, from: &str, to: &str) -> Result<bool> {
+        let generation = super::redo::cache_generation(self.inner.path())?;
+        if self.cache.redo_generation()? != generation {
+            return Ok(false);
+        }
         #[cfg(test)]
         super::cache_refresh::test_count("incremental");
         use crate::git_ops::ObjectChange;
@@ -1190,38 +1201,41 @@ impl CachedGitBackend {
         if super::cache_refresh::INCREMENTAL_ERROR.with(|c| c.get()) {
             anyhow::bail!("injected incremental failure");
         }
-        if self.current_head_sha() != to {
+        if self.current_head_sha() != to
+            || super::redo::cache_generation(self.inner.path())? != generation
+        {
             return Ok(false);
         }
-        self.cache.apply_incremental(to, self.inner.path(), |tx| {
-            for step in &steps {
-                match step {
-                    Step::Upsert(req) => {
-                        tx.upsert_requirement(req)?;
-                        // BUG-626 parity with the write path: a child's status
-                        // / hierarchy change shifts its parent epic's rollup.
-                        // BUG-1606: an ancestor epic the targeted read cannot
-                        // resolve is a cache/store disagreement. Don't guess:
-                        // decline (rolling back every row), and the caller does
-                        // a full rebuild.
-                        // trace:BUG-1606 | ai:claude
-                        if !self.refresh_parent_epic_status_in(tx, req, &epic_statuses) {
-                            return Ok(false);
+        self.cache
+            .apply_incremental(to, self.inner.path(), &generation, |tx| {
+                for step in &steps {
+                    match step {
+                        Step::Upsert(req) => {
+                            tx.upsert_requirement(req)?;
+                            // BUG-626 parity with the write path: a child's status
+                            // / hierarchy change shifts its parent epic's rollup.
+                            // BUG-1606: an ancestor epic the targeted read cannot
+                            // resolve is a cache/store disagreement. Don't guess:
+                            // decline (rolling back every row), and the caller does
+                            // a full rebuild.
+                            // trace:BUG-1606 | ai:claude
+                            if !self.refresh_parent_epic_status_in(tx, req, &epic_statuses) {
+                                return Ok(false);
+                            }
                         }
-                    }
-                    Step::Delete(spec_id) => {
-                        // Resolve the spec_id (from the path) to its uuid via the
-                        // cache and drop the row. Absent already → harmless no-op.
-                        if let Some(uuid) = tx.uuid_for_spec_id(spec_id)? {
-                            tx.delete_requirement(&uuid)?;
+                        Step::Delete(spec_id) => {
+                            // Resolve the spec_id (from the path) to its uuid via the
+                            // cache and drop the row. Absent already → harmless no-op.
+                            if let Some(uuid) = tx.uuid_for_spec_id(spec_id)? {
+                                tx.delete_requirement(&uuid)?;
+                            }
                         }
                     }
                 }
-            }
-            // Every changed row refreshed — `apply_incremental` stamps `to`
-            // and commits it all together.
-            Ok(true)
-        })
+                // Every changed row refreshed — `apply_incremental` stamps `to`
+                // and commits it all together.
+                Ok(true)
+            })
     }
 
     /// [`Self::refresh_parent_epic_status`] inside the incremental refresh
@@ -1375,9 +1389,12 @@ impl CachedGitBackend {
     /// Force a full cache rebuild, regardless of staleness. Used by the
     /// `aida cache rebuild` CLI command.
     pub fn rebuild_cache(&self) -> Result<usize> {
+        let generation = super::redo::cache_generation(self.inner.path())?;
         // trace:BUG-1663 | ai:claude
         let (store, head) = self.load_at_stable_head()?;
-        let n = self.cache.rebuild_from_store(&store, &head)?;
+        let n = self
+            .cache
+            .rebuild_with_redo(&store, &head, &generation, false, None)?;
         Ok(n)
     }
 
@@ -1473,6 +1490,11 @@ impl CachedGitBackend {
     /// a single commit on top of it (our own commit).
     // trace:BUG-1951 | ai:claude
     fn restamp_head(&self, pre_write_head: &str, post_write_head: &str) {
+        // A one-row write cannot acknowledge unseen mediated changes.
+        if !self.redo_generation_matches().unwrap_or(false) {
+            let _ = self.cache.set_source_head_sha("");
+            return;
+        }
         // TASK-1515: while a schema migration is pending, `source_head_sha()`
         // reads `None`, which the freshness match below would take for "just
         // rebuilt" and stamp the post-write HEAD on rows that never ingested
@@ -1831,7 +1853,13 @@ impl DatabaseBackend for CachedGitBackend {
         let head = self.current_head_sha();
         if report.kept_unloaded.is_empty() && report.stale_untouched.is_empty() {
             self.with_cache_schema_retry("rebuild cache after save", || {
-                self.cache.rebuild_from_store(store, &head)
+                self.cache.rebuild_with_redo(
+                    store,
+                    &head,
+                    &super::redo::cache_generation(self.inner.path())?,
+                    false,
+                    None,
+                )
             })?;
         } else {
             self.with_cache_schema_retry("rebuild cache after save", || self.full_rebuild(false))?;
@@ -1871,7 +1899,13 @@ impl DatabaseBackend for CachedGitBackend {
             // transaction loaded and wrote under the lock.
             let head = self.current_head_sha();
             self.with_cache_schema_retry("rebuild cache after atomic update", || {
-                self.cache.rebuild_from_store(&store, &head)
+                self.cache.rebuild_with_redo(
+                    &store,
+                    &head,
+                    &super::redo::cache_generation(self.inner.path())?,
+                    false,
+                    None,
+                )
             })?;
             return Ok(store);
         }
@@ -4321,11 +4355,11 @@ mod tests {
         // Its stale application must not execute, even without a coherent flock.
         assert!(backend
             .cache
-            .apply_incremental(&target, &root, |_| panic!("older refresh applied"))
+            .apply_incremental(&target, &root, "", |_| panic!("older refresh applied"))
             .unwrap());
         assert!(backend
             .cache
-            .apply_incremental(&newer, &root, |_| panic!("duplicate refresh applied"))
+            .apply_incremental(&newer, &root, "", |_| panic!("duplicate refresh applied"))
             .unwrap());
         assert_eq!(
             before,
@@ -6066,7 +6100,7 @@ mod tests {
         let head = backend.current_head_sha();
         backend
             .cache
-            .apply_incremental(&head, &store, |_| {
+            .apply_incremental(&head, &store, "", |_| {
                 assert!(!may_wait());
                 let start = std::time::Instant::now();
                 assert_eq!(

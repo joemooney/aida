@@ -179,6 +179,10 @@ fn unexpected_bytes_quarantine_and_fence_all_writers() {
         })
         .unwrap_err();
         assert!(e.downcast_ref::<OutcomeUnknown>().is_some(), "{e:#}");
+        assert!(e.to_string().contains(&format!("{}.unknown", name(&d))));
+        assert!(e
+            .to_string()
+            .contains("docs/advanced/store-redo-recovery.md"));
     }
     assert_eq!(
         crate::object_store::read_object(&root.join("objects"), "TASK-1")
@@ -435,15 +439,24 @@ fn full_journal_refuses_new_decisions_but_keeps_retry_evidence() {
     })
     .unwrap();
     let dir = root.join(".aida/redo");
-    for n in 1..4096 {
-        fs::write(dir.join(format!("retained-{n}.done")), b"retained evidence").unwrap();
+    for n in 1_u128..4096 {
+        fs::write(
+            dir.join(format!("{}-{}.done", d.epoch, uuid::Uuid::from_u128(n))),
+            b"retained evidence",
+        )
+        .unwrap();
     }
     with_store_write_lock(root, || {
         let mut next = d.clone();
         next.request_id = uuid::Uuid::new_v4();
         assert_eq!(commit(root, next).unwrap_err().to_string(), "Busy");
         assert_eq!(commit(root, d.clone())?, d.result);
-        assert!(dir.join("retained-4095.done").exists());
+        assert!(dir
+            .join(format!("{}-{}.done", d.epoch, uuid::Uuid::from_u128(4095)))
+            .exists());
+        let mut fresh = d.clone();
+        fresh.epoch = uuid::Uuid::new_v4();
+        assert_eq!(commit(root, fresh)?, d.result);
         Ok(())
     })
     .unwrap();
@@ -501,4 +514,172 @@ fn revocation_during_planning_refuses_before_durable_acceptance() {
             .len(),
         0
     );
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (_, mut op) = fixture(root);
+    if let CanonicalOperation::CommentAdd { content, .. } = &mut op {
+        *content = "first line\n\tsecond line".into();
+    }
+    let backend = GitBackend::new(root).unwrap();
+    let result = backend
+        .mutate_canonical(
+            "fixed",
+            uuid::Uuid::new_v4(),
+            uuid::Uuid::new_v4(),
+            "author",
+            &op,
+            || Ok(()),
+        )
+        .unwrap();
+    let mut edit = CanonicalOperation::SpecEdit {
+        spec_id: "TASK-1".into(),
+        expected_revision: result["revision"].as_str().unwrap().into(),
+        fields: super::super::canonical_mutation::EditFields {
+            title: None,
+            description: Some("paragraph one\n\tparagraph two".into()),
+        },
+    };
+    backend
+        .mutate_canonical(
+            "fixed",
+            uuid::Uuid::new_v4(),
+            uuid::Uuid::new_v4(),
+            "author",
+            &edit,
+            || Ok(()),
+        )
+        .unwrap();
+    let row = crate::object_store::read_object(&root.join("objects"), "TASK-1").unwrap();
+    assert_eq!(row.comments[0].content, "first line\n\tsecond line");
+    assert_eq!(row.description, "paragraph one\n\tparagraph two");
+    for c in ['\0', '\r', '\u{7f}', '\u{85}'] {
+        if let CanonicalOperation::CommentAdd { content, .. } = &mut op {
+            *content = format!("bad{c}");
+        }
+        if let CanonicalOperation::SpecEdit { fields, .. } = &mut edit {
+            fields.description = Some(format!("bad{c}"));
+        }
+        assert!(op.validate().is_err());
+        assert!(edit.validate().is_err());
+    }
+}
+
+#[test]
+fn operator_repaired_preconditions_can_requeue_a_quarantined_decision() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (d, _) = fixture(root);
+    let object = crate::object_store::object_path(&root.join("objects"), "TASK-1").unwrap();
+    let original = fs::read(&object).unwrap();
+    fs::write(root.join("decision.json"), serde_json::to_vec(&d).unwrap()).unwrap();
+    assert_eq!(child(root, "journal").code(), Some(72));
+    fs::write(&object, b"unexpected").unwrap();
+    assert!(with_store_write_lock(root, || Ok(())).is_err());
+    // Operator holds the same raw lock, which does not auto-recover, then
+    // restores independently verified before bytes and requeues the decision.
+    {
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(super::super::store_write_lock_path(root))
+            .unwrap();
+        fs2::FileExt::lock_exclusive(&lock).unwrap();
+        replace(&object, &original).unwrap();
+        let dir = root.join(".aida/redo");
+        fs::rename(
+            dir.join(format!("{}.unknown", name(&d))),
+            dir.join(format!("{}.pending", name(&d))),
+        )
+        .unwrap();
+        sync(&dir).unwrap();
+    }
+    with_store_write_lock(root, || {
+        assert_eq!(
+            lookup(root, &d.binding, d.epoch, d.request_id, &d.digest)?,
+            Some(d.result.clone())
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn mediated_install_keeps_real_sha_incremental_refresh_and_write_through_restamp() {
+    use crate::db::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (_, op) = fixture(root);
+    crate::git_ops::configure_user(root, "Fixture", "fixture@example.invalid").unwrap();
+    crate::git_ops::add(root, &["objects"]).unwrap();
+    crate::git_ops::commit(root, "initial objects").unwrap();
+    let cached =
+        crate::CachedGitBackend::with_inner(GitBackend::new(root).unwrap(), &root.join("cache.db"))
+            .unwrap();
+    GitBackend::new(root)
+        .unwrap()
+        .mutate_canonical(
+            "fixed",
+            uuid::Uuid::new_v4(),
+            uuid::Uuid::new_v4(),
+            "author",
+            &op,
+            || Ok(()),
+        )
+        .unwrap();
+    assert!(cached.cache_snapshot_is_stale().unwrap());
+    cached.load().unwrap();
+    assert!(!cached.cache_snapshot_is_stale().unwrap());
+    assert_eq!(
+        cached.cache().source_head_sha().unwrap().unwrap(),
+        crate::git_ops::head_sha(root).unwrap()
+    );
+    // Simulate later publication capturing the installed bytes. The unchanged
+    // redo generation must not turn this HEAD advance into a full rebuild.
+    crate::git_ops::add(root, &["objects"]).unwrap();
+    crate::git_ops::commit(root, "publish installed objects").unwrap();
+    super::super::cache_refresh::test_counts(); // reset thread-local counts
+    cached.load().unwrap();
+    let after = super::super::cache_refresh::test_counts();
+    assert_eq!(after.get("full_rebuild").copied().unwrap_or(0), 0);
+    assert!(after.get("incremental").copied().unwrap_or(0) > 0);
+    let mut row = crate::object_store::read_object(&root.join("objects"), "TASK-1").unwrap();
+    row.title = "ordinary write after mediated install".into();
+    cached.update_requirement(&row).unwrap();
+    assert!(!cached.cache_snapshot_is_stale().unwrap());
+    assert_eq!(
+        cached.cache().source_head_sha().unwrap().unwrap(),
+        crate::git_ops::head_sha(root).unwrap()
+    );
+    super::super::cache_refresh::test_counts();
+    cached.load().unwrap();
+    assert_eq!(
+        super::super::cache_refresh::test_counts()
+            .get("full_rebuild")
+            .copied()
+            .unwrap_or(0),
+        0
+    );
+}
+
+#[test]
+fn unreadable_redo_generation_refuses_freshness_without_inventing_a_git_sha() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    fixture(root);
+    let cached =
+        crate::CachedGitBackend::with_inner(GitBackend::new(root).unwrap(), &root.join("cache.db"))
+            .unwrap();
+    let recorded = cached.cache().source_head_sha().unwrap();
+    let dir = journal(root).unwrap();
+    // A directory is unreadable as a regular generation file, even as root.
+    fs::create_dir(dir.join("cache-dirty")).unwrap();
+    for _ in 0..2 {
+        assert!(cached.cache_snapshot_is_stale().is_err());
+        assert_eq!(cached.cache().source_head_sha().unwrap(), recorded);
+    }
 }

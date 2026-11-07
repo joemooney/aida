@@ -50,8 +50,11 @@ impl CanonicalOperation {
             "InvalidRequest"
         );
         crate::object_store::relative_object_path(sid)?;
-        let text =
-            |s: &str| !s.is_empty() && s.len() <= 16384 && !s.chars().any(|c| c.is_control());
+        let text = |s: &str| {
+            !s.is_empty()
+                && s.len() <= 16384
+                && !s.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
+        };
         match self {
             Self::CommentAdd { content, .. } => anyhow::ensure!(text(content), "InvalidRequest"),
             Self::SpecEdit { fields, .. } => {
@@ -64,7 +67,8 @@ impl CanonicalOperation {
                 }
                 if let Some(t) = &fields.description {
                     anyhow::ensure!(
-                        t.len() <= 16384 && !t.chars().any(|c| c.is_control()),
+                        t.len() <= 16384
+                            && !t.chars().any(|c| c.is_control() && c != '\n' && c != '\t'),
                         "InvalidRequest"
                     );
                 }

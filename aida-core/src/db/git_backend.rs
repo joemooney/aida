@@ -2721,7 +2721,7 @@ impl GitBackend {
                 return Ok(result);
             }
             let (sid, revision) = operation.target();
-            let path = object_store::object_path(&self.objects_root, sid)?;
+            object_store::object_path(&self.objects_root, sid)?;
             let before = redo::object_bytes(&self.root, sid)?;
             anyhow::ensure!(redo::hash(&before) == revision, "Conflict");
             let current: Requirement = serde_yaml::from_slice(&before)?;
