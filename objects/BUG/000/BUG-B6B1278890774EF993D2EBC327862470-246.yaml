@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:15:32.908507337Z
+modified_at: 2026-11-07T07:15:35.423581263Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Batched epic rollup is semantically equivalent to derive_epic_status (terminal skip, shared closure, first-match index) and unit-tested, but the new 7k-row timed regression is never executed by CI, so the performance acceptance is guarded only by implementer self-report.. No triage reason was given.'
   created_at: 2026-11-07T07:15:32.908504814Z
   modified_at: 2026-11-07T07:15:32.908504814Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4dc-daf6-75d3-8308-921d25a68df5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2481):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d2ce529e8dd8
+    Recorded: 2026-11-07T07:11:09.226389708+00:00
+    Findings:
+    1. tests/test_status_cold_cache.py is not wired into .github/workflows/ci.yml (or any Makefile target). The spec's acceptance asks for a timed regression; an unexecuted script does not guard against the O(epics x store) rebuild returning. Add a CI step alongside 'Run single-spec show latency regression' (contracts shard, ci.yml ~L471-474) — e.g. run it against target/debug/aida with a --cold-budget/--warm-budget override sized for debug (the pre-fix debug binary exceeded 50s, so a ~30s debug cold budget still discriminates), keeping the 15s/5s defaults for optimized runs.
+    2. Acceptance bullets 1-2 (cold <15s optimized, warm <5s) are evidenced only by spec comments (cold 6.50s / warm 1.62s, baseline timeout at 15s). Once wired, cite the CI step's printed timings in the PR body so the reviewer can verify from CI evidence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T07:15:35.286722458Z
+  modified_at: 2026-11-07T07:15:35.286722458Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
