@@ -72,8 +72,12 @@ fn story_2593_reduced_sealed_leaf_and_lifetime() {
     }
     host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
     for version in [None, Some("codex-cli 0.166.1"), Some("0.166.0")] {
+        let error = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, version, 3600)
+            .err()
+            .expect("unsupported version admitted");
         assert!(
-            codex_auth::prepare(home.path(), unsafe { libc::getuid() }, version, 3600).is_err()
+            error.to_string().contains("re-probe this codex version"),
+            "{error:#}"
         );
     }
 }
@@ -132,7 +136,7 @@ fn story_2593_credential_identity_schema_and_redaction() {
     assert!(error(home.path()).contains("routing mismatch"));
 }
 
-/// Ordinary failures retain their status until the captured lane deadline.
+/// Ordinary failures retain their status; expiry and OAuth denial name relaunch.
 // trace:STORY-2593 | ai:codex
 #[test]
 fn story_2593_vendor_exit_preserves_status_before_deadline() {
@@ -143,6 +147,11 @@ fn story_2593_vendor_exit_preserves_status_before_deadline() {
         acceptance: None,
         credentials: None,
         chatgpt_deadline: Some(chrono::Utc::now().timestamp() + 3600),
+        oauth_denial: {
+            let file = tempfile::tempfile().unwrap();
+            file.write_at(b"0", 0).unwrap();
+            file
+        },
         mutation: None,
         _state: tempfile::tempdir().unwrap(),
     };
@@ -156,6 +165,15 @@ fn story_2593_vendor_exit_preserves_status_before_deadline() {
         assert_eq!(run.vendor_exit(status).unwrap(), status);
     }
     assert_eq!(run.vendor_exit(success).unwrap(), success);
+    run.oauth_denial.write_at(b"1", 0).unwrap();
+    for status in statuses {
+        assert_eq!(
+            run.vendor_exit(status).unwrap_err().to_string(),
+            codex_auth::RELAUNCH
+        );
+    }
+    assert_eq!(run.vendor_exit(success).unwrap(), success);
+    run.oauth_denial.write_at(b"0", 0).unwrap();
     run.chatgpt_deadline = Some(chrono::Utc::now().timestamp());
     for status in statuses {
         assert_eq!(
@@ -200,6 +218,7 @@ s=socket.socket();s.settimeout(3);s.connect(('127.0.0.1',int(os.environ['HTTP_PR
 s.sendall(b'CONNECT auth.openai.com:443 HTTP/1.1\r\nHost: auth.openai.com:443\r\n\r\n')
 assert b'200' not in s.recv(4096)
 print('credential and refresh sentinels passed')
+raise SystemExit(1)
 "#,
         host = host.path().to_str().unwrap()
     );
@@ -222,6 +241,7 @@ print('credential and refresh sentinels passed')
     let args: Vec<_> = plan.command.get_args().collect();
     let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
     cfg["allowed"] = serde_json::json!(allowed);
+    cfg["chatgpt_deadline"] = deadline.into();
     cfg["bwrap"] = serde_json::json!(plan.profile.args(plan._state.path()));
     let env = plan
         .command
@@ -252,7 +272,12 @@ print('credential and refresh sentinels passed')
         }
     };
     run.release().unwrap();
-    assert!(run.child.wait().unwrap().success());
+    let failed = run.child.wait().unwrap();
+    assert_eq!(failed.code(), Some(1));
+    assert_eq!(
+        run.vendor_exit(failed).unwrap_err().to_string(),
+        codex_auth::RELAUNCH
+    );
     use std::io::{Seek, SeekFrom};
     output.seek(SeekFrom::Start(0)).unwrap();
     let mut text = String::new();
@@ -264,9 +289,11 @@ print('credential and refresh sentinels passed')
         before,
         std::fs::read(host.path().join("auth.json")).unwrap()
     );
-    let failed = Command::new("/bin/false").status().unwrap();
     assert_eq!(run.chatgpt_deadline, Some(deadline));
-    assert_eq!(run.vendor_exit(failed).unwrap(), failed);
+    assert_eq!(
+        run.vendor_exit(failed).unwrap_err().to_string(),
+        codex_auth::RELAUNCH
+    );
     run.chatgpt_deadline = Some(chrono::Utc::now().timestamp() - 1);
     assert_eq!(
         run.vendor_exit(failed).unwrap_err().to_string(),
@@ -301,6 +328,21 @@ except RuntimeError as error:
 request=json.dumps(request).encode()
 proxy_request(request,[a.detach()],{{(h,443) for h in {allowed:?}}},None)
 assert b.recv(100)==b'denied-v1'
+# All excluded OAuth hosts record denial before replying; other refusals and
+# launches without the ChatGPT channel do not produce refresh evidence.
+fd=os.memfd_create('oauth-denial-test',os.MFD_CLOEXEC)
+for host,expected in [('auth.openai.com',b'1'),('auth0.openai.com',b'1'),
+                      ('openai.auth0.com',b'1'),('auth.chatgpt.com',b'1'),
+                      ('other.example',b'0')]:
+    os.pwrite(fd,b'0',0)
+    request=dict(version=1,method='CONNECT',host=host,port=443,
+                 host_header=host+':443',protocol='tcp')
+    a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+    proxy_request(json.dumps(request).encode(),[a.detach()],set(),None,fd)
+    assert b.recv(100)==b'denied-v1'
+    assert os.pread(fd,1,0)==expected
+    b.close()
+os.close(fd)
 "#
     );
     assert!(Command::new("/usr/bin/python3")

@@ -1272,6 +1272,7 @@ fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
         acceptance: None,
         credentials,
         chatgpt_deadline: None,
+        oauth_denial: tempfile::tempfile().unwrap(),
         mutation: None,
         _state: tempfile::tempdir().unwrap(),
     };

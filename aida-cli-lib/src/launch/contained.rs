@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -733,6 +733,8 @@ pub(crate) struct PreparedLaunch {
     credentials: Option<i64>,
     /// Absolute ChatGPT lane deadline in Unix seconds, shared with the supervisor.
     chatgpt_deadline: Option<i64>,
+    /// Unlinked host-only evidence; never mounted or passed to the lane.
+    oauth_denial: File,
     outer_only: Option<&'static str>,
     mutation: Option<store_mutation::Session>,
 }
@@ -1378,13 +1380,19 @@ impl PreparedLaunch {
         profile: WriteProfile,
         state: tempfile::TempDir,
         sha: String,
-        cfg: serde_json::Value,
+        mut cfg: serde_json::Value,
         mut env: BTreeMap<String, String>,
         root: &Path,
     ) -> Result<Self> {
         // bwrap --chdir sets PWD. Admit that exact name/value at the outer
         // boundary too, so helper, bwrap and shim have identical environments.
         env.insert("PWD".into(), root.to_string_lossy().into_owned());
+        // trace:STORY-2593 | ai:codex
+        let oauth_denial = tempfile::tempfile()?;
+        oauth_denial.write_at(b"0", 0)?;
+        if cfg.get("chatgpt_deadline").is_some() {
+            cfg["oauth_denial_fd"] = oauth_denial.as_raw_fd().into();
+        }
         let (reader, writer) = pipe()?;
         let (accept_reader, accept_writer) = pipe()?;
         let source = format!(
@@ -1406,6 +1414,7 @@ impl PreparedLaunch {
             accept_writer,
             credentials: None,
             chatgpt_deadline: None,
+            oauth_denial,
             outer_only: None,
             mutation: None,
         })
@@ -1417,7 +1426,11 @@ impl PreparedLaunch {
             .iter()
             .map(|m| m.file.as_raw_fd())
             .collect();
-        fds.extend([self.writer.as_raw_fd(), self.accept_reader.as_raw_fd()]);
+        fds.extend([
+            self.writer.as_raw_fd(),
+            self.accept_reader.as_raw_fd(),
+            self.oauth_denial.as_raw_fd(),
+        ]);
         if let Some(service) = &self.mutation {
             fds.push(service.fd());
         }
@@ -1452,6 +1465,7 @@ impl PreparedLaunch {
             receipt: None,
             credentials: self.credentials,
             chatgpt_deadline: self.chatgpt_deadline,
+            oauth_denial: self.oauth_denial,
             mutation: self.mutation,
             _state: self._state,
         };
@@ -1532,12 +1546,14 @@ pub(crate) struct ContainedChild {
     credentials: Option<i64>,
     /// Absolute ChatGPT lane deadline in Unix seconds, shared with the supervisor.
     chatgpt_deadline: Option<i64>,
+    /// Unlinked host-only evidence; never mounted or passed to the lane.
+    oauth_denial: File,
     mutation: Option<store_mutation::Session>,
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
-    /// Preserve vendor exits unless a failed lane has reached its captured
-    /// credential deadline. Expiry is a named refusal, never a writable retry.
+    /// Preserve vendor exits unless a failed ChatGPT lane expired or the host
+    /// denied an OAuth CONNECT. Neither refusal permits a writable retry.
     // trace:TASK-2708 | ai:claude
     // trace:STORY-2593 | ai:codex
     pub(crate) fn vendor_exit(
@@ -1546,7 +1562,12 @@ impl ContainedChild {
     ) -> Result<std::process::ExitStatus> {
         if let Some(deadline) = self.chatgpt_deadline {
             let expired = chrono::Utc::now().timestamp() >= deadline;
-            anyhow::ensure!(status.success() || !expired, codex_auth::RELAUNCH);
+            let mut denied = [0];
+            self.oauth_denial.read_exact_at(&mut denied, 0)?;
+            anyhow::ensure!(
+                status.success() || !(expired || denied == *b"1"),
+                codex_auth::RELAUNCH
+            );
         }
         if let Some(credentials) = &self.credentials {
             let expired = *credentials <= chrono::Utc::now().timestamp_millis();

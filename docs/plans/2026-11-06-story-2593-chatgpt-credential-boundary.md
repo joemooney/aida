@@ -42,8 +42,10 @@ The CONNECT broker cannot distinguish HTTPS paths, so this slice removes
 It retains allowed inference hosts without expanding policy. The host
 supervisor checks an absolute, non-renewing credential deadline before exec
 and throughout execution. An unsuccessful ChatGPT vendor exit at or after that
-deadline returns the host reauthentication/relaunch diagnostic; earlier failures
-preserve the vendor exit status. It never retries with host auth.
+deadline, or following a host-denied OAuth CONNECT, returns the host
+reauthentication/relaunch diagnostic. The host records that denial through an
+unlinked descriptor that is never passed or mounted into the lane. Other
+failures preserve the vendor exit status. It never retries with host auth.
 
 Synthetic regressions cover reduced-leaf contents and sealing, unchanged host
 credentials, version refusals, expiry/margin/overflow, malformed and oversized

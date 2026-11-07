@@ -541,7 +541,7 @@ def _hung_up(fd):
     return any(ev & (select.POLLHUP | select.POLLERR) for _, ev in p.poll(0))
 
 
-def proxy_request(data, fds, allowed, fixture):
+def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None):
     """Validate one typed CONNECT, pin a checked public address, connect on
     the host and hand the connected socket back over the per-request pair."""
     reply_fd = fds[0] if len(fds) == 1 else None
@@ -571,7 +571,15 @@ def proxy_request(data, fds, allowed, fixture):
             # Bounded metadata only: host, port, decision. Never payloads.
             print('aida-containment: proxy allowed %s:%d' % (request['host'], request['port']),
                   file=sys.stderr, flush=True)
-        except (RuntimeError, ValueError, TypeError, KeyError, OSError):
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError) as error:
+            # Host-only evidence, written before the denial reaches the lane.
+            # The descriptor is never passed to bwrap or mounted in lane state.
+            # trace:STORY-2593 | ai:codex
+            if (oauth_denial_fd is not None and str(error) == 'proxy destination refused'
+                    and host_name(request['host']) in (
+                        'auth.openai.com', 'auth0.openai.com',
+                        'openai.auth0.com', 'auth.chatgpt.com')):
+                os.pwrite(oauth_denial_fd, b'1', 0)
             try:
                 reply.send(b'denied-v1')
             except OSError:
@@ -597,6 +605,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         require(not cfg.get('chatgpt_deadline') or time.time() < cfg['chatgpt_deadline'],
                 'contained ChatGPT credentials expired; reauthenticate on the host, then relaunch')
     credential_deadline()
+    oauth_denial_fd = cfg.get('oauth_denial_fd')
     port = cfg['port']
     allowed = {(h, 443) for h in cfg['allowed']}
     fixture = tuple(cfg['fixture']) if cfg.get('fixture') else None
@@ -704,7 +713,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd),
                                  daemon=True).start()
             if broker in ready:
                 data, ancillary, flags, _ = broker.recvmsg(32, socket.CMSG_SPACE(12))
@@ -763,7 +772,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 if not data:
                     watch.remove(proxy)
                     continue
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd),
                                  daemon=True).start()
         rc = process.wait()
         return rc if rc >= 0 else 128 - rc

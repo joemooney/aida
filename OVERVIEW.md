@@ -1587,10 +1587,11 @@ at most one hour.
 Unsupported versions, malformed or insufficient validity and keyring logins
 refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
 there is no renewal. The host supervisor enforces the absolute deadline and
-failed ChatGPT exits at or after that deadline request host reauthentication
-and relaunch; earlier failures preserve the vendor exit status. Readable bearer
-exposure remains an accepted risk. These changes have no live ChatGPT C0-C4
-pass credit until the advisor runs that evidence; see the
+failed ChatGPT exits at or after that deadline, or after a host-denied OAuth
+CONNECT, request host reauthentication and relaunch. Other failures preserve
+the vendor exit status. Readable bearer exposure remains an accepted risk.
+These changes have no live ChatGPT C0-C4 pass credit until the advisor runs
+that evidence; see the
 [credential boundary plan](docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md).
 The launcher writes no secret credential files and forwards neither registry nor
 handle launch tokens. Tool shells cannot bind their own registry/handle records.
