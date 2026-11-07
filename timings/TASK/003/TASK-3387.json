@@ -5,6 +5,10 @@
     {
       "at": "2026-11-07T17:32:59.567719255Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-07T17:33:06.061589982Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -19,6 +23,16 @@
     },
     {
       "ts": "2026-11-07T17:32:59.322749666Z",
+      "spec": "TASK-3387",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3301d1324605d2fca53faed8d542286499699093",
+        "pr": 3606,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-07T17:33:05.691861525Z",
       "spec": "TASK-3387",
       "kind": {
         "event": "SpecCompleted",
