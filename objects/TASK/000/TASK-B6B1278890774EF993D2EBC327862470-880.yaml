@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T10:02:45.711568616Z
+modified_at: 2026-11-07T10:06:40.285961695Z
 req_type: Task
 tags:
 - architecture
@@ -350,6 +350,14 @@ comments:
   modified_at: 2026-11-07T10:01:46.024719334Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b579-7c9d-77a3-a958-d798e7404545
+  author: joe
+  content: |-
+    Round 6 code fixes: request_status and redo lookup are read-only; status does not take the store writer lock, initialize .aida/redo, or alter corrupt evidence. Local accepted read-only IDs take precedence over host status. Journal Git exclusion is installed only during initialization. Marker write/fsync/rename restart coverage accepts no request and recovery removes abandoned staging. Canonical object staging now lives under the excluded journal; recovery also cleans legacy objects/**/ID.tmp-UUID files under the lock. Removed the TASK-3223 per-change AGENTS.md paragraph. Validation in progress.
+    Host PR body update required for #3584: live comment_add/spec_edit remain disabled in both broker and host until durable Git/event publication. Raw-write denial and the lane-private cache are the next PR. own_claim and queue_done remain UnsupportedOperation (TASK-3326). Native seat leaves all edits uncommitted for host publication with Refs TASK-3223; no PR metadata or merge-hold mutation from this seat.
+  created_at: 2026-11-07T10:06:40.285961695Z
+  modified_at: 2026-11-07T10:06:40.285961695Z
+  session_id: 01a1b575d3f5
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
