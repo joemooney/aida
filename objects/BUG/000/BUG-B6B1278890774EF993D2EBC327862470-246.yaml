@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:04:05.555059844Z
+modified_at: 2026-11-07T07:05:21.495707231Z
 req_type: Bug
 comments:
 - id: 01a1b4d2-54b3-71f0-8427-23c8cfa7f940
@@ -16,6 +16,12 @@ comments:
   content: 'Implemented cold-cache epic rollup batching: build hierarchy adjacency and UUID index once per full rebuild instead of rebuilding/scanning the whole store per epic/descendant. The graph computation runs before the cache insert transaction, explaining the empty cache during the slow path. Shared status/defer tally policy retained. Validation: optimized agent-profile CLI build passed; generated exactly-7000-row full-status regression (200 nested epics, ~3.8KB description per row) passed cold 7.68s (<15s), warm 1.75s (<5s), with all 7000 persisted rows and expected epic statuses. Existing optimized binary exceeded the cold 15s watchdog on the nested fixture. 22 graph tests and 109 cache tests passed; cargo fmt and git diff --check passed; ExecContext guard zero new sites. Changes left uncommitted in the native implementer seat for host publication. No queue completion or publication performed.'
   created_at: 2026-11-07T07:04:05.555059844Z
   modified_at: 2026-11-07T07:04:05.555059844Z
+  session_id: 01a1b4c79430
+- id: 01a1b4d3-7d57-7fa1-bd4a-d43605018e9f
+  author: joe
+  content: 'Final regression fixture strengthened to exactly 7000 rows with 1000 nested epics (replaces the earlier 200-epic fixture detail). On the finished optimized agent-profile build: cold full status 6.50s, warm 1.62s; all 7000 cached rows verified, with one Completed leaf epic and 999 InProgress ancestors as required by stored-child rollup policy. Under the same final fixture, the existing optimized baseline binary times out at 15s. The smaller 200-epic baseline could pass at 11.56s once build load cleared, so it was strengthened to make the regression discriminating. Final formatting/whitespace checks pass. No blockers; native edits remain uncommitted for host publication.'
+  created_at: 2026-11-07T07:05:21.495707231Z
+  modified_at: 2026-11-07T07:05:21.495707231Z
   session_id: 01a1b4c79430
 history:
 - id: 01a1b4c2-b43b-7d73-b618-1f11ca67da92
