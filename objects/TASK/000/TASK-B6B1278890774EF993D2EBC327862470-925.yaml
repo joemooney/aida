@@ -1,0 +1,29 @@
+id: 01a1b49d-f550-7010-9e23-6ccdd6eeb71f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-925
+title: 'non-blocking (cosmetic): tests/test_store_mutation.py:51 starts the helper with…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2480, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): tests/test_store_mutation.py:51 starts the helper with 'python -m tests.test_store_mutation', which only resolves when cwd is the repo root (as in CI). Passing cwd=ROOT to subprocess.run would make the test independent of the caller's cwd.
+
+  PR: #3573
+  Reviewed sha: d5808f68133664a852c1c876b82234aa092a5151
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T06:06:53.264721173Z
+modified_at: 2026-11-07T06:06:53.264721173Z
+req_type: Task
+tags:
+- carried-from:BUG-2480
+- finding-hash:d4816620
+- from-review:PR-3573
+- kind:carried-forward
+filed_at:
+  code_sha: b11ebbd4c258f311cd7647a28eb7b389a532b274
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 36fc675baec
+  vendor: claude
