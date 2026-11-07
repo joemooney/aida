@@ -884,3 +884,25 @@ fn bug_1635_history_formats_agree_on_event_count() {
     assert!(toon.starts_with("view: history-progression"), "{toon}");
     assert!(toon.contains("status_change"), "{toon}");
 }
+
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s3_migration_global_json_matches_dedicated_json() {
+    let (_tmp, repo, home, _spec) = fixture();
+    let dedicated = json(
+        &aida(&repo, &home, &["db", "migrate-defer-conditions", "--json"]),
+        "migration --json",
+    );
+    let global = json(
+        &aida(
+            &repo,
+            &home,
+            &["db", "migrate-defer-conditions", "--format", "json"],
+        ),
+        "migration --format json",
+    );
+    assert_eq!(global, dedicated);
+    assert_eq!(global["dry_run"], true);
+    assert_eq!(global["specs_written"], 0);
+    assert!(global["specs"].is_array());
+}
