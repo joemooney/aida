@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T21:18:58.994244267Z
+modified_at: 2026-11-07T21:57:32.579214763Z
 req_type: Story
 comments:
 - id: 01a1b7a6-d350-7e21-b918-65fab0b15f35
@@ -110,6 +110,22 @@ comments:
   modified_at: 2026-11-07T21:14:27.093137654Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ff-4fcc-7893-a06e-ff4bc75a464c
+  author: joe
+  content: |
+    Round 2 implementation is in the native seat, deliberately uncommitted for host publication. Addressed the six review findings: scope-bound reservations settle abandoned/held/punted/no-PR exits; gate infrastructure and annotation failures report skipped markers without bypassing normal lane reporting/cleanup; the imported-head fence is explicit to automatic publication, preserving operator from-seat recovery; trace-tagged regressions cover all five ACs, actual timeout-to-repair mapping, all three real launch exit paths, result-line markers and the exact-tip import/publication path; native missing-bwrap exits settle without publication because native Git itself requires its sandbox; lane-job diagnostics identify the requested program. No unsandboxed gate fallback was added. OVERVIEW explains the lifecycle and native no-sandbox limitation.
+    Validation so far: targeted rustfmt --check and git diff --check pass; aida criteria reports all 5 criteria traced. The first correct-package cargo test job reached its 900-second compile timeout without executing tests. Final-source job j20261107T213509748-2-0 runs cargo test --profile agent -p aida-cli-lib --lib -- fast_gate with a 1800-second budget and is still compiling. No executed-test result yet: untested=true at this checkpoint. No seat commit, push, PR lifecycle or merge-hold clearance performed.
+  created_at: 2026-11-07T21:52:05.068702791Z
+  modified_at: 2026-11-07T21:52:05.068702791Z
+  session_id: 01a1b7de217f
+- id: 01a1b804-4f23-74f1-bd62-16ed102b42f7
+  author: joe
+  content: |
+    Round 2 final validation: host lane job j20261107T213509748-2-0 finished exit 0 on the final source. Command: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate (AIDA_CARGO_TIMEOUT=1800). Result: 20 passed, 0 failed, 0 ignored; tests executed in 1.18s after a 21m46s cold CLI test build. Includes all three actual launch exit paths, manual from-seat recovery with a receipt, exact checked-tip automatic import/publication, real timeout result mapped into one repair, result-line markers, annotation flakes, held/no-PR receipt settlement and native no-sandbox settlement. untested=false. Final targeted rustfmt --check and git diff --check pass. aida criteria reports all 5 acceptance criteria traced.
+    Eight files remain deliberately uncommitted for the native host launcher: OVERVIEW.md; aida-cli-lib/src/{lane_fast_gate.rs,lane_job.rs,queue_cmd.rs,session.rs,ship_from_seat.rs,standalone_implementer.rs,tests/bug_home_038_seat_publish_tests.rs}. No seat commit, push, PR lifecycle command, queue completion or review record was performed. Existing supervised merge-hold clearance remains outside this code fix. Suggested host subject: [AI:codex] fix(fast-gate): settle lane exits and preserve publication recovery (STORY-2640).
+  created_at: 2026-11-07T21:57:32.579214763Z
+  modified_at: 2026-11-07T21:57:32.579214763Z
+  session_id: 01a1b7de217f
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
