@@ -17,12 +17,12 @@ description: |-
   5. TASK-3223 implementation acceptance is unmet, which is expected for a sketch. Verified at head: service.py:11 MUTATION_VERBS is still ('session_probe','request_status'); contained_boundary.rs:136 contained_store_write_paths still grants store/cache; there is no lane-private cache, no gated mediated profile, and no stale-base / concurrent-mutation / persist-before-reply tests. TASK-3223 must stay open, and this PR may land only as Refs-only.
   6. CI 'contracts' and 'gates' jobs were still pending at 621c83395e48 when this review ran. Confirm they are green before any eventual merge.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T06:48:45.618710587Z
-modified_at: 2026-11-07T13:54:43.029304209Z
+modified_at: 2026-11-07T13:54:46.563295161Z
 req_type: Task
 tags:
 - from-advisor:TASK-3223
@@ -44,6 +44,15 @@ history:
   author: joe
   timestamp: 2026-11-07T07:20:44.286211443Z
   changes: []
+- id: 01a1b64a-52a3-7190-8e01-d4815341c0f3
+  author: joe
+  timestamp: 2026-11-07T13:54:46.563290374Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
   branch: main
