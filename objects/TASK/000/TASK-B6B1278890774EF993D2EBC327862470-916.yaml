@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T02:13:19.656979457Z
-modified_at: 2026-11-07T05:53:09.092641801Z
+modified_at: 2026-11-07T05:53:24.002609006Z
 req_type: Task
 tags:
 - carried-from:BUG-2474
@@ -46,6 +46,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Read-time 5-minute ceiling defers rather than fixes the clock-skew supersession; phase-3/drive now pick a displaced retained approval over a newer top-level refusal by timestamp, and pr_has_approved_verdict disagrees with them. CI code jobs green; merge-hold-gate red is the human gate, not code.. No triage reason was given.'
   created_at: 2026-11-07T05:53:09.092640429Z
   modified_at: 2026-11-07T05:53:09.092640429Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b491-70b7-7390-a9e5-d1371e83ee30
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2964):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 888d0611abb1
+    Recorded: 2026-11-07T05:51:23.747814948+00:00
+    Findings:
+    1. major: review_verdict.rs:784,838-840 — the future-stamp bound is evaluated against the READER's clock, so it only postpones the problem. A recording stamped T (ahead of real time) counts as undated only while now+5m < T. Once the clock passes T it becomes the newest dated record and supersedes a refusal made later in real time by an accurate-clock node: the resolution flips from conflict to approved with no new review. Skew under 5 minutes is never caught. The test uses now+365d only and never checks what happens after the stamp elapses. The advisor's preferred fix was append order: inside an artifact, the top-level recording is later than its rounds, and rounds are in array order. Use that order, and treat timestamp-only cross-artifact ordering as unresolved when it contradicts append order, or bound stamps at write/ingest time rather than read time.
+    2. major: phase_gates.rs:800-861 + review_verdict_tests.rs task2964 cases 3/4 — outcome_of_verdict_body now drops the old undated conflict check and returns whatever reconciliation selects. So inside one PR-N.json, a retained round with a later recorded_at beats the top-level recording, even though the writer's displacement proves the top-level is the later act. Example: node A (clock +3m) approves at 12:00 (stamped 12:03); node B refuses at 12:01, displacing A into rounds. Phase-3/drive/read_verdict_file_for_head_since now read Approved; before this PR they refused this as a conflict. That reintroduces TASK-2964's own failure on surfaces that used to be safe, and tests 3/4 lock it in. Drop timestamp-over-append-order within an artifact (or keep it a conflict), and add a regression for this skewed-displacement case.
+    3. minor: human.rs:27-47 — pr_has_approved_verdict disagrees with phase-3/drive whenever reconciliation picks a retained approval over a top-level refusal (task2964 case 4). outcome_of_verdict_body returns Approved, but independent_approval_authorized gets the top-level refusal's RecordedVerdict, whose kind does not approve, so it returns false. Authority is checked against the top-level recording, not the selected one. The test asserts pr_has_approved_verdict only in the future-stamp error cases, so the ruling's 'legitimate later approval reads as approved on every surface' is unverified for this surface. Either make the selection agree with append order (see the previous finding) or check authority on the selected recording, and assert pr_has_approved_verdict in the agreement matrix.
+    4. minor: phase_gates.rs:849-861 — mapping the selected outcome loses the Rejected/RequestChanges difference. reconcile_artifacts_for_sha folds every blocker into RequestChanges, and the code re-derives 'rejected' only from the top-level raw word. Result: a newer retained 'rejected' under an older top-level approval reads as request-changes (the terminal rejection is lost), and a top-level 'rejected' superseded by a newer retained 'request-changes' stays Rejected. The VerdictKind::Rejected arm cannot be reached. Have reconcile return the selected kind (or the selected recording) instead of re-deriving it from the top-level word.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T05:53:12.887610793Z
+  modified_at: 2026-11-07T05:53:12.887610793Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
