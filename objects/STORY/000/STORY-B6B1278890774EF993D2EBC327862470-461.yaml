@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T02:30:49.381392882Z
+modified_at: 2026-11-07T02:30:55.379247363Z
 req_type: Story
 tags:
 - architecture
@@ -331,6 +331,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits), but the advisor''s main merge b49e7a4 left the exact-site ledger stale: check-exec-context.py --base origin/main reports 6 new sites and 1 retired site, so the PR''s own ExecContext ratchet step in CI (gates) will fail at this head; gates/lib-0/lib-1 still pending.. No triage reason was given.'
   created_at: 2026-11-07T02:30:49.381390130Z
   modified_at: 2026-11-07T02:30:49.381390130Z
+- id: 01a1b3d8-3c14-7513-9406-4bbf8799d57a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b49e7a4ab700
+    Recorded: 2026-11-07T02:29:34.090207082+00:00
+    Findings:
+    1. BLOCKING: ledger stale at head b49e7a4. Running 'python3 scripts/check-exec-context.py --base origin/main' at b49e7a4 prints 'new sites (forbidden)' for 6 sites inherited from main via merge b49e7a4 (STORY-2326 PR-C #3531 and related): aida-cli-lib/src/gate/seat_authority.rs:current_grant_selector:var_os; aida-cli-lib/src/launch/control.rs:story_2326_control_child_survives_running_image_replacement:var_os; aida-cli-lib/src/seat_occupancy/tests.rs:story_2326_control_child_argv0_preserves_loop_anchor:var_os; aida-tui/src/redesign/mod.rs:apply_control_env:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_argv0_is_aida:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_forwards_selector_without_fabricating_role:var_os. It also reports 1 retired site to prune: aida-cli-lib/src/queue_cmd.rs:handle_queue_work:set_var. The ledger (ceiling 1231) is byte-identical between 8256c88 and b49e7a4, so the merge was pushed without the binding post-merge regeneration step. Fix (no code change): run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' at the current head (after merging any newer origin/main), commit only scripts/exec-context-legacy.json (expect ceiling 1236), and push.
+    2. BLOCKING (carried over): no green CI at the exact head. Run 42328374537 at b49e7a4 has cli-0, cli-1, contracts and rest passing, but gates, lib-0 and lib-1 are still pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates 'ExecContext environment ratchet' step and the lib shards that run the exec_context and launch_policy unit tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:30:55.252528643Z
+  modified_at: 2026-11-07T02:30:55.252528643Z
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
