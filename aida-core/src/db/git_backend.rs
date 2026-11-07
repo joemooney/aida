@@ -2692,6 +2692,117 @@ impl GitBackend {
         )?))
     }
 
+    /// Plan canonical postimages without side effects, then durably decide and
+    /// install them. Caller authorization runs inside the bounded writer lock.
+    /// Only title/description edits are admitted in this slice; lifecycle and
+    /// multi-root commands require their own policy-preserving typed handlers.
+    // trace:TASK-3223 | ai:codex
+    pub fn mutate_canonical(
+        &self,
+        binding: &str,
+        epoch: uuid::Uuid,
+        request_id: uuid::Uuid,
+        author: &str,
+        operation: &super::canonical_mutation::CanonicalOperation,
+        mut authorize: impl FnMut() -> Result<()>,
+    ) -> Result<serde_json::Value> {
+        use super::{canonical_mutation::CanonicalOperation, redo};
+        operation
+            .validate()
+            .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
+        super::with_store_write_lock_bounded(&self.root, || {
+            // Recovery of an accepted decision precedes authorization of a new
+            // request. Revocation cannot cancel an already durable decision.
+            authorize()?;
+            #[cfg(unix)]
+            crate::transport_policy::refuse_unsupported(&self.root)?;
+            let digest = redo::hash(&serde_json::to_vec(operation)?);
+            if let Some(result) = redo::lookup(&self.root, binding, epoch, request_id, &digest)? {
+                return Ok(result);
+            }
+            let (sid, revision) = operation.target();
+            object_store::object_path(&self.objects_root, sid)?;
+            let before = redo::object_bytes(&self.root, sid)?;
+            anyhow::ensure!(redo::hash(&before) == revision, "Conflict");
+            let current: Requirement = serde_yaml::from_slice(&before)?;
+            anyhow::ensure!(current.spec_id.as_deref() == Some(sid), "Conflict");
+            let mut next = current.clone();
+            let context = crate::provenance::WriteContext {
+                session_id: Some(epoch.to_string()),
+                harness_version: None,
+            };
+            let mut comment_id = None;
+            match operation {
+                CanonicalOperation::CommentAdd { content, .. } => {
+                    let mut c = crate::models::Comment::new(author.into(), content.clone());
+                    c.session_id = context.session_id.clone();
+                    comment_id = Some(c.id);
+                    next.add_comment(c);
+                }
+                CanonicalOperation::SpecEdit { fields, .. } => {
+                    let mut changes = Vec::new();
+                    if let Some(title) = &fields.title {
+                        changes.push(crate::models::FieldChange {
+                            field_name: "title".into(),
+                            old_value: current.title.clone(),
+                            new_value: title.clone(),
+                        });
+                        next.title = title.clone();
+                    }
+                    if let Some(description) = &fields.description {
+                        changes.push(crate::models::FieldChange {
+                            field_name: "description".into(),
+                            old_value: current.description.clone(),
+                            new_value: description.clone(),
+                        });
+                        next.description = description.clone();
+                    }
+                    next.record_change(author.into(), changes);
+                }
+            }
+            let mut planned = vec![next];
+            self.prepare_hypothesis_updates(&mut planned, &[])?;
+            let mut images = Vec::new();
+            let mut target_revision = String::new();
+            for row in planned {
+                let sid = row
+                    .spec_id
+                    .as_deref()
+                    .context("missing canonical identity")?;
+                let bytes = redo::object_bytes(&self.root, sid)?;
+                let old: Requirement = serde_yaml::from_slice(&bytes)?;
+                let (stamped, _, _) =
+                    crate::provenance::with_write_actor(author, context.clone(), || {
+                        Self::prepare_requirement_update(&row, Some(&old), &context)
+                    })?;
+                let after = serde_yaml::to_string(&stamped)?;
+                if row.id == current.id {
+                    target_revision = redo::hash(after.as_bytes());
+                }
+                images.push(redo::Image {
+                    spec_id: sid.into(),
+                    before: redo::hash(&bytes),
+                    after,
+                });
+            }
+            // Planning can scan the hypothesis graph; recheck the live grant
+            // immediately before the durable acceptance decision.
+            authorize()?;
+            redo::commit(
+                &self.root,
+                redo::Decision {
+                    version: 1,
+                    binding: binding.into(),
+                    epoch,
+                    request_id,
+                    digest,
+                    images,
+                    result: serde_json::json!({"spec_id":current.spec_id,"revision":target_revision,"comment_id":comment_id}),
+                },
+            )
+        })
+    }
+
     /// Compare-and-swap check: the object at `path` must still hold `before`.
     // trace:BUG-1612 | ai:claude
     fn ensure_object_unchanged(&self, spec_id: &str, path: &Path, before: &[u8]) -> Result<()> {
