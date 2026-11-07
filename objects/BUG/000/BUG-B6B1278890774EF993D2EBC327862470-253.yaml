@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-07T20:41:56.418942199Z
+modified_at: 2026-11-07T20:42:03.729440604Z
 req_type: Bug
 comments:
 - id: 01a1b7af-5b2f-7c41-b302-d8aeec3784ae
@@ -35,6 +35,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests exist and the run_from no-change guard is sound, but moving the hold signal into the seat for every standalone lane breaks the main-root hold marker that held --resume and PR-open cleanup read; CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T20:41:56.418940641Z
   modified_at: 2026-11-07T20:41:56.418940641Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7bf-3386-74b0-9296-a7f480ef5692
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b3387d9fa806
+    Recorded: 2026-11-07T20:38:53.350877878+00:00
+    Findings:
+    1. MAJOR regression (standalone_implementer.rs:649-673, provision_signals): AIDA_HOLD_SIGNAL_FILE now points at <seat>/.aida/pr-holds/<spec>.json for EVERY standalone lane (every vendor, not only native Codex), and nothing mirrors it to the main root. The persisted hold marker is read at the main root by 'aida queue work <spec> --resume' (queue_cmd.rs:12208 -> held_resume_reentry_allowed needs hold_marker_present) and cleared at the main root on PR open (pr_cmd.rs:8471). A lane that runs 'aida pr hold' can no longer be resumed as held, and the marker disappears when the seat is removed. Fix: after the child exits, have the host copy the seat's punt and hold signals to crate::punt::{signal,hold}_signal_path(&main_root, spec), or move the signals only for native contained Codex and mirror them. Add a test for held --resume after a standalone hold.
+    2. Advisor signal lost (ship_from_seat.rs:534-538): the notify closure in publish_queue_exit returns early whenever the seat has no commits beyond its base, even when clean_exit=false. The drain and resume exit paths never classify the run as NoChange, so a failed lane that produced nothing now only writes a line to stderr instead of sending 'Queue-work lane exited without changes'. Keep advisor_request when !clean_exit; skip it only for a clean exit with no change.
+    3. Untested no-change classification (standalone_implementer.rs:858-864, acceptance criterion acf66e50): the test builds Outcome::NoChange by hand and calls report() on it. Nothing exercises the path where a contained Codex lane with a successful exit and no commits beyond its base is reclassified from NoPr to NoChange. Add a test of that mapping, e.g. by factoring it into a helper.
+    4. Weak suppression check (bug_home_038_seat_publish_tests.rs, acceptance criterion acc03424): the test treats publish_queue_exit(...) returning Ok as proof that publication was suppressed. Nothing records bundle, push or forge calls, so a veto that silently did nothing could still pass. Call publish_queue_exit_with or run_from with a bundle that panics or a recording forge while the seat punt is present, as the no-change half of the test already does.
+    5. Duplicate lease lookup (seat_clone.rs:1507-1536, has_commits_beyond_base): it repeats the list_leases/canonicalize lookup that ship_from_seat::seat_lease already does, and fails hard when the base pin is missing. run_from_with_reconciliation already has the validated branch from lease_branch; pass that branch (and the HostRecordedClone) in, so the bundle and the no-change probe cannot resolve different leases.
+    6. Partial fix for the operator's evidence (spec comment: lost punt in the seat's .aida/punts.jsonl): this PR only carries the signal file to the host. The punt record written by 'aida punt' inside a native seat still appears to land in the seat's own .aida/punts.jsonl, which the host's punt list and advisor never read. Either confirm the record reaches the host store (and say so in the PR) or mirror it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T20:42:03.526147783Z
+  modified_at: 2026-11-07T20:42:03.526147783Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
