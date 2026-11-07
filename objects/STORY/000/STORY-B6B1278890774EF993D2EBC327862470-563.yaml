@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T22:20:59.028723260Z
+modified_at: 2026-11-07T22:58:52.208229208Z
 req_type: Story
 relationships:
 - rel_type:
@@ -168,6 +168,12 @@ comments:
   content: 'Round 3 checkpoint: uncommitted fixes now allow review after settled head movement; bind queued self-push repair holds to the exact queue row and live/nonparked spec; preserve known fail through infrastructure and annotation errors; generalize both rework-brief mirrors to skipped(<reason>). Added regression tests for each and an explicit real-main make check-ci-fast integration test through production run_fast_gate (bubblewrap mandatory, no unsandboxed fallback). Regenerated writer inventory: only stale pushed-to-pushed_inner mappings and obsolete caller wrappers changed. Validation passed: 41 writer-inventory fixtures, 8 Git-maintenance fixtures, portability, execution-context ledger, gate classification audit, rustfmt, whitespace and mirror parity. Cargo job j20261107T221053474-2-0 is still running; real-target job j20261107T221150636-2-0 and final-source regression job j20261107T221750514-3091872-0 are queued. No executed Rust result yet at this checkpoint. Installed host CLI still refuses direct make lane jobs as Cargo-only; the integration job exercises new source inside its cargo test sandbox. No Git publication or merge-hold clearance attempted.'
   created_at: 2026-11-07T22:20:59.028723260Z
   modified_at: 2026-11-07T22:20:59.028723260Z
+  session_id: 01a1b80dd99e
+- id: 01a1b83c-74b0-7502-a2ac-e8670508811d
+  author: joe
+  content: 'Round 3 validation update: the first two Cargo jobs (j20261107T221053474-2-0 and j20261107T221150636-2-0) each hit the seeded-target 900-second compile timeout while compiling aida-cli-lib; neither executed tests. Replaced the still-pending 900-second final request with j20261107T222936130-2-0: AIDA_CARGO_TIMEOUT=3600 cargo test --profile agent -p aida-cli-lib --lib -- fast_gate --include-ignored --nocapture. This combined job is running and includes the real clean-main target through production run_fast_gate. Final-source rustfmt, git diff --check, portability and template/mirror parity pass. There are still five edited files, deliberately uncommitted. No completed Rust verdict at this checkpoint.'
+  created_at: 2026-11-07T22:58:52.208229208Z
+  modified_at: 2026-11-07T22:58:52.208229208Z
   session_id: 01a1b80dd99e
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
