@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T20:32:54.557608664Z
+modified_at: 2026-11-07T20:32:58.138355169Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Token cap, parent preservation, doctor lifetime and refusal guidance work, but the 30-min floor also applies when the grant (not the token) is short. A launch with an ample token and a parent grant under 30 min left now refuses with misleading ''codex login'' guidance, which breaks the ''refuses only when the capped TTL is below the floor'' criterion. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T20:32:54.557607102Z
   modified_at: 2026-11-07T20:32:54.557607102Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7b6-e067-7493-b8c1-e36102a70629
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1a836160909f
+    Recorded: 2026-11-07T20:27:48.475481793+00:00
+    Findings:
+    1. MAJOR aida-cli-lib/src/launch/codex_auth.rs:468-480 grant_deadline applies the floor to min(now+ttl, exp-300), so it refuses even when the token did not cap anything. A child grant inherits parent.expires_at (seat_authority.rs ~2714); if the parent has, say, 600s left and the token has 24h, grant_deadline(now, now+86400, 600, 1800) refuses with 'run codex login' and 'remaining 86400s'. Before this PR that launch passed (exp - deadline >= 300). Fix: apply the floor only when exp-300 < now+ttl, i.e. when the token is the binding cap; otherwise keep the old behaviour. Add a test for an ample token with a short grant.
+    2. MINOR aida-cli-lib/src/launch/contained.rs:1027: the cap uses the literal 300 (auth.expires_at.saturating_sub(300)) instead of codex_auth::MARGIN. If MARGIN changes, the grant cap and the credential deadline drift apart. Expose MARGIN, or return the cap deadline from codex_auth so there is one source.
+    3. MINOR aida-cli-lib/src/doctor_cmd.rs:1215-1216: codex_token_lifetime is filled in even when --category selects something else; every other section (e.g. permission-posture) is gated by doctor_category_selected. Also, an expired token renders as a negative 'remaining' count (codex_auth_hints::token_lifetime); say 'expired' instead.
+    4. MINOR aida-cli-lib/src/config_cmd.rs CONFIG_KNOBS: the new trusted key [contained] codex_min_grant_secs has no KnobSpec row, so 'aida config show/menu' cannot show it. The only place it is documented is docs/cli/07-project-setup.md.
+    5. MINOR test gap: nothing tests reading the floor from policy (contained.rs:1013-1022) with a custom value being honoured or a zero/negative/non-integer value being refused with MIN_GRANT_INVALID. Nothing asserts the launch-diagnostic line (requested/effective/deadline/expiry) from contained.rs:1032, the acceptance item 'records the cap in launch diagnostics'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T20:32:57.959183784Z
+  modified_at: 2026-11-07T20:32:57.959183784Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
