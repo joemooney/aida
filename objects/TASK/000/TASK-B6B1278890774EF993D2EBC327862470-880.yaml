@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T04:23:11.611914206Z
+modified_at: 2026-11-07T04:23:14.098906292Z
 req_type: Task
 tags:
 - architecture
@@ -126,6 +126,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3: sketch doc is accurate, marked UNAPPROVED, and the per-PR publication section was removed (prior finding 4 resolved). Still blocked: PR #3563 title keeps the closing (TASK-3223) chore subject claiming full S2, there is no advisor signoff, merge-hold-gate is failing, and none of the TASK-3223 implementation acceptance is met.. It was punted on: design-fork: Round 3 findings 1-5 accepted; none disputed. Finding 4 is fixed in uncommitted doc edits and PR publication instructions moved to a spec comment. Finding 3 remains a manual design gate: TASK-3225 comment 0 amendment 2 requires independent advisor selection/signoff on redo transaction versus alternative, canonical reader/writer recovery admission and multi-root claim/queue participants. Native implementer cannot supply that signoff or clear merge hold 3563. Findings 1-2 require host PR retitle and an explicit Refs-only squash subject with empty body so prior closing subject 1baca620b4a5 never lands as completion evidence. Finding 5: all S2 implementation acceptance remains unmet; keep TASK-3223 open. Refs declaration recorded, not publication authority. Preserve merge hold and punt veto; host must not publish over them. No finding disputed; native seat cannot satisfy new-commit clause directly and leaves corrective edits for host.. No triage reason was given.'
   created_at: 2026-11-07T04:23:11.611912792Z
   modified_at: 2026-11-07T04:23:11.611912792Z
+- id: 01a1b43f-0f2d-7e62-8cb0-95019e82f0d1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3223):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 621c83395e48
+    Recorded: 2026-11-07T04:20:24.784000864+00:00
+    Findings:
+    1. PR title is still '[AI:codex] chore: STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary (TASK-3223)'. GitHub's squash subject defaults to the PR title, and the trailing closing (TASK-3223) auto-completes TASK-3223 at merge with zero implementation. Retitle to exactly '[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)' (round-2 finding 1, still unaddressed; host/PR action).
+    2. Branch history still includes 1baca620b4a5 with the closing 'chore: ... (TASK-3223)' subject, and 0c650b3d5e7 and 621c83395e4 share an identical subject. GitHub's default squash body lists every commit subject, which would carry the closing trailer into main. Either rewrite the branch to a single Refs-only docs(plans) commit, or have the merger set an empty or Refs-only squash body explicitly (round-2 finding 2, unaddressed).
+    3. The PR body is only the bare 'Published from seat ...' line. It needs the documentation-only / unapproved-v1 / TASK-3223-stays-open statement that TASK-3223 comment 6 drafted for the host, so a merger sees the publication constraints (empty squash body, no completion, hold preserved). Prior finding 4 moved those notes out of the doc and into the PR body, but they never reached the PR body.
+    4. No independent advisor signoff is recorded on TASK-3223 for the redo-transaction design, canonical reader/writer recovery admission, or the multi-root claim/queue participant protocol (TASK-3225 comment 0 amendment 2; repo rule that architecture needs advisor signoff). merge-hold-gate fails at 621c83395e48 for this reason. Only the human/advisor 'aida merge-hold clear 3563' path can clear it; a reviewer verdict cannot.
+    5. TASK-3223 implementation acceptance is unmet, which is expected for a sketch. Verified at head: service.py:11 MUTATION_VERBS is still ('session_probe','request_status'); contained_boundary.rs:136 contained_store_write_paths still grants store/cache; there is no lane-private cache, no gated mediated profile, and no stale-base / concurrent-mutation / persist-before-reply tests. TASK-3223 must stay open, and this PR may land only as Refs-only.
+    6. CI 'contracts' and 'gates' jobs were still pending at 621c83395e48 when this review ran. Confirm they are green before any eventual merge.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T04:23:13.965369054Z
+  modified_at: 2026-11-07T04:23:13.965369054Z
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
