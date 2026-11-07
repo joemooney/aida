@@ -16493,6 +16493,9 @@ Usage: aida own [OPTIONS] <COMMAND>
 Commands:
   show     Show the ownership records: who holds each piece of work, the phase it is in, and whether
            its holder is still running. Read-only
+  release  Release an exact ownership key (for example train/origin-12). Requires a human at a host
+           terminal. Journals the override and leaves all leases, worktrees and cargo targets for
+           guarded session teardown
   migrate  One-time rewrite of the existing session, review and train records into ownership
            records. Only adds records; never changes, archives or deletes an existing record,
            worktree or branch
@@ -16533,6 +16536,34 @@ Options:
       --json
           Emit JSON
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida own release
+Release an exact ownership key (for example train/origin-12). Requires a human at a host terminal.
+Journals the override and leaves all leases, worktrees and cargo targets for guarded session
+teardown
+
+Usage: aida own release [OPTIONS] <KEY>
+
+Arguments:
+  <KEY>
+          Exact kind/file-stem under .aida/ownership (for example train/origin-12)
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -21684,8 +21715,8 @@ Mark a pull request as under review, so nothing merges it before your verdict la
 
 While the claim is live, `aida pr ship` and a drain's merge phase refuse to merge the PR at the
 claimed head, and `aida awaiting` shows it as under review. `aida review record … --pr N` clears the
-claim; so does `--release`. It also expires on its own after `--ttl-mins`, so an abandoned review
-never holds a PR indefinitely.
+claim; so does `--release`. Manual claims without ownership records expire after `--ttl-mins`;
+recorded reviewers end by ownership liveness.
 
 Usage: aida review claim [OPTIONS] --pr <N>
 
@@ -21700,8 +21731,9 @@ Options:
           Spec the PR implements, shown alongside the claim
 
       --ttl-mins <MINUTES>
-          Minutes until the claim expires on its own. Capped at 1440 (24h); a larger value is
-          clamped, not refused
+          Minutes until a manual claim without a matching ownership record expires. Recorded
+          reviewers use ownership liveness. Capped at 1440 (24h); a larger value is clamped, not
+          refused
           
           [default: 30]
 
@@ -47967,6 +47999,32 @@ Working on aida itself
     "path": [
       "aida",
       "own",
+      "release"
+    ],
+    "about": "Release an exact ownership key (for example train/origin-12). Requires a human at a host terminal. Journals the override and leaves all leases, worktrees and cargo targets for guarded session teardown",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "own",
       "migrate"
     ],
     "about": "One-time rewrite of the existing session, review and train records into ownership records. Only adds records; never changes, archives or deletes an existing record, worktree or branch",
@@ -53418,7 +53476,7 @@ Working on aida itself
       {
         "name": "ttl-mins",
         "takes_value": true,
-        "help": "Minutes until the claim expires on its own. Capped at 1440 (24h); a larger value is clamped, not refused"
+        "help": "Minutes until a manual claim without a matching ownership record expires. Recorded reviewers use ownership liveness. Capped at 1440 (24h); a larger value is clamped, not refused"
       }
     ],
     "hidden": false

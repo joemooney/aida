@@ -3278,6 +3278,15 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
         ("PATH", Some(path.as_str())),
         ("AIDA_HOST_OVERRIDE", Some("train-host")),
     ]);
+    // A malformed train remains blocking without aborting observation of the others.
+    // trace:STORY-2325 | ai:codex
+    std::fs::write(
+        ownership.path_for(&crate::ownership::WorkKey::Train {
+            train: crate::ownership::dual::change(3249),
+        }),
+        "{broken",
+    )
+    .unwrap();
     let (open, leased, abandoned) = live_trains(&root).unwrap();
     assert_eq!(
         abandoned,

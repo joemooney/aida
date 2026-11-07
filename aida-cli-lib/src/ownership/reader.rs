@@ -16,12 +16,23 @@ pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {
 pub(crate) fn owner(record: &Ownership) -> OwnerVerdict {
     let writer = dual::WriterFacts::here();
     let probe = |id: &aida_core::process_probe::ProcessIdentity| {
-        aida_core::process_probe::ProbeSource::system().probe(id)
+        use aida_core::{
+            proc_identity::{ProcIdentity, Verdict},
+            process_probe::Probe,
+        };
+        let Some(id) = ProcIdentity::from_record(id, writer.pid_ns) else {
+            return Probe::Unknown("insufficient identity".into());
+        };
+        match aida_core::proc_identity::observe(&id, true) {
+            Verdict::Alive => Probe::Alive,
+            Verdict::Dead(why) => Probe::Dead(format!("{why:?}")),
+            Verdict::ForeignUnknown(why) => Probe::Unknown(format!("{why:?}")),
+        }
     };
     let host = HostFacts {
         node_id: aida_core::proc_identity::local_node_id(),
-        host: writer.host,
-        boot: writer.boot,
+        host: writer.host.clone(),
+        boot: writer.boot.clone(),
         pid_ns: writer.pid_ns,
         probe: &probe,
     };

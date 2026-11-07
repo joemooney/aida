@@ -154,6 +154,33 @@ impl OwnershipStore {
         read_record(&self.path_for(key))
     }
 
+    /// Read exactly the operator's kind/file-stem, without scanning unrelated records.
+    // trace:STORY-2325 | ai:codex
+    pub(crate) fn load_named(&self, name: &str) -> Result<Option<Ownership>> {
+        let (kind, stem) = name.split_once('/').context("expected kind/file-stem")?;
+        anyhow::ensure!(
+            KINDS.contains(&kind)
+                && !stem.is_empty()
+                && stem
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+                && stem != "."
+                && stem != "..",
+            "invalid ownership key {name}"
+        );
+        let _lock = self.read_lock()?;
+        self.recover()?;
+        let record = read_record(&self.dir.join(kind).join(format!("{stem}.json")))?;
+        if let Some(record) = &record {
+            let (actual_kind, actual_stem) = file_name(&record.key);
+            anyhow::ensure!(
+                actual_kind == kind && actual_stem == stem,
+                "ownership key does not match its file: {name}"
+            );
+        }
+        Ok(record)
+    }
+
     /// Every record, sorted by key. A malformed record is reported by path
     /// beside the readable ones.
     // trace:STORY-2325 | ai:claude

@@ -75,28 +75,24 @@ fn operator_release(
     key: &str,
 ) -> anyhow::Result<()> {
     use crate::ownership::{
-        store::{file_name, Expect, Step},
+        store::{Expect, Step},
         Phase, WorkKey,
     };
-    let (records, errors) = store.list();
-    anyhow::ensure!(
-        errors.is_empty(),
-        "ownership evidence unreadable: {errors:?}"
-    );
-    let record = records
-        .iter()
-        .find(|r| {
-            let (kind, name) = file_name(&r.key);
-            format!("{kind}/{name}") == key
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!("ownership key {key} missing; use kind/file-stem from .aida/ownership")
-        })?;
-    let mut affected = vec![record];
-    // Releasing a train also releases its rider reservations, even when a
-    // failed begin-train left the train without a holder.
+    let record = store.load_named(key)?.ok_or_else(|| {
+        anyhow::anyhow!("ownership key {key} missing; use kind/file-stem from .aida/ownership")
+    })?;
+    let mut affected = vec![record.clone()];
+    // Readable riders are released together. An unrelated damaged record must
+    // never prevent the explicit operator escape hatch for this exact key.
     if let WorkKey::Train { train } = &record.key {
-        affected.extend(records.iter().filter(|r| {
+        let (records, errors) = store.list();
+        for (path, error) in errors {
+            eprintln!(
+                "ownership: retained unreadable record {}: {error}",
+                path.display()
+            );
+        }
+        affected.extend(records.into_iter().filter(|r| {
             matches!(&r.phase, Phase::Training { train: t } if t == train) && r.key != record.key
         }));
     }
@@ -155,6 +151,10 @@ mod tests {
                 ))
             })
             .unwrap();
+        let unrelated = store.dir().join("change/origin-999.json");
+        std::fs::write(&unrelated, "{broken").unwrap();
+        assert!(operator_release(&store, "change/origin-999").is_err());
+        assert!(operator_release(&store, "change/../origin-9").is_err());
         assert!(operator_release(&store, "change/origin-9-extra").is_err());
         operator_release(&store, "change/origin-9").unwrap();
         assert!(matches!(

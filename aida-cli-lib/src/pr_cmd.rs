@@ -1521,6 +1521,111 @@ pub(crate) struct HumanFinishOptions {
     pub(crate) no_trailer_check: bool,
 }
 
+/// Resume this session's handed-off branch only at its recorded PR head.
+/// Git switch enforces worktree occupancy; unrelated detached checkouts refuse.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn ship_branch(
+    project: &std::path::Path,
+    main: &std::path::Path,
+    resume: bool,
+) -> Result<String> {
+    use crate::ownership::{store::Expect, Phase};
+    let branch = current_git_branch(project)?;
+    if !branch.is_empty() {
+        return Ok(branch);
+    }
+    let inputs = aida_core::exec_context::Environment::capture();
+    let session = inputs.var("AIDA_SESSION_ID").unwrap_or_default();
+    let seat = project.canonicalize()?;
+    let lease = list_leases(main)
+        .into_iter()
+        .find(|l| l.id == session && l.worktree_path.canonicalize().ok().as_ref() == Some(&seat))
+        .ok_or_else(|| anyhow::anyhow!("detached HEAD has no owning session lease"))?;
+    let store = crate::ownership::store::OwnershipStore::for_project(main)?
+        .ok_or_else(|| anyhow::anyhow!("ownership store unavailable"))?;
+    let record = crate::ownership::reader::lease_record(main, &lease)?
+        .ok_or_else(|| anyhow::anyhow!("detached seat has no ownership handoff"))?;
+    let Phase::InPr {
+        head,
+        handed_off_by: Some(by),
+        ..
+    } = &record.phase
+    else {
+        anyhow::bail!("detached seat has no recorded PR handoff");
+    };
+    anyhow::ensure!(
+        by == &lease.id && record.holder.is_none(),
+        "detached seat belongs to another session"
+    );
+    let tip = |reference: &str| -> Result<String> {
+        let out = aida_core::git_ops::host_git_command(project)
+            .args(["rev-parse", "--verify", reference])
+            .output()?;
+        anyhow::ensure!(out.status.success(), "cannot read handed-off branch tip");
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    anyhow::ensure!(
+        tip("HEAD")? == *head && tip(&format!("refs/heads/{}", lease.branch))? == *head,
+        "detached seat or branch moved beyond the recorded PR head"
+    );
+    if !resume {
+        return Ok(lease.branch);
+    }
+    let mut attached = false;
+    let result = store.update_all_checked(
+        vec![crate::ownership::store::Step {
+            key: record.key.clone(),
+            op: "resume-ship".into(),
+            expect: Expect::Generation(record.generation),
+            transition: Box::new(|cur| {
+                crate::ownership::ops::acquire(
+                    cur,
+                    &record.key,
+                    crate::ownership::dual::holder_for_lease(
+                        &lease,
+                        &crate::ownership::dual::WriterFacts::here(),
+                        chrono::Utc::now(),
+                    ),
+                    Phase::Leased,
+                )
+            }),
+        }],
+        || {
+            anyhow::ensure!(
+                tip("HEAD")? == *head && tip(&format!("refs/heads/{}", lease.branch))? == *head,
+                "seat or branch moved before resume"
+            );
+            let out = aida_core::git_ops::host_git_command(project)
+                .args([
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "switch",
+                    "--no-guess",
+                    &lease.branch,
+                ])
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "cannot resume handed-off branch: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            attached = true;
+            Ok(())
+        },
+    );
+    if result.is_err() && attached && !store.dir().join(".pending.json").exists() {
+        let out = aida_core::git_ops::host_git_command(project)
+            .args(["update-ref", "--no-deref", "HEAD", head, head])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "resume failed and HEAD restoration failed"
+        );
+    }
+    result?;
+    Ok(lease.branch)
+}
+
 /// STORY-720: the one-shot HUMAN-implementer finish — commit → rebase → push
 /// → PR → CI → squash-merge → pull → worktree-cleanup.
 ///
@@ -1547,7 +1652,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 
     let project_root = find_project_root()?;
     let main_worktree = main_worktree_root_from(&project_root);
-    let branch = current_git_branch(&project_root)?;
+    let branch = ship_branch(&project_root, &main_worktree, !opts.dry_run)?;
     if branch.is_empty() {
         anyhow::bail!(
             "could not detect the current branch (detached HEAD?) — `aida ship` runs from \
@@ -2463,7 +2568,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     let main_worktree = main_worktree_root_from(&project_root);
     let hold_root = pr_ship_hold_root(&project_root);
 
-    let branch = current_git_branch(&project_root)?;
+    let branch = ship_branch(&project_root, &main_worktree, !opts.dry_run)?;
     if branch.is_empty() {
         anyhow::bail!("could not detect current branch (detached HEAD?)");
     }

@@ -141,10 +141,30 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
             return PrLeaseCheck::NotProvable(format!("ownership evidence unreadable: {e:#}"))
         }
     };
-    let Some(_) = record.holder.as_ref().filter(|h| h.session == lease.id) else {
+    // An InPr record is free to acquire, but its old seat is still protected.
+    // Only the handing-off session may use its own process evidence for cleanup.
+    // trace:STORY-2325 | ai:codex
+    let cleanup_record = if record
+        .holder
+        .as_ref()
+        .is_some_and(|h| h.session == lease.id)
+    {
+        record.clone()
+    } else if record.holder.is_none()
+        && matches!(&record.phase, crate::ownership::Phase::InPr { handed_off_by: Some(session), .. }
+            if session == &lease.id)
+    {
+        let mut cleanup = record.clone();
+        cleanup.holder = Some(crate::ownership::dual::holder_for_lease(
+            lease,
+            &crate::ownership::dual::WriterFacts::here(),
+            chrono::Utc::now(),
+        ));
+        cleanup
+    } else {
         return PrLeaseCheck::NotProvable("this lease no longer holds the ownership record".into());
     };
-    match crate::ownership::reader::owner(&record) {
+    match crate::ownership::reader::owner(&cleanup_record) {
         crate::ownership::OwnerVerdict::Alive { .. } => return PrLeaseCheck::Live,
         crate::ownership::OwnerVerdict::Unknown { why } => return PrLeaseCheck::NotProvable(why),
         crate::ownership::OwnerVerdict::Dead { .. } => {}

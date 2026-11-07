@@ -23,7 +23,10 @@ pub enum OwnCommand {
     /// Release an exact ownership key (for example train/origin-12).
     /// Requires a human at a host terminal. Journals the override and leaves
     /// all leases, worktrees and cargo targets for guarded session teardown.
-    Release { key: String },
+    Release {
+        /// Exact kind/file-stem under .aida/ownership (for example train/origin-12).
+        key: String,
+    },
 
     /// One-time rewrite of the existing session, review and train records
     /// into ownership records. Only adds records; never changes, archives or

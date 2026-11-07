@@ -472,7 +472,8 @@ fn exited_lease(fx: &Fixture) -> crate::SessionLease {
         .pid_namespace(std::process::id())
         .unwrap();
     let identity = aida_core::proc_identity::ProcIdentity::from_record(&id, Some(ns)).unwrap();
-    let admission = serde_json::from_value(serde_json::json!({"version":1,"node_id":aida_core::proc_identity::local_node_id().unwrap(),"identity":identity,"generation":"dead-fixture","refusal":null})).unwrap();
+    let admission: aida_core::proc_identity::HolderRecord = serde_json::from_value(serde_json::json!({"version":1,"node_id":aida_core::proc_identity::local_node_id().unwrap(),"identity":identity,"generation":"dead-fixture","refusal":null})).unwrap();
+    lease.holder_record = Some(serde_json::to_string(&admission).unwrap());
     let key = WorkKey::Spec {
         spec: crate::gate::canon::SpecKey(uuid::Uuid::from_u128(2315)),
     };
@@ -873,6 +874,83 @@ fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
     assert!(crate::list_leases(&fx.main)
         .iter()
         .any(|l| l.branch == "feat"));
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
+    // A live handing-off lease still blocks cleanup, even though the key is free.
+    let mut live = lease.clone();
+    live.active_pid = Some(std::process::id());
+    live.active_pid_start_time = crate::process_probe::process_start_identity(std::process::id());
+    live.holder_record = Some(
+        serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(
+            std::process::id(),
+        ))
+        .unwrap(),
+    );
+    assert_eq!(check_pr_lease(&fx.main, &live, "feat"), PrLeaseCheck::Live);
+    // A different handing-off session grants neither recovery nor cleanup.
+    store
+        .update(
+            &key,
+            "foreign",
+            crate::ownership::store::Expect::Any,
+            |cur| {
+                let mut record = cur.unwrap().clone();
+                if let crate::ownership::Phase::InPr { handed_off_by, .. } = &mut record.phase {
+                    *handed_off_by = Some("another-session".into());
+                }
+                Some((record, None))
+            },
+        )
+        .unwrap();
+    assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+    assert!(matches!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::Bail(_)
+    ));
+    store
+        .update(
+            &key,
+            "restore",
+            crate::ownership::store::Expect::Any,
+            |cur| {
+                let mut record = cur.unwrap().clone();
+                if let crate::ownership::Phase::InPr { handed_off_by, .. } = &mut record.phase {
+                    *handed_off_by = Some(lease.id.clone());
+                }
+                Some((record, None))
+            },
+        )
+        .unwrap();
+    let head = git(&fx.seat, &["rev-parse", "HEAD"]);
+    git(&fx.seat, &["update-ref", "refs/heads/feat", "HEAD~1"]);
+    assert!(crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).is_err());
+    git(&fx.seat, &["update-ref", "refs/heads/feat", &head]);
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, false).unwrap(),
+        "feat"
+    );
+    assert!(
+        git(&fx.seat, &["branch", "--show-current"]).is_empty(),
+        "dry-run stays detached"
+    );
+    // Both ship entry points use this recovery seam after --no-merge or a hold.
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
+        "feat"
+    );
+    assert_eq!(git(&fx.seat, &["branch", "--show-current"]), "feat");
+    assert_eq!(
+        crate::pr_cmd::ship_branch(&fx.seat, &fx.main, true).unwrap(),
+        "feat"
+    );
+    // The resumed branch can hand off again, then take the ordinary cleanup path.
+    crate::ownership::dual::handed_off(&fx.main, &fx.seat, "feat", &lease.scope, 42).unwrap();
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
     crate::session_end::session_end(
         Some(&lease.id),
         None,

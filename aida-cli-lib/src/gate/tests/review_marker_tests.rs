@@ -164,15 +164,13 @@ fn prc_manual_claim_expires_without_ownership() {
 
 // trace:STORY-2325 | ai:codex
 #[test]
-fn prc_recorded_review_uses_matching_ownership_and_clears_closed_or_dead() {
+fn prc_closed_review_never_clears_a_fresh_manual_claim() {
     use crate::ownership::{
         store::{Expect, OwnershipStore},
         Ownership, Phase, WorkKey,
     };
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    let store = OwnershipStore::at(root.join(".aida/ownership"));
-    // for_project needs a repository; all fixture writes are local.
     assert!(crate::test_git::git_command()
         .arg("-C")
         .arg(root)
@@ -180,64 +178,126 @@ fn prc_recorded_review_uses_matching_ownership_and_clears_closed_or_dead() {
         .status()
         .unwrap()
         .success());
+    let store = OwnershipStore::at(root.join(".aida/ownership"));
     let key = WorkKey::Review {
         change: crate::ownership::dual::change(7),
         head: "abcdef123456".into(),
     };
-    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
     store
-        .update(&key, "seed", Expect::Absent, |_| {
+        .update(&key, "old-review-ended", Expect::Absent, |_| {
             Some((
                 Ownership {
                     key: key.clone(),
                     generation: 0,
                     holder: None,
-                    phase: Phase::Reviewing {
-                        head: "abcdef123456".into(),
+                    phase: Phase::Closed {
+                        why: "earlier review ended".into(),
                     },
                 },
                 None,
             ))
         })
         .unwrap();
+    for head in ["ABCDEF", ""] {
+        let m = claim(7, head, now_secs(), 60);
+        write(root, &m).unwrap();
+        assert_eq!(
+            merge_gate(root, 7, || Some("abcdef123456".into())),
+            MergeGate::UnderReview(m)
+        );
+        assert!(read(root, 7).is_some());
+    }
+    // Unrelated unreadable evidence cannot make manual TTL claims permanent.
+    std::fs::create_dir_all(store.dir().join("train")).unwrap();
+    std::fs::write(store.dir().join("train/origin-999.json"), "{broken").unwrap();
+    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
     write(root, &m).unwrap();
-    assert!(
-        is_live_at(root, &m),
-        "unknown matching record overrides TTL"
-    );
-    for state in ["dead", "closed"] {
-        store
-            .update(&key, state, Expect::Any, |cur| {
-                let mut r = cur.unwrap().clone();
-                if state == "closed" {
-                    r.phase = Phase::Closed { why: "done".into() };
-                } else {
-                    r.holder = Some(crate::ownership::Holder {
+    assert!(matches!(
+        merge_gate(root, 7, || panic!("TTL expired")),
+        MergeGate::ExpiredCleared(_, _)
+    ));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_only_the_markers_process_ownership_overrides_its_ttl() {
+    use crate::ownership::{
+        store::{Expect, OwnershipStore},
+        Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    assert!(crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["init", "-q"])
+        .status()
+        .unwrap()
+        .success());
+    let store = OwnershipStore::at(root.join(".aida/ownership"));
+    let key = WorkKey::Review {
+        change: crate::ownership::dual::change(7),
+        head: "abcdef123456".into(),
+    };
+    let mut m = claim(7, "ABCDEF", now_secs() - 120, 60);
+    m.pid = 123456;
+    m.pid_start = Some("linux-starttime:42".into());
+    let witness = Witness {
+        admission: None,
+        recorded_at: chrono::Utc::now(),
+        kind: WitnessKind::Process {
+            host: m.host.clone(),
+            id: aida_core::process_probe::ProcessIdentity {
+                pid: m.pid,
+                start: format!("linux:{}:42", aida_core::local_boot_id().unwrap()),
+            },
+            pid_ns: None,
+        },
+    };
+    store
+        .update(&key, "seed", Expect::Absent, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    phase: Phase::Reviewing {
+                        head: "abcdef123456".into(),
+                    },
+                    holder: Some(Holder {
                         seat: "reviewer".into(),
                         session: "review".into(),
-                        role: crate::ownership::Role::Reviewer,
+                        role: Role::Reviewer,
                         tree: None,
-                        witnesses: vec![crate::ownership::Witness {
-                            admission: None,
-                            recorded_at: chrono::Utc::now(),
-                            kind: crate::ownership::WitnessKind::Heartbeat {
-                                at: chrono::Utc::now() - chrono::Duration::days(1),
-                                every_secs: 10,
-                            },
-                        }],
-                    });
-                }
-                Some((r, None))
-            })
-            .unwrap();
-        write(root, &m).unwrap();
-        assert!(
-            matches!(
-                merge_gate(root, 7, || panic!("ended")),
-                MergeGate::ExpiredCleared(_, _)
-            ),
-            "{state}"
-        );
-        assert!(read(root, 7).is_none());
-    }
+                        witnesses: vec![witness],
+                    }),
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        is_live_at(root, &m),
+        "matching unknown ownership retains the marker past TTL"
+    );
+    let mut other = m.clone();
+    other.pid_start = Some("linux-starttime:43".into());
+    assert!(!is_live_at(root, &other), "different process uses TTL");
+    store
+        .update(&key, "dead", Expect::Any, |cur| {
+            let mut record = cur.unwrap().clone();
+            record.holder.as_mut().unwrap().witnesses.push(Witness {
+                admission: None,
+                recorded_at: chrono::Utc::now(),
+                kind: WitnessKind::Heartbeat {
+                    at: chrono::Utc::now() - chrono::Duration::days(1),
+                    every_secs: 10,
+                },
+            });
+            Some((record, None))
+        })
+        .unwrap();
+    assert!(
+        !is_live_at(root, &m),
+        "matching dead ownership ends the marker"
+    );
 }

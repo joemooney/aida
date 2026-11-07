@@ -260,34 +260,10 @@ pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
 }
 
 fn ownership_ended(root: &Path, m: &Marker) -> Option<String> {
-    use crate::ownership::{store::OwnershipStore, WorkKey};
-    let store = match OwnershipStore::for_project(root) {
-        Ok(Some(store)) => store,
-        Ok(None) => return ttl_expired(m),
-        Err(_) => return None,
-    };
-    let (records, errors) = store.list();
-    if !errors.is_empty() {
-        return None;
+    match super::kernel_deps::review_ownership_ended(root, m) {
+        Some(ended) => ended,
+        None => ttl_expired(m),
     }
-    let matching: Vec<_> = records
-        .iter()
-        .filter(|r| {
-            matches!(&r.key,
-        WorkKey::Review { change, head } if change == &crate::ownership::dual::change(m.pr)
-            && covers_head(head, Some(&m.head_sha)))
-        })
-        .collect();
-    if matching.is_empty() {
-        return ttl_expired(m);
-    }
-    // Prefix/case matching must agree with covers_head. Ambiguous evidence
-    // retains the marker unless every matching record has positively ended.
-    let reasons: Option<Vec<_>> = matching
-        .into_iter()
-        .map(|record| crate::ownership::reader::ended_record(record))
-        .collect();
-    reasons.map(|r| r.join("; "))
 }
 
 // trace:STORY-2325 | ai:codex

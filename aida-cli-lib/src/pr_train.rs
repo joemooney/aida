@@ -1835,7 +1835,12 @@ fn live_trains(
         let key = crate::ownership::WorkKey::Train {
             train: crate::ownership::dual::change(r.number),
         };
-        let record = crate::ownership::reader::load(main_worktree, &key)?;
+        let record = crate::ownership::reader::load(main_worktree, &key).unwrap_or_else(|error| {
+            // Unreadable evidence retains this train; other trains remain observable.
+            // trace:STORY-2325 | ai:codex
+            eprintln!("ownership: retaining train PR-{}: {error:#}", r.number);
+            None
+        });
         let ended = record.as_ref().is_some_and(|rec| {
             matches!(rec.phase, crate::ownership::Phase::Closed { .. })
                 || matches!(

@@ -238,6 +238,7 @@ fn acquire_is_idempotent_and_names_a_replaced_holder() {
         Phase::InPr {
             change: dual::change(5),
             handed_off_at: now(),
+            handed_off_by: None,
             head: "abc".into(),
         },
     );
@@ -1018,6 +1019,7 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
         Phase::InPr {
             change: dual::change(1),
             handed_off_at: now(),
+            handed_off_by: None,
             head: "h".into(),
         },
     );

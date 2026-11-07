@@ -1099,7 +1099,15 @@ for retirement. An agent session or a noninteractive caller cannot override.
 
 **Example.** `aida own release train/origin-12`
 
-Manual `aida review claim` markers without matching ownership expire after their
-requested TTL. Recorded reviews follow ownership liveness or explicit release;
-unknown recorded ownership retains the marker. Abbreviated and differently cased
-head SHAs match the same way as the merge gate's head comparison.
+Manual `aida review claim` markers expire after their requested TTL. Ownership
+can override that expiry only when its process identity matches the marker;
+a previous closed review at the same head cannot clear a new claim. Unrelated
+unreadable records do not disable TTL expiry or an exact-key operator release.
+Abbreviated and differently cased head SHAs match the merge gate's comparison.
+
+After PR handoff, the lease remains the seat's cleanup handle. A dead handing-off
+session with a clean, published tree can end through the guarded relaunch path.
+A later `aida ship` from that detached seat restores its leased branch only if
+both HEAD and the branch still equal the recorded PR head and Git permits the
+checkout. A moved branch or another session's handoff refuses recovery.
+<!-- trace:STORY-2325 | ai:codex -->
