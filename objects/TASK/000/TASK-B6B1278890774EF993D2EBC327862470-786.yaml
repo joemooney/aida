@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T23:30:38.171659084Z
+modified_at: 2026-11-07T23:54:34.590721400Z
 req_type: Task
 tags:
 - area:containment
@@ -638,6 +638,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b86f-74de-7ef3-bbc5-66ebe28c748b
+  author: aida-orchestrator
+  timestamp: 2026-11-07T23:54:34.590744453Z
+  session_id: 01a1b86daa87
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -646,3 +655,11 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Partial slice of the 2026-11-07 16:40 ruling. AC status: (1) run_aida accepts agy + shared-boundary launch with receipt-gated argv: PARTIAL - fixture accepts agy, argv drops --sandbox/--settings and gates bypass on accepted receipt (contained.rs:1715, launch_tests.rs:628), but agy never executes (require_conformance refuses; doc admits) and MCP/browser/URL disabling is absent; (2) auth hosts as data + measured refresh hosts + unknown-host fail-closed: PARTIAL - oauth2 host added from static binary strings only, auth_hosts not consumed by the launcher egress set, no named unknown-host refusal, no measured list on spec; (3) native diagnostic never gets credit: verified conformance.py:1131 hardcodes false; (4) production require_conformance still refuses: verified agy.rs:207-216. CI still pending at review time.'
+  recovery_hint: address the review findings, move TASK-3048 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T23:54:34.590721400Z
