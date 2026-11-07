@@ -1,34 +1,14 @@
-/// BUG-1468: a PR branch's green check is evidence about the guards that
-/// existed WHEN IT RAN. Nothing re-evaluates that green when a new required
-/// guard lands on main, so a long-lived branch can present a green check
-/// that no longer means what a reader assumes (observed on PR #1979 —
-/// `aida-core/templates/.aida/discipline/session-discipline.md` grew a
-/// content check 15h after the branch's own CI ran, and the branch still
-/// showed green).
-///
-/// TWO TIERS (BUG-1468 follow-up — the single-tier version refused almost
-/// every ship in this repo, because nearly every commit on main touches
-/// `*/tests/` or `*_tests.rs`, making `--override-stale-check` routine):
-/// - `definition_files`: a `.github/workflows/*` file whose `on:` triggers
-///   include `pull_request` (a plain substring check on the file's content
-///   at `base_ref` — nightly/cron-only, release-only, and dispatch-only
-///   workflows don't gate a PR's own check, so they do NOT count), or a
-///   `scripts/` file one of THOSE PR-triggered workflows invokes directly —
-///   the check's own DEFINITION changed, so the green no longer means what
-///   it looks like. `aida pr ship` REFUSES on this tier (override-able); the
-///   drain's merge phase only WARNS and proceeds (BUG-1468 follow-up 2).
-/// - `test_files`: WARN-only, everywhere. An ordinary test file changed on
-///   base since divergence — the common, usually-harmless "base moved" case;
-///   still worth surfacing (a reader may want to re-run), never worth
-///   refusing.
-///
-/// STORY-1690 supersedes the tiers for `aida pr ship`: it refuses ANY
-/// warning (a head behind its base), and the tiers only shape the message.
-/// The drain's merge phase still reads them as described above.
-// trace:BUG-1468 trace:STORY-1690 | ai:claude
+/// A behind-base warning. Workflow content identities determine whether CI's
+/// definition changed; changed paths explain the difference and ordinary test
+/// changes remain advisory. The head and base are pinned for the entire read.
+/// STORY-1690's independent behind-base gate still refuses any behind head.
+// trace:BUG-1468 trace:STORY-1690 trace:STORY-2401 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StaleCheckWarning {
     pub(crate) behind_commits: u64,
+    // trace:STORY-2401 | ai:codex
+    pub(crate) head_digest: String,
+    pub(crate) base_digest: String,
     pub(crate) definition_files: Vec<String>,
     pub(crate) test_files: Vec<String>,
 }
@@ -220,6 +200,16 @@ pub(crate) fn pr_stale_check(
     base_ref: &str,
 ) -> std::result::Result<Option<StaleCheckWarning>, String> {
     let branch_ref = stale_check_branch_ref(repo, branch);
+    // Compare content at pinned commits, not the path history since divergence.
+    // A touch followed by a revert must not invalidate the definition.
+    // trace:STORY-2401 | ai:codex
+    let forge = crate::forge::resolve_forge_kind(repo);
+    let head_key = crate::ci_digest::CiEvidenceKey::read(repo, &branch_ref, forge)
+        .map_err(|e| e.to_string())?;
+    let base_key =
+        crate::ci_digest::CiEvidenceKey::read(repo, base_ref, forge).map_err(|e| e.to_string())?;
+    let branch_ref = head_key.head_sha.as_str();
+    let base_ref = base_key.head_sha.as_str();
     let run = |args: &[&str]| -> std::result::Result<String, String> {
         let out = std::process::Command::new("git")
             .arg("-C")
@@ -260,13 +250,26 @@ pub(crate) fn pr_stale_check(
     .lines()
     .map(|l| l.to_string())
     .collect();
-    let (definition_files, test_files) = classify_changed_files(
+    let (mut definition_files, test_files) = classify_changed_files(
         &changed,
         &|workflow_path| workflow_is_pr_triggered(repo, base_ref, workflow_path),
         &|script_path| script_referenced_by_pr_workflows(repo, base_ref, script_path),
     );
+    if head_key.workflow_digest == base_key.workflow_digest {
+        definition_files.clear();
+    } else if definition_files.is_empty() {
+        // Includes removed, newly added and non-PR workflows, and GitLab CI.
+        definition_files.push(match forge {
+            crate::forge::ForgeKind::GitHub | crate::forge::ForgeKind::None => {
+                ".github/workflows".into()
+            }
+            crate::forge::ForgeKind::GitLab => ".gitlab-ci.yml".into(),
+        });
+    }
     Ok(Some(StaleCheckWarning {
         behind_commits,
+        head_digest: head_key.workflow_digest,
+        base_digest: base_key.workflow_digest,
         definition_files,
         test_files,
     }))

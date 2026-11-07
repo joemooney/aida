@@ -744,7 +744,19 @@ Journaled retirement confirms closure before deleting the remote branch using
 an explicit lease against the pinned train tip. Uncertain closure or a moved
 branch retains the recovery entry and branch. Dispatch train fallback defers
 journal-lock contention to a later serve pass without recording a ship failure.
-Legacy trains without journals retain their confirmed owner-liveness cleanup. Workflow-definition digest evidence remains slice 5.
+Legacy trains without journals retain their confirmed owner-liveness cleanup.
+
+CI evidence in the live train proof is keyed by the pinned head SHA and workflow
+content digest, and refreshed before each merge attempt. GitHub uses the Git tree
+identity of `.github/workflows`; GitLab uses the `.gitlab-ci.yml` blob identity.
+Staleness reads pin both commits and compare these digests, so an edit followed
+by a revert or identical endpoint definitions does not produce a stale-definition
+refusal. A real definition change does. Absent definitions have an explicit
+forge-scoped identity; missing commits, failed Git reads and invalid object types
+remain unavailable evidence. Unconfigured/pure-Git advisory reads retain the
+historical GitHub workflow-path convention. Scripts outside the workflow tree
+and external GitLab includes are outside this digest. The independent behind-base
+refusal still applies even with equal digests.
 <!-- trace:STORY-2401 | ai:codex -->
 
 ### Autonomy & escalation

@@ -784,6 +784,13 @@ fn a_behind_head_with_no_definition_change_refuses_as_behind_base() {
     let warning = |definition: Vec<String>| {
         Ok(Some(crate::StaleCheckWarning {
             behind_commits: 2,
+            head_digest: "head".into(),
+            base_digest: if definition.is_empty() {
+                "head"
+            } else {
+                "base"
+            }
+            .into(),
             definition_files: definition,
             test_files: Vec::new(),
         }))
