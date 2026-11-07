@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T14:49:15.576217843Z
+modified_at: 2026-11-07T14:49:26.199477380Z
 req_type: Story
 tags:
 - architecture
@@ -362,6 +362,29 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-C Refs slice (train/review readers, staged writes, seat detach): readers fail closed correctly, but handoff now aborts ships after the PR opens, leaks seat worktrees, wedges explicit review claims forever, and ships no operator override; CI still queued at 7408ec76.. No triage reason was given.'
   created_at: 2026-11-07T14:49:15.576216423Z
   modified_at: 2026-11-07T14:49:15.576216423Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b67c-5d57-73f3-a253-0aaeb6e4e207
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3600):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7408ec769fc3
+    Recorded: 2026-11-07T14:45:39.260569722+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3600#issuecomment-6708400544
+    Findings:
+    1. [major] pr_cmd.rs:1767 and :2638 now propagate dual::handed_off errors with ?, after the PR is created. handed_off (ownership/dual.rs:77-90) fails when AIDA_SESSION_ID is unset (an operator ship), when no lease or spec resolves (shipped_spec falls back to unwrap_or_default() at pr_cmd.rs:2637, then 'handoff needs a canonical spec'), when the spec record is missing, or when the holder tree path differs, and verify_seat_at_pr_head now counts any untracked file (--untracked-files=normal, dual.rs:427). Each case makes aida ship fail with the PR already open. That contradicts the comment at pr_cmd.rs:1758-1761 ('never fails the ship — the PR is open'). On the merge path it also skips log_ship_activity, the merge and the cleanup. Fix: run the handoff only when this session owns the branch's lease; otherwise report the refusal without failing the ship, or verify before creating the PR.
+    2. [major] handed_off removes the lease file with a raw std::fs::remove_file (dual.rs:93-100) instead of going through session_end. Afterwards pr_ship step 5 (pr_cmd.rs:4278 list_leases().find(branch == ship_branch)) finds no lease, so the seat worktree and its cargo target are never retired after the merge, and no other path retires a seat that has no lease (A7 says retirement goes through EndBySafeRule or salvage, and nothing reaches this tree). The still-running agent also loses its lease mid-session. No test covers handed_off's lease removal or the ship-then-cleanup sequence.
+    3. [major] Review markers no longer expire. is_live_at and merge_gate (gate/review_marker.rs:258-268, :314) end a marker only when its Review ownership record is Closed or Dead, and reader::ended returns None when the record is missing. An explicit 'aida review claim' (lib_part5.rs:2832-2841, pid=0, no reviewer lease, so no Review record is ever written) therefore blocks merges at that head forever. The same happens to any marker whose head_sha is not byte-equal to the lease's pr_head_sha: the exact-key lookup disagrees with covers_head's prefix and case-insensitive matching (review_marker.rs:278-287). The --ttl-mins help text (review_cmd_args.rs:167-168) and the claim output ('for {ttl_mins}m') still promise expiry, and STORY-1405's 'an abandoned review never wedges a PR' guarantee is lost. Fix: write a Review ownership record for explicit claims, or keep TTL expiry when no record exists, and update the help text.
+    4. [major] There is no operator override. The signed sketch (section 2 operations, Q5) makes operator_release(key) with a human TTY the only override once readers are authoritative, and this PR adds none ('aida own' has only show and migrate). Once readers keep work on Unknown or missing ownership, a stale Training change record wedges its rider. For example, train_lease_taken's begin-train write fails and is only report()ed (dual.rs:679-682) while train_opened has already written the riders' Training phase. ownership_rider_refusal (pr_train.rs:1649-1669) then refuses that PR from every future train, and the only escape is hand-editing .aida/ownership. Ship operator_release, or a TTY-gated 'aida own release KEY', in this slice.
+    5. [minor] The relaunch cleanup dropped --force (queue_cmd.rs:13558, session_start.rs:2742), and Unknown, missing-record and unknown-branch leases now Bail instead of taking the plain guarded end (pr_lease_takeover.rs:130-147, 220-243). That matches the threat model, but only the verdict-to-action mapping is tested. No test drives the STORY-2315 fixture (dead owner, clean seat at the PR head) through SafeEnd and then session_end(force=false) to prove the plain end actually succeeds, so the 'could not end dead lease … add --force' regression could come back unnoticed. Add that end-to-end test.
+    6. [minor] The new authority readers have no tests on their key paths. Nothing tests ownership_rider_refusal (pr_train.rs:1649), the merge_gate ExpiredCleared path when the Review record is Dead or Closed, train_pr_running reading ownership (pipeline_stall.rs:1068-1085), or handoff_seat's restore-branch-on-failure path (dual.rs:189-197). Strict tier: every refusal and every release path needs a test.
+    7. [minor] Every ownership write is O(journal size). update_all_checked (store.rs:458-500) reads the whole journal.jsonl, embeds it in .pending.json, and recover() rewrites it whole. The host journal is already 629 KB (2984 lines) and grows without bound, so each write serializes and rewrites it about twice under a 10 s lock. Every load() and list() now also takes that exclusive lock. Stage only the new journal lines (replay is idempotent through the generation check) or rotate the journal.
+    8. [minor] handoff_seat compares holder.tree.path with seat by raw PathBuf equality (dual.rs:125-131), with no canonicalization. A symlinked or differently spelled project_root refuses the handoff, which combined with the first finding fails the ship. Canonicalize both sides.
+    9. [cosmetic] Legacy readers are kept alive under #[cfg(test)] instead of deleted, as the PR-C plan says: pr_train OWNER_LINE, TrainOwner, train_abandoned and parse_owner_line; review_marker expired_reason and is_live; pr_lease_takeover classify and OwnerLiveness. Tests keep exercising dead production code. pipeline_stall::train_pr_running keeps an unused _body parameter. Fine to defer to the deletion slice, but leave a note.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T14:49:26.103145077Z
+  modified_at: 2026-11-07T14:49:26.103145077Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
