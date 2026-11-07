@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-243
 agreed_id: BUG-2477
 title: status_awaiting.rs keys on the display ID, so a label collision misclassifies an escalation
 description: 'Source: work GDMS CI report. status_awaiting resolves records by their display label. When two records share a label, an escalation is attributed to the wrong record. Read by the summary''s unique UUID instead. Acceptance: a regression test with two records that share a display label classifies each escalation correctly. The work branch has a reference fix plus a story_465/story_1680 test.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:32.761539508Z
-modified_at: 2026-11-07T05:56:07.633921058Z
+modified_at: 2026-11-07T07:21:13.197668438Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -66,6 +66,20 @@ history:
   timestamp: 2026-11-07T05:56:08.769085163Z
   session_id: 01a1b4721cd9
   changes: []
+- id: 01a1b4e2-02ba-7700-83ed-7a5623c637ca
+  author: aida-auto-bump
+  timestamp: 2026-11-07T07:21:13.146144195Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b4e2-02ed-7683-8880-52670ce17030
+  timestamp: 2026-11-07T07:21:13.197664472Z
+  agent: aida
+  commit_sha: bb6eef8efe4999767677c9c822ae26a35966b6e8
+  summary: Escalation classification now resolves the summary's UUID (status_awaiting.rs:904) instead of the collidable display label; regression test colliding_display_labels_classify_each_escalation_by_uuid covers both shelved orderings with two records sharing agreed_id. Matches operator reference patch. PR CI was pending at review time; ship gates on CI.
+  review_verdict: approved
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
@@ -75,3 +89,7 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T07:21:13.146137837Z
+  completion_sha: bb6eef8efe4999767677c9c822ae26a35966b6e8
