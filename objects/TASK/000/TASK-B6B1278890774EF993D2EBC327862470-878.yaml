@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T01:01:43.233981716Z
+modified_at: 2026-11-07T01:03:14.340956522Z
 req_type: Task
 tags:
 - architecture
@@ -209,6 +209,12 @@ comments:
   modified_at: 2026-11-07T00:14:35.316648945Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b387-f5a4-74a3-8cb1-20daf6009050
+  author: joe
+  content: 'S2 continuation on the already merged private-PTY implementation: verify the agent_launch.rs merge resolution preserves pre-release registry binding and delegate_seats. Add focused fixture assertions for that contract and bounded PTY diagnostics so an unexpected worker exit retains its terminal error instead of failing before driver collection. Re-run wrapper/PTY tests under required-live, report actual task_3219_live_ count separately, formatting and make check-ci-fast. S3 background and S4 resume remain refused; Refs-only host publication.'
+  created_at: 2026-11-07T01:03:14.340956522Z
+  modified_at: 2026-11-07T01:03:14.340956522Z
+  session_id: 01a1b3868126
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
