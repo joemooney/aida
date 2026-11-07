@@ -1,10 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-11-07T01:30:22.389146637Z
+last_run: 2026-11-07T15:49:23.003247884Z
 last_by:
   seat: advisor
-  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   vendor: claude
 result: done
-note: '18:32: train running 3550+3545+3531+3516 (holds lifted); landed since 17:11: 3537 3535 3549; review watch rebuilt on a live grant after the 00:11Z revocation (2 reviews lost); rework lanes TASK-3219, STORY-2401, BUG-2473; BUG-2474 PR #3553; queued TASK-2959, TASK-911. Human-waiting: none.'
-due_since: 2026-11-07T02:30:42.732629054Z
-due_reason: every 1h
