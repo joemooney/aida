@@ -42,11 +42,6 @@ unattributed	aida-cli-lib/src/headless_tee.rs:let line = r#"{"type":"system","su
 unattributed	aida-cli-lib/src/headless_tee.rs:r#"{{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}}"#
 unattributed	aida-cli-lib/src/health_metrics.rs:const INIT: &str = r#"{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}"#;
 unattributed	aida-cli-lib/src/init_cmd.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
-unattributed	aida-cli-lib/src/tests/mcp_tests.rs:assert_eq!(plan.exe, PathBuf::from("/tmp/aida"));
-unattributed	aida-cli-lib/src/tests/mcp_tests.rs:exe: PathBuf::from("/tmp/aida"),
-unattributed	aida-cli-lib/src/tests/mcp_tests.rs:let dir = std::path::Path::new("/tmp/sessions");
-unattributed	aida-cli-lib/src/tests/mcp_tests.rs:working_directory = \"/tmp/wt-{name}\"\n\
-unattributed	aida-cli-lib/src/tests/mcp_tests.rs:worktree_path = \"/tmp/wt-{scope}\"\n\
 unattributed	aida-cli-lib/src/network_retry.rs:let mut c = Command::new("sh");
 unattributed	aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/proj/.aida/worktrees/pr-rebase-308"));
 unattributed	aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);

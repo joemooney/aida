@@ -755,7 +755,7 @@ fn mcp_respawn_decision_uses_version_then_build_identity() {
 #[test]
 fn mcp_respawn_plan_preserves_original_argv() {
     let plan = McpRespawnPlan {
-        exe: PathBuf::from("/tmp/aida"),
+        exe: PathBuf::from("/nonexistent/aida"),
         argv: vec![OsString::from("aida"), OsString::from("mcp-serve")],
         running: McpBinaryIdentity {
             version: "0.9.1".to_string(),
@@ -768,7 +768,7 @@ fn mcp_respawn_plan_preserves_original_argv() {
             dirty: false,
         },
     };
-    assert_eq!(plan.exe, PathBuf::from("/tmp/aida"));
+    assert_eq!(plan.exe, PathBuf::from("/nonexistent/aida"));
     assert_eq!(plan.argv[1], OsString::from("mcp-serve"));
     assert_eq!(plan.running.label(), "0.9.1 sha aaaaaaa");
     assert_eq!(plan.on_disk.label(), "0.9.1 sha bbbbbbb");
@@ -3658,7 +3658,7 @@ fn mcp_claim_path_is_case_insensitive_for_session_end_reaping() {
     // lease may differ in case from the spec_id claim_task lowercased into
     // the filename, so the path MUST fold case — else the reap misses and
     // the orphan lingers (the 24-day TASK-702 leak). Lock the contract.
-    let dir = std::path::Path::new("/tmp/sessions");
+    let dir = std::path::Path::new("/nonexistent/sessions");
     let lower = mcp_claim_path(dir, "task-702");
     let upper = mcp_claim_path(dir, "TASK-702");
     assert_eq!(lower, upper, "scope casing must not change the reaped path");
@@ -5388,7 +5388,7 @@ fn seed_lease(dir: &Path, id: &str, scope: &str, role: &str) {
              scope = \"{scope}\"\n\
              slug = \"{scope}\"\n\
              owner = \"tester\"\n\
-             worktree_path = \"/tmp/wt-{scope}\"\n\
+             worktree_path = \"/nonexistent/wt-{scope}\"\n\
              branch = \"{scope}-branch\"\n\
              started_at = \"2026-06-07T00:00:00Z\"\n\
              hostname = \"testhost\"\n\
@@ -5631,7 +5631,7 @@ fn seed_role(dir: &Path, name: &str, purpose: &str) {
              purpose = \"{purpose}\"\n\
              created_at = \"2026-06-01T00:00:00Z\"\n\
              last_active_at = \"2026-06-07T00:00:00Z\"\n\
-             working_directory = \"/tmp/wt-{name}\"\n\
+             working_directory = \"/nonexistent/wt-{name}\"\n\
              global = false\n\
              scope_tags = [\"inbox\"]\n\
              scope_status = \"draft\"\n"
