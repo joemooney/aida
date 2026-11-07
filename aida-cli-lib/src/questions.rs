@@ -1659,8 +1659,7 @@ pub(crate) fn questions_clarify(
         vendor.program()
     );
     let child_grant =
-        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+        crate::launch::assign_advisor_child(&project_root, vendor, contained, &mut command)?;
     // trace:BUG-2398 | ai:claude
     let status_code = session::coordinator_status_with_handle_guard(
         vendor,
@@ -1671,7 +1670,7 @@ pub(crate) fn questions_clarify(
     )
     .with_context(|| format!("failed to launch {}", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
-    crate::session::revoke_headless_child_grant(&child_grant.id);
+    drop(child_grant);
     let status_code = status_code?;
 
     if status_code.success() {

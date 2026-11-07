@@ -3,6 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use super::*;
+use crate::launch::profile::finalize_codex as prepare_launch;
 use std::path::Path;
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
@@ -512,7 +513,7 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
         1,
         Finalization::PrepareLaunch(1),
     ),
-    ("autopilot_intake.rs", 3, Finalization::CoordinatorSpawn),
+    ("autopilot_intake.rs", 2, Finalization::CoordinatorSpawn),
     ("burndown_run.rs", 4, Finalization::CoordinatorSpawn),
     ("compete_cmd.rs", 2, Finalization::PrepareLaunch(1)),
     (
@@ -553,9 +554,26 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "launch::assign_seat, the seat writer every converted site calls",
         ),
     ),
+    // PR-C moves the shared advisor seat assignment here; intake/questions
+    // retain their coordinator finalization and revoke-on-return boundary.
+    // trace:STORY-2326 | ai:codex
+    (
+        "launch/grant.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "advisor seat builder only; intake/questions finalize via coordinator spawn",
+        ),
+    ),
     ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
+    (
+        "queue_cmd.rs",
+        4,
+        Finalization::NotACodexLaunch(
+            "explicit Claude exec seats; Codex uses finalized session constructors",
+        ),
+    ),
     // Claude-only builders/resumes plus the shared seat-env helper; every
     // Codex spawn in this file (incl. the coordinator spawn) finalizes.
     // BUG-2386 adds two Codex resume sites, both finalized: the interactive
@@ -568,9 +586,9 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // plus 16 launcher calls (8 spawn_agent, 8 assign_seat); PR-B removes
     // two direct grant writes.
     // trace:STORY-2326 | ai:claude
-    ("session.rs", 23, Finalization::PrepareLaunch(7)),
+    ("session.rs", 26, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
-    ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
+    ("zen_drive_root.rs", 2, Finalization::PrepareLaunch(1)),
 ];
 
 /// Child-launch markers in whitespace-normalized source: a grant selector
@@ -692,23 +710,28 @@ fn launcher_calls(raw: &str) -> usize {
             })
             .count()
     };
-    ["assign_seat", "spawn_agent"]
-        .iter()
-        .map(|&name| {
-            let aliases: usize = raw
-                .split(&format!("{name} as "))
-                .skip(1)
-                .map(|rest| {
-                    rest.chars()
-                        .take_while(|c| is_ident(*c))
-                        .collect::<String>()
-                })
-                .filter(|alias| !alias.is_empty())
-                .map(|alias| calls(alias.as_str()))
-                .sum();
-            calls(name) + aliases
-        })
-        .sum()
+    [
+        "assign_seat",
+        "spawn_agent",
+        "exec_agent",
+        "assign_advisor_child",
+    ]
+    .iter()
+    .map(|&name| {
+        let aliases: usize = raw
+            .split(&format!("{name} as "))
+            .skip(1)
+            .map(|rest| {
+                rest.chars()
+                    .take_while(|c| is_ident(*c))
+                    .collect::<String>()
+            })
+            .filter(|alias| !alias.is_empty())
+            .map(|alias| calls(alias.as_str()))
+            .sum();
+        calls(name) + aliases
+    })
+    .sum()
 }
 
 /// The LAUNCH_INVENTORY count of the production source `src`.
@@ -728,6 +751,14 @@ fn flagged_as_unlisted(rel: &str, src: &str) -> bool {
 // trace:STORY-2326 | ai:claude
 #[test]
 fn story_2326_inventories_count_launcher_callers() {
+    let advisor = "fn go() { crate::launch::assign_advisor_child(root, vendor, contained, cmd); }";
+    assert_eq!(launcher_calls(advisor), 1);
+    assert_eq!(launch_sites(advisor), 1);
+    assert_eq!(role_sites(advisor), 1);
+    let exec = "fn go(cmd: &mut Command) { crate::launch::spawn::exec_agent(cmd); }";
+    assert_eq!(launcher_calls(exec), 1);
+    assert!(flagged_as_unlisted("fixture_exec.rs", exec));
+    assert!(role_flagged_as_unlisted("fixture_exec.rs", exec));
     let seat = "fn launch(ctx: &LaunchContext, g: &str) -> Result<()> {\n\
                 let mut cmd = crate::launch::spawn_agent(ctx)?;\n\
                 crate::launch::assign_seat(&mut cmd, ctx.kind(),\n\
@@ -854,7 +885,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
             .unwrap_or_else(|| panic!("stale LAUNCH_INVENTORY entry {rel}"));
         match how {
             Finalization::PrepareLaunch(n) => assert!(
-                text.matches("crate::codex_tool_env::prepare_launch(")
+                text.matches("crate::launch::profile::finalize_codex(")
                     .count()
                     >= *n,
                 "{rel}: a managed Codex spawn path lost finalization"
@@ -868,12 +899,27 @@ fn bug_2398_final_spawn_boundary_ratchet() {
                     .skip(1)
                 {
                     let rest_of_fn = call.split("\n}\n").next().unwrap();
-                    assert!(
-                        rest_of_fn.contains("revoke_headless_child_grant("),
-                        "{rel}: a coordinator launch does not revoke its child grant"
-                    );
+                    if matches!(*rel, "autopilot_intake.rs" | "questions.rs") {
+                        // PR-C's scoped advisor grant owns revocation, including
+                        // assignment and spawn errors. Explicitly drop it before
+                        // propagating the coordinator result or exiting.
+                        // trace:STORY-2326 | ai:codex
+                        assert!(text.contains("crate::launch::assign_advisor_child("));
+                        let drop = rest_of_fn.find("drop(child_grant);").unwrap();
+                        let propagate = rest_of_fn.find("let status_code = status_code?;").unwrap();
+                        assert!(drop < propagate, "{rel}: result escapes grant cleanup");
+                        let grant = include_str!("../launch/grant.rs");
+                        assert!(grant.contains("impl Drop for AdvisorChildGrant"));
+                        assert!(grant
+                            .contains("crate::session::revoke_headless_child_grant(&self.0.id)"));
+                    } else {
+                        assert!(
+                            rest_of_fn.contains("revoke_headless_child_grant("),
+                            "{rel}: a coordinator launch does not revoke its child grant"
+                        );
+                    }
                 }
-                assert!(!text.contains("crate::codex_tool_env::prepare_launch("));
+                assert!(!text.contains("crate::launch::profile::finalize_codex("));
             }
             Finalization::NotACodexLaunch(reason) => assert!(!reason.is_empty()),
         }
@@ -889,7 +935,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .split("\n}\n")
         .next()
         .unwrap()
-        .contains("crate::codex_tool_env::prepare_launch(cmd)"));
+        .contains("crate::launch::profile::finalize_codex(cmd)"));
     let spawn = session
         .split("fn coordinator_status_with_handle_guard(")
         .nth(1)
@@ -912,7 +958,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .unwrap();
     assert!(
         run.find("customize(&mut child_cmd)").unwrap()
-            < run.find("crate::codex_tool_env::prepare_launch").unwrap()
+            < run.find("crate::launch::profile::finalize_codex").unwrap()
     );
 }
 
@@ -1781,12 +1827,15 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ),
     // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
     ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
+    // Shared advisor builder only; callers finalize via coordinator spawn.
+    ("launch/grant.rs", 1, RoleRoute::SeatWriter),
+    ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
+    ("questions.rs", 1, RoleRoute::LaunchInventory),
     (
-        "orchestrator_leases.rs",
-        1,
-        RoleRoute::AidaChild("reviewer gate runs `aida queue work`, which finalizes in session.rs"),
+        "queue_cmd.rs",
+        4,
+        RoleRoute::AidaChild("Claude exec seats; Codex finalizes in session.rs"),
     ),
-    ("phase_driver.rs", 3, RoleRoute::LaunchInventory),
     // BUG-2386 adds two: `finalize_codex_resume` (interactive resume, seat
     // from the delegated grant) and `spawn_vendor_headless_resume_granted`
     // (punt/bg resume); both finalize through `prepare_launch`.
@@ -1794,8 +1843,8 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // STORY-2326: the headless forking and reviewer writes moved into
     // launch::assign_seat; 6 literal writes plus 16 launcher calls (8
     // spawn_agent, 8 assign_seat). trace:STORY-2326 | ai:codex
-    ("session.rs", 22, RoleRoute::LaunchInventory),
-    ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
+    ("session.rs", 25, RoleRoute::LaunchInventory),
+    ("zen_drive_root.rs", 2, RoleRoute::LaunchInventory),
 ];
 
 // trace:BUG-2395 | ai:claude
@@ -1939,7 +1988,12 @@ fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
         .current_dir(tmp.path())
         .env(GRANT_ENV, "")
         .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
-        .env("AIDA_SESSION_ROLE", "implementer");
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env_remove("AIDA_CONTAINED")
+        .env("AIDA_CONTAINMENT_POSTURE", "none")
+        .env_remove("AIDA_SESSION_PURPOSE")
+        .env_remove("AIDA_STANDALONE_IMPLEMENTER")
+        .env_remove("AIDA_HEADLESS_LANE");
     prepare_launch(&mut expected).unwrap();
     let args = |c: &Command| c.get_args().map(|a| a.to_owned()).collect::<Vec<_>>();
     let envs = |c: &Command| {

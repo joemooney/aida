@@ -134,12 +134,13 @@ printf '%s' "$AIDA_SESSION_GRANT" > "$AIDA_PROJECT_ROOT/child-grant"
         for worker in ["reviewer", "implementer"] {
             if !expected.iter().any(|s| s == worker) {
                 assert!(
-                    authority::issue_launch_child(tmp.path(), worker, "grandchild", false).is_err()
+                    crate::launch::issue_launch_child(tmp.path(), worker, "grandchild", false)
+                        .is_err()
                 );
                 continue;
             }
             let grandchild =
-                authority::issue_launch_child(tmp.path(), worker, "grandchild", false).unwrap();
+                crate::launch::issue_launch_child(tmp.path(), worker, "grandchild", false).unwrap();
             assert!(grandchild.delegable_seats.is_empty());
             assert_eq!(grandchild.parent_grant_id.as_deref(), Some(id.as_str()));
         }
@@ -167,7 +168,7 @@ printf '%s' "$AIDA_SESSION_GRANT" > "$AIDA_PROJECT_ROOT/child-grant"
     )
     .unwrap_err();
     assert!(format!("{refusal:#}").contains("requires an advisor or integrator"));
-    assert!(authority::issue_launch_child(tmp.path(), "implementer", "worker", false).is_err());
+    assert!(crate::launch::issue_launch_child(tmp.path(), "implementer", "worker", false).is_err());
     env.set_key("AIDA_USER", "delegator-operator");
     env.set_key(authority::GRANT_ENV, &parent);
     let refusal = authority::issue_launch_child_with_delegation(
@@ -196,10 +197,11 @@ fn bug_2467_revoking_root_invalidates_grandchild_live_and_recorded_authority() {
         &["advisor", "reviewer"],
     );
     env.set_key(authority::GRANT_ENV, &root);
-    let child = authority::issue_launch_child(tmp.path(), "advisor", "child", false).unwrap();
+    let child = crate::launch::issue_launch_child(tmp.path(), "advisor", "child", false).unwrap();
     env.set_key("AIDA_USER", "child");
     env.set_key(authority::GRANT_ENV, &child.id);
-    let worker = authority::issue_launch_child(tmp.path(), "reviewer", "worker", false).unwrap();
+    let worker =
+        crate::launch::issue_launch_child(tmp.path(), "reviewer", "worker", false).unwrap();
     env.set_key("AIDA_USER", "worker");
     env.set_key(authority::GRANT_ENV, &worker.id);
     assert!(authority::current_grant(tmp.path()).is_some());

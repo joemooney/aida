@@ -1663,7 +1663,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
         if let Some(id) = selector {
             child.env("AIDA_SESSION_ID", id);
         }
-        crate::codex_tool_env::prepare_launch(&mut child).unwrap();
+        crate::launch::profile::finalize_codex(&mut child).unwrap();
         child
     };
     let job_argv = [

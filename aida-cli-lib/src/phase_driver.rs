@@ -166,11 +166,11 @@ pub(crate) struct RealPhaseDriver {
     // trace:BUG-1460 | ai:codex
     pub(crate) ci_terminal_sha: Option<String>,
     pub(crate) ci_terminal_green: Option<bool>,
-    /// Cached aida binary path, resolved once at construction. Re-resolving
-    /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
-    /// replaced the running dev binary: `/proc/self/exe` then includes a
-    /// " (deleted)" suffix, and `Command::new("<path> (deleted)").spawn()`
-    /// fails with ENOENT. trace:BUG-217 | ai:claude
+    /// Executable injection for unit fixtures only. Production control
+    /// children execute the running image; legacy helpers resolve their
+    /// replacement path lazily through `aida_exe()`.
+    // trace:STORY-2326 | ai:codex
+    #[cfg(test)]
     pub(crate) aida_exe: std::path::PathBuf,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
@@ -669,6 +669,7 @@ impl RealPhaseDriver {
             ci_run_id: None,
             ci_terminal_sha: None,
             ci_terminal_green: None,
+            #[cfg(test)]
             aida_exe: resolve_aida_exe(),
             no_human,
             autonomy_mode,
@@ -709,7 +710,28 @@ impl RealPhaseDriver {
     }
 
     pub(crate) fn aida_exe(&self) -> std::path::PathBuf {
-        self.aida_exe.clone()
+        #[cfg(test)]
+        {
+            self.aida_exe.clone()
+        }
+        #[cfg(not(test))]
+        {
+            resolve_aida_exe()
+        }
+    }
+
+    // Unit fixtures supply their current image through the existing aida_exe
+    // field. Production never substitutes that field for the kernel's image.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn control_child(&self) -> Result<std::process::Command> {
+        #[cfg(test)]
+        {
+            crate::launch::control::control_child_for_test(&self.aida_exe)
+        }
+        #[cfg(not(test))]
+        {
+            crate::launch::control_child()
+        }
     }
 
     /// TASK-1421: the injection seam. An injected
@@ -1376,10 +1398,19 @@ impl RealPhaseDriver {
         }
         let content = read_headless_log_for_session(&self.project_root, session_uuid)?;
         let punt = pending_text_question_from_headless_log(&content)?;
-        let status = std::process::Command::new(self.aida_exe())
+        let mut command = match self.control_child() {
+            Ok(command) => command,
+            Err(error) => {
+                eprintln!(
+                    "auto-punt control child refused for {}: {error:#}",
+                    self.spec
+                );
+                return None;
+            }
+        };
+        let status = command
             .current_dir(worktree_path)
             .args(build_auto_punt_args(&self.spec, &punt.detail, &punt.lean))
-            .env("AIDA_SESSION_ROLE", "implementer")
             .status_retrying_etxtbsy()
             .ok()?;
         if !status.success() {
@@ -2291,7 +2322,7 @@ impl RealPhaseDriver {
         // trace:BUG-2398 | ai:codex — Codex tools get their own delegation,
         // never the consult launcher's ambient advisor selector.
         let codex_grant = if vendor == session::HeadlessVendor::Codex {
-            let grant = crate::gate::seat_authority::issue_launch_child(
+            let grant = crate::launch::issue_launch_child(
                 &self.project_root,
                 "advisor",
                 &crate::current_user_id(None),
@@ -2304,7 +2335,7 @@ impl RealPhaseDriver {
                 .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
                 .env("AIDA_USER", crate::current_user_id(None))
                 .env("AIDA_PROJECT_ROOT", &self.project_root);
-            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut child_cmd) {
+            if let Err(error) = crate::launch::profile::finalize_codex(&mut child_cmd) {
                 session::revoke_headless_child_grant(&grant.id);
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,

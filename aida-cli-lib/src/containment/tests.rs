@@ -219,11 +219,14 @@ fn task_3048_only_signed_agy_descriptor_selects_outer_only() {
         data.vendor["agy"].credentials,
         CredentialLayout::Unverified
     ));
-    // The capability row is not a production profile or launch admission.
-    assert!(
-        crate::launch::contained::ContainedVendor::for_program(std::ffi::OsStr::new("agy"))
-            .is_err()
-    );
+    // A common-wrapper row is preparation data, not launch admission.
+    let runtime = runtime_policy("agy").unwrap();
+    assert!(runtime
+        .require_auth_policy(&runtime.auth_hosts)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }
 
 // Same fixture never reads the live repo/config or executes config commands.
@@ -443,7 +446,7 @@ fn task_2705_policy_errors_are_redacted_and_aida_selector_stays_closed() {
     );
     let mut unwired = std::process::Command::new("codex");
     unwired.env("AIDA_PROJECT_ROOT", partial.path());
-    assert!(crate::codex_tool_env::prepare_launch(&mut unwired)
+    assert!(crate::launch::profile::finalize_codex(&mut unwired)
         .unwrap_err()
         .to_string()
         .contains(crate::codex_tool_env::UNWIRED_AIDA_POSTURE));

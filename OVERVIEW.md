@@ -396,7 +396,15 @@ create/comment operations to recover confirmed writes without replay. See [the w
 constructs vendor processes through `spawn_agent`. Seat assignment is explicit;
 background handoffs recover lane identity from the worktree lease. An exact-count
 source ratchet inventories constructors and protected environment writers outside
-the launcher. Resource validation grants no write authority by itself.
+the launcher. The effectful vendor profile owns Codex finalization, after seat
+and identity decisions and before stdio or process hooks. Launched children mint
+through one `launch::issue_launch_child` entry, retaining delegation and keyring
+checks. AIDA control children execute the kernel-held `/proc/self/exe` image, surviving
+promote/rollback renames and unlinking, with `argv[0]` set to `aida` so process
+labels, loop-anchor detection and CLI usage retain the AIDA name. They forward
+only the caller's grant selector; routing roles travel as explicit command args.
+The TUI uses the same selector-only `control_env` policy. Resource validation
+grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
 ### The four layers
@@ -1456,6 +1464,15 @@ bounded supervisor. Its successful report credits only the fixed diagnostic;
 it cannot launch arbitrary programs or issue an applied-containment receipt.
 This diagnostic remains separate from ordinary launch receipts. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
 <!-- trace:TASK-2705 | ai:codex -->
+
+The common foreground wrapper also has a descriptor-driven private-runtime
+mechanism for outer-only vendors: fresh writable runtime state, a pinned
+read-only credential leaf, explicit trusted auth-host approval and read-only
+Git/store/cache authority. AGY's `vendors.toml` row selects that mechanism, but
+its incomplete refresh-host inventory and missing integrated all-tool evidence
+keep admission closed. See [AGY adapter preparation](docs/internal/testing/containment-conformance.md#agy-shared-boundary-adapter-preparation)
+for the remaining acceptance and model-free test limits.
+<!-- trace:TASK-3048 | ai:codex -->
 
 ### Foreground headless Codex boundary
 

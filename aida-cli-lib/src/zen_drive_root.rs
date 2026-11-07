@@ -334,7 +334,7 @@ pub(crate) fn run_do_drive(
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
             args.join(" ").dimmed()
         );
-        let status = std::process::Command::new(resolve_aida_exe())
+        let status = crate::launch::control_child()?
             .args(args)
             .status_retrying_etxtbsy()
             .with_context(|| format!("failed to launch `aida {context}`"))?;
@@ -515,7 +515,7 @@ pub(crate) fn do_micro_groom_mode(
         );
     }
     let mode_str = proposal.mode.to_string();
-    let status = std::process::Command::new(resolve_aida_exe())
+    let status = crate::launch::control_child()?
         .args(["edit", display, "--mode", &mode_str])
         .status_retrying_etxtbsy()
         .context("failed to record the confirmed mode via `aida edit --mode`")?;
@@ -622,7 +622,7 @@ pub(crate) fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result
 /// BUG-2416: the guided session's child Command. The implementer seat is a
 /// baseline seat, so its grant decision is an explicit EMPTY selector (never
 /// the launcher's own grant), exactly as the dispatch implementer lane does.
-/// A Codex child is then finalized through `codex_tool_env::prepare_launch`,
+/// A Codex child is then finalized through the Codex vendor profile,
 /// which carries the seat into Codex tool shells and refuses a launch whose
 /// grant decision is missing or conflicts with the baseline.
 // trace:BUG-2416 | ai:claude
@@ -630,14 +630,37 @@ pub(crate) fn guided_launch_command(
     launch: &session::GuidedSessionLaunch,
     worktree: &std::path::Path,
 ) -> Result<std::process::Command> {
-    let mut cmd = std::process::Command::new(launch.program);
-    cmd.arg(&launch.prompt)
-        .current_dir(worktree)
-        .env(crate::gate::seat_authority::GRANT_ENV, "")
-        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
-        .env("AIDA_SESSION_ROLE", "implementer");
+    let vendor = aida_core::launch_policy::LaunchVendor::parse(launch.program)?;
+    let headless = session::HeadlessVendor::parse(launch.program)
+        .context("unsupported guided launch vendor")?;
+    let posture = session::containment_posture(headless, false)?;
+    anyhow::ensure!(
+        posture != session::ContainmentPosture::Aida,
+        "guided launch requires the supervised agent launcher for AIDA containment"
+    );
+    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+        vendor,
+        kind: aida_core::launch_policy::LaunchKind::Fresh,
+        program: launch.program.into(),
+        args: vec![launch.prompt.clone()],
+        tail: Vec::new(),
+        posture,
+        cwd: worktree.to_path_buf(),
+        set_cwd: true,
+        host_main: None,
+    })?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::Child {
+            role: "implementer",
+            grant: "",
+        },
+    )?;
+    cmd.env(crate::gate::seat_authority::GRANT_FILE_ENV, "");
     if launch.program == "codex" {
-        crate::codex_tool_env::prepare_launch(&mut cmd)
+        crate::launch::profile::finalize_codex(&mut cmd)
             .context("guided Codex launch refused by seat transport")?;
     }
     Ok(cmd)
@@ -926,10 +949,9 @@ pub(crate) fn run_zen_drive(
     // Drive the one spec through the EXISTING orchestrator by self-invoking
     // `aida queue work <spec> --auto-complete --no-human <mode> [...]` — the
     // SAME full per-spec engine burndown uses (ADR-7), so the independent
-    // reviewer + merge run for free (TASK-1049). resolve_aida_exe() (not raw
-    // a fresh OS executable lookup) survives a mid-run `cargo build` swap. The drive owns the
+    // reviewer + merge run for free (TASK-1049). The child runs this image,
+    // even after a build replaces or unlinks it. The drive owns the
     // implement → CI → review → merge → pull sequence.
-    let exe = resolve_aida_exe();
     let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
     eprintln!(
         "  {} zen-driving {} — aida {}",
@@ -937,7 +959,7 @@ pub(crate) fn run_zen_drive(
         display,
         args.join(" ").dimmed()
     );
-    let mut cmd = std::process::Command::new(&exe);
+    let mut cmd = crate::launch::control_child()?;
     cmd.args(&args);
     if let Some(cwd) = &drive_cwd {
         cmd.current_dir(cwd);

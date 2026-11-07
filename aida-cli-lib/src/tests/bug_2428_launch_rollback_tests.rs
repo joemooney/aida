@@ -162,8 +162,8 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     for exec in [
         "session::exec_codex_resume(",
         "session::exec_codex_session(",
-        "session::exec_claude_resume(",
-        "session::exec_claude_with_session(",
+        "session::build_claude_resume_exec_command(",
+        "session::build_claude_exec_command(",
     ] {
         let at = body.find(exec).unwrap_or_else(|| panic!("{exec}"));
         let before = &body[..at];

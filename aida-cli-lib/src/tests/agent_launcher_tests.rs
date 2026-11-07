@@ -3120,7 +3120,9 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
-        default_args: vec!["--dangerously-skip-permissions".to_string()],
+        // Outer-only bypass belongs only to the receipt-bearing wrapper.
+        // trace:TASK-3048 | ai:codex
+        default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
         contained: false,
     };
@@ -3183,23 +3185,15 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     assert!(env.contains("AIDA_SESSION_ROLE=implementer"), "{env}");
     assert!(env.contains("AIDA_SESSION_SCOPE=STORY-434"), "{env}");
     assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
-    assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
+    assert!(!argv.contains("--dangerously-skip-permissions"), "{argv}");
     assert!(argv.contains("--prompt-interactive"), "{argv}");
     assert!(argv.contains("work STORY-434"), "{argv}");
-    // BUG-1686 fixed the HEADLESS agy argv, whose `-p` swallowed the permission
-    // flag. This interactive lane never had that bug — its option flags already
-    // precede the prompt flag, with the prompt as the adjacent value — and this
-    // assertion records that, so the headless fix is not silently widened into a
-    // path that did not need it and cannot regress the other way either.
-    // trace:BUG-1686 | ai:claude
-    // trace:BUG-1686.ac4341ac | ai:claude
+    // Interactive native-permission runs keep the prompt adjacent to its flag.
+    // Permission bypass is exercised only behind the wrapper's receipt barrier.
+    // trace:BUG-1686 TASK-3048 | ai:codex
     assert_eq!(
         argv.lines().collect::<Vec<&str>>(),
-        vec![
-            "--dangerously-skip-permissions",
-            "--prompt-interactive",
-            "work STORY-434",
-        ],
+        vec!["--prompt-interactive", "work STORY-434",],
         "{argv}"
     );
     let views = agent_registry::list_agent_views(
