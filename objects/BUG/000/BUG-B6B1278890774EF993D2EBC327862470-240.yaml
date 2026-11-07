@@ -14,13 +14,21 @@ description: |
   1. For one PR at one head, the newest verdict among the PR-N key and the spec keys of the PR's trailers decides the merge hold and the train gate. An older request-changes at the same head no longer holds.
   2. Regression test: CR(spec, sha X, t1) then APPROVED(PR-N, sha X, t2>t1) means train admits; reversed order holds.
   3. A newer request-changes still re-holds.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:48:00.000573110Z
-modified_at: 2026-11-07T00:48:00.000573110Z
+modified_at: 2026-11-07T00:50:54.851901665Z
 req_type: Bug
+history:
+- id: 01a1b37c-ad03-7492-a7b6-4b66763d938e
+  author: aida-session-start
+  timestamp: 2026-11-07T00:50:54.851900735Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 37c695e340639ae667426824967c5ca3c708e25e
   branch: main
