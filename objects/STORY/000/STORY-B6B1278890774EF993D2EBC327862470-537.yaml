@@ -24,8 +24,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T05:48:36.735638292Z
-modified_at: 2026-11-07T05:48:36.735638292Z
+modified_at: 2026-11-07T05:49:19.749487067Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
+  created_at: 2026-11-07T05:49:19.749483836Z
+  created_by: joe
+history:
+- id: 01a1b48d-f41e-7ab3-9e39-f07ce7df41ef
+  author: joe
+  timestamp: 2026-11-07T05:49:24.382161196Z
+  session_id: 01a1b47530f4
+  changes: []
 filed_at:
   code_sha: 36fc675baec589c06c273135f0021eefcfe35db7
   branch: main
