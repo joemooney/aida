@@ -1,0 +1,19 @@
+id: 01a1b684-98b1-7fe1-9247-3ff8ce42b2dd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-941
+agreed_id: TASK-3387
+title: Separate Infinity lessons for vendor harness support from AIDA-owned agent research
+description: 'Documentation-only request from Joe: split the Infinity architecture deep dive into two independently readable documents. One covers benefits to existing Codex, Claude and AGY support, current capabilities, adapter limitations and incremental validation. The other covers the optional AIDA-owned agent runtime, durable execution risks, prototype scope and a separate investment decision. Cross-link the documents and preserve useful source analysis. No runtime implementation or runtime adoption is authorized.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T14:58:25.585224297Z
+modified_at: 2026-11-07T14:58:25.585224297Z
+req_type: Task
+filed_at:
+  code_sha: 122fea66d306d6739516983479c50201e9d0ae84
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02790568d5e
+  vendor: codex
