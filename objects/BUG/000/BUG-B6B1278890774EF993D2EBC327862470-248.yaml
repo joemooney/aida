@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T14:38:50.271312640Z
-modified_at: 2026-11-07T15:49:45.343253289Z
+modified_at: 2026-11-07T15:51:37.139125478Z
 req_type: Bug
 comments:
 - id: 01a1b678-d06e-7c30-a326-48a454771ec9
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-07T15:45:08.752698664Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6b5-4bb3-7d50-8123-00378e922448
+  author: dirtlab
+  content: 'Applied binding advisor delta for #3601: loaded-store not-found falls back to case-insensitive literal completing/Refs trailers while ambiguous identities still refuse; both orchestrator PR-open recovery paths use the Refs/alias-aware publication guard. Completion gate unchanged. Added not-found and Refs-only drained recovery regressions. untested=true: lane runner refused due to missing fresh heartbeat. rustfmt and git diff --check pass; fast gate interrupted because it invokes Cargo forbidden in this lane. Existing #3601 is closed (unmerged); updating its existing branch for delta re-review.'
+  created_at: 2026-11-07T15:51:37.139125478Z
+  modified_at: 2026-11-07T15:51:37.139125478Z
+  session_id: 01a1b6b391c3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b672-ec35-7090-9993-910d229bdcf7
   author: joe
