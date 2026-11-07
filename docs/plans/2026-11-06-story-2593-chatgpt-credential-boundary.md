@@ -3,7 +3,10 @@
 <!-- trace:STORY-2593 | ai:codex -->
 
 Status: option (a) signed off by the advisor on 2026-11-06 (recorded on
-STORY-2593). This is the design record, not a completed containment change.
+STORY-2593), but the step-1 compatibility gate failed on 2026-11-06.
+Implementation is blocked pending an advisor/operator interface decision on
+the ID-token-shaped/empty-refresh schema or another supported `codex exec`
+interface. This is the design record, not a completed containment change.
 This file is the canonical design; the STORY-2593 comment points here rather
 than maintaining a second copy.
 
@@ -93,7 +96,8 @@ The master/operator must record explicit sign-off on STORY-2593 for option (a),
 including the residual readable bearer-token risk, the no-in-lane-renewal
 deadline, and the requirement to return to this gate if installed `codex exec`
 cannot consume access-only credentials. The advisor recorded that sign-off on
-STORY-2593 on 2026-11-06; implementation proceeds under its conditions.
+STORY-2593 on 2026-11-06. Its step-1 stop condition was subsequently reached;
+steps 1-3 remain blocked pending the interface decision described above.
 
 ## Observed implementation
 
