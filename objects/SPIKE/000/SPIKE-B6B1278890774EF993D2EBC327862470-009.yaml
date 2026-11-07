@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T21:37:39.393335869Z
-modified_at: 2026-11-07T22:10:52.487955430Z
+modified_at: 2026-11-07T23:39:24.377095222Z
 req_type: Spike
 relationships:
 - rel_type: Child
@@ -29,6 +29,24 @@ comments:
   created_at: 2026-11-07T22:10:52.487955430Z
   modified_at: 2026-11-07T22:10:52.487955430Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b861-9159-7af0-a632-59af70624076
+  author: joe
+  content: |-
+    ADVISOR RULINGS 2026-11-07 16:55 MST on docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md section 9:
+    1. aida-mcp first (PR 12 right after PR 1). Section 3 shows only sibling crates cut wall time; the leaf crates are 0% hygiene. Leaves (PR 5) run in parallel only when a lane is free.
+    2. Yes. Leaf and delivery crates gate on "no slower than run-to-run spread"; kernel and family cuts keep the faster-only gate (STORY-1488 amendment 5 narrowed, not removed).
+    3. Yes, relocate-ledger-paths.py applied in the move commit. Include scripts/portability-allowlist.txt: PR #3637 just failed the set-based portability ratchet because moved rows look new.
+    4. Invert through traits in gate (EPIC-78 ports). Moving 144 items down would make gate (39.8k lines) the next SCC.
+    5. Children of EPIC-78, but PRs 1-6 and 12 are exempt from the STORY-2326 deferral (they touch no in-flight file). PRs 7-11 stay sequenced behind their named prerequisites.
+    6. STORY-2326 owns queue_cmd Work region until PR-D MERGES, not merely in review; PR 3 moves the non-Work arms only.
+    7. Allowed for the agent/dev profiles only, behind a cargo feature, with CI and release staying bundled; record the system libsqlite3 minimum version.
+    8. Dissolve lib_part1..6.rs in PR 4; codegraph indexes real modules.
+    9. aida-tui may depend on aida-cli-lib now (command palette); aida-server waits for the family crates.
+    Filed: PR 4 and PR 12 as tasks under EPIC-78. SPIKE-713 deliverable is complete.
+  created_at: 2026-11-07T23:39:24.377095222Z
+  modified_at: 2026-11-07T23:39:24.377095222Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7f2-40d4-7c30-893c-c6bfa958c1d6
