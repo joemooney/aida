@@ -9,12 +9,12 @@ description: |-
 
   PR: #3536
   Reviewed sha: b9dc534564860a2b4bdb685263d634eb04808855
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T02:13:12.679223971Z
-modified_at: 2026-11-07T05:02:35.290989424Z
+modified_at: 2026-11-07T06:45:21.148176115Z
 req_type: Task
 tags:
 - carried-from:BUG-2472
@@ -67,6 +67,20 @@ history:
   timestamp: 2026-11-07T05:02:36.942841143Z
   session_id: 01a1b458c9a5
   changes: []
+- id: 01a1b4c1-2c10-7531-a855-29ea50bbdff1
+  author: aida-auto-bump
+  timestamp: 2026-11-07T06:45:21.040964008Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b4c1-2c7c-7aa3-956c-a5a02aa0e5d9
+  timestamp: 2026-11-07T06:45:21.148171675Z
+  agent: aida
+  commit_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
+  summary: 'Train refusal keeps diagnostic + nonzero exit and now omits the impossible ''Re-run manually'' hint (pr_cmd.rs:8297 early return, same BRANCH_PREFIX check as review_gates.rs:1136); non-train skip hints unchanged; docs updated; CI green at head. Non-blocking: tests/test_gitlab_review_handoff.py regression is not wired into CI.'
+  review_verdict: approved
 filed_at:
   code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
   branch: main
@@ -74,3 +88,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b8fe51ef0f4
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T06:45:21.040958808Z
+  completion_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
