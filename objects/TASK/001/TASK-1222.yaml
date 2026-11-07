@@ -15,13 +15,24 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-10-04T04:42:54.630586638Z
+modified_at: 2026-11-07T20:26:47.503738993Z
 req_type: Task
 tags:
 - cleanup
 - cruft
 - hygiene
 - worktree
+comments:
+- id: 01a1b7b1-394f-7ce1-94e8-b54cacaf7665
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-14T03:40:44.133970260Z","deferred_until":"branch/worktree cruft actually impedes work, or a scheduled batch-review session (the merged-safe worktrees are already reaped; the remaining ~226 are UNMERGED origin branches needing a per-branch human glance — not a blind delete)","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:47.503733626Z
+  modified_at: 2026-11-07T20:26:47.503733626Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-14T03:40:44.133970260Z
-deferred_until: branch/worktree cruft actually impedes work, or a scheduled batch-review session (the merged-safe worktrees are already reaped; the remaining ~226 are UNMERGED origin branches needing a per-branch human glance — not a blind delete)
+deferred_until: manual:operator
