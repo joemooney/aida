@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-07T20:57:42.078737324Z
+modified_at: 2026-11-07T20:57:43.421735021Z
 req_type: Task
 tags:
 - cli
@@ -28,6 +28,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:26:45.741850757Z
   modified_at: 2026-11-07T20:26:45.741850757Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cd-8afd-7872-a79b-4311484af0a8
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage: ACTIVATED. 0.16.0 shipped and the hidden aliases are still live (aida graph --blocked-by). Single user: remove them now, no grace period.'
+  created_at: 2026-11-07T20:57:43.421735021Z
+  modified_at: 2026-11-07T20:57:43.421735021Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
