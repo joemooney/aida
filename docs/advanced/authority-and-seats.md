@@ -46,18 +46,20 @@ When you launch an agent for a seat from a terminal that holds no grant, `aida a
 
 ## Child grants and delegation
 
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-911 | ai:codex -->
+
 **Status: built.** An advisor often starts implementers and reviewers. Each agent it launches gets its own child grant for one seat. A session can hand down only the seats it named when it was entered:
 
 ```
-eval "$(aida role enter advisor --delegate-seat implementer --delegate-seat reviewer)"
+eval "$(aida role enter advisor --delegate-seat implementer --delegate-seat reviewer --delegate-seat advisor --delegate-seat integrator)"
 ```
 
-![Delegation: a direct grant hands down named child seats, one level only](../showcase/assets/authority-delegation.svg)
+![Delegation: named seats bounded by the parent grant; advisor and integrator children may delegate onward within that set](../showcase/assets/authority-delegation.svg)
 
 - **Empty by default.** With no `--delegate-seat`, a session can delegate nothing, and a launch that asks for a seat refuses and names the flag to add. Entering advisor without the flag asks once whether to include advisor itself; the default answer is no.
 - **One seat per child.** A child grant names one seat, from the parent's delegation set, for one launched session.
-- **No onward delegation.** A child cannot delegate further.
-- **Tied to the parent.** A child grant shares its parent's expiry. It stops working when the parent is revoked or the roster no longer allows the seat.
+- **Bounded onward delegation.** Advisor and integrator children inherit the validated parent's delegation set and can delegate onward within it; `aida agent new --delegate-seat` can narrow that set. Implementer and reviewer children cannot delegate onward.
+- **Tied to the grant chain.** A descendant's expiry is bounded by its grant chain. It stops working when any ancestor is revoked or the roster no longer allows the seat.
 
 Not every launcher issues a child grant. `aida agent new --role <seat>` and `aida queue work` do. `aida session new` issues none: its role option only labels the session, and the agent inherits the parent's grant from the environment. The [roles and sessions reference](../cli/06-roles-sessions.md) has the full table.
 
