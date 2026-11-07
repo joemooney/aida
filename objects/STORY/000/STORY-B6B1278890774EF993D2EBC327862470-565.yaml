@@ -28,8 +28,25 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574469Z
-modified_at: 2026-11-07T23:34:54.519630102Z
+modified_at: 2026-11-07T23:51:09.819197553Z
 req_type: Story
+comments:
+- id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
+  author: dirtlab
+  content: |
+    Native implementer handoff: initial non-completing slice, left uncommitted. Recorded publication declaration: [AI:codex] feat(doctor): add lane host diagnostics and containment preflight (Refs STORY-2642).
+
+    Implemented --lane-host text/JSON diagnostics for every enabled lane vendor, user permission-preset fixes, safe idempotent Cargo wrapper configuration, init reporting, and a containment preflight before real no-human launches (including drains; resumes use their recorded vendor). The existing trusted native-Codex policy remains distinct from AIDA containment. FAQ-151 now points to the command and retains manual setup steps.
+
+    Changed files: aida-cli-lib/src/doctor_cmd.rs, init_cmd.rs, lib.rs, queue_cmd.rs, lane_host.rs, vendors/mod.rs, vendors/host_diagnostics.rs; docs/cli/07-project-setup.md. FAQ-151 was updated through AIDA.
+
+    Final-source lane-runner validation passed: lane_host::tests (10 executed tests), story_2539_vendor_literal_ratchet (3 executed tests), permissions_set_contained_is_parseable_idempotent_and_backed_up (1 executed test). rustfmt checks, git diff --check, check-exec-context.py (zero new ambient sites), and check-store-writers.py passed. make check-ci-fast was interrupted when it unexpectedly started a direct Cargo check; it is not counted as validation. Runner receipts noted overlay-stale after the primary rewrote its seed generation; all listed jobs nevertheless exited 0 with executed-test results.
+
+    Remaining contract gaps: lane cache reachability cannot be certified until STORY-2641 supplies transport and an in-sandbox probe (the row deliberately fails as unverified); binary freshness currently compares the local origin default-branch SHA, with release freshness unverified; unsupported/AGY auth sources remain unverified. Auth checks establish recognized source presence only. The command therefore cannot certify full readiness yet. Keep STORY-2642 In Progress and preserve Refs on publication. No commit, push, PR creation, queue completion, review recording or merge was attempted from this seat.
+  created_at: 2026-11-07T23:51:09.819197553Z
+  modified_at: 2026-11-07T23:51:09.819197553Z
+  session_id: 01a1b85d3963
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
