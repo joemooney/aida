@@ -1,7 +1,8 @@
 job: defer-resurface-route
-due_since: 2026-11-06T23:31:34.413670195Z
-due_reason: on CronJobFailed:defer-resurface
-due_failure:
-  trip_id: defer-resurface@2026-11-06T23:29:16.238386307Z
-  job: defer-resurface
-  error: 'exit 127: this aida binary does not support the command of scheduled job ''defer-resurface'': unknown scheduled task command ''defer resurface''; valid commands: cache verify, cache refresh --history --if-behind, cache refresh --if-requested, session reap, session hygiene, queue gc, notify check, doctor, doctor check performance --fail-on-findings, fetch --code-only, store compact, store gc, doctor check remote-drift --fail-on-findings, doctor check stale-remote-branches --fail-on-findings, doctor check runaway-seats --fail-on-findings, doctor check disk-headroom --fail-on-findings, doctor check codex-mail-wake --fail-on-findings, doctor check merged-agent-worktrees --fail-on-findings, fleet drive --tick, dispatch tick, docs sweep, doctor check relay-stall --fail-on-findings, doctor check lane-liveness, lane-liveness, doctor check mail-backlog, mail-backlog, remote mirror-sync, shift tick, dev build --if-main-green, remote reconcile --execute'
+last_run: 2026-11-07T00:15:18.948267282Z
+last_by:
+  seat: advisor
+  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  vendor: claude
+result: done
+note: 'trip predated live binary 584e94 (has #3506); rerun rc=0, 55 free-text deferrals kept Unknown per STORY-2402 ruling'
