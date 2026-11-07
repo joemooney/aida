@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T06:38:54.699269867Z
+modified_at: 2026-11-07T06:41:28.022687981Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -57,6 +57,13 @@ comments:
   modified_at: 2026-11-07T06:35:23.660532713Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4bd-9dd6-7580-8d62-fdb0d134bc8b
+  author: joe
+  content: |
+    Round 2 review fixes are ready for host publication; edits remain uncommitted as required by the standalone native seat. Changed .gitlab/ci/gdma.yml, ci/gdma/run-upstream.py, ci/gdma/README.md, and tests/test_gdma_ci.py. Finding 1: main accepts explicit argv/environ and threads the supplied mapping through event/context/environment projection; fixtures no longer mutate os.environ and no migration-ledger entry was added. Finding 2: GitLab jobs force GIT_STRATEGY=clone; adapter removes prior collected artifacts and matching target reports/logs/timings before execution. Regression covers an early failing command plus repeated after_script collection. Finding 3: closed job/strategy/matrix/defaults keys refuse unsupported inputs before the first command; non-Linux matrix and changed runner expressions also refuse. Finding 4: equality/inequality and startsWith are case-insensitive; code and README clarify per-step subprocess timeout caps and GitLab enforcement of the whole-job 40m budget. Validation: python3 -m unittest tests/test_exec_context_ratchet.py passed 19 tests; python3 scripts/check-exec-context.py --base origin/main passed (1241 exact sites, zero additions); python3 -m unittest tests/test_gdma_ci.py tests/test_ci_test_shards.py passed 47 tests (22 adapter); check-ci-gates --audit passed all 76 classifications; git diff --check passed. These reproduce both affected CI steps locally; live home/GitLab CI remains unverified until host publication. Existing merge hold still requires authorized clearance. No commit, push, PR creation, queue completion, shipping or review recording was attempted. Suggested host subject: [AI:codex] fix(ci): address GitLab adapter review findings (STORY-2606).
+  created_at: 2026-11-07T06:41:28.022687981Z
+  modified_at: 2026-11-07T06:41:28.022687981Z
+  session_id: 01a1b4bb3dcb
 history:
 - id: 01a1b445-7165-7711-9410-a0b875b2776d
   author: joe

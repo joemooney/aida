@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T06:18:20.098719310Z
+modified_at: 2026-11-07T06:41:28.480490395Z
 req_type: Task
 tags:
 - architecture
@@ -284,6 +284,17 @@ comments:
   content: 'Current-head validation found a second main-merge integration issue: make check-ci-fast refuses six unchanged ExecContext fingerprints still inventoried under prepare_for_owner after S2 extracted prepare_with_io. Adding scripts/exec-context-legacy.json to the narrow scope: relocate those exact navigation keys using the documented --write-ledger --base origin/main guard; preserve operation/expression fingerprints and total ceiling. No production source changes.'
   created_at: 2026-11-07T06:18:20.098719310Z
   modified_at: 2026-11-07T06:18:20.098719310Z
+  session_id: 01a1b49f1d8f
+- id: 01a1b4bd-9fa0-7fc2-9c02-3fa14327c410
+  author: joe
+  content: |
+    S2 current-head inventory integration is ready for host publication. The private-PTY S2 implementation and prior review fixes were already present in this clean checkout. Two uncommitted files: scripts/store-writers.toml classifies the three PTY terminal-descriptor writes as host-only and documents the four mixed preparation routes without granting store-service authority; scripts/exec-context-legacy.json relocates six unchanged environment-read fingerprints from prepare_for_owner to prepare_with_io. Reviewed prepare_with_io writes include lane-private files AND absent project/Git protection leaves, so its mixed routes remain blocked for TASK-3223. No production source change, S3 or S4 implementation.
+
+    Validation: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded bug_2395_every_role_launch_site_is_inventoried bug_2398_final_spawn_boundary_ratchet --nocapture --logfile /tmp/task3219-current-results.log passed 71 total, zero failed. Separate actual TASK-3219 live count: 3/3 (S1 coordinator 1/1, S2 baseline and granted interactive 2/2); PTY unit tests 4/4. No TASK-3219 required-live infrastructure refusal. Installed-Codex companion remains separately opt-in and was not exercised. Store-writer fixtures pass 41/41; ExecContext fixtures pass 19/19. Guarded ledger regeneration against origin/main reports 1241 exact sites, zero additions. Final make check-ci-fast passed all 42 fast gates; cargo fmt --all -- --check and git diff --check pass. Initial fast run identified the now-corrected ExecContext relocation; an intervening retry timed out in the shared Cargo slot queue before the no-default-features check compiled. The final fresh fast run passed that check and every later gate. Logs: /tmp/task3219-current-tests.log, /tmp/task3219-current-results.log, /tmp/task3219-final-fast-retry.log.
+
+    Recorded native publication declaration: [AI:codex] chore(containment): reconcile private-PTY launch inventories (Refs TASK-3219). Background/resume remain refused and TASK-3219 remains in progress for S3/S4. No new design blocker or punt; existing holds are untouched. No commit, push, PR creation, review verdict, merge or queue completion from this native seat. Host owns publication after exit.
+  created_at: 2026-11-07T06:41:28.480490395Z
+  modified_at: 2026-11-07T06:41:28.480490395Z
   session_id: 01a1b49f1d8f
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
