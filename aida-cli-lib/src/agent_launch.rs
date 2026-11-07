@@ -1721,11 +1721,9 @@ pub(crate) struct AgentLaunchConfig {
     pub(crate) delegate_seats: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentPromptStyle {
-    Positional,
-    Flag(&'static str),
-}
+// Compatibility name; prompt transport and expansion belong to the registry.
+// trace:STORY-2539 | ai:codex
+pub(crate) use aida_core::vendors::PromptTransport as AgentPromptStyle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentLaunchPlan {
@@ -2712,7 +2710,7 @@ pub(crate) fn agent_new_claude(
         agent_type: "claude",
         binary: "claude",
         default_args,
-        prompt_style: AgentPromptStyle::Positional,
+        prompt_style: session::HeadlessVendor::Claude.profile().interactive_prompt,
         contained,
     };
     if bg {
@@ -2825,7 +2823,7 @@ pub(crate) fn agent_new_codex_wake(
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
-        prompt_style: AgentPromptStyle::Positional,
+        prompt_style: session::HeadlessVendor::Codex.profile().interactive_prompt,
         contained: false,
     })?;
     // TASK-646: resolve the child role before launch (flag → picker → default).
@@ -2853,7 +2851,7 @@ pub(crate) fn agent_new_codex_wake(
         agent_type: "codex",
         binary: "codex",
         default_args,
-        prompt_style: AgentPromptStyle::Positional,
+        prompt_style: session::HeadlessVendor::Codex.profile().interactive_prompt,
         contained: false,
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
@@ -2912,7 +2910,7 @@ pub(crate) fn agent_new_antigravity(
         } else {
             Vec::new()
         },
-        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        prompt_style: session::HeadlessVendor::Agy.profile().interactive_prompt,
         contained: false,
     })?;
     // TASK-646: resolve the child role before launch (flag → picker → default).
@@ -2935,7 +2933,7 @@ pub(crate) fn agent_new_antigravity(
         agent_type: "antigravity",
         binary: "agy",
         default_args,
-        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        prompt_style: session::HeadlessVendor::Agy.profile().interactive_prompt,
         contained: false,
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
@@ -4020,10 +4018,7 @@ pub(crate) fn agent_initial_prompt_args(
     } else {
         prompt
     };
-    match config.prompt_style {
-        AgentPromptStyle::Positional => vec![prompt],
-        AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],
-    }
+    config.prompt_style.expand(prompt)
 }
 
 pub(crate) fn orchestrated_implementer_ship_instruction(variant: Option<&str>) -> &'static str {
@@ -7043,10 +7038,7 @@ fn relaunch_prompt_args(config: &AgentLaunchConfig, seat: &str) -> Vec<String> {
          worktree. Your seat handoff was loaded at session start (re-read it with \
          `aida session handoff --seat {seat} --show --rotated`). Continue from it."
     );
-    match config.prompt_style {
-        AgentPromptStyle::Positional => vec![prompt],
-        AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],
-    }
+    config.prompt_style.expand(prompt)
 }
 
 /// Replace the seeded `--session-id` in `args` with `native_session_id`.

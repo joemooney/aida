@@ -157,6 +157,8 @@ pub mod lifecycle;
 pub mod liveness;
 // Pure agent-launch policy. trace:STORY-2326 | ai:claude
 pub mod launch_policy;
+// trace:STORY-2539 | ai:codex
+pub mod vendors;
 // Pure advisor-directed worktree-lock verifier (STORY-711 slice 1). No
 // dependencies beyond std, so unlike `liveness` it needs no feature gate.
 // trace:STORY-711 | ai:claude
