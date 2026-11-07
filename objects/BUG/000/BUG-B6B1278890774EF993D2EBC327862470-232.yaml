@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-07T23:47:35.539999391Z
+modified_at: 2026-11-07T23:51:43.106097250Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -91,6 +91,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 17:35 MST: the 21:23Z performance-guard trip is a REAL regression, not window contamination. Post-fix samples only (~/.aida/usage.jsonl, cmd=show, ts >= 2026-11-07T00:10Z, the #3524 go-live): n=604, 93 over 2000ms = 15.4% (tolerance 10%), p50 916ms, p90 2395ms, max 7578ms (ceiling 5000ms breached). #3524 cut the worst case (13.9s -> 7.6s) but not the over-budget rate. Slowest phase in the over-budget calls: linkage 38, open.cache 30, residual 13, notice 5. 81 of 93 are implementer-role calls (lanes under build load). Budget stays (ADR-53). NEXT SLICE: (1) linkage: do not compute shipped linkage on the default show path. Compute it only for --full/--format json callers that need it, or serve it from a cached per-spec value keyed by store head and main SHA; (2) open.cache: find the lock or refresh wait in the 30 slow open.cache calls and make show read-only against a stale-OK cache; (3) add a test that asserts default show runs no git log walk. Acceptance unchanged: 24h of guard passes after go-live. LIGHT gate.'
   created_at: 2026-11-07T23:47:30.493855952Z
   modified_at: 2026-11-07T23:47:30.493855952Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b86c-d702-72d3-978c-c9b0258ce86f
+  author: joe
+  content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST (operator asked whether host load explains it): partly, but not alone. Same host and window (load avg ~11 on 6 cores): advisor-role show 202 calls, 4.5% over 2s; implementer-role show 396 calls, 20.5% over. Linkage phase is the same in both (p50 ~0.42s, p90 ~1.22s), so the excess is concentrated in lane-seat calls. FIRST step of the slice: instrument and compare one lane-seat show against a primary-checkout show (open.cache: cold per-seat cache or refresh-on-open in the seat clone is the leading suspect). Then (1)-(3) from the 17:35 ruling, prioritizing whatever the comparison shows. Linkage on the default path is still ~0.4s of waste at p50 and stays in scope.'
+  created_at: 2026-11-07T23:51:43.106097250Z
+  modified_at: 2026-11-07T23:51:43.106097250Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
