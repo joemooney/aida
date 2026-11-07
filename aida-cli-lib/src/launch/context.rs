@@ -159,10 +159,14 @@ impl LaunchContext {
         // A posture marker alone is not an applied receipt. The wrapper adds
         // receipt-only options itself, after resolving this site-owned argv.
         // trace:TASK-3048 | ai:codex
-        crate::containment::refuse_unreceipted_bypass(req.vendor.as_str(), &req.args)
-            .map_err(|error| LaunchRefusal::OuterOnlyPermission(error.to_string()))?;
         let mut argv = req.args;
         argv.extend(req.tail);
+        let descriptor_key = match req.vendor {
+            LaunchVendor::Agy => "agy",
+            vendor => vendor.as_str(),
+        };
+        crate::containment::refuse_unreceipted_bypass(descriptor_key, &argv)
+            .map_err(|error| LaunchRefusal::OuterOnlyPermission(error.to_string()))?;
         Ok(Self {
             vendor: req.vendor,
             kind: req.kind,

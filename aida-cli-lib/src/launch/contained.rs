@@ -852,11 +852,20 @@ impl PreparedLaunch {
         let empty = state.path().join("empty");
         ensure_dir(&empty)?;
         // bwrap needs the nested runtime mountpoint inside the masked vendor
-        // parent. Create it in our empty view, never in host vendor state.
-        if let Some(policy) = &runtime_policy {
+        // parent. Use a dedicated view so other vendor masks stay empty.
+        // trace:TASK-3048 | ai:codex
+        let runtime_parent_mask = if let Some(policy) = &runtime_policy {
+            let view = state.path().join("runtime-parent-mask");
             let nested: PathBuf = Path::new(&policy.relative).components().skip(1).collect();
-            ensure_dir(&empty.join(nested))?;
-        }
+            ensure_dir(&view.join(nested))?;
+            let parent = Path::new(&policy.relative)
+                .components()
+                .next()
+                .context("runtime parent missing")?;
+            Some((std::fs::canonicalize(host_home.join(parent))?, view))
+        } else {
+            None
+        };
         // trace:TASK-2708 | ai:claude — including a relocated CODEX_HOME /
         // CODEX_SQLITE_HOME, which the default-path masks alone would leave
         // readable inside the sandbox.
@@ -871,7 +880,15 @@ impl PreparedLaunch {
         let empty_file = state.path().join("empty-file");
         std::fs::write(&empty_file, "")?;
         for p in masks {
-            let file = File::open(if p.is_dir() { &empty } else { &empty_file })?;
+            let view = if p.is_dir() {
+                runtime_parent_mask
+                    .as_ref()
+                    .filter(|(parent, _)| parent == &p)
+                    .map_or(&empty, |(_, view)| view)
+            } else {
+                &empty_file
+            };
+            let file = File::open(view)?;
             profile.mounts.push(Mount {
                 file,
                 path: p,

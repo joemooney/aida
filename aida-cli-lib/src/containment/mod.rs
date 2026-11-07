@@ -140,14 +140,24 @@ pub(crate) fn refuse_unreceipted_bypass(vendor: &str, args: &[String]) -> anyhow
         let (name, joined) = arg
             .split_once('=')
             .map_or((arg.as_str(), false), |(name, _)| (name, true));
-        if policy.prompt_options.iter().any(|option| option == name) {
+        if !name.starts_with('-') {
+            continue;
+        }
+        // Go flags accept one or two leading dashes. Normalize both the
+        // forbidden options and value-taking prompt options before matching.
+        let name = name.trim_start_matches('-');
+        if policy
+            .prompt_options
+            .iter()
+            .any(|option| option.trim_start_matches('-') == name)
+        {
             if !joined {
                 let _ = args.next();
             }
             continue;
         }
         anyhow::ensure!(
-            !name.starts_with("--dangerously-"),
+            !name.starts_with("dangerously-"),
             "{vendor} permission bypass requires an applied AIDA ContainmentReceipt from the shared wrapper; legacy launch refused"
         );
     }
@@ -201,7 +211,7 @@ impl RuntimePolicy {
                     .prompt_options
                     .iter()
                     .all(|option| option.starts_with('-')
-                        && !option.starts_with("--dangerously-")
+                        && !option.trim_start_matches('-').starts_with("dangerously-")
                         && !option.contains('=')
                         && !option.chars().any(char::is_whitespace)),
             "runtime prompt options must be option names"

@@ -62,24 +62,80 @@ mod tests {
                 for flag in [
                     "--dangerously-skip-permissions",
                     "--dangerously-skip-permissions=true",
+                    "-dangerously-skip-permissions",
+                    "-dangerously-skip-permissions=true",
                 ] {
-                    let req = LaunchRequest {
-                        vendor: LaunchVendor::Agy,
-                        kind,
-                        program: "agy".into(),
-                        args: vec![flag.into(), "-p".into(), "bounded task".into()],
-                        tail: Vec::new(),
-                        posture,
-                        cwd: std::env::temp_dir(),
-                        set_cwd: false,
-                        host_main: None,
-                    };
-                    let error = LaunchContext::resolve_under(req, false).unwrap_err();
-                    assert!(matches!(error, LaunchRefusal::OuterOnlyPermission(_)));
-                    assert!(error.to_string().contains(
-                        "agy permission bypass requires an applied AIDA ContainmentReceipt"
-                    ));
+                    // Defaults arrive in args; --extra-flag arrives in tail.
+                    for in_tail in [false, true] {
+                        let mut req = LaunchRequest {
+                            vendor: LaunchVendor::Agy,
+                            kind,
+                            program: "agy".into(),
+                            args: Vec::new(),
+                            tail: Vec::new(),
+                            posture,
+                            cwd: std::env::temp_dir(),
+                            set_cwd: false,
+                            host_main: None,
+                        };
+                        if in_tail {
+                            req.tail.push(flag.into());
+                        } else {
+                            req.args = vec![flag.into(), "-p".into(), "bounded task".into()];
+                        }
+                        let error = LaunchContext::resolve_under(req, false).unwrap_err();
+                        // The generic tail gate may refuse before the outer-only
+                        // gate, but no spelling or launch kind may reach a child.
+                        if in_tail && flag.starts_with("--") {
+                            assert!(matches!(error, LaunchRefusal::PostureFlag(_)));
+                        } else {
+                            assert!(matches!(error, LaunchRefusal::OuterOnlyPermission(_)));
+                            assert!(error.to_string().contains(
+                                "agy permission bypass requires an applied AIDA ContainmentReceipt"
+                            ));
+                        }
+                    }
                 }
+            }
+        }
+    }
+
+    // Native diagnostics remain available for every agent-session kind.
+    // Query and Control retain their separate constructors.
+    // trace:TASK-3048 | ai:codex
+    #[test]
+    fn task_3048_native_agy_without_bypass_resolves_for_each_launch_kind() {
+        use crate::launch::context::{LaunchContext, LaunchRefusal, LaunchRequest};
+        use crate::session::ContainmentPosture;
+        use aida_core::launch_policy::{LaunchKind, LaunchVendor};
+        for kind in [
+            LaunchKind::Fresh,
+            LaunchKind::Exec,
+            LaunchKind::Background,
+            LaunchKind::Resume,
+            LaunchKind::Query,
+            LaunchKind::Control,
+        ] {
+            let args = vec!["-p".into(), "bounded diagnostic".into()];
+            let req = LaunchRequest {
+                vendor: LaunchVendor::Agy,
+                kind,
+                program: "agy".into(),
+                args: args.clone(),
+                tail: Vec::new(),
+                posture: ContainmentPosture::None,
+                cwd: std::env::temp_dir(),
+                set_cwd: false,
+                host_main: None,
+            };
+            let result = LaunchContext::resolve_under(req, false);
+            if matches!(kind, LaunchKind::Query | LaunchKind::Control) {
+                assert_eq!(result.unwrap_err(), LaunchRefusal::UnsupportedKind(kind));
+            } else {
+                let context = result.unwrap();
+                assert_eq!(context.vendor(), LaunchVendor::Agy);
+                assert_eq!(context.kind(), kind);
+                assert_eq!(context.argv(), args);
             }
         }
     }
@@ -87,7 +143,12 @@ mod tests {
     #[test]
     fn task_3048_prompt_text_cannot_select_permission_posture() {
         let policy = crate::containment::runtime_policy("agy").unwrap();
-        for option in &policy.prompt_options {
+        for option in policy.prompt_options.iter().flat_map(|option| {
+            [
+                option.clone(),
+                format!("-{}", option.trim_start_matches('-')),
+            ]
+        }) {
             for argv in [
                 vec![option.clone(), "--dangerously-skip-permissions".into()],
                 vec![format!("{option}=--dangerously-skip-permissions")],
@@ -96,15 +157,18 @@ mod tests {
             }
         }
         // A prompt consumes one value; subsequent options still get checked.
-        assert!(crate::containment::refuse_unreceipted_bypass(
-            "agy",
-            &[
-                "-p".into(),
-                "text".into(),
-                "--dangerously-skip-permissions".into()
-            ]
-        )
-        .is_err());
+        for prompt_option in ["-p", "-prompt", "-print", "-prompt-interactive"] {
+            for flag in [
+                "--dangerously-skip-permissions",
+                "-dangerously-skip-permissions=true",
+            ] {
+                assert!(crate::containment::refuse_unreceipted_bypass(
+                    "agy",
+                    &[prompt_option.into(), "text".into(), flag.into()]
+                )
+                .is_err());
+            }
+        }
         // The signed ruling changes only vendors with native_layer=none.
         for vendor in ["claude", "codex"] {
             crate::containment::refuse_unreceipted_bypass(
@@ -118,12 +182,19 @@ mod tests {
     #[test]
     fn task_3048_agent_defaults_refuse_legacy_bypass_without_contained_parent() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
-        for agent_type in ["agy", "antigravity"] {
+        for (agent_type, flag) in ["agy", "antigravity"].into_iter().flat_map(|agent_type| {
+            [
+                "--dangerously-skip-permissions",
+                "-dangerously-skip-permissions",
+                "-dangerously-skip-permissions=true",
+            ]
+            .map(|flag| (agent_type, flag))
+        }) {
             let config = crate::AgentLaunchConfig {
                 delegate_seats: Vec::new(),
                 agent_type,
                 binary: "agy",
-                default_args: vec!["--dangerously-skip-permissions".into()],
+                default_args: vec![flag.into()],
                 prompt_style: crate::AgentPromptStyle::Flag("--prompt-interactive"),
                 contained: false,
             };
