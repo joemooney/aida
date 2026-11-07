@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-07T09:25:08.977710793Z
+modified_at: 2026-11-07T10:44:49.550688437Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-07T09:25:08.977710793Z
   modified_at: 2026-11-07T09:25:08.977710793Z
   session_id: 01a1b5527fbf
+- id: 01a1b59c-6b0e-7803-be21-45eb00904854
+  author: joe
+  content: '[advisor 03:35] BLOCKED on the live guard window. The AC1/AC2 fix (#3524) has been live since 2026-11-07 00:10Z. AC3 is 24h of performance-guard passes at the unchanged 2000ms/10%/5000ms budget; judge after 2026-11-08 00:10Z, ignoring trips before it, then aida queue done BUG-2466 if clean.'
+  created_at: 2026-11-07T10:44:49.550688437Z
+  modified_at: 2026-11-07T10:44:49.550688437Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
