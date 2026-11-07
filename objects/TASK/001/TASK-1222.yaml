@@ -1,8 +1,21 @@
 id: 01a09ccf-e718-7233-a46c-99209bcadfbb
 spec_id: TASK-1222
 agreed_id: TASK-1222
-title: 'Deliberate sweep of stale worktree/branch cruft: 226 unshipped branches (74-101d, 1000+ commits ahead), ~43 on-disk worktrees, ~68 aida-* sibling dirs'
-description: |-
+title: Extend worktree GC to ended seat clones and add a weekly dry-run report
+description: |
+  ## Current approved scope
+
+  The advisor's 2026-11-07 14:55 rescope replaces the destructive sweep in this implementer seat with a code change. The advisor/operator will review and apply cleanup on the host after it lands. Do not delete host worktrees or branches from the seat.
+
+  ## Acceptance
+
+  1. Extend `aida worktree gc` to private `aida-seat-*` clones. A clone is eligible only after its lease has ended, with no commits missing from origin (reuse the salvage/remote-coverage checks), and with a merged or closed PR. Default to a dry run; add `--apply` for operator removal and report bytes reclaimed.
+  2. Also make clean linked worktrees eligible when their branch is merged into the default branch or their exact PR head is merged/closed. Preserve existing ownership, lock, live-process and mailbox-retention safeguards; uncertain evidence must retain work.
+  3. Register a weekly read-only dry-run job and route its counts to the advisor. Never auto-apply cleanup.
+  4. Validate with fixture repositories. LIGHT gate; host application follows publication.
+
+  ## Historical cleanup request
+
   aida session reap --dry-run (2026-09-13) surfaced 226 'unshipped work' branches, most 1000+ commits ahead and 74-101 days old (abandoned worktree branches from months ago whose specs almost certainly completed via other branches). Plus ~43 on-disk git worktrees and ~68 /home/joe/ai/aida-* sibling dirs accumulated over the alpha cycle.
 
   NOT a blind batch-delete (clean git status != no work; some worktrees hold uncommitted work — e.g. STORY-1006 and STORY-993 are Completed but their worktrees carry uncommitted changes the reap correctly refused to remove).
@@ -15,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-07T23:01:16.697531763Z
+modified_at: 2026-11-07T23:13:18.190249526Z
 req_type: Task
 tags:
 - cleanup
@@ -120,5 +133,10 @@ history:
 - id: 01a1b821-6c59-7391-baab-0b620b115024
   author: joe
   timestamp: 2026-11-07T22:29:20.601655113Z
+  session_id: 01a1b8210422
+  changes: []
+- id: 01a1b849-abf4-7ba1-807b-d7bad8608a3c
+  author: joe
+  timestamp: 2026-11-07T23:13:18.324618703Z
   session_id: 01a1b8210422
   changes: []
