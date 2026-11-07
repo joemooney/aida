@@ -1,0 +1,36 @@
+id: 01a1b502-8b69-7b63-8613-5537acbde821
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-543
+agreed_id: STORY-2620
+title: 'Review PR-3584: [AI:codex] feat(store): add canonical redo transactions and typed mutations (Refs TASK-3223)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b4f1`) for branch `task-3223-r0035`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3584>
+  - Branch: `task-3223-r0035` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3223
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3584` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T07:56:45.289221134Z
+modified_at: 2026-11-07T07:56:45.289221134Z
+req_type: Story
+filed_at:
+  code_sha: 6ac3f69d6356d65cab0e6f7e12cc0ae0d2b54658
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a7bda6eabe0
+  vendor: claude
+  session: 01a1b4f1df40
