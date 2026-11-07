@@ -533,6 +533,13 @@ pub(crate) fn run_flow_verb(
                 let msg = format!("{err:#}");
                 if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     RunnerOutcome::Refused { reason: msg }
+                } else if err
+                    .downcast_ref::<crate::pr_train::TrainJournalBusy>()
+                    .is_some()
+                {
+                    RunnerOutcome::Deferred {
+                        reason: format!("train busy; retry on a later dispatch pass: {msg}"),
+                    }
                 } else {
                     RunnerOutcome::Failed {
                         summary: format!("flow ship failed for PR #{pr}: {msg}"),
@@ -698,6 +705,13 @@ pub(crate) fn run_flow_verb(
                 let msg = format!("{err:#}");
                 if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     RunnerOutcome::Refused { reason: msg }
+                } else if err
+                    .downcast_ref::<crate::pr_train::TrainJournalBusy>()
+                    .is_some()
+                {
+                    RunnerOutcome::Deferred {
+                        reason: format!("train busy; retry on a later dispatch pass: {msg}"),
+                    }
                 } else {
                     RunnerOutcome::Failed {
                         summary: format!("flow ship failed for PR #{pr}: {msg}"),
@@ -775,6 +789,17 @@ pub(crate) fn run_train_verb(
                 let msg = format!("{err:#}");
                 if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     return RunnerOutcome::Refused { reason: msg };
+                }
+                if err
+                    .downcast_ref::<crate::pr_train::TrainJournalBusy>()
+                    .is_some()
+                {
+                    return RunnerOutcome::Deferred {
+                        reason: format!(
+                            "train busy; retry on a later dispatch pass (landed {}): {msg}",
+                            landed_notes.len()
+                        ),
+                    };
                 }
                 return RunnerOutcome::Failed {
                     summary: format!(
