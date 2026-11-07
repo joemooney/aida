@@ -488,3 +488,35 @@ Guards reporting native read-only `.git/FETCH_HEAD` refusals passed through
 their existing local-evidence path. No implementation or validation blocker
 remains. The host owns commit creation and publication of this follow-up with
 the declared Refs subject. Turn ends with the five-file uncommitted handoff.
+
+## Slice-4 integration follow-up: nested member-gate reads (2026-11-06)
+
+The starting checkout already contains the slice-4 journal, both SIGKILL recovery
+fixtures, and BUG-2463 (#3519). The member gate's labels and PR title/body reads
+still bypassed per-call intent persistence after the outer gate checkpoint.
+`LiveChecks` now checkpoints each of those nested reads. A PATH-isolated
+regression makes the journal unavailable after a successful checkpoint and
+asserts both reads refuse without spawning gh, retaining the pinned Gate entry.
+This change stays within slice 4; workflow-definition digests remain slice 5.
+
+Changed files: `aida-cli-lib/src/pr_train.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, and this plan.
+Validation and native host publication results follow below.
+
+Validation passed:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **171 passed, zero failures**, 12,582 filtered out; runtime 76.84s.
+  This includes both SIGKILL recovery seams and the new nested member-read test.
+  Log: `/tmp/story2401-nested-member-train.log`.
+- `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`: **all 38 gates passed**.
+  Log: `/tmp/story2401-nested-member-fast.log`. Some guards reported native
+  read-only `.git/FETCH_HEAD` refusals and passed using their local evidence.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint nested member gate reads (Refs STORY-2401)`.
+No implementation or validation blocker remains. The three changed files remain
+uncommitted for the host launcher; no commit, push, PR creation, merge, review
+record or queue completion occurred in this seat. Slice 5 remains outstanding;
+existing punt/hold signals remain publication vetoes. Turn ends with this handoff.

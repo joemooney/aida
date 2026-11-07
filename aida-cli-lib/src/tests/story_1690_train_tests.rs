@@ -4206,6 +4206,70 @@ exit 0
 
 // trace:STORY-2401 | ai:codex
 #[test]
+fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::forge::Forge;
+    let root = repo();
+    let r = root.path();
+    git(
+        r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/test/train.git",
+        ],
+    );
+    let gh = r.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> gh-calls\nexit 1\n",
+    );
+    let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let forge = crate::forge::fake::RecordingForge::new();
+    let meta = forge
+        .change_metadata(1, &mut crate::network_retry::NoopSink)
+        .unwrap();
+    let mut checks = LiveChecks {
+        project_root: r,
+        main_worktree: r,
+        forge: &forge,
+        base: "main",
+        named: false,
+    };
+    let dir = r.join("intent");
+    std::fs::create_dir(&dir).unwrap();
+    let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/nested-1".into());
+    entry.step = journal::Step::Gate;
+    journal::activate(&dir, entry).unwrap();
+    let _scope = journal::Scope;
+    // An earlier metadata checkpoint succeeded, but its response arrived after
+    // the journal became unavailable. Each following remote read must refuse.
+    std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+    std::fs::write(&dir, "unavailable").unwrap();
+    assert!(checks
+        .labels(1)
+        .unwrap_err()
+        .contains("could not persist train intent"));
+    assert!(checks
+        .message(1, &meta, "head1")
+        .unwrap_err()
+        .contains("could not persist train intent"));
+    assert!(
+        !r.join("gh-calls").exists(),
+        "nested reads must not spawn gh"
+    );
+    let saved = journal::entries(&r.join("intent-saved")).unwrap();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].step, journal::Step::Gate);
+    assert_eq!(saved[0].train.tip, "car1");
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
 fn pr_train_journal_metadata_retry_refuses_when_checkpoint_fails() {
     if crate::test_env::run_path_isolated_test() {
         return;

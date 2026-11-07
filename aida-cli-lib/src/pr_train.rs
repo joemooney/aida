@@ -1356,6 +1356,9 @@ impl MemberChecks for LiveChecks<'_> {
         &mut self,
         pr: u64,
     ) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String> {
+        // Nested gate reads need their own durable intent, even when the
+        // preceding metadata read checkpoint succeeded. trace:STORY-2401 | ai:codex
+        journal::before("read member labels").map_err(|e| format!("{e:#}"))?;
         crate::merge_hold::fetch_pinned_change(self.project_root, self.forge.kind(), pr)
             .map_err(|e| e.to_string())
     }
@@ -1448,6 +1451,8 @@ impl MemberChecks for LiveChecks<'_> {
         head: &str,
     ) -> std::result::Result<(String, String), String> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
+            // trace:STORY-2401 | ai:codex
+            journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
             crate::pr_cmd::fetch_pr_ship_metadata_via_gh(self.project_root, pr)
                 .map_err(|e| format!("its title and body could not be read ({e:#})"))?
         } else {
