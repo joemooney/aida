@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-244
 agreed_id: BUG-2479
 title: 'Full aida status on a 7,073-record store takes 36s against a 10s budget: idle_in_progress rescans YAML for every record'
 description: 'Source: work GDMS CI report. The timed full-status test on the real store took 36.2s against its 10s budget. idle_in_progress.rs resolves canonical IDs by repeated YAML scans; use the cached, validated canonical-ID resolver. Acceptance: the existing timed status test passes at its unchanged 10s budget, with unchanged assertions, on a store of about 7k records, including a cold first run. Separately, decide whether CI should warm the store before the timed test (the work CI uses prepare-status-fixture.sh) or whether the budget must hold cold.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:43.460416454Z
-modified_at: 2026-11-07T04:39:17.310907729Z
+modified_at: 2026-11-07T04:57:19.544897692Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b45e-45b8-77a2-87cf-547b3063dc05
+  author: aida-session-start
+  timestamp: 2026-11-07T04:57:19.544896008Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
