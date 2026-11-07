@@ -159,8 +159,8 @@ Simple spec completion, shipping, landing or merging phrases (including past
 tense) become spec-completion conditions; an ID followed by a recognized status
 (such as `<ID> approved`) becomes a condition for that status. `#N merges`
 becomes a PR-merged condition; versions become release thresholds; ISO dates
-become date conditions. Inferred spec IDs must have numeric segments (such as
-`BUG-1-234`) and resolve unambiguously in the strict store snapshot; absent
+become date conditions. Inferred spec IDs (`<spec-id>`) must have numeric segments
+and resolve unambiguously in the strict store snapshot; absent
 or ambiguous targets fall back to manual review. Compound, conflicting or unknown
 text becomes
 `manual:<owner>`, falling back to `manual:operator` when the owner is empty
