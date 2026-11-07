@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T03:56:15.742785142Z
-modified_at: 2026-11-07T20:55:21.716050367Z
+modified_at: 2026-11-07T20:55:23.826610991Z
 req_type: Bug
 comments:
 - id: 01a1b7b2-bf71-7a71-b521-5de38611949f
@@ -19,6 +19,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:28:27.377924422Z
   modified_at: 2026-11-07T20:28:27.377924422Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cb-69b2-72e2-aa7c-bd512dc902e3
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Absorbed into STORY-2325 (NotAGitTree witness).'
+  created_at: 2026-11-07T20:55:23.826610991Z
+  modified_at: 2026-11-07T20:55:23.826610991Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
