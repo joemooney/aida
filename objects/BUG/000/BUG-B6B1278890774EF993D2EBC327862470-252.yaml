@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T19:52:04.388400872Z
+modified_at: 2026-11-07T20:02:01.689171356Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -138,6 +138,13 @@ comments:
   content: 'Final Round 4 validation: AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1 cargo test -p aida-cli-lib --lib bug_2487 -- --nocapture passed both tests (2 passed, 0 failed). Actual Rust-builder exec flags accepted by pinned 0.166.0; generated sandbox preflight and exec model tool both pass allowed-write/denied-write probes, with passing outer controls. cargo fmt --all -- --check, git diff --check, and check-exec-context.py pass (1241 exact legacy sites; zero additions). Fixture corrected to inspect both diagnostic streams, use explicit /tmp instead of Cargo''s RAM TMPDIR, and bound Codex startup at 40s. Native publication declaration recorded: [AI:codex] fix(containment): select and validate pinned Codex exec profile (BUG-2487). Five files remain uncommitted for host publication to #3611; no Git publication, queue completion, review verdict or hold clearance was performed. Host must use corrected PR title/squash attribution; existing merge hold remains.'
   created_at: 2026-11-07T19:52:04.388392322Z
   modified_at: 2026-11-07T19:52:04.388392322Z
+- id: 01a1b79a-8d59-7001-9a6d-04d17d16801c
+  author: joe
+  content: 'ADVISOR 2026-11-07 12:57: head b7e93293 (re-scoped fix) conflicts with main after #3603 landed. Rework = rebase onto origin/main and resolve the conflict in launch/contained.rs only, with no scope change. LIGHT gate: one targeted cargo test for the codex exec argv / flag-vs-help test, plus make check-ci-fast.'
+  created_at: 2026-11-07T20:02:01.689171356Z
+  modified_at: 2026-11-07T20:02:01.689171356Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
   author: joe
