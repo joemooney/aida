@@ -124,7 +124,7 @@ fn bounded_diagnostic(text: &str) -> String {
 #[serde(deny_unknown_fields)]
 struct Identity {
     // Absent fields are omitted only so a legacy record round-trips
-    // unchanged. Identity::of always stamps both, so state this binary writes
+    // unchanged. New captures always stamp both, so state this binary writes
     // does NOT parse under a pre-BUG-2425 binary after `aida dev rollback`
     // (deny_unknown_fields); that break is accepted (single-user substrate,
     // clear the review-watch state by hand if rolling back).
@@ -162,18 +162,39 @@ impl PartialEq for Identity {
 impl Eq for Identity {}
 impl Identity {
     fn current() -> Result<Self> {
-        Self::of(std::process::id())
+        // Fail closed: receipts need a verified local procfs coordinate view.
+        // Restricted/masked procfs must not mint a partial caller identity.
+        // trace:TASK-3365 | ai:codex
+        Self::current_from(aida_core::proc_identity::ProcIdentity::capture(
+            std::process::id(),
+        ))
     }
+    fn current_from(
+        capture: std::result::Result<aida_core::proc_identity::ProcIdentity, String>,
+    ) -> Result<Self> {
+        capture.map(Self::from_process_identity).map_err(|why| anyhow::anyhow!(
+            "cannot record review-watch caller identity: {why}; retry from a host with a complete, local /proc view; existing reservations remain held"
+        ))
+    }
+    fn child(child: &Child) -> Result<Self> {
+        aida_core::proc_identity::ProcIdentity::capture_child(child)
+            .map(Self::from_process_identity)
+            .map_err(anyhow::Error::msg)
+    }
+    #[cfg(test)]
     fn of(pid: u32) -> Result<Self> {
         let identity =
             aida_core::proc_identity::ProcIdentity::capture(pid).map_err(anyhow::Error::msg)?;
-        Ok(Self {
+        Ok(Self::from_process_identity(identity))
+    }
+    fn from_process_identity(identity: aida_core::proc_identity::ProcIdentity) -> Self {
+        Self {
             pid_namespace: Some(identity.pidns_inode),
             recorded_at: Some(chrono::Utc::now()),
             pid: identity.pid,
             start: format!("linux-starttime:{}", identity.starttime),
             boot: identity.boot_id,
-        })
+        }
     }
     // Keep the strict persisted wire format readable by rollback binaries.
     // Missing legacy evidence is unknown; never recapture a recorded PID.
@@ -202,10 +223,15 @@ impl Identity {
     /// Capacity policy is separate from kernel process observation.
     // trace:TASK-3365 | ai:codex
     fn alive(&self) -> bool {
-        use aida_core::proc_identity::Verdict;
+        use aida_core::proc_identity::{UnknownReason, Verdict};
         match self.verdict() {
             Verdict::Alive => true,
             Verdict::Dead(_) => false,
+            Verdict::ForeignUnknown(UnknownReason::MissingIdentity) => {
+                // Legacy/incomplete receipts retain the existing reboot/TTL
+                // backstop, rather than holding capacity forever.
+                self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
+            }
             Verdict::ForeignUnknown(_) if !self.observable() => {
                 self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
             }
@@ -1888,7 +1914,7 @@ fn child_with_program(
             // trace:TASK-1993 | ai:claude
             retry_busy(|| store.record_worker(key, token, None))?;
             let mut child = crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut cmd)?;
-            match Identity::of(child.id()) {
+            match Identity::child(&child) {
                 Ok(worker) => {
                     if let Err(error) = retry_busy(|| store.record_worker(key, token, Some(worker.clone()))) {
                         eprintln!("{key}: could not record the queue-work child; the attempt stays held as ambiguous: {error:#}");
@@ -2137,7 +2163,7 @@ pub(crate) fn reviewer_status_on_spawn(
     let mut child = cmd.spawn_retrying_etxtbsy()?;
     note_agent_spawned();
     on_spawn();
-    match Identity::of(child.id()) {
+    match Identity::child(&child) {
         Ok(reviewer) => {
             if let Err(error) =
                 retry_busy(|| store.record_reviewer(&key, &head, Some(reviewer.clone())))
@@ -2542,9 +2568,11 @@ fn watch_change(
             match spawned {
                 Ok(mut child) => {
                     // trace:TASK-1993 | ai:claude
+                    // Capture before try_wait can reap a fast-exiting dispatcher.
+                    // trace:TASK-3365 | ai:codex
+                    let identity = Identity::child(&child).ok();
                     let exited = child.try_wait().ok().flatten();
                     let pid = child.id();
-                    let identity = Identity::of(pid).ok();
                     let token = attempt.token.clone();
                     children.push(Dispatcher {
                         child,
@@ -3034,7 +3062,7 @@ pub(crate) fn fixture_admission_exit(
         },
         |_| {
             let mut child = Command::new("sleep").arg("0.05").spawn()?;
-            let identity = Identity::of(child.id())?;
+            let identity = Identity::child(&child)?;
             store.record_worker("PR-7", &attempt.token, Some(identity))?;
             child.wait()?;
             if ambiguous {

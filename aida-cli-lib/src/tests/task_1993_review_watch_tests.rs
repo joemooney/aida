@@ -1895,33 +1895,37 @@ fn task1993_queue_work_records_the_reviewer_it_launches() {
             c.head.clone(),
         ))
     });
-    // Keep the child live until its identity is recorded. ProcIdentity capture
-    // deliberately refuses an already-exited /bin/true child.
+    // Delay capture until the immediately-exiting reviewer is an unreaped
+    // zombie, exercising startup refusal receipts rather than avoiding them.
     // trace:TASK-3365 | ai:codex
-    let release = temp.path().join("release-reviewer");
-    let status = std::thread::scope(|scope| {
-        scope.spawn(|| {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-            while store.load().unwrap().entries["PR-1"].attempts[0]
-                .reviewer
-                .is_none()
-            {
-                if std::time::Instant::now() >= deadline {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(5));
+    let pid_file = temp.path().join("reviewer-pid");
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", "echo $$ > \"$1\"; exit 0", "reviewer"])
+        .arg(&pid_file);
+    let status = reviewer_status_on_spawn(&mut cmd, || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let zombie = std::fs::read_to_string(&pid_file)
+                .ok()
+                .and_then(|pid| {
+                    let pid = pid.trim().parse::<u32>().ok()?;
+                    std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()
+                })
+                .is_some_and(|stat| {
+                    stat[stat.rfind(')').unwrap() + 1..]
+                        .split_whitespace()
+                        .next()
+                        == Some("Z")
+                });
+            if zombie {
+                break;
             }
-            std::fs::write(&release, "done").unwrap();
-        });
-        reviewer_status(
-            Command::new("/bin/sh")
-                .args([
-                    "-c",
-                    "while [ ! -f \"$1\" ]; do sleep 0.01; done",
-                    "reviewer",
-                ])
-                .arg(&release),
-        )
+            assert!(
+                std::time::Instant::now() < deadline,
+                "reviewer did not exit"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
     });
     LAUNCH.with(|l| *l.borrow_mut() = None);
     assert!(status.unwrap().success());
@@ -2640,4 +2644,48 @@ fn bug2471_unusable_state_stops_before_admitting_another_change() {
     .unwrap_err();
     assert!(stops_watcher(&error));
     assert_eq!(visited, ["PR-1"]);
+}
+
+// trace:TASK-3365 | ai:codex
+#[test]
+fn task_3365_fast_exiting_worker_is_recorded_and_releases_capacity() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Ok(()),
+        |_| {
+            store.record_worker(&c.key(), &attempt.token, None)?;
+            let mut child = Command::new("/bin/true").spawn()?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                let stat = std::fs::read_to_string(format!("/proc/{}/stat", child.id()))?;
+                if stat[stat.rfind(')').unwrap() + 1..]
+                    .split_whitespace()
+                    .next()
+                    == Some("Z")
+                {
+                    break;
+                }
+                assert!(std::time::Instant::now() < deadline, "worker did not exit");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let identity = Identity::child(&child)?;
+            store.record_worker(&c.key(), &attempt.token, Some(identity.clone()))?;
+            child.wait()?;
+            assert!(!identity.alive());
+            assert!(store.load()?.entries[&c.key()].attempts[0].worker.is_some());
+            Ok(())
+        },
+    )
+    .unwrap();
+    let state = store.load().unwrap();
+    let recorded = &state.entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Completed);
+    assert!(!recorded.unrecorded_descendant());
+    assert!(!active(recorded));
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
 }
