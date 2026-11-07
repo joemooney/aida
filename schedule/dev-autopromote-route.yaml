@@ -1,14 +1,8 @@
 job: dev-autopromote-route
-last_run: 2026-11-07T09:24:26.311962378Z
+last_run: 2026-11-07T23:17:23.792823318Z
 last_by:
   seat: advisor
-  session: 01a1b441-8158-7162-ad75-f7915b45ee33
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   vendor: claude
 result: done
-note: a7bda6e build was refused only because main moved mid-build; the 08:24Z run promoted 8b39018 == origin/main
-due_since: 2026-11-07T14:17:01.713952779Z
-due_reason: on CronJobFailed:dev-autopromote
-due_failure:
-  trip_id: dev-autopromote@2026-11-07T14:52:39.964325925Z
-  job: dev-autopromote
-  error: 'exit 1: build of 02790568d5ef592f46ede38d73e4d82ac21a9d66 failed; log /home/joe/.aida/dev-autopromote/20261107T143109Z-02790568d5ef.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 5m 05s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+note: 'resolved: live == main 2a7fe186bdc; earlier failure was a concurrent build lock'
