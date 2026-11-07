@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:12.323674694Z
-modified_at: 2026-11-07T20:55:13.647103984Z
+modified_at: 2026-11-07T20:55:17.117594681Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:26:40.204670027Z
   modified_at: 2026-11-07T20:26:40.204670027Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cb-4f7d-73d0-9cad-5761be9ef796
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Work-machine evidence arrived (BUG-898/899/900); work clone runs routinely via the hub bridge.'
+  created_at: 2026-11-07T20:55:17.117594681Z
+  modified_at: 2026-11-07T20:55:17.117594681Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
