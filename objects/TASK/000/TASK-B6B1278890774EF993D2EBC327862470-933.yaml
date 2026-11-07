@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:37.400718782Z
-modified_at: 2026-11-07T20:17:23.794322040Z
+modified_at: 2026-11-07T20:33:24.987699608Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -103,6 +103,12 @@ comments:
   modified_at: 2026-11-07T20:14:29.814906374Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7b7-49fb-7050-93d5-3ce0b924c5a4
+  author: joe
+  content: 'Advisor portability-only rework: added #[cfg(target_os = "linux")] to the subreaper adoption test, reviewer launch test, and fast-exiting worker test (3 lines in the two requested test files). No allowlist growth or other code changes. scripts/check-portability.sh exit 0; make check-ci-fast exit 0 (43 gates, including formatting); git diff --check clean. LIGHT job j20261107T201809700-2302262-0 timed out at 900s before executing tests (exit 124); runner reported seed overlay-stale because primary rewrote a generation file. untested=true. Edits left uncommitted for host publication to existing PR #3615.'
+  created_at: 2026-11-07T20:33:24.987699608Z
+  modified_at: 2026-11-07T20:33:24.987699608Z
+  session_id: 01a1b7a871ba
 history:
 - id: 01a1b59d-50c9-7572-acd5-ba4354eb1e1d
   author: joe
