@@ -12,12 +12,12 @@ description: |-
   Findings:
   1. BLOCKING (only remaining item; no code change required): no green CI at the exact head ba1a4d1c1006. Run 42291371263 (created 20:47Z) had all 7 jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) still queued at 21:02Z because of runner backlog. So the new --write-ledger test, the golden-key and extern-crate fixtures, and the 1220-site ledger have never passed on the runner's Python. Do NOT push new commits (that restarts CI). Wait for run 42291371263 to go fully green, including the gates 'ExecContext environment ratchet' step, then re-request review citing that run. If gates fails on the ratchet step, run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' after merging main, and push. merge-hold-gate failing is the expected supervised hold (cleared through 'aida merge-hold clear 3515'), not a code defect.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T23:15:27.837243119Z
-modified_at: 2026-11-07T00:22:43.435870287Z
+modified_at: 2026-11-07T00:22:44.686192422Z
 req_type: Task
 tags:
 - from-advisor:STORY-2538
@@ -39,6 +39,15 @@ history:
   author: joe
   timestamp: 2026-11-06T23:26:28.301400268Z
   changes: []
+- id: 01a1b362-e2ce-7a72-848a-921c29d6695f
+  author: joe
+  timestamp: 2026-11-07T00:22:44.686189819Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c4c0461a21f3f0b842f169699ead0a7bf3d8b0d3
   branch: main
