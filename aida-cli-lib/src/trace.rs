@@ -2548,6 +2548,42 @@ pub(crate) fn pr_open_spec_guard_violation(
     Some(other_ids)
 }
 
+/// Publication attribution accepts completing and Refs trailers. Keep this
+/// separate from completion evidence: a Refs slice does not complete its spec.
+// trace:BUG-2483 | ai:codex
+pub(crate) fn pr_publication_spec_guard_violation(
+    commits: &[(String, String)],
+    expected_spec: &str,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Option<Vec<String>> {
+    let resolve = |id: &str| store.and_then(|s| s.resolve_unambiguous_index(id).ok().flatten());
+    let expected = resolve(expected_spec);
+    let mut other_ids = Vec::new();
+    for (_, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject).into_iter().chain(
+            crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject),
+        ) {
+            let matches = match store {
+                Some(_) => expected.is_some() && resolve(&id) == expected,
+                None => id.eq_ignore_ascii_case(expected_spec),
+            };
+            if matches {
+                return None;
+            }
+            if !other_ids
+                .iter()
+                .any(|s: &String| s.eq_ignore_ascii_case(&id))
+            {
+                other_ids.push(id);
+            }
+        }
+    }
+    Some(other_ids)
+}
+
 /// Which spec a reviewer-verdict shelve should be recorded against.
 // trace:TASK-1444 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2659,7 +2695,8 @@ pub(crate) fn collect_pr_attribution_disagreements(
 }
 
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
-/// default branch carries a `(SPEC-ID)` trailer naming `expected_spec`. A
+/// default branch carries a `(SPEC-ID)` or `(Refs SPEC-ID)` trailer naming
+/// `expected_spec` (including an unambiguous store alias). A
 /// no-op when the commit range can't be read (soft warning — a git hiccup
 /// shouldn't block shipping) or when the branch has no commits to ship.
 // trace:TASK-1442 | ai:claude
@@ -2684,21 +2721,26 @@ pub(crate) fn run_pr_open_spec_guard(
         return;
     }
 
-    let other_ids = match pr_open_spec_guard_violation(&commits, expected_spec) {
-        None => return,
-        Some(ids) => ids,
-    };
+    let store = load_store_for_lookup(project_root);
+    let other_ids =
+        match pr_publication_spec_guard_violation(&commits, expected_spec, store.as_ref()) {
+            None => return,
+            Some(ids) => ids,
+        };
 
     eprintln!(
         "{} pr ship: refusing to open a PR — branch `{}` is leased for {} but no commit on \
-         it carries a `({})` trailer.",
+         it carries a `({})` or `(Refs {})` trailer.",
         crate::glyph(crate::glyphs::Glyph::Cross),
         branch,
+        expected_spec,
         expected_spec,
         expected_spec
     );
     if other_ids.is_empty() {
-        eprintln!("  no commit on this branch carries a (SPEC-ID) trailer at all.");
+        eprintln!(
+            "  no commit on this branch carries a (SPEC-ID) or (Refs SPEC-ID) trailer at all."
+        );
     } else {
         eprintln!(
             "  commit trailer(s) instead name: {} — a mismatch against the leased spec {}.",
