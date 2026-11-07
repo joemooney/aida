@@ -281,7 +281,7 @@ signal.pause()
                     mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
                     mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()):
                 with self.assertRaisesRegex(ValueError, "continuation-timeout"):
-                    c.launch_aida_continuation(script, Path("."), dict(os.environ), 1, cleanup_grace=0.1)
+                    c.launch_aida_continuation(script, Path("."), {"PATH": os.defpath}, 1, cleanup_grace=0.1)
             self.assertEqual(c.termios.tcgetattr(terminal), before)
         finally:
             os.close(master)
@@ -363,6 +363,87 @@ assert termios.tcgetattr(0) == before
                 child.wait(timeout=5)
                 os.close(master)
                 os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_foreground_sigint_records_refusal_and_restores_terminal(self):
+        import select
+        for mode in ("--aida-setup", "--aida-continue"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "repository").mkdir()
+                c.write_json(root / "aida-state.json", {
+                    "aida": "fixture", "spec": "TASK-1", "timeout": 5,
+                    "report": {"setup": [], "checks": {"C0": {"status": "unknown"}},
+                               "containment_receipt_sha256": None}})
+                continuation = f"""
+import importlib.util, pathlib, signal, sys, termios
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+root = pathlib.Path({str(root)!r})
+def interruptible(*args, **kwargs):
+    attrs = termios.tcgetattr(0)
+    attrs[1] &= ~termios.OPOST
+    attrs[3] &= ~(termios.ECHO | termios.ICANON)
+    termios.tcsetattr(0, termios.TCSANOW, attrs)
+    print('INTERRUPT_READY', flush=True)
+    signal.pause()
+c.fixture_command = lambda *args: 'TASK-1'
+if {mode!r} == '--aida-setup':
+    c.fixture_role_enter = interruptible
+else:
+    class Network:
+        config = {{}}
+        receipts = list(range(8))
+        def __init__(self, *args): pass
+        def close(self): (root / 'network-closed').touch()
+    c.Network = Network
+    c.network_attempts = lambda *args: {{'control': {{'result': 'allowed'}}}}
+    c.bounded_launch = interruptible
+sys.argv = [c.__file__, {mode!r}, str(root)]
+c.main()
+"""
+                script = "exec " + c.shlex.join([c.sys.executable, "-c", continuation])
+                worker = f"""
+import fcntl, importlib.util, os, pathlib, termios
+fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+before = termios.tcgetattr(0)
+assert c.launch_aida_continuation({script!r}, pathlib.Path({str(root)!r}),
+                                  {{'PATH': os.defpath}}, 10) == 2
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+"""
+                master, terminal = pty.openpty()
+                child = c.subprocess.Popen([c.sys.executable, "-c", worker], stdin=terminal,
+                                           stdout=terminal, stderr=terminal, start_new_session=True)
+                output = b""
+                interrupted = False
+                deadline = time.monotonic() + 15
+                try:
+                    while child.poll() is None and time.monotonic() < deadline:
+                        if select.select([master], [], [], 0.1)[0]:
+                            output += os.read(master, 65536)
+                            if b"INTERRUPT_READY" in output and not interrupted:
+                                foreground = os.tcgetpgrp(master)
+                                self.assertNotEqual(foreground, child.pid)
+                                os.killpg(foreground, c.signal.SIGINT)
+                                interrupted = True
+                    self.assertTrue(interrupted, output.decode(errors="replace"))
+                    self.assertEqual(child.poll(), 0, output.decode(errors="replace"))
+                    self.assertNotIn(b"Traceback", output)
+                    report = json.loads((root / "report.json").read_text())
+                    self.assertEqual(report["unsupported_reason"], "harness-interrupted: SIGINT")
+                    if mode == "--aida-continue":
+                        self.assertTrue((root / "network-closed").exists())
+                finally:
+                    if child.poll() is None:
+                        child.kill()
+                    child.wait(timeout=5)
+                    os.close(master)
+                    os.close(terminal)
 
     # trace:BUG-2485 | ai:codex
     def test_main_installs_distinct_harness_termination_handler(self):

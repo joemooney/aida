@@ -386,7 +386,11 @@ lends terminal foreground ownership to each continuation before releasing its
 script, so implementer prompts can read the controlling terminal. Supervisors
 return foreground ownership after nested cleanup, blocking SIGTTOU while
 reclaiming it. Attribute restoration runs only in the foreground group; the outer
-supervisor covers timeout, cancellation and SIGTERM exits. Top-level SIGTERM
+supervisor restores attributes after continuation exit and timeout or SIGTERM
+cleanup. While a continuation owns the foreground, Ctrl+C reaches that group;
+both implementer setup and vendor-run continuations record
+`harness-interrupted: SIGINT` before exiting, and the supervisors reclaim the
+terminal without replacing that reason with a generic launch refusal. Top-level SIGTERM
 reports `harness-terminated: SIGTERM`, distinct from continuation timeout cleanup.
 <!-- trace:BUG-2485 | ai:codex -->
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->

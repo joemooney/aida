@@ -617,7 +617,8 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
             child.communicate(script, timeout=seconds)
         except BaseException as error:
             # Keep foreground ownership through nested cleanup, then reclaim
-            # the operator's group. Every interrupted wait cleans the child.
+            # the operator's group. This handles interruptions delivered to this
+            # supervisor; foreground Ctrl+C is recorded by the continuation.
             try:
                 os.killpg(child.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -772,7 +773,7 @@ def run_aida(args):
                                           cleanup_grace=25)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The continuation owns newer setup evidence. Never overwrite it
         # with the pre-continuation snapshot on an outer timeout.
         # trace:TASK-3194 | ai:codex
@@ -780,7 +781,8 @@ def run_aida(args):
         if saved.exists():
             report = json.loads(saved.read_text())
         if not report.get("unsupported_reason"):
-            aida_refuse(root, report, str(error))
+            aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
         raise
 
 
@@ -849,13 +851,14 @@ def setup_aida(root):
                                           repo, env, state["timeout"] + 180)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The launch continuation owns newer evidence after the seat switch.
         saved = root / "report.json"
         if saved.exists():
             report = json.loads(saved.read_text())
         if not report.get("unsupported_reason"):
-            aida_refuse(root, report, str(error))
+            aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
         raise
 
 
@@ -966,8 +969,9 @@ def continue_aida(root):
             aida_refuse(root, report, "production-containment-receipt-unavailable")
         write_json(root / "report.json", report)
         print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
-        aida_refuse(root, report, str(error))
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
+        aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
     finally:
         if network is not None:
             network.close()
