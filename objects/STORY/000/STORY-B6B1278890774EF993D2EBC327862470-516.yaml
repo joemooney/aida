@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T09:56:07.030484095Z
+modified_at: 2026-11-07T10:00:58.698899847Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -463,6 +463,12 @@ comments:
   content: 'Round 13 PR #3575: restored the existing prepare_with_io body and injected the Codex SHA-256 pin directly, preserving the six ExecContext ledger identities without changing the ledger. Removed the ineffective version argument/check and its obsolete negative assertions; executable SHA-256 refusal coverage remains. Finding 3 is explicitly deferred as permitted: continue hashing every launch rather than adding metadata-based caching. Ratchet against origin/main passes (1241 exact sites, zero additions); formatting and diff whitespace checks pass. Targeted Rust validation in progress; lane runner reports no runner for this native lease. Broader AC2/AC3 remain outside this review-fix slice, with the existing merge hold retained.'
   created_at: 2026-11-07T09:56:07.030484095Z
   modified_at: 2026-11-07T09:56:07.030484095Z
+  session_id: 01a1b56d99da
+- id: 01a1b574-464a-7791-b31a-bc39dad6400b
+  author: joe
+  content: 'Round 13 validation update: cargo test -p aida-cli-lib --lib story_2593 --offline -- --nocapture passed: 11 passed, 0 failed, 1 watchdog-only test ignored (watchdog child passed separately). Live credential/refresh sentinel, live deadline and production-prepare fixtures passed. Exact installed-Codex probe skipped because AIDA_REQUIRE_CODEX_INSTALLED_LIVE was unset. Direct cargo run completed despite the separate lane-runner refusal; make check-ci-fast still running. Native publication declaration recorded as [AI:codex] fix(containment): preserve environment ledger sites and remove dead version gate (Refs STORY-2593). No Git mutation or hold clearance performed.'
+  created_at: 2026-11-07T10:00:58.698899847Z
+  modified_at: 2026-11-07T10:00:58.698899847Z
   session_id: 01a1b56d99da
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
