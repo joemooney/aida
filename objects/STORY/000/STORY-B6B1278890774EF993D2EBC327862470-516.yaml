@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:13:48.686261072Z
+modified_at: 2026-11-07T06:13:56.126002665Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -307,6 +307,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Steps 1-3 slice (Refs) mostly meets the 21:55 interface ruling, but vendor_exit relabels every non-zero ChatGPT Codex exit as an auth/relaunch error and discards the real exit status. CI: contracts/cli/rest green; lib-0/lib-1/gates still pending at record time.. No triage reason was given.'
   created_at: 2026-11-07T06:13:48.686256801Z
   modified_at: 2026-11-07T06:13:48.686256801Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4a4-6895-77b3-95d8-0444e97a8bf4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3575):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 056f7efbf589
+    Recorded: 2026-11-07T05:59:08.870256968+00:00
+    Findings:
+    1. 1. [major] aida-cli-lib/src/launch/contained.rs:1546 vendor_exit runs anyhow::ensure!(!self.chatgpt || status.success(), codex_auth::RELAUNCH) unconditionally. Every non-zero exit of a ChatGPT-auth contained Codex lane (a task error, codex exec exit 1, the implementer's NO_PR_EXIT_CODE=31 from standalone_implementer.rs:58/275, a reviewer exit code read by queue_cmd.rs reviewer_vendor_exit_code) becomes Err('contained ChatGPT authentication unavailable or expired; reauthenticate...') with the ExitStatus lost. Callers session.rs:2211 and :6601 then treat it as a launch failure (session.rs:2216 revokes the child grant), and the step-4 C0-C4 run would report real conformance failures as auth expiry. The ruling's req (2) asks for a fail-closed relaunch diagnostic when a refresh is attempted or the credential expires, not for every failure. Fix: remap only when the credential is actually unusable, the same way the Claude arm does (status failed AND now >= the chatgpt deadline), or when the host reports a distinct deadline/OAuth-denial signal; otherwise return Ok(status). Replace the /bin/false assertion in story_2593_live_credential_and_refresh_sentinels with a test proving a pre-deadline failure keeps its status and a post-deadline one maps to RELAUNCH. Update the matching sentences in OVERVIEW.md ('failed ChatGPT exits request host reauthentication/relaunch') and the plan doc ('An unsuccessful ChatGPT vendor exit returns the host reauthentication/relaunch diagnostic').
+    2. 2. [cosmetic] OVERVIEW.md:1584 is reflowed past wrap width (101 chars: 'delivery timestamp, through --ro-bind-data at a read-only private tmpfs auth leaf; no full cache or'); rewrap the paragraph.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T06:13:55.989629612Z
+  modified_at: 2026-11-07T06:13:55.989629612Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
