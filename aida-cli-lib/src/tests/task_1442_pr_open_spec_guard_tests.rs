@@ -84,3 +84,76 @@ fn plan_commits_are_exempt_like_guard_1() {
     let violation = pr_open_spec_guard_violation(&commits, "STORY-1391").unwrap();
     assert_eq!(violation, Vec::<String>::new());
 }
+
+// trace:BUG-2483 | ai:codex
+#[test]
+fn publication_refs_resolve_friendly_and_canonical_without_completion_credit() {
+    let canonical = "STORY-b6b1278890774ef993d2ebc327862470-323";
+    let mut store = aida_core::RequirementsStore::new();
+    let mut requirement = aida_core::Requirement::new("slice".into(), String::new());
+    requirement.spec_id = Some(canonical.into());
+    requirement.agreed_id = Some("STORY-2325".into());
+    store.requirements.push(requirement);
+    for trailer in ["STORY-2325", canonical] {
+        for expected in ["STORY-2325", canonical] {
+            let commits = vec![commit(
+                "abc123",
+                &format!("refactor: slice (Refs {trailer})"),
+            )];
+            assert_eq!(
+                pr_publication_spec_guard_violation(&commits, expected, Some(&store)),
+                None
+            );
+            assert!(pr_open_spec_guard_violation(&commits, expected).is_some());
+        }
+    }
+    for subject in [
+        "fix: other (Refs STORY-9999)",
+        "fix: other (STORY-9999)",
+        "fix: absent",
+    ] {
+        assert!(pr_publication_spec_guard_violation(
+            &[commit("abc123", subject)],
+            canonical,
+            Some(&store)
+        )
+        .is_some());
+    }
+}
+
+// trace:BUG-2483 | ai:codex
+#[test]
+fn publication_refs_without_store_require_literal_match_and_exclude_plans() {
+    for (subject, passes) in [
+        ("fix: slice (Refs story-2325)", true),
+        ("fix: slice (STORY-2325)", true),
+        ("fix: slice (Refs STORY-9999)", false),
+        ("fix: mention (Refs STORY-2325) in prose", false),
+        ("fix: slice (Refs STORY-2325) (#123)", true),
+        ("docs(plans): slice (Refs STORY-2325)", false),
+    ] {
+        assert_eq!(
+            pr_publication_spec_guard_violation(&[commit("abc123", subject)], "STORY-2325", None)
+                .is_none(),
+            passes
+        );
+    }
+}
+
+// trace:BUG-2483 | ai:codex
+#[test]
+fn publication_refuses_ambiguous_store_identity_even_when_literal_matches() {
+    let mut store = aida_core::RequirementsStore::new();
+    for native in ["STORY-1", "STORY-2"] {
+        let mut r = aida_core::Requirement::new("collision".into(), String::new());
+        r.spec_id = Some(native.into());
+        r.agreed_id = Some("STORY-2325".into());
+        store.requirements.push(r);
+    }
+    assert!(pr_publication_spec_guard_violation(
+        &[commit("abc123", "fix: slice (Refs STORY-2325)")],
+        "STORY-2325",
+        Some(&store)
+    )
+    .is_some());
+}
