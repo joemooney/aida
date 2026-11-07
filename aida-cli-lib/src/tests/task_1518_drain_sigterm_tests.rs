@@ -11,6 +11,7 @@
 //! the files it left. Sibling tests in this process never see the signal.
 //
 // trace:TASK-1518 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use super::*;
 use crate::drain_lock::{drain_lock_path, DrainLock};
@@ -890,15 +891,15 @@ fn task_1542_real_sigterm_stop_child_body() {
         .unwrap();
     let child_pid = grandchild.id();
     let start = aida_core::liveness::process_start_identity(child_pid).unwrap();
-    std::fs::write(
-        lease_path(&root, "aaaa11112222"),
-        format!(
-            "id = \"aaaa11112222\"\ncreator_pid = {pid}\nactive_pid = {child_pid}\n\
-             active_pid_start_time = {}\n",
-            aida_core::toml_quote::toml_string(&start)
-        ),
-    )
-    .unwrap();
+    let mut lease = format!(
+        "id = \"aaaa11112222\"\ncreator_pid = {pid}\nactive_pid = {child_pid}\n\
+         active_pid_start_time = {}\n",
+        aida_core::toml_quote::toml_string(&start)
+    );
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        lease.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
+    std::fs::write(lease_path(&root, "aaaa11112222"), lease).unwrap();
     let slot: GuardSlot = Arc::new(Mutex::new(None));
     install(DrainTermContext {
         project_root: root.clone(),

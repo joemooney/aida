@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 // The derived per-spec driver end to end: `aida driver register` + session
 // leases + batch tags resolve every in-progress spec to relay / agent /
 // queued / idle in `aida ps --json` and `aida list --json`. Fake drivers are
@@ -188,6 +189,12 @@ fn write_lease_at(
         lease.insert(k.into(), toml::Value::String(v));
     }
     lease.insert("active_pid".into(), toml::Value::Integer(active_pid.into()));
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        lease.insert(
+            "pid_namespace".into(),
+            toml::Value::Integer(namespace as i64),
+        );
+    }
     if let Some(d) = driver {
         lease.insert("driver".into(), toml::Value::String(d.into()));
     }

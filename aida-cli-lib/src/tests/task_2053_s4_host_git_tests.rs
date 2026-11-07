@@ -6,6 +6,7 @@
 //! sandboxed accessor's own (tagged), and a negative control shows the check
 //! flags an untagged one.
 //! trace:TASK-2053 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use super::tests::{clone_invocations, fixture, Fixture};
 use super::*;
@@ -47,16 +48,16 @@ pub(super) fn leased_clone_on(fx: &Fixture, name: &str, id: &str, branch: &str) 
     create(&fx.main, &clone, branch, "origin/main").unwrap();
     let path = crate::lease_path(&fx.main, id);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        path,
-        format!(
-            "id = \"{id}\"\nscope = \"TASK-2053\"\nslug = \"task-2053\"\nowner = \"test\"\n\
-             worktree_path = {}\nbranch = \"{branch}\"\nstarted_at = \"2026-10-21T00:00:00Z\"\n\
-             hostname = \"h\"\ntree_kind = \"clone\"\n",
-            aida_core::toml_quote::toml_string(&clone.display().to_string())
-        ),
-    )
-    .unwrap();
+    let mut body = format!(
+        "id = \"{id}\"\nscope = \"TASK-2053\"\nslug = \"task-2053\"\nowner = \"test\"\n\
+         worktree_path = {}\nbranch = \"{branch}\"\nstarted_at = \"2026-10-21T00:00:00Z\"\n\
+         hostname = \"h\"\ntree_kind = \"clone\"\n",
+        aida_core::toml_quote::toml_string(&clone.display().to_string())
+    );
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        body.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
+    std::fs::write(path, body).unwrap();
     clone.canonicalize().unwrap()
 }
 
@@ -175,7 +176,15 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
     let clone = leased_clone(&fx, "heal", "c0ffee000042");
     std::fs::write(clone.join("wip.txt"), "unsaved\n").unwrap();
     let (shim_dir, log, _) = git_shim(&fx);
-    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&["PATH", "AIDA_TRUST_PID_NAMESPACE"]);
+    let inputs = aida_core::exec_context::Environment::capture();
+    let path = std::env::join_paths(std::iter::once(shim_dir).chain(std::env::split_paths(
+        inputs.get("PATH").unwrap_or_default(),
+    )))
+    .unwrap();
+    env.set_key("PATH", path);
+    // This isolated fixture owns every clone and process it creates.
+    env.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
 
     let patch = crate::worktree_gc::salvage_worktree_patch(&fx.main, "TASK-2053", None, &clone)
         .unwrap()
@@ -329,6 +338,7 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
         return;
     }
     let fx = fixture();
+    let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
 
     // An untracked `.gitmodules` with no submodule section: not evidence.
     let other = leased_clone(&fx, "nosub", "c0ffee000046");

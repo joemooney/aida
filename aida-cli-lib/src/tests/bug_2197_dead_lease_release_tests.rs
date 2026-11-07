@@ -7,6 +7,7 @@
 //! names stays byte-identical.
 //
 // trace:BUG-2197 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use super::*;
 use aida_core::liveness::{process_provably_dead_with, recorded_lease_owner, RecordedLeaseOwner};
@@ -183,11 +184,41 @@ fn lease_json(id: &str, worktree: &Path, extra: serde_json::Value) -> SessionLea
         "branch": "main",
         "started_at": "2026-10-03T00:00:00Z",
         "hostname": crate::coordination::hostname(),
+        "pid_namespace": aida_core::pid_observer::current_pid_namespace(),
     });
     for (k, val) in extra.as_object().unwrap() {
         v[k] = val.clone();
     }
     serde_json::from_value(v).expect("fixture lease parses")
+}
+
+#[test]
+fn fixture_namespace_can_be_overridden_for_foreign_and_legacy_records() {
+    let root = Path::new("/fixture");
+    let namespace = aida_core::pid_observer::current_pid_namespace();
+    assert_eq!(
+        lease_json("fixture-local", root, serde_json::json!({})).pid_namespace,
+        namespace
+    );
+    let foreign = namespace.unwrap_or(0) ^ 1;
+    assert_eq!(
+        lease_json(
+            "fixture-foreign",
+            root,
+            serde_json::json!({"pid_namespace": foreign})
+        )
+        .pid_namespace,
+        Some(foreign)
+    );
+    assert_eq!(
+        lease_json(
+            "fixture-legacy",
+            root,
+            serde_json::json!({"pid_namespace": null})
+        )
+        .pid_namespace,
+        None
+    );
 }
 
 fn live(pid: u32, cwd: &Path) -> process_probe::LiveSession {
@@ -718,6 +749,12 @@ fn dead_creator_reviewer_lease_with_a_worktree_is_stale() {
 #[cfg(unix)]
 #[test]
 fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // Only this child can hold the disposable review worktree. Keep the
+    // namespace opt-in out of concurrently running holder negative controls.
+    let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let root = base.join("repo");

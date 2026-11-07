@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 use super::*;
 
 #[test]
@@ -36,7 +37,7 @@ fn bug_1772_prune_stale_reaps_immortal_harness_leases() {
     std::fs::create_dir_all(&sessions_dir).unwrap();
     let old_date = chrono::Utc::now() - chrono::Duration::days(90);
     // Since SessionLease has many fields, we can just write the TOML directly to avoid missing fields
-    let toml_content = format!(
+    let mut toml_content = format!(
         r#"
 id = "stale-harness-lease"
 scope = "harness-worktree"
@@ -50,6 +51,9 @@ hostname = "test-host"
         root.display(),
         old_date.to_rfc3339()
     );
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        toml_content.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
     std::fs::write(sessions_dir.join("stale-harness-lease.toml"), toml_content).unwrap();
     assert_eq!(super::list_leases(&root).len(), 1);
     let result = super::session_leases_prune_stale(true);
