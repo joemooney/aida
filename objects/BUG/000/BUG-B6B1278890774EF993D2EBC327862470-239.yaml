@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T01:52:38.517447984Z
+modified_at: 2026-11-07T01:53:56.051655288Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -86,6 +86,12 @@ comments:
   modified_at: 2026-11-07T01:51:27.018486819Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b3b6-5f53-7280-acff-eced7fffd3ae
+  author: joe
+  content: 'Round 3 finding addressed: replaced both unguarded push calls in bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates with seat_git, preserving maintenance.auto=false and gc.auto=0. Reproduced the Python ratchet failure before the edit (2 sites over baseline 0); afterward python3 -m unittest tests/test_git_maintenance_ratchet.py passed all 8 tests, cargo fmt --all -- --check passed, and git diff --check passed. Native implementer seat leaves the two-line change uncommitted for host publication; merge hold remains unchanged.'
+  created_at: 2026-11-07T01:53:56.051655288Z
+  modified_at: 2026-11-07T01:53:56.051655288Z
+  session_id: 01a1b3b525d3
 history:
 - id: 01a1b368-f22a-7ab3-bbec-f4bcc959f0e9
   author: aida-session-start
