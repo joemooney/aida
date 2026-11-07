@@ -471,7 +471,9 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
                 "direct grant backend caller in {rel}"
             );
             assert!(
-                !src.contains("seat_authority::issue_child("),
+                !src.contains("seat_authority::issue_child(")
+                    && !src.contains("seat_authority::issue_launch_child_with_delegation(")
+                    && !src.contains("issue_child_from("),
                 "legacy child issuer in {rel}"
             );
         }
@@ -526,4 +528,36 @@ fn story_2326_control_env_users_are_checked_aida_constructors() {
         ]),
         "control_env must only run inside checked AIDA control constructors"
     );
+}
+
+/// Inventory every literal production AIDA name, conservatively including
+/// writes as well as reads. New inputs require an explicit disposition.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_ambient_aida_inputs_have_a_disposition() {
+    use aida_core::launch_policy::{AMBIENT_AIDA_KEYS, DROPPED_AIDA_KEYS, OWNED_KEYS};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let names = regex::Regex::new(r#""(AIDA_[A-Z][A-Z0-9_]+)""#).unwrap();
+    for (path, source) in crate::seat_clone::clone_git_ratchet_tests::workspace_sources(root) {
+        let src = production(&source);
+        for captures in names.captures_iter(&src) {
+            let key = &captures[1];
+            assert!(
+                OWNED_KEYS.iter().any(|(name, _)| *name == key)
+                    || AMBIENT_AIDA_KEYS.contains(&key)
+                    || DROPPED_AIDA_KEYS.contains(&key),
+                "unclassified production input {key} in {path}"
+            );
+        }
+    }
+    for key in AMBIENT_AIDA_KEYS {
+        assert!(
+            !key.starts_with("AIDA_TEST_")
+                && !key.starts_with("AIDA_REQUIRE_")
+                && !key.contains("TOKEN")
+                && !key.contains("API_KEY")
+                && *key != "AIDA_AGENT_CMD"
+        );
+        assert!(!DROPPED_AIDA_KEYS.contains(key));
+    }
 }

@@ -31,6 +31,15 @@ thread_local! {
 /// assigns the seat with [`assign_seat`].
 pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     let mut cmd = Command::new(ctx.program());
+    // Claude is the first vendor cutover. The explicit uncontained fixture
+    // override keeps integration harness inputs, never contained launches.
+    // trace:STORY-2326 | ai:codex
+    let profile = super::profile::VendorProfile::for_vendor(ctx.vendor());
+    if profile.clears_environment() && !ctx.fixture_override() {
+        let parent = aida_core::exec_context::Environment::capture();
+        let env = profile.child_env(ctx.kind(), &parent, None)?;
+        cmd.env_clear().envs(env.pairs());
+    }
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());
@@ -130,6 +139,23 @@ pub(crate) fn assign_seat(
             cmd.env_remove(PURPOSE_ENV);
         }
         SeatDecision::ThisSession { grant } => {
+            // Exec retains this validated session's selectors after env_clear;
+            // new child and lane decisions above always replace them.
+            // trace:STORY-2326 | ai:codex
+            if super::profile::environment_is_cleared(cmd) {
+                let parent = aida_core::exec_context::Environment::capture();
+                for key in [
+                    ROLE_ENV,
+                    GRANT_ENV,
+                    PURPOSE_ENV,
+                    STANDALONE_MARKER_ENV,
+                    LANE_MARKER_ENV,
+                ] {
+                    if let Some(value) = parent.get(key) {
+                        cmd.env(key, value);
+                    }
+                }
+            }
             if let Some(grant) = grant {
                 cmd.env(GRANT_ENV, grant);
             }

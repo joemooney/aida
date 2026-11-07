@@ -101,6 +101,7 @@ pub(crate) struct LaunchContext {
     set_cwd: bool,
     host_main: Option<PathBuf>,
     parent_contained: bool,
+    fixture_override: bool,
 }
 
 impl LaunchContext {
@@ -177,7 +178,14 @@ impl LaunchContext {
             set_cwd: req.set_cwd,
             host_main: req.host_main,
             parent_contained,
+            fixture_override: agent_cmd
+                && !parent_contained
+                && req.posture == ContainmentPosture::None,
         })
+    }
+
+    pub(crate) fn fixture_override(&self) -> bool {
+        self.fixture_override
     }
 
     pub(crate) fn vendor(&self) -> LaunchVendor {
