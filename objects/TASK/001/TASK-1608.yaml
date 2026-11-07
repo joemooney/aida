@@ -21,11 +21,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:06.818167687Z
-modified_at: 2026-11-07T20:27:38.954702185Z
+modified_at: 2026-11-07T20:54:29.075939992Z
 req_type: Task
 tags:
 - guided-lane
-- operator-held
 - plan:night
 - seat-occupancy
 - slice:B
@@ -96,10 +95,12 @@ history:
   timestamp: 2026-10-19T15:50:32.058283391Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
-deferred: true
-deferred_at: 2026-10-19T15:50:31.774172620Z
-deferred_until: manual:operator
-deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
+- id: 01a1b7ca-94bd-79c2-9ea9-89356c54f7fa
+  author: joe
+  timestamp: 2026-11-07T20:54:29.309614940Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
