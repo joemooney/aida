@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T12:24:34.405601578Z
+modified_at: 2026-11-07T12:40:19.466205531Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -51,6 +51,12 @@ comments:
   modified_at: 2026-11-07T12:23:25.221910992Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b606-290a-7ff2-aebb-c5da5f1856bc
+  author: joe
+  content: 'Round 2 addresses all five review findings. Added persisted boot-ID/CLOCK_BOOTTIME deadlines (600s Rust, 3600s release shell); Alive always retains while non-Alive expiry is separate from Dead. Legacy acquisition migrates deadlines once without PID recapture; explicit merge-lock --migrate-legacy handles admission gates that precede acquisition. Text/JSON expose holder verdict, reason, lease state and concrete repair guidance. release.sh consults the shared merge-lock --check-file judge, reclaims proved Dead/Expired holders and stamps boot deadlines. Rust replacement cleanup releases its train shadow; Rust and shell release wait up to 5s and warn with recovery context on failures. Updated lifecycle docs and CLI help fixture. Validation: CLI build passed; 17 merge-lock, 4 liveness-ratchet, 43 ownership and 22 command-registry/policy tests passed (86 total); release PR-flow suite, bash syntax, cargo fmt --all -- --check and git diff --check passed. Six files left uncommitted for native host publication. Existing merge hold remains; no merge-hold clearance, commit, push, PR creation, queue completion or review recording performed from this seat.'
+  created_at: 2026-11-07T12:40:19.466205531Z
+  modified_at: 2026-11-07T12:40:19.466205531Z
+  session_id: 01a1b5f7b4f3
 history:
 - id: 01a1b59d-064f-7020-a1ae-8513041adbc0
   author: joe
