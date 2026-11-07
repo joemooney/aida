@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T12:34:23.659096215Z
+modified_at: 2026-11-07T12:47:22.971337590Z
 req_type: Story
 tags:
 - architecture
@@ -453,6 +453,25 @@ comments:
   modified_at: 2026-11-07T12:32:36.646185858Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b60c-9f5b-7ff2-97d8-a8d8aa828768
+  author: joe
+  content: |
+    Round 3 implementation handoff for PR #3595 / reviewed da77ae60829e.
+
+    Addressed finding 1: fetched run 42371593774 logs and JUnit artifacts. lib-0 failed solely on the unbudgeted vendor ratchet (58.028s). Added source and literal candidate filtering and a token precheck before AST attribution (trace comments otherwise defeat the source prefilter). Escaped literals remain candidates, preserving decoded-string coverage. Same-host debug probes measured 34.51s original vs 15.50s revised (~55% lower); the real library run measured 14.78s. Added a 60s CI budget with evidence. Recorded session tests max 1.410s and registry contract 0.020s need no budget.
+
+    lib-1 failed on codex_native_sandbox::tests::every_codex_spawn_path_gets_the_shared_write_set: inline vectors in vendors/mod.rs were counted as production posture builders. The scanner now excludes inline test modules via the existing clone-Git ratchet helper. Its later stale assertion also expected two role-less helper calls in session.rs: it now checks one there and one profile-owned delegation in vendors/headless.rs, retaining all seat/role rescoping checks.
+
+    Addressed finding 2: recognizes cfg(test), cfg(all(..., test, ...)) including nested all, and any attribute whose final path segment is test. Fixtures cover cfg(all(test, unix)), tokio::test, file/module exclusions, and retain production accounting for any(test, unix) / not(test). Dropped the init_cmd.rs test-only ledger entry. Updated AGENTS.md and OVERVIEW.md.
+
+    Validation: cargo test -p aida-cli-lib --lib story_2539 -- --nocapture: 4 passed (workspace ratchet, mutants, exclusion fixtures, registry/consumer contracts). cargo test -p aida-cli-lib --lib codex_native_sandbox::tests::every_codex_spawn_path_gets_the_shared_write_set -- --exact --nocapture: 1 passed, 1.84s. cargo fmt --all -- --check and git diff --check passed. scripts/test-timings.py replay of both lib JUnit reports with updated budgets passed. Builds used the seat-owned target directory.
+
+    Changed files: AGENTS.md; OVERVIEW.md; aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs; aida-cli-lib/src/tests/story_2539_vendor_literals.tsv; aida-cli-lib/src/tests/task_2712_codex_native_sandbox_tests.rs; scripts/test-time-budget.toml.
+
+    Native seat: edits remain uncommitted. Recorded publication declaration: [AI:codex] fix(vendors): speed up literal ratchet and repair CI regressions (Refs STORY-2539). Host must commit/publish and rerun CI. The existing supervised merge hold remains in place; no queue completion, review recording, PR shipping, commit or push was attempted from this seat.
+  created_at: 2026-11-07T12:47:22.971337590Z
+  modified_at: 2026-11-07T12:47:22.971337590Z
+  session_id: 01a1b600b04a
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
