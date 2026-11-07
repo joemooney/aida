@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T17:31:21.278015417Z
+modified_at: 2026-11-07T18:15:52.595845887Z
 req_type: Story
 tags:
 - architecture
@@ -827,6 +827,12 @@ comments:
   content: 'Round 8 implementation: shared exec/coordinator builder now marks wrapper-owned environments before spawn_agent. Site-level regression builds both commands under trusted claude="aida" and rejects ambient parent session/rotation/context transport, while explicit child leases remain accepted. Restore explicit purpose-removal checks for inheriting vendors; Claude snapshots prove env_clear, and seat-writer snapshots retain tombstones. Audit launch/spawn.rs four grant writes (Child, Lane, current-session restore, explicit current-session grant) and fix stale final-spawn inventory. Delete the per-change round-7 handoff document. HOST PR BODY REQUIRED: replace the declared-resource projection claim with: Known limitation: SandboxResources::child_env is projection plumbing only; spawn_agent passes resources=None and still projects parent cargo configuration, while the contained wrapper independently selects seat build environment and disables sccache. Keep: Known limitation: dropped environment keys are not reported; aida launch explain is deferred under the accepted advisor ruling. New-head green CI remains required after host publication; supervised merge hold remains human-gated. Local validation pending.'
   created_at: 2026-11-07T17:31:21.278015417Z
   modified_at: 2026-11-07T17:31:21.278015417Z
+  session_id: 01a1b70ae419
+- id: 01a1b739-5e13-7d42-ad6f-1c817ddbe001
+  author: joe
+  content: 'Round 8 final validation: exact final source cargo test -p aida-cli-lib --profile agent --lib story_2326 -- --test-threads=2 PASSED: 46 passed, 0 failed, including story_2326_spawn_agent_clears_env, the trusted-policy exec/coordinator selected_environment regression, explicit seat-writer tombstones and cleared Claude snapshots. Log /tmp/story2326-r8-tests-current.log. bug_2398_final_spawn_boundary_ratchet and exec_headless_child_never_inherits_the_launcher_seat_env each passed separately. make check-ci-fast PASSED: 43 gates, exit 0 (/tmp/story2326-r8-fast-final.log); ExecContext ratchet separately passed 19 tests. Formatting and git diff --check passed. Earlier snapshot failure was the approved AIDA_AGENT_CMD inheritance seam; command-only snapshots now temporarily disable it through AmbientGuard setters, then restore it for spawned fake vendors. No ratchet ledger expansion. Changed files: session.rs; containment/tests/launch_tests.rs; tests/bug_2398_codex_tool_env_tests.rs; tests/story_2326_launch_tests.rs; deleted docs/plans/2026-11-07-story-2326-prd-round7.md. Native publication declaration recorded: [AI:codex] fix(launch): close coordinator wrapper env leak and restore boundary assertions (Refs STORY-2326). Edits remain uncommitted as required in this seat. HOST: commit/push the new round, apply the two PR-body limitations from the prior round-8 comment, and establish/cite green hosted CI at the new head. Finding 2 remains pending host publication; the supervised merge hold remains human-gated. No commit/push/PR mutation, queue done, review record or pr ship was run.'
+  created_at: 2026-11-07T18:15:52.595845887Z
+  modified_at: 2026-11-07T18:15:52.595845887Z
   session_id: 01a1b70ae419
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
