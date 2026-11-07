@@ -3,12 +3,12 @@ spec_id: STORY-704
 agreed_id: STORY-704
 title: Auto-generated tutorial structure from aida doc entries + spec metadata
 description: Walk Doc entries (--about edges) + emit one tutorial page per feature cluster; read-only projection, regenerable, idempotent like aida changelog refresh. (Living-docs followup; EPIC-24 closed.)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:54:29.682662741Z
-modified_at: 2026-11-07T21:05:35.682599452Z
+modified_at: 2026-11-07T21:05:37.250869684Z
 req_type: Story
 tags:
 - doc-projection
@@ -44,3 +44,12 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7d4-c5e2-7dd2-9336-15b75062f6bb
+  author: joe
+  timestamp: 2026-11-07T21:05:37.250863480Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
