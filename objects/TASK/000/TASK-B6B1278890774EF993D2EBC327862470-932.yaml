@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-932
 agreed_id: TASK-3364
 title: 'STORY-2537 S2: ProcIdentity for the merge lock'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T16:16:19.140419039Z
+modified_at: 2026-11-07T17:02:20.603020887Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -289,6 +289,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b6f6-0a49-7850-98ba-f50152acc4b7
+  author: aida-auto-bump
+  timestamp: 2026-11-07T17:02:20.233236324Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b6f6-0bbb-7600-86ac-55268f9a747d
+  timestamp: 2026-11-07T17:02:20.603016565Z
+  agent: aida
+  commit_sha: 97707de19147cd72ee00a61f95cf12241e8ba6a2
+  summary: 'Round 4 resolves both 551f783 findings: store-writers.toml adds exactly the 7 merge_lock.rs/release.sh sink rows (blocked, TASK-3223) and drops the 2 stale lease_acquire rows; mutation_guard WouldBlock now maps to the shared retained-holder diagnostic, covered by mutation_guard_respects_zero_wait. All TASK-3364 acceptance met: merge-lock family on proc_identity, pid-only checks removed (baseline merge_lock.rs 3->0, dual.rs 2->1), namespace/pid-reuse/subreaper/other-node/clock cases in merge_lock::tests. CI at head: cli-0/cli-1 green, gates/lib/contracts/rest still pending and must be green before ship; merge-hold-gate red only for the supervised hold (clear via the human/advisor path).'
+  review_verdict: approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -298,3 +312,7 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T17:02:20.233229931Z
+  completion_sha: 97707de19147cd72ee00a61f95cf12241e8ba6a2
