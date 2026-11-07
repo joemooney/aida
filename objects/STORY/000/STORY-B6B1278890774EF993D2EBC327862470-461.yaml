@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T00:34:52.218891314Z
+modified_at: 2026-11-07T00:35:14.952127184Z
 req_type: Story
 tags:
 - architecture
@@ -277,6 +277,13 @@ comments:
   content: '[advisor 17:38] Rework brief for #3515 @7fa530d: CI gates red. (1) docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree; regenerate it. (2) One python gate test fails (errors=1) in the gates job; reproduce it with make check-ci-fast. Scope stays the round-4 ruling (F1-F4 fixed, F5 doc only, no new nits). LIGHT gate: one targeted cargo test plus make check-ci-fast, then push.'
   created_at: 2026-11-07T00:34:52.218891314Z
   modified_at: 2026-11-07T00:34:52.218891314Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b36e-551d-79e2-8599-7375f6ce4d10
+  author: joe
+  content: 'Advisor ruling: Round-4 scope stands (F1-F4 fixed, F5 doc only, no new nits). This round fixes only CI at 7fa530d: regenerate docs/internal/architecture/external-tool-output-classifiers.md to match the tree markers, and fix the python gate test that fails in the gates job (reproduce with make check-ci-fast). LIGHT gate, then push.'
+  created_at: 2026-11-07T00:35:14.845137054Z
+  modified_at: 2026-11-07T00:35:14.845137054Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 history:
