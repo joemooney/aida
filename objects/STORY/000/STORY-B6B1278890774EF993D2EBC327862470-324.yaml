@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T18:41:04.808346333Z
+modified_at: 2026-11-07T18:58:14.303155860Z
 req_type: Story
 tags:
 - architecture
@@ -865,6 +865,12 @@ comments:
   content: 'Round 9 implementation/audit: phase_driver advisor consult now uses assign_seat(Child) with current_grant_id (or explicit baseline empty selector), preserving the launcher advisor authority after Claude env_clear; the Codex caller still replaces it with a delegated advisor grant before finalization. Claude compete arms deliberately have no delegated seat and drop parent role/grant/purpose; regression added. All remaining spawn_agent call sites use assign_seat directly or phase CI-fix apply_headless_child_seat_env. Both PreparedLaunch entrypoints now fail closed on a cleared/projected Command before root/credential/store/broker I/O. Tests preserve tombstones for inheriting vendors and assert clearing before accepting absent keys; command-only snapshots disable the full-parent AIDA_AGENT_CMD fixture seam. Issuer ratchet now catches issue_child bare imports, aliases and grouped imports. PR #3603 body corrected with gh pr edit to the exact round-8 cargo-resource known limitation; accepted missing dropped-key report retained. Local LIGHT validation running; new-head hosted CI cannot exist until the native-seat host publishes these uncommitted edits. No hold clearance or queue completion.'
   created_at: 2026-11-07T18:41:04.808346333Z
   modified_at: 2026-11-07T18:41:04.808346333Z
+  session_id: 01a1b7495ec2
+- id: 01a1b760-269f-70a2-aee1-dc3f6625f725
+  author: joe
+  content: 'Round 9 final handoff: 61 targeted aida-cli-lib tests PASSED, 0 failed (cargo test -p aida-cli-lib --profile agent --lib -- story_2326 bug_2165_headless_child_grant_isolation_tests contained_child_commands_export_aida_contained burndown_quiet_builder_argv_and_env_contained_vs_uncontained burndown_verbose_builder_argv_and_env_contained_vs_uncontained autopilot_intake_builder_argv_and_env_contained_vs_uncontained questions_clarify_builder_argv_and_env_contained_vs_uncontained bug_2398_final_spawn_boundary_ratchet --test-threads=2). Includes advisor current/baseline grant, compete no-parent-seat, both wrapper refusal entrypoints, removed-marker Codex rebuild and issue_child import/alias mutants. Log /tmp/story2326-r9-tests-green.log. make check-ci-fast PASSED all 43 gates (/tmp/story2326-r9-fast.log); formatting and git diff --check passed. Initial test compile exposed probe visibility; fixed by making it crate-visible. Initial run passed 60 tests and identified the stale phase_driver launch ledger count; shrank 5 to 4 after removing the direct role writer, then the final complete run passed. BUG-2398 grant inventory explicitly accounts for the advisor assign_seat call (Codex replaces the current selector with its own delegation before finalizing). PR #3603 body updated directly with the exact cargo-resource known limitation and validation; accepted missing dropped-key report retained. Changed runtime files under aida-cli-lib/src: agent_launch.rs, compete_cmd.rs, phase_driver.rs, session.rs, launch/contained.rs, launch/profile.rs. Changed tests: containment/tests/codex_auth_tests.rs, containment/tests/launch_tests.rs, containment/tests/mediated_store_tests.rs; tests/bug_2133_contained_drain_children_tests.rs, tests/bug_2165_headless_child_grant_isolation_tests.rs, tests/bug_2171_2170_contained_builders_tests.rs, tests/bug_2398_codex_tool_env_tests.rs, tests/story_2326_launch_ratchet_tests.rs, tests/story_2326_launch_tests.rs. All 15 edits remain uncommitted for native host publication. HOST must commit/push a new round-9 head and establish/cite green hosted CI; finding 2 remains pending that host action. Supervised merge hold untouched. No commit/push, queue done, review record or pr ship from this seat.'
+  created_at: 2026-11-07T18:58:14.303155860Z
+  modified_at: 2026-11-07T18:58:14.303155860Z
   session_id: 01a1b7495ec2
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
