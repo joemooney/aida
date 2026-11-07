@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-24T16:27:36.299718161Z
+modified_at: 2026-11-07T20:26:53.998120486Z
 req_type: Bug
 tags:
 - drain-safe
@@ -67,9 +67,19 @@ comments:
   created_at: 2026-09-20T19:10:49.508131006Z
   modified_at: 2026-09-20T19:10:49.508131006Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a1b7b1-52ae-7150-a6d4-bf633eb3e93a
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-20T19:10:46.610517779Z","deferred_until":"a real Linux tick-lock failure is captured in CI or in local artifacts, carrying the error kind and raw os error number","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:53.998114951Z
+  modified_at: 2026-11-07T20:26:53.998114951Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-20T19:10:46.610517779Z
-deferred_until: a real Linux tick-lock failure is captured in CI or in local artifacts, carrying the error kind and raw os error number
+deferred_until: manual:operator
 execution_mode: drain
 failure_reason:
   phase: implementer
