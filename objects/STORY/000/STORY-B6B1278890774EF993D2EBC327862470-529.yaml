@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T09:03:24.266973523Z
+modified_at: 2026-11-07T09:03:27.386767339Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -76,6 +76,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 fixed (injected environ, GIT_STRATEGY clone + artifact cleanup, closed job/strategy/matrix keys, case-insensitive compare). New blockers: the adapter does not map two ci.yml inputs that the merge from main brought in, so the gates lane would fail under GitLab. ACs: AC1 (home CI passes test_gdma_ci.py) unverified, gates job still in progress at dbeedb4; AC2 (relay inventory admits gdma-ci: [lane]) verified by ci_inventory.rs gitlab_jobs test + test_work_ci_relay new receipt test (green at 91b4643, pending at head); AC3 (no work hostname/registry/credential) verified by diff inspection (only .invalid placeholders, image/tag/registries are CI variables, no RUST_MIN_STACK/CARGO_BUILD_JOBS/Nexus); bring-in list present, dev_build.rs sccache change already on main (dev_build_tests.rs:2230).. No triage reason was given.'
   created_at: 2026-11-07T09:03:24.266972276Z
   modified_at: 2026-11-07T09:03:24.266972276Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b53f-9c29-7a90-9e6d-d87f43d23e46
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2606):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dbeedb4f6a53
+    Recorded: 2026-11-07T09:01:32.811290343+00:00
+    Findings:
+    1. BLOCKING: The 'Install awk engines' step (.github/workflows/ci.yml:799-803, gates lane, runs 'sudo apt-get update && sudo apt-get install -y mawk gawk') is not in INSTALL_STEPS (ci/gdma/run-upstream.py:369-372), so the adapter executes it under GitLab. A provisioned builder image without sudo or apt network access fails it, and the gates lane goes red. Fix: map it to the image (add it to INSTALL_STEPS and list mawk + gawk among the image prerequisites in ci/gdma/README.md). Make the mapping fail closed: validate_job should refuse any unmapped run step that invokes sudo or apt-get. Add a test asserting that every current ci.yml step using apt-get is mapped.
+    2. BLOCKING: RUNNER_TEMP is never provided. 'Live bwrap OS-wrap confinement gate' (ci.yml:386-413, gates lane, full CI) uses $RUNNER_TEMP nine times for its log and result files. run-upstream.py:625-631 sets GITHUB_STEP_SUMMARY but not RUNNER_TEMP, so the paths resolve to /live-bwrap.log and similar. That fails in a non-root container and writes into / otherwise. Fix: set RUNNER_TEMP to a fresh per-job directory (e.g. under target/). Extend test_every_current_ci_expression_and_shell_is_supported to scan run bodies for $RUNNER_*/$GITHUB_* references and require the adapter to supply each one, so a future runner variable refuses instead of silently expanding to empty.
+    3. MINOR: A non-zero 40-hex CI_COMMIT_BEFORE_SHA whose object is missing from the clone (a force-pushed or re-pushed relay branch) makes full_ci() raise CalledProcessError with a traceback (run-upstream.py:488-497, 621-623). README.md:204 says a missing baseline selects full CI conservatively. Fix: check the object with 'git cat-file -e <sha>^{commit}', or catch the error, then fall back to full=True. Add a test.
+    4. MINOR: .gitlab/ci/gdma.yml:52-53,63-64 creates the seven jobs on any ci/N push even when GDMA_CI_IMAGE or GDMA_RUNNER_TAG is unset. An empty image falls back to the runner's default image and an empty tag leaves the job pending or on the wrong runner, so an unconfigured instance runs the suite in the wrong environment. Fix: add '&& $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG' to the rule, and cover it in test_literal_jobs_match_upstream_lane_set.
+    5. MINOR: The step timeout (run-upstream.py:660-668) kills only the direct bash child. Grandchildren (cargo, nextest) keep running during the always()/!cancelled() cleanup steps and can write JUnit after collection. Fix: run the step with start_new_session=True and os.killpg the group on TimeoutExpired.
+    6. COSMETIC: The merge-request path (event_name pull_request, CI_MERGE_REQUEST_TARGET_BRANCH_NAME base_ref, full_ci against origin/<target>) cannot run, because the gdma.yml rules admit only push pipelines on ci/N. README.md:202-204 describes MR mapping as live behavior. Either note that MR mapping is for future use or drop it. Separately, on an MR, origin/<target> is fetched only when target == CI_DEFAULT_BRANCH.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T09:03:27.273213667Z
+  modified_at: 2026-11-07T09:03:27.273213667Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
