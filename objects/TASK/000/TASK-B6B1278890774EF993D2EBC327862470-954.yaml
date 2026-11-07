@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T21:16:33.551709008Z
-modified_at: 2026-11-07T23:37:59.798774874Z
+modified_at: 2026-11-07T23:38:02.352767070Z
 req_type: Task
 tags:
 - carried-from:TASK-3365
 - finding-hash:6f6bdcbc
 - from-review:PR-3615
 - kind:carried-forward
+comments:
+- id: 01a1b860-50f0-7921-b839-1dc4cbe21592
+  author: joe
+  content: 'Superseded: folded into TASK-3367 by advisor ruling 2026-11-07 16:45.'
+  created_at: 2026-11-07T23:38:02.352767070Z
+  modified_at: 2026-11-07T23:38:02.352767070Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7e2-2cd4-7392-848e-84802ddfb100
   author: joe
