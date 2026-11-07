@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-10-11T01:44:23.114977537Z
+modified_at: 2026-11-07T20:27:37.655990682Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
@@ -239,6 +239,16 @@ comments:
   created_at: 2026-10-08T17:38:15.176428719Z
   modified_at: 2026-10-08T17:38:15.176428719Z
   relayed_from: independent_v2_advisor
+- id: 01a1b7b1-fd37-7673-8a85-feb9016f547e
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-08T19:17:35.564989934Z","deferred_until":"When those exact profiles and independently accepted common dependencies exist, recheck all B1-B4 mandatory positive and negative real-entrypoint witnesses before resuming.","legacy_tags":[]}
+    Migrated condition: manual:joe
+  created_at: 2026-11-07T20:27:37.655982956Z
+  modified_at: 2026-11-07T20:27:37.655982956Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a110e0-8876-74d3-87d1-91763f517baf
   author: joe
@@ -271,7 +281,7 @@ history:
     new_value: TASK-b6b1278890774ef993d2ebc327862470-410
 deferred: true
 deferred_at: 2026-10-08T19:17:35.564989934Z
-deferred_until: When those exact profiles and independently accepted common dependencies exist, recheck all B1-B4 mandatory positive and negative real-entrypoint witnesses before resuming.
+deferred_until: manual:joe
 deferred_reason: 'Technical dependency: signed consumer design is approved but the exact supported vendor/version/containment/minimal-credential profile and independently accepted common publisher/P4/C, occupancy and real transport/consumer joins are not supplied. No guessed backend or authority bypass.'
 filed_at:
   code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
