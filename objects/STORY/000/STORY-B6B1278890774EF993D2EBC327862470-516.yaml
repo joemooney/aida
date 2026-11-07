@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T05:38:06.688230715Z
+modified_at: 2026-11-07T05:47:36.922151377Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -295,6 +295,12 @@ comments:
   content: 'Exact-leaf compatibility refinement: fake-only installed 0.166.0 probes show that last_refresh omission drops the bearer, while account_id omission drops routing. The implementation therefore copies only approved access_token and id_token, generates refresh_token="", derives account_id from the approved ID-token claim, and generates last_refresh as the leaf delivery timestamp. No additional host-cache field is copied and the bearer expiry is unchanged. With both generated metadata fields, the local Responses recorder receives the expected bearer and account header (deliberate HTTP 400/exit 1; no containment credit). Added an opt-in regression feeding the production reduced memfd to the installed CLI; stdout/stderr, input immutability and bounded private artifact scans are checked. This preserves the ruling against reusable refresh material and in-lane renewal.'
   created_at: 2026-11-07T05:38:06.688230715Z
   modified_at: 2026-11-07T05:38:06.688230715Z
+  session_id: 01a1b47530f4
+- id: 01a1b48c-505a-7641-98e2-e9381611cc30
+  author: joe
+  content: 'Native implementation handoff: 60 launcher tests passed (including real common-wrapper tmpfs credential/refresh-denial/deadline sentinels, production prepare, and FIFO watchdog); the watchdog-only child is intentionally ignored except through its parent. Separately enabled the installed-Codex exact-leaf regression: 1 passed on codex-cli 0.166.0 using the production memfd with fake tokens, expected bearer/account routing, unchanged auth input, no access token in stdout/stderr or scanned artifacts; fixture deliberately returns HTTP 400. All 44 Python conformance regressions passed after the FD change; cargo fmt --check, git diff --check and Python compilation passed. Memfd delivery uses bwrap --ro-bind-data into private read-only tmpfs; no disk-backed secret copy. Read-only forge verification confirms #3560 CLOSED with docs/Refs title (finding 4 resolved); advisor ruling resolves finding 5. Findings 2/3 acceptance work remains advisor/operator-owned: real ChatGPT C0-C4, policy/binary/receipt hash chain, native file-tool visibility and evidence-based BUG-2447/2448 disposition. Both bugs remain Approved/blocked and the story remains In Progress. Twelve source/test/manifest/doc files changed, left uncommitted. Recorded native publication declaration: [AI:codex] feat(launch): deliver pinned non-renewing ChatGPT credentials (Refs STORY-2593). No commit, push, PR mutation, queue completion, ship/merge operation or review verdict from this seat; preserve any existing hold. Detailed evidence and limitations are in docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md.'
+  created_at: 2026-11-07T05:47:36.922151377Z
+  modified_at: 2026-11-07T05:47:36.922151377Z
   session_id: 01a1b47530f4
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
