@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T18:31:03.414871167Z
-modified_at: 2026-11-07T18:31:03.414871167Z
+modified_at: 2026-11-07T19:29:31.867809661Z
 req_type: Task
 tags:
 - carried-from:BUG-2483
 - finding-hash:2f6c309e
 - from-review:PR-3605
 - kind:carried-forward
+comments:
+- id: 01a1b77c-ccdb-7de2-a0ab-2225badd162b
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 12:30 (10-28 order, non-blocking findings ruled once): accepted, not filed as follow-up. Reason: cosmetic message wording.'
+  created_at: 2026-11-07T19:29:31.867809661Z
+  modified_at: 2026-11-07T19:29:31.867809661Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b76a-c68d-73d2-9744-19af27ce2d8b
   author: joe
