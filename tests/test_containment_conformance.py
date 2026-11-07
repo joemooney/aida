@@ -232,6 +232,7 @@ items = [{name = "preserved", enabled = true}]
                         "#aida:eval:begin\nprivate-key-adoption\n#aida:eval:end\n")
                 try:
                     with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)), \
+                            mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
                             mock.patch.object(c.subprocess, "run", side_effect=entered), \
                             contextlib.redirect_stderr(io.StringIO()) as diagnostics:
                         if outcome == "success":
@@ -254,6 +255,7 @@ items = [{name = "preserved", enabled = true}]
     def test_disconnected_terminal_does_not_mask_original_error(self):
         with mock.patch.object(c.os, "isatty", return_value=True), \
                 mock.patch.object(c.termios, "tcgetattr", return_value=[]), \
+                mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
                 mock.patch.object(c.termios, "tcsetattr", side_effect=c.termios.error("disconnected")):
             with self.assertRaisesRegex(ValueError, "original failure"):
                 with c.preserved_terminal():
@@ -275,13 +277,111 @@ print('terminal changed', flush=True)
 signal.pause()
 """])
         try:
-            with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)):
+            with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)), \
+                    mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
+                    mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()):
                 with self.assertRaisesRegex(ValueError, "continuation-timeout"):
                     c.launch_aida_continuation(script, Path("."), dict(os.environ), 1, cleanup_grace=0.1)
             self.assertEqual(c.termios.tcgetattr(terminal), before)
         finally:
             os.close(master)
             os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_background_terminal_restore_is_skipped(self):
+        with mock.patch.object(c.os, "isatty", return_value=True), \
+                mock.patch.object(c.termios, "tcgetattr", return_value=[]), \
+                mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp() + 1), \
+                mock.patch.object(c.termios, "tcsetattr") as restore:
+            with c.preserved_terminal():
+                pass
+        restore.assert_not_called()
+
+    # trace:BUG-2485 | ai:codex
+    def test_controlling_terminal_supports_implementer_and_nested_prompts(self):
+        import select
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            role = root / "role"
+            role.write_text("#!/bin/sh\nstty -echo -opost\necho PROMPT >/dev/tty\nread answer\n"
+                            "test \"$answer\" = yes || exit 1\n"
+                            "printf '#aida:eval:begin\\ntrue\\n#aida:eval:end\\n'\n")
+            role.chmod(0o700)
+            supervisor = f"""
+import importlib.util, os, pathlib
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+root = pathlib.Path({str(root)!r})
+assert os.tcgetpgrp(0) == os.getpgrp()
+c.fixture_role_enter({str(role)!r}, root, dict(os.environ), root, {{'setup': []}}, 'implementer')
+assert c.launch_aida_continuation('echo PROMPT >/dev/tty; read answer; test "$answer" = yes',
+                                  root, dict(os.environ), 5) == 0
+assert os.tcgetpgrp(0) == os.getpgrp()
+"""
+            script = "exec " + c.shlex.join([c.sys.executable, "-c", supervisor])
+            worker = f"""
+import fcntl, importlib.util, os, pathlib, termios
+fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+before = termios.tcgetattr(0)
+assert c.launch_aida_continuation({script!r}, pathlib.Path({str(root)!r}), dict(os.environ), 10) == 0
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+try:
+    c.launch_aida_continuation('stty -echo -opost; trap "" TERM; exec sleep 30',
+                               pathlib.Path({str(root)!r}), dict(os.environ), 0.3, cleanup_grace=0.1)
+except ValueError as error:
+    assert 'continuation-timeout' in str(error)
+else:
+    raise AssertionError('expected forced cleanup')
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+"""
+            master, terminal = pty.openpty()
+            child = c.subprocess.Popen([c.sys.executable, "-c", worker], stdin=terminal,
+                                       stdout=terminal, stderr=terminal, start_new_session=True)
+            output = b""
+            prompts = 0
+            deadline = time.monotonic() + 15
+            try:
+                while child.poll() is None and time.monotonic() < deadline:
+                    if select.select([master], [], [], 0.1)[0]:
+                        output += os.read(master, 65536)
+                        count = output.count(b"PROMPT")
+                        while prompts < count:
+                            os.write(master, b"yes\n")
+                            prompts += 1
+                self.assertEqual(child.poll(), 0, output.decode(errors="replace"))
+                self.assertEqual(prompts, 2)
+            finally:
+                # Bound a regression that stops a process group on SIGTTIN/TTOU.
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+                os.close(master)
+                os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_main_installs_distinct_harness_termination_handler(self):
+        for boundary in ("native", "aida"):
+            with self.subTest(boundary=boundary), \
+                    mock.patch.object(c.sys, "argv", [c.__file__, "--vendor", "codex",
+                                                      "--boundary", boundary, "--output", "fixture"]), \
+                    mock.patch.object(c.signal, "signal") as install, \
+                    mock.patch.object(c, "run") as run, \
+                    contextlib.redirect_stderr(io.StringIO()) as diagnostics:
+                def terminate(_args):
+                    install.assert_called_once_with(c.signal.SIGTERM, c.harness_terminated)
+                    install.call_args.args[1](c.signal.SIGTERM, None)
+                run.side_effect = terminate
+                with self.assertRaises(SystemExit) as exit:
+                    c.main()
+                self.assertEqual(exit.exception.code, 2)
+                self.assertIn("harness-terminated: SIGTERM", diagnostics.getvalue())
+                self.assertNotIn("continuation-timeout", diagnostics.getvalue())
 
     def test_setup_refusal_never_enters_implementer_or_launches(self):
         for refused in ("setup-seat-preflight", "spec-add", "queue-add"):
@@ -436,7 +536,7 @@ signal.pause()
                 return "fixture"
             # trace:TASK-2941 | ai:codex
             def timeout(script, repo, env, seconds, cleanup_grace):
-                # Cover all four 30s setup calls, the full inner budget, its
+                # Cover three 30s setup calls, the 300s role entry, the inner budget, its
                 # TERM/KILL cleanup and time to publish the real outcome.
                 self.assertEqual(seconds, args.timeout + 3 * 30 + 300 + 180 + 30)
                 self.assertEqual(cleanup_grace, 25)

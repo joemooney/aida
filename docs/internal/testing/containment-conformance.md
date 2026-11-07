@@ -356,8 +356,12 @@ argv, environment variables, reports or files. Both seat transitions retain the
 operator's terminal session and the supervised timeout cleanup. Each role entry
 announces that it is waiting for the operator and allows five minutes for prompts,
 including the advisor delegation question (whose default remains no). The harness
-saves and restores terminal attributes around role entry and continuation cleanup,
-including timeout, cancellation and SIGTERM exits.
+lends terminal foreground ownership to each continuation before releasing its
+script, so implementer prompts can read the controlling terminal. Supervisors
+return foreground ownership after nested cleanup, blocking SIGTTOU while
+reclaiming it. Attribute restoration runs only in the foreground group; the outer
+supervisor covers timeout, cancellation and SIGTERM exits. Top-level SIGTERM
+reports `harness-terminated: SIGTERM`, distinct from continuation timeout cleanup.
 <!-- trace:BUG-2485 | ai:codex -->
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 

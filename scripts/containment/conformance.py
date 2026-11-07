@@ -548,12 +548,42 @@ def preserved_terminal():
     finally:
         if terminal is not None:
             try:
-                if attributes is not None:
+                if attributes is not None and os.tcgetpgrp(terminal) == os.getpgrp():
                     termios.tcsetattr(terminal, termios.TCSANOW, attributes)
             except (OSError, termios.error):
                 pass  # A disconnected terminal cannot be restored.
             finally:
                 os.close(terminal)
+
+
+# trace:BUG-2485 | ai:codex
+@contextlib.contextmanager
+def foreground_continuation(group):
+    """Lend a controlling terminal to the child before releasing its script."""
+    terminal = os.dup(0)
+    previous = None
+    try:
+        try:
+            if os.isatty(terminal) and os.tcgetpgrp(terminal) == os.getpgrp():
+                previous = os.getpgrp()
+                os.tcsetpgrp(terminal, group)
+        except OSError:
+            # Pipes and non-controlling PTYs have no foreground group to lend.
+            # A real handoff failure must refuse before the child can prompt.
+            if previous is not None:
+                raise
+        yield
+    finally:
+        try:
+            if previous is not None:
+                # We are now background. Reclaiming the tty must not stop us.
+                mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+                try:
+                    os.tcsetpgrp(terminal, previous)
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        finally:
+            os.close(terminal)
 
 
 # Retain the operator's terminal session, but own a group for continuation
@@ -577,12 +607,13 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
     finally:
         os.close(terminal)
     script = f"exec 0<&{terminal}\nexec {terminal}<&-\n" + script
-    with child:
+    with child, contextlib.ExitStack() as terminal_owner:
         try:
+            terminal_owner.enter_context(foreground_continuation(child.pid))
             child.communicate(script, timeout=seconds)
         except BaseException as error:
-            # The separate group does not receive the operator's Ctrl+C.
-            # Every interrupted wait must request continuation cleanup.
+            # Keep foreground ownership through nested cleanup, then reclaim
+            # the operator's group. Every interrupted wait cleans the child.
             try:
                 os.killpg(child.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -599,6 +630,11 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
                 raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
             raise
         return child.returncode
+
+
+# trace:BUG-2485 | ai:codex
+def harness_terminated(signum, _frame):
+    raise ValueError(f"harness-terminated: {signal.Signals(signum).name}")
 
 
 def continuation_terminated(_signum, _frame):
@@ -1174,7 +1210,7 @@ def main():
         if args.boundary == "native" and args.vendor == "claude":
             parser.error("native-boundary-unsupported-vendor: claude")
         try:
-            signal.signal(signal.SIGTERM, continuation_terminated)
+            signal.signal(signal.SIGTERM, harness_terminated)
             run(args)
         except ValueError as error:
             parser.exit(2, f"conformance: {error}\n")
