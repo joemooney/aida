@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:43.460416454Z
-modified_at: 2026-11-07T04:57:37.859390039Z
+modified_at: 2026-11-07T05:01:56.112904331Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ comments:
   modified_at: 2026-11-07T04:39:17.310907729Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b462-7e10-7890-856a-d17d7b95d7f9
+  author: joe
+  content: 'Implementation uses get_requirement_unambiguous_for_read for idle candidates, preserving canonical-object validation while avoiding repeated agreed-ID YAML scans. Ported the scoped reference regression cases for canonical timestamps, ambiguous IDs, and missing IDs. CI decision: retain the unchanged 10-second cold-first-run budget; do not port the work-only prepare-status-fixture.sh warm-up. The exact work full-status timed test is absent from this checkout; preparing an isolated 7,246-object real-store snapshot for a local cold-cache measurement.'
+  created_at: 2026-11-07T05:01:56.112904331Z
+  modified_at: 2026-11-07T05:01:56.112904331Z
+  session_id: 01a1b45e3bac
 history:
 - id: 01a1b445-1a9b-7601-8f9e-747ef8aa1341
   author: joe
