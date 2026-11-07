@@ -198,6 +198,14 @@ pub(crate) fn handle_doctor_command(
                             *fail_on_findings,
                         );
                     }
+                    // trace:STORY-2630 | ai:codex
+                    Some(crate::codegraph::CATEGORY) => {
+                        return doctor_check_store_free_light(
+                            crate::codegraph::CATEGORY,
+                            *json,
+                            *fail_on_findings,
+                        );
+                    }
                     Some("performance") => {
                         return doctor_check_store_free_light(
                             "performance",
@@ -725,7 +733,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let gc_deadline = opts
         .quiet_output
         .then(|| std::time::Instant::now() + POST_SHIP_GC_BUDGET);
-    let project_root = main_worktree_root_from(&find_project_root()?);
+    // trace:STORY-2630 | ai:codex
+    let invoking_root = find_project_root()?;
+    let project_root = main_worktree_root_from(&invoking_root);
     // A bad `--since` fails the run with an error naming the flag rather than
     // silently applying no cutoff. trace:BUG-1622 | ai:claude
     if let Some(raw) = opts.since.as_deref() {
@@ -749,6 +759,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // Main owns the store, but navigation must be reachable from this seat.
+    // trace:STORY-2630 | ai:codex
+    if invoking_root != project_root
+        && doctor_category_selected(opts.category.as_deref(), crate::codegraph::CATEGORY)?
+    {
+        findings.retain(|finding| finding.category != crate::codegraph::CATEGORY);
+        findings.extend(crate::codegraph::scan(&invoking_root));
+    }
     // trace:BUG-1719 | ai:codex
     let mut merged_agent_worktrees_reclaimable = 0;
     let mut merged_agent_worktrees_skipped = 0;
@@ -1655,8 +1673,14 @@ fn doctor_stale_locks_bounded(
 
 // trace:TASK-1544 | ai:codex
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
-    let project_root = main_worktree_root_from(&find_project_root()?);
+    // Keep the invoking seat for codegraph reachability; other scans use main.
+    // trace:STORY-2630 | ai:codex
+    let invoking_root = find_project_root()?;
+    let project_root = main_worktree_root_from(&invoking_root);
     let report = match category {
+        crate::codegraph::CATEGORY => {
+            DoctorReport::from_findings(crate::codegraph::scan(&invoking_root))
+        }
         // trace:TASK-2197 | ai:codex
         crate::loose_objects::CATEGORY => {
             DoctorReport::from_findings(crate::loose_objects::scan(&project_root))
