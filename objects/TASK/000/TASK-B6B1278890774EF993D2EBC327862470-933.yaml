@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T10:45:37.400718782Z
-modified_at: 2026-11-07T17:19:44.175041111Z
+modified_at: 2026-11-07T17:32:57.926955748Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,6 +20,24 @@ comments:
   content: 'ADVISOR 2026-11-07 10:05: S2 (TASK-3364, #3594) landed. Start S3 now on dell1 (codex), building on the merge-lock ProcIdentity from S2. LIGHT gate. S4 (TASK-3366) follows sequentially (same ratchet file).'
   created_at: 2026-11-07T17:03:09.310946916Z
   modified_at: 2026-11-07T17:03:09.310946916Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b712-1026-7cb3-8738-ad2bc511ef85
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3365):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 83ecdb222896
+    Recorded: 2026-11-07T17:19:43.954416678+00:00
+    Findings:
+    1. MAJOR review_watch.rs:197-213 (Identity::verdict/alive): when an identity has no pid_namespace (legacy pre-BUG-2425) or an unparseable start, process_identity() returns None, so verdict() returns ForeignUnknown(MissingIdentity) without calling observe(). Then alive() takes the 'ForeignUnknown(_) => true' arm whenever observable() is true, and PidObserver::can_observe(None) is true on a non-isolated host. The old code probed such a record on the host and freed it once dead, and its boot check freed it after a reboot. Now a dead legacy worker/reviewer/dispatcher keeps one of the two capacity slots forever, even across a reboot: descendants_gone() and finish_admission() never see it gone. This changes expiry behaviour, which the sketch (slice 3) says needs a specified clock-safe backstop first. Fix: for MissingIdentity, at least apply within_foreign_backstop (reboot plus TTL), or keep a bounded legacy probe. Add a test: a dead-pid legacy record and a different-boot legacy record must both read not-alive.
+    2. MINOR review_watch.rs:168 (Identity::of) with the callers at :1891 and :2140: ProcIdentity::capture refuses a process that has already exited, including our own unreaped zombie child. The old process_start_identity_exact recorded it, and its PID cannot be reused until we call wait(). Now a queue-work or reviewer child that exits immediately (for example on a startup refusal) is never recorded. The attempt is left with spawning=true and worker/reviewer=None, so unrecorded_descendant() stays true, finish_admission never reaches Terminal, and the attempt holds capacity as ambiguous until an operator recovers it. Fix: when the pid is our own child, accept a Dead(Exited) zombie as recordable, or pass an exited-child identity through. Restore coverage for an immediately-exiting child.
+    3. MINOR tests/task_1993_review_watch_tests.rs:1898-1925: task1993_queue_work_records_the_reviewer_it_launches used an immediately-exiting reviewer. It was rewritten to use a long-lived /bin/sh child that waits on a release file, so the test now avoids the fast-exit path instead of covering it. That weakens an existing test to hide the regression in the previous finding. Keep the long-lived variant if you like, but add (or restore) a case asserting that a fast-exiting reviewer/worker is still recorded, or at least ends terminal rather than held as ambiguous.
+    4. MINOR acceptance gap (TASK-3365 'Test: the family's namespace, pid-reuse and subreaper cases on the proc_identity matrix'): the new task_3365 test covers pid reuse and missing evidence. The namespace case is covered indirectly by the existing bug_2425_foreign_* tests, now routed through NamespaceMismatch. No subreaper case exists: for example, an orphaned group member reparented to a subreaper must not count as 'ours' in review_watch_signal.rs ancestry, and must not be signalled. Add it, or record on the spec why it does not apply.
+    5. MINOR review_watch.rs:922/944/978/2039 (Identity::current): current() now goes through ProcIdentity::capture, which needs LocalView. LocalView errors on a masked /proc view, hidepid, an unverified procfs mount, or procfs in ancestor coordinates. In those environments record_worker, record_reviewer, transition and the fetch-unavailable path now fail outright with an error; the old code needed only /proc/self/stat plus boot_id. If failing closed is intended, say so in a comment and the PR body and add a test. Otherwise, map a capture failure of the caller's own identity to a clear, recoverable diagnostic.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:32:56.742939412Z
+  modified_at: 2026-11-07T17:32:56.742939412Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
