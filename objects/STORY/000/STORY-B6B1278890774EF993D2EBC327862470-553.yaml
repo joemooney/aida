@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T20:49:46.897694794Z
+modified_at: 2026-11-07T22:02:22.314354716Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -168,6 +168,13 @@ comments:
   created_at: 2026-11-07T20:49:46.897694794Z
   modified_at: 2026-11-07T20:49:46.897694794Z
   session_id: 01a1b7b057aa
+- id: 01a1b808-baea-7160-87a5-6cb59c12fe15
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-07 15:00. Slice 1 (#3607: share the primary index with lane setup) has landed. NEXT = the final slice, COMPLETING (STORY-2630). First verify on origin/main which ACs are already met (AC1 index resolution, AC2 read-only grant) and state that in the PR body. Then do AC3: one line in the AGENTS.md template master and the shared lane prompt (when to use callers/callees/impact; confirm ''no callers'' with rg), followed by make sync-templates and check-templates. And AC4: an aida doctor finding for codegraph missing, index older than 1h, or unreachable from a seat. AC5 evidence: in this lane, run one codegraph call from the seat and paste the command and its output in the PR body. Note: #3613 (BUG-2486) also edits doctor_cmd.rs, so rebase before pushing. LIGHT gate.'
+  created_at: 2026-11-07T22:02:22.314354716Z
+  modified_at: 2026-11-07T22:02:22.314354716Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
