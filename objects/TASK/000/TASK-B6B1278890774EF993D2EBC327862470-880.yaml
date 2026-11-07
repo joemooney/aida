@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T10:06:40.285961695Z
+modified_at: 2026-11-07T10:27:35.748647054Z
 req_type: Task
 tags:
 - architecture
@@ -357,6 +357,12 @@ comments:
     Host PR body update required for #3584: live comment_add/spec_edit remain disabled in both broker and host until durable Git/event publication. Raw-write denial and the lane-private cache are the next PR. own_claim and queue_done remain UnsupportedOperation (TASK-3326). Native seat leaves all edits uncommitted for host publication with Refs TASK-3223; no PR metadata or merge-hold mutation from this seat.
   created_at: 2026-11-07T10:06:40.285961695Z
   modified_at: 2026-11-07T10:06:40.285961695Z
+  session_id: 01a1b575d3f5
+- id: 01a1b58c-a4c4-7450-b996-a0f00b746c04
+  author: joe
+  content: 'Round 6 validation complete: all 22 redo Rust tests and all 9 CLI store_mutation tests pass, including the real Python MutationAuthority -> Rust host status path while another thread holds the writer lock. Also passed 26 Python service tests, 41 inventory tests, inventory reconciliation, all 43 make check-ci-fast gates, formatting and git diff --check. Changed files: aida-core/src/db/redo.rs and redo/tests.rs; aida-cli-lib/src/store_mutation/mod.rs and service.py; scripts/store-writers.toml; AGENTS.md; OVERVIEW.md. No known code blockers. All edits remain uncommitted in the native seat. Recorded host subject: [AI:codex] fix(store-mutation): keep status read-only and recover redo staging (Refs TASK-3223). Host PR-body draft: /tmp/task3223-round6-pr-body.md, including disabled broker/host comment/edit admission until durable Git/event publication and raw-write denial/lane-private cache as the next PR. Host must apply that body and publish; merge-hold remains untouched for human/advisor clearance. No queue completion or review/ship merge performed.'
+  created_at: 2026-11-07T10:27:35.748647054Z
+  modified_at: 2026-11-07T10:27:35.748647054Z
   session_id: 01a1b575d3f5
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
