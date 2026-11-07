@@ -407,6 +407,15 @@ The TUI uses the same selector-only `control_env` policy. Resource validation
 grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
+Execution input APIs live in `aida-core::exec_context`: immutable environment,
+explicit home/project/authority roots and tool selections, plus an injected
+wall/monotonic clock. Child projection belongs to `launch_policy::EnvPolicy`
+and its existing owned-key tables. These types confer no authority. Production
+reader migration and vendor env-clear activation are separate, incomplete work;
+the [migration inventory](docs/internal/testing/exec-context-migration.md) defines
+the shrinking legacy ledger and API ownership boundaries.
+<!-- trace:STORY-2538 | ai:codex -->
+
 `aida-core/src/vendors/` owns the pure `profile(LaunchVendor)` registry, with
 identity spellings, interactive prompt transport, hook paths and closed
 wake/resume/background/sandbox capabilities. `launch_policy` re-exports the

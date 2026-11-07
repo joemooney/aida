@@ -157,6 +157,8 @@ pub mod lifecycle;
 pub mod liveness;
 // Pure agent-launch policy. trace:STORY-2326 | ai:claude
 pub mod launch_policy;
+// Injected execution inputs. trace:STORY-2538 | ai:codex
+pub mod exec_context;
 // trace:STORY-2539 | ai:codex
 pub mod vendors;
 // Pure advisor-directed worktree-lock verifier (STORY-711 slice 1). No
