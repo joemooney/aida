@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:55:24.499361019Z
-modified_at: 2026-11-07T20:56:34.308280356Z
+modified_at: 2026-11-07T20:56:35.667111872Z
 req_type: Story
 tags:
 - lanes
@@ -114,6 +114,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:27:15.261460830Z
   modified_at: 2026-11-07T20:27:15.261460830Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cc-8253-7890-ae1c-0f507e2b38cb
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Same as STORY-1482.'
+  created_at: 2026-11-07T20:56:35.667111872Z
+  modified_at: 2026-11-07T20:56:35.667111872Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
