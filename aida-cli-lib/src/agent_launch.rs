@@ -2676,6 +2676,11 @@ pub(crate) fn agent_new_claude(
         let root = agent_launch_project_root_from(&find_aida_project_root_from(&base)?);
         crate::agent_config::load_agents_contained(&root)
     };
+    // Only the foreground owner may compose wrapper argv. Background remains refused.
+    // trace:TASK-3219 | ai:codex
+    let wrapper_root = child_role_project_root(cwd)?;
+    let _wrapper_composition = (!bg && session::claude_uses_contained_wrapper(&wrapper_root)?)
+        .then(session::ClaudeWrapperComposition::enter);
     let ClaudeNewPosture {
         mut default_args,
         contained,
@@ -2687,6 +2692,7 @@ pub(crate) fn agent_new_claude(
         parent_contained,
         knob_contained,
     )?;
+    drop(_wrapper_composition);
     // TASK-646: resolve the child role (flag → picker → implementer default)
     // before any launch work. A cancelled picker aborts cleanly.
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
@@ -3029,6 +3035,11 @@ pub(crate) fn agent_new_with_config_wake(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = agent_launch_project_root_from(&discovered_root);
+    // This scope belongs only to fresh foreground agent-new, never resume/background.
+    // trace:TASK-3219 | ai:codex
+    let wrapper = config.agent_type == "claude"
+        && config.contained
+        && session::claude_uses_contained_wrapper(&project_root)?;
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -3069,12 +3080,14 @@ pub(crate) fn agent_new_with_config_wake(
     }
     // trace:BUG-2394 | ai:claude
     let codex_mcp_defaults = flag_options.use_config_defaults;
+    let composition = wrapper.then(session::ClaudeWrapperComposition::enter);
     apply_agent_default_flags(
         &mut config,
         &project_root,
         flag_options,
         explicit_permission,
     )?;
+    drop(composition);
     // BUG-2151: a contained parent contains every child, whatever the flags.
     // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
     refuse_uncontained_child_of_contained_parent(&config)?;
@@ -3224,7 +3237,10 @@ pub(crate) fn agent_new_with_config_wake(
         launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
+    {
+        let _composition = wrapper.then(session::ClaudeWrapperComposition::enter);
+        rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
+    }
     // trace:BUG-2394 | ai:claude
     rescope_codex_mcp_flags(
         &mut config,
@@ -3340,6 +3356,8 @@ pub(crate) fn agent_new_with_config_wake(
     if let Some(warning) = &launch_wake.warning {
         eprintln!("  {} {warning}", "warning:".yellow().bold());
     }
+    // Retain routing intent through rotations; policy changes cannot downgrade it.
+    let _wrapper_owner = wrapper.then(session::ClaudeWrapperComposition::enter);
     run_tracked_agent_after_spawn(
         &binary,
         &config,
@@ -7246,6 +7264,21 @@ pub(crate) fn run_agent_generation(
     rotation: Option<RotationEnv<'_>>,
     on_spawn: impl FnOnce(),
 ) -> Result<GenerationExit> {
+    // trace:TASK-3219 | ai:codex
+    let wrapper = config.agent_type == "claude"
+        && config.contained
+        && (session::composing_for_claude_wrapper()
+            || session::claude_uses_contained_wrapper(&plan.launch_cwd)?);
+    let _wrapper_composition = wrapper.then(session::ClaudeWrapperComposition::enter);
+    let terminal_io = wrapper
+        .then(crate::launch::contained::pty::host_stdio)
+        .transpose()?;
+    let pty = wrapper
+        .then(crate::launch::contained::pty::PrivatePty::open)
+        .transpose()?;
+    if let (Some(pty), Some((input, _))) = (&pty, &terminal_io) {
+        pty.resize_from(input)?;
+    }
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
     // (or the TASK-876 `AIDA_OS_WRAP` per-host override is set) and the agent is
@@ -7285,10 +7318,18 @@ pub(crate) fn run_agent_generation(
         Some(state) => command.env(crate::mail_wake::LAUNCH_WAKE_ENV, state.as_str()),
         None => command.env_remove(crate::mail_wake::LAUNCH_WAKE_ENV),
     };
-    apply_harness_version(
-        &mut command,
-        harness_version_probe_program_and_args(binary, config, plan, true)?,
-    );
+    if wrapper {
+        // The lane queries the version after receipt acceptance. The legacy
+        // host adapter cannot own a shared-wrapper receipt; never execute a
+        // vendor here or pass inherited provenance into the lane.
+        // trace:TASK-3219 | ai:codex
+        command.env_remove("AIDA_HARNESS_VERSION");
+    } else {
+        apply_harness_version(
+            &mut command,
+            harness_version_probe_program_and_args(binary, config, plan, true)?,
+        );
+    }
     command.env("AIDA_ROLE_INSTANCE", plan.role_instance.as_str());
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
@@ -7369,6 +7410,16 @@ pub(crate) fn run_agent_generation(
                 grant: Some(&grant.id),
             },
         )?;
+    } else if wrapper {
+        // Make the existing implicit baseline explicit; never inherit a parent's selector.
+        crate::launch::assign_seat(
+            &mut command,
+            ctx.kind(),
+            crate::launch::SeatDecision::Child {
+                role: "implementer",
+                grant: "",
+            },
+        )?;
     } else {
         crate::launch::assign_seat(
             &mut command,
@@ -7391,14 +7442,56 @@ pub(crate) fn run_agent_generation(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
-    let mut child = command
-        .spawn_retrying_etxtbsy()
-        .with_context(|| format!("failed to spawn {}", binary.display()))?;
-    // Once spawned, the child owns its work even if registry/wait fails.
-    // trace:BUG-2188 | ai:codex
-    grant_rollback.disarm();
-    on_spawn();
-    let child_pid = child.id();
+    // Keep the wrapper owner alive through registry binding, release and wait.
+    // trace:TASK-3219 | ai:codex
+    let mut contained = if wrapper {
+        Some(
+            crate::containment::launch::PreparedLaunch::prepare_interactive(
+                &command,
+                &plan.launch_cwd,
+                crate::seat_clone::launcher_main().as_deref(),
+            )?
+            .spawn_interactive(pty.as_ref().expect("interactive PTY"))?,
+        )
+    } else {
+        None
+    };
+    let mut native = if wrapper {
+        None
+    } else {
+        Some(
+            command
+                .spawn_retrying_etxtbsy()
+                .with_context(|| format!("failed to spawn {}", binary.display()))?,
+        )
+    };
+    let mut on_spawn = Some(on_spawn);
+    let child_pid = contained
+        .as_ref()
+        .map(|run| run.receipt().worker_pid())
+        .unwrap_or_else(|| native.as_ref().expect("native child").id());
+    if let Some(run) = contained.as_ref() {
+        anyhow::ensure!(
+            session::containment_applied(
+                session::HeadlessVendor::Claude,
+                true,
+                Some(run.receipt())
+            ),
+            "missing applied receipt"
+        );
+        let grant = command
+            .get_envs()
+            .find(|(k, _)| *k == crate::gate::seat_authority::GRANT_ENV)
+            .and_then(|(_, v)| v)
+            .and_then(|v| v.to_str())
+            .context("interactive wrapper requires explicit child grant")?;
+        crate::gate::seat_authority::bind_contained_launch_worker(grant, run.receipt())?;
+        #[cfg(test)]
+        crate::launch::contained::pty::before_release(grant, run.receipt().worker_pid())?;
+    } else {
+        grant_rollback.disarm();
+        on_spawn.take().expect("spawn callback")();
+    }
     // BUG-1918: this launcher made the claim; record the worker it spawned.
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
@@ -7445,44 +7538,78 @@ pub(crate) fn run_agent_generation(
     // child exits, where they stay on screen.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
     let mut deferred_warnings = Vec::new();
-    let signal_forwarder = post_spawn_step(
-        install_child_signal_forwarder(child_pid),
-        "could not forward Ctrl+C/SIGTERM to the agent",
-        &mut deferred_warnings,
-    );
+    let _wrapper_signals = if wrapper {
+        Some(crate::launch::contained::pty::WorkerSignals::install(
+            child_pid,
+        )?)
+    } else {
+        None
+    };
+    let signal_forwarder = if wrapper {
+        None
+    } else {
+        post_spawn_step(
+            install_child_signal_forwarder(child_pid),
+            "could not forward Ctrl+C/SIGTERM to the agent",
+            &mut deferred_warnings,
+        )
+    };
+    let mut register = Some(|| {
+        agent_registry::register_spawned_agent_with_row(
+            &plan.project_root,
+            config.agent_type,
+            child_pid,
+            agent_registry::SpawnedRow {
+                role: plan.role.clone(),
+                current_spec: plan.current_spec.clone(),
+                worktree_path: plan.launch_cwd.clone(),
+                binary: Some(&binary),
+                name: Some(plan.name.clone()),
+                native_session_id: plan.native_session_id.clone(),
+                resumed_from: plan.resumed_from.clone(),
+                description,
+                delegate_seats: config.delegate_seats.clone(),
+            },
+        )
+        .map(|entry| {
+            // Stamp the launch's mail wake; a thread the child's
+            // SessionStart hook already recorded arms it now, else that
+            // hook arms it.
+            // trace:STORY-HOME-096 | ai:claude
+            if let Some(state) = mail_wake {
+                stamp_launch_mail_wake(&plan.project_root, &entry, state);
+            }
+            entry.id
+        })
+    });
+    let registered = if let Some(run) = contained.as_mut() {
+        let id = register.take().expect("registry callback")()?;
+        run.release()?;
+        grant_rollback.disarm();
+        on_spawn.take().expect("spawn callback")();
+        Some(id)
+    } else {
+        None
+    };
     let status = supervise_spawned_child(
         config.agent_type,
         child_pid,
         deferred_warnings,
-        || {
-            agent_registry::register_spawned_agent_with_row(
-                &plan.project_root,
-                config.agent_type,
-                child_pid,
-                agent_registry::SpawnedRow {
-                    role: plan.role.clone(),
-                    current_spec: plan.current_spec.clone(),
-                    worktree_path: plan.launch_cwd.clone(),
-                    binary: Some(&binary),
-                    name: Some(plan.name.clone()),
-                    native_session_id: plan.native_session_id.clone(),
-                    resumed_from: plan.resumed_from.clone(),
-                    description,
-                    delegate_seats: config.delegate_seats.clone(),
-                },
-            )
-            .map(|entry| {
-                // Stamp the launch's mail wake; a thread the child's
-                // SessionStart hook already recorded arms it now, else that
-                // hook arms it.
-                // trace:STORY-HOME-096 | ai:claude
-                if let Some(state) = mail_wake {
-                    stamp_launch_mail_wake(&plan.project_root, &entry, state);
-                }
-                entry.id
-            })
+        || match registered {
+            Some(id) => Ok(id),
+            None => register.take().expect("registry callback")(),
         },
-        || child.wait(),
+        || {
+            if let Some(run) = contained.as_mut() {
+                let (input, output) = terminal_io.expect("terminal endpoints");
+                pty.expect("private PTY")
+                    .wait(&mut run.child, input, output)
+                    .and_then(|status| run.vendor_exit(status))
+                    .map_err(std::io::Error::other)
+            } else {
+                native.as_mut().expect("native child").wait()
+            }
+        },
         verbose,
         &mut std::io::stderr(),
     );
