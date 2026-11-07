@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:54:24.074021232Z
-modified_at: 2026-11-06T00:15:01.373686431Z
+modified_at: 2026-11-07T20:26:52.621242491Z
 req_type: Story
 tags:
 - codegraph
@@ -34,6 +34,16 @@ comments:
   created_at: 2026-11-06T00:15:01.373686431Z
   modified_at: 2026-11-06T00:15:01.373686431Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-4d4d-7363-8318-6c677fdbe277
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-19T21:54:33.539474010Z","deferred_until":"SPIKE-84 answers question 4 — whether a local codegraph install makes a bounded slice worth filing; do not scope before that report","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:52.621236081Z
+  modified_at: 2026-11-07T20:26:52.621236081Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-19T21:54:33.539474010Z
-deferred_until: SPIKE-84 answers question 4 — whether a local codegraph install makes a bounded slice worth filing; do not scope before that report
+deferred_until: manual:operator
