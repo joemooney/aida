@@ -14,12 +14,12 @@ description: |
   1. For one PR at one head, the newest verdict among the PR-N key and the spec keys of the PR's trailers decides the merge hold and the train gate. An older request-changes at the same head no longer holds.
   2. Regression test: CR(spec, sha X, t1) then APPROVED(PR-N, sha X, t2>t1) means train admits; reversed order holds.
   3. A newer request-changes still re-holds.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:48:00.000573110Z
-modified_at: 2026-11-07T01:09:35.643211805Z
+modified_at: 2026-11-07T02:12:51.836476541Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-11-07T01:09:36.855054800Z
   session_id: 01a1b37ca493
   changes: []
+- id: 01a1b3c7-b3a2-77d3-a613-c580a6ffb63d
+  author: aida-auto-bump
+  timestamp: 2026-11-07T02:12:51.746112716Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b3c7-b3fc-7b70-95de-d69fdab12049
+  timestamp: 2026-11-07T02:12:51.836472115Z
+  agent: aida
+  commit_sha: 8b06f6009cb46336fc5a69248909b5bbfa1424d6
+  summary: 'All 3 BUG-2474 criteria verified: reconcile_artifacts_for_sha now lets the newest dated same-head verdict decide across PR/spec keys (corpus gate, hold view, train); ties/undated/invalid timestamps and malformed rounds still fail closed; newer CR re-holds. Tests: bug_2474_newest_same_head_verdict_decides_across_pr_and_spec_keys, bug_2474_supersession_requires_ordered_same_head_evidence, bug_2474_train_admits_newer_pr_approval_over_same_head_spec_refusal, bug_2474_train_refuses_newer_same_head_spec_refusal_after_pr_approval. CI was still running at review time (merge-hold-gate pass, 7 jobs pending); the ship gate enforces green CI. Two non-blocking follow-ups noted.'
+  review_verdict: approved
 filed_at:
   code_sha: 37c695e340639ae667426824967c5ca3c708e25e
   branch: main
@@ -61,3 +75,7 @@ filed_at:
   vendor: claude
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T02:12:51.746106532Z
+  completion_sha: 8b06f6009cb46336fc5a69248909b5bbfa1424d6
