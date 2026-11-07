@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T10:45:37.400718782Z
-modified_at: 2026-11-07T17:03:09.310946916Z
+modified_at: 2026-11-07T17:19:44.175041111Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b705-f8a5-71b0-8a0e-9c2e68f78343
+  author: joe
+  timestamp: 2026-11-07T17:19:44.293142961Z
+  session_id: 01a1b7038974
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -47,3 +53,11 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Migration to ProcIdentity is mostly right (ratchet 5->3 real, pidfd pin-then-verdict safe, wire format unchanged), but two capacity regressions break the sketch's 'preserve capacity and spawning ambiguity / no expiry change without a clock-safe backstop plan'. Also an existing fast-exit test was weakened and the subreaper case is untested. CI was still pending at review time.
+  recovery_hint: address the review findings, move TASK-3365 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T17:19:44.175041111Z
