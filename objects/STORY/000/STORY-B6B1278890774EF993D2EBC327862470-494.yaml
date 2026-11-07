@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T19:36:32.037505329Z
+modified_at: 2026-11-07T20:31:40.097516765Z
 req_type: Story
 tags:
 - area:advisor
@@ -341,6 +341,13 @@ comments:
   content: 'ADVISOR 2026-11-07 12:35: running on a dell1 codex lane (log dell1:~/lanes/lane-STORY-2571.log). dell1 partition: do not pass to local fill-slots/auto-rework until its PR opens.'
   created_at: 2026-11-07T19:36:32.037505329Z
   modified_at: 2026-11-07T19:36:32.037505329Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7b5-b041-7240-9d97-6aaca7617610
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-07 13:40. The sketch and inventory are done (#3526, #3589; AC1 met). BUG-2467 and BUG-2468 are completed. NEXT = the first runtime slice per sketch ''Delivery and evidence gates'' step 1: supervised review-watch. ''aida advisor loops status|rebind'' runs review-watch as an AIDA-supervised service bound to the current advisor seat grant, re-binding on rotation (sketch ''Host supervisor and grant rotation''), building on BUG-2471. Scope this PR to review-watch only. Other loops follow as separate Refs PRs. Tests: rebind after rotation, a stale successor refused, and one PR''s refusal not stopping the service for other PRs. Refs STORY-2571. LIGHT gate.'
+  created_at: 2026-11-07T20:31:40.097516765Z
+  modified_at: 2026-11-07T20:31:40.097516765Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
