@@ -1,0 +1,21 @@
+id: 01a1b6dc-b6f6-7a90-8439-21fdd034b5bf
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-249
+agreed_id: BUG-2484
+title: 'Contained Codex refuses the npm/nvm codex.js wrapper: resolve it to the pinned native vendor binary'
+description: 'STORY-2593 pins the native codex binary by SHA-256 (codex-cli 0.166.0, b8a11fed...). With a standard npm/nvm install, the first codex on PATH is the JS wrapper (~/.nvm/.../bin/codex -> @openai/codex/bin/codex.js), so the launch refuses (''contained ChatGPT auth refused: re-probe this codex binary ... put the probed native codex binary first on PATH''). The wrapper''s own native binary, @openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex, matches the pin. Repro 2026-11-07: the operator ran conformance --vendor codex --boundary aida, report ~/.aida/conformance-codex-aida-1794069161. Acceptance: when the PATH codex is the npm wrapper, the launcher resolves it to the package''s vendored native binary, verifies the SHA pin against that, and executes it directly; an unpinned binary still refuses; aida doctor names the resolved binary; a test uses a fake wrapper layout.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T16:34:40.502347183Z
+modified_at: 2026-11-07T16:34:40.502347183Z
+req_type: Bug
+filed_at:
+  code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
+  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
