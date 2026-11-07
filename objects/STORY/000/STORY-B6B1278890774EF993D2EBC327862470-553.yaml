@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T18:11:54.485453173Z
+modified_at: 2026-11-07T18:17:08.620809919Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -64,6 +64,13 @@ comments:
   content: 'Round 2 Slice 1 rework handoff (native seat; edits remain uncommitted): findings 1-3 fixed. Both common Git runtime excludes and seat excludes include .codegraph without a slash; runtime-noise filtering accepts only symlink entries. Navigation linking runs after the existing .aida-store/.aida links and warns/skips on any navigation failure, preserving real directories and foreign/dangling links. Doctor suppresses codegraph noise when neither index directory nor executable is present. Corrected the CI-failing prompt expectation to include shared navigation. Finding 4''s non-contained read-write routing limitation is recorded in the preceding comment; AC2/AC5 stay in Slice 2. Validation: cargo test --profile agent -p aida-cli-lib codegraph (6 passed); runtime-noise test (1 passed); fresh compiled CLI test executable rework_direction::tests (12 passed, including conflicting_pr_adds_resolve_conflicts_first); cargo test --profile agent -p aida-core aida_runtime_excludes_hide_materialized_worktree_state (1 passed). The redundant queued Cargo prompt invocation exited 200 before running; direct executable run passed. make check-ci-fast: 43 gates passed. cargo fmt --all -- --check, make check-templates and git diff --check passed. make sync-templates reached the portable .agents pack then failed with read-only filesystem; host must rerun. Installed aida predates this PR and rejects doctor category codegraph; source doctor tests passed. Existing merge hold untouched. No launch/spawn.rs or launch/profile.rs changes. Native Refs publication declaration recorded: [AI:codex] fix(codegraph): keep lane runtime setup clean and resilient (Refs STORY-2630). Host must commit/publish; no seat commit/push/PR/queue completion/review record performed.'
   created_at: 2026-11-07T18:02:53.695861646Z
   modified_at: 2026-11-07T18:02:53.695861646Z
+- id: 01a1b73a-870c-7073-9f30-49ca19886ea5
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 are fixed (exclude/noise/ignore, warn-and-skip after the AIDA links, doctor noise suppression, AC2 limitation recorded). But the new navigation prefix in assemble_pickup_prompt pushes the /aida-review or /aida-pickup invocation off the start of the prompt, which breaks skill expansion. AC1 and AC4 are covered by unit tests (CI pending at review time). AC3 is delivered but placed wrong. AC2 and AC5 belong to slice 2. merge-hold-gate red = supervised hold, not a code defect.. No triage reason was given.'
+  created_at: 2026-11-07T18:17:08.620808302Z
+  modified_at: 2026-11-07T18:17:08.620808302Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
@@ -115,6 +122,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b73a-870c-7073-9f30-49b44a47c486
+  author: joe
+  timestamp: 2026-11-07T18:17:08.620793899Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -124,11 +140,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 findings 1-4 are fixed (exclude/noise/ignore, warn-and-skip after the AIDA links, doctor noise suppression, AC2 limitation recorded). But the new navigation prefix in assemble_pickup_prompt pushes the /aida-review or /aida-pickup invocation off the start of the prompt, which breaks skill expansion. AC1 and AC4 are covered by unit tests (CI pending at review time). AC3 is delivered but placed wrong. AC2 and AC5 belong to slice 2. merge-hold-gate red = supervised hold, not a code defect.
-  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T18:11:54.485453173Z
