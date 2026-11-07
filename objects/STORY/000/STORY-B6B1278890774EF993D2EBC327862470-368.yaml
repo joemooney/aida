@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T20:31:30.790563399Z
+modified_at: 2026-11-07T22:16:16.547425213Z
 req_type: Story
 relationships:
 - rel_type:
@@ -519,6 +519,13 @@ comments:
   content: 'ADVISOR BRIEF 2026-11-07 13:40. S1-S4 have landed (#3491, #3506, #3593). The S3 one-time migration was APPLIED to the canonical store at 13:38: 76 deferrals rewritten, re-run idempotent. NEXT = S5, one PR (Refs STORY-2402): relay/seat handoff conditionals and ''findings recur --until'' take the typed Condition (reuse condition_cmd.rs parsing; refuse free text unless manual:<who> with --reason, same as aida defer), and the hourly defer-resurface job evaluates them. Tests story2402_s5_*. The derived-attention half still waits on STORY-2325 (#3619); do not start it. LIGHT gate. Note: make check-ci-fast failed on dell1 in Codex mail-wake fixtures. If that recurs, record it as host-env and continue; do not fix it in this PR.'
   created_at: 2026-11-07T20:31:30.790563399Z
   modified_at: 2026-11-07T20:31:30.790563399Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b815-75a3-7851-a97e-afa3e35bede4
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 15:20 (supersedes the 08:20 ruling, whose two CI fixes landed in #3593): implement S5 exactly as in the 13:40 ADVISOR BRIEF on this spec. Relay/seat handoff conditionals and ''findings recur --until'' take the typed Condition (reuse condition_cmd.rs parsing; refuse free text unless manual:<who> with --reason), and the hourly defer-resurface job evaluates them. Tests story2402_s5_*. One PR, Refs STORY-2402. The derived-attention half waits on STORY-2325. LIGHT gate: run the targeted test through the lane job runner (aida lane job run -- cargo test ...), never cargo directly.'
+  created_at: 2026-11-07T22:16:16.547425213Z
+  modified_at: 2026-11-07T22:16:16.547425213Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
