@@ -6,13 +6,6 @@
   added_at: 2026-11-07T20:29:02.001481742Z
   for_role: human
 - user_id: role:human
-  requirement_id: 01a15cca-fdd3-7eb3-9954-1d6cb78b0d91
-  position: 3000
-  added_by: aida:defer-resurface
-  note: 'manual condition older than 14 days; manual:operator: manual (waiting on operator to decide)'
-  added_at: 2026-11-07T20:29:02.001481742Z
-  for_role: human
-- user_id: role:human
   requirement_id: 01a15b3a-3b77-7313-a3a3-37320dd97611
   position: 4000
   added_by: aida:defer-resurface
