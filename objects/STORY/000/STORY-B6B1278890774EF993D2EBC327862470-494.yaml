@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T20:31:40.097516765Z
+modified_at: 2026-11-07T20:46:39.637448323Z
 req_type: Story
 tags:
 - area:advisor
@@ -348,6 +348,13 @@ comments:
   content: 'ADVISOR BRIEF 2026-11-07 13:40. The sketch and inventory are done (#3526, #3589; AC1 met). BUG-2467 and BUG-2468 are completed. NEXT = the first runtime slice per sketch ''Delivery and evidence gates'' step 1: supervised review-watch. ''aida advisor loops status|rebind'' runs review-watch as an AIDA-supervised service bound to the current advisor seat grant, re-binding on rotation (sketch ''Host supervisor and grant rotation''), building on BUG-2471. Scope this PR to review-watch only. Other loops follow as separate Refs PRs. Tests: rebind after rotation, a stale successor refused, and one PR''s refusal not stopping the service for other PRs. Refs STORY-2571. LIGHT gate.'
   created_at: 2026-11-07T20:31:40.097516765Z
   modified_at: 2026-11-07T20:31:40.097516765Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7c3-6a15-7e21-827c-278b103adfcc
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:00: TASK-3368 (ProcIdentity observer, S6 of STORY-2537) is signed to run as an operation of STORY-2571''s supervised host service (sketch step 2), not as a separate daemon. Design the step-2 transport to carry it: one request per connection, SO_PEERPIDFD at accept, no ancillary fds.'
+  created_at: 2026-11-07T20:46:39.637448323Z
+  modified_at: 2026-11-07T20:46:39.637448323Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
