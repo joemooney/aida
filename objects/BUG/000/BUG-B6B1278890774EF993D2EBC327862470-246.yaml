@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-246
 agreed_id: BUG-2481
 title: 'Full aida status with no derived cache exceeds 50s on a ~7k-row store: the first-use cache rebuild is unbounded'
 description: 'Split from BUG-2479 (advisor 2026-11-06 23:50). With the derived cache warm, full status on 7,247 rows takes about 5s (debug build). With the derived cache empty (a fresh clone, a cache-version bump, or a CI job with no warm-up step), the same command exceeded a 50s watchdog while the cache stayed at zero rows. That means it never populated the cache during the run, or rebuilt it serially per record. Acceptance: on a ~7k-row store snapshot with no derived cache, the first full status populates the cache and finishes within 15s on an optimized build, and the second run takes under 5s. Add a timed regression on a generated 7k-row fixture, not the real store.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:27:29.596298929Z
+modified_at: 2026-11-07T07:54:43.630326713Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -108,6 +108,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b500-b08c-7391-8a12-206cba9bdc99
+  author: joe
+  timestamp: 2026-11-07T07:54:43.724836336Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
   branch: main
