@@ -414,11 +414,16 @@ pub struct StatusRollup {
 
 /// Tally the statuses of `ids` against the live store. trace:STORY-489
 pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
+    rollup_requirements(ids.iter().filter_map(|id| store.get_requirement_by_id(id)))
+}
+
+// Keep single-root and batch rollups on the same status/defer policy.
+// trace:BUG-2481 | ai:codex
+fn rollup_requirements<'a>(
+    requirements: impl Iterator<Item = &'a crate::models::Requirement>,
+) -> StatusRollup {
     let mut r = StatusRollup::default();
-    for id in ids {
-        let Some(req) = store.get_requirement_by_id(id) else {
-            continue;
-        };
+    for req in requirements {
         r.total += 1;
         // A deferred child (view-flag or a legacy `deferred:*` tag) is parked,
         // not open — count it as resolved and skip the status buckets so it is
@@ -457,6 +462,37 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
         }
     }
     r
+}
+
+/// Roll up many roots using one hierarchy and UUID index. Cold-cache rebuilds
+/// must not rebuild the whole graph per epic or scan every row per descendant.
+/// The shared closure preserves cycle, dangling-edge and root-exclusion rules.
+// trace:BUG-2481 | ai:codex
+pub(crate) fn child_status_rollups(
+    store: &RequirementsStore,
+    roots: &[Uuid],
+) -> HashMap<Uuid, StatusRollup> {
+    if roots.is_empty() {
+        return HashMap::new();
+    }
+    let mut children: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for (parent, child) in oriented_hierarchy_edges(store) {
+        children.entry(parent).or_default().push(child);
+    }
+    let mut by_id = HashMap::new();
+    for req in &store.requirements {
+        // Match get_requirement_by_id's first-match behavior.
+        by_id.entry(req.id).or_insert(req);
+    }
+    roots
+        .iter()
+        .map(|root| {
+            let graph = downward_closure(*root, &children, None);
+            let rollup =
+                rollup_requirements(graph.nodes.iter().filter_map(|id| by_id.get(id).copied()));
+            (*root, rollup)
+        })
+        .collect()
 }
 
 /// BUG-543: the status rollup over a spec's child subtree — the SAME membership
@@ -596,6 +632,55 @@ mod tests {
             requirements: reqs,
             ..Default::default()
         }
+    }
+
+    // trace:BUG-2481 | ai:codex
+    #[test]
+    fn batch_rollups_match_single_root_policy() {
+        let statuses = [
+            RequirementStatus::Draft,
+            RequirementStatus::Approved,
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            RequirementStatus::NeedsAttention,
+            RequirementStatus::Done,
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+            RequirementStatus::Superseded,
+        ];
+        let mut first = make_req("EPIC-1", RequirementStatus::Approved);
+        let mut second = make_req("EPIC-2", RequirementStatus::InProgress);
+        let empty = make_req("EPIC-3", RequirementStatus::Draft);
+        link(&mut first, RelationshipType::Parent, second.id);
+        link(&mut second, RelationshipType::Parent, first.id); // cycle
+        let mut reqs = Vec::new();
+        for (i, status) in statuses.into_iter().enumerate() {
+            let mut req = make_req(&format!("TASK-{i}"), status);
+            link(&mut req, RelationshipType::Child, second.id);
+            link(&mut second, RelationshipType::Parent, req.id); // reciprocal
+            req.archived = i == 6;
+            reqs.push(req);
+        }
+        let mut deferred = make_req("TASK-10", RequirementStatus::Approved);
+        deferred.deferred = true;
+        link(&mut deferred, RelationshipType::Child, first.id);
+        reqs.push(deferred);
+        let mut tagged = make_req("TASK-11", RequirementStatus::InProgress);
+        tagged.tags.insert("deferred:later".into());
+        link(&mut tagged, RelationshipType::Child, first.id);
+        reqs.push(tagged);
+        let mut decision = make_req("ADR-1", RequirementStatus::Approved);
+        link(&mut decision, RelationshipType::Child, first.id);
+        reqs.push(decision);
+        link(&mut first, RelationshipType::Parent, Uuid::new_v4()); // dangling
+        let roots = [first.id, second.id, empty.id];
+        reqs.extend([first, second, empty]);
+        let store = store_with(reqs);
+        let batch = child_status_rollups(&store, &roots);
+        for root in roots {
+            assert_eq!(batch[&root], child_status_rollup(&store, root));
+        }
+        assert!(child_status_rollups(&store, &[]).is_empty());
     }
 
     #[test]

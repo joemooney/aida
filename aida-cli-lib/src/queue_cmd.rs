@@ -17077,38 +17077,50 @@ mod bug_1581_integration_probe_tests {
         ));
     }
 
-    // Drive the actual integrate probe and pure decision together. A green,
-    // mergeable PR with an approved top level still parks when retained
-    // independent evidence disagrees at that commit.
-    // trace:BUG-1581 | ai:codex
+    // Exercise the integrate probe and decision with the same append order as
+    // merge/train gates, even when the retained act has a future timestamp.
+    // trace:BUG-1581 trace:TASK-2964 | ai:codex
     #[test]
-    fn integrate_probe_parks_a_same_sha_verdict_conflict() {
-        let root = tempfile::tempdir().unwrap();
-        let path = verdict_path(root.path());
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            path,
-            r#"{
-              "verdict":"Approved",
-              "reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a",
-              "recorded_by":"reviewer-a",
-              "rounds":[{
-                "verdict":"RequestChanges",
-                "reviewed_sha":"ac772eaca9",
-                "recorded_by":"reviewer-b"
-              }]
-            }"#,
-        )
-        .unwrap();
-
-        let state =
-            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
-        assert!(matches!(
-            crate::integrate::classify_integration_action(&state),
-            crate::integrate::IntegrationAction::Park(
-                crate::integrate::ParkReason::ReviewIntegrity
-            )
-        ));
+    fn integrate_probe_follows_same_artifact_append_order() {
+        for (current, retained, blocks) in [
+            ("Approved", "RequestChanges", false),
+            ("Approved", "Rejected", false),
+            ("RequestChanges", "Approved", true),
+            ("Rejected", "Approved", true),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let path = verdict_path(root.path());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let body = serde_json::json!({
+                "verdict": current,
+                "reviewed_sha": "ac772eaca9d389fa762a232156df996023bfdf7a",
+                "recorded_by": "reviewer-a",
+                "recorded_at": "2026-01-01T12:01:00Z",
+                "rounds": [{
+                    "verdict": retained,
+                    "reviewed_sha": "ac772eaca9",
+                    "recorded_by": "reviewer-b",
+                    "recorded_at": "2099-01-01T00:00:00Z"
+                }]
+            });
+            std::fs::write(path, body.to_string()).unwrap();
+            let state =
+                probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+            assert!(!state.review_integrity_unproven);
+            assert_eq!(state.request_changes_pending, blocks);
+            let expected = if blocks {
+                crate::integrate::IntegrationAction::Park(
+                    crate::integrate::ParkReason::RequestChanges,
+                )
+            } else {
+                crate::integrate::IntegrationAction::Merge
+            };
+            assert_eq!(
+                crate::integrate::classify_integration_action(&state),
+                expected,
+                "{current} after retained {retained}"
+            );
+        }
     }
 
     // An artifact that exists but cannot be interpreted is not evidence of

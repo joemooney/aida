@@ -758,82 +758,106 @@ pub(crate) fn same_reviewed_sha(a: &str, b: &str) -> bool {
 /// Explain an irreconcilable pair of independent verdicts at the artifact's
 /// current reviewed commit. Historical disagreement at an older commit is an
 /// audit trail, not a veto on a later review.
-// trace:BUG-1581 | ai:codex
+// trace:BUG-1581 trace:TASK-2964 | ai:codex
 pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
-    let serde_json::Value::Object(obj) = serde_json::from_str(body).ok()? else {
-        return None;
-    };
-    let current_sha = round_sha(&obj)?;
-    let mut rounds: Vec<&JsonObj> = vec![&obj];
-    rounds.extend(
-        obj.get("rounds")
-            .and_then(|v| v.as_array())
-            .into_iter()
-            .flatten()
-            .filter_map(|v| v.as_object()),
-    );
-
-    let mut approvals = Vec::new();
-    let mut blockers = Vec::new();
-    for round in rounds {
-        let Some(_) = round_sha(round).filter(|sha| same_reviewed_sha(sha, &current_sha)) else {
-            continue;
-        };
-        let reviewer = round
-            .get("recorded_by")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("unknown reviewer")
-            .to_string();
-        match VerdictKind::parse(
-            round
-                .get("verdict")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default(),
-        ) {
-            VerdictKind::Approved => approvals.push(reviewer),
-            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
-            VerdictKind::Unknown => {}
-        }
-    }
-    approvals.sort();
-    approvals.dedup();
-    blockers.sort();
-    blockers.dedup();
-    let independent = approvals
-        .iter()
-        .any(|approved| blockers.iter().any(|blocked| approved != blocked));
-    if approvals.is_empty() || blockers.is_empty() || !independent {
-        return None;
-    }
-    Some(format!(
-        "conflicting review verdicts at {}: approved by {}; blocked by {}",
-        short_sha(&current_sha),
-        approvals.join(", "),
-        blockers.join(", ")
-    ))
+    let current_sha = parse_recorded_verdict(body)?.reviewed_sha?;
+    reconcile_artifacts_for_sha([body], &current_sha).err()
 }
 
-/// Reconcile every review recording from multiple artifacts at `current_sha`.
-/// The newest dated recording at that head supersedes older dated verdicts
-/// across PR/spec aliases. Tied or undated opposing recordings still conflict.
-/// Retained rounds are validated before ordering: ill-formed or unattributed
-/// rounds remain integrity errors that a later approval cannot hide.
-// trace:BUG-1581 | ai:codex
-pub fn reconcile_artifacts_for_sha<'a>(
+/// Preserve each artifact's own history, plus the ledger's explicit ordering
+/// of its acts. Keeping these separate avoids inventing an order between
+/// otherwise unrelated retained rounds or concealing contradictory histories.
+// trace:TASK-2964 | ai:codex
+pub(crate) fn bodies_with_ledger_history(
+    root: &Path,
+    event: &super::ledger::GateEvent,
+) -> Result<Vec<String>, String> {
+    let events = match super::ledger::ChangeKey::parse(&event.change) {
+        Some(change) => super::ledger::project::events(root, change),
+        None => super::ledger::store::read_unbound(root, &event.change),
+    };
+    let current = event
+        .verdict_record()
+        .ok_or_else(|| "ledger event is not a verdict".to_string())?;
+    if events.iter().any(|prior| prior == event)
+        && events
+            .iter()
+            .filter(|prior| prior.seq <= event.seq)
+            .filter_map(|prior| prior.verdict_record())
+            .all(|record| record == current)
+    {
+        return Ok(vec![
+            serde_json::to_string(current).map_err(|e| e.to_string())?
+        ]);
+    }
+    let mut bodies = vec![serde_json::to_string(current).map_err(|e| e.to_string())?];
+    let mut history = Vec::new();
+    for prior in events {
+        let Some(record) = prior.verdict_record() else {
+            continue;
+        };
+        if prior.seq > event.seq {
+            break;
+        }
+        if prior == *event && history.is_empty() {
+            return Ok(bodies);
+        }
+        // Every projected artifact belongs to the selected act, including
+        // its closure state. Historical roots must not resurrect closed holds.
+        let mut wrapped = current.clone();
+        let mut retained = match record.get("rounds") {
+            Some(serde_json::Value::Array(rounds)) => rounds.clone(),
+            Some(invalid) => {
+                wrapped.insert("rounds".into(), invalid.clone());
+                bodies.push(serde_json::to_string(&wrapped).map_err(|e| e.to_string())?);
+                Vec::new()
+            }
+            None => Vec::new(),
+        };
+        let mut act = record.clone();
+        act.remove("rounds");
+        act.remove("unarchived_rounds");
+        if prior != *event {
+            retained.push(serde_json::Value::Object(act));
+        }
+        wrapped.insert("rounds".into(), serde_json::Value::Array(retained));
+        bodies.push(serde_json::to_string(&wrapped).map_err(|e| e.to_string())?);
+        let mut snapshot = record.clone();
+        snapshot.remove("rounds");
+        snapshot.remove("unarchived_rounds");
+        if prior == *event {
+            snapshot.insert("rounds".into(), serde_json::Value::Array(history));
+            bodies.push(serde_json::to_string(&snapshot).map_err(|e| e.to_string())?);
+            return Ok(bodies);
+        }
+        let snapshot = serde_json::Value::Object(snapshot);
+        if history.last() != Some(&snapshot) {
+            history.push(snapshot);
+        }
+    }
+    Err("review ledger changed during chronology selection".to_string())
+}
+
+/// Reconcile review recordings using append evidence, never wall-clock time.
+/// Rounds are oldest first and the top-level recording is the latest act.
+/// Shared identical recordings connect histories across aliases; unrelated
+/// opposing artifacts remain unresolved. Validate all history before reducing.
+// trace:BUG-1581 trace:TASK-2964 | ai:codex
+pub(crate) fn effective_recordings_for_sha<'a>(
     bodies: impl IntoIterator<Item = &'a str>,
     current_sha: &str,
-) -> Result<Option<VerdictKind>, String> {
-    let mut at_head = Vec::new();
-
+) -> Result<Vec<JsonObj>, String> {
+    let mut at_head: Vec<(VerdictKind, String, JsonObj)> = Vec::new();
+    let mut edges = Vec::new();
+    let mut chains = Vec::new();
+    let mut repeated = Vec::new();
     for body in bodies {
         let value: serde_json::Value = serde_json::from_str(body)
             .map_err(|e| format!("verdict artifact is not valid JSON: {e}"))?;
         let obj = value
             .as_object()
             .ok_or_else(|| "verdict artifact is not a JSON object".to_string())?;
-        let mut recordings = vec![(obj, false)];
+        let mut recordings = Vec::new();
         if let Some(rounds) = obj.get("rounds") {
             let rounds = rounds
                 .as_array()
@@ -845,7 +869,9 @@ pub fn reconcile_artifacts_for_sha<'a>(
                 recordings.push((round, true));
             }
         }
-
+        recordings.push((obj, false));
+        let mut previous = None;
+        let mut chain = Vec::new();
         for (recording, retained) in recordings {
             let sha = round_sha(recording).ok_or_else(|| {
                 if retained {
@@ -875,35 +901,117 @@ pub fn reconcile_artifacts_for_sha<'a>(
             if !same_reviewed_sha(&sha, current_sha) {
                 continue;
             }
-            let recorded_at = RECORDED_AT_KEYS
-                .iter()
-                .find_map(|key| recording.get(*key).and_then(|v| v.as_str()));
-            let timestamp =
-                recorded_at.and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
-            at_head.push((
-                kind,
-                reviewer.unwrap_or("unknown reviewer").to_string(),
-                timestamp,
-            ));
+            // Full recording identity avoids conflating repeated acts by the
+            // same reviewer. Only the history containers are not act data.
+            let mut identity = recording.clone();
+            identity.remove("rounds");
+            identity.remove("unarchived_rounds");
+            let index = match at_head.iter().position(|(_, _, r)| r == &identity) {
+                Some(index) => index,
+                None => {
+                    at_head.push((
+                        kind,
+                        reviewer.unwrap_or("unknown reviewer").to_string(),
+                        identity,
+                    ));
+                    at_head.len() - 1
+                }
+            };
+            if chain.contains(&index) && !repeated.contains(&index) {
+                repeated.push(index);
+            }
+            chain.push(index);
+            if let Some(prev) = previous {
+                if prev != index && !edges.contains(&(prev, index)) {
+                    edges.push((prev, index));
+                }
+            }
+            previous = Some(index);
+        }
+        chains.push(chain);
+    }
+    // Repeated identical acts are distinguishable by append occurrence, not
+    // their JSON identity. They cannot supply global identity-only edges;
+    // their complete ordered chains establish displacement below instead.
+    let edges: Vec<_> = edges
+        .into_iter()
+        .filter(|(from, to)| !repeated.contains(from) && !repeated.contains(to))
+        .collect();
+    // A topological walk both detects contradictory append histories and
+    // leaves only their latest (sink) recordings in contention.
+    let mut incoming = vec![0usize; at_head.len()];
+    for &(_, to) in &edges {
+        incoming[to] += 1;
+    }
+    let mut ready: Vec<_> = (0..at_head.len()).filter(|&i| incoming[i] == 0).collect();
+    let mut visited = 0;
+    while let Some(index) = ready.pop() {
+        visited += 1;
+        for &(_, to) in edges.iter().filter(|(from, _)| *from == index) {
+            incoming[to] -= 1;
+            if incoming[to] == 0 {
+                ready.push(to);
+            }
         }
     }
+    if visited != at_head.len() {
+        return Err("conflicting review append histories".to_string());
+    }
+    let is_subsequence = |earlier: &[usize], later: &[usize]| {
+        let mut matched = 0;
+        for index in later {
+            if earlier.get(matched) == Some(index) {
+                matched += 1;
+            }
+        }
+        matched == earlier.len()
+    };
+    let mut effective = Vec::new();
+    for chain in &chains {
+        let Some(&index) = chain.last() else {
+            continue;
+        };
+        let displaced = edges.iter().any(|(from, _)| *from == index)
+            || chains.iter().any(|later| {
+                later.last() != Some(&index)
+                    && later.len() > chain.len()
+                    && is_subsequence(chain, later)
+            });
+        if !displaced && !effective.contains(&at_head[index].2) {
+            effective.push(at_head[index].2.clone());
+        }
+    }
+    if effective.is_empty() && !at_head.is_empty() {
+        return Err("conflicting review append histories have no effective recording".to_string());
+    }
+    Ok(effective)
+}
 
-    // trace:BUG-2474 | ai:codex
-    // Keys are aliases for this PR's review corpus. A strictly newer dated
-    // recording at this head supersedes older ones, regardless of key or
-    // reviewer. Keep undated recordings and timestamp ties in contention:
-    // their order cannot be established. Validate every round before reducing
-    // so a later approval cannot conceal malformed historical evidence.
-    let newest = at_head.iter().filter_map(|(_, _, at)| *at).max();
+/// Apply the shared append-order selection, preserving each refusal kind.
+// trace:TASK-2964 | ai:codex
+pub fn reconcile_artifacts_for_sha<'a>(
+    bodies: impl IntoIterator<Item = &'a str>,
+    current_sha: &str,
+) -> Result<Option<VerdictKind>, String> {
+    let effective = effective_recordings_for_sha(bodies, current_sha)?;
     let mut approvals = Vec::new();
     let mut blockers = Vec::new();
-    for (kind, reviewer, at) in at_head {
-        if at.is_some() && at < newest {
-            continue;
-        }
+    let mut rejected = false;
+    for recording in effective {
+        let kind = VerdictKind::parse(recording["verdict"].as_str().unwrap());
+        let reviewer = recording
+            .get("recorded_by")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("unknown reviewer")
+            .to_string();
         match kind {
             VerdictKind::Approved => approvals.push(reviewer),
-            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+            VerdictKind::RequestChanges | VerdictKind::Rejected => {
+                rejected |= kind == VerdictKind::Rejected;
+                blockers.push(reviewer);
+            }
             VerdictKind::Unknown => unreachable!(),
         }
     }
@@ -922,7 +1030,9 @@ pub fn reconcile_artifacts_for_sha<'a>(
             blockers.join(", ")
         ));
     }
-    if !blockers.is_empty() {
+    if rejected {
+        Ok(Some(VerdictKind::Rejected))
+    } else if !blockers.is_empty() {
         Ok(Some(VerdictKind::RequestChanges))
     } else if !approvals.is_empty() {
         Ok(Some(VerdictKind::Approved))
