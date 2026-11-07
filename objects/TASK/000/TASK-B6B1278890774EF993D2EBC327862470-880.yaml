@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T14:07:43.180920702Z
+modified_at: 2026-11-07T14:16:36.613533862Z
 req_type: Task
 tags:
 - architecture
@@ -411,6 +411,12 @@ comments:
   content: S2a part 2 in progress under the 2026-11-07 13:45 ruling. Added a staged store-write profile with no legacy store/cache grants, a final resolved-path read-only seal for canonical store/project authority/Git/shared-cache targets, and a fresh explicit private-cache path. Explicit mediated selection currently refuses before launch effects; read-only S1 service selection and Claude/native compatibility stay unchanged. Tests exercise primary and linked/relocated targets under an ancestor grant, raw create/append/rename denial with parent sentinel checks, private SQLite WAL writes, and fixture-only canonical comment/edit positives with host reads. The latter uses the transaction primitive, not live broker/CLI/MCP or durable publication admission. Full routing/publication and integrated positives remain activation blockers; this is Refs-only, TASK-3223 stays open. Validation underway; no historical PR metadata, hold, Git history or completion mutation from the native seat.
   created_at: 2026-11-07T14:07:43.180920702Z
   modified_at: 2026-11-07T14:07:43.180920702Z
+  session_id: 01a1b64aa1cf
+- id: 01a1b65e-5005-7340-816a-567b6c67a4c3
+  author: joe
+  content: 'S2a boundary staging validation complete. Changed: contained_boundary.rs; launch/contained.rs; containment/tests/mediated_store_tests.rs; containment/tests/launch_tests.rs; OVERVIEW.md. Final 5 mediated-profile tests passed with the live bubblewrap case exercised (no skip): raw create/append/rename denial and parent sentinel checks, private SQLite WAL writes, fixture-transport typed comment/edit requests and host reads. Existing 5 BUG-1929 compatibility tests passed. All 44 make check-ci-fast gates passed, including 41 inventory fixtures; Python service suite 26 passed; writer inventory reconciled; doc links 1458 paths/0 missing; formatting and diff checks passed. Earlier fixture runs caught overly strict symlink rename assertions and an uncanonicalized relocated-cache grant; both corrected and the final suite is green.\n\nThis is a partial Refs slice: mediated production selection refuses before launch effects. Live broker/host mutation verbs, CLI/MCP routing, integration of the explicit private cache into readers, and transactional Git/event publication remain activation blockers. Fixture positives establish shared filesystem/core behavior only, not live service or vendor conformance. TASK-3223 remains open.\n\nRecorded native publication declaration: [AI:codex] feat(containment): stage gated mediated store boundary and private caches (Refs TASK-3223). Handoff: /tmp/task-3223-native-handoff.md. PR-body draft: /tmp/task-3223-s2a-boundary-pr-body.md. Host must create the new commit after exit and use Refs-only subject with explicit empty squash body; preserve existing punt/hold and run CI on the host-created commit before merge. No historical PR metadata/history changes or gate clearance were attempted; latest advisor ruling and landed #3584 supersede the old sketch-only premise. Native seat leaves all edits uncommitted; no push/PR/review/merge/queue completion. No review finding is disputed.'
+  created_at: 2026-11-07T14:16:36.613533862Z
+  modified_at: 2026-11-07T14:16:36.613533862Z
   session_id: 01a1b64aa1cf
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
