@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:00:50.385855628Z
-modified_at: 2026-11-07T22:40:14.271543412Z
+modified_at: 2026-11-07T22:42:20.704273906Z
 req_type: Spike
 comments:
 - id: 01a1b7e3-96fe-7402-a2b3-98f18e1451e4
@@ -17,6 +17,22 @@ comments:
   created_at: 2026-11-07T21:21:48.286069562Z
   modified_at: 2026-11-07T21:21:48.286069562Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b82d-2c62-7191-944e-32f5003d0f7d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3638):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d4f59a3181fc
+    Recorded: 2026-11-07T22:40:12.922831087+00:00
+    Findings:
+    1. Codex row 2 (pre-compaction) evidence is wrong: the native codex 0.166.0 binary (node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex) contains a hook input schema with "hook_event_name": {"const": "PreCompact"} (33 PreCompact / 33 PostCompact strings) and the config key model_auto_compact_token_limit (21 hits). The doc says 'binary strings contain no PreCompact hook name' and 'token-limit config key name was not confirmed', most likely because strings ran on the bin/codex.js npm wrapper. Fix: correct the evidence, reclassify the row the same way as the Claude row, and update conclusion (a), which says only Claude has a documented compaction surface.
+    2. Claude row 2 says Result 'yes (help/binary evidence; no live test)', but the section's own definition says help/binary evidence 'proves the surface exists, not the behavior', and conclusion (c) says 'no row is a verified yes'. The spec's AC3 says any 'yes' becomes its own implementation spec, and the brief says to file each yes as a DRAFT. Pick one: (i) relabel the row 'unverified: surface present (help/binary), live PreCompact firing not tested' with the host rerun, or (ii) keep 'yes' and file the DRAFT implementation spec. Apply the same choice to the corrected Codex row.
+    3. The brief asks for the exact command for every unverified row, and some rows give none. AGY row 2 has no command, only 'needs a logged-in host to inspect settings keys'. Codex row 2 says 'Operator check: codex --help, the config.toml docs…' but gives no hook-registration command and no pass criterion. AGY row 1's rerun tests --conversation, which is resume, not fork. It also says 'inspect the conversation file' without naming the file path or a pass criterion. Give each of these a concrete command and a yes/no criterion, as the Claude rows have.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T22:42:10.658675919Z
+  modified_at: 2026-11-07T22:42:10.658675919Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b762-cb76-7e13-b7cf-4b2737c734fc
