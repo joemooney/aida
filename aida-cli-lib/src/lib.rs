@@ -769,3 +769,8 @@ include!("lib_part3.rs");
 include!("lib_part4.rs");
 include!("lib_part5.rs");
 include!("lib_part6.rs");
+
+#[cfg(test)]
+// trace:STORY-2539 | ai:codex
+#[path = "tests/story_2539_vendor_literal_ratchet_tests.rs"]
+mod story_2539_vendor_literal_ratchet_tests;

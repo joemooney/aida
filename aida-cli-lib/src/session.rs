@@ -3951,6 +3951,7 @@ pub(crate) fn guided_session_launch(
 // trace:TASK-2631 | ai:codex
 // trace:STORY-683 TASK-1048 | ai:claude
 // trace:BUG-2006 | ai:antigravity
+// trace:STORY-2539 | ai:codex
 pub fn headless_vendor_args(
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
@@ -3960,29 +3961,9 @@ pub fn headless_vendor_args(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
-    let actually_contained = containment_applied(vendor, contained, None);
-    Ok(match vendor {
-        HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
-            host_main,
-            prompt,
-            session_id,
-            actually_contained,
-            model,
-            effort,
-        )?,
-        // trace:TASK-2631 | ai:codex
-        HeadlessVendor::Codex => {
-            let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
-            if contained {
-                containment_posture(vendor, true)?;
-                args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-                let flags = crate::tool_contained_flags(host_main, "codex")?;
-                args.splice(0..0, flags);
-            }
-            args
-        }
-        HeadlessVendor::Agy => agy_headless_args_with_effort(prompt, effort),
-    })
+    crate::vendors::headless::headless_vendor_args(
+        host_main, vendor, prompt, session_id, contained, model, effort,
+    )
 }
 
 /// BUG-2133: [`headless_vendor_args`] for a drain child whose working
@@ -3992,6 +3973,7 @@ pub fn headless_vendor_args(
 /// is uncontained. Callers run [`require_child_containment`] first, so a
 /// vendor that cannot apply containment never reaches this with `Some`.
 // trace:BUG-2133 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub(crate) fn headless_vendor_args_contained_in(
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
@@ -4001,32 +3983,15 @@ pub(crate) fn headless_vendor_args_contained_in(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
-    match (vendor, contained_in) {
-        (HeadlessVendor::Claude, Some(dir)) => claude_headless_args_for_roots(
-            host_main,
-            prompt,
-            session_id,
-            Some(&contained_resume_write_roots(dir)),
-            model,
-            effort,
-        ),
-        // trace:TASK-2631 | ai:codex
-        (HeadlessVendor::Codex, Some(dir)) => {
-            containment_posture_in(dir, vendor.as_str(), true)?;
-            let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
-            args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-            // TASK-2712: the write set of the child's own tree. A drain
-            // child's role is not known here, so no gate ledger (reviewer
-            // only).
-            // trace:TASK-2712 TASK-2032 | ai:claude
-            args.splice(
-                0..0,
-                crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main, dir, None)?,
-            );
-            Ok(args)
-        }
-        _ => headless_vendor_args(host_main, vendor, prompt, session_id, false, model, effort),
-    }
+    crate::vendors::headless::headless_vendor_args_contained_in(
+        host_main,
+        vendor,
+        prompt,
+        session_id,
+        contained_in,
+        model,
+        effort,
+    )
 }
 
 /// BUG-2133: containment is monotonic — a contained drain contains every
@@ -4288,18 +4253,9 @@ pub fn agy_headless_args(prompt: &str) -> Vec<String> {
 // option flag precedes `-p`, and the prompt is `-p`'s value at the tail.
 // The permission posture is unchanged — the same single flag, moved, not weakened.
 // trace:BUG-1686 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
-    // trace:TASK-2838 | ai:codex
-    let mut args = vec![
-        "--dangerously-skip-permissions".to_string(),
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-    ];
-    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
-        args.extend(["--effort".to_string(), effort.to_string()]);
-    }
-    args.extend(["-p".to_string(), prompt.to_string()]);
-    args
+    crate::vendors::headless::agy_headless_args_with_effort(prompt, effort)
 }
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
@@ -4329,24 +4285,13 @@ pub fn codex_headless_args_with_model(prompt: &str, model: Option<&str>) -> Vec<
 }
 
 // trace:STORY-1033 | ai:codex
+// trace:STORY-2539 | ai:codex
 pub fn codex_headless_args_with_model_and_effort(
     prompt: &str,
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Vec<String> {
-    let mut args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--dangerously-bypass-approvals-and-sandbox".to_string(),
-    ];
-    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
-        args.extend(["--model".to_string(), model.to_string()]);
-    }
-    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
-        args.extend(["-c".to_string(), format!("model_reasoning_effort={effort}")]);
-    }
-    args.push(prompt.to_string());
-    args
+    crate::vendors::headless::codex_headless_args_with_model_and_effort(prompt, model, effort)
 }
 
 /// BUG-2386: a composed `codex … exec <flags> <prompt>` argv rewritten to
@@ -4475,6 +4420,7 @@ pub fn claude_headless_args_with_posture_model_and_effort(
 /// [`claude_headless_args_with_posture_model_and_effort`] uses would scope it
 /// to the wrong tree.
 // trace:BUG-2133 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub(crate) fn claude_headless_args_for_roots(
     host_main: Option<&Path>,
     prompt: &str,
@@ -4483,45 +4429,14 @@ pub(crate) fn claude_headless_args_for_roots(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
-    let contained_flags = contained_roots
-        .map(|roots| claude_contained_flags_for_roots(host_main, roots))
-        .transpose()?
-        .unwrap_or_default();
-    let permission_mode = if contained_roots.is_some() {
-        "dontAsk"
-    } else {
-        "bypassPermissions"
-    };
-    let args: Vec<String> = vec![
-        "-p".to_string(),
-        "--permission-mode".to_string(),
-        permission_mode.to_string(),
-    ]
-    .into_iter()
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    .chain(headless_claude_posture(contained_flags)?)
-    .chain([
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-        "--session-id".to_string(),
-        session_id.to_string(),
-    ])
-    .chain(
-        model
-            .filter(|m| !m.trim().is_empty())
-            .map(|m| vec!["--model".to_string(), m.to_string()])
-            .unwrap_or_default(),
+    crate::vendors::headless::claude_headless_args_for_roots(
+        host_main,
+        prompt,
+        session_id,
+        contained_roots,
+        model,
+        effort,
     )
-    .chain(
-        effort
-            .filter(|e| !e.trim().is_empty())
-            .map(|e| vec!["--effort".to_string(), e.to_string()])
-            .unwrap_or_default(),
-    )
-    .chain([prompt.to_string()])
-    .collect();
-    Ok(args)
 }
 
 /// BUG-050: THE headless `claude -p` posture lives in `aida-core` (the AI
