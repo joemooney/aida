@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:50:05.078996761Z
+modified_at: 2026-11-07T06:54:02.085718205Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -365,6 +365,12 @@ comments:
   content: 'Round 10 rework for PR #3575 at 99b16162d3eb: addressing all three findings. The BUG-2480 extracted-loop fixture now supplies credential_deadline and the optional OAuth channel context. A host-only unlinked descriptor records denied OAuth CONNECTs before replying; failed ChatGPT exits with that evidence map to RELAUNCH even before expiry, while ordinary failures retain ExitStatus. Added all-four-host/other-host signal checks and a real contained denied-CONNECT then exit-1 regression; version refusal assertions now require re-probe this codex version. Store mutation tests passed with AIDA_REQUIRE_STORE_MUTATION_LIVE=1 (22 tests); Python containment suites passed (44 tests), fmt/diff/portability checks passed. Rust launcher suite is compiling. This remains the authorized Refs implementation slice, not real ChatGPT C0-C4 acceptance; preserve the existing merge hold. Native-seat edits remain uncommitted for host publication.'
   created_at: 2026-11-07T06:50:05.078996761Z
   modified_at: 2026-11-07T06:50:05.078996761Z
+  session_id: 01a1b4c1e52e
+- id: 01a1b4c9-1f65-72d3-80be-eca8faaa14a6
+  author: joe
+  content: 'Round 10 final native-seat handoff: all three findings addressed. Validation: AIDA_REQUIRE_STORE_MUTATION_LIVE=1 python3 -m unittest tests/test_store_mutation.py: 22 passed. Python containment conformance suites: 44 passed. cargo test -p aida-cli-lib --lib --offline -- launch::contained::tests --nocapture: 61 passed, 0 failed, 1 ignored watchdog child; that child passed via its watchdog parent. The real contained OAuth-denial then exit-1 regression and live host deadline test passed; installed-Codex opt-in probes were not enabled. The four excluded OAuth hosts record the signal before replying; unrelated refusals leave it clear. Ordinary exit 1, exit 31 and signal statuses remain unchanged without expiry/denial, and successful statuses remain successful. fmt, git diff --check and portability checks passed. Seven files changed: contained_host.py, launch/contained.rs, containment/tests/codex_auth_tests.rs, containment/tests/launch_tests.rs, tests/test_store_mutation.py, OVERVIEW.md and the credential-boundary plan. All edits left uncommitted; no commit/push/PR mutation/queue completion/review recording/hold clearance from this seat. This remains the Refs implementation slice: real operator ChatGPT C0-C4 and associated acceptance disposition remain advisor-owned, and the existing merge hold remains in place.'
+  created_at: 2026-11-07T06:54:02.085718205Z
+  modified_at: 2026-11-07T06:54:02.085718205Z
   session_id: 01a1b4c1e52e
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
