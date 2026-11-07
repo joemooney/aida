@@ -8,13 +8,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T05:05:59.420450766Z
-modified_at: 2026-11-07T05:05:59.420450766Z
+modified_at: 2026-11-07T13:57:42.711583373Z
 req_type: Task
 tags:
 - from-advisor:TASK-3325
 - kind:observation
 - linked:TASK-3325
 - severity:minor
+comments:
+- id: 01a1b64d-02b7-7a22-8c38-d064b0c2a519
+  author: joe
+  content: 'ADVISOR 2026-11-07 07:00: rejected. Standalone non-native aida-core is not a supported configuration. CI guards only ''cargo check -p aida-cli --no-default-features'', which keeps native aida-core, and there is no non-native consumer (single-user project). The failure predates TASK-3325. If a wasm/non-native consumer appears, file it with that consumer as the acceptance.'
+  created_at: 2026-11-07T13:57:42.711583373Z
+  modified_at: 2026-11-07T13:57:42.711583373Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b49d-6766-7be0-989e-dff65e7775a2
   author: joe
