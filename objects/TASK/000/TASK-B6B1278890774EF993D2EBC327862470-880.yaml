@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T07:16:42.718452527Z
+modified_at: 2026-11-07T07:17:50.937442379Z
 req_type: Task
 tags:
 - architecture
@@ -244,6 +244,23 @@ comments:
   modified_at: 2026-11-07T07:09:53.488320208Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4de-ddb7-7bb3-abae-c026d0eb93cd
+  author: joe
+  content: |
+    Round 4 re-audit on task-3223-r0014 at a7bda6eabe0. The current user explicitly labels the 621c83395e48 review findings AUTHORITATIVE; this is a review-remediation assignment, not authorization to substitute the full implementation round described in TASK-3223 comment 14.
+
+    DISPUTE finding 4 as a current-state assertion: independent advisor signoff exists in TASK-3223 comment 10 (2026-11-07T04:55:39.522648898Z). The approved design is already on main via d6c6e961d48 (#3571). It specifies canonical-object redo, writer-lock recovery, lock-free per-file readers and one-live-binary compatibility; multi-root own_claim/queue_done remain refused and belong to TASK-3326. Re-labeling this design UNAPPROVED would contradict recorded approval. The historical finding was accurate when recorded.
+
+    Findings 1-3: read-only gh pr view confirms #3563 remains CLOSED and UNMERGED at 621c83395e48671e1d8d78fee3b1e31c39fb62ee, with its old closing title and bare seat body unchanged. Advisor comment 10 explicitly chose closure so that history never reaches main. Do not reopen or merge it. The requested retitle/body/squash controls have not been applied by this seat; those are host/merger actions if revival is explicitly authorized. Native seat instructions forbid committing, pushing and PR creation; no history rewrite or publication attempted.
+
+    Finding 5 accepted: service.py MUTATION_VERBS is still session_probe/request_status; contained_store_write_paths still grants store/cache. No runtime acceptance is claimed. TASK-3223 must remain open. No implementation was substituted for the explicitly authoritative review assignment.
+
+    Finding 6 confirmed from current forge evidence for reviewed head: CI (gates), CI (contracts), and Build (ubuntu-latest) all SUCCESS; merge-hold-gate remains FAILURE. Evidence: https://github.com/joemooney/aida/actions/runs/42337834239 and https://github.com/joemooney/aida/actions/runs/42337834240/job/128298672219 . Any eventual new implementation head needs fresh checks. No hold clearance performed.
+
+    Also dispute the new-commit requirement within this native seat: the explicit standalone override prohibits commits. No file edit would resolve the closed-PR/advisor-state contradiction. Changed repository files: none. Validation: git diff --check passed; worktree clean; source inspection as above; no runtime tests warranted or run. No pending Codex briefs. Punt ambiguous-spec with these named disputes rather than silently pass or fabricate a documentation change. Preserve holds/punt vetoes. Host must reconcile the authoritative stale-review prompt with the newer approved implementation directive before relaunch. Do not auto-publish or queue-complete this run.
+  created_at: 2026-11-07T07:17:47.063334906Z
+  modified_at: 2026-11-07T07:17:47.063334906Z
+  session_id: 01a1b4ddceae
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -488,6 +505,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b4de-ecd9-7cf1-9dd9-b357d3fb7bca
+  author: joe
+  timestamp: 2026-11-07T07:17:50.937458826Z
+  session_id: 01a1b4ddceae
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -497,3 +522,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Dispute finding 4 as a current-state assertion: advisor signoff is recorded in TASK-3223 comment 10 and approved design landed via d6c6e961d48. Findings 1-3 target CLOSED UNMERGED PR 3563; advisor explicitly chose closure, while current user calls the old review AUTHORITATIVE. The exact unapproved-v1 title now contradicts approved design. Host must reconcile that review assignment with later comment 14 implementation directive. Also dispute mandatory-new-commit clause because explicit native-seat override prohibits commits. No edits can repair host PR state or resolve this assignment conflict; no implementation substituted. Finding 5 accepted: all runtime acceptance pending, keep TASK-3223 open. Finding 6 verified green gates/contracts/Build at reviewed head; merge-hold-gate still failed, untouched. No repository changes, diff check passed, no runtime tests. Preserve hold and punt publication vetoes; do not publish or queue-complete this run.'
+  raised_by: implementer
+  raised_at: 2026-11-07T07:17:50.937442379Z
