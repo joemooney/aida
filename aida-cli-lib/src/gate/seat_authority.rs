@@ -2937,6 +2937,46 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
     Ok(revoked)
 }
 
+/// Only shorten a delegated grant minted by this launcher. Preserve every other
+/// field under the existing stamp/revocation lock. Direct session grants stay
+/// unchanged: their contained lane is bounded by the effective credential TTL.
+// trace:BUG-2486 | ai:codex
+pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
+    let at = DateTime::<Utc>::from_timestamp(deadline, 0).context("invalid child deadline")?;
+    anyhow::ensure!(at > Utc::now(), "child grant deadline is already expired");
+    // An ample token needs no mutation, including for a direct session grant.
+    let grant = read_grant(id)?;
+    // A direct session grant is not owned by this launch. The caller supplies
+    // the credential-capped TTL to the lane without changing session authority.
+    if grant.parent_grant_id.is_none() || grant.expires_at <= at {
+        return Ok(());
+    }
+    let launcher = own_process_token().context("launcher identity unavailable")?;
+    let eligible = |g: &SeatGrant| {
+        g.parent_grant_id.is_some()
+            && g.binding.contains(&launcher)
+            && g.revoked_at.is_none()
+            && g.expires_at > Utc::now()
+    };
+    update_grant(
+        id,
+        |g| {
+            if !eligible(g) || g.expires_at <= at {
+                return false;
+            }
+            g.expires_at = at;
+            true
+        },
+        |g| g.expires_at <= at,
+    )?;
+    let current = read_grant(id)?;
+    anyhow::ensure!(
+        eligible(&current) && current.expires_at <= at,
+        "cannot cap ChatGPT child grant: requires this launcher's live delegated grant"
+    );
+    Ok(())
+}
+
 /// BUG-1934 (C4): bind grant `id` to live process `pid` as well: a launcher
 /// stamps the worker it detached (setsid, nohup, a new terminal), which no
 /// longer descends from the launcher the grant was minted bound to. Locked

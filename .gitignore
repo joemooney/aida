@@ -202,6 +202,8 @@ __pycache__/
 /.agents/
 
 # codegraph index (local tooling, not part of the repo)
+# Shared primary-index links in lane worktrees (trace:STORY-2630 | ai:codex)
+.codegraph
 .codegraph/
 scripts/split-lib/golden/
 
