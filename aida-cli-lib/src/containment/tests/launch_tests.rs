@@ -589,7 +589,7 @@ fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
         args.iter()
             .filter(|arg| arg.as_str() == "--settings")
             .count(),
-        1
+        0
     );
     for original in [
         vec![],
@@ -628,11 +628,9 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
         args.iter()
             .filter(|a| a.as_str() == "--dangerously-skip-permissions")
             .count(),
-        0
+        1
     );
-    assert!(args
-        .windows(2)
-        .any(|a| a[0] == "--settings" && Path::new(&a[1]) == runtime.join("settings.json")));
+    assert!(!args.iter().any(|a| a == "--settings"));
     assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
     assert!(crate::launch::agy::AGY
         .candidate_argv(Path::new("/"), prompt, Some(run.receipt()))
@@ -2297,7 +2295,7 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
             &std::fs::read(source.join("settings.json")).unwrap()
         )
         .unwrap(),
-        serde_json::json!({"permissions": {"allow": [format!("write_file({}/**)", workspace.path().display())]}})
+        serde_json::json!({})
     );
     assert!(std::fs::read(source.join(&policy.credential))
         .unwrap()
@@ -2412,7 +2410,7 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
         })
         .into();
     let workspace = tempfile::tempdir().unwrap();
-    let settings_json = policy.settings(workspace.path()).unwrap().to_string();
+    let settings_json = serde_json::json!({}).to_string();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
     let protected_json = serde_json::to_string(&protected).unwrap();

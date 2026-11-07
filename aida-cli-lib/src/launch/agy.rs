@@ -207,7 +207,10 @@ mod tests {
     fn agy_adapter_keeps_unmeasured_policy_closed() {
         let policy = crate::containment::runtime_policy("agy").unwrap();
         assert!(!policy.auth_inventory_complete);
-        assert_eq!(policy.auth_hosts, ["daily-cloudcode-pa.googleapis.com"]);
+        assert_eq!(
+            policy.auth_hosts,
+            ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com"]
+        );
         assert!(!policy.raw_git_writes && !policy.raw_store_writes);
         assert!(AGY
             .require_conformance()

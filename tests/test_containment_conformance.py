@@ -99,6 +99,18 @@ items = [{name = "preserved", enabled = true}]
             c.fixture_policy(config)
             self.assertEqual(tomllib.loads(config.read_text()), merged)
 
+    # trace:TASK-3048 | ai:codex
+    def test_agy_fixture_uses_shipped_auth_hosts_and_aida_posture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text('[contained]\nallowed_hosts = ["deny.fixture.test"]\n')
+            c.fixture_policy(config, "agy")
+            policy = tomllib.loads(config.read_text())
+            self.assertEqual(policy["agents"]["vendor"], "agy")
+            self.assertEqual(policy["contained"]["vendors"]["agy"], "aida")
+            self.assertEqual(policy["contained"]["allowed_hosts"],
+                             ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com", "allow.fixture.test"])
+
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
         fixture_home = Path.home() / ".aida"
@@ -154,7 +166,7 @@ items = [{name = "preserved", enabled = true}]
             root = Path(directory)
             repo = root / "repository"
             repo.mkdir()
-            report = {"setup": [], "containment_receipt_sha256": None,
+            report = {"vendor": "codex", "setup": [], "containment_receipt_sha256": None,
                       "checks": {"C0": {"status": "unknown"}}}
             c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 1})
             stages = []
@@ -210,7 +222,7 @@ items = [{name = "preserved", enabled = true}]
                 master, terminal = pty.openpty()
                 before = c.termios.tcgetattr(terminal)
                 duplicate = os.dup
-                report = {"setup": [], "checks": {}, "containment_receipt_sha256": None}
+                report = {"vendor": "codex", "setup": [], "checks": {}, "containment_receipt_sha256": None}
                 def entered(argv, **kwargs):
                     self.assertEqual(kwargs["timeout"], 300)
                     self.assertNotIn("stdin", kwargs)
@@ -373,7 +385,7 @@ assert termios.tcgetattr(0) == before
                 (root / "repository").mkdir()
                 c.write_json(root / "aida-state.json", {
                     "aida": "fixture", "spec": "TASK-1", "timeout": 5,
-                    "report": {"setup": [], "checks": {"C0": {"status": "unknown"}},
+                    "report": {"vendor": "codex", "setup": [], "checks": {"C0": {"status": "unknown"}},
                                "containment_receipt_sha256": None}})
                 continuation = f"""
 import importlib.util, pathlib, signal, sys, termios
@@ -468,7 +480,7 @@ assert termios.tcgetattr(0) == before
         for refused in ("setup-seat-preflight", "spec-add", "queue-add"):
             with self.subTest(stage=refused), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                report = {"setup": [], "containment_receipt_sha256": None,
+                report = {"vendor": "codex", "setup": [], "containment_receipt_sha256": None,
                           "checks": {"C0": {"status": "unknown"}}}
                 c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 1})
                 def fixture(argv, cwd, env, report, stage):
@@ -691,7 +703,7 @@ except ValueError:
             root = Path(directory)
             repo = root / "repository"
             repo.mkdir()
-            report = {"setup": [], "containment_receipt_sha256": None,
+            report = {"vendor": "codex", "setup": [], "containment_receipt_sha256": None,
                       "checks": {"C0": {"status": "unknown"}}}
             c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 30, "spec": "TASK-1"})
             # Run the real continuation, lane launcher and signal cleanup with
@@ -769,7 +781,7 @@ except ValueError as error:
         self.assertEqual(saved["checks"]["C1"]["status"], "fail")
 
     def test_unsupported_shared_vendors_never_fall_back(self):
-        for vendor in ("agy", "claude"):
+        for vendor in ("claude",):
             args = type("Args", (), {"vendor": vendor, "boundary": "aida"})()
             with mock.patch.object(c, "prepare") as prepare:
                 with self.assertRaisesRegex(ValueError, "aida-boundary-unsupported-vendor: " + vendor):
@@ -777,16 +789,13 @@ except ValueError as error:
                 prepare.assert_not_called()
 
     # trace:TASK-3048 | ai:codex
-    def test_agy_outer_only_shared_refusal_names_remaining_gates_without_spawning(self):
-        args = type("Args", (), {"vendor": "agy", "boundary": "aida"})()
-        with mock.patch.object(c, "bounded_launch") as launch, \
-                mock.patch.object(c, "prepare") as prepare, \
-                mock.patch.object(c.shutil, "which") as executable:
-            with self.assertRaisesRegex(ValueError, "agy; outer-only adapter requires auth inventory, mediated-write policy and integrated conformance"):
+    def test_agy_aida_boundary_retains_hidden_output_refusal(self):
+        args = type("Args", (), {"vendor": "agy", "boundary": "aida",
+                                  "output": Path("/tmp/agy-fixture")})()
+        with mock.patch.object(c, "bounded_launch") as launch:
+            with self.assertRaisesRegex(ValueError, "fixture-output-hidden"):
                 c.run(args)
             launch.assert_not_called()
-            prepare.assert_not_called()
-            executable.assert_not_called()
 
     def test_production_launch_retains_terminal_session_but_owns_cleanup_group(self):
         with tempfile.TemporaryDirectory() as directory:

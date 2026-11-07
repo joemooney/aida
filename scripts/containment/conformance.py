@@ -646,15 +646,20 @@ def continuation_terminated(_signum, _frame):
     raise ValueError("aida-boundary-continuation-timeout: cleanup requested")
 
 
-# trace:BUG-2470 | ai:codex
-def fixture_policy(config):
+# trace:BUG-2470 TASK-3048 | ai:codex
+def fixture_policy(config, vendor="codex"):
     """Merge experiment policy into init's config without duplicating tables."""
     policy = tomllib.loads(config.read_text())
-    policy.setdefault("agents", {}).update(contained=True, vendor="codex")
+    policy.setdefault("agents", {}).update(contained=True, vendor=vendor)
     contained = policy.setdefault("contained", {})
     # Replace, never extend: init's default hosts must not weaken C3's denial.
     contained["allowed_hosts"] = ["api.openai.com", "allow.fixture.test"]
-    contained.setdefault("vendors", {})["codex"] = "aida"
+    if vendor == "agy":
+        # Shipped vendor data, never an open-ended hostname glob.
+        data = Path(__file__).resolve().parents[2] / "aida-cli-lib/src/containment/vendors.toml"
+        runtime = tomllib.loads(data.read_text())["vendor"][vendor]["runtime"]
+        contained["allowed_hosts"] = [*runtime["auth_hosts"], "allow.fixture.test"]
+    contained.setdefault("vendors", {})[vendor] = "aida"
 
     # TOML inline tables let us retain all parsed init values using only the
     # standard library. Comments need not survive in this disposable fixture.
@@ -675,14 +680,9 @@ def fixture_policy(config):
     config.write_text(rendered)
 
 
+# trace:TASK-3048 | ai:codex
 def run_aida(args):
-    if args.vendor != "codex":
-        # The signed outer-only posture is not permission to run the native
-        # diagnostic with bypass flags or to claim a shared-wrapper receipt.
-        # trace:TASK-3048 | ai:codex
-        if args.vendor == "agy":
-            raise ValueError("aida-boundary-unsupported-vendor: agy; outer-only adapter requires "
-                             "auth inventory, mediated-write policy and integrated conformance")
+    if args.vendor not in ("codex", "agy"):
         raise ValueError(f"aida-boundary-unsupported-vendor: {args.vendor}")
     # Refuse hidden output before creating files or invoking grant setup.
     # trace:TASK-3194 | ai:codex
@@ -691,7 +691,7 @@ def run_aida(args):
         raise ValueError("fixture-output-hidden-by-production-tmpfs: use a fresh directory under ~/.aida")
     aida, vendor = shutil.which("aida"), shutil.which(args.vendor)
     if not aida or not vendor:
-        raise ValueError("aida-boundary-missing-executable: aida and codex required")
+        raise ValueError("aida-boundary-missing-executable: aida and selected vendor required")
     aida, vendor = Path(aida).resolve(), Path(vendor).resolve()
     try:
         root.mkdir(mode=0o700)  # Fresh only; never reuse another run's authority.
@@ -706,7 +706,7 @@ def run_aida(args):
               "trusted_policy_sha": None, "containment_receipt_sha256": None,
               "setup": [], "checks": {k: {"status": "unknown"} for k in ("C0", "C1", "C2", "C3", "C4")},
               "whole_lane_pass": False, "production_launcher_credit": False,
-              "evidence_claim": "production launcher under a committed disposable fixture policy selecting codex=aida"}
+              "evidence_claim": f"production launcher under a committed disposable fixture policy selecting {args.vendor}=aida"}
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     # Relocate authority/roles/queues together; roles use HOME while seat
     # authority uses AIDA_HOME. Preserve the real vendor credential location
@@ -729,7 +729,7 @@ def run_aida(args):
         config = repo / ".aida/config.toml"
         # init owns the store and authority formats. Only fixture policy and
         # experiment instructions are authored here, never seat/lease files.
-        fixture_policy(config)
+        fixture_policy(config, args.vendor)
         skill = repo / ".agents/skills/aida-pickup/SKILL.md"
         skill.parent.mkdir(parents=True)
         invocation = shlex.join([sys.executable, str(root / "payload/runner.py"),
@@ -919,7 +919,7 @@ def continue_aida(root):
             temporary.chmod(0o444)
             temporary.replace(manifest)
             observed["payload_hashes"] = (digest(runner), digest(manifest))
-        argv = [aida, "queue", "work", spec, "--role", "implementer", "--vendor", "codex",
+        argv = [aida, "queue", "work", spec, "--role", "implementer", "--vendor", report["vendor"],
                 "--no-human=both", "--sandbox", "--no-pull", "--base", "main",
                 "--branch", "probe", "--path", str(workspace)]
         write_json(root / "argv.json", argv)

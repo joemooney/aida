@@ -33,7 +33,9 @@ credentials = "unverified"
 [vendor.agy.runtime]
 relative = ".gemini/antigravity-cli"
 credential = "antigravity-oauth-token"
-auth_hosts = ["daily-cloudcode-pa.googleapis.com"]
+# Token endpoint is confirmed in the installed binary; host measurement is
+# still required before marking this inventory complete.
+auth_hosts = ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com"]
 auth_inventory_complete = false
 raw_store_writes = false
 raw_git_writes = false

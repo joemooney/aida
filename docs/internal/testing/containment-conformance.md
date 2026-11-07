@@ -461,3 +461,31 @@ The offline test gives the harness an idle PTY on stdin and stderr and verifies 
 fixture initialization and roster provisioning reach the expected managed-agent role refusal without
 executing the fake vendor. This test terminal grants no authority; managed-agent
 identity remains set throughout.
+
+### AGY outer-only follow-up (2026-11-07 ruling)
+
+The native `agy --sandbox` experiment is diagnostic only. Its report always
+retains `production_launcher_credit=false` and `whole_lane_pass=false`; a native
+sandbox result cannot admit the outer-only vendor.
+
+The AIDA fixture now accepts `--vendor agy --boundary aida`, pins the fixture
+vendor selection and reads its auth hosts from the common wrapper's shipped
+runtime data. Production admission still refuses in `Adapter::require_conformance`;
+this fixture therefore does **not yet reach AGY execution**. A separate diagnostic
+entry point through the shared wrapper is still required, along with verified
+MCP/browser/URL disabling and explicit credential-source handling across the
+fixture's relocated authority HOME. Do not remove the production gate to make
+this fixture run.
+
+Candidate outer-only argv has no `--sandbox` or `--settings` permission profile;
+its permission bypass remains behind the shared wrapper's accepted-receipt exec
+barrier. The private conventional settings file is empty. Existing tests exercise
+private runtime mounts and credential inode pinning without executing AGY.
+
+The host-observed inventory remains `daily-cloudcode-pa.googleapis.com` only.
+`oauth2.googleapis.com` is an additional candidate refresh host: the installed
+AGY binary contains `https://oauth2.googleapis.com/token`. This static evidence
+is not a refresh measurement; `auth_inventory_complete` stays false. The advisor
+must measure refresh and attach fresh AIDA-boundary C0–C4 evidence before the
+separate production-admission change.
+<!-- trace:TASK-3048 | ai:codex -->
