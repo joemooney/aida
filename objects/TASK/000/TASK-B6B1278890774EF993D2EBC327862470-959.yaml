@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-07T22:14:00.675288585Z
+modified_at: 2026-11-07T23:44:50.117975774Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,6 +21,13 @@ comments:
   created_at: 2026-11-07T22:14:00.675288585Z
   modified_at: 2026-11-07T22:14:00.675288585Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b866-89c5-7603-b21f-979748809b89
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 17:15 MST: STORY-2326 PR-D merged (#3603), so the Work region of queue_cmd.rs is no longer owned by an in-flight story. PR3 may move the Work arm and handle_queue_work verbatim into queue_cmd/work.rs in the same PR (SPIKE-713 ruling 6 condition met). Still sequenced after TASK-3424 and TASK-3425 merge.'
+  created_at: 2026-11-07T23:44:50.117975774Z
+  modified_at: 2026-11-07T23:44:50.117975774Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
