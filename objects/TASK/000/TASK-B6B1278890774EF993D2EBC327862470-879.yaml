@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-07T00:01:27.403259208Z
+modified_at: 2026-11-07T00:13:18.349922379Z
 req_type: Task
 tags:
 - architecture
@@ -487,6 +487,15 @@ comments:
   created_at: 2026-11-07T00:00:04.506092784Z
   modified_at: 2026-11-07T00:00:04.506092784Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b35a-3e8d-70d2-a8aa-4f7636bcca0c
+  author: joe
+  content: |
+    Round 6 response at base 01383fd77a9a: regenerated scripts/store-writers.toml against the merged tree and reviewed the complete diff. Exactly two sink additions (defer_resurface.rs::sweep queue_add and update_spec_atomically), no stale rows or other discovered drift. Both new rows remain blocked for TASK-3223. Added an explicit blocked cli:defer resurface operation with reviewed run_defer -> defer_resurface::run -> sweep entrypoints bridging the bare sweep call; both sink IDs are mapped. Added a disposable-tree regression proving these sinks and the operation refuse before regeneration and reconcile afterward; documented the route in docs/internal/security/store-mutation-writers.md. Existing advisor-requested argv/global-flag, variable-binary, multi-clone-harness and Python string fixtures and Limits text were already present at this head and still pass.
+    Validation: python3 scripts/check-store-writers.py --regenerate passed (3301 sink sites / 293 blocked operation mappings); all 41 inventory fixtures passed; CI classification audit passed (73 classified); make check-ci-fast passed all 40 gates including both store-writer steps; git diff --check passed. Local guards emitted refused FETCH_HEAD writes under native read-only Git metadata but returned success. Remote exact-head Gates/Build remain unverified until host publication; the supervised merge hold remains unchanged.
+    Native-seat handoff: four files changed (scripts/check-store-writers.py, scripts/store-writers.toml, tests/test_store_writer_inventory.py, docs/internal/security/store-mutation-writers.md), left uncommitted as instructed. Host must create this round's new commit and publish, then obtain exact-head CI. No queue completion, merge, or review record performed from this seat.
+  created_at: 2026-11-07T00:13:18.349922379Z
+  modified_at: 2026-11-07T00:13:18.349922379Z
+  session_id: 01a1b34f56c2
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
