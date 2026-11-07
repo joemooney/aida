@@ -53,6 +53,12 @@ cutover blocker. `queue done` selects sinks and qualified calls from the concret
 `QueueCommand::Done` arm, rather than all arms of the dispatcher. Its sink rows
 still use the enclosing function identity required by the inventory contract.
 
+`defer resurface` has a separate blocked operation row for the reviewed
+`run_defer -> defer_resurface::run -> sweep` route. Its explicit entrypoints
+bridge the bare `sweep` call, which qualified lexical propagation cannot resolve.
+The row includes both `update_spec_atomically` and `queue_add`; TASK-3223 must
+review the spec update and human-queue authority before routing this operation.
+
 Print unresolved operations without touching a live store:
 
 ```bash

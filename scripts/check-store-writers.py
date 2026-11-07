@@ -492,6 +492,13 @@ def operations(root, scanned=None):
     for selector, (module, function) in explicit.items():
         if (root / f"aida-cli-lib/src/{module}.rs").exists():
             resolve("cli", selector, [f"aida_cli_lib::{module}::{function}"])
+    # trace:TASK-3222 | ai:codex
+    # Reviewed bare-name edge: defer_resurface::run calls sweep. Do not infer
+    # other bare calls globally, where unrelated names can collide.
+    if "aida-cli-lib/src/defer_resurface.rs" in files:
+        resolve("cli", "defer resurface",
+                [f"aida_cli_lib::defer_resurface::{name}" for name in ("run", "sweep")],
+                "Reviewed run_defer -> defer_resurface::run -> sweep route, including the bare sweep call; atomic spec updates and human-queue writes remain blocked for TASK-3223 authority and receiver review.")
     # Explicit reviewed receiver/import edges, never global bare-name propagation.
     mcp_path = "aida-cli-lib/src/mcp.rs"
     if mcp_path in files:

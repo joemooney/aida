@@ -327,6 +327,26 @@ class WriterInventoryTests(unittest.TestCase):
         self.assertTrue({('case_MU-203', 'git add'), ('case_MU-203', 'git commit'),
                          ('add_spec', 'aida add'), ('case_MU-401', 'aida queue')} <= actual)
 
+    def test_defer_resurface_maps_reviewed_bare_sweep_edge(self):
+        self.put('aida-cli-lib/src/defer_resurface.rs', '''
+            fn run() { sweep(); }
+            fn sweep() {
+                backend.update_spec_atomically(req, callback);
+                backend.queue_add(entry);
+            }
+        ''')
+        errors = guard.check(self.root)
+        self.assertTrue(any('defer_resurface.rs|sweep|' in e for e in errors), errors)
+        self.assertIn('operation mapping changed: cli:defer resurface', errors)
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+        row = guard.operations(self.root)['cli:defer resurface']
+        self.assertEqual({
+            'aida-cli-lib/src/defer_resurface.rs|sweep|update_spec_atomically',
+            'aida-cli-lib/src/defer_resurface.rs|sweep|queue_add',
+        }, set(row['sites']))
+        self.assertIn('bare sweep call', row['resolution_note'])
+
     def test_queue_done_maps_only_concrete_arm(self):
         self.put('aida-cli-lib/src/queue_cmd.rs', '''
             fn handle_queue_command() {
