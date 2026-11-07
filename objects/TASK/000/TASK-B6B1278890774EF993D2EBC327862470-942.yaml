@@ -1,0 +1,29 @@
+id: 01a1b6a7-ace5-7113-90d5-4c060c1d1cb6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-942
+title: 'minor (non-blocking): orchestrator PR-open recovery paths (orchestrator_leases.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2483, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): orchestrator PR-open recovery paths (orchestrator_leases.rs:1385, :1737) still call ensure_pr_open_spec_attribution -> pr_open_spec_guard_violation, so a drained Refs-only slice is still refused at PR open and alias matching is still literal there; must split from ensure_spec_done_after_pr (pr_merge_gate.rs:424), which correctly stays completion-only.
+
+  PR: #3601
+  Reviewed sha: c7c0468d7a2967f85f533e9f0f90291b09a4a4bb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T15:36:44.517969092Z
+modified_at: 2026-11-07T15:36:44.517969092Z
+req_type: Task
+tags:
+- carried-from:BUG-2483
+- finding-hash:a8219258
+- from-review:PR-3601
+- kind:carried-forward
+filed_at:
+  code_sha: 1220b5d94cc96afed81065dab2929a39cc3c72b8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 122fea66d30
+  vendor: claude
