@@ -3,7 +3,7 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-958
 agreed_id: TASK-3425
 title: 'Crate-split PR2: move the 14 command-framework types from command_registry.rs into cmdkit.rs, with a re-export (no import churn)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move the command-framework types the plan lists (section 5/7) into a new aida-cli-lib/src/cmdkit.rs; command_registry.rs re-exports them, so no caller import changes. The plan measures that this removes 29 modules from the main SCC. Acceptance: no caller edits; the dependency script from the plan (or rg) shows the reduced SCC; make check-ci-fast passes; and the command-registry ratchet tests pass. LIGHT gate.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
@@ -84,6 +84,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b85e-8aca-7cf0-b1bc-b8ef64c10812
+  author: aida-session-start
+  timestamp: 2026-11-07T23:36:06.090330245Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1b861-a2ee-7381-b6df-9d37b8645ce3
   author: joe
   timestamp: 2026-11-07T23:39:28.878161711Z
