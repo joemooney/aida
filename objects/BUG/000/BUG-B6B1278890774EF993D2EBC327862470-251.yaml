@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T20:36:25.618167917Z
+modified_at: 2026-11-07T20:54:14.266066163Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-07T20:32:57.959183784Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ca-59fa-76d0-bd10-211bc40468b5
+  author: joe
+  content: 'Round 2: addressed all five review findings in the native worktree, left uncommitted. The minimum floor now applies only when the token is the binding cap, with short inherited-grant and equality regressions. Grant capping shares codex_auth::MARGIN and preserves ample-token no-write behavior. Doctor lifetime obeys permission-posture category filtering and says expired for expired tokens. Added a read-only CONFIG_KNOBS declaration plus resolved config show/menu row, and tests for custom/invalid policy floors and exact launch-diagnostic fields; setup docs clarify the contract. Validation: rustfmt --check, git diff --check, exec-context ratchet (1241 sites, zero additions) and store-writer inventory (3349 sinks) passed. untested=true: bug_2486 job j20261107T203830718-2476382-0 timed out after 900s, exit 124, before executing tests; runner reported overlay-stale because the primary rewrote seed generation agent-4f2073f444567321 in place. At handoff codex_auth_tests job j20261107T204018550-2483520-0 is running (compiling aida-cli-lib against the same generation); story_2539 job j20261107T204019726-2483592-0 and bug_1723_config_trust job j20261107T204020897-2483665-0 are queued. Host needs executed-test validation with a valid target/adequate build budget, then commit and publish; existing merge hold is unchanged. No commit, push, PR, review record or queue completion from this seat.'
+  created_at: 2026-11-07T20:54:14.266066163Z
+  modified_at: 2026-11-07T20:54:14.266066163Z
+  session_id: 01a1b7b9ff59
 history:
 - id: 01a1b6ea-5313-7aa0-90fc-6964f99ff91a
   author: joe
