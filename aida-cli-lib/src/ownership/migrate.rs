@@ -221,6 +221,7 @@ pub(crate) fn classify(
             let in_pr = Phase::InPr {
                 change: change.clone(),
                 handed_off_at: now,
+                handed_off_by: Some(holder.session.clone()),
                 head: pr.head.clone(),
             };
             let mut records = vec![record(key.clone(), None, in_pr.clone())];

@@ -109,6 +109,9 @@ pub(crate) enum Phase {
     InPr {
         change: ChangeId,
         handed_off_at: DateTime<Utc>,
+        /// Session that transferred this work; absent on older records.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handed_off_by: Option<String>,
         head: String,
     },
     Reviewing {

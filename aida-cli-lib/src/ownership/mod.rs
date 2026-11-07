@@ -12,8 +12,14 @@
 //! ([`store`]: one locked, generation-checked, journaled write path), the
 //! transitions ([`ops`]), the dual-write call-site adapters ([`dual`]), the
 //! one-time rewrite (`aida own migrate`, [`migrate`]) and the diagnostic
-//! `aida own show --compare` ([`compare`]). No decision call site reads the
-//! records yet: the cutover of every reader is PR-C.
+//! `aida own show --compare` ([`compare`]). PR-C routes train abandonment,
+//! reviewer markers and relaunch safety through [`reader`], stages batches
+//! for recovery, and detaches linked seats on verified self-handoff.
+//! Other legacy readers remain pending; this slice does not complete the story.
+//! Deletion-slice debt: test-only train owner/body parsing, review-marker PID/TTL
+//! helpers and the old relaunch classifier remain as historical rule fixtures;
+//! production callers use ownership readers. Delete these with their old fixtures
+//! once the remaining reader migration lands.
 //!
 //! The judge is pure: it reads no file, process, git state or clock. The
 //! caller injects the host it runs on ([`HostFacts`], including a process
@@ -40,12 +46,14 @@ pub(crate) mod dual;
 mod judge;
 pub(crate) mod migrate;
 pub(crate) mod ops;
+pub(crate) mod reader;
 pub(crate) mod store;
 mod types;
 
 #[allow(unused_imports)]
 pub(crate) use judge::{
-    heartbeat_window, judge, judge_owner, judge_witness, process_witness, LONGEST_TOOL_TIMEOUT_SECS,
+    heartbeat_window, judge, judge_owner, judge_witness, process_witness, reclaim_dead_tree,
+    LONGEST_TOOL_TIMEOUT_SECS,
 };
 #[allow(unused_imports)]
 pub(crate) use types::{

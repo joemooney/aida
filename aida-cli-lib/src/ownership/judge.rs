@@ -238,7 +238,7 @@ pub(crate) fn judge(
 
 /// A dead holder's tree: ended by rule only when it holds nothing the PR
 /// lacks. Today's `pr_lease_takeover::classify`, plus a non-git path.
-fn reclaim_dead_tree(
+pub(crate) fn reclaim_dead_tree(
     tree: &TreeReading,
     pr_head: Option<&str>,
     is_ancestor: &dyn Fn(&str, &str) -> bool,
