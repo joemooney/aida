@@ -156,10 +156,29 @@ host run. Nothing was worked around.
 | 3. Exit + resume across a human wait | Codex | 0.166.0 | unverified: sandbox blocks startup | Same `codex exec` startup error as row 1. `codex exec resume --help`: `codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]` (`--last` also accepted), so the surface exists. Operator rerun: `codex exec -s read-only "Ask me one question and stop."`, then `codex exec resume <id> "Banana. Repeat the question and my answer."`. |
 | 3. Exit + resume across a human wait | AGY | 1.5.3 | unverified: not logged in | Same login/read-only error as row 1. `agy --help` shows `--conversation <id>` ("Resume a previous conversation by ID") and `--continue`. Operator rerun: `agy --print="Ask me one question and stop."`, then `agy --conversation <id> --print="Banana. Repeat the question and my answer."`. |
 
-Conclusions: (a) only candidate 2 on Claude Code is a documented yes
-(PreCompact hook and `--autocompact` exist in 2.1.319), and it still lacks a
-live firing test; (b) candidates 1 and 3 are unverified on all three vendors and
-need a host run outside the seat sandbox with the commands above, with the extra
-caveat that Codex has no non-interactive fork and AGY has no CLI fork (its
-`invoke_subagent` is a model tool); (c) no row is a verified "yes", so no
-implementation DRAFT spec is warranted until the host reruns land.
+### Host rerun (advisor seat, outside the sandbox, 2026-11-07 16:55-16:58 MST)
+
+Same versions, scratch directories, the exact commands above. This supersedes
+the "unverified" results in the table where a row is listed here.
+
+| Candidate | Vendor | Result | Live evidence |
+|---|---|---|---|
+| 1. Turn-boundary fork | Claude Code | **yes** | `--session-id` run printed `OK`; transcript `~/.claude/projects/-tmp-s711/<sid>.jsonl` was 197329 bytes, mtime 1794095733. `--resume <sid> --fork-session "What word..."` answered `PELICAN`; the original transcript was still 197329 bytes, same mtime (the fork wrote a new session). |
+| 1. Turn-boundary fork | Codex | **no (headless)** | No non-interactive fork: `codex fork` is TUI-only and no `codex exec fork` exists. A lane cannot fork without a pty or the app-server. |
+| 1. Turn-boundary fork | AGY | **no (CLI)** | No fork flag; `--conversation <id>` resumes the same conversation in place. `invoke_subagent` (a model tool) was not exercised. |
+| 2. Pre-compaction handoff | Claude Code | **yes (live)** | A scratch project's `.claude/settings.json` `PreCompact` command hook appended `fired 16:57:11` when `claude -p --resume <sid> "/compact"` ran headless; the next resume still answered `PELICAN`. |
+| 2. Pre-compaction handoff | Codex | no hook (unchanged) | No pre-compaction user hook (table row stands). |
+| 2. Pre-compaction handoff | AGY | no hook found (unchanged) | No `PreCompact`; compaction is internal (`CompactionConfig`). |
+| 3. Exit + resume across a human wait | Claude Code | **yes** | First run asked "What's your favourite fruit?"; a separate `--resume <sid> "Banana. ..."` replied "Your favourite fruit is banana. The first question I asked was: 'What's your favourite fruit?'". |
+| 3. Exit + resume across a human wait | Codex | **yes** | `codex exec -s read-only` printed `OK`, session `01a1b870-...`; `codex exec resume <id> "What word..."` answered `PELICAN` and appended to the same rollout (158380 -> 165552 bytes). |
+| 3. Exit + resume across a human wait | AGY | **yes** | `agy --print=... --output-format json` returned `conversation_id`; `agy --conversation <id> --print=...` answered `PELICAN` (`num_turns: 2`), and the fruit test cited both the answer and the question. AGY was logged in on the host; the earlier "not logged in" was the sandbox. |
+
+Conclusions (revised after the host rerun): (a) candidate 3, exit and resume
+across a human wait, is a live **yes on all three vendors** with headless CLI
+surfaces (`claude -p --resume`, `codex exec resume`, `agy --conversation`), so
+it warrants an implementation spec (park on ask, resume on answer); (b)
+candidate 2 is a live yes on Claude Code only, so a pre-compaction handoff can be
+Claude-first through a `PreCompact` hook, with Codex and AGY falling back to
+AIDA-side handoffs at turn boundaries; (c) candidate 1 is a headless yes on
+Claude Code only (`--fork-session`), so fork stays vendor-optional and must not
+be a dependency of any cross-vendor workflow.
