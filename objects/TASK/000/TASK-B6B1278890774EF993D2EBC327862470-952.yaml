@@ -13,13 +13,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T19:10:14.728032683Z
-modified_at: 2026-11-07T19:10:14.728032683Z
+modified_at: 2026-11-07T19:30:01.018221221Z
 req_type: Task
 tags:
 - carried-from:BUG-2485
 - finding-hash:05c56ab7
 - from-review:PR-3612
 - kind:carried-forward
+comments:
+- id: 01a1b77d-3eba-7583-a17e-b281c9e4efbd
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 12:30 (10-28 order, non-blocking findings ruled once): accepted, not filed as follow-up. Reason: operator-interactive path; SIGINT regression covers the shared handler.'
+  created_at: 2026-11-07T19:30:01.018221221Z
+  modified_at: 2026-11-07T19:30:01.018221221Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
   branch: main
