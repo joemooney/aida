@@ -1,0 +1,29 @@
+id: 01a1b62b-2b5e-7bc2-a3ce-8e47e294b08d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-940
+title: '[cosmetic] The ci_key embedded in the train proof (pr_train_verified.rs:268) co…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2401, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic] The ci_key embedded in the train proof (pr_train_verified.rs:268) comes entirely from train.tip and is never compared against anything, so it records the key but verifies nothing beyond the existing checks.sha==tip check.
+
+  PR: #3591
+  Reviewed sha: 702b4277dbe9691fce056a91dd5c90222ace337b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T13:20:44.894667610Z
+modified_at: 2026-11-07T13:20:44.894667610Z
+req_type: Task
+tags:
+- carried-from:STORY-2401
+- finding-hash:a872d79b
+- from-review:PR-3591
+- kind:carried-forward
+filed_at:
+  code_sha: 9f75814f1947e90c7e37ae099356a20cf8673a77
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4803b66ade9
+  vendor: claude
