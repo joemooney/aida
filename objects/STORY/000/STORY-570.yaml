@@ -16,15 +16,28 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:00:31.951353181Z
-modified_at: 2026-06-13T01:48:48.906094266Z
+modified_at: 2026-11-07T20:26:01.888986094Z
 req_type: Story
 tags:
 - batch:repositioning
 - beads
 - bridge
 - competitive
-- deferred:post-stability
 - from:SPIKE-53
 - interop
+comments:
+- id: 01a1b7b0-8720-7213-9ccb-a0d63c8c5b23
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:post-stability"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:01.888978158Z
+  modified_at: 2026-11-07T20:26:01.888978158Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-13T01:48:48.906094266Z
+deferred: true
+deferred_at: 2026-06-13T01:48:48.906094266Z
+deferred_until: manual:operator
