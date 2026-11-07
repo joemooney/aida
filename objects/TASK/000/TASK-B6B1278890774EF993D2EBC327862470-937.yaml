@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T13:20:37.563445158Z
-modified_at: 2026-11-07T13:20:37.563445158Z
+modified_at: 2026-11-07T13:56:36.619525600Z
 req_type: Task
 tags:
 - carried-from:STORY-2401
 - finding-hash:6b357d78
 - from-review:PR-3591
 - kind:carried-forward
+comments:
+- id: 01a1b64c-008b-7661-9a95-8fc9ba1a0d4f
+  author: joe
+  content: 'ADVISOR 2026-11-07 07:00: accepted as non-blocking at the approved review (operator ruling 2026-10-28: non-blocking findings are ruled once, at review). No follow-up.'
+  created_at: 2026-11-07T13:56:36.619525600Z
+  modified_at: 2026-11-07T13:56:36.619525600Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b645-121c-7d71-8ef4-eb1defd49ff6
   author: joe
