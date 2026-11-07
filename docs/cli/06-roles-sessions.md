@@ -1081,3 +1081,37 @@ use [`aida mailbox disposition`](../advanced/mailbox.md#explicit-responses-to-re
 independently of read ACKs. Reading, replying or accepting a wake is not action.
 Claude/Antigravity wake delivery remains separate work.
 <!-- trace:TASK-3074 | ai:codex -->
+
+### `aida own release`
+
+**What it does.** Releases an exact ownership key from a human host terminal,
+recording an operator override in the ownership journal. Keys use the directory
+and file stem under `.aida/ownership`, for example `train/origin-12` or
+`change/origin-9`. Releasing a train also releases its rider reservations.
+
+**Reach for it when** — stale or unknown ownership blocks a rider or reviewer
+and the operator has established that the reservation should end. If a failed
+train acquisition left only a rider record, release that change key directly.
+
+**Don't reach for it when** — a session should simply finish normally. Release
+leaves leases, worktrees and cargo targets intact; use guarded `aida session end`
+for retirement. An agent session or a noninteractive caller cannot override.
+
+**Example.** `aida own release train/origin-12`
+
+Manual `aida review claim` markers expire after their requested TTL. Ownership
+can override that expiry only when its process identity matches the marker;
+a previous closed review at the same head cannot clear a new claim. Unrelated
+unreadable records do not disable TTL expiry or an exact-key operator release.
+Abbreviated and differently cased head SHAs match the merge gate's comparison.
+Store discovery failures and store-wide read failures (including lock timeouts
+and failed pending-batch recovery) retain pid-backed markers even after process
+death or TTL expiry. Repair the store and retry, or explicitly clear the marker
+with `aida review claim --pr <N> --release`.
+
+After PR handoff, the lease remains the seat's cleanup handle. A dead handing-off
+session with a clean, published tree can end through the guarded relaunch path.
+A later `aida ship` from that detached seat restores its leased branch only if
+both HEAD and the branch still equal the recorded PR head and Git permits the
+checkout. A moved branch or another session's handoff refuses recovery.
+<!-- trace:STORY-2325 | ai:codex -->

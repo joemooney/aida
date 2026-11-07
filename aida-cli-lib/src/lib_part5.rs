@@ -2822,7 +2822,7 @@ pub(crate) fn handle_review_claim(
             .map(|info| info.head_oid)
         });
     if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
-        if crate::gate::review_marker::is_live(&prev) {
+        if crate::gate::review_marker::is_live_at(&root, &prev) {
             eprintln!(
                 "  {} replacing a live review claim on PR-{pr}: {}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -2841,7 +2841,7 @@ pub(crate) fn handle_review_claim(
     crate::gate::review_marker::write(&root, &marker)
         .with_context(|| format!("could not mark PR-{pr} as under review"))?;
     println!(
-        "{} PR-{pr} is marked under review{} for {ttl_mins}m — merges wait for your verdict",
+        "{} PR-{pr} is marked under review{} — manual expiry {ttl_mins}m (matching ownership takes precedence)",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         head.as_deref()
             .map(|h| format!(" at {}", crate::gate::review_verdict::short_sha(h)))
