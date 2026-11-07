@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-245
 agreed_id: BUG-2480
 title: 'contained_host.py: shutdown can block because the notification listener is read before its hang-up is checked'
 description: 'Source: work GDMS CI report. In the run loop (aida-cli-lib/src/containment/contained_host.py about line 744), broker_connect_contained() runs on the notification socket before _hung_up() is checked, so a hung-up listener can block the shutdown. The work fix checks for listener hang-up before receiving. Acceptance: a test closes the notification peer during a lane run, and the host exits within the normal shutdown deadline.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:54.525722236Z
-modified_at: 2026-11-07T04:39:18.852652594Z
+modified_at: 2026-11-07T05:22:15.400040312Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b475-18e8-7d30-ba33-512eda528e18
+  author: aida-session-start
+  timestamp: 2026-11-07T05:22:15.400038196Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
