@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T11:54:52.573648757Z
+modified_at: 2026-11-07T12:12:09.502529644Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1ae37-9822-7172-a4a8-bd3141b4ff5e
   created_at: 2026-11-07T10:45:28.123046267Z
+comments:
+- id: 01a1b5ec-5f9e-7d40-a77c-4838919f7925
+  author: joe
+  content: 'Implemented merge-lock ProcIdentity migration. Rust writers capture cooperative HolderRecord evidence; stale detection, covers, train observation, ownership dual-write and migration preserve the same generation and shared verdict. Complete legacy/unknown/refused/live holders cannot be reclaimed by wall-time TTL. New namespace spelling plus non-expiring compatibility TTL fences the preceding readers; permanent per-branch guards serialize generation-fenced publication/removal. Release script removes private PID liveness decisions, retains complete records conservatively, uses monotonic local waits and exact-publication cleanup. Its shell holder remains unadmitted; abandoned script/legacy records require documented operator recovery. Upgrade binary and release script together and retire old mergers before rollback. Validation: 14 merge-lock tests, 4 liveness ratchet checks, 43 ownership tests, 12 sealed train-context regressions and 2 core ProcIdentity matrix tests passed (75 total); release PR-flow suite, bash syntax, cargo fmt --all -- --check and git diff --check passed. Eight source/doc/test files remain uncommitted for native host publication. No queue completion, commit, push, PR, ship or review-record action performed from this seat.'
+  created_at: 2026-11-07T12:12:09.502529644Z
+  modified_at: 2026-11-07T12:12:09.502529644Z
+  session_id: 01a1b5dbf154
 history:
 - id: 01a1b59d-064f-7020-a1ae-8513041adbc0
   author: joe
