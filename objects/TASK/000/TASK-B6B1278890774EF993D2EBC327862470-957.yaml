@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T22:44:03.786050571Z
+modified_at: 2026-11-07T22:44:08.294346064Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,6 +27,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Pure move verified byte-identical (689=689 tests, ledgers consistent), but include! of 4-space-indented bodies takes ~23.7k test lines out of the cargo fmt --check gate; the plan names the #[path] mod pattern. CI still queued at review time.. No triage reason was given.'
   created_at: 2026-11-07T22:44:03.786046310Z
   modified_at: 2026-11-07T22:44:03.786046310Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b82e-f743-7392-b8df-5eebccf04c79
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3424):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2358bc038f86
+    Recorded: 2026-11-07T22:35:43.516881461+00:00
+    Findings:
+    1. MAJOR fmt-gate regression: the 9 new src/tests/*.rs files are reached only via include!() (e.g. aida-cli-lib/src/mcp.rs:9318, auto_complete.rs:6478, burndown.rs:1416/2085/2522, awaiting_you.rs:250/3615, maintenance_schedule.rs:4309, mcp.rs:9407). cargo fmt --all does not follow include!, and CI (.github/workflows/ci.yml:851-852) only rustfmt-checks lib_part*.rs explicitly, so ~23.7k test lines that cargo fmt checked before this PR are now unchecked. The bodies also keep their old 4-space mod indentation (e.g. tests/mcp_tests.rs:2 '    use super::*;'), so they cannot be added to the rustfmt line as-is: rustfmt would flag every line. Fix: use the STORY-770 pattern named in the plan (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md §6: '#[cfg(test)] #[path = "tests/NAME.rs"] mod NAME;', as in burndown_run.rs:275), e.g. '#[cfg(test)] #[path = "tests/mcp_tests.rs"] mod tests;', and dedent each moved file by one level. The module paths (crate::mcp::tests, etc.) and parent-private access through use super::* stay the same, and cargo fmt reaches the files again.
+    2. MINOR acceptance evidence missing: TASK-3424 asks for the before/after test counts and a targeted cargo test per moved module, but the PR body has only the seat-publish boilerplate. The reviewer counted statically: 256+85+117+74+157=689 #[test]/#[tokio::test] attributes before and 689 after. Add the counts and the targeted-test evidence to the PR body.
+    3. COSMETIC: each moved file starts with a column-0 '// trace:TASK-3424 | ai:codex' line followed by 4-space-indented content. This goes away with the dedent in finding 1; otherwise put the trace at the include stanza.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T22:44:08.131227476Z
+  modified_at: 2026-11-07T22:44:08.131227476Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
