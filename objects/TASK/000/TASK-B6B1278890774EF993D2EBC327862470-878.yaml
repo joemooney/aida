@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T22:46:10.680752105Z
+modified_at: 2026-11-07T22:46:17.347479432Z
 req_type: Task
 tags:
 - architecture
@@ -387,6 +387,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes for prior findings 2-7 are present and correct (ended-drain, socket-close cancellation with SIGKILL+reap+retain, attach-subcommand refusal + test, production entry refusals, CLI logs/attach test, retention docs); gates (required-live) and contracts now green, but CI cli-0 and lib-1 are red at 6c5d01f while main at the same base 47e379a is green on both shards.. No triage reason was given.'
   created_at: 2026-11-07T22:46:10.680749995Z
   modified_at: 2026-11-07T22:46:10.680749995Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b830-ef64-7e70-ad73-7625391aa931
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3628):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6c5d01f354d7
+    Recorded: 2026-11-07T22:40:30.950511986+00:00
+    Findings:
+    1. BLOCKING (CI): run 42420084831 at 6c5d01f fails CI (cli-0) job 128546514040 and CI (lib-1) job 128546513767 ('Run tests', exit 1). main CI run 42420067746 at the merge base 47e379ad6e4 passes cli-0 and lib-1, so both failures are PR-caused. The reviewer sandbox cannot download job logs (blob host denied), so the failing test names are not known. The handoff says the runtime/command regressions were never executed locally (900s lane timeouts, overlay-stale). Likely candidates, unconfirmed: cli-0 = task_3219_background_logs_and_attach_commands (aida-cli/tests/bug_1502_format_json_audit.rs:912) or the other bug_1502 audit rows; lib-1 = supervisor_cancellation_closes_socket_and_reaps_before_cleanup (agent_claude_background.rs:410), task_3219_background_entry_refuses_before_setup_and_native_argv or task_3219_background_attach_argv_refuses_subcommand_preserves_prompt (containment/tests/launch_tests.rs). Get the names from the job logs, fix them, and run each one with a targeted cargo test before pushing. lib-0, cli-1, rest, contracts and gates (including the required-live count) are green.
+    2. minor (error masking): dispatch_with_helper (agent_claude_background.rs:194-206) calls cancel_supervisor(...)? on the error path. A failing try_wait/kill/wait then replaces the original refusal (for example 'background supervisor refused before release: ...') with a cleanup error, and the operator loses the real reason. Keep the original error and attach the cleanup failure as context.
+    3. minor (containment/terminal hygiene): aida agent logs/attach (agent_claude_background.rs:360-376) copy output.log, which the untrusted contained worker writes, raw to the operator's stdout. A contained worker can send CSI/OSC sequences (OSC 52 clipboard write, title or screen spoofing) into the host terminal. Strip or escape control sequences when stdout is a TTY, or document this as an accepted delta with an advisor ruling.
+    4. minor (test gap, AC3): task_3219_background_entry_refuses_before_setup_and_native_argv proves native byte-identity only for build_agent_new_bg_command with a hand-built '--bg' default_args. It does not exercise the changed agent_new_claude guard 'if bg && !(contained && claude_uses_contained_wrapper)' (agent_launch.rs:2717) or the widened _wrapper_composition scope (agent_launch.rs:2686) with the opt-in unset. Add an assertion that agent_new_claude still pushes --bg when the opt-in is unset.
+    5. cosmetic: launch/control.rs:16. Inserting detach_with_socket under the existing '/// Only phase-driver unit fixtures may inject a coordinating executable.' doc comment moved that doc onto detach_with_socket, so control_child_for_test has none. Move the comment back above control_child_for_test and give detach_with_socket and background_print their own docs.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T22:46:17.188823045Z
+  modified_at: 2026-11-07T22:46:17.188823045Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
