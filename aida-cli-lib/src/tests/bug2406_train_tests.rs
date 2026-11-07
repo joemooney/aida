@@ -910,6 +910,57 @@ fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() 
     assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
 }
 
+// trace:BUG-2474 | ai:codex
+#[test]
+fn bug_2474_train_admits_newer_pr_approval_over_same_head_spec_refusal() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let head = f.records[0]["reviewed_sha"].as_str().unwrap();
+    bug2438_ledger(&f, head, &f.records[0]);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("newer same-head approval must admit train: {e:#}"));
+    assert_eq!(calls(f.root()).len(), 1);
+}
+
+// trace:BUG-2474 | ai:codex
+#[test]
+fn bug_2474_train_refuses_newer_same_head_spec_refusal_after_pr_approval() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let head = f.records[0]["reviewed_sha"].as_str().unwrap();
+    bug2438_ledger(&f, head, &f.records[0]);
+    bug2438_refuses(
+        &f,
+        "newer same-head refusal",
+        "no approval recorded at its head",
+        || {
+            let refusal = json!({"verdict":"request-changes", "reviewed_sha":head,
+            "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"later reviewer"});
+            ledger::store::append_one(
+                f.root(),
+                ledger::event::verdict_event(
+                    f.root(),
+                    ledger::ChangeKey::pr(11),
+                    refusal.as_object().unwrap(),
+                    Some(&ledger::GateSpec::with_key(
+                        "BUG-b6b1278890774ef993d2ebc327862470-173",
+                        None,
+                    )),
+                ),
+            )
+            .unwrap();
+        },
+    );
+}
+
 #[test]
 fn bug2406_retry_refresh_refuses_changed_source_without_second_transport() {
     if crate::test_env::run_path_isolated_test() {

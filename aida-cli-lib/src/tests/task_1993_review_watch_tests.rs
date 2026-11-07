@@ -38,6 +38,35 @@ fn write_verdict(path: &Path, value: &serde_json::Value) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
 }
 
+// trace:BUG-2472 | ai:codex
+#[test]
+fn bug2472_train_changes_never_reach_review_admission_and_report_once() {
+    let (_temp, store) = fixture();
+    let mut train = change(3521, 1, false);
+    train.head_branch = Some(format!("{}20261106-1", crate::pr_train::BRANCH_PREFIX));
+    // Train exclusion must not need overlap probes or depend on the title.
+    train.overlap = None;
+    let mut gitlab_train = train.clone();
+    gitlab_train.gitlab = true;
+    let mut ordinary = change(3522, 2, false);
+    ordinary.head_branch = Some("fix/train-handling".into());
+    let mut reported = BTreeSet::new();
+    for head in [1, 2] {
+        train.head = format!("{head:040x}");
+        let selected = reviewable_changes(
+            vec![train.clone(), gitlab_train.clone(), ordinary.clone()],
+            &mut reported,
+        );
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].id, ordinary.id);
+    }
+    assert_eq!(reported, BTreeSet::from([train.key(), gitlab_train.key()]));
+    assert!(store.load().unwrap().entries.is_empty());
+    // Ordinary work still reserves capacity, while the train leaves no attempt.
+    dispatch(select(&store, &ordinary, None, 2).unwrap());
+    assert!(!store.load().unwrap().entries.contains_key(&train.key()));
+}
+
 // trace:TASK-1993.ac9ef854 | ai:claude
 #[test]
 fn task1993_pending_ci_dispatches_with_receipt_before_work() {
