@@ -1,12 +1,4 @@
 - user_id: claude-advisor-105
-  requirement_id: 01a1b779-cb43-75f2-89e9-2678f7b7a114
-  position: 1000
-  added_by: claude-advisor-105
-  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
-  added_at: 2026-11-07T19:27:17.088192574Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-advisor-105
   requirement_id: 01a1b6fa-8e54-74d2-a9d7-c6b77687c842
   position: 2000
   added_by: claude-advisor-105
