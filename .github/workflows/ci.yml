@@ -898,6 +898,20 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_git_maintenance_ratchet.py
 
+      # Exact sites, not per-directory exemptions. trace:STORY-2538 | ai:codex
+      - name: ExecContext environment ratchet
+        if: matrix.shard == 'gates'
+        env:
+          EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          python3 -m unittest tests/test_exec_context_ratchet.py
+          if [ -n "$EXEC_CONTEXT_BASE" ] && [ "$EXEC_CONTEXT_BASE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$EXEC_CONTEXT_BASE"
+            python3 scripts/check-exec-context.py --base "$EXEC_CONTEXT_BASE"
+          else
+            python3 scripts/check-exec-context.py
+          fi
+
       # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
       - name: Store writer inventory ratchet
         if: matrix.shard == 'gates'
