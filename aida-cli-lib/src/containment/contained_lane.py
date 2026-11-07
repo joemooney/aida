@@ -255,9 +255,75 @@ def lane_args(argv):
             json.loads(argv[5]), json.loads(argv[6]), argv[7:])
 
 
+# Interactive provenance queries run only after the host accepts the receipt.
+# The child has private stdio and no seat/identity selectors. Match the legacy
+# two-second / 257-byte probe, keeping the group leader unreaped through cleanup.
+# trace:TASK-3219 | ai:codex
+def interactive_harness_version(program):
+    import unicodedata, signal
+    # Preserve an unreaped group leader until cleanup; auto-reaping would
+    # invalidate that PID reservation. An unusual disposition yields unknown.
+    if signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        return None
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith('AIDA_') or k in ('AIDA_CONTAINED', 'AIDA_CONTAINMENT_POSTURE')}
+    process = None
+    value = None
+    try:
+        process = subprocess.Popen([program, '--version'], env=env,
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, start_new_session=True)
+        os.set_blocking(process.stdout.fileno(), False)
+        end, data, eof = time.monotonic() + 2, b'', False
+        while time.monotonic() < end:
+            try:
+                chunk = os.read(process.stdout.fileno(), 258)
+                eof = not chunk
+                data += chunk
+                if len(data) > 257:
+                    break
+            except BlockingIOError:
+                pass
+            exited = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+            if eof and exited is not None:
+                value = data
+                break
+            time.sleep(0.01)
+    except (OSError, ValueError):
+        pass
+    finally:
+        if process is not None:
+            try:
+                os.killpg(process.pid, 9)
+            except ProcessLookupError:
+                pass
+            status = process.wait()
+            process.stdout.close()
+            if status != 0:
+                value = None
+    if value is not None:
+        try:
+            value = value.decode('utf-8').strip()
+            if value and len(value.encode('utf-8')) <= 256 and not any(
+                    unicodedata.category(c) == 'Cc' for c in value):
+                return value
+        except UnicodeError:
+            pass
+    return None
+
+
 def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, nested_userns, argv):
     # broker_fd < 0 exists only for the test-only positive-control lane, which
     # Rust can request solely under cfg(test). trace:TASK-2707 | ai:claude
+    # A private PTY is supplied only as stdio; bwrap keeps --new-session and /dev.
+    # Claim it inside the lane, never the host's controlling terminal.
+    # trace:TASK-3219 | ai:codex
+    if os.environ.get('AIDA_HEADLESS') == '0':
+        require(os.isatty(0) and os.isatty(1) and os.isatty(2), 'private PTY required')
+        import fcntl, termios
+        if os.getsid(0) != os.getpid():
+            os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
     broker = socket.socket(fileno=broker_fd) if broker_fd >= 0 else None
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -315,4 +381,9 @@ def contained_main(broker_fd, proxy_fd, connector_fd, port, preflight, nested_us
     os.write(broker.fileno(), b'preflight-v1')
     require(broker.recv(32) == b'exec-v1', 'receipt acceptance refused')
     broker.close()
+    if os.environ.get('AIDA_HEADLESS') == '0':
+        os.environ.pop('AIDA_HARNESS_VERSION', None)
+        version = interactive_harness_version(argv[0])
+        if version is not None:
+            os.environ['AIDA_HARNESS_VERSION'] = version
     os.execve(argv[0], argv, dict(os.environ))
