@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-324
 agreed_id: STORY-2326
 title: 'One agent launcher: LaunchContext + spawn_agent with an env-clear allowlist and declared sandbox resources'
 description: 'Regroup target 3, 2026-11-02. Build the context once (seat, validated grant, containment posture, worktree, vendor). Every agent spawn goes through spawn_agent, which clears the environment and sets an allowlist; a ratchet forbids other spawn sites. The containment profile declares cargo slots, sccache and the target directory, so lanes can run the LIGHT gate. Slice by vendor; high risk. Evidence: TASK-1749, TASK-1758, TASK-1788, TASK-1333, STORY-1486, BUG-1669, TASK-2772. Sketch-first; advisor signoff required.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T15:48:52.286652214Z
+modified_at: 2026-11-07T15:53:42.350420332Z
 req_type: Story
 tags:
 - architecture
@@ -1196,6 +1196,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b6b7-34ce-71a3-9648-2df6983c2546
+  author: aida-session-start
+  timestamp: 2026-11-07T15:53:42.350413876Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
