@@ -717,6 +717,11 @@ also retain their attempt diagnostic. Watch-level failures, such as an invalid
 grant or unusable shared state, still exit nonzero.
 <!-- trace:BUG-2471 | ai:codex -->
 
+Landing PRs with a `train/` head branch are excluded before review probes or
+reservations: their members are reviewed individually. The watcher logs
+`train PR: not reviewed` once per change during a watcher run.
+<!-- trace:BUG-2472 | ai:codex -->
+
 The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
 per-command timeouts; the watcher avoids unbounded version-detection probes.
 Initial root resolution and later probes clear ambient Git routing variables.

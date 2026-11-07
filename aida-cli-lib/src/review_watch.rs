@@ -2160,6 +2160,7 @@ pub(crate) fn run_with_program(
         eprintln!("review-watch: removed {swept} leaked probe ref(s)");
     }
     let mut children = Vec::<Dispatcher>::new();
+    let mut reported_trains = BTreeSet::new();
     loop {
         children.retain_mut(|d| match d.child.try_wait() {
             Ok(Some(status)) => {
@@ -2210,23 +2211,55 @@ pub(crate) fn run_with_program(
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
-        watch_changes(&store, changes, |change| {
-            watch_change(
-                &root,
-                &repo,
-                &store,
-                args,
-                &mut children,
-                &authors,
-                change,
-                program,
-            )
-        })?;
+        watch_changes(
+            &store,
+            reviewable_changes(changes, &mut reported_trains),
+            |change| {
+                watch_change(
+                    &root,
+                    &repo,
+                    &store,
+                    args,
+                    &mut children,
+                    &authors,
+                    change,
+                    program,
+                )
+            },
+        )?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Train members were reviewed at their own heads. Exclude the landing PR
+// before probes, stale-author updates, reservations or reviewer spawning.
+// Keep diagnostics once per change for this watcher, across polling passes.
+// trace:BUG-2472 | ai:codex
+fn reviewable_changes(
+    changes: Vec<forge::Change>,
+    reported_trains: &mut BTreeSet<String>,
+) -> Vec<forge::Change> {
+    changes
+        .into_iter()
+        .filter(|change| {
+            if change
+                .head_branch
+                .as_deref()
+                .is_some_and(|branch| branch.starts_with(crate::pr_train::BRANCH_PREFIX))
+            {
+                let key = change.key();
+                if reported_trains.insert(key.clone()) {
+                    eprintln!("{key}: train PR: not reviewed");
+                }
+                false
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 // A transient synchronization refusal skips only this pass. `--once` retains
