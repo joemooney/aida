@@ -968,7 +968,13 @@ fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
     let value: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(value["rounds"][0]["recorded_by"], "reviewer-a");
     assert_eq!(value["rounds"][0]["verdict"], "approved");
-    assert!(verdict_conflict_for_current_sha(&body).is_some());
+    // The dated later refusal supersedes the approval, while retaining it
+    // for audit. Undated independent disagreement remains covered above.
+    assert_eq!(verdict_conflict_for_current_sha(&body), None);
+    assert_eq!(
+        reconcile_artifacts_for_sha([body.as_str()], "ac772eaca9").unwrap(),
+        Some(VerdictKind::RequestChanges)
+    );
 }
 
 // trace:BUG-1508 | ai:claude
@@ -2632,4 +2638,107 @@ fn task_1951_verdict_mtime_reads_metadata_only() {
     assert!(verdict_file_modified(&file).is_some());
     std::fs::hard_link(&file, tmp.path().join("other-link")).unwrap();
     assert!(verdict_file_modified(&file).is_none());
+}
+
+// All single-artifact consumers must honor the same ordered rounds as the
+// corpus/train gate, and must not use an out-of-bounds clock for supersession.
+// trace:TASK-2964 | ai:codex
+#[test]
+fn task2964_chronology_agrees_across_verdict_surfaces() {
+    use crate::auto_complete::{ReviewerOutcome, Verdict};
+    const HEAD: &str = "ac772eaca9d389fa762a232156df996023bfdf7a";
+    let tmp = TempDir::new().unwrap();
+    let path = verdict_path(tmp.path(), "PR-2964");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let round = |word: &str, reviewer: &str, at: &str| {
+        serde_json::json!({
+            "verdict": word, "reviewed_sha": HEAD,
+            "recorded_by": reviewer, "recorded_at": at
+        })
+    };
+    let t1 = "2026-01-01T00:00:00Z";
+    let t2 = "2026-01-01T00:01:00Z";
+    for (current_word, retained_word, current_at, retained_at, expected) in [
+        ("approved", "request-changes", t2, t1, Verdict::Approved),
+        (
+            "request-changes",
+            "approved",
+            t2,
+            t1,
+            Verdict::RequestChanges,
+        ),
+        // The selected outcome must be used even if the top-level round is
+        // older; simply removing the old conflict check is insufficient.
+        (
+            "approved",
+            "request-changes",
+            t1,
+            t2,
+            Verdict::RequestChanges,
+        ),
+        ("request-changes", "approved", t1, t2, Verdict::Approved),
+    ] {
+        let mut body = round(current_word, "reviewer-b", current_at);
+        let retained = round(retained_word, "reviewer-a", retained_at);
+        body["rounds"] = serde_json::json!([retained]);
+        let body = body.to_string();
+        assert_eq!(verdict_conflict_for_current_sha(&body), None);
+        let kind = reconcile_artifacts_for_sha([body.as_str()], HEAD)
+            .unwrap()
+            .unwrap();
+        assert_eq!(kind.approves(), expected == Verdict::Approved);
+        assert_eq!(
+            crate::phase_gates::outcome_of_verdict_body(&body).unwrap(),
+            ReviewerOutcome::Verdict(expected)
+        );
+        std::fs::write(&path, &body).unwrap();
+        assert_eq!(
+            crate::phase_gates::read_verdict_file_for_head_since(&path, Some(HEAD), None).unwrap(),
+            ReviewerOutcome::Verdict(expected)
+        );
+    }
+
+    let future = (chrono::Utc::now() + chrono::Duration::days(365)).to_rfc3339();
+    let approval = round("approved", "reviewer-a", &future);
+    let refusal = round("request-changes", "reviewer-b", t2);
+    for (current, retained) in [(&refusal, &approval), (&approval, &refusal)] {
+        let mut body = current.clone();
+        body["rounds"] = serde_json::json!([retained]);
+        let body = body.to_string();
+        assert!(reconcile_artifacts_for_sha([body.as_str()], HEAD).is_err());
+        assert!(verdict_conflict_for_current_sha(&body).is_some());
+        assert!(crate::phase_gates::outcome_of_verdict_body(&body).is_err());
+        std::fs::write(&path, &body).unwrap();
+        assert!(
+            crate::phase_gates::read_verdict_file_for_head_since(&path, Some(HEAD), None).is_err()
+        );
+        assert!(!crate::human::pr_has_approved_verdict(tmp.path(), 2964));
+    }
+    // A subsequent legitimate approval can resolve the refusal even when
+    // the old future-stamped approval remains in the audit history.
+    let mut later = round("approved", "reviewer-c", "2026-01-01T00:02:00Z");
+    later["rounds"] = serde_json::json!([approval, refusal]);
+    let later = later.to_string();
+    assert_eq!(
+        reconcile_artifacts_for_sha([later.as_str()], HEAD).unwrap(),
+        Some(VerdictKind::Approved)
+    );
+    assert_eq!(verdict_conflict_for_current_sha(&later), None);
+    assert_eq!(
+        crate::phase_gates::outcome_of_verdict_body(&later).unwrap(),
+        ReviewerOutcome::Verdict(Verdict::Approved)
+    );
+    std::fs::write(&path, &later).unwrap();
+    assert_eq!(
+        crate::phase_gates::read_verdict_file_for_head_since(&path, Some(HEAD), None).unwrap(),
+        ReviewerOutcome::Verdict(Verdict::Approved)
+    );
+    // Alias/key enumeration order cannot restore a future approval either.
+    for bodies in [
+        [approval.to_string(), refusal.to_string()],
+        [refusal.to_string(), approval.to_string()],
+    ] {
+        assert!(reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), HEAD).is_err());
+        assert!(corpus_hold_at_head(&bodies, Some(HEAD), false).is_some());
+    }
 }

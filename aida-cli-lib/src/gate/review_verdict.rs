@@ -758,66 +758,18 @@ pub(crate) fn same_reviewed_sha(a: &str, b: &str) -> bool {
 /// Explain an irreconcilable pair of independent verdicts at the artifact's
 /// current reviewed commit. Historical disagreement at an older commit is an
 /// audit trail, not a veto on a later review.
-// trace:BUG-1581 | ai:codex
+// trace:BUG-1581 trace:TASK-2964 | ai:codex
 pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
-    let serde_json::Value::Object(obj) = serde_json::from_str(body).ok()? else {
-        return None;
-    };
-    let current_sha = round_sha(&obj)?;
-    let mut rounds: Vec<&JsonObj> = vec![&obj];
-    rounds.extend(
-        obj.get("rounds")
-            .and_then(|v| v.as_array())
-            .into_iter()
-            .flatten()
-            .filter_map(|v| v.as_object()),
-    );
-
-    let mut approvals = Vec::new();
-    let mut blockers = Vec::new();
-    for round in rounds {
-        let Some(_) = round_sha(round).filter(|sha| same_reviewed_sha(sha, &current_sha)) else {
-            continue;
-        };
-        let reviewer = round
-            .get("recorded_by")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("unknown reviewer")
-            .to_string();
-        match VerdictKind::parse(
-            round
-                .get("verdict")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default(),
-        ) {
-            VerdictKind::Approved => approvals.push(reviewer),
-            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
-            VerdictKind::Unknown => {}
-        }
-    }
-    approvals.sort();
-    approvals.dedup();
-    blockers.sort();
-    blockers.dedup();
-    let independent = approvals
-        .iter()
-        .any(|approved| blockers.iter().any(|blocked| approved != blocked));
-    if approvals.is_empty() || blockers.is_empty() || !independent {
-        return None;
-    }
-    Some(format!(
-        "conflicting review verdicts at {}: approved by {}; blocked by {}",
-        short_sha(&current_sha),
-        approvals.join(", "),
-        blockers.join(", ")
-    ))
+    let current_sha = parse_recorded_verdict(body)?.reviewed_sha?;
+    reconcile_artifacts_for_sha([body], &current_sha).err()
 }
 
 /// Reconcile every review recording from multiple artifacts at `current_sha`.
 /// The newest dated recording at that head supersedes older dated verdicts
 /// across PR/spec aliases. Tied or undated opposing recordings still conflict.
+/// Timestamps beyond the five-minute clock-skew ceiling cannot establish
+/// supersession; keep those recordings unordered rather than trusting a
+/// saturated timestamp to erase an opposing review.
 /// Retained rounds are validated before ordering: ill-formed or unattributed
 /// rounds remain integrity errors that a later approval cannot hide.
 // trace:BUG-1581 | ai:codex
@@ -825,6 +777,11 @@ pub fn reconcile_artifacts_for_sha<'a>(
     bodies: impl IntoIterator<Item = &'a str>,
     current_sha: &str,
 ) -> Result<Option<VerdictKind>, String> {
+    // trace:TASK-2964 | ai:codex
+    // Take one ceiling per reconciliation. A future stamp beyond this bound
+    // is uncertain chronology, just like a missing/invalid stamp. Merely
+    // sorting its clamped value would still let it outrank a later refusal.
+    let latest_allowed = chrono::Utc::now() + chrono::Duration::minutes(5);
     let mut at_head = Vec::new();
 
     for body in bodies {
@@ -878,8 +835,9 @@ pub fn reconcile_artifacts_for_sha<'a>(
             let recorded_at = RECORDED_AT_KEYS
                 .iter()
                 .find_map(|key| recording.get(*key).and_then(|v| v.as_str()));
-            let timestamp =
-                recorded_at.and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
+            let timestamp = recorded_at
+                .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                .filter(|at| *at <= latest_allowed);
             at_head.push((
                 kind,
                 reviewer.unwrap_or("unknown reviewer").to_string(),

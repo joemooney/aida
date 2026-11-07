@@ -288,9 +288,12 @@ For one PR at one head, verdict reconciliation uses the newest timestamped
 verdict across its PR key and associated spec keys. A later approval can
 supersede an earlier request for changes at that same head; a later refusal
 holds it again. Opposing verdicts with tied, missing or invalid timestamps
-remain unresolved, and malformed retained evidence still refuses. Review
+remain unresolved. Timestamps beyond the reader's five-minute clock-skew
+ceiling also remain unordered: capping a future approval must not let it erase
+a later refusal. Phase-3, drive and approval views use this same reconciliation,
+and malformed retained evidence still refuses. Review
 authority and other merge-hold clearance requirements continue to apply.
-<!-- trace:BUG-2474 | ai:codex -->
+<!-- trace:BUG-2474 trace:TASK-2964 | ai:codex -->
 
 `aida pr ship [N] --wait [SECS]` bounds drive ownership, registration, and
 CI settlement with one deadline. Bare `--wait` uses 300 seconds. Omit `--wait` for an unbounded wait. Pending state is printed

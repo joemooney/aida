@@ -797,24 +797,24 @@ pub(crate) fn read_verdict_file_since(
 pub(crate) fn outcome_of_verdict_body(
     body: &str,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
-    if let Some(current_sha) = crate::gate::review_verdict::parse_recorded_verdict(body)
+    // trace:TASK-2964 | ai:codex
+    // Select and validate through the same chronology as merge/train gates.
+    // Do not run a second, undated conflict policy or discard the selected
+    // outcome in favor of the top-level recording.
+    let reconciled = crate::gate::review_verdict::parse_recorded_verdict(body)
         .and_then(|recorded| recorded.reviewed_sha)
-    {
-        crate::gate::review_verdict::reconcile_artifacts_for_sha([body], &current_sha).map_err(
-            |reason| {
-                auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::NoVerdict,
-                    format!("{reason} — review evidence cannot be proven safe"),
-                )
-            },
-        )?;
-    }
-    if let Some(conflict) = crate::gate::review_verdict::verdict_conflict_for_current_sha(body) {
-        return Err(auto_complete::PhaseFailure::of(
-            auto_complete::FailureKind::NoVerdict,
-            format!("{conflict} — refusing to select a winner; reconcile the independent reviews"),
-        ));
-    }
+        .map(|current_sha| {
+            crate::gate::review_verdict::reconcile_artifacts_for_sha([body], &current_sha).map_err(
+                |reason| {
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::NoVerdict,
+                        format!("{reason} — review evidence cannot be proven safe"),
+                    )
+                },
+            )
+        })
+        .transpose()?
+        .flatten();
     let value: serde_json::Value = serde_json::from_str(body).map_err(|e| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
@@ -846,7 +846,20 @@ pub(crate) fn outcome_of_verdict_body(
                 "the verdict file has no `verdict` field",
             )
         })?;
-    auto_complete::Verdict::parse(raw)
+    let selected = match reconciled {
+        Some(crate::gate::review_verdict::VerdictKind::Approved) => "approved",
+        // Reconciliation groups both refusal kinds. Preserve the existing
+        // terminal rejection outcome when the current recording is rejected.
+        Some(crate::gate::review_verdict::VerdictKind::RequestChanges)
+            if auto_complete::Verdict::parse(raw) == Some(auto_complete::Verdict::Rejected) =>
+        {
+            "rejected"
+        }
+        Some(crate::gate::review_verdict::VerdictKind::RequestChanges) => "request-changes",
+        Some(crate::gate::review_verdict::VerdictKind::Rejected) => "rejected",
+        _ => raw,
+    };
+    auto_complete::Verdict::parse(selected)
         .map(auto_complete::ReviewerOutcome::Verdict)
         .ok_or_else(|| {
             auto_complete::PhaseFailure::of(

@@ -1055,8 +1055,9 @@ fn bug_2398_coordinator_codex_launch_keeps_delegated_seat() {
     assert!(!log.exists(), "a refused coordinator child must never exec");
 }
 
-// Actual supported recorder output, copied byte-for-byte to the PR key.
-// No attestation or verified-authority map is fabricated by this matrix.
+// Actual supported recorder output at the PR key, with an older refusal
+// retained for chronology coverage. No attestation or verified-authority map
+// is fabricated by this matrix.
 // trace:BUG-2398 | ai:codex
 fn assert_recorded_authority_boundaries(root: &Path, child_grant: &str, authorized: bool) {
     use crate::gate::{review_verdict as rv, ship};
@@ -1065,7 +1066,17 @@ fn assert_recorded_authority_boundaries(root: &Path, child_grant: &str, authoriz
     let head = v.reviewed_sha.as_deref().unwrap();
     let pr_path = rv::verdict_path(root, "PR-2398");
     std::fs::create_dir_all(pr_path.parent().unwrap()).unwrap();
-    std::fs::write(&pr_path, &body).unwrap();
+    // trace:TASK-2964 | ai:codex
+    // Exercise the real positive-authority view with an older independent
+    // refusal at this head. Its retained audit must not veto this approval.
+    let mut pr_body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let earlier = chrono::DateTime::parse_from_rfc3339(v.recorded_at.as_deref().unwrap()).unwrap()
+        - chrono::Duration::seconds(1);
+    pr_body["rounds"] = serde_json::json!([{
+        "verdict": "request-changes", "reviewed_sha": head,
+        "recorded_by": "earlier-independent-reviewer", "recorded_at": earlier.to_rfc3339()
+    }]);
+    std::fs::write(&pr_path, pr_body.to_string()).unwrap();
     let mut req = aida_core::Requirement::new("fixture".into(), "desc".into());
     req.spec_id = Some("TASK-1".into());
 
