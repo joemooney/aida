@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T09:26:34.234144026Z
-modified_at: 2026-11-07T09:26:34.234144026Z
+modified_at: 2026-11-07T13:57:38.546562816Z
 req_type: Task
 tags:
 - carried-from:TASK-2964
 - finding-hash:02cb13f4
 - from-review:PR-3572
 - kind:carried-forward
+comments:
+- id: 01a1b64c-f272-7510-a1bf-b95bd75868d7
+  author: joe
+  content: 'ADVISOR 2026-11-07 07:00: accepted as non-blocking at the approved review (operator ruling 2026-10-28: non-blocking findings are ruled once, at review). No follow-up. The requested audit trail is now recorded as a comment on BUG-1581.'
+  created_at: 2026-11-07T13:57:38.546562816Z
+  modified_at: 2026-11-07T13:57:38.546562816Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b56b-f939-72b3-b361-2f19f4b8df09
   author: joe
