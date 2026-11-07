@@ -1,0 +1,41 @@
+id: 01a1b4c4-4b32-7452-866c-24827da5ceda
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-926
+title: 'Repeated unchanged review findings: TASK-3223'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3223; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-3223):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 621c83395e48
+  Recorded: 2026-11-07T04:20:24.784000864+00:00
+  Findings:
+  1. PR title is still '[AI:codex] chore: STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary (TASK-3223)'. GitHub's squash subject defaults to the PR title, and the trailing closing (TASK-3223) auto-completes TASK-3223 at merge with zero implementation. Retitle to exactly '[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)' (round-2 finding 1, still unaddressed; host/PR action).
+  2. Branch history still includes 1baca620b4a5 with the closing 'chore: ... (TASK-3223)' subject, and 0c650b3d5e7 and 621c83395e4 share an identical subject. GitHub's default squash body lists every commit subject, which would carry the closing trailer into main. Either rewrite the branch to a single Refs-only docs(plans) commit, or have the merger set an empty or Refs-only squash body explicitly (round-2 finding 2, unaddressed).
+  3. The PR body is only the bare 'Published from seat ...' line. It needs the documentation-only / unapproved-v1 / TASK-3223-stays-open statement that TASK-3223 comment 6 drafted for the host, so a merger sees the publication constraints (empty squash body, no completion, hold preserved). Prior finding 4 moved those notes out of the doc and into the PR body, but they never reached the PR body.
+  4. No independent advisor signoff is recorded on TASK-3223 for the redo-transaction design, canonical reader/writer recovery admission, or the multi-root claim/queue participant protocol (TASK-3225 comment 0 amendment 2; repo rule that architecture needs advisor signoff). merge-hold-gate fails at 621c83395e48 for this reason. Only the human/advisor 'aida merge-hold clear 3563' path can clear it; a reviewer verdict cannot.
+  5. TASK-3223 implementation acceptance is unmet, which is expected for a sketch. Verified at head: service.py:11 MUTATION_VERBS is still ('session_probe','request_status'); contained_boundary.rs:136 contained_store_write_paths still grants store/cache; there is no lane-private cache, no gated mediated profile, and no stale-base / concurrent-mutation / persist-before-reply tests. TASK-3223 must stay open, and this PR may land only as Refs-only.
+  6. CI 'contracts' and 'gates' jobs were still pending at 621c83395e48 when this review ran. Confirm they are green before any eventual merge.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T06:48:45.618710587Z
+modified_at: 2026-11-07T06:48:45.618710587Z
+req_type: Task
+tags:
+- from-advisor:TASK-3223
+- kind:observation
+- linked:TASK-3223
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b11ebbd4c25
+  vendor: claude
+  session: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
