@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T12:50:41.514748622Z
+modified_at: 2026-11-07T12:50:44.102521383Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -62,6 +62,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 merge-lock ProcIdentity migration resolves all five prior findings (boot-clock deadline, legacy migration + verdict/repair surfacing, shell consults shared judge, shadow release, bounded guard waits); blocked on one CI wiring regression: the release PR-flow fixture now requires a built aida binary but stays tiered fast and runs before any build on docs-only PRs.. No triage reason was given.'
   created_at: 2026-11-07T12:50:41.514747273Z
   modified_at: 2026-11-07T12:50:41.514747273Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b60f-b09d-7932-a72f-4e6d1fbfcdb8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3364):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b3df799afbc7
+    Recorded: 2026-11-07T12:47:34.531966876+00:00
+    Findings:
+    1. MAJOR (CI regression): tests/test_release_pr_flow.sh:26-29 now hard-exits 'Build aida first' unless target/debug/aida (or AIDA_TEST_BIN) exists, but the gate is still tiered fast (scripts/ci-gate-tiers.toml:97, 'needs no cargo BUILD') and its CI step (.github/workflows/ci.yml:537-540, 'Shell only, so it runs on every PR', if: matrix.shard == 'gates' with no full_ci condition) runs before 'Minimal aida-cli build for docs-only guards' (ci.yml:735). On every docs-only PR full_ci is false, so 'Build all packages' (ci.yml:169) is skipped and the gates shard fails at this step; 'make check-ci-fast' in a fresh worktree likewise fails, or silently runs against a stale target/debug/aida lacking --check-file. Fix: reclassify the gate as full in ci-gate-tiers.toml and make the CI step run only after a binary exists (e.g. gate on full_ci, or move it after the minimal build and pass AIDA_TEST_BIN), keeping the tier comment's binary-dependency rule true.
+    2. MINOR (misleading fail-closed diagnostic): scripts/release.sh:186 runs 'aida merge-lock --check-file ... 2>/dev/null || return 0', so an older aida on PATH (no --check-file) or any helper error reads as a live holder, and release.sh:294-300 then tells the operator 'an aida pr ship (or other merger) holds the merge-lease ... wait for it to finish'. Likewise a pre-upgrade record with no deadline fields is retained forever by the shell (it never migrates), and the refusal does not name 'aida merge-lock --migrate-legacy'. Fix: distinguish helper-unavailable from retained in lease_is_live and print the helper error, and include the reported holder_verdict/repair_hint (or the --migrate-legacy step) in the refusal text.
+    3. COSMETIC: merge_lock.rs:388 inspect_file reports lease_state 'Retained' together with reclaimable:true for an incomplete record past its 30s grace (verdict ForeignUnknown, stale reason 'incomplete lease record...'); report a distinct state (e.g. 'Incomplete'/'Expired'). merge_hold_cmd.rs:79-82 text status prints 'holder_verdict=Alive()' with empty parentheses for live holders.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T12:50:43.997503208Z
+  modified_at: 2026-11-07T12:50:43.997503208Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
