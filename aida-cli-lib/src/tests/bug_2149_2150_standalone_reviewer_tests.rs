@@ -12,6 +12,7 @@
 //!   on the same PR is still refused.
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+// trace:BUG-2476 | ai:codex
 
 const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -130,6 +131,8 @@ fn run_mock_reviewer_in(
         (crate::gate::seat_authority::GRANT_ENV, None),
         // The launcher is uncontained: it is the gate ledger's writer.
         ("AIDA_CONTAINED", None),
+        // The isolated fixture owns its temporary reviewer worktree.
+        ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
     ]);
     // Headless launch resolves its grant root independently of the arguments
     // passed to the standalone collector; pin that root to this fixture too.
