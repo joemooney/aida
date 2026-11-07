@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T18:15:31.049970162Z
+modified_at: 2026-11-07T18:15:35.078866602Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-5 are addressed (foreground-only restore, terminal lending to continuations, controlling-tty implementer/nested prompt test, distinct harness-terminated handler, budget comment), but CI (gates) is red at 1203365: the new test adds an unledgered os.environ site that trips the ExecContext ratchet.. No triage reason was given.'
   created_at: 2026-11-07T18:15:31.049967614Z
   modified_at: 2026-11-07T18:15:31.049967614Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b739-193c-7e01-aff7-c32474256027
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2485):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1203365375ea
+    Recorded: 2026-11-07T18:10:41.698989684+00:00
+    Findings:
+    1. MAJOR (CI red, caused by this PR) tests/test_containment_conformance.py:284: test_supervisor_restores_terminal_after_forced_child_cleanup calls c.launch_aida_continuation(script, Path('.'), dict(os.environ), ...). That is a new top-level os.environ site, and scripts/exec-context-legacy.json has no entry for it (the ledger lists only the six pre-existing functions at lines 1141-1146). CI (gates) step 78 'ExecContext environment ratchet' fails at 1203365, and check_growth forbids growing the ledger. Fix: pass an explicit env that does not read os.environ, e.g. {'PATH': os.defpath}, or reuse a ledgered helper. Do not add a ledger entry. The dict(os.environ) uses at lines 317/319/330/335 are inside f-string sources run in subprocesses, so they are not AST sites. Confirm with: python3 scripts/check-exec-context.py --base origin/main.
+    2. MINOR scripts/containment/conformance.py:612-617 and docs/internal/testing/containment-conformance.md:362-364: while the terminal foreground is lent to a continuation group, the operator's Ctrl+C reaches only that group, and the outer supervisor never sees it. During implementer entry the setup python dies with an uncaught KeyboardInterrupt traceback. During the vendor run, continue_aida exits without aida_refuse. In both cases the outer harness records 'aida-boundary-launch-refused' rather than an interruption. The doc claim 'the outer supervisor covers timeout, cancellation and SIGTERM exits' and the comment 'Every interrupted wait cleans the child' no longer describe the Ctrl+C path. Either have setup_aida and continue_aida treat KeyboardInterrupt as a recorded refusal such as 'harness-interrupted: SIGINT', or correct the doc and comment. Add a test that sends SIGINT to the foreground continuation group under the controlling-tty harness and asserts the terminal is restored and the recorded reason.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T18:15:34.972111794Z
+  modified_at: 2026-11-07T18:15:34.972111794Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
