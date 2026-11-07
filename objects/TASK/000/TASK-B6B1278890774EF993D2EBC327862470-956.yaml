@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T21:16:43.461219269Z
-modified_at: 2026-11-07T23:38:27.815661468Z
+modified_at: 2026-11-07T23:38:30.567429788Z
 req_type: Task
 tags:
 - carried-from:TASK-3365
 - finding-hash:a9d2042e
 - from-review:PR-3615
 - kind:carried-forward
+comments:
+- id: 01a1b860-bf27-7303-a70d-c22d67089d56
+  author: joe
+  content: 'Accepted as-is (advisor 2026-11-07): PR #3615 has merged; its body is history, and the fail-closed policy is recorded in the code comment and the spec comment.'
+  created_at: 2026-11-07T23:38:30.567429788Z
+  modified_at: 2026-11-07T23:38:30.567429788Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7e2-2cf6-7333-a4dc-186838719abd
   author: joe
