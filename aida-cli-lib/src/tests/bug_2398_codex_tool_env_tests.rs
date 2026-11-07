@@ -504,8 +504,10 @@ enum Finalization {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // STORY-2326: the fg/bg seat writes moved into launch::assign_seat; the
-    // 2 grant writes plus 5 launcher calls (2 spawn_agent, 3 assign_seat).
-    ("agent_launch.rs", 7, Finalization::PrepareLaunch(2)),
+    // 2 grant writes plus 6 launcher calls (2 spawn_agent, 4 assign_seat).
+    // TASK-3219: the extra seat assignment is Claude-wrapper-only; Codex
+    // retains the same finalization after all seat metadata is assigned.
+    ("agent_launch.rs", 8, Finalization::PrepareLaunch(2)),
     // STORY-2254: the detached Codex worker (one grant assignment, one
     // finalization, after its own grant/headless/identity assignments).
     (
@@ -1808,9 +1810,10 @@ fn role_flagged_as_unlisted(rel: &str, src: &str) -> bool {
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
-    // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 3
-    // assign_seat calls. trace:STORY-2326 | ai:claude
-    ("agent_launch.rs", 5, RoleRoute::LaunchInventory),
+    // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 4
+    // assign_seat calls (TASK-3219 adds the Claude-wrapper baseline).
+    // trace:STORY-2326 TASK-3219 | ai:codex
+    ("agent_launch.rs", 6, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
     // PR-B launcher calls are seat routes, even without a literal role write.
     // trace:STORY-2326 | ai:codex
