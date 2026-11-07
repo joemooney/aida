@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T17:26:54.275448088Z
+modified_at: 2026-11-07T17:31:21.278015417Z
 req_type: Story
 tags:
 - architecture
@@ -822,6 +822,12 @@ comments:
   modified_at: 2026-11-07T17:24:03.217095363Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b710-9b3e-7642-86eb-9ea4fa3694cb
+  author: joe
+  content: 'Round 8 implementation: shared exec/coordinator builder now marks wrapper-owned environments before spawn_agent. Site-level regression builds both commands under trusted claude="aida" and rejects ambient parent session/rotation/context transport, while explicit child leases remain accepted. Restore explicit purpose-removal checks for inheriting vendors; Claude snapshots prove env_clear, and seat-writer snapshots retain tombstones. Audit launch/spawn.rs four grant writes (Child, Lane, current-session restore, explicit current-session grant) and fix stale final-spawn inventory. Delete the per-change round-7 handoff document. HOST PR BODY REQUIRED: replace the declared-resource projection claim with: Known limitation: SandboxResources::child_env is projection plumbing only; spawn_agent passes resources=None and still projects parent cargo configuration, while the contained wrapper independently selects seat build environment and disables sccache. Keep: Known limitation: dropped environment keys are not reported; aida launch explain is deferred under the accepted advisor ruling. New-head green CI remains required after host publication; supervised merge hold remains human-gated. Local validation pending.'
+  created_at: 2026-11-07T17:31:21.278015417Z
+  modified_at: 2026-11-07T17:31:21.278015417Z
+  session_id: 01a1b70ae419
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
