@@ -11213,12 +11213,12 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            // Agy's argv never reads the host main.
-            match session::headless_vendor_args(
-                None, vendor, prompt, session_id, contained, model, None,
-            ) {
-                Ok(argv) => format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv)),
-                Err(err) => format!("{err:#}"),
+            // A manual paste is also a launch path: never offer the legacy
+            // bypass command without the shared wrapper's applied receipt.
+            // trace:TASK-3048 | ai:codex
+            match crate::launch::agy::AGY.require_conformance() {
+                Err(error) => format!("{error:#}"),
+                Ok(()) => "agy headless launch requires AIDA's shared wrapper".into(),
             }
         }
     }

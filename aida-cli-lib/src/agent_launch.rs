@@ -2584,6 +2584,12 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
     config: &AgentLaunchConfig,
 ) -> Result<()> {
     if !session::aida_contained_env()? {
+        // Final defaults and explicit bypass options are checked before a
+        // role, lease, worktree or registry row can be created.
+        // trace:TASK-3048 | ai:codex
+        if let Some(vendor) = session::HeadlessVendor::parse(config.agent_type) {
+            crate::containment::refuse_unreceipted_bypass(vendor.as_str(), &config.default_args)?;
+        }
         return Ok(());
     }
     let containable = session::HeadlessVendor::parse(config.agent_type)
@@ -2899,7 +2905,13 @@ pub(crate) fn agent_new_antigravity(
         delegate_seats: Vec::new(),
         agent_type: "antigravity",
         binary: "agy",
-        default_args: Vec::new(),
+        // Refuse the explicit legacy bypass before the role picker too.
+        // trace:TASK-3048 | ai:codex
+        default_args: if bypass_sandbox {
+            tool_bypass_flags("antigravity")
+        } else {
+            Vec::new()
+        },
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
         contained: false,
     })?;
