@@ -1693,7 +1693,7 @@ impl Cache {
         // unreadable. Now:
         // - the existing tables hold rows: DEFER the drop. Nothing is written
         //   here; the drop, schema apply, refill and stamps all commit in the
-        //   next rebuild's single transaction (see `rebuild_projection`).
+        //   next rebuild's single transaction (see `rebuild_with_redo`).
         //   Readers keep the old committed tables until then. The on-disk
         //   stamp/drift is left untouched, so any other process opening the
         //   cache re-detects the same pending migration.
@@ -2109,6 +2109,11 @@ impl Cache {
         self.set_meta(META_KEY_SOURCE_HEAD_SHA, sha)
     }
 
+    // trace:TASK-3223 | ai:codex
+    pub(crate) fn redo_generation(&self) -> Result<String> {
+        Ok(self.get_meta("redo_generation")?.unwrap_or_default())
+    }
+
     pub fn built_at(&self) -> Result<Option<String>> {
         self.get_meta(META_KEY_BUILT_AT)
     }
@@ -2166,7 +2171,7 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
-        self.rebuild_projection(store, source_head_sha, false, None)
+        self.rebuild_with_redo(store, source_head_sha, "", false, None)
     }
 
     /// The one rebuild transaction. TASK-1515: the rows, the hierarchy edges,
@@ -2177,10 +2182,11 @@ impl Cache {
     /// tables are dropped and recreated INSIDE the same transaction: a reader
     /// sees either the old tables or the fully rebuilt ones, never empty ones.
     // trace:TASK-1515 | ai:claude
-    fn rebuild_projection(
+    pub(crate) fn rebuild_with_redo(
         &self,
         store: &RequirementsStore,
         source_head_sha: &str,
+        redo_generation: &str,
         force_drop: bool,
         refresh_store: Option<&Path>,
     ) -> Result<usize> {
@@ -2258,7 +2264,15 @@ impl Cache {
                     // with the rows, including on filesystems with incoherent flock.
                     // trace:TASK-1526 | ai:codex
                     if let Some(store_path) = refresh_store {
-                        if !schema_migration_needed(&tx)
+                        let recorded_generation: Option<String> = tx
+                            .query_row(
+                                "SELECT value FROM cache_meta WHERE key = 'redo_generation'",
+                                [],
+                                |r| r.get(0),
+                            )
+                            .optional()?;
+                        if recorded_generation.as_deref().unwrap_or_default() == redo_generation
+                            && !schema_migration_needed(&tx)
                             && refresh_head_reached(&tx, source_head_sha, store_path)?
                         {
                             return Ok(tx.query_row(
@@ -2305,6 +2319,9 @@ impl Cache {
                     }
                     // TASK-1515: stamp freshness in the SAME transaction as the rows.
                     set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
+                    // The generation labels these exact rows, atomically with HEAD.
+                    // trace:TASK-3223 | ai:codex
+                    set_meta_on(&tx, "redo_generation", redo_generation)?;
                     set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
                     // trace:TASK-1527 | ai:claude
                     set_meta_on(
@@ -2342,13 +2359,14 @@ impl Cache {
     // Only freshness-driven rebuilds skip a projection another process has
     // already committed. Explicit `cache rebuild` remains an unconditional repair.
     // trace:TASK-1526 | ai:codex
+    #[cfg(test)]
     pub(crate) fn rebuild_for_refresh(
         &self,
         store: &RequirementsStore,
         head: &str,
         store_path: &Path,
     ) -> Result<usize> {
-        self.rebuild_projection(store, head, false, Some(store_path))
+        self.rebuild_with_redo(store, head, "", false, Some(store_path))
     }
 
     /// Force a schema reset before rebuilding from the authoritative store.
@@ -2368,7 +2386,7 @@ impl Cache {
     ) -> Result<usize> {
         // TASK-1515: the drop now commits with the refill, not before it.
         // trace:TASK-1515 | ai:claude
-        self.rebuild_projection(store, source_head_sha, true, None)
+        self.rebuild_with_redo(store, source_head_sha, "", true, None)
     }
 
     /// Apply an incremental refresh to `to_head` as ONE write transaction.
@@ -2388,6 +2406,7 @@ impl Cache {
         &self,
         to_head: &str,
         store_path: &Path,
+        redo_generation: &str,
         mut apply: F,
     ) -> Result<bool>
     where
@@ -2404,6 +2423,22 @@ impl Cache {
             self.read_only,
             || {
                 let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                // Validate the exact generation the caller read, while holding
+                // SQLite's write lock. A newer rebuild must not lend its stamp
+                // to rows from an older incremental reader.
+                // trace:TASK-3223 | ai:codex
+                let recorded_generation: Option<String> = tx
+                    .query_row(
+                        "SELECT value FROM cache_meta WHERE key = 'redo_generation'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                if recorded_generation.as_deref().unwrap_or_default() != redo_generation
+                    || super::redo::cache_generation(store_path)? != redo_generation
+                {
+                    return Ok(false);
+                }
                 // trace:TASK-1526 | ai:codex
                 if refresh_head_reached(&tx, to_head, store_path)? {
                     return Ok(true);
