@@ -1,0 +1,29 @@
+id: 01a1b397-49fb-7f52-b9c3-052f439672ff
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-911
+title: '[minor, non-blocking] docs/advanced/authority-and-seats.md:59 (generated into d…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-903, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking] docs/advanced/authority-and-seats.md:59 (generated into docs/showcase/authority.html:48 and search-data.js) still says 'No onward delegation. A child cannot delegate further.' directly under the refreshed figure, contradicting it and BUG-2467 behaviour; line 60 'A child grant shares its parent's expiry ... stops when the parent is revoked' should say grant chain / any ancestor. Fix the md bullets and rebuild the showcase.
+
+  PR: #3549
+  Reviewed sha: 0078f69a32eba21b22c7234b0f7328da36f88732
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T01:19:58.971135069Z
+modified_at: 2026-11-07T01:19:58.971135069Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-903
+- finding-hash:8dc4a1cd
+- from-review:PR-3549
+- kind:carried-forward
+filed_at:
+  code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
