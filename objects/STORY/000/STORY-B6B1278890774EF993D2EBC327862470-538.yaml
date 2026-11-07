@@ -1,0 +1,34 @@
+id: 01a1b493-c156-7f12-8acd-0893e609a19f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-538
+agreed_id: STORY-2615
+title: 'Review PR-3576: [AI:codex] fix: status_awaiting.rs keys on the display ID, so a label collision misclassifies an escalation (BUG-2477)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b472`) for branch `bug-b6b1278890774ef993d2ebc327862470-243`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3576>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-243` → `main`
+
+  ## Covers
+
+  - BUG-2477
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3576` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T05:55:44.598074888Z
+modified_at: 2026-11-07T05:55:44.598074888Z
+req_type: Story
+filed_at:
+  code_sha: 36fc675baec589c06c273135f0021eefcfe35db7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 36fc675baec
+  vendor: claude
+  session: 01a1b4721cd9
