@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-11-07T20:54:05.614909370Z
+modified_at: 2026-11-07T20:54:07.708207024Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
@@ -246,6 +246,13 @@ comments:
     Migrated condition: manual:joe
   created_at: 2026-11-07T20:27:37.655982956Z
   modified_at: 2026-11-07T20:27:37.655982956Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ca-405c-77b1-b121-29ba2566e158
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Subsumed by STORY-2326 (one spawn path); TASK-1327 completed.'
+  created_at: 2026-11-07T20:54:07.708207024Z
+  modified_at: 2026-11-07T20:54:07.708207024Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
