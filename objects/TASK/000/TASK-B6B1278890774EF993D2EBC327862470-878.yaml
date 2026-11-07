@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T21:34:22.870920366Z
+modified_at: 2026-11-07T21:34:29.246837702Z
 req_type: Task
 tags:
 - architecture
@@ -342,6 +342,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 AIDA-owned Claude background supervisor matches the signed sketch (detached supervisor, receipt-before-release, worker-bound child grant revoked at exit, native --bg unchanged when the opt-in is unset, resume still refused), but CI is red at 99baa40 (cli-0, rest, lib-1 Run tests; contracts CLI-manual drift guard) while main is green, and aida agent attach can drop the worker''s final output.. No triage reason was given.'
   created_at: 2026-11-07T21:34:22.870918671Z
   modified_at: 2026-11-07T21:34:22.870918671Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ef-32f9-7281-8356-0e1c0ed61dfa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3628):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 99baa4030adc
+    Recorded: 2026-11-07T21:29:37.539360039+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3628#issuecomment-6713259141
+    Findings:
+    1. BLOCKING: CI run 42414900396 at 99baa40 has 4 failed jobs: CI (cli-0) job 128530745434 'Run tests', CI (rest) job 128530745555 'Run tests', CI (lib-1) 'Run tests', and CI (contracts) job 128530745595 'CLI-manual drift-guard (every command documented)'. The latest main CI runs (20:43, 19:40 UTC) are green, so the failures are presumed PR-caused. At the time of review, gates (required-live task_3219_live_ count) and lib-0 were still running. The reviewer sandbox cannot download job logs. Name the failing tests from the logs and fix them. For contracts, run python3 docs/cli/verify-manual.py against a built binary: the new aida agent logs/attach verbs have no '### aida agent' manual entry or flag/verb coverage beyond one prose bullet in docs/cli/06-roles-sessions.md.
+    2. minor (correctness): agent_claude_background.rs logs() follow loop (lines 324-341) can drop the worker's final output. Read returns 0, the worker writes its tail, the supervisor creates 'ended', then the loop sees ended.exists() and breaks without reading again. aida agent attach then misses the last lines (for example Claude's final print-mode result). After observing 'ended', drain the log to EOF once more before breaking.
+    3. minor (refusal-path robustness): dispatch_with_helper (agent_claude_background.rs 207-217) sends SIGTERM to the supervisor on any pre-release error, including the 45 s 'ready' timeout during a slow prepare. WorkerSignals is installed only after spawn and grant binding (agent_launch.rs ~7646), so a SIGTERM before that point kills the supervisor by default action: no unwinding, no IssuedLaunchGrant revoke, no wrapper teardown. The dispatcher also never escalates to SIGKILL after 2 s, and it then returns Err with handle_guard still armed, so the worktree and lease are cleaned up while the supervisor may still be alive. That contradicts the adjacent comment. Make the pre-signal window safe (for example close the socket instead of signalling, or install a TERM handler early), escalate to SIGKILL, and wait for the supervisor before cleanup.
+    4. minor (test gap, advisor decision 'opted-in claude attach must refuse with an explicit hint'): the new claude_argv refusal (launch/contained.rs:1480-1484) has no test. It also fires only when AIDA composes wrapper argv whose first element is 'attach': a bare positional prompt 'attach' is misrefused, and a user running claude attach directly gets no hint. Add a unit test for the refusal, check only the subcommand position (not a prompt that happens to equal 'attach'), and state the limitation in the docs bullet.
+    5. minor (test gap, AC1/'one targeted test per launch path'): the live regression drives dispatch() through a test-only dispatcher entry and bypasses the production agent_new_bg_dispatch wrapper branch (agent_launch.rs 3424-3443, 3669-3687). Untested there: the rotate/direct-resume/no-prompt refusals, the forced resume.prompt_enabled=false, skipping refuse_bg_under_os_wrap, and the take_ownership disarm of handle_guard/setup_receipt. Add a path-level test, a unit test at minimum, that the opted-in wrapper branch refuses rotate/resume/no-prompt before any claim or worktree side effect, and that native --bg argv is byte-identical when the opt-in is unset (AC3).
+    6. minor (test gap): aida agent logs <attempt> and aida agent attach <attempt> (agent_launch.rs:431-432) have no command-level test: snapshot output, refusal of a non-canonical/unknown attempt, refusal of an unsafe (group-readable or symlinked) attempt directory, and follow termination after 'ended' or after a dead supervisor. Only the open_log/attempt_dir helpers are unit-tested.
+    7. cosmetic: .aida/claude-background/<attempt>/ directories (output.log, supervisor.json, ended) are created per dispatch and never pruned, so they accumulate without bound in the project's .aida. Add retention (for example prune ended attempts older than N days on dispatch) or document manual cleanup.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T21:34:29.113294976Z
+  modified_at: 2026-11-07T21:34:29.113294976Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
