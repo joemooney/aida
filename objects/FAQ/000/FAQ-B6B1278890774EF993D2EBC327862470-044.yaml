@@ -8,6 +8,7 @@ description: |
   ## 1. Access and checkout
   - `ssh dell1` works from the primary (permission rule `Bash(ssh dell1:*)`).
   - Clone at `~/ai/aida`. Remote `all` = ssh://git@gitlab.joemooney.com:2222/ai/aida.git. The host pulls main and aida-store from GitLab, which the primary keeps current with `aida remote mirror-sync`.
+  - GitLab (gitlab.joemooney.com, SSH :2222) runs on dell1 since 2026-11-07, in rootless containers. Every LAN host pins it in `/etc/hosts` to bypass Cloudflare Access: other hosts use `192.168.179.100 gitlab.joemooney.com`, and dell1 itself uses `127.0.0.1`. A stale pin gives Connection refused on :2222.
   - `~/.local/bin` is on PATH in BOTH `.profile` and `.bashrc`. Run remote commands as `ssh dell1 'bash -lc "..."'`; a non-login ssh shell does not find `aida`.
 
   ## 2. AIDA binary
@@ -36,12 +37,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:47:52.567998136Z
-modified_at: 2026-11-07T20:03:40.293886492Z
+modified_at: 2026-11-07T21:24:49.892089709Z
 req_type: Faq
 history:
 - id: 01a1b79c-1360-77b1-b44f-5c865f1ced63
   author: joe
   timestamp: 2026-11-07T20:03:41.536329131Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1b7e6-623c-7b23-bff4-b8699c44f0bd
+  author: joe
+  timestamp: 2026-11-07T21:24:51.388841886Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
