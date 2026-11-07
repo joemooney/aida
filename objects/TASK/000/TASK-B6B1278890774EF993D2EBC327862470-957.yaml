@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T23:02:30.705931456Z
+modified_at: 2026-11-07T23:02:32.744536253Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -99,6 +99,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b83f-d2ed-7683-b8d2-93efc60d21be
+  author: joe
+  timestamp: 2026-11-07T23:02:32.941800Z
+  session_id: 01a1b83046f6
+  changes: []
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -108,6 +113,12 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 2 review finding 2 / acceptance evidence cannot be completed within the approved pure-move scope: origin/main portability growth guard rejects all five moved mcp allowlist rows as forbidden additions. Findings 1 and 3 are implemented; PR body has 689-before/689-after counts and actual validation outcomes. No finding is disputed. Fixing the remaining gate requires advisor authorization for portability policy or test behavior changes, which the brief explicitly requires punting rather than widening. Tests are also unverified: first lane job timed out after 900 seconds compiling and reported a stale seeded overlay; remaining jobs are running/queued. Edits are uncommitted in this native seat; do not publish through the punt veto.'
+  lean: Authorize a narrow follow-up for verified portability-ledger relocation, reconcile it with the base-pinned growth checker, refresh the stale lane overlay, and rerun the five parent suites plus ADR9 before publication.
+  raised_by: implementer
+  raised_at: 2026-11-07T23:02:32.744536253Z
 failure_reason:
   phase: reviewer
   phase_index: 3
