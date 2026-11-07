@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T19:30:11.478091676Z
+modified_at: 2026-11-07T20:13:32.375954006Z
 req_type: Story
 tags:
 - architecture
@@ -517,6 +517,38 @@ comments:
   modified_at: 2026-11-07T19:18:44.929390853Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7a5-1757-7ab3-85b2-5451acaba560
+  author: mcp
+  content: |-
+    Round 6 native implementer handoff (uncommitted; no code commit, push, PR publication, queue done, ship merge, or review verdict recorded by this seat).
+
+    Prepared fixes for findings 1, 2, and 4–9:
+    - Named review retirement, queue recovery, legacy watcher probe-ref cleanup, and leased conversation liveness now read ownership judgment; the ratchet baseline shrinks.
+    - Fresh session-start dispatch has an invocation-local receipt, so its newly created lease does not block its own launch. Independent re-entry still retains unknown ownership and checks real tree holders.
+    - Recordless refusals name host migration commands. Proven-dead missing-tree reclaim is journaled and ends through ordinary safeguards; the final session-end coverage check no longer tries to read a nonexistent checkout HEAD, and the recorded branch remains retained.
+    - Reclaim journals say reclaim_attempt, not completed reclaim. Failure context names the lease. Live/dirty/unknown guidance and resume hints are restored.
+    - Retired --steal refuses before queue/rework mutations; help, manual, golden snapshot, and the old fabricated string test are updated.
+
+    Finding 3 is NOT implemented. A design-fork punt was recorded and STORY-2325 remains Needs Attention. The advisor must settle delivered-but-unacknowledged and queued/pending retirement criteria and the fresh writer-admission scan requirement. Mail build-identity gating was not weakened or removed. The existing punt and merge hold remain publication vetoes. A Refs-only native declaration was recorded:
+    [AI:codex] fix(ownership): repair relaunch gates and round-six regressions (Refs STORY-2325)
+
+    Validation:
+    - make check-ci-fast: 43 gates passed on final rerun. Optional fetch attempts reported read-only Git metadata; no write permission was broadened.
+    - Broad targeted Rust run: 109 cases passed; the remaining temporary-store fixture was corrected, then the final focused run passed 7/7 with AIDA_REQUIRE_BWRAP_LIVE=1 (both queue reclaim regressions and all five S4 tests, including the original submodule CI failure).
+    - All original Codex routing/session-start CI cases pass with the matching source-built CLI.
+    - Source-built CLI manual verification: completeness (85 commands), spec IDs, reflection (14 specs), subcommands and flags all pass.
+    - Latest no-default-features CLI check, formatting, whitespace check, and 15 ownership/manual Python tests pass.
+    - Matching CLI built successfully; help golden regenerated and verified.
+
+    Changed files:
+    aida-cli-lib/src/{agent_launch.rs,lane_env.rs,ownership/reader.rs,ownership/writer_tests.rs,pr_lease_takeover.rs,queue_cmd.rs,queue_cmd_args.rs,review_watch_forge.rs,session.rs,session_end.rs,session_start.rs}
+    aida-cli-lib/src/tests/{bug_2002_launch_lease_tests.rs,bug_2223_orphan_seat_reentry_tests.rs,bug_2385_vendor_routing_tests.rs,golden/cli_help_snapshot.txt,queue_work_tests.rs,story_2315_pr_lease_takeover_tests.rs,task_2053_s4_host_git_tests.rs}
+    docs/cli/{04-git-lifecycle.md,06-roles-sessions.md}
+    scripts/ownership-liveness-legacy.json
+
+    Logs: /tmp/story2325-fast-verified.log, /tmp/story2325-final-targeted.log, /tmp/story2325-reclaim-bwrap-verified.log, /tmp/story2325-source-manual.log, /tmp/story2325-final-check.log, /tmp/story2325-python-final.log.
+  created_at: 2026-11-07T20:13:32.375938586Z
+  modified_at: 2026-11-07T20:13:32.375938586Z
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
