@@ -98,3 +98,25 @@ executing lane-selected vendor code on the host. Repeat the fake reduced-leaf
 credential probe and host-run containment conformance before claiming support.
 No C0-C4 pass credit, successful real-account authentication, or complete
 no-in-lane-refresh proof is established by these probes.
+
+## Round 2 review disposition, 2026-11-07
+
+The review of `cfbecb41250f` is accepted: AC1 (pin), AC2 (pre-launch flag
+validation), AC3 (pin/argv regression), and AC4 (supported upgrade instructions)
+remain unmet. This document is investigation evidence only. In particular,
+the commit's claim to have re-pinned the binary is incorrect; neither that
+subject nor its completing trailer establishes implementation or completion.
+
+A fresh empty-HOME parser check in round 2 reproduced the same 0.167.0
+SHA-256 above: both `-P aida exec --help` and `exec -P aida --help` exit 2,
+while `sandbox --help` exits 0 and lists `--permission-profile`. No credentials
+or inference were used in this repeat check.
+
+Finding 6 is the blocking advisor decision, not permission to choose a new
+containment interface. The disputed premise is that re-pinning alone to
+0.167.0 fixes exec. An advisor must select an exec-compatible interface (or a
+different measured binary) and revise acceptance before production rework.
+Until then, findings 1–4 remain open and PR #3611 must stay held. Do not clear
+the merge hold or mark BUG-2487 complete. Any later authorized publication of
+this evidence must use a descriptive `docs(containment)` subject with
+`(Refs BUG-2487)`, and correct the PR's completion attribution before merging.
