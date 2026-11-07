@@ -8,12 +8,12 @@ description: |-
 
   PR: #3612
   Reviewed sha: 7dfe7680d021c78009223dbe89052f4d00ee1763
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T19:10:14.728032683Z
-modified_at: 2026-11-07T19:30:01.018221221Z
+modified_at: 2026-11-07T19:30:06.790968336Z
 req_type: Task
 tags:
 - carried-from:BUG-2485
@@ -28,6 +28,16 @@ comments:
   modified_at: 2026-11-07T19:30:01.018221221Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1b77d-5546-7ff1-9144-a8496fab299a
+  author: joe
+  timestamp: 2026-11-07T19:30:06.790963885Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
   branch: main
