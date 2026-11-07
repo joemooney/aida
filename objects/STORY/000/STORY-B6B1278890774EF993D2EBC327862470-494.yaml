@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T23:09:39.965664581Z
+modified_at: 2026-11-07T23:43:31.225763169Z
 req_type: Story
 tags:
 - area:advisor
@@ -397,6 +397,19 @@ comments:
   modified_at: 2026-11-07T23:07:44.067476362Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b865-5599-7653-8a25-ceabc74659ff
+  author: joe
+  content: |
+    Round 4, PR #3640 (Refs STORY-2571): implemented all five requested changes. Confirmed reaped/dead controllers revoke the recorded child grant before clearing the receipt. The trusted launcher now requests default-deputy bootstrap without an existing service receipt and may rotate an operator binding to its new advisor handle under the existing successor rules. Added controller-bound select/pass, watch_change delegation, launch bootstrap/takeover, exit revocation, and unchanged-tick regressions. Documented exact host reset/recovery and linked it from refusal/status output. Status supports --json/global JSON and TOON; --deputy has help; no-op ticks do not replace state and heartbeat writes are limited to every two seconds, with initialization-marker sync only at creation.
+
+    CI fixes: updated fixed-AIDA launch/role inventory counts, moved the new socket liveness probes to proc_identity, added all advisor-loops paths to the JSON audit with a real status probe, and corrected the writer inventory's unix::serve -> unix::serve_service rename. The gates log confirms lane_fixture_fails was expected nested fixture output; its enclosing 88-test suite passed. The actual gates failure was the writer inventory rename.
+
+    Static validation passed: rustfmt for all changed Rust files, portability ratchet, static CLI-manual flag guard, and store-writer inventory (3355 sinks / 293 operation mappings). Rust validation is currently untested=true: first story2571 job j20261107T231308771-2-0 timed out after 900 seconds during compilation without executing tests. Snapshot job j20261107T231410317-2-0 also timed out after 900 seconds during aida-cli-lib compilation without executing a test (both exits 124, no compiler diagnostic). The next job j20261107T231432764-2-0 (final spawn boundary ratchet) started at 23:43:10 UTC; role inventory, liveness ratchet, JSON audit, real lane fixture, and the latest nine service tests remain queued. No Rust test pass is claimed. The help snapshot has been updated manually; authoritative regeneration/verification remains pending. Repeated compilation timeout is the validation blocker for this handoff.
+
+    Native-seat handoff: edits are uncommitted. Publication declaration recorded: [AI:codex] fix(advisor): revoke exited review-watch grants and repair rotation (Refs STORY-2571). No commit, push, PR creation, merge, review verdict or queue completion was performed. Existing merge hold remains for advisor review.
+  created_at: 2026-11-07T23:43:31.225763169Z
+  modified_at: 2026-11-07T23:43:31.225763169Z
+  session_id: 01a1b8464b27
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
