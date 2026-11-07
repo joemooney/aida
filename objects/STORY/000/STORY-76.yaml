@@ -35,10 +35,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:18.292085502Z
-modified_at: 2026-06-08T03:30:54.113065137Z
+modified_at: 2026-11-07T20:25:46.937895462Z
 req_type: Story
-tags:
-- deferred:multi-repo
 relationships:
 - rel_type: Child
   target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
@@ -49,5 +47,18 @@ comments:
   content: 'Deferred 2026-05-14 (Trojan-horse triage): priority lowered to Low per the same rationale as STORY-74 — cross-project surface, not TUI-Trojan-horse aligned. Re-evaluate after EPIC-26 ships.'
   created_at: 2026-05-15T04:02:12.135224965Z
   modified_at: 2026-05-15T04:02:12.135224965Z
+- id: 01a1b7b0-4cb9-7673-98cd-6009141849d6
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":false,"deferred_at":null,"deferred_until":null,"legacy_tags":["deferred:multi-repo"]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:25:46.937888538Z
+  modified_at: 2026-11-07T20:25:46.937888538Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 archived: true
 archived_at: 2026-06-06T04:16:34.844050292Z
+deferred: true
+deferred_at: 2026-06-08T03:30:54.113065137Z
+deferred_until: manual:operator
