@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T15:43:05.114773340Z
+modified_at: 2026-11-07T16:16:19.140419039Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -127,6 +127,12 @@ comments:
   modified_at: 2026-11-07T15:40:14.585295247Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6cb-e8c4-7380-ad9b-62ed588201ad
+  author: joe
+  content: 'Round 4 addresses both review findings from 551f783bbbc3. Regenerated and reviewed scripts/store-writers.toml: exactly seven added merge-lock/release sink classifications, all blocked under TASK-3223, and two stale lease_acquire rows removed; existing classifications and operation policies unchanged. In aida-cli-lib/src/merge_lock.rs, mutation-guard WouldBlock now shares the retained-holder verdict/wait/inspection diagnostic with ordinary lease contention; other error kinds propagate unchanged. Expanded the existing guard-contention test to cover missing and live holder evidence and record preservation. The portable sed rewrite was already committed and remains unchanged; portability baseline untouched. Validation passed: make check-ci-fast (43 gates, including portability and all previously skipped non-clippy gate steps), cargo clippy --workspace -- -W clippy::all -D clippy::correctness, cargo test -p aida-cli-lib --profile agent --lib merge_lock::tests -- --test-threads=1 (17 passed), inventory mutation fixtures (41), pure-move fixtures (44), combined GitLab/sccache/trace-header fixtures (58), cargo fmt --all -- --check and git diff --check. Fast-gate optional fetch attempts hit read-only Git metadata but gates returned success. Two changed files remain uncommitted under standalone native-seat instructions. Host publication subject declared: [AI:codex] fix(merge-lock): reconcile writer inventory and timeout diagnostics (Refs TASK-3364). No commit, push, PR creation, queue completion, review recording or merge-hold clearance performed; existing merge hold remains for its authorized clearance path.'
+  created_at: 2026-11-07T16:16:19.140419039Z
+  modified_at: 2026-11-07T16:16:19.140419039Z
+  session_id: 01a1b6ad6f84
 history:
 - id: 01a1b59d-064f-7020-a1ae-8513041adbc0
   author: joe
