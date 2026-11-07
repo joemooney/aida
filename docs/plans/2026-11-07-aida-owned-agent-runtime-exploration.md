@@ -27,7 +27,15 @@ credentials or subscriptions must not be assumed reusable.
 The potential advantage is exact control of suspension, event admission,
 context inheritance, and bounded execution. The ongoing cost includes provider
 compatibility, coding-tool quality, credential handling, cancellation, migration,
-and debugging a new execution engine. A short core loop does not bound that cost.
+and debugging a new execution engine. In Infinity (`e1a3e4b36e5`),
+`crates/infinity-agent-core/src` totals 15,050 lines (`wc -l` over every `.rs`
+file). About 7,850 of them are production runtime code (counted as the lines
+before each file's first `#[cfg(test)]`, excluding `system/tests.rs` and
+`system/test_support.rs`; 2,000 of them in `event_processor.rs:1-2000`). The
+other 7,196 are tests, including 3,209 lines in `event_processor.rs:2001-5209`
+and 2,652 lines in `system/tests.rs` + `system/test_support.rs`. All of that is
+before counting `infinity-daemon`
+(7,490 lines), provider adapters, RAP/MCP bridges, CLI surfaces, and sandboxing.
 
 AIDA's existing positioning in
 [OVERVIEW.md](../../OVERVIEW.md#what-this-means-for-aidas-roadmap) favors composing
@@ -61,32 +69,28 @@ not reasons to adopt every component or protocol.
 
 ## 3. Qualifications the original synthesis needs
 
-### Hibernation depends on the embedding and wait type
+### Hibernation depends on the embedding, execution mode, and a passive-tool check
 
-The step API lets an embedding release execution state between invocations.
-However, the local driver's `check_before_idle` returns `AwaitInput` while
-`thread.awaiting_tool_result()` is true. It retains that thread while waiting;
-subscription state alone does not keep the driver resident. Therefore the
-checked-in local runtime does not demonstrate zero resident memory for every
-tool wait. External tool processes and the coordinator also have resource costs.
+Infinity exposes two distinct execution modes in `crates/infinity-agent-core/src/system/builder.rs`:
+1. **Step mode (`AgentSystem::step`, `builder.rs:452-492`):** Loads `Thread::load(...)` from the stores, runs one `step_no_defer`, and drops the per-thread `Thread` handle (and its in-memory `HistoryManager`) when the step finishes. Note that dropping `Thread` is still distinct from exiting the host worker process: `SystemInner` (shared stores, model/config sources, input channels) and any spawned background tasks remain in the embedding process unless the worker process itself exits.
+2. **Resident local driver (`LocalAgentSystem` / `drive_thread`, `system/local/driver.rs:235-282`):** Calls `check_before_idle` (`driver.rs:331-364`), which returns `IdleDecision::AwaitInput` whenever `thread.awaiting_tool_result()` is true, parking the driver task and its `Thread` in memory rather than exiting.
 
-For AIDA, process exit on a long wait would be a proposed guarantee to test,
-including who owns any surviving tool and how its callback survives restarts.
+Moreover, inspecting `Thread::awaiting_tool_result` (`system/thread.rs:235-238`) alongside `Thread::pending_active_tool_call` (`system/thread.rs:216-226`) reveals an important discrepancy in Infinity's local driver:
+* `pending_active_tool_call()` checks `t.is_passive()`, so passive sleep tools (`sleep_until_event_or_input`, `sleep`, and `sleep_until` in `tools/sleep.rs`, which return `is_passive() -> true`) do not block event deferral.
+* `awaiting_tool_result()` only checks `name != "close_thread"` and **does not check `!is_passive()`**:
+  * For `sleep_until_event_or_input` (`tools/sleep.rs:11-49`), which is recorded as a `ToolCall` at the tail of history and whose `execute()` is a no-op that never schedules a `ToolResult`, `awaiting_tool_result()` stays `true` indefinitely and **the resident local driver never exits on its own (`IdleDecision::AwaitInput`)** until external input arrives.
+  * For timed `sleep` and `sleep_until` (`tools/sleep.rs:54-228`), `execute()` spawns an in-process `tokio::spawn` timer task (`sleep.rs:98`, `sleep.rs:204`) and `awaiting_tool_result()` remains `true` **for the entire sleep duration**, keeping the driver resident until the timer delivers its `ToolResult` and the subsequent step finishes without a tool call.
 
-### Commit-before-dispatch leaves crash boundaries
+For AIDA, releasing worker memory across long tool, timer, or human waits requires exiting the worker process (not just parking a local driver or dropping a step handle in a long-lived process) and persisting timer/callback routing across restarts.
 
-`Thread::step_no_defer` commits history before dispatching the asynchronous
-action. That prevents a result from preceding its recorded call, but does not
-by itself recover a crash between commit and dispatch, or an ambiguous remote
-acceptance. `HistoryManager::sync` appends messages and updates processed IDs
-through separate calls; the latter error is discarded in this implementation.
-Callback deduplication is not exactly-once execution of external effects.
+### Commit-before-dispatch trade-offs and crash boundaries
 
-The local daemon's `memory_store.rs` also writes JSON directly and discards
-write errors at several persistence sites. Its durability properties must not
-be generalized to all Infinity storage implementations, nor imported as
-sufficient for AIDA. AIDA's Git-canonical requirement store does not by itself
-supply an atomic conversation/inbox/outbox transaction either.
+In `Thread::step_no_defer` (`system/thread.rs:564-587`), `self.history.sync().await?` commits the assistant `ToolCall` before `event_processor::execute_action_with_error_result` dispatches the HTTP request.
+* **Why commit-before-dispatch is required for async callbacks:** Because `HistoryManager::handle_content` matches an incoming `ToolResult` against `history.last()`, dispatching before committing would allow a fast callback to arrive before its `ToolCall` is in history, dropping the result as an orphan. If the process stays alive and the HTTP POST fails synchronously, `execute_action_with_error_result` injects a synthetic error `ToolResult` so the thread recovers on the next step.
+* **Where the crash window lies:**
+  1. If the process crashes after `self.history.sync().await?` (`thread.rs:566`) but before `execute_action_with_error_result` (`thread.rs:574`), the `ToolCall` is durably persisted at the history tail with no HTTP request ever sent. While plain user text can still interrupt it (`TOOL_CALL_INTERRUPTED_TEXT`), `pending_active_tool_call()` remains `Some(call_id)`, causing `filter_deferrable` to defer `SubscriptionEvent`, `ThreadReport`, and `ParentMessage` inputs indefinitely. Recording a durable pre-dispatch outbox receipt (analogous to `inflight: Option<Receipt>` in AIDA's [`mailbox_wake_run.rs`](../../aida-cli-lib/src/mailbox_wake_run.rs)) makes unfinished or timed-out dispatch **detectable and explicitly uncertain** rather than silently wedged; safe automatic retry still requires tool idempotency or explicit reconciliation.
+  2. In `HistoryManager::sync` (`event_processor.rs:645-670`), `conversation_store.append_messages` and `let _ = self.state_store.add_processed_message_ids(...)` run as two separate calls with errors from the second call explicitly discarded (`let _ =`), allowing a crash or state-store failure to leave appended messages unrecorded in `processed_message_ids`.
+  3. The local daemon's `crates/infinity-daemon/src/memory_store.rs` writes JSON snapshots and discards several write errors; its durability properties must not be generalized to all `ConversationStore`/`StateStore` implementations or imported as sufficient for AIDA.
 
 ### Context protection is separate from raw evidence retention
 
