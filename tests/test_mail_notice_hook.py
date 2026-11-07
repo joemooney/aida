@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Round-trip the shipped notice hook's JSON through both common awk engines."""
+"""Round-trip the shipped notice hook's JSON through both common awk engines.
+
+The original corruption did not reproduce on mawk 1.3.4 20240123 or gawk
+5.2.1; these tests verify portable escaping, not a version-specific failure.
+"""
 # trace:BUG-2475 | ai:codex
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -32,8 +35,8 @@ case "$*" in
 esac
 ''')
             fake.chmod(0o755)
-            env = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'],
-                       AIDA_SESSION_PROJECT=directory)
+            env = {'PATH': directory + ':/usr/bin:/bin',
+                   'AIDA_SESSION_PROJECT': directory, 'HOME': directory}
             result = subprocess.run(
                 ['sh', str(HOOK), '--client', client, '--event', event],
                 input='{}', text=True, capture_output=True, env=env, timeout=5,

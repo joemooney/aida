@@ -45,7 +45,8 @@
 #     before it. trace:TASK-1567
 [tiers]
 # trace:BUG-2475 | ai:codex
-"Mail notice hook JSON protocol" = "fast"
+# Both engines are mandatory; gawk is installed by CI but optional on dev hosts.
+"Mail notice hook JSON protocol" = "full"
 # trace:TASK-3222 | ai:codex
 "Store writer inventory ratchet" = "fast"
 "Store writer inventory mutation fixtures" = "fast"
@@ -151,7 +152,7 @@
 # first place.
 [skips]
 # trace:BUG-2475 | ai:codex
-"Install awk engines" = "`sudo apt-get` against the runner image; local hook tests require mawk and gawk on PATH"
+"Install awk engines" = "`sudo apt-get` against the runner image; full-tier hook tests require mawk and gawk on PATH"
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"
 "Pin stable toolchain & verify cargo" = "runs `rustup default stable`, which would mutate this machine's toolchain"
 "Install Linux dependencies" = "`sudo apt-get` against the runner image"
