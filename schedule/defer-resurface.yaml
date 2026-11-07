@@ -1,9 +1,9 @@
 job: defer-resurface
-last_run: 2026-11-06T23:29:16.238386307Z
+last_run: 2026-11-07T00:40:21.207019299Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:127
+result: ok
 failure_trips:
 - trip_id: defer-resurface@2026-11-06T23:29:16.238386307Z
   at: 2026-11-06T23:29:16.238386307Z
