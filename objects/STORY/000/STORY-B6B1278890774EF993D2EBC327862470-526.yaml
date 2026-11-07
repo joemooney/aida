@@ -1,0 +1,36 @@
+id: 01a1b3d0-c5cb-7650-9164-df828c8bea47
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-526
+agreed_id: STORY-2603
+title: 'Review PR-3559: [AI:codex] feat(vendors): add shared profiles and capability consumers (Refs STORY-2539)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b3bd`) for branch `story-2539-r1859`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3559>
+  - Branch: `story-2539-r1859` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2539
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3559` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T02:22:46.219064473Z
+modified_at: 2026-11-07T02:22:46.219064473Z
+req_type: Story
+filed_at:
+  code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b8fe51ef0f4
+  vendor: claude
+  session: 01a1b3bdcc7a
