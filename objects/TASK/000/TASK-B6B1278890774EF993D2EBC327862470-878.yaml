@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T06:05:07.234320715Z
+modified_at: 2026-11-07T06:09:27.299463276Z
 req_type: Task
 tags:
 - architecture
@@ -273,6 +273,12 @@ comments:
   modified_at: 2026-11-07T04:53:28.646335367Z
   session_id: 01a1b45562ad
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4a0-4f03-7152-ab4b-424ab663c97c
+  author: joe
+  content: 'S2 current-head continuation: private-PTY implementation and review corrections are already present. Complete the latest advisor inventory rework by replacing generic PTY sink descriptions with reviewed terminal-descriptor destinations, and explicitly documenting that prepare_with_io also bootstraps absent project/git protection leaves (not only lane-private files). Keep mixed preparation routes blocked for TASK-3223; no runtime authority change. Expected edit: scripts/store-writers.toml only. Re-run required-live wrapper/PTY selection and make check-ci-fast per the binding launch brief; report actual live counts separately. No S3/S4 implementation.'
+  created_at: 2026-11-07T06:09:27.299463276Z
+  modified_at: 2026-11-07T06:09:27.299463276Z
+  session_id: 01a1b49f1d8f
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
