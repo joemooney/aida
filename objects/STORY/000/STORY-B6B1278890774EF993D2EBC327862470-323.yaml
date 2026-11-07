@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T21:13:46.699979559Z
+modified_at: 2026-11-07T21:49:59.418079115Z
 req_type: Story
 tags:
 - architecture
@@ -611,6 +611,12 @@ comments:
   content: 'Round 7 mailbox verification found an actual prerequisite: mailbox_lifecycle tests now pass 171/171, but a new logical-inbox preservation test fails because retained delivery sidecars are read while retained message bodies and receipts are not inventoried. Keeping that failing regression and extending the bounded/pinned logical read path to retained generations, including ACK replica validation, is necessary before safely removing the build gate. No data deletion or new persisted mailbox layout is introduced; existing retained/<key>/<generation>/data stays canonical preservation. Reassessed scope expands narrowly to mailbox_logical.rs, ACK source-location handling and mailbox_view.rs source attribution.'
   created_at: 2026-11-07T21:13:46.699979559Z
   modified_at: 2026-11-07T21:13:46.699979559Z
+  session_id: 01a1b7b65058
+- id: 01a1b7fd-64fa-7cb1-bfec-ecf836ff339b
+  author: joe
+  content: 'Round 7 verification: 217 mailbox/logical/delivery tests pass, including retained unique unread body visibility, retained ACK validation/anchoring, compatibility receipts, symlink refusal and existing per-ID retained-sidecar fault isolation. The corrected 270-case CLI run passes 269 cases; the remaining existing TASK-1993 forge test passes alone but reproduces a deleted inherited cwd at its first current_dir unwrap in both parallel and serial suites. Its isolated startup now keeps the explicit process-ticket branch, otherwise normalizes to the parent-owned unique TMPDIR before fixtures. All forge assertions and leaked_probe_refs_are_swept_and_live_ones_kept remain unchanged. Final serial rerun j20261107T214926212-2-0 is active. Completing native publication declaration recorded; no commit, push, PR ship, verdict or queue-done action was performed from this seat.'
+  created_at: 2026-11-07T21:49:59.418079115Z
+  modified_at: 2026-11-07T21:49:59.418079115Z
   session_id: 01a1b7b65058
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
