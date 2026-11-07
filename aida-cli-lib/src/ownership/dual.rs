@@ -1,13 +1,16 @@
 //! Dual-write adapters (STORY-2325 PR-B, advisor amendment A6).
 //!
+//! PR-C cuts train/review/relaunch readers over to these records and stages
+//! verified seat handoffs. The remaining adapters still mirror legacy writers;
+//! failures are diagnostic until their own writer cutover.
+//!
 //! Each call site that writes one of today's ownership records (a session,
 //! review or claim lease; the train's merge lease; the PR that `aida ship`
-//! opens) also calls one function here. The old records stay authoritative:
-//! nothing here can fail, refuse or slow the caller beyond one bounded lock,
-//! and no reader looks at these records yet. A write that cannot be made is
-//! dropped (and shown only under `AIDA_OWNERSHIP_TRACE=1`); `aida own show
-//! --compare` reports the gap, and PR-C cuts over only once that report is
-//! clean.
+//! opens) also calls one function here. Legacy-writer failures are diagnostic
+//! under `AIDA_OWNERSHIP_TRACE=1`; `aida own show --compare` reports gaps.
+//! Post-open self-handoff failures are always reported without failing ship.
+//! Ownership transfers to the PR, while the lease remains the retirement
+//! handle for guarded session end after the seat exits.
 //!
 //! Where the writes happen (A1, A6): only in host-side processes. A contained
 //! seat never writes `.aida/ownership/`, and its sandbox is never widened to
@@ -424,7 +427,7 @@ pub(crate) fn verify_seat_at_pr_head(seat: &Path, branch: &str) -> Result<String
         }
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
-    let dirty = git(&["status", "--porcelain", "--untracked-files=no"])?;
+    let dirty = git(&["status", "--porcelain", "--untracked-files=normal"])?;
     if !dirty.is_empty() {
         return Err(format!(
             "the seat has uncommitted changes ({} path(s))",
@@ -445,11 +448,8 @@ pub(crate) fn verify_seat_at_pr_head(seat: &Path, branch: &str) -> Result<String
     Ok(head)
 }
 
-/// The holder hands its work to the PR (Q2): the spec and the change records
-/// both move to `InPr` with no holder, in one locked write. The seat HEAD is
-/// not detached here: per the advisor ruling of 2026-11-03 (round 3 on PR
-/// #3291), the ship-time detach under the ownership lock is deferred to
-/// PR-C, which completes STORY-2325. Until then the seat keeps its branch.
+/// Staged handoff transitions. The caller binds every key to the owner and
+/// expected generation, then verifies and detaches under the ownership lock.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn handoff_steps(facts: &HandoffFacts, now: DateTime<Utc>) -> Vec<Step<'static>> {
     let mut keys = vec![WorkKey::Change {
@@ -492,26 +492,146 @@ fn commit_handoff(project_root: &Path, facts: HandoffFacts) {
 }
 
 /// `aida ship` opened (or found) PR `pr` for the seat `seat` on `branch`.
-/// Verified first; a seat that fails the check records nothing.
+/// Only the owning branch lease may hand off. A refusal is reported, but
+/// never fails a ship whose PR is already open. The lease remains for cleanup.
 // trace:STORY-2325 | ai:claude
-pub(crate) fn handed_off(project_root: &Path, seat: &Path, branch: &str, spec: &str, pr: u64) {
+pub(crate) fn handed_off(
+    project_root: &Path,
+    seat: &Path,
+    branch: &str,
+    spec: &str,
+    pr: u64,
+) -> anyhow::Result<()> {
     if !enabled() || pr == 0 {
-        return;
+        return Ok(());
     }
-    match verify_seat_at_pr_head(seat, branch) {
-        Ok(head) => commit_handoff(
-            project_root,
-            HandoffFacts {
-                spec: resolve_spec(project_root, spec),
-                change: change(pr),
-                head,
-            },
-        ),
-        Err(why) => report(
-            &format!("the handoff to PR-{pr}"),
-            anyhow::anyhow!("refused: {why}"),
-        ),
+    let attempt = || -> anyhow::Result<()> {
+        let input = aida_core::exec_context::Environment::capture();
+        let session = input
+            .var("AIDA_SESSION_ID")
+            .map_err(|_| anyhow::anyhow!("no owning session identity (operator ship)"))?;
+        let owns_branch = crate::list_leases(project_root)
+            .into_iter()
+            .any(|lease| lease.id == session && lease.branch == branch);
+        anyhow::ensure!(owns_branch, "this session does not own the branch lease");
+        let store = store_for(project_root)
+            .ok_or_else(|| anyhow::anyhow!("ownership store unavailable for handoff"))?;
+        handoff_seat(
+            &store,
+            seat,
+            branch,
+            resolve_spec(project_root, spec),
+            pr,
+            session,
+        )
+    };
+    if let Err(error) = attempt() {
+        eprintln!("ownership: PR-{pr} is open; seat handoff requires attention: {error:#}");
     }
+    // Keep the lease as the retirement handle for session_end after merge.
+    // The ownership record alone transfers to InPr; the running seat keeps
+    // its lifecycle/cleanup identity until guarded session teardown.
+    Ok(())
+}
+
+/// Testable self-handoff. CAS binds both records; all ownership checks and git
+/// verification precede detachment under the same lock as batch publication.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn handoff_seat(
+    store: &OwnershipStore,
+    seat: &Path,
+    branch: &str,
+    spec: Option<SpecKey>,
+    pr: u64,
+    session: &str,
+) -> anyhow::Result<()> {
+    use anyhow::{bail, Context};
+    let spec = spec.ok_or_else(|| anyhow::anyhow!("handoff needs a canonical spec"))?;
+    let spec_key = WorkKey::Spec { spec };
+    let held = store
+        .load(&spec_key)?
+        .ok_or_else(|| anyhow::anyhow!("spec ownership record missing"))?;
+    let holder = held
+        .holder
+        .as_ref()
+        .filter(|h| h.session == session)
+        .ok_or_else(|| anyhow::anyhow!("handoff refused: this session does not own the spec"))?;
+    let tree = holder
+        .tree
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("handoff refused: owner has no seat"))?;
+    let owner_path = tree.path.canonicalize().context("resolving owner's seat")?;
+    let seat_path = seat.canonicalize().context("resolving handoff seat")?;
+    if owner_path != seat_path || tree.branch.as_deref() != Some(branch) {
+        bail!("handoff refused: the owner's seat and branch do not match");
+    }
+    let head = verify_seat_at_pr_head(seat, branch).map_err(anyhow::Error::msg)?;
+    let facts = HandoffFacts {
+        spec: Some(spec),
+        change: change(pr),
+        head: head.clone(),
+    };
+    let mut steps = handoff_steps(&facts, Utc::now());
+    for step in &mut steps {
+        let current = store.load(&step.key)?;
+        if current
+            .as_ref()
+            .and_then(|r| r.holder.as_ref())
+            .is_some_and(|h| h.session != session)
+        {
+            bail!("handoff refused: another session owns a handoff key");
+        }
+        if current
+            .as_ref()
+            .is_some_and(|r| matches!(r.phase, Phase::Training { .. }))
+        {
+            bail!("handoff refused: a handoff key is riding a train");
+        }
+        step.expect = if step.key == spec_key {
+            Expect::Generation(held.generation)
+        } else {
+            current
+                .as_ref()
+                .map_or(Expect::Absent, |r| Expect::Generation(r.generation))
+        };
+    }
+    let mut detached = false;
+    let result = store.update_all_checked(steps, || {
+        let current = aida_core::git_ops::host_git_command(seat)
+            .args(["symbolic-ref", "--quiet", "HEAD"])
+            .output()?;
+        if !current.status.success()
+            || String::from_utf8_lossy(&current.stdout).trim() != format!("refs/heads/{branch}")
+        {
+            bail!("handoff refused: seat no longer has the expected branch checked out");
+        }
+        let verified = verify_seat_at_pr_head(seat, branch).map_err(anyhow::Error::msg)?;
+        if verified != head {
+            bail!("handoff refused: seat HEAD moved");
+        }
+        // update-ref changes only HEAD, with an old-value check; it does not
+        // run checkout hooks or alter the index/worktree.
+        let status = aida_core::git_ops::host_git_command(seat)
+            .args(["update-ref", "--no-deref", "HEAD", &head, &head])
+            .status()?;
+        if !status.success() {
+            bail!("could not detach seat HEAD");
+        }
+        detached = true;
+        Ok(())
+    });
+    // Before publication an error restores the branch. After publication the
+    // durable batch owns recovery, so HEAD stays detached to match InPr.
+    if result.is_err() && detached && !store.dir().join(".pending.json").exists() {
+        let status = aida_core::git_ops::host_git_command(seat)
+            .args(["symbolic-ref", "HEAD", &format!("refs/heads/{branch}")])
+            .status()
+            .context("restoring seat HEAD after handoff staging failure")?;
+        if !status.success() {
+            bail!("handoff failed and branch restoration failed; inspect detached seat");
+        }
+    }
+    result.map(|_| ())
 }
 
 /// `aida ship --from-seat` pushed the contained seat's verified bundle tip

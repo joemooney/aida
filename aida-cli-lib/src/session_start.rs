@@ -2720,18 +2720,15 @@ pub(crate) fn session_start_with_receipt(
                             l.branch,
                             n
                         );
-                        // STORY-2315: a dead lease whose seat is clean and
-                        // whose HEAD is already in the PR loses nothing to
-                        // `--force`; plain `session end` refused it. The
-                        // verdict-to-action mapping is shared with `queue
-                        // work --steal` (pr_lease_takeover::end_action).
-                        // trace:STORY-2315 | ai:claude
-                        let force = match crate::pr_lease_takeover::plan_lease_end(
+                        // Ownership proof permits guarded cleanup, never a
+                        // dirty-tree or live-process override.
+                        // trace:STORY-2325 | ai:codex
+                        match crate::pr_lease_takeover::plan_lease_end(
                             &project_root,
                             l,
                             Some(&source_branch),
                         ) {
-                            crate::pr_lease_takeover::LeaseEndAction::ForceEnd => true,
+                            crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {}
                             crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
                                 // trace:BUG-2450 | ai:codex
                                 crate::pr_lease_takeover::notify_advisor(
@@ -2742,13 +2739,8 @@ pub(crate) fn session_start_with_receipt(
                                 .with_context(|| message.clone())?;
                                 anyhow::bail!("{}", message)
                             }
-                            crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
                         };
-                        let mut end_args =
-                            vec!["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
-                        if force {
-                            end_args.push("--force");
-                        }
+                        let end_args = ["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
                         let ended = std::process::Command::new(crate::aida_exe_path())
                             .current_dir(&project_root)
                             .args(&end_args)

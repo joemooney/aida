@@ -1643,14 +1643,41 @@ pub(crate) fn train_rider_refusal(
     None
 }
 
+/// A rider's Training phase is authoritative even if its train is absent from
+/// a forge listing. Only a proved ended owner or explicit release frees it.
+// trace:STORY-2325 | ai:codex
+fn ownership_rider_refusal(root: &Path, pr: u64) -> Result<Option<String>> {
+    let key = crate::ownership::WorkKey::Change {
+        change: crate::ownership::dual::change(pr),
+    };
+    let Some(record) = crate::ownership::reader::load(root, &key)? else {
+        return Ok(None);
+    };
+    let crate::ownership::Phase::Training { train } = record.phase else {
+        return Ok(None);
+    };
+    let train_key = crate::ownership::WorkKey::Train {
+        train: train.clone(),
+    };
+    if crate::ownership::reader::ended(root, &train_key)?.is_some() {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "it is already riding train PR #{}; its ownership is live or unknown",
+        train.n
+    )))
+}
+
 /// The train PR body line naming the process that opened the train:
 /// `aida-train-owner: host=<host> pid=<pid> start=<kernel start identity>
 /// pidns=<pid namespace inode> boot=<boot id>`. A later train reads it to
 /// tell a live train from one whose process died.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) const OWNER_LINE: &str = "aida-train-owner:";
 
 /// The process that opened a train PR, as its body records it.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TrainOwner {
     pub host: String,
@@ -1668,6 +1695,7 @@ pub(crate) struct TrainOwner {
 
 /// The owner line for this process.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn owner_line_for_self() -> String {
     let pid = std::process::id();
     owner_line(&TrainOwner {
@@ -1681,6 +1709,7 @@ pub(crate) fn owner_line_for_self() -> String {
 
 /// The owner line for `owner`.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn owner_line(owner: &TrainOwner) -> String {
     format!(
         "{OWNER_LINE} host={} pid={} start={} pidns={} boot={}",
@@ -1695,6 +1724,7 @@ pub(crate) fn owner_line(owner: &TrainOwner) -> String {
 /// The owner a train PR body records, or `None` when it has no well-formed
 /// owner line (a train opened before BUG-2412, or a hand-edited body).
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
     let rest = body
         .lines()
@@ -1728,6 +1758,7 @@ pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
 /// boot id, or a missing, foreign or unresolvable PID namespace (a pid probed
 /// across namespaces names an unrelated process, or none).
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn train_abandoned(
     body: &str,
     our_host: &str,
@@ -1765,7 +1796,7 @@ fn live_trains(
 ) -> Result<(
     Vec<(u64, Option<Vec<(u64, String)>>)>,
     Vec<(u64, Option<Vec<(u64, String)>>)>,
-    Vec<(u64, String, TrainOwner)>,
+    Vec<(u64, String, crate::ownership::Ownership)>,
 )> {
     #[derive(serde::Deserialize)]
     struct Row {
@@ -1790,29 +1821,37 @@ fn live_trains(
         ],
     )?;
     let rows: Vec<Row> = serde_json::from_str(&raw).context("could not parse `gh pr list` JSON")?;
-    let our_host = crate::coordination::hostname();
     let leases: Vec<crate::merge_lock::Holder> = crate::merge_lock::live_status(main_worktree)
         .into_iter()
         .map(|(_, holder)| holder)
         .filter(|holder| holder.note == TRAIN_LEASE_NOTE && holder.pr.is_some())
         .collect();
     let mut open: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
-    let mut abandoned: Vec<(u64, String, TrainOwner)> = Vec::new();
+    let mut abandoned: Vec<(u64, String, crate::ownership::Ownership)> = Vec::new();
     for r in rows
         .into_iter()
         .filter(|r| r.head_ref.starts_with(BRANCH_PREFIX))
     {
-        match train_abandoned(
-            &r.body,
-            &our_host,
-            aida_core::liveness::process_identity_is_alive,
-        ) {
-            // A live train lease on this PR means a train is still landing
-            // it: never close it.
-            Some(owner) if !leases.iter().any(|h| h.pr == Some(r.number)) => {
-                abandoned.push((r.number, r.head_ref, owner))
-            }
-            _ => open.push((r.number, parse_members_line(&r.body))),
+        let key = crate::ownership::WorkKey::Train {
+            train: crate::ownership::dual::change(r.number),
+        };
+        let record = crate::ownership::reader::load(main_worktree, &key).unwrap_or_else(|error| {
+            // Unreadable evidence retains this train; other trains remain observable.
+            // trace:STORY-2325 | ai:codex
+            eprintln!("ownership: retaining train PR-{}: {error:#}", r.number);
+            None
+        });
+        let ended = record.as_ref().is_some_and(|rec| {
+            matches!(rec.phase, crate::ownership::Phase::Closed { .. })
+                || matches!(
+                    crate::ownership::reader::owner(rec),
+                    crate::ownership::OwnerVerdict::Dead { .. }
+                )
+        });
+        if ended && !leases.iter().any(|h| h.pr == Some(r.number)) {
+            abandoned.push((r.number, r.head_ref, record.unwrap()));
+        } else {
+            open.push((r.number, parse_members_line(&r.body)));
         }
     }
     let mut leased: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
@@ -1850,6 +1889,7 @@ fn live_trains(
 
 /// Why an abandoned train PR is closed, as its closing comment says.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn abandoned_train_note(owner: &TrainOwner) -> String {
     format!(
         "Closed by a later `aida pr train`: the train that opened this PR (pid {} on {}) \
@@ -1866,14 +1906,13 @@ fn close_abandoned_train(
     main_worktree: &Path,
     train: u64,
     branch: &str,
-    owner: &TrainOwner,
+    owner: &crate::ownership::Ownership,
     dry_run: bool,
 ) -> Result<()> {
     if dry_run {
         println!(
-            "  train PR #{train} is abandoned (its owner pid {} is gone); \
-             a real run closes it",
-            owner.pid
+            "  train PR #{train} is abandoned (ownership generation {} ended); a real run closes it",
+            owner.generation
         );
         return Ok(());
     }
@@ -1891,34 +1930,25 @@ fn close_abandoned_train(
     {
         anyhow::bail!("train PR #{train} cleanup unconfirmed; PR, branch and members retained; inspect before retrying");
     }
-    let owner_confirmed = crate::forge_observed::confirm_snapshot(
-        || crate::forge::observe_train_body(main_worktree, train),
-        |body| {
-            crate::forge_observed::Observed::Known(
-                train_abandoned(
-                    body,
-                    &crate::coordination::hostname(),
-                    aida_core::liveness::process_identity_is_alive,
-                )
-                .as_ref()
-                    == Some(owner),
-            )
-        },
-        crate::forge_confirmation::backoff,
-    );
-    if !owner_confirmed.is_settled() {
+    // Re-read the authoritative generation immediately before cleanup. Forge
+    // body edits supply no process evidence. Unknown observations retain it.
+    // trace:STORY-2325 | ai:codex
+    let current = crate::ownership::reader::load(main_worktree, &owner.key)?;
+    if current.as_ref() != Some(owner)
+        || crate::ownership::reader::ended(main_worktree, &owner.key)?.is_none()
+    {
         anyhow::bail!(
             "train PR #{train} owner changed or is unconfirmed; cleanup and new admission deferred"
         );
     }
-    let note = abandoned_train_note(owner);
+    let note = "Closed by a later `aida pr train`: its ownership record proves the train ended. Its members ride the next train.";
     match gh_stdout(
         main_worktree,
         &["pr", "close", &train.to_string(), "--comment", &note],
     ) {
         Ok(_) => println!(
-            "  closed abandoned train PR #{train} (its owner pid {} is gone)",
-            owner.pid
+            "  closed abandoned train PR #{train} (ownership generation {} ended)",
+            owner.generation
         ),
         Err(e) => {
             return Err(e.context(format!(
@@ -2549,9 +2579,9 @@ impl TrainForge for LiveTrainForge<'_> {
                 branch: branch.to_string(),
                 base: self.base.clone(),
                 title: format!("[train] land {}", prs.join(", ")),
-                // BUG-2412: record the owner so a later train can tell this
-                // train died. trace:BUG-2412 | ai:claude
-                body: format!("{}{}\n", train_pr_body(train), owner_line_for_self()),
+                // Ownership lives in the local record, never in forge prose.
+                // trace:STORY-2325 | ai:codex
+                body: train_pr_body(train),
                 draft: false,
             },
             &specs,
@@ -3925,7 +3955,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             waiting.push(pr);
             continue;
         }
-        if let Some(reason) = train_rider_refusal(pr, &open_trains, &leased_trains) {
+        let ownership_refusal = ownership_rider_refusal(&main_worktree, pr)?;
+        if let Some(reason) =
+            ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
+        {
             println!("  ✗ #{pr} not eligible: {reason}");
             refused.push(Ejected { pr, reason });
             continue;

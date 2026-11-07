@@ -340,3 +340,26 @@ mod tests {
 }
 
 pub(crate) mod headless;
+
+// trace:BUG-2484 | ai:codex
+pub(crate) fn installed_codex_binary_diagnostic() -> Option<String> {
+    let path = crate::which_binary(aida_core::vendors::LaunchVendor::Codex.as_str())?;
+    Some(codex_binary_diagnostic(&path))
+}
+// trace:BUG-2484 | ai:codex
+pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
+    use crate::launch::contained::codex_auth;
+    match codex_auth::resolve_native_program(path) {
+        Ok(program) => {
+            let pin = match codex_auth::require_program(&program, codex_auth::PROGRAM_SHA256) {
+                Ok(()) => "ChatGPT SHA-256 pin matches".to_string(),
+                Err(error) => format!("ChatGPT pin unavailable: {error:#}"),
+            };
+            format!("Codex resolved binary: {} ({pin})", program.display())
+        }
+        Err(error) => format!(
+            "Codex binary resolution refused for {}: {error:#}",
+            path.display()
+        ),
+    }
+}
