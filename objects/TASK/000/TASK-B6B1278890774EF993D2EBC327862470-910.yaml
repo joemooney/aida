@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:41:27.298433170Z
-modified_at: 2026-11-07T01:34:00.608640971Z
+modified_at: 2026-11-07T01:41:40.434365862Z
 req_type: Task
 tags:
 - from-advisor:BUG-2473
@@ -30,6 +30,12 @@ comments:
   modified_at: 2026-11-07T01:30:08.392488947Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b3ab-25d2-7bf2-b0e8-d77fe4a4650f
+  author: joe
+  content: 'Implemented the advisor-approved fixture-only repair: adoption_lease_fixture stamps current_pid_namespace using the existing optional TOML field pattern, with trace:TASK-2959. Production PidObserver and lease adoption logic are unchanged. Validation in this native non-initial PID namespace: all 18 leases::bug_1656_subagent_liveness_tests passed; bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_preserves_live passed (including unobservable namespace refusals); aida-core pid_observer::tests::isolated_initial_namespace_cannot_observe_unstamped_records passed; cargo fmt --all -- --check and git diff --check passed. Changed file: aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs. No blockers. Edits left uncommitted for the host launcher; queue completion remains with the host after publication.'
+  created_at: 2026-11-07T01:41:40.434365862Z
+  modified_at: 2026-11-07T01:41:40.434365862Z
+  session_id: 01a1b3a3ab1b
 history:
 - id: 01a1b396-a331-7ac3-af09-012f2126777b
   author: joe
