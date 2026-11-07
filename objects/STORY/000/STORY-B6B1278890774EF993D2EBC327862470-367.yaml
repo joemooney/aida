@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T09:29:31.638244814Z
+modified_at: 2026-11-07T09:53:38.185284122Z
 req_type: Story
 relationships:
 - rel_type:
@@ -468,6 +468,17 @@ comments:
   created_at: 2026-11-07T07:48:22.901301345Z
   modified_at: 2026-11-07T07:48:22.901301345Z
   session_id: 01a1b4e70e9b
+- id: 01a1b56d-8d89-71b2-9638-d964601516ed
+  author: joe
+  content: |
+    Slice-4 pickup validation, 2026-11-07. Starting HEAD a54530cb6e1 already contains the requested resumable train intent journal in merged PR #3533 (8b39018a304). BUG-2463 (#3519, b815ab24313) is also an ancestor; no rebase is needed. Audited durable pinned head/member/step persistence, startup recovery under the shared run lock, forge_confirmation before destructive recovery, and completed merge/close detection. No implementation gap was found, so no tracked files were changed and no duplicate implementation PR is needed. Slice 5 workflow-definition digests remain outstanding and STORY-2401 remains In Progress.
+
+    Fresh validation: cargo test -p aida-cli-lib --lib pr_train passed 180 tests, zero failures, 12656 filtered out (109.63s test runtime; 9m41s build). This includes pr_train_journal_killed_merge_and_eject_resume_without_replay, covering SIGKILL after merge-call and after persisted eject decision. make check-ci-fast passed all 43 gates. git diff --check passed; working tree clean. Logs: /tmp/story2401-current-train.log and /tmp/story2401-current-fast.log.
+
+    Native Refs declaration accepted: [AI:codex] chore(train): verify landed resumable intent journal (Refs STORY-2401). This records intent only; there are no code changes to publish. No commit, push, PR creation, merge, review recording or queue completion occurred in this seat. No validation or implementation blockers. Existing punt/hold vetoes remain authoritative. Turn ended.
+  created_at: 2026-11-07T09:53:38.185284122Z
+  modified_at: 2026-11-07T09:53:38.185284122Z
+  session_id: 01a1b557724e
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
