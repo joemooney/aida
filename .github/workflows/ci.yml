@@ -478,6 +478,13 @@ jobs:
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: python3 tests/test_show_latency.py --aida target/debug/aida
 
+      # Debug budgets retain the pre-fix >50s cold-path discrimination.
+      # Optimized runs keep the script's 15s cold / 5s warm defaults.
+      # trace:BUG-2481 | ai:codex
+      - name: Run full-status cold-cache latency regression
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
+        run: python3 tests/test_status_cold_cache.py --aida target/debug/aida --cold-budget 30 --warm-budget 10
+
       # trace:STORY-1468 | ai:codex
       - name: Run originating prompt CLI output regression
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}

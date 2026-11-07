@@ -188,15 +188,27 @@ fn bug_2474_newest_same_head_verdict_decides_across_pr_and_spec_keys() {
     const T3: &str = "2026-11-07T00:40:00Z";
     for (blocked_key, approved_key) in [("STORY-2593", "PR-7"), ("PR-7", "STORY-2593")] {
         for (blocked_at, approved_at, holds) in [(T1, T2, false), (T2, T1, true)] {
+            // trace:TASK-2964 | ai:codex
+            // These aliases share append history. Timestamps alone do not
+            // grant supersession across independent artifacts.
+            let mut blocked: serde_json::Value = serde_json::from_str(&dated_body(
+                "request-changes",
+                HEAD,
+                "reviewer-a",
+                blocked_at,
+            ))
+            .unwrap();
+            let mut approved: serde_json::Value =
+                serde_json::from_str(&dated_body("approved", HEAD, "reviewer-b", approved_at))
+                    .unwrap();
+            if holds {
+                blocked["rounds"] = serde_json::json!([approved]);
+            } else {
+                approved["rounds"] = serde_json::json!([blocked]);
+            }
             let mut bodies = vec![
-                keyed(
-                    blocked_key,
-                    dated_body("request-changes", HEAD, "reviewer-a", blocked_at),
-                ),
-                keyed(
-                    approved_key,
-                    dated_body("approved", HEAD, "reviewer-b", approved_at),
-                ),
+                keyed(blocked_key, blocked.to_string()),
+                keyed(approved_key, approved.to_string()),
             ];
             for _ in 0..2 {
                 assert_eq!(
@@ -221,19 +233,31 @@ fn bug_2474_newest_same_head_verdict_decides_across_pr_and_spec_keys() {
                 );
                 bodies.reverse();
             }
-            // A subsequent refusal re-arms the hold after an approval.
-            bodies.push(keyed(
-                "TASK-10",
-                dated_body("request-changes", HEAD, "reviewer-c", T3),
-            ));
+            // A subsequent refusal re-arms after the approval, retaining
+            // the winning history so all aliases establish the same order.
+            let prior = if holds { &bodies[0].1 } else { &bodies[1].1 };
+            let prior: serde_json::Value = serde_json::from_str(prior).unwrap();
+            let mut later: serde_json::Value =
+                serde_json::from_str(&dated_body("request-changes", HEAD, "reviewer-c", T3))
+                    .unwrap();
+            let mut rounds = prior
+                .get("rounds")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let mut snapshot = prior.as_object().unwrap().clone();
+            snapshot.remove("rounds");
+            rounds.push(serde_json::Value::Object(snapshot));
+            later["rounds"] = serde_json::Value::Array(rounds);
+            bodies.push(keyed("TASK-10", later.to_string()));
             let (_, arm) = refusal_of(corpus_merge_gate(7, &bodies, Some(HEAD)));
             assert!(arm.is_some());
         }
     }
 }
 
-// Timestamp ordering never lets stale-head approval or uncertain evidence
-// erase a refusal, and parses RFC3339 instants rather than sorting strings.
+// Unrelated artifacts never establish append order from timestamps, whether
+// equal, missing, invalid, or differently offset. Stale heads cannot erase a refusal.
 // trace:BUG-2474 | ai:codex
 #[test]
 fn bug_2474_supersession_requires_ordered_same_head_evidence() {
@@ -280,7 +304,7 @@ fn bug_2474_supersession_requires_ordered_same_head_evidence() {
         Some(HEAD)
     ))
     .1
-    .is_some());
+    .is_none());
     // Even superseded historical rounds must retain their required provenance.
     let malformed = serde_json::json!({"verdict":"request-changes", "reviewed_sha":HEAD,
         "recorded_at":"2026-11-06T22:10:00Z", "rounds":[{"verdict":"approved"}]})

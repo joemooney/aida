@@ -182,8 +182,32 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
                 .any(|b| b.verdict_record() == u.verdict_record())
         })
         .collect();
-    let mut out: Vec<GateEvent> = bound.into_iter().chain(unbound).collect();
-    out.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
+    // trace:TASK-2964 | ai:codex
+    // Merge independent ledgers by their next event's host time, retaining
+    // append order within each ledger even when the host clock rolls back.
+    // A global timestamp sort would make a spec lookup disagree with its PR.
+    let mut streams: Vec<std::collections::VecDeque<GateEvent>> = Vec::new();
+    for event in bound.into_iter().chain(unbound) {
+        if let Some(stream) = streams.iter_mut().find(|stream| {
+            stream
+                .front()
+                .is_some_and(|first| first.change == event.change)
+        }) {
+            stream.push_back(event);
+        } else {
+            streams.push(std::collections::VecDeque::from([event]));
+        }
+    }
+    let mut out = Vec::new();
+    while let Some(index) = streams
+        .iter()
+        .enumerate()
+        .filter_map(|(index, stream)| stream.front().map(|event| (index, event)))
+        .min_by(|(_, a), (_, b)| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)))
+        .map(|(index, _)| index)
+    {
+        out.push(streams[index].pop_front().unwrap());
+    }
     out
 }
 

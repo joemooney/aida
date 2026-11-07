@@ -218,6 +218,103 @@ fn a_verdict_for_the_spec_of_a_pr_and_one_for_the_pr_are_the_same_record() {
     assert_eq!(project::newest_verdict(&root, "STORY-43"), None);
 }
 
+// Host timestamps are metadata too: a clock rollback cannot reverse a
+// ledger's append order when the same verdict is looked up through a spec.
+// trace:TASK-2964 | ai:codex
+#[test]
+fn task2964_spec_projection_preserves_append_order_after_host_clock_rollback() {
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(2964);
+    let spec = "STORY-2964";
+    let mut events = Vec::new();
+    for (index, (word, at)) in [
+        ("approved", "2099-01-01T00:00:00Z"),
+        ("request-changes", "2026-01-01T12:01:00Z"),
+        ("approved", "2026-01-01T12:02:00Z"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut event = verdict(change, Some(spec), record(word, at, None));
+        event.seq = (index + 1) as u64;
+        event.at = at.into();
+        events.push(event);
+    }
+    std::fs::create_dir_all(ledger_dir(&root)).unwrap();
+    project::index_spec(&root, spec, change).unwrap();
+    let path = store::ledger_file(&root, change);
+    for count in [2, 3] {
+        let body: String = events[..count]
+            .iter()
+            .map(|event| format!("{}\n", serde_json::to_string(event).unwrap()))
+            .collect();
+        std::fs::write(&path, body).unwrap();
+        assert_eq!(
+            project::newest_verdict_event(&root, spec),
+            project::newest_verdict_event(&root, "PR-2964")
+        );
+        assert_eq!(
+            project::verdict_records(&root, spec),
+            events[..count]
+                .iter()
+                .map(|event| event.verdict_record().unwrap().clone())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            project::verdict_events_at(&root, spec, HEAD),
+            events[..count].iter().rev().cloned().collect::<Vec<_>>()
+        );
+    }
+    // Adding another indexed change must not reorder the original stream.
+    let other_change = ChangeKey::pr(2966);
+    let mut other = verdict(
+        other_change,
+        Some(spec),
+        record("rejected", "2026-01-01T12:01:30Z", None),
+    );
+    other.seq = 1;
+    other.at = "2026-01-01T12:01:30Z".into();
+    project::index_spec(&root, spec, other_change).unwrap();
+    std::fs::write(
+        store::ledger_file(&root, other_change),
+        format!("{}\n", serde_json::to_string(&other).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        project::newest_verdict_event(&root, spec),
+        Some(events[2].clone())
+    );
+    let projected = project::verdict_events_at(&root, spec, HEAD);
+    assert_eq!(
+        projected
+            .iter()
+            .filter(|event| event.change == change.as_key())
+            .cloned()
+            .collect::<Vec<_>>(),
+        events.iter().rev().cloned().collect::<Vec<_>>()
+    );
+    assert!(projected.contains(&other));
+
+    // The unbound spec ledger has the same ordering contract.
+    let unbound_spec = "STORY-2965";
+    for event in &mut events {
+        event.change = unbound_spec.into();
+        event.spec = Some(unbound_spec.into());
+    }
+    let unbound_path = store::unbound_file(&root, unbound_spec);
+    for count in [2, 3] {
+        let body: String = events[..count]
+            .iter()
+            .map(|event| format!("{}\n", serde_json::to_string(event).unwrap()))
+            .collect();
+        std::fs::write(&unbound_path, body).unwrap();
+        assert_eq!(
+            project::newest_verdict_event(&root, unbound_spec),
+            Some(events[count - 1].clone())
+        );
+    }
+}
+
 #[test]
 fn rewriting_the_same_record_does_not_append_twice() {
     let _env = uncontained();

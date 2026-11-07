@@ -227,13 +227,19 @@ pub fn compute_blocked(store: &RequirementsStore) -> HashSet<Uuid> {
 /// after a full rebuild.
 // trace:BUG-626 | ai:claude
 pub fn compute_epic_statuses(store: &RequirementsStore) -> HashMap<Uuid, String> {
-    store
+    // trace:BUG-2481 | ai:codex
+    let epics: Vec<_> = store
         .requirements
         .iter()
         .filter(|req| req.req_type == crate::models::RequirementType::Epic)
-        .filter_map(|req| {
-            crate::rollup::derive_epic_status(store, req.id)
-                .map(|status| (req.id, format!("{status:?}")))
+        .filter(|req| !crate::rollup::is_terminal_epic_status(&req.status))
+        .map(|req| req.id)
+        .collect();
+    crate::graph_walk::child_status_rollups(store, &epics)
+        .into_iter()
+        .filter_map(|(id, rollup)| {
+            crate::rollup::derive_epic_status_from_rollup(&rollup)
+                .map(|status| (id, format!("{status:?}")))
         })
         .collect()
 }

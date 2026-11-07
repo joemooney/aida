@@ -1330,20 +1330,26 @@ pub(crate) fn corpus_gate_bodies(
             }
         }
     }
-    let ledger: Vec<(String, Vec<crate::gate::ledger::GateEvent>)> = keys
+    let ledger: Vec<(String, Vec<(PathBuf, crate::gate::ledger::GateEvent)>)> = keys
         .iter()
         .map(|key| {
             let events = stores
                 .iter()
-                .filter_map(|store| crate::gate::ledger::project::newest_verdict_event(store, key))
+                .filter_map(|store| {
+                    crate::gate::ledger::project::newest_verdict_event(store, key)
+                        .map(|event| (store.clone(), event))
+                })
                 .collect();
             (key.clone(), events)
         })
         .collect();
-    let ledger_body = |event: &crate::gate::ledger::GateEvent| -> Result<String, String> {
-        serde_json::to_string(event.verdict_record().unwrap_or(&Default::default()))
-            .map_err(|e| e.to_string())
-    };
+    // trace:TASK-2964 | ai:codex
+    // Preserve the ledger's append sequence when aliases select different
+    // events from the same change. No cross-file clock can supply this order.
+    let ledger_body =
+        |(root, event): &(PathBuf, crate::gate::ledger::GateEvent)| -> Result<Vec<String>, String> {
+            crate::gate::review_verdict::bodies_with_ledger_history(root, event)
+        };
     let mut counted: Vec<(String, usize)> = Vec::new();
     let mut seen: Vec<PathBuf> = Vec::new();
     let mut out = Vec::new();
@@ -1371,7 +1377,7 @@ pub(crate) fn corpus_gate_bodies(
             // An unparseable file stays as written: the gate fails closed on it.
             let file = crate::gate::review_verdict::parse_recorded_verdict(&body);
             let newer = file.as_ref().and_then(|file| {
-                events.iter().position(|event| {
+                events.iter().position(|(_, event)| {
                     crate::gate::review_verdict::ledger_supersedes(&path, Some(file), event)
                 })
             });
@@ -1379,7 +1385,11 @@ pub(crate) fn corpus_gate_bodies(
                 Some(i) if counted.contains(&(key.clone(), i)) => {}
                 Some(i) => {
                     counted.push((key.clone(), i));
-                    out.push((key.clone(), ledger_body(&events[i])?));
+                    out.extend(
+                        ledger_body(&events[i])?
+                            .into_iter()
+                            .map(|body| (key.clone(), body)),
+                    );
                 }
                 None => out.push((key.clone(), body)),
             }
@@ -1390,7 +1400,11 @@ pub(crate) fn corpus_gate_bodies(
             continue;
         }
         for event in events {
-            out.push((key.clone(), ledger_body(event)?));
+            out.extend(
+                ledger_body(event)?
+                    .into_iter()
+                    .map(|body| (key.clone(), body)),
+            );
         }
     }
     Ok(out)
