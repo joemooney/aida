@@ -1086,11 +1086,12 @@ pub(crate) struct CorpusArm {
 
 /// The gate's release syntax, spoken in every refusal (a refusal must name the
 /// repair the caller can actually run).
+// trace:BUG-2474 | ai:codex
 fn corpus_release_hint(pr: u64, key: &str) -> String {
     format!(
-        "The hold lifts only when the findings are addressed on a NEW head and a fresh \
-         APPROVED verdict is recorded at it — `aida review record {key} --verdict approved \
-         --sha <new-head> --pr {pr}` after reviewing it — then merge again."
+        "Address the findings and record a fresh APPROVED verdict at the current head \
+         — `aida review record {key} --verdict approved --sha <current-head> --pr {pr}` \
+         after reviewing it — then merge again."
     )
 }
 
