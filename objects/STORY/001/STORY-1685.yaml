@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T06:17:24.784149600Z
-modified_at: 2026-11-07T20:56:42.467512126Z
+modified_at: 2026-11-07T20:56:43.687811130Z
 req_type: Story
 tags:
 - handoff
@@ -33,6 +33,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:28:07.464557920Z
   modified_at: 2026-11-07T20:28:07.464557920Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cc-a1a7-7f03-97a9-b09e443b5c79
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Single incident; typed-condition migration applied the principle.'
+  created_at: 2026-11-07T20:56:43.687811130Z
+  modified_at: 2026-11-07T20:56:43.687811130Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
