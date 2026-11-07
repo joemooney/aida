@@ -1,14 +1,8 @@
 job: session-hygiene-route
-last_run: 2026-11-07T02:27:44.108933653Z
+last_run: 2026-11-07T23:26:03.740505470Z
 last_by:
   seat: advisor
-  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   vendor: claude
 result: done
-note: same known salvage items; BUG-2473 rework in flight (#3551)
-due_since: 2026-11-07T02:30:42.732629054Z
-due_reason: on CronJobFailed:session-hygiene
-due_failure:
-  trip_id: session-hygiene@2026-11-07T22:52:33.634354264Z
-  job: session-hygiene
-  error: 'exit 1: '
+note: 'TASK-2708 seat: commit already on origin, only ignored files; dead sessions ended'
