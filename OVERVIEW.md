@@ -1521,8 +1521,10 @@ the compatibility profile. It removes canonical store/cache write grants and
 seals resolved store, project authority, Git metadata and shared-cache targets
 read-only after broader grants, including primary-checkout and linked/symlink
 layouts. Its fresh private derived-cache path is an explicit reader input;
-it never overlays or copies the shared cache. Missing protected mountpoints or
-a private state root inside protected state refuse. Explicit child selection
+it never overlays or copies the shared cache. Each cache directory is created
+owner-only (0700), and an existing directory or symlink refuses reuse. Missing
+protected mountpoints or a private state root inside protected state refuse.
+Explicit child selection
 `AIDA_STORE_MUTATION_PROFILE=mediated` currently refuses before launch setup:
 CLI/MCP routing, transactional Git/event publication and integrated comment/edit
 positives remain prerequisites to activation. The read-only service requirement
