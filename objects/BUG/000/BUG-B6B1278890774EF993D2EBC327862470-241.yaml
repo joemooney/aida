@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:09.119639981Z
-modified_at: 2026-11-07T04:51:04.673303582Z
+modified_at: 2026-11-07T04:53:49.587508202Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ comments:
   modified_at: 2026-11-07T04:39:12.374954569Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b45b-1193-79d1-956c-8080eeb3ab1e
+  author: joe
+  content: Implemented portable character-by-character JSON escaping in the master mail-notice hook, avoiding awk gsub replacement semantics. Added actual-hook round-trip tests for mawk and gawk covering SessionStart/PreInvocation, backslashes, quotes, tabs, Unicode, multiline/empty output, CR normalization and unchanged plain-text relay; wired the test and required engines into CI with local gate classification. Tests pass with mawk 1.3.4 20240123 and gawk 5.2.1 (the original failure did not reproduce on these versions). Shell syntax, cargo fmt --all -- --check, hook-link verification, CI gate audit and git diff --check pass. make sync-templates reaches the portable skill-pack step but refuses read-only .agents/skills in the native sandbox; hook-specific sync and verification pass and the tracked hook symlink points to the edited master. Changes intentionally uncommitted for host publication; status remains In Progress until publication.
+  created_at: 2026-11-07T04:53:49.587508202Z
+  modified_at: 2026-11-07T04:53:49.587508202Z
+  session_id: 01a1b4582f41
 history:
 - id: 01a1b444-9558-7901-b5f0-903657561dd2
   author: joe
