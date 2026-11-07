@@ -378,7 +378,8 @@ stat=$(cat "/proc/$$/stat")
 read -ra stat_fields <<< "${stat##*)}"
 starttime=${stat_fields[19]}
 write_lease "$$" "$(date +%s)"
-sed -i "s/^pid_start=$/pid_start=linux-starttime:$starttime/" "$F4/work/.aida/merge-locks/main"
+sed "s/^pid_start=$/pid_start=linux-starttime:$starttime/" "$F4/work/.aida/merge-locks/main" > "$F4/work/.aida/merge-locks/main.tmp" &&
+    mv "$F4/work/.aida/merge-locks/main.tmp" "$F4/work/.aida/merge-locks/main"
 printf 'process={"version":1,"node_id":"%s","identity":{"boot_id":"%s","pidns_inode":%s,"pid":%s,"starttime":%s},"generation":"live-text-fixture","refusal":null}\n' \
     "$node" "$boot" "$ns" "$$" "$starttime" >> "$F4/work/.aida/merge-locks/main"
 view=$(cd "$F4/work" && "$MERGE_JUDGE" merge-lock)
