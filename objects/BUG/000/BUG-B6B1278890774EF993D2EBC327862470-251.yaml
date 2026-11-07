@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-251
 agreed_id: BUG-2486
 title: Contained Codex launch refuses when the ChatGPT token expires before the grant; cap the child grant at the token's life instead
 description: 'STORY-2593 delivers pinned, non-renewing ChatGPT credentials and requires the access token to stay valid for the grant TTL plus 300s. Role grants default to 24h, so any token with less than 24h05m left refuses: ''contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch (grant plus 300s margin required)''. Repro 2026-11-07 16:47Z: the operator''s token had 10.8h left; conformance out=~/.aida/conformance-codex-aida-1794070028. Acceptance: the contained Codex launch caps the delegated child grant at (token exp - 300s) and records the cap in launch diagnostics. It refuses only when the capped TTL falls below a configured floor (default 30 min), naming the token expiry and ''codex login'' as the fix. aida doctor shows the token''s remaining life. Tests for capped, floor-refused and unchanged-when-ample cases.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T21:26:07.924864700Z
+modified_at: 2026-11-07T22:20:02.814404555Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -206,6 +206,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b818-e93a-7e32-901d-c9d1feaff5de
+  author: aida-auto-bump
+  timestamp: 2026-11-07T22:20:02.746257776Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b818-e97e-7ba0-991c-4fd23c8db7c3
+  timestamp: 2026-11-07T22:20:02.814399816Z
+  agent: aida
+  commit_sha: 47e379ad6e4aae7653eed8efff79cbabefec6d8d
+  summary: 'All 6 BUG-2486 criteria met and CI green at bced43bd (7/7 jobs plus Build). Round-2 findings fixed: doctor expired fixture now has auth_mode=chatgpt; diagnostic deadline comes from auth.deadline through Credential::launch_lifetime; the production prepare_with_io test asserts the persisted child cap (exp-300), the unchanged parent and a below-floor refusal with no write; direct grants are left unchanged and the lane keyring TTL is capped. Non-blocking: hint strings hardcode 300s instead of MARGIN; the diagnostic prints ''requested 0s'' for grantless launches; doctor tells API-key auth.json users to run codex login. merge-hold-gate needs human clearance.'
+  review_verdict: approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -215,3 +229,7 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T22:20:02.746251570Z
+  completion_sha: 47e379ad6e4aae7653eed8efff79cbabefec6d8d
