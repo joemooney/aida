@@ -9,13 +9,13 @@ note: 'BUG-2466 filed (approved,high): aida show tail is blocking not CPU; budge
 due_since: 2026-11-07T03:05:13.738003076Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-11-07T03:00:59.953185421Z
+  trip_id: performance-guard@2026-11-07T09:08:19.930111093Z
   performance:
   - command: show
     budget_ms: 2000
-    over_budget: 106
-    denominator: 770
-    proportion_millipercent: 13766
+    over_budget: 126
+    denominator: 842
+    proportion_millipercent: 14964
     tolerated_millipercent: 10000
     window_hours: 24
     worst_ms: 13911

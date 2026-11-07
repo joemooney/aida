@@ -9,6 +9,6 @@ note: reconciled aida-store union c95bf6c0 to both hubs
 due_since: 2026-11-07T03:05:13.738003076Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-11-07T03:00:59.953185421Z
+  trip_id: hub-drift-guard@2026-11-07T09:08:19.930111093Z
   job: hub-drift-guard
   error: 'exit 1: '
