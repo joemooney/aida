@@ -120,10 +120,10 @@ aida-cli-lib/src/agent_launch.rs|rescope_contained_settings|literal:codex	1
 aida-cli-lib/src/agent_launch.rs|resolved_agent_permission_summary|literal:antigravity	1
 aida-cli-lib/src/agent_launch.rs|resolved_agent_permission_summary|literal:claude	1
 aida-cli-lib/src/agent_launch.rs|resolved_agent_permission_summary|literal:codex	1
-aida-cli-lib/src/agent_launch.rs|run_agent_generation|literal:claude	1
-aida-cli-lib/src/agent_launch.rs|run_agent_generation|literal:codex	1
-aida-cli-lib/src/agent_launch.rs|run_agent_generation|typed:Claude	1
-aida-cli-lib/src/agent_launch.rs|run_agent_generation|typed:HeadlessVendor	1
+aida-cli-lib/src/agent_launch.rs|run_agent_generation_with_io|literal:claude	1
+aida-cli-lib/src/agent_launch.rs|run_agent_generation_with_io|literal:codex	1
+aida-cli-lib/src/agent_launch.rs|run_agent_generation_with_io|typed:Claude	1
+aida-cli-lib/src/agent_launch.rs|run_agent_generation_with_io|typed:HeadlessVendor	1
 aida-cli-lib/src/agent_launch.rs|session_launch_mode|literal:claude	1
 aida-cli-lib/src/agent_launch.rs|split_posture_flags|literal:antigravity	1
 aida-cli-lib/src/agent_launch.rs|split_posture_flags|literal:claude	1

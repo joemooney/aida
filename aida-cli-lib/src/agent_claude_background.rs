@@ -9,7 +9,6 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::{
     fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     net::UnixStream,
-    process::CommandExt,
 };
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -152,7 +151,7 @@ pub(crate) fn dispatch(
             dir.join("output.log").display()
         )
     })?;
-    eprintln!("AIDA background attempt {attempt}\n  logs: aida agent logs {attempt}\n  attach: aida agent attach {attempt}\n  claude attach is unavailable for AIDA-supervised sessions.");
+    eprintln!("{}", crate::vendors::supervised_background_hint(&attempt));
     Ok(())
 }
 
@@ -164,28 +163,15 @@ fn dispatch_with_helper(
     init: &Handoff,
     take_ownership: impl FnOnce(),
 ) -> Result<()> {
-    let fd = child.as_raw_fd();
-    // SAFETY: only async-signal-safe syscalls between fork and exec.
-    unsafe {
-        helper.pre_exec(move || {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            if fd != FD && libc::dup2(fd, FD) < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            if libc::fcntl(FD, libc::F_SETFD, 0) < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
+    crate::launch::control::detach_with_socket(helper, child.as_raw_fd(), FD);
     helper
         .stdin(std::process::Stdio::null())
         .stdout(output.try_clone()?)
         .stderr(output);
     let mut supervisor = helper.spawn_retrying_etxtbsy()?;
     drop(child);
+    let mut take_ownership = Some(take_ownership);
+    let mut transferred = false;
     let result = (|| {
         send(parent, init)?;
         let ready: String = receive(parent)?;
@@ -195,7 +181,8 @@ fn dispatch_with_helper(
         );
         // Ownership moves before the supervisor can release the vendor. If the
         // final acknowledgement is lost, retain the admitted worktree and lease.
-        take_ownership();
+        take_ownership.take().expect("ownership callback")();
+        transferred = true;
         send(parent, &"release")?;
         let accepted: String = receive(parent)?;
         anyhow::ensure!(
@@ -205,14 +192,59 @@ fn dispatch_with_helper(
         Ok(())
     })();
     if result.is_err() {
-        // TERM reaches the attested worker through WorkerSignals. Never guess
-        // that killing a helper means a worktree or lease is safe to delete.
-        unsafe {
-            libc::kill(supervisor.id() as i32, libc::SIGTERM);
+        cancel_supervisor(
+            &mut supervisor,
+            parent,
+            transferred,
+            take_ownership,
+            if transferred {
+                Duration::from_secs(2)
+            } else {
+                TIMEOUT
+            },
+        )?;
+    }
+    result
+}
+
+// trace:TASK-3219 | ai:codex
+fn cancel_supervisor(
+    supervisor: &mut std::process::Child,
+    parent: &UnixStream,
+    transferred: bool,
+    mut retain: Option<impl FnOnce()>,
+    grace: Duration,
+) -> Result<()> {
+    let result = (|| {
+        // Closing the release socket cancels slow prepare before WorkerSignals
+        // exists. The owner can unwind and revoke its grant when prepare returns.
+        let _ = parent.shutdown(std::net::Shutdown::Both);
+        if transferred {
+            // Ready is sent only after WorkerSignals was installed.
+            unsafe {
+                libc::kill(supervisor.id() as i32, libc::SIGTERM);
+            }
         }
-        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let deadline = std::time::Instant::now() + grace;
         while supervisor.try_wait()?.is_none() && std::time::Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
+        }
+        if supervisor.try_wait()?.is_none() {
+            // Forced exit cannot prove RAII teardown. Retain the seat for recovery.
+            if let Some(retain) = retain.take() {
+                retain();
+            }
+            eprintln!("background supervisor required forced termination; launch resources retained for manual recovery");
+            supervisor.kill()?;
+        }
+        supervisor.wait()?; // Caller cleanup must never race a live owner.
+        Ok(())
+    })();
+    if result.is_err() {
+        // A failed wait/kill also leaves ownership uncertain. Do not let the
+        // caller remove the worktree underneath a possibly live supervisor.
+        if let Some(retain) = retain.take() {
+            retain();
         }
     }
     result
@@ -256,8 +288,8 @@ pub(crate) fn supervise_main() -> Result<()> {
         &(me, init.parent),
     )?;
     let config = AgentLaunchConfig {
-        agent_type: "claude",
-        binary: "claude",
+        agent_type: crate::vendors::supervised_background_name(),
+        binary: crate::vendors::supervised_background_name(),
         default_args: init.args,
         prompt_style: AgentPromptStyle::Positional,
         contained: true,
@@ -297,7 +329,11 @@ pub(crate) struct RegistryEnd {
 }
 impl Drop for RegistryEnd {
     fn drop(&mut self) {
-        if let Err(e) = agent_registry::mark_agent_ended(&self.root, "claude", self.pid) {
+        if let Err(e) = agent_registry::mark_agent_ended(
+            &self.root,
+            crate::vendors::supervised_background_name(),
+            self.pid,
+        ) {
             eprintln!("failed to mark background worker ended: {e:#}");
         }
     }
@@ -328,7 +364,14 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
             output.flush()?;
             continue;
         }
-        if !follow || dir.join("ended").exists() {
+        if !follow {
+            break;
+        }
+        if dir.join("ended").exists() {
+            // The terminal marker follows worker exit. The writer may have
+            // appended between our EOF read and this observation.
+            std::io::copy(&mut log, &mut output)?;
+            output.flush()?;
             break;
         }
         let (me, _): (ProcId, ProcId) =
@@ -360,6 +403,49 @@ pub(crate) mod tests {
         assert!(open_log(&leaf).is_ok());
         std::os::unix::fs::symlink(&leaf, root.path().join("link")).unwrap();
         assert!(open_log(&root.path().join("link")).is_err());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn supervisor_cancellation_closes_socket_and_reaps_before_cleanup() {
+        let (parent, child) = UnixStream::pair().unwrap();
+        let mut helper = std::process::Command::new("/bin/sh");
+        helper.args(["-c", "sleep 0.1; read x <&3 || exit 0; exit 1"]);
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        let mut process = helper.spawn().unwrap();
+        drop(child);
+        let retained = std::cell::Cell::new(false);
+        cancel_supervisor(
+            &mut process,
+            &parent,
+            false,
+            Some(|| retained.set(true)),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert!(process.wait().unwrap().success());
+        assert!(!retained.get(), "graceful unwind permits ordinary cleanup");
+
+        let (parent, child) = UnixStream::pair().unwrap();
+        let mut helper = std::process::Command::new("/bin/sleep");
+        helper.arg("60");
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        let mut process = helper.spawn().unwrap();
+        drop(child);
+        cancel_supervisor(
+            &mut process,
+            &parent,
+            false,
+            Some(|| retained.set(true)),
+            Duration::from_millis(10),
+        )
+        .unwrap();
+        assert!(
+            retained.get(),
+            "forced termination retains uncertain resources"
+        );
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(process.wait().unwrap().signal(), Some(libc::SIGKILL));
     }
 
     // A dispatcher process exits after dispatch; the live test remains alive
@@ -426,8 +512,8 @@ pub(crate) mod tests {
         let init: Handoff = receive(&mut socket).unwrap();
         let _aida = init.aida.clone().map(crate::kernel::test_aida_exe::set);
         let config = AgentLaunchConfig {
-            agent_type: "claude",
-            binary: "claude",
+            agent_type: crate::vendors::supervised_background_name(),
+            binary: crate::vendors::supervised_background_name(),
             default_args: init.args,
             prompt_style: AgentPromptStyle::Positional,
             contained: true,

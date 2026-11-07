@@ -255,6 +255,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida push` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida fetch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida internal claude-bg-supervise` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal advisor-code-gate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal record-no-verify-bypass` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal locking-gate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -484,6 +485,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida brief read` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida compete` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida agent logs` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida agent attach` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent new` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent new claude` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent new codex` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

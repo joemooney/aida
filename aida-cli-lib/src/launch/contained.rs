@@ -1479,8 +1479,9 @@ fn codex_argv(
 fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
     // trace:TASK-3219 | ai:codex
     anyhow::ensure!(
-        original.first().map(String::as_str) != Some("attach"),
-        "claude attach is unavailable under the AIDA wrapper; use aida agent attach <attempt> or aida agent logs <attempt>"
+        !(original.first().map(String::as_str) == Some("attach")
+            && original.get(1).is_some_and(|arg| !arg.starts_with('-'))),
+        crate::vendors::background_attach_refusal()
     );
     let mut args = Vec::with_capacity(original.len());
     let mut settings_seen = 0;

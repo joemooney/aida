@@ -3042,7 +3042,7 @@ pub(crate) fn agent_new_with_config_wake(
     let project_root = agent_launch_project_root_from(&discovered_root);
     // This scope belongs only to fresh foreground agent-new, never resume/background.
     // trace:TASK-3219 | ai:codex
-    let wrapper = config.agent_type == "claude"
+    let wrapper = config.agent_type == crate::vendors::supervised_background_name()
         && config.contained
         && session::claude_uses_contained_wrapper(&project_root)?;
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
@@ -3421,7 +3421,7 @@ pub(crate) fn agent_new_bg_dispatch(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = agent_launch_project_root_from(&discovered_root);
-    let wrapper = config.agent_type == "claude"
+    let wrapper = config.agent_type == crate::vendors::supervised_background_name()
         && config.contained
         && session::claude_uses_contained_wrapper(&project_root)?;
     if wrapper {
@@ -7537,7 +7537,7 @@ pub(crate) fn run_agent_generation_with_io(
             wrapper,
             "background supervision requires the shared Claude wrapper"
         );
-        command.arg("--print").env("AIDA_HEADLESS", "1");
+        crate::launch::control::background_print(&mut command, &plan.project_root);
     }
     // Keep the wrapper owner alive through registry binding, release and wait.
     // trace:TASK-3219 | ai:codex

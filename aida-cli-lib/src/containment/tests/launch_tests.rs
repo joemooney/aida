@@ -3790,3 +3790,107 @@ print('BACKGROUND-EXIT',flush=True)
     assert!(!root.path().join("worker.json").exists());
     eprintln!("LIVE: background supervisor passed (1 live regression)");
 }
+
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_attach_argv_refuses_subcommand_preserves_prompt() {
+    let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let err =
+        claude_argv(&args(&["attach", "session-id", "--settings", "{}"]), 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
+    for input in [
+        args(&["--settings", "{}", "attach"]),
+        args(&["attach", "--settings", "{}"]),
+        args(&["--settings", "{}", "--", "attach"]),
+    ] {
+        assert!(claude_argv(&input, 1, &[]).is_ok());
+    }
+}
+
+// Exercise the production entry point, with invalid requests deliberately
+// refusing before executable discovery, claims, worktrees or setup receipts.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::agent_launch::*;
+    use crate::{session, RoleInstanceKind};
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[("AIDA_CONTAINED", None), ("AIDA_OS_WRAP", Some("1"))],
+    );
+    let config = || AgentLaunchConfig {
+        delegate_seats: vec![],
+        agent_type: "claude",
+        binary: "/missing/claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    for (rotate, resume, prompt, expected) in [
+        (true, None, Some("work"), "--rotate"),
+        (false, Some("session"), Some("work"), "resume waits"),
+        (false, None, None, "need a prompt"),
+    ] {
+        let err = agent_new_bg_dispatch(
+            config(),
+            Some("implementer".into()),
+            Some("TASK-3219".into()),
+            false,
+            Some(root.path()),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(prompt.map(str::to_owned), false),
+            AgentResumeOptions::new(true, resume.map(str::to_owned), false, true),
+            AgentDefaultFlagOptions::new(false, vec![], None).rotating(rotate),
+            None,
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains(expected), "{err:#}");
+        let files: Vec<_> = std::fs::read_dir(root.path().join(".aida"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(files, vec![std::ffi::OsString::from("config.toml")]);
+    }
+    trusted_policy(root.path(), "");
+    let mut cfg = config();
+    cfg.default_args = vec!["--bg".into(), "--model".into(), "sonnet".into()];
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "native".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    // Native os_wrap is disabled as on the historical daemon path.
+    env.set_key("AIDA_OS_WRAP", "0");
+    let cmd = build_agent_new_bg_command(
+        Path::new("/bin/echo"),
+        &cfg,
+        &plan,
+        &["attach".into(), "prompt with spaces".into()],
+        None,
+    )
+    .unwrap();
+    assert_eq!(cmd.get_program(), "/bin/echo");
+    assert_eq!(
+        cmd.get_args().collect::<Vec<_>>(),
+        ["--bg", "--model", "sonnet", "attach", "prompt with spaces"].map(std::ffi::OsStr::new)
+    );
+}

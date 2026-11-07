@@ -14,6 +14,30 @@ pub(crate) fn control_child() -> Result<Command> {
 }
 
 /// Only phase-driver unit fixtures may inject a coordinating executable.
+// trace:TASK-3219 | ai:codex
+pub(crate) fn detach_with_socket(helper: &mut Command, fd: i32, target: i32) {
+    // SAFETY: only async-signal-safe syscalls between fork and exec.
+    unsafe {
+        helper.pre_exec(move || {
+            if libc::setsid() < 0
+                || (fd != target && libc::dup2(fd, target) < 0)
+                || libc::fcntl(target, libc::F_SETFD, 0) < 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+pub(crate) fn background_print(command: &mut Command, root: &Path) {
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(root));
+    command
+        .arg("--print")
+        .env("AIDA_HEADLESS", "1")
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+}
+
 #[cfg(test)]
 pub(crate) fn control_child_for_test(program: &Path) -> Result<Command> {
     let current = program.canonicalize()?;
