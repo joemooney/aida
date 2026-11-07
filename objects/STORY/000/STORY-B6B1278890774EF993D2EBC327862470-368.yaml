@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T14:20:16.935443671Z
+modified_at: 2026-11-07T15:08:31.950633455Z
 req_type: Story
 relationships:
 - rel_type:
@@ -500,6 +500,13 @@ comments:
   created_at: 2026-11-07T14:20:16.935443671Z
   modified_at: 2026-11-07T14:20:16.935443671Z
   session_id: 01a1b65b4866
+- id: 01a1b68d-d8ed-70c3-8b71-43efbe182f4a
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 08:20 (CI at 5ef082e760; the last lane returned the same head). Fix exactly two CI gates, nothing else: (1) test-timings BUDGET: aida-cli::bug_1502_format_json_audit story2402_s3_migration_global_json_matches_dedicated_json ran 10.1s against the 10s unbudgeted limit. Make it faster (share one fixture/store across its asserts) or add it to scripts/test-time-budget.toml at measured time plus headroom (15s). (2) docs spec-id leak: docs manual 10-storage.md:163 cites ''BUG-1''. Replace it with a <spec-id> placeholder or plain prose. LIGHT gate: make check-ci-fast plus that one test. Commit with (Refs STORY-2402), push, stop.'
+  created_at: 2026-11-07T15:08:31.853739387Z
+  modified_at: 2026-11-07T15:08:31.853739387Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
