@@ -15,7 +15,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-07T21:08:35.466134158Z
+modified_at: 2026-11-07T22:00:53.392537397Z
 req_type: Task
 tags:
 - cleanup
@@ -38,6 +38,13 @@ comments:
   content: 'ADVISOR 2026-11-07 14:20, regroup triage: ACTIVATED. Trigger fired: 3474 remote branches, 236 worktrees, 147 aida-* sibling dirs. Do it as a per-item lifecycle sweep (merged/closed PR branches, landed seat clones), never a blind delete. Add a recurring gc job so it doesn''t regrow.'
   created_at: 2026-11-07T20:57:39.445416606Z
   modified_at: 2026-11-07T20:57:39.445416606Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b807-5f90-72f3-a643-a88b2ed7c110
+  author: joe
+  content: 'ADVISOR RESCOPE 2026-11-07 14:55 (after the dell1 lane''s punt: a contained seat cannot see this host''s inventory, and destructive gc must not run from a seat). Host facts on the primary: 238 linked worktrees, 34 aida-seat-* private clones, 70G in ../aida-worktrees, disk 84% full; ''aida worktree gc'' finds 0 candidates because seat dirs are private clones, not linked worktrees; ''aida pr gc'' worked (advisor applied it: 456 pr-N branches deleted). NEW SCOPE = code: (1) ''aida worktree gc'' also covers seat clones (aida-seat-*): eligible only when the lease has ended AND the branch has no commits missing from origin (reuse the salvage check) AND its PR is merged or closed. Dry-run by default, --apply to delete, and it reports bytes freed. (2) Linked worktrees whose branch is merged into main or whose PR is merged/closed, with a clean tree, become eligible as well. (3) Register a weekly due job that runs the dry-run and routes counts to the advisor (never auto-apply). Tests with fixture repos. LIGHT gate. The advisor runs --apply on the host after it lands.'
+  created_at: 2026-11-07T22:00:53.392537397Z
+  modified_at: 2026-11-07T22:00:53.392537397Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
