@@ -3435,12 +3435,12 @@ pub(crate) fn contained_wrapper_launch(vendor: HeadlessVendor, contained: bool) 
 }
 
 thread_local! {
-    /// Set only while a wrapper-owned headless launch composes its Claude argv.
+    /// Set only while a wrapper-owned launch composes its Claude argv.
     // trace:TASK-2708 | ai:claude
     static CLAUDE_WRAPPER_COMPOSITION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// The scope in which a wrapper-owned headless launch composes its Claude
+/// The scope in which a wrapper-owned launch composes its Claude
 /// argv: the contained Claude flags are permitted, and the legacy os_wrap is
 /// not applied (the wrapper owns the boundary). Outside it, a Claude AIDA
 /// composition under `claude = "aida"` refuses by name
@@ -3461,14 +3461,14 @@ impl Drop for ClaudeWrapperComposition {
     }
 }
 
-fn composing_for_claude_wrapper() -> bool {
+pub(crate) fn composing_for_claude_wrapper() -> bool {
     CLAUDE_WRAPPER_COMPOSITION.with(std::cell::Cell::get)
 }
 
 /// The named refusal for a Claude AIDA launch surface the wrapper does not
 /// own yet, under `[contained.vendors] claude = "aida"`.
 // trace:TASK-2708 | ai:claude
-pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches and coordinators so far; this launch surface (interactive, --bg or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
+pub(crate) const CLAUDE_WRAPPER_UNWIRED: &str = "[contained.vendors] claude = \"aida\" selects AIDA's shared contained wrapper, which supports foreground headless Claude launches, coordinators and private-PTY agent-new so far; this launch surface (--bg or resume) refuses rather than fall back. Remove `claude` from [contained.vendors] to use the Claude-native boundary.";
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
 // trace:TASK-2631 | ai:codex

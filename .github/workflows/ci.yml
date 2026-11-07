@@ -441,11 +441,11 @@ jobs:
             echo "::error::required-live test task_2708_claude_prepare_fake_home did not report ok"; exit 1
           fi
           if [ "$expected_2708" -eq 0 ] || [ "$ran_2708" -ne "$expected_2708" ]; then echo "::error::only $ran_2708 of $expected_2708 task_2708_live_ tests ran ok"; exit 1; fi
-          # S1 coordinator launch must exercise the wrapper, never silently skip.
+          # S1 coordinator and S2 interactive launches must exercise the wrapper, never silently skip.
           # trace:TASK-3219 | ai:codex
           expected_3219=$(grep -rhoE 'fn task_3219_live_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
           ran_3219=$(grep -hE '^ok ' "$lib_results" | grep -oE 'task_3219_live_[a-z0-9_]+$' | sort -u | wc -l)
-          echo "task_3219 coordinator live tests: $ran_3219 of $expected_3219 ran ok"
+          echo "task_3219 wrapper live tests: $ran_3219 of $expected_3219 ran ok"
           if [ "$expected_3219" -eq 0 ] || [ "$ran_3219" -ne "$expected_3219" ]; then echo "::error::only $ran_3219 of $expected_3219 task_3219_live_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
