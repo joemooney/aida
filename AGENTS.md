@@ -494,10 +494,12 @@ and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.
 The separate `launch/contained.rs` owner handles trusted Codex AIDA-posture
 fresh foreground headless phases with exact env transport, private state, a
-mandatory connect broker and host-attested receipts before vendor exec. API-key
-mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.
+mandatory connect broker and host-attested receipts before vendor exec. API keys
+and version-pinned, non-renewing ChatGPT file credentials use this path; see
+`launch/codex_auth.rs` and the STORY-2593 plan for credential and validation
+limits. Other launch surfaces still refuse.
 Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup.md.
-<!-- trace:TASK-2705 TASK-2707 | ai:codex -->
+<!-- trace:TASK-2705 TASK-2707 STORY-2593 | ai:codex -->
 
 Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
 evidence. Condition PR probes use this boundary with a 15-second timeout and

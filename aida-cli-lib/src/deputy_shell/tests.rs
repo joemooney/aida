@@ -27,6 +27,28 @@ fn host_observer() -> aida_core::pid_observer::PidObserver {
     }
 }
 
+// A successful spawn precedes exec's /proc cmdline update. Wait for the
+// identity under test rather than depending on the parent's scheduling.
+// trace:STORY-2593 | ai:codex
+fn wait_for_legacy_runner(q: &Queue, child: &mut std::process::Child) -> RunnerStatus {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let status = q.runner_status_with(Path::new("/proc"), host_observer());
+        if status == RunnerStatus::Legacy(child.id()) {
+            return status;
+        }
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "bash exited before readiness"
+        );
+        assert!(
+            std::time::Instant::now() < deadline,
+            "bash never became visible: {status:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // trace:BUG-2468 | ai:codex
 #[test]
 fn runner_status_preserves_native_identity_checks_and_legacy_fallback() {
@@ -81,7 +103,7 @@ fn runner_pid_only_detects_a_live_bash_runner_without_grant_authority() {
     let f = Fixture::new("t");
     let script = f.root().join("aida-deputy-shell");
     std::fs::write(&script, "read -r line\n").unwrap();
-    let child = Child(
+    let mut child = Child(
         Command::new("/bin/bash")
             .arg(&script)
             .args(["run", "t"])
@@ -90,7 +112,7 @@ fn runner_pid_only_detects_a_live_bash_runner_without_grant_authority() {
             .unwrap(),
     );
     std::fs::write(f.q.root.join("runner.pid"), format!("{}\n", child.0.id())).unwrap();
-    let status = f.q.runner_status_with(Path::new("/proc"), host_observer());
+    let status = wait_for_legacy_runner(&f.q, &mut child.0);
     assert_eq!(status, RunnerStatus::Legacy(child.0.id()));
     let mut out = Vec::new();
     crate::deputy_shell_cmd::write_runner_status(status, &mut out).unwrap();
@@ -128,7 +150,7 @@ fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
         wait: false,
     };
     for start in [vec!["run", "t"], vec!["t"]] {
-        let child = Child(
+        let mut child = Child(
             Command::new("/bin/bash")
                 .arg(&script)
                 .args(&start)
@@ -138,7 +160,7 @@ fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
         );
         std::fs::write(f.q.root.join("runner.pid"), format!("{}\n", child.0.id())).unwrap();
         assert_eq!(
-            f.q.runner_status_with(Path::new("/proc"), host_observer()),
+            wait_for_legacy_runner(&f.q, &mut child.0),
             RunnerStatus::Legacy(child.0.id()),
             "{start:?}"
         );
