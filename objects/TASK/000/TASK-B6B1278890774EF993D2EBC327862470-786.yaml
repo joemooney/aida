@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-06T23:57:33.211815029Z
+modified_at: 2026-11-07T00:17:16.628701357Z
 req_type: Task
 tags:
 - area:containment
@@ -253,6 +253,16 @@ comments:
   created_at: 2026-11-06T23:56:16.010198653Z
   modified_at: 2026-11-06T23:56:16.010198653Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b35d-e154-7f72-9c49-bd1c2f738ae7
+  author: joe
+  content: |-
+    PR #3545 round 4: addressed findings 1-3. LaunchContext maps Agy to descriptor key agy and checks combined profile/caller argv. The outer-only guard normalizes Go single/double-dash bypass and prompt options (including descriptor validation). Regressions cover defaults/caller tails, joined flags, prompt text and each session LaunchKind; Query/Control retain separate constructors. The private runtime parent now has its own mask view, leaving other vendor masks empty.
+    Executed validation: cargo test -p aida-cli-lib --lib task_3048_ -- --nocapture: 12 passed, including the live runtime/read-only credential check, no skips. Fresh test binary with bug_1686_agy_headless_argv_tests, preflight_launch_vendor and story_2326_launch_tests filters: 26 passed. cargo fmt --all -- --check and git diff --check passed. make check-ci-fast: all 38 gates passed.
+    Finding 4: retained immediate headless/bypass refusals under the signed ruling. AGY admission remains closed pending complete auth/refresh inventory and fresh integrated all-tool conformance; operator-script impact remains for advisor acknowledgement. Finding 5: local Rust tests have now executed, but new-head CI requires host publication; re-review must cite that new head. Existing merge hold requires authorized clearance. This remains a Refs slice rather than TASK-3048 completion.
+    Four files left uncommitted: containment/mod.rs and launch/{context,contained,agy}.rs. Native publication declaration recorded: [AI:codex] fix(containment): normalize outer-only flags and restore agy diagnostics (Refs TASK-3048). Host must commit and publish after seat exit. AIDA MCP comment attempt failed with Transport closed; recording through CLI instead.
+  created_at: 2026-11-07T00:17:16.628701357Z
+  modified_at: 2026-11-07T00:17:16.628701357Z
+  session_id: 01a1b34bcab6
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
