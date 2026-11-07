@@ -2461,10 +2461,10 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     let fx = fixture();
     let clone = seat(&fx, "hygiene", "c0ffee002473");
     seat_commit(&clone, "published.txt");
-    git_ok(&clone, &["push", "-q", "origin", "feat"]);
+    seat_git(&clone, &["push", "-q", "origin", "feat"]);
     // Include another local branch to exercise all-branch remote coverage.
     git_ok(&clone, &["branch", "also-published"]);
-    git_ok(&clone, &["push", "-q", "origin", "also-published"]);
+    seat_git(&clone, &["push", "-q", "origin", "also-published"]);
     let mut lease = crate::list_leases(&fx.main).remove(0);
     lease.tree_kind = TreeKind::Worktree;
     lease.branch.clear();
