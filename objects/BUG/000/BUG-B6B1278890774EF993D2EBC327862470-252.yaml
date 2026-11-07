@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:19:41.755157732Z
+modified_at: 2026-11-07T17:19:45.014361690Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -28,6 +28,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Investigation-only doc PR: none of BUG-2487''s four acceptance criteria are met (pin, argv, tests, launcher all unchanged), yet the commit says ''fix: ... re-pin to 0.167.0 (BUG-2487)'', so merging would auto-complete the bug. The evidence doc is useful; land it with a non-completing Refs trailer once the -P design fork is decided.. It was punted on: design-fork: The requested npm codex-cli 0.167.0 x86_64 musl binary (SHA-256 cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda) also rejects -P at top level and under exec (exit 2); only sandbox accepts it. Re-pinning cannot satisfy the launch contract. Evidence and reproduction: docs/internal/testing/bug-2487-codex-pin.md. Requires an authorized exec-compatible profile-selection interface or a different measured binary before implementation and compatibility admission.. No triage reason was given.'
   created_at: 2026-11-07T17:19:41.755154278Z
   modified_at: 2026-11-07T17:19:41.755154278Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b705-f9b0-7762-b888-021b27336cda
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2487):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cfbecb41250f
+    Recorded: 2026-11-07T17:07:51.921166599+00:00
+    Findings:
+    1. AC1 unverified/unmet: aida-cli-lib/src/launch/codex_auth.rs:19 still pins codex-cli 0.166.0 SHA b8a11fed...; codex_auth.rs:52, codex_auth_probe.py:77 and codex_auth_tests.rs:39/475 still name 0.166.0. The PR only adds docs/internal/testing/bug-2487-codex-pin.md.
+    2. AC2 unmet: no pre-launch check that the pinned binary supports every flag; launch/contained.rs:1397 still unconditionally adds '-P aida' before exec, which the doc itself shows both 0.166.0 and 0.167.0 reject (exit 2).
+    3. AC3 unmet: no test pairs the pin with the argv builder.
+    4. AC4 partial: the new doc records the measured 0.167.0 SHA but explicitly says the version is NOT supported and the upgrade step does not work, so it does not name a supported version + upgrade step as AC4 requires (correctly, given the evidence; the spec premise needs revising).
+    5. Commit attribution: subject '[AI:codex] fix: ... re-pin to 0.167.0 (BUG-2487)' carries a completing trailer and a title claiming a re-pin that did not happen. Merging would mark BUG-2487 complete while the launcher still exits 2. Re-commit as docs(containment): ... (Refs BUG-2487), or hold until the fix lands.
+    6. Spec blocker (advisor): the evidence says the premise is wrong: 0.167.0 accepts -P only under 'codex sandbox', not top-level or exec. BUG-2487's acceptance (re-pin to 0.167.0) cannot be satisfied as written. The design fork the doc names (exec-compatible profile selection, e.g. a -c config override or a different binary) must be decided, and the acceptance rewritten, before the implementation is reworked.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:19:44.560182797Z
+  modified_at: 2026-11-07T17:19:44.560182797Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
