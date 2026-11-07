@@ -9,6 +9,6 @@ note: same known salvage items; BUG-2473 rework in flight (#3551)
 due_since: 2026-11-07T02:30:42.732629054Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-07T15:27:24.271525878Z
+  trip_id: session-hygiene@2026-11-07T16:27:53.931583664Z
   job: session-hygiene
   error: 'exit 1: '
