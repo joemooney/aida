@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T21:35:31.439458077Z
+modified_at: 2026-11-07T22:17:04.245538587Z
 req_type: Task
 tags:
 - architecture
@@ -365,6 +365,23 @@ comments:
   modified_at: 2026-11-07T21:34:29.113294976Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b816-2ff5-7590-8928-21c992035504
+  author: joe
+  content: |-
+    PR #3628 round 3: uncommitted review fixes prepared for the host publication path.
+
+    Runtime: drain the output log again after observing ended; cancel pre-ready preparation by closing the release socket rather than sending TERM before WorkerSignals exists; bound graceful cleanup, escalate to SIGKILL, reap the supervisor before returning, and retain launch resources on forced/unconfirmed termination. Ready/ownership-transferred cancellation keeps the two-second TERM grace.
+
+    Coverage/docs: production agent_new_bg_dispatch early refusals for rotate, direct resume and missing prompt, plus a native argv snapshot; targeted attach-subcommand refusal and literal attach prompt cases; real CLI logs/attach snapshots, canonical/unknown attempt refusals, private-directory/symlink refusals, ended follow and dead-supervisor termination. Documented direct-vendor interception limits and manual cleanup, including uncertain failed attempts. Added logs/attach default-new rewrite registration, manual command sections, and JSON-audit rows.
+
+    CI failures addressed in source: story_2256_every_agent_subcommand_passes_the_default_new_rewrite; launch_sites_outside_the_launcher_match_the_ledger; task_2708_every_spawn_agent_builder_is_inventoried_and_guarded; task_2708_every_codex_spawn_path_is_inventoried_and_guarded; task_2032_launcher_main_is_called_only_from_entry_points; story_2539_vendor_literal_ratchet; every_headless_spawn_site_disables_background_tasks; every_headless_spawn_site_sets_the_background_wait_ceiling; checked_in_audit_is_exhaustive_and_every_honoured_probe_parses. Moved supervisor detach setup and headless env setup into launch/control instead of expanding launch debt; function inventories follow run_agent_generation_with_io, with explicit Claude-only receipt-boundary checks. Vendor names come from the registry rendering layer. All inventory additions from 31a4e2b9713 are already reflected on origin/main.
+
+    Validation: make check-ci-fast passed all 43 gates; final rustfmt check, git diff --check, static manual check, and writer-inventory check passed. untested=true for runtime/command regressions. Initial lane compilation caught two test imports, corrected; two subsequent 900-second jobs timed out before any executed-test result. The runner then reported overlay-stale: primary rewrote generation agent-65a17c57ad652b4a in place. The queued retry still uses that stale generation, which the overlay implementation documents can make builds inconsistent. No live regression executed (live_count=0); the full verify-manual.py against this branch's built binary could not run. Redundant/queued own requests were withdrawn. Host needs a fresh/reseeded target, then AIDA_CARGO_TIMEOUT=3600 runs for the selected lib tests, bug_1502_format_json_audit, task1169_launcher_sets_ceiling_guardrail, and python3 docs/cli/verify-manual.py with the rebuilt binary on PATH. The active long retry is j20261107T220845284-2-0; lane shutdown owns its termination.
+
+    No git commit/push/PR/queue-done/review-record/ship-to-merge from this native seat. Leave all 13 changed files for the host, with a Refs TASK-3219 publication declaration. Existing merge holds remain in place.
+  created_at: 2026-11-07T22:17:04.245538587Z
+  modified_at: 2026-11-07T22:17:04.245538587Z
+  session_id: 01a1b7f01a5f
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
