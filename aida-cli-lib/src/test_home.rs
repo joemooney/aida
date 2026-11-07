@@ -3,7 +3,7 @@
 //! Lib tests reach dozens of global writers that resolve `~/.aida/...`
 //! (role activity in `roles/<role>.toml`, `usage.jsonl`, `presence.toml`,
 //! `turn-clock/`, the schedule files, the mailbox, `shift-local.toml`, ...)
-//! through `dirs::home_dir()`, `$HOME`, or an `AIDA_HOME` / `AIDA_TEST_HOME`
+//! through `etcetera::home_dir()`, `$HOME`, or an `AIDA_HOME` / `AIDA_TEST_HOME`
 //! override. Before this module, any test that did not set an override wrote
 //! into the operator's real `~/.aida` (the queue_rework tests appended
 //! `[[activity]]` rows for fixture specs to the real `roles/advisor.toml`).
@@ -31,11 +31,11 @@
 //!    while a panic names the leaking call site in the failing test.
 //!
 //! A source-scan test (`no_direct_home_resolution_in_crate`) keeps new code
-//! from calling `dirs::home_dir()` / `dirs::config_dir()`, or reading
+//! from calling `etcetera::home_dir()` / `etcetera::base_strategy`, or reading
 //! `HOME` / `USERPROFILE` / `APPDATA` directly, and bypassing layer 2. The
 //! production resolvers live in `aida_core::home`, which consults the
 //! environment before the platform lookup so the redirect also wins on
-//! Windows, where `dirs` ignores it. (TASK-1513)
+//! Windows, where platform lookups can ignore it. (TASK-1513)
 // trace:BUG-1642 | ai:claude
 // trace:TASK-1513 | ai:claude
 
@@ -44,7 +44,7 @@ use std::sync::OnceLock;
 
 struct Redirect {
     /// Home locations the operator's environment named at startup: the
-    /// `dirs::home_dir()` answer, `$HOME`, `$USERPROFILE`, `$AIDA_HOME`,
+    /// `etcetera::home_dir()` answer, `$HOME`, `$USERPROFILE`, `$AIDA_HOME`,
     /// `$AIDA_TEST_HOME`, and the password-database home. None of them may be
     /// resolved as a home by a test.
     real_homes: Vec<PathBuf>,
@@ -119,7 +119,7 @@ const TEST_HOME_PREFIX: &str = "aida-lib-test-home-";
 pub(crate) fn passwd_home() -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt;
 
-    // SAFETY: after the redirect, `$HOME` is always set and `dirs::home_dir()`
+    // SAFETY: after the redirect, `$HOME` is always set and `etcetera::home_dir()`
     // returns it, so no other code in this process calls `getpw*` concurrently.
     // The pointer stays valid until the next `getpw*` call on this thread.
     let dir = unsafe {
@@ -263,7 +263,7 @@ fn install() -> std::io::Result<()> {
 
     let mut real_homes: Vec<PathBuf> = Vec::new();
     for p in [
-        dirs::home_dir(),
+        etcetera::home_dir().ok(),
         non_empty_env("HOME"),
         non_empty_env("USERPROFILE"),
         non_empty_env("AIDA_HOME"),
@@ -481,12 +481,12 @@ pub(crate) fn assert_hermetic(path: &Path) {
 
 /// `cfg(test)` body of [`crate::home_dir`]: `$HOME` (which the redirect set,
 /// and which tests override per-case under the env lock) on every platform,
-/// falling back to `dirs::home_dir()`, and never the operator's real home.
+/// falling back to `etcetera::home_dir()`, and never the operator's real home.
 #[track_caller]
 pub(crate) fn home_dir() -> Option<PathBuf> {
-    // `dirs::home_dir()` ignores `$HOME` on Windows; reading it directly
+    // `etcetera::home_dir()` ignores `$HOME` on Windows; reading it directly
     // makes the redirect effective there too.
-    let home = non_empty_env("HOME").or_else(dirs::home_dir)?;
+    let home = non_empty_env("HOME").or_else(|| etcetera::home_dir().ok())?;
     assert_hermetic(&home);
     Some(home)
 }
@@ -514,7 +514,10 @@ mod tests {
         let home = crate::home_dir().expect("home resolves");
         assert!(home.starts_with(&r.test_home), "{}", home.display());
         #[cfg(unix)]
-        assert_eq!(dirs::home_dir().as_deref(), Some(r.test_home.as_path()));
+        assert_eq!(
+            etcetera::home_dir().ok().as_deref(),
+            Some(r.test_home.as_path())
+        );
     }
 
     /// The operator's ambient session identity never reaches a test: the
@@ -568,8 +571,8 @@ mod tests {
     }
 
     /// No code in this crate may resolve a home or config directory itself.
-    /// `dirs::home_dir()` bypasses [`crate::home_dir`]'s `cfg(test)` guard;
-    /// `dirs::config_dir()` and a direct `HOME` / `USERPROFILE` / `APPDATA`
+    /// `etcetera::home_dir()` bypasses [`crate::home_dir`]'s `cfg(test)` guard;
+    /// `etcetera::base_strategy` and a direct `HOME` / `USERPROFILE` / `APPDATA`
     /// read bypass [`aida_core::home`], which is what makes the redirect
     /// effective on Windows. A deliberate exception carries an
     /// `allow-direct-home-dir` marker on the line.
@@ -610,7 +613,7 @@ mod tests {
 
     /// The shared `aida-core` resolvers follow the redirected home too, so a
     /// lib test that reaches a `~/.config/aida` writer through `aida-core`
-    /// stays inside the temp home. On unix `dirs::config_dir()` is
+    /// stays inside the temp home. On unix `etcetera::base_strategy` is
     /// `$XDG_CONFIG_HOME` or `$HOME/.config` and the constructor cleared the
     /// former; on Windows the constructor redirects `%APPDATA%`.
     // trace:TASK-1513 | ai:claude
@@ -865,6 +868,8 @@ fn raw_home_lookup_offenders(workspace: &Path) -> Vec<String> {
     let needles = [
         "dirs::home_dir",
         "dirs::config_dir",
+        "etcetera::home_dir",
+        "etcetera::base_strategy",
         "std::env::home_dir",
         "var(\"HOME\")",
         "var_os(\"HOME\")",

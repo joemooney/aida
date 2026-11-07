@@ -1884,7 +1884,7 @@ pub(crate) fn resolve_queue_work_launch(
             for m in prior.iter().take(8) {
                 labels.push(session::format_session_line(m));
             }
-            let pick = inquire::Select::new(
+            let pick = crate::prompt_select::select(
                 &format!(
                     "{} prior session(s) for {} — resume one?",
                     prior.len(),

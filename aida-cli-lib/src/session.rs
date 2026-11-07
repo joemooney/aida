@@ -9645,7 +9645,7 @@ fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
         })
         .collect();
 
-    let pick = inquire::Select::new("Resume which session?", labels)
+    let pick = crate::prompt_select::select("Resume which session?", labels)
         .with_help_message("arrows to move, type to filter, Enter to resume, Esc to cancel")
         .prompt()
         .context("interactive picker cancelled")?;

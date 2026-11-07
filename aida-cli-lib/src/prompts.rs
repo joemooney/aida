@@ -1,5 +1,5 @@
 use anyhow::Result;
-use inquire::{Confirm, Select, Text};
+use inquire::{Confirm, Text};
 use std::env;
 
 use aida_core::{Requirement, RequirementPriority, RequirementStatus, RequirementType};
@@ -24,7 +24,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
-    let status = Select::new("Status:", status_options).prompt()?;
+    let status = crate::prompt_select::select("Status:", status_options).prompt()?;
     req.status = status;
 
     let priority_options = vec![
@@ -32,7 +32,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
         RequirementPriority::Medium,
         RequirementPriority::Low,
     ];
-    let priority = Select::new("Priority:", priority_options).prompt()?;
+    let priority = crate::prompt_select::select("Priority:", priority_options).prompt()?;
     req.priority = priority;
 
     let type_options = vec![
@@ -47,7 +47,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
         RequirementType::Task,
         RequirementType::Spike,
     ];
-    let req_type = Select::new("Type:", type_options).prompt()?;
+    let req_type = crate::prompt_select::select("Type:", type_options).prompt()?;
     req.req_type = req_type;
 
     let owner = Text::new("Owner:").prompt()?;
@@ -61,7 +61,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     let mut feature_options = vec!["Create new feature".to_string()];
     feature_options.extend(existing_features.clone());
 
-    let feature_selection = Select::new("Feature:", feature_options).prompt()?;
+    let feature_selection = crate::prompt_select::select("Feature:", feature_options).prompt()?;
 
     if feature_selection == "Create new feature" {
         // Prompt for new feature name
