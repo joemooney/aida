@@ -1,4 +1,4 @@
-//! Launch-owned authorization for the read-only typed channel. No ambient
+//! Launch-owned authorization and typed canonical-object mutation channel. No ambient
 //! session environment is changed and no request supplies authority selectors.
 // trace:TASK-3225 | ai:codex
 use anyhow::{Context, Result};
@@ -15,6 +15,108 @@ use std::sync::{
 use std::time::Duration;
 
 pub(super) const SOURCE: &str = include_str!("service.py");
+
+// Closed host schema independently checked after the Python broker.
+// trace:TASK-3223 | ai:codex
+#[derive(serde::Deserialize)]
+#[serde(
+    tag = "op",
+    content = "data",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+enum HostOperation {
+    CommentAdd {
+        spec_id: String,
+        expected_revision: String,
+        content: String,
+    },
+    SpecEdit {
+        spec_id: String,
+        expected_revision: String,
+        fields: aida_core::db::canonical_mutation::EditFields,
+    },
+    RequestStatus {
+        request_id: uuid::Uuid,
+    },
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HostRequest {
+    version: u32,
+    launch_epoch: uuid::Uuid,
+    request_id: uuid::Uuid,
+    op: String,
+    data: serde_json::Value,
+}
+fn read_operation(host: &mut UnixStream) -> Result<HostRequest> {
+    let mut size = [0; 4];
+    host.read_exact(&mut size)?;
+    let size = u32::from_be_bytes(size) as usize;
+    anyhow::ensure!(size > 0 && size <= 65536, "invalid host frame");
+    let mut bytes = vec![0; size];
+    host.read_exact(&mut bytes)?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
+fn host_operation(
+    root: &Path,
+    binding: &str,
+    epoch: uuid::Uuid,
+    specs: &[String],
+    author: &str,
+    request: &HostRequest,
+    mut authorize: impl FnMut() -> Result<()>,
+) -> Result<serde_json::Value> {
+    use aida_core::db::{canonical_mutation::CanonicalOperation as Op, redo};
+    anyhow::ensure!(
+        request.version == 1 && request.launch_epoch == epoch,
+        "Unauthorized"
+    );
+    anyhow::ensure!(request.op == "request_status", "UnsupportedOperation");
+    let op: HostOperation =
+        serde_json::from_value(serde_json::json!({"op":request.op,"data":request.data}))
+            .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
+    let op = match op {
+        HostOperation::CommentAdd {
+            spec_id,
+            expected_revision,
+            content,
+        } => Op::CommentAdd {
+            spec_id,
+            expected_revision,
+            content,
+        },
+        HostOperation::SpecEdit {
+            spec_id,
+            expected_revision,
+            fields,
+        } => Op::SpecEdit {
+            spec_id,
+            expected_revision,
+            fields,
+        },
+        HostOperation::RequestStatus { request_id } => {
+            authorize()?;
+            return Ok(
+                serde_json::json!({"state": if redo::status(root, binding, epoch, request_id)? {"completed"} else {"unknown"}}),
+            );
+        }
+    };
+    aida_core::db::GitBackend::new(root)?.mutate_canonical(
+        binding,
+        epoch,
+        request.request_id,
+        author,
+        &op,
+        || {
+            authorize()?;
+            let target: aida_core::Requirement =
+                serde_yaml::from_slice(&redo::object_bytes(root, op.target().0)?)?;
+            anyhow::ensure!(specs.contains(&target.id.to_string()), "Unauthorized");
+            Ok(())
+        },
+    )
+}
 
 struct PinnedRoot {
     path: PathBuf,
@@ -152,13 +254,16 @@ impl Session {
         let bound_worker = worker.clone();
         let config = serde_json::json!({"epoch":epoch,"specs":specs,"role":role,
             "policy_version":1,"build":env!("CARGO_PKG_VERSION"),"authority_fd":helper.as_raw_fd()});
+        let host_epoch = uuid::Uuid::parse_str(&epoch)?;
+        let host_specs = specs.clone();
+        let host_binding = format!("{}:{}:{}:{}", grant_id, subject, lease_id, started);
         let thread = std::thread::Builder::new()
             .name("store-service-authority".into())
             .spawn(move || {
                 while !stop.load(Ordering::Acquire) {
                     let mut request = [0u8; 1];
                     match host.read(&mut request) {
-                        Ok(1) if request == [b'?'] => {}
+                        Ok(1) if request == [b'?'] || request == [b'M'] => {}
                         Err(e)
                             if matches!(
                                 e.kind(),
@@ -210,8 +315,29 @@ impl Session {
                             _ => None,
                         }
                     };
-                    if host.write_all(&[valid().unwrap_or(b'N')]).is_err() {
-                        break;
+                    if request == [b'?'] {
+                        if host.write_all(&[valid().unwrap_or(b'N')]).is_err() { break; }
+                    } else {
+                        // Partial or timed-out frames terminate the stream; no
+                        // late byte can become a later authority response.
+                        let _ = host.set_read_timeout(Some(Duration::from_secs(5)));
+                        let Ok(request) = read_operation(&mut host) else { break; };
+                        let result = host_operation(root_path(&store), &host_binding, host_epoch, &host_specs, &subject, &request, || {
+                            match valid() { Some(b'Y') => Ok(()), Some(b'E') => anyhow::bail!("Expired"), Some(b'R') => anyhow::bail!("Revoked"), _ => anyhow::bail!("Unauthorized") }
+                        });
+                        let reply = match result {
+                            Ok(result) => serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result}),
+                            Err(error) => {
+                                let reason = error.to_string();
+                                let code = if error.downcast_ref::<aida_core::db::redo::OutcomeUnknown>().is_some() { "OutcomeUnknown" }
+                                    else if ["Conflict", "Expired", "Revoked", "Unauthorized", "Busy", "InvalidRequest", "UnsupportedOperation"].contains(&reason.as_str()) { &reason }
+                                    else { "Unavailable" };
+                                serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"error":code})
+                            }
+                        };
+                        let Ok(bytes) = serde_json::to_vec(&reply) else { break; };
+                        if bytes.len() > 65536 || host.write_all(&(bytes.len() as u32).to_be_bytes()).and_then(|_| host.write_all(&bytes)).is_err() { break; }
+                        let _ = host.set_read_timeout(Some(Duration::from_millis(100)));
                     }
                 }
             })?;
@@ -384,3 +510,97 @@ mod tests {
 
 #[cfg(test)]
 mod owner_tests;
+
+#[cfg(test)]
+#[test]
+fn staged_writes_cannot_reach_host_mutation_or_authorization() {
+    for op in ["comment_add", "spec_edit", "own_claim", "queue_done"] {
+        let request = HostRequest {
+            version: 1,
+            launch_epoch: uuid::Uuid::nil(),
+            request_id: uuid::Uuid::new_v4(),
+            op: op.into(),
+            data: serde_json::json!({}),
+        };
+        let error = host_operation(
+            Path::new("/nonexistent-store"),
+            "binding",
+            uuid::Uuid::nil(),
+            &[],
+            "author",
+            &request,
+            || panic!("staged writes must not reach authority or store access"),
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "UnsupportedOperation");
+    }
+}
+
+// Exercise the actual Python authority RPC against the Rust host, including a
+// held writer lock: read-only status must neither wait on it nor create redo.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)]
+#[test]
+fn request_status_real_authority_is_read_only_and_preserves_local_results() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    aida_core::db::with_store_write_lock(root, || {
+        let (mut host, helper) = UnixStream::pair()?;
+        host.set_read_timeout(Some(Duration::from_secs(5)))?;
+        let root = root.to_path_buf();
+        let worker = std::thread::spawn(move || {
+            let mut operations = 0;
+            loop {
+                let mut byte = [0];
+                match host.read_exact(&mut byte) {
+                    Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                    other => other.unwrap(),
+                }
+                if byte == [b'?'] {
+                    host.write_all(b"Y").unwrap();
+                } else {
+                    assert_eq!(byte, [b'M']);
+                    let request = read_operation(&mut host).unwrap();
+                    let result = host_operation(&root, "fixed", request.launch_epoch, &[], "author", &request, || Ok(())).unwrap();
+                    assert_eq!(result, serde_json::json!({"state":"unknown"}));
+                    let wire = serde_json::to_vec(&serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result})).unwrap();
+                    host.write_all(&(wire.len() as u32).to_be_bytes()).unwrap();
+                    host.write_all(&wire).unwrap();
+                    operations += 1;
+                }
+            }
+            assert_eq!(operations, 1, "local completed IDs must not fall through to host");
+        });
+        let script = r#"
+import json, os, socket, uuid
+from tests.test_store_mutation import ns, Service, Identity
+channel = socket.socket(fileno=0)
+authority = ns['MutationAuthority'](channel)
+epoch = str(uuid.uuid4())
+service = Service(dict(epoch=epoch, specs=[], role='implementer'), Identity(), authority)
+def dispatch(op, data):
+    request = dict(version=1, launch_epoch=epoch, request_id=str(uuid.uuid4()), op=op, data=data)
+    reply = json.loads(service.dispatch(json.dumps(request).encode(), (os.getpid(), os.getuid(), os.getgid())))
+    return request['request_id'], reply['result']
+probe, _ = dispatch('session_probe', dict(challenge='read-only'))
+status, result = dispatch('request_status', dict(request_id=probe))
+assert result == dict(state='completed'), result
+_, result = dispatch('request_status', dict(request_id=status))
+assert result == dict(state='completed'), result
+_, result = dispatch('request_status', dict(request_id=str(uuid.uuid4())))
+assert result == dict(state='unknown'), result
+service.close()
+channel.close()
+"#;
+        let file = File::from(std::os::fd::OwnedFd::from(helper));
+        let output = std::process::Command::new("python3")
+            .args(["-c", script])
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
+            .stdin(std::process::Stdio::from(file))
+            .output()?;
+        worker.join().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!tmp.path().join(".aida/redo").exists());
+        Ok(())
+    }).unwrap();
+}

@@ -263,7 +263,11 @@ fn collect(
     // Read CI by exact commit, never by branch. Required-check discovery must
     // itself succeed; an API error is not an empty required-check policy.
     let required = crate::forge::github_required_checks(&live.project_root, change)?;
-    let checks = live.forge.commit_checks(&train.tip)?;
+    // Bind the live CI read and every refreshed proof to its workflow content.
+    // trace:STORY-2401 | ai:codex
+    let ci_key =
+        crate::ci_digest::CiEvidenceKey::read(&live.project_root, &train.tip, live.forge.kind())?;
+    let checks = live.forge.commit_checks(&ci_key.head_sha)?;
     let names: Vec<&str> = required.iter().map(String::as_str).collect();
     anyhow::ensure!(
         checks.sha == train.tip
@@ -476,7 +480,7 @@ fn collect(
     Ok((
         json!({"v": PATCH_VERSION, "repository": repository, "origin": origin,
         "change": change.id, "branch": change.branch, "base_ref": live.base,
-        "base_tip": train.base, "tip": train.tip, "cars": cars, "sources": sources,
+        "base_tip": train.base, "tip": train.tip, "ci_key": ci_key, "cars": cars, "sources": sources,
         "specs": all_specs, "bound_source_event": bound}),
         mapped,
     ))

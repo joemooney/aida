@@ -503,9 +503,19 @@ fn bug2406_real_builder_binding_and_production_gate(bound: bool) {
             *f.records[i].as_object().unwrap()
         );
     }
+    // trace:STORY-2401 | ai:codex — the live CI read carries both identities.
+    let ci_key = crate::ci_digest::CiEvidenceKey::read(
+        f.root(),
+        &train.tip,
+        crate::forge::ForgeKind::GitHub,
+    )
+    .unwrap();
     assert!(ledger::project::events(f.root(), ledger::ChangeKey::pr(77))
         .iter()
-        .any(|e| matches!(e.body, ledger::EventBody::TrainCoverage { .. })));
+        .any(
+            |e| matches!(&e.body, ledger::EventBody::TrainCoverage { proof }
+            if proof["ci_key"] == serde_json::to_value(&ci_key).unwrap())
+        ));
     assert!(ledger::project::events(f.root(), ledger::ChangeKey::pr(77))
         .iter()
         .all(|e| e.verdict_record().is_none_or(

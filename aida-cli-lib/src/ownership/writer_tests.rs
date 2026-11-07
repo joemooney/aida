@@ -1076,8 +1076,9 @@ fn proc_identity_migration_is_pinned_and_preserves_legacy_evidence() {
         })
         .unwrap();
     let original = store.load(&key).unwrap().unwrap();
+    let unresolved = facts(lease("worker-session", "unresolved", ""), None);
     let mut plan = migrate::plan(
-        &[],
+        &[unresolved],
         &[],
         Default::default(),
         vec![],

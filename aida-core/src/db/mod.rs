@@ -29,6 +29,10 @@ mod postgres_backend;
 pub mod refresh_request;
 // trace:TASK-1527 | ai:claude
 #[cfg(feature = "native")]
+pub mod canonical_mutation;
+#[cfg(feature = "native")]
+pub mod redo;
+#[cfg(feature = "native")]
 pub mod refresh_worker;
 #[cfg(feature = "native")]
 mod sqlite_backend;
@@ -85,7 +89,7 @@ pub(crate) use store_lock::acquire as acquire_store_write_lock;
 pub use store_lock::{
     any_store_write_lock_held, hold_store_write, store_write_lock_contended_count,
     store_write_lock_contended_for, store_write_lock_held, store_write_lock_path,
-    with_store_write_lock, StoreWriteHold,
+    with_store_write_lock, with_store_write_lock_bounded, StoreWriteHold,
 };
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
 #[cfg(feature = "native")]

@@ -1,7 +1,19 @@
+CI freshness compares pinned workflow content: the GitHub `.github/workflows`
+tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
+refusals, including edits followed by reverts; the separate behind-base gate
+still applies. Train CI proofs bind head SHA plus workflow digest. See OVERVIEW.md.
+<!-- trace:STORY-2401 | ai:codex -->
+
 Question parking with an empty consequence preserves an existing deferral trigger
 and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.
 <!-- trace:STORY-2402 | ai:codex -->
+
+AGY runtime regressions exercise external tool descendants against filesystem,
+network and host-IPC denials with positive controls. This is synthetic shared
+wrapper evidence; admission still needs auth/refresh inventory and integrated
+AGY all-tool conformance. See docs/internal/testing/containment-conformance.md.
+<!-- trace:TASK-3048 | ai:codex -->
 
 Queue completion requires readable branch ownership evidence even with
 `--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
@@ -482,10 +494,12 @@ and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.
 The separate `launch/contained.rs` owner handles trusted Codex AIDA-posture
 fresh foreground headless phases with exact env transport, private state, a
-mandatory connect broker and host-attested receipts before vendor exec. API-key
-mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.
+mandatory connect broker and host-attested receipts before vendor exec. API keys
+and version-pinned, non-renewing ChatGPT file credentials use this path; see
+`launch/codex_auth.rs` and the STORY-2593 plan for credential and validation
+limits. Other launch surfaces still refuse.
 Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup.md.
-<!-- trace:TASK-2705 TASK-2707 | ai:codex -->
+<!-- trace:TASK-2705 TASK-2707 STORY-2593 | ai:codex -->
 
 Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
 evidence. Condition PR probes use this boundary with a 15-second timeout and

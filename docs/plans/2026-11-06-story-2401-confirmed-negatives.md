@@ -839,3 +839,87 @@ that attempted a fetch reported the native seat's read-only `.git/FETCH_HEAD`
 refusal and passed their local-evidence checks. `git diff --check` passed.
 No implementation or validation blocker remains. This plan is the only changed
 tracked file from the audit and is left uncommitted for the host launcher.
+
+
+## Slice 5: workflow-definition digest (2026-11-07)
+
+The advisor ruling at 2026-11-07 10:39 UTC supersedes the slice-4 brief: AC1–AC3
+are integrated and this change implements AC4 only. Host publication must use
+`[AI:codex] fix(ci): bind freshness evidence to workflow content (STORY-2401)`.
+
+`ci_digest.rs` pins a commit and reads the GitHub `.github/workflows` tree ID
+or GitLab `.gitlab-ci.yml` blob ID. Validated absence has a forge-scoped identity;
+Git failures and invalid definition objects refuse. The staleness wrapper pins
+both sides and carries head/base digests through `StaleCheckWarning`.
+`behind_base_refusal` classifies StaleDefinition only when digests differ.
+Equal endpoint content clears historical definition-path hints, including a
+touch followed by a revert. The independent STORY-1690 BehindBase refusal remains.
+The final train proof reads exact-commit CI using a `CiEvidenceKey` and records
+both the head and digest in its invocation evidence, re-read at every refresh.
+No cache or persisted proof grants merge authority.
+
+The digest deliberately covers the paths named in the ruling. It includes all
+GitHub workflows, but excludes scripts outside that tree and external GitLab
+includes. Existing path-classification fixtures are adjusted for that boundary.
+Real-Git `story_2401_ci_digest_tests` cover reverts, real edits, equal endpoints,
+key changes, dirty-file isolation, absence, invalid refs, and script-only edits.
+The production train fixture checks the key in its recorded live proof.
+
+Validation results and native-seat handoff follow below. Edits remain uncommitted;
+the host owns commit and PR publication. Existing punts and holds retain vetoes.
+<!-- trace:STORY-2401 | ai:codex -->
+
+
+Slice-5 changed files (left uncommitted for the native host):
+
+- `aida-cli-lib/src/ci_digest.rs` (new helper and evidence key)
+- `aida-cli-lib/src/lib.rs` (module registration)
+- `aida-cli-lib/src/lib_part3.rs` (pinned head/base digest reads)
+- `aida-cli-lib/src/gate/ci_freshness.rs` (digest-based refusal classification)
+- `aida-cli-lib/src/pr_train_verified.rs` (live CI key in refreshed proof)
+- `aida-cli-lib/src/tests/story_2401_ci_digest_tests.rs` (new regression module)
+- `aida-cli-lib/src/tests/bug_1468_stale_check_tests.rs` (workflow-tree boundary)
+- `aida-cli-lib/src/tests/story_1690_train_tests.rs` (warning fixture fields)
+- `aida-cli-lib/src/tests/bug2406_train_tests.rs` (production proof assertion)
+- `AGENTS.md`, `OVERVIEW.md`, and this plan.
+
+Validation notes: an initial digest test binary predated the distinct-history
+fixture correction (7/8); the corrected run passed 8/8. The first train run
+passed 177 tests but three isolated child spawns failed with ENOENT while a
+concurrent Cargo invocation replaced the same test executable. Subsequent
+validation is serialized. The first fast run reached formatting after 28 passing
+gates and identified two formatting differences in the directly included
+`lib_part3.rs`, which CI formats separately from `cargo fmt --all`; corrected
+with `rustfmt --edition 2021`. No behavior changed for that formatting fix.
+
+
+Final fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`
+completed **all 44 gates**, including the feature-disabled CLI, standalone TUI,
+formatting (including the directly included Rust parts), environment ratchet
+(**1,241 exact sites, zero additions**), store-writer inventory and trace-header
+checks. Log: `/tmp/story2401-digest-fast-final.log`. Native read-only FETCH_HEAD
+refusals were handled by the guards' passing local-evidence paths.
+`git diff --check` passed. Final Rust test results follow below.
+
+
+Final-source Rust validation passed, with no concurrent Cargo builds:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **180 passed, zero failures**, 12,665 filtered out; runtime **113.06s**,
+  incremental build **3m 59s**. Both kill/recovery seams, the production CI-key
+  assertions and all three previously interrupted isolated tests passed.
+  Log: `/tmp/story2401-digest-train-final.log`.
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib
+  story_2401_ci_digest_tests`: **8 passed, zero failures**, 12,837 filtered out;
+  runtime **0.44s**. Log: `/tmp/story2401-digest-tests-verified.log`.
+- The existing `bug_1468_stale_check_tests` module also passed **13/13** via
+  the compiled test harness. Log: `/tmp/story2401-digest-legacy.log`.
+- `git diff --check`: passed.
+
+Native-seat handoff: the 12 files listed above remain uncommitted. There are no
+implementation or validation blockers. The completing publication subject is
+`[AI:codex] fix(ci): bind freshness evidence to workflow content (STORY-2401)`.
+The native `aida ship -m` declaration records intent only; the host owns commit
+creation and PR publication after this process exits. No commit, push, PR creation,
+merge, review recording or queue completion was performed in this seat. Existing
+punt/hold vetoes remain in force. This completes the advisor-approved slice 5.

@@ -744,7 +744,19 @@ Journaled retirement confirms closure before deleting the remote branch using
 an explicit lease against the pinned train tip. Uncertain closure or a moved
 branch retains the recovery entry and branch. Dispatch train fallback defers
 journal-lock contention to a later serve pass without recording a ship failure.
-Legacy trains without journals retain their confirmed owner-liveness cleanup. Workflow-definition digest evidence remains slice 5.
+Legacy trains without journals retain their confirmed owner-liveness cleanup.
+
+CI evidence in the live train proof is keyed by the pinned head SHA and workflow
+content digest, and refreshed before each merge attempt. GitHub uses the Git tree
+identity of `.github/workflows`; GitLab uses the `.gitlab-ci.yml` blob identity.
+Staleness reads pin both commits and compare these digests, so an edit followed
+by a revert or identical endpoint definitions does not produce a stale-definition
+refusal. A real definition change does. Absent definitions have an explicit
+forge-scoped identity; missing commits, failed Git reads and invalid object types
+remain unavailable evidence. Unconfigured/pure-Git advisory reads retain the
+historical GitHub workflow-path convention. Scripts outside the workflow tree
+and external GitLab includes are outside this digest. The independent behind-base
+refusal still applies even with equal digests.
 <!-- trace:STORY-2401 | ai:codex -->
 
 ### Autonomy & escalation
@@ -1473,6 +1485,30 @@ success. The client retains one request ID across at most two retries. S1's
 memory-only dedupe is safe for read-only probes; recoverable canonical mutation
 transactions still require separate approval before S2 enables any writer.
 
+The S2 canonical-only core stages typed comment/edit schemas and version-1,
+fsynced redo decisions under the store writer lock. It recovers pending installs
+before admitting another writer and quarantines uncertain decisions. Retry
+quotas are per epoch; old epochs retain their evidence without exhausting new
+launches. Cache redo generation is recorded separately from Git HEAD, allowing
+incremental refresh and write-through restamping after a mediated install.
+Restart coverage includes record write, file fsync and rename: unrenamed
+temporary files are ignored as decisions, while visible pending records recover
+before another writer enters. Recovery syncs the journal directory before any
+object install, including when the prior process died immediately after rename.
+Status and retry lookup are read-only: absent journals report unknown without
+creating state or acquiring the writer lock. Status retains completed read-only
+requests from the launch's local accepted map. Git exclusion is installed only
+when initializing a journal. Canonical replacement staging stays inside that
+excluded directory; recovery removes abandoned UUID staging files there and
+legacy canonical staging files under objects before any writer can publish.
+Edit fields must be strings when present; null is refused. Expected revisions
+use lowercase SHA-256 hex in both schemas.
+**Live `comment_add` and `spec_edit` remain disabled** in both broker and host
+until installed objects have transactional Git/event publication. `own_claim`
+and `queue_done` remain unsupported. Quarantine diagnostics name the affected
+file and the [operator recovery procedure](docs/advanced/store-redo-recovery.md).
+<!-- trace:TASK-3223 | ai:codex -->
+
 The lane probes its actual channel before the receipt barrier; the host checks
 that receipt's exact epoch/readiness and the existing authority owner's worker
 stamp before releasing tools. Revocation, lease loss or authority-channel
@@ -1584,7 +1620,10 @@ read-only credential leaf, explicit trusted auth-host approval and read-only
 Git/store/cache authority. AGY's `vendors.toml` row selects that mechanism, but
 its incomplete refresh-host inventory and missing integrated all-tool evidence
 keep admission closed. See [AGY adapter preparation](docs/internal/testing/containment-conformance.md#agy-shared-boundary-adapter-preparation)
-for the remaining acceptance and model-free test limits.
+for the remaining acceptance and model-free test limits. The live runtime
+regression checks filesystem, network and host-IPC restrictions in external
+file/URL helpers and a stdio server, with positive controls; it grants no
+real-vendor conformance credit.
 <!-- trace:TASK-3048 | ai:codex -->
 
 ### Foreground headless Codex boundary
@@ -1594,10 +1633,27 @@ and reviewer phases through `launch/contained.rs`. `/usr/bin/python3 -I -S`
 and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;
-bubblewrap inherits it unchanged. Only `OPENAI_API_KEY` carries authentication.
-An existing Codex `auth.json` refuses by name until the ChatGPT-auth design lands.
-The launcher writes no credential files and forwards neither registry nor handle
-launch tokens. Tool shells cannot bind their own registry/handle records.
+bubblewrap inherits it unchanged. API-key authentication uses `OPENAI_API_KEY`.
+Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.166.0`:
+the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
+access-token expiry and identity account routing, and requires grant lifetime
+plus a 300-second margin. A sealed memfd supplies only the access token, host ID
+token and `refresh_token=""`, plus derived account routing and a generated
+delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
+leaf; no full cache or host refresh token enters the lane. Baseline lanes last
+at most one hour.
+Unsupported versions, malformed or insufficient validity and keyring logins
+refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
+there is no renewal. The host supervisor enforces the absolute deadline and
+failed ChatGPT exits at or after that deadline, or after a host-denied OAuth
+CONNECT, request host reauthentication and relaunch. Other failures preserve
+the vendor exit status. Readable bearer exposure remains an accepted risk.
+These changes have no live ChatGPT C0-C4 pass credit until the advisor runs
+that evidence; see the
+[credential boundary plan](docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md).
+The launcher writes no secret credential files and forwards neither registry nor
+handle launch tokens. Tool shells cannot bind their own registry/handle records.
+<!-- trace:STORY-2593 | ai:codex -->
 
 Each launch has private Codex state. HOME retains the issuer's canonical AIDA
 home, read-only, so core-filtered tools resolve the same grant records without
