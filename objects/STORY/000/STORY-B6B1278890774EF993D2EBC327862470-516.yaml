@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T03:00:07.475134430Z
+modified_at: 2026-11-07T03:00:18.488986289Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -174,6 +174,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs-only evidence update to the STORY-2593 plan (failed step-1 interface gate); AC1-AC3 unmet and PR title/first commit still carry a feat subject with a completing (STORY-2593) trailer.. It was punted on: design-fork: Round 4 at e58b7e8cafc7 / PR #3560: factual findings 1-6 accepted. Explicitly dispute treating findings 1-3 as implementer-actionable before resolving finding 5: the signed step-1 hard gate failed, so removing refuse_chatgpt or claiming credential-visibility/C0-C4 evidence now would violate the advisor stop condition. AC1-AC3 remain unmet; BUG-2447 and BUG-2448 remain Approved and blocked with no C3/C4 basis for closure or rescope. Finding 5 requires an advisor/operator decision: authorize the ID-token-shaped/empty-refresh schema with explicit security and compatibility requirements, or name another supported codex exec interface. Prior risk sign-off and requeue without a triage reason do not resolve this distinct interface fork. Finding 4 accepted: e58b7e8cafc7 and PR #3560 still misrepresent docs-only work as feat/completion; the host must re-subject the commit and PR as [AI:codex] docs(plans): STORY-2593 round-3 interface-gate evidence (Refs STORY-2593), or close PR #3560 without merging. This native seat cannot amend Git metadata or perform PR operations. Finding 6 fixed locally: plan header now states the 2026-11-06 compatibility-gate failure and pending interface decision; the stale implementation-proceeds sentence is also corrected. git diff --check passed; only the canonical plan changed, uncommitted. The recorded round-4 docs/Refs subject is descriptive intent only; this punt vetoes host publication and completion. Preserve the merge hold, escalate to advisor/operator, and do not schedule another docs-only implementation round before the decision.. No triage reason was given.'
   created_at: 2026-11-07T03:00:07.475132966Z
   modified_at: 2026-11-07T03:00:07.475132966Z
+- id: 01a1b3f3-2347-7060-92a0-25ade54336c1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cadef932a42c
+    Recorded: 2026-11-07T02:54:31.005007650+00:00
+    Findings:
+    1. AC1 unmet: refuse_chatgpt() is still defined and called (aida-cli-lib/src/launch/contained.rs:624, :851). The PR changes no code; the plan itself says not to remove the refusal because the signed step-1 gate failed.
+    2. AC2 unmet: no C0-C4 run under --boundary aida with the operator's ChatGPT login, no policy/binary/receipt hashes, no credential-visibility sentinels. The new table records synthetic login-status/exec probes against a loopback recorder, which the doc itself says are not containment evidence.
+    3. AC3 unmet: BUG-2447 and BUG-2448 are status approved and still blocked by this story; neither is closed or re-scoped from C3/C4 evidence.
+    4. Metadata still completes the story (round-3 finding 4 only half-fixed): the new commit cadef932a42 uses docs(plans)/(Refs STORY-2593), but commit e58b7e8cafc and the PR #3560 title still read '[AI:codex] feat: ... replace the ... refusal with a brokered credential path (STORY-2593)'. A squash merge takes the PR title, so the trailing (STORY-2593) would auto-complete an unimplemented story. Retitle the PR to '[AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593)' (host-side action) or close the PR unmerged.
+    5. Blocking decision belongs to the advisor/operator: the signed design requires a leaf with no refresh field and installed codex-cli 0.166.0 does not authenticate that shape. An interface decision (accept the ID-token-shaped/empty-refresh schema, or name another supported exec interface) is needed before steps 1-3. Route by escalation, not another docs-only implementer round.
+    6. Minor, docs accuracy: plan line ~18-19 says the 00:45:56Z comment 'assigns live conformance and bug disposition to the implementation follow-up', but the signed 00:33:24Z comment says steps 4-5 (live C0-C4 run, BUG-2447/2448 disposition) are the advisor's through deputy 3, and the 00:45:56Z comment only moves AC1-AC3 to the implementation PR. Reword so ownership of steps 4-5 matches the sign-off. Also the commit says 'round-4' while the section heading is 'Round 3'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T03:00:18.375025262Z
+  modified_at: 2026-11-07T03:00:18.375025262Z
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
