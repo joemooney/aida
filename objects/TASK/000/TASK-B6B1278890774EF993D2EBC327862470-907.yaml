@@ -1,0 +1,36 @@
+id: 01a1b36d-e191-79e2-bff7-e02c85966121
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-907
+title: 'Repeated unchanged review findings: STORY-2538'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2538; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3515):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: ba1a4d1c1006
+  Recorded: 2026-11-06T21:02:37.484857159+00:00
+  Findings:
+  1. BLOCKING (only remaining item; no code change required): no green CI at the exact head ba1a4d1c1006. Run 42291371263 (created 20:47Z) had all 7 jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) still queued at 21:02Z because of runner backlog. So the new --write-ledger test, the golden-key and extern-crate fixtures, and the 1220-site ledger have never passed on the runner's Python. Do NOT push new commits (that restarts CI). Wait for run 42291371263 to go fully green, including the gates 'ExecContext environment ratchet' step, then re-request review citing that run. If gates fails on the ratchet step, run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' after merging main, and push. merge-hold-gate failing is the expected supervised hold (cleared through 'aida merge-hold clear 3515'), not a code defect.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T00:34:45.265114850Z
+modified_at: 2026-11-07T00:34:45.265114850Z
+req_type: Task
+tags:
+- from-advisor:STORY-2538
+- kind:observation
+- linked:STORY-2538
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
+  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
