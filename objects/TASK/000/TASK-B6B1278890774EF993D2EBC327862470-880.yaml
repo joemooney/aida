@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T07:17:50.937442379Z
+modified_at: 2026-11-07T07:31:01.033188065Z
 req_type: Task
 tags:
 - architecture
@@ -261,6 +261,13 @@ comments:
   created_at: 2026-11-07T07:17:47.063334906Z
   modified_at: 2026-11-07T07:17:47.063334906Z
   session_id: 01a1b4ddceae
+- id: 01a1b4ea-facc-7c83-9a60-7cf6810ff8ad
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 00:35. This supersedes every earlier review-findings block on TASK-3223. The REVIEW FINDINGS for PR #3563 (reviewed commit 621c83395e48) are VOID: #3563 was closed unmerged by the advisor, and its findings 1-4 (title, squash body, PR body, missing signoff) concern that dead PR. The signoff exists (comment 10) and the approved design landed as d6c6e961d48 (#3571). Nothing in this round is about PR metadata; do not dispute findings or punt over them. YOUR TASK THIS ROUND IS CODE: (1) the versioned redo-transaction module under with_store_write_lock (fsync the record before install, recover on lock acquisition, quarantine with OutcomeUnknown); (2) typed canonical-object mutation verbs (comment add, edit fields) in store_mutation/service.py plus the Rust host operation enum, with own_claim and queue_done still UnsupportedOperation (TASK-3326); (3) fault-injection plus restart-recovery tests. Leave edits uncommitted in the seat as usual; the host publishes them as a new PR (Refs TASK-3223). A punt is acceptable only for a concrete technical blocker in the code, named with file and line.'
+  created_at: 2026-11-07T07:31:00.940091473Z
+  modified_at: 2026-11-07T07:31:00.940091473Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
