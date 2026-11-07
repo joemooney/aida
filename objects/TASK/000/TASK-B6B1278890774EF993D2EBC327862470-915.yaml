@@ -1,5 +1,6 @@
 id: 01a1b3c8-131a-7f82-b885-c45860b00ff3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-915
+agreed_id: TASK-2965
 title: 'minor (non-blocking): phase_gates.rs:812 outcome_of_verdict_body still calls ve…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2474, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:b4994743
 - from-review:PR-3553
 - kind:carried-forward
+history:
+- id: 01a1b3e2-3719-75f2-89d2-17c2738c7954
+  author: joe
+  timestamp: 2026-11-07T02:41:49.337945724Z
+  changes: []
 filed_at:
   code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
   branch: main

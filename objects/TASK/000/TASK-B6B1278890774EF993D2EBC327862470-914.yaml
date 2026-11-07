@@ -1,5 +1,6 @@
 id: 01a1b3c8-0567-78d0-b06d-1b9c3b589788
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-914
+agreed_id: TASK-2963
 title: 'non-blocking: queue_review_for_open_pr (pr_cmd.rs ~8346) still prints ''Re-run m…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:a59da886
 - from-review:PR-3536
 - kind:carried-forward
+history:
+- id: 01a1b3e2-3698-76a3-8ce3-e42940d43018
+  author: joe
+  timestamp: 2026-11-07T02:41:49.208650657Z
+  changes: []
 filed_at:
   code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
   branch: main
