@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:58:29.391669890Z
-modified_at: 2026-11-06T00:15:04.596725565Z
+modified_at: 2026-11-07T20:27:33.827115337Z
 req_type: Story
 tags:
 - operator-held
@@ -48,6 +48,16 @@ comments:
   created_at: 2026-11-06T00:15:04.596725565Z
   modified_at: 2026-11-06T00:15:04.596725565Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-ee43-71b1-92dd-e80715603c4e
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-11-04T02:45:10.236140476Z","deferred_until":"the operator reopens the regeneration / north-star research line","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:33.827106729Z
+  modified_at: 2026-11-07T20:27:33.827106729Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a464-7fe8-7d63-84c9-064921cd2236
   author: joe
@@ -87,7 +97,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-11-04T02:45:10.236140476Z
-deferred_until: the operator reopens the regeneration / north-star research line
+deferred_until: manual:operator
 deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
