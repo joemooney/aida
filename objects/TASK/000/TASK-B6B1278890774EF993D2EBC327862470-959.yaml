@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-07T23:44:50.117975774Z
+modified_at: 2026-11-07T23:51:50.813524486Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,6 +27,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 17:15 MST: STORY-2326 PR-D merged (#3603), so the Work region of queue_cmd.rs is no longer owned by an in-flight story. PR3 may move the Work arm and handle_queue_work verbatim into queue_cmd/work.rs in the same PR (SPIKE-713 ruling 6 condition met). Still sequenced after TASK-3424 and TASK-3425 merge.'
   created_at: 2026-11-07T23:44:50.117975774Z
   modified_at: 2026-11-07T23:44:50.117975774Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b86c-f51d-7811-b9ee-99876ddd6f3f
+  author: joe
+  content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: also SEQUENCED AFTER PR #3619 (STORY-2325) merges; it edits handle_queue_command, handle_queue_recover, handle_queue_rework, ReworkArgs and handle_queue_work. Split by function boundaries, not line numbers (resolve_rework_findings and run_standalone_reviewer sit between the regions).'
+  created_at: 2026-11-07T23:51:50.813524486Z
+  modified_at: 2026-11-07T23:51:50.813524486Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
