@@ -1,0 +1,26 @@
+id: 01a1b814-f6e6-7562-ba73-77d8deaa2bfd
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-254
+agreed_id: BUG-2489
+title: Pickup prompt leads with the newest brief AND an older ruling as co-authoritative, so lanes follow a superseded ruling (STORY-2402 ran a finished 08:20 ruling twice)
+description: |-
+  rework_direction::resolve_direction (aida-cli-lib/src/rework_direction.rs:136) picks the newest brief and the newest ruling independently, and lead_rework_prompt (:279) emits both blocks. When the ruling predates the brief, the older ruling still reads as an authoritative task. Observed 2026-11-07: STORY-2402's lanes at 13:40 and 14:15 got the 13:40 'ADVISOR BRIEF: NEXT = S5' and the 08:20 'ADVISOR RULING: fix exactly two CI gates, nothing else' (already landed in #3593). Both lanes did the ruling, found nothing to change, and exited with no change. The same pattern caused the 'stale brief' no-op lanes on STORY-2571.
+
+  Fix: order advisor direction by created_at. The newest advisor comment (brief or ruling) is THE task. An older ruling or brief is shown only as labelled background ('earlier direction, superseded by the newer one above'), or omitted. Keep the existing verdict-vs-brief standing logic.
+
+  Acceptance: a unit test where an older ruling and a newer brief yield a prompt whose authoritative block is the brief, with the ruling marked superseded; a newer ruling over an older brief does the reverse; the existing BUG-057 tests still pass. LIGHT gate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T22:15:44.102546116Z
+modified_at: 2026-11-07T22:15:44.102546116Z
+req_type: Bug
+filed_at:
+  code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 77bc9e4e4d3
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
