@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T01:09:56.045204434Z
+modified_at: 2026-11-07T01:09:58.742384445Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -40,6 +40,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2 and AC3 verified. AC1 only partly met: probe, ps and hygiene salvage now handle legacy seat clones, but session reap still routes on lease.tree_kind, so a legacy clone lease is never reaped. CI still pending at review time (lib-1/cli-1/rest green).. No triage reason was given.'
   created_at: 2026-11-07T01:09:56.045202903Z
   modified_at: 2026-11-07T01:09:56.045202903Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b38e-20b7-7bc0-b9f3-fbbf7653a740
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2473):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bbcb02d0d40e
+    Recorded: 2026-11-07T00:58:57.756788543+00:00
+    Findings:
+    1. AC1 (acb474cc) PARTIAL: session_reap.rs:973 (scan) and :1141 (reap_one_with_clear_hooks) still pick the clone path only when lease.tree_kind == TreeKind::Clone. A legacy MCP lease (tree_kind defaulted to Worktree, empty branch) on a physical seat clone, which is exactly what this bug observed, falls through to the linked-worktree path. There worktree_status_dirty -> host_git_command refuses the clone (git_ops.rs:136), so the row is skipped as unreadable/dirty and is never reaped. Hygiene stops warning (the row is now Stalled), but these leases pile up silently. Fix: pick the clone reap/scan path from seat_clone_root(&lease.worktree_path).is_some(), as remote_missing_commits_for_lease now does, and resolve an empty lease.branch from the sandboxed probe (dispatch_snapshot) before merged_pr_heads/probe_counting_origin.
+    2. AC1 test gap: bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates calls classify_clone_reap directly with a hard-coded 'feat' branch and all-true flags. That skips the real reap dispatch for its own legacy lease (tree_kind=Worktree, branch cleared). Add an end-to-end assertion that the session-reap scan (the function hygiene calls) puts this lease in report.reapable.
+    3. minor: the bug_2473 bwrap-dependent test returns early when bwrap_live() is false and is not named *_bwrap_*, so the AIDA_REQUIRE_BWRAP_LIVE gate (ci.yml:389) never forces it live. Rename it to match bug_2473_bwrap_ and add that prefix to the live-gate filter and expected-name grep, so a skip fails CI.
+    4. cosmetic: guard_remote_commits (session_end.rs:2673) puts {error:#} into the context message and then attaches it to the same error. The top-level CLI prints {:?} (lib_part1.rs:275), so the cause prints twice: once inline and again under 'Caused by:'. Consider anyhow::anyhow!(message) with the source kept some other way, or drop the Caused-by duplication.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T01:09:58.583140011Z
+  modified_at: 2026-11-07T01:09:58.583140011Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 history:
