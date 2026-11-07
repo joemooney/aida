@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T02:13:19.656979457Z
-modified_at: 2026-11-07T07:00:46.003993637Z
+modified_at: 2026-11-07T07:12:32.478168633Z
 req_type: Task
 tags:
 - carried-from:BUG-2474
@@ -76,6 +76,12 @@ comments:
   content: 'Pickup verification found a remaining spec-index projection gap: verdict_events sorts by host at timestamps even within one ledger, so a host clock rollback can reverse append order for spec-ID readers while PR readers remain correct. Preserve each ledger stream order during cross-ledger merge; add clock-rollback regression for PR and spec projections, then rerun chronology and ledger suites. Existing round-2 implementation is already committed in this checkout; new edits will remain uncommitted for host publication.'
   created_at: 2026-11-07T07:00:46.003993637Z
   modified_at: 2026-11-07T07:00:46.003993637Z
+  session_id: 01a1b4ce017e
+- id: 01a1b4da-10de-7822-adb5-164dd49b7d57
+  author: joe
+  content: 'Final pickup verification: existing round-2 append-based reconciliation already present at HEAD. Fixed an additional remaining gap in gate/ledger/project.rs: spec-ID projections now merge ledger streams while preserving each stream append order, instead of globally sorting host timestamps. Regression covers future-stamped approval, later refusal and legitimate subsequent approval under host clock rollback, PR/spec agreement, an additional indexed change, and unbound spec ledgers. Updated docs/cli/04-git-lifecycle.md. Validation: 238 distinct targeted Rust tests passed (172 verdict/ledger/phase/corpus/real-recorder authority, 8 Rework history, 58 verified train); six TASK-2964 tests also passed in the initial focused run. cargo fmt --all -- --check and git diff --check passed. Three changed files remain uncommitted for the native host launcher; no implementation blockers. No commit, push, PR operation, queue completion, review record or ship merge performed.'
+  created_at: 2026-11-07T07:12:32.478168633Z
+  modified_at: 2026-11-07T07:12:32.478168633Z
   session_id: 01a1b4ce017e
 history:
 - id: 01a1b3e2-36ae-7cf3-b019-cfdaf99c87f3
