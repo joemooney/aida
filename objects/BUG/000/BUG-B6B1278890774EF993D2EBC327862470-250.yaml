@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T17:52:26.619364936Z
+modified_at: 2026-11-07T17:53:54.846502558Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -54,6 +54,12 @@ comments:
   created_at: 2026-11-07T17:22:52.093136879Z
   modified_at: 2026-11-07T17:22:52.093136879Z
   session_id: 01a1b70567b8
+- id: 01a1b725-429e-7273-8e3a-5bbb095f1deb
+  author: joe
+  content: 'Native-seat revalidation: this checkout already contains the approved round-2 implementation at f8d2a870d24 (current HEAD 1203365375e includes a main merge). No additional source edits were necessary. Both conformance suites passed: python3 -m unittest discover -s tests -p test*conformance*.py (50 tests, 58.161s). cargo fmt --all -- --check, Python AST parsing of the harness and both suites, and git diff --check passed. Working tree remains clean. Existing branch changes are scripts/containment/conformance.py, tests/test_containment_conformance.py, and docs/internal/testing/containment-conformance.md. No live vendor conformance run performed. No implementation blockers; publication and queue completion remain host responsibilities.'
+  created_at: 2026-11-07T17:53:54.846502558Z
+  modified_at: 2026-11-07T17:53:54.846502558Z
+  session_id: 01a1b7237115
 history:
 - id: 01a1b6e9-7c41-7821-b0b6-d68fe217481a
   author: joe
