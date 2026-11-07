@@ -12,10 +12,16 @@ use crate::phase_driver_trait::build_phase_driver_ci_fix_command;
 use crate::session::HeadlessVendor;
 use std::path::Path;
 
-fn get_cmd_env<'a>(cmd: &'a std::process::Command, key: &str) -> Option<Option<&'a str>> {
-    cmd.get_envs()
-        .find(|(k, _)| *k == key)
-        .and_then(|(_, v)| v.and_then(|s| s.to_str()).map(Some))
+fn get_cmd_env<'a>(cmd: &'a mut std::process::Command, key: &str) -> Option<Option<&'a str>> {
+    let cleared = crate::launch::profile::environment_is_cleared(cmd);
+    let value = cmd.get_envs().find(|(k, _)| *k == key).map(|(_, v)| v);
+    if value.is_none() {
+        assert!(
+            cleared,
+            "{key} must be explicitly removed from an inheriting command"
+        );
+    }
+    value.map(|v| v.and_then(|s| s.to_str()))
 }
 
 #[test]
@@ -29,12 +35,12 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
-    let cmd = build_burndown_quiet_command(
+    let mut cmd = build_burndown_quiet_command(
         HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
@@ -46,22 +52,22 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
     .unwrap();
 
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("implementer")),
         "quiet burndown child must run as implementer"
     );
     assert_eq!(
-        get_cmd_env(&cmd, GRANT_ENV),
+        get_cmd_env(&mut cmd, GRANT_ENV),
         Some(Some("child-grant-quiet-123")),
         "quiet burndown child must receive child grant"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "quiet burndown child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_BURNDOWN_LOCK_HELD"),
+        get_cmd_env(&mut cmd, "AIDA_BURNDOWN_LOCK_HELD"),
         Some(Some("1"))
     );
 }
@@ -77,12 +83,12 @@ fn burndown_quiet_command_supports_baseline_child() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
-    let cmd = build_burndown_quiet_command(
+    let mut cmd = build_burndown_quiet_command(
         HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
@@ -94,17 +100,17 @@ fn burndown_quiet_command_supports_baseline_child() {
     .unwrap();
 
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("implementer")),
         "quiet burndown child must run as implementer"
     );
     assert_eq!(
-        get_cmd_env(&cmd, GRANT_ENV),
+        get_cmd_env(&mut cmd, GRANT_ENV),
         Some(Some("")),
         "baseline child must receive empty grant"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "baseline child must have AIDA_SESSION_PURPOSE scrubbed"
     );
@@ -121,12 +127,12 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
-    let cmd = build_burndown_verbose_command(
+    let mut cmd = build_burndown_verbose_command(
         HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
@@ -138,22 +144,22 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
     .unwrap();
 
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("implementer")),
         "verbose burndown child must run as implementer"
     );
     assert_eq!(
-        get_cmd_env(&cmd, GRANT_ENV),
+        get_cmd_env(&mut cmd, GRANT_ENV),
         Some(Some("child-grant-verbose-456")),
         "verbose burndown child must receive child grant"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "verbose burndown child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_BURNDOWN_LOCK_HELD"),
+        get_cmd_env(&mut cmd, "AIDA_BURNDOWN_LOCK_HELD"),
         Some(Some("1"))
     );
 }
@@ -161,7 +167,12 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
 #[test]
 fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
     let tmp = tempfile::tempdir().unwrap();
-    let cmd = build_phase_driver_ci_fix_command(
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        tmp.path(),
+        None,
+        &[("AIDA_AGENT_CMD", None), ("AIDA_CONTAINED", None)],
+    );
+    let mut cmd = build_phase_driver_ci_fix_command(
         tmp.path(),
         "claude",
         &["-p".into(), "fix".into()],
@@ -174,24 +185,24 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
     .unwrap();
 
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("implementer")),
         "CI-fix child must run as implementer"
     );
     assert_eq!(
-        get_cmd_env(&cmd, GRANT_ENV),
+        get_cmd_env(&mut cmd, GRANT_ENV),
         Some(Some("child-grant-cifix-789")),
         "CI-fix child must receive child grant"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "CI-fix child must have AIDA_SESSION_PURPOSE scrubbed"
     );
-    assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));
+    assert_eq!(get_cmd_env(&mut cmd, "AIDA_HEADLESS"), Some(Some("1")));
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     assert_eq!(
-        get_cmd_env(&cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
+        get_cmd_env(&mut cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
         Some(Some("1")),
         "CI-fix child must run with background tasks disabled"
     );
@@ -200,9 +211,14 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
 #[test]
 fn phase_driver_advisor_command_scrubs_purpose() {
     let tmp = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        tmp.path(),
+        None,
+        &[("AIDA_AGENT_CMD", None), ("AIDA_CONTAINED", None)],
+    );
     let req = tmp.path().join("req.json");
     let resp = tmp.path().join("resp.json");
-    let cmd = build_phase_driver_advisor_command(
+    let mut cmd = build_phase_driver_advisor_command(
         tmp.path(),
         "claude",
         &["-p".into(), "advisor".into()],
@@ -216,23 +232,23 @@ fn phase_driver_advisor_command_scrubs_purpose() {
     .unwrap();
 
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("advisor")),
         "advisor consult child must run as advisor"
     );
     assert_eq!(
-        get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
+        get_cmd_env(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "advisor consult child must have AIDA_SESSION_PURPOSE scrubbed"
     );
-    assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));
+    assert_eq!(get_cmd_env(&mut cmd, "AIDA_HEADLESS"), Some(Some("1")));
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     assert_eq!(
-        get_cmd_env(&cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
+        get_cmd_env(&mut cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
         Some(Some("1")),
         "advisor consult child must run with background tasks disabled"
     );
-    assert_eq!(get_cmd_env(&cmd, "CEILING_KEY"), Some(Some("100")));
+    assert_eq!(get_cmd_env(&mut cmd, "CEILING_KEY"), Some(Some("100")));
 }
 
 #[test]

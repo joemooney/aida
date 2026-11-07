@@ -32,11 +32,22 @@ fn args_of(cmd: &std::process::Command) -> Vec<String> {
         .collect()
 }
 
-fn env_of(cmd: &std::process::Command, key: &str) -> Option<Option<String>> {
-    cmd.get_envs()
+// Absence proves scrubbing only on a cleared command. Inheriting fixture or
+// wrapper commands must retain an explicit removal decision.
+// trace:STORY-2326 | ai:codex
+fn env_of(cmd: &mut std::process::Command, key: &str) -> Option<Option<String>> {
+    let cleared = crate::launch::profile::environment_is_cleared(cmd);
+    let value = cmd
+        .get_envs()
         .find(|(k, _)| *k == key)
-        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
-        .filter(|value| value.is_some())
+        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()));
+    if value.is_none() {
+        assert!(
+            cleared,
+            "{key} must be explicitly removed from an inheriting command"
+        );
+    }
+    value
 }
 
 #[test]
@@ -124,13 +135,13 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
     // Contained
-    let cmd = build_burndown_quiet_command(
+    let mut cmd = build_burndown_quiet_command(
         CLAUDE,
         "prompt-quiet",
         "dontAsk",
@@ -141,20 +152,23 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd, "AIDA_CONTAINED"),
+        env_of(&mut cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
         "contained quiet burndown must set AIDA_CONTAINED=1"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "contained quiet burndown must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_BURNDOWN_LOCK_HELD"),
+        env_of(&mut cmd, "AIDA_BURNDOWN_LOCK_HELD"),
         Some(Some("1".to_string()))
     );
-    assert_eq!(env_of(&cmd, "CEILING_KEY"), Some(Some("10".to_string())));
+    assert_eq!(
+        env_of(&mut cmd, "CEILING_KEY"),
+        Some(Some("10".to_string()))
+    );
     let args = args_of(&cmd);
     assert!(args.contains(&"--permission-mode".to_string()));
     assert!(args.contains(&"dontAsk".to_string()));
@@ -162,7 +176,7 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     crate::session::assert_headless_posture(&args, true, "contained quiet burndown");
 
     // Uncontained
-    let cmd_uncontained = build_burndown_quiet_command(
+    let mut cmd_uncontained = build_burndown_quiet_command(
         CLAUDE,
         "prompt-quiet",
         "bypassPermissions",
@@ -173,12 +187,12 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_CONTAINED"),
+        env_of(&mut cmd_uncontained, "AIDA_CONTAINED"),
         None,
         "uncontained quiet burndown must strip AIDA_CONTAINED"
     );
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd_uncontained, "AIDA_SESSION_PURPOSE"),
         None,
         "uncontained quiet burndown must strip AIDA_SESSION_PURPOSE"
     );
@@ -201,13 +215,13 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
     // Contained
-    let cmd = build_burndown_verbose_command(
+    let mut cmd = build_burndown_verbose_command(
         CLAUDE,
         "prompt-verbose",
         "dontAsk",
@@ -218,21 +232,21 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd, "AIDA_CONTAINED"),
+        env_of(&mut cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
         "contained verbose burndown must set AIDA_CONTAINED=1"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "contained verbose burndown must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_ROLE"),
+        env_of(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("implementer".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
+        env_of(&mut cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-grant-1".to_string()))
     );
     let args = args_of(&cmd);
@@ -246,7 +260,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     assert_eq!(args.last().unwrap(), "prompt-verbose");
 
     // Uncontained
-    let cmd_uncontained = build_burndown_verbose_command(
+    let mut cmd_uncontained = build_burndown_verbose_command(
         CLAUDE,
         "prompt-verbose",
         "bypassPermissions",
@@ -257,12 +271,12 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_CONTAINED"),
+        env_of(&mut cmd_uncontained, "AIDA_CONTAINED"),
         None,
         "uncontained verbose burndown must strip AIDA_CONTAINED"
     );
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd_uncontained, "AIDA_SESSION_PURPOSE"),
         None,
         "uncontained verbose burndown must strip AIDA_SESSION_PURPOSE"
     );
@@ -288,7 +302,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
@@ -296,7 +310,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     let cfg = crate::intake::IntakeConfig::default();
 
     // Contained
-    let cmd = build_autopilot_intake_command(
+    let mut cmd = build_autopilot_intake_command(
         CLAUDE,
         "prompt-intake",
         "dontAsk",
@@ -312,21 +326,21 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd, "AIDA_CONTAINED"),
+        env_of(&mut cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
         "contained autopilot intake must set AIDA_CONTAINED=1"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "contained autopilot intake must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_ROLE"),
+        env_of(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("advisor".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
+        env_of(&mut cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-intake-grant".to_string()))
     );
     let args = args_of(&cmd);
@@ -335,7 +349,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     crate::session::assert_headless_posture(&args, true, "contained autopilot intake");
 
     // Uncontained
-    let cmd_uncontained = build_autopilot_intake_command(
+    let mut cmd_uncontained = build_autopilot_intake_command(
         CLAUDE,
         "prompt-intake",
         "bypassPermissions",
@@ -351,12 +365,12 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     )
     .unwrap();
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_CONTAINED"),
+        env_of(&mut cmd_uncontained, "AIDA_CONTAINED"),
         None,
         "uncontained autopilot intake must strip AIDA_CONTAINED"
     );
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd_uncontained, "AIDA_SESSION_PURPOSE"),
         None,
         "uncontained autopilot intake must strip AIDA_SESSION_PURPOSE"
     );
@@ -381,31 +395,31 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
         None,
         &[
             ("AIDA_HEADLESS_VENDOR", Some("claude")),
-            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_AGENT_CMD", None),
             ("AIDA_OS_WRAP", Some("0")),
             ("AIDA_CONTAINED", None),
         ],
     );
     // Contained
-    let cmd =
+    let mut cmd =
         build_questions_clarify_command(CLAUDE, "prompt-clarify", "child-clarify-grant", true)
             .unwrap();
     assert_eq!(
-        env_of(&cmd, "AIDA_CONTAINED"),
+        env_of(&mut cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
         "contained questions clarify must set AIDA_CONTAINED=1"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd, "AIDA_SESSION_PURPOSE"),
         None,
         "contained questions clarify must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
-        env_of(&cmd, "AIDA_SESSION_ROLE"),
+        env_of(&mut cmd, "AIDA_SESSION_ROLE"),
         Some(Some("advisor".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
+        env_of(&mut cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-clarify-grant".to_string()))
     );
     let args = args_of(&cmd);
@@ -416,16 +430,16 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
     assert_eq!(args.last().unwrap(), "prompt-clarify");
 
     // Uncontained
-    let cmd_uncontained =
+    let mut cmd_uncontained =
         build_questions_clarify_command(CLAUDE, "prompt-clarify", "child-clarify-grant", false)
             .unwrap();
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_CONTAINED"),
+        env_of(&mut cmd_uncontained, "AIDA_CONTAINED"),
         None,
         "uncontained questions clarify must strip AIDA_CONTAINED"
     );
     assert_eq!(
-        env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
+        env_of(&mut cmd_uncontained, "AIDA_SESSION_PURPOSE"),
         None,
         "uncontained questions clarify must strip AIDA_SESSION_PURPOSE"
     );

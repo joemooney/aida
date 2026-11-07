@@ -1510,11 +1510,10 @@ fn task_2708_claude_prepare_fake_home() {
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_GRANT", "")
         .env("AIDA_SESSION_ROLE", "companion");
-    let prepare = || PreparedLaunch::prepare(&child, root.path(), None);
     // Synthetic foreign-owner seam: exercise the same prepare path with a
     // mismatching issuer uid, without requiring host chown authority.
     assert!(PreparedLaunch::prepare_for_owner(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() } + 1
@@ -1523,7 +1522,8 @@ fn task_2708_claude_prepare_fake_home() {
     .unwrap()
     .to_string()
     .contains("credentials identity refused"));
-    let plan = prepare().unwrap_or_else(|e| panic!("prepare: {e:#}"));
+    let plan = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .unwrap_or_else(|e| panic!("prepare: {e:#}"));
     let cfg: serde_json::Value =
         serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
     let vendor = ContainedVendor::for_program(std::ffi::OsStr::new("claude")).unwrap();
@@ -1632,7 +1632,7 @@ print('Claude prepare live mounts ok')
     let saved = config.join("saved");
     std::fs::rename(&path, &saved).unwrap();
     std::os::unix::fs::symlink(&saved, &path).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -1640,20 +1640,20 @@ print('Claude prepare live mounts ok')
     std::fs::remove_file(&path).unwrap();
     std::fs::rename(&saved, &path).unwrap();
     std::fs::hard_link(&path, &saved).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("credentials identity refused"));
     std::fs::remove_file(&saved).unwrap();
     std::fs::write(&path, "not json").unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("CLAUDE_CREDENTIALS_INVALID"));
     credentials_expiring_in(&config, -60);
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -2565,7 +2565,7 @@ fn task_3225_service_required_refuses_absent_and_empty_binding_before_setup() {
         if let Some(grant) = grant {
             command.env(crate::gate::seat_authority::GRANT_ENV, grant);
         }
-        let error = match PreparedLaunch::prepare(&command, root.path(), None) {
+        let error = match PreparedLaunch::prepare(&mut command, root.path(), None) {
             Ok(_) => panic!("service admitted missing binding"),
             Err(error) => error,
         };
@@ -3355,9 +3355,10 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
     ] {
         let mut cmd = Command::new("claude");
         cmd.arg(flag);
-        let error = PreparedLaunch::prepare_interactive(&cmd, Path::new("/nonexistent/3219"), None)
-            .err()
-            .expect("unsupported surface");
+        let error =
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/3219"), None)
+                .err()
+                .expect("unsupported surface");
         assert!(
             error.to_string().contains(if flag == "--bg" {
                 "supervisor"
@@ -3537,5 +3538,29 @@ fn story_2326_wrapper_headless_builders_keep_parent_context_out_of_selection() {
         // A child lease assigned by the owner remains transportable.
         cmd.env("AIDA_SESSION_ID", "child-lease");
         assert_eq!(selected_environment(&cmd)["AIDA_SESSION_ID"], "child-lease");
+    }
+}
+
+// Both wrapper entrypoints reject an accidental env_clear/projection before
+// touching the root, credentials, store or broker. This protects future sites
+// that omit LaunchContext's wrapper_environment decision.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_refuses_projected_commands_before_io() {
+    for interactive in [false, true] {
+        let mut cmd = Command::new("claude");
+        cmd.env_clear().env("AIDA_SESSION_ID", "projected-parent");
+        let result = if interactive {
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/2326"), None)
+        } else {
+            PreparedLaunch::prepare(&mut cmd, Path::new("/nonexistent/2326"), None)
+        };
+        let error = result.err().expect("projected command must refuse");
+        assert!(
+            error
+                .to_string()
+                .contains("unprojected command environment"),
+            "{error:#}"
+        );
     }
 }

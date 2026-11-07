@@ -31,11 +31,22 @@ fn git_init(dir: &std::path::Path) {
     assert!(status.success());
 }
 
-fn env_value(cmd: &std::process::Command, key: &str) -> Option<Option<String>> {
-    cmd.get_envs()
+// Absence proves scrubbing only on a cleared command. Inheriting fixture or
+// wrapper commands must retain an explicit removal decision.
+// trace:STORY-2326 | ai:codex
+fn env_value(cmd: &mut std::process::Command, key: &str) -> Option<Option<String>> {
+    let cleared = crate::launch::profile::environment_is_cleared(cmd);
+    let value = cmd
+        .get_envs()
         .find(|(k, _)| *k == key)
-        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
-        .filter(|value| value.is_some())
+        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()));
+    if value.is_none() {
+        assert!(
+            cleared,
+            "{key} must be explicitly removed from an inheriting command"
+        );
+    }
+    value
 }
 
 /// The `--settings` JSON value from a contained claude argv.
@@ -255,11 +266,12 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
 
 #[test]
 fn contained_child_commands_export_aida_contained() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None), ("AIDA_AGENT_CMD", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let p = tmp.path();
 
-    let ci_fix = build_phase_driver_ci_fix_command(
+    let mut ci_fix = build_phase_driver_ci_fix_command(
         p,
         "claude",
         &[],
@@ -270,8 +282,11 @@ fn contained_child_commands_export_aida_contained() {
         "",
     )
     .unwrap();
-    assert_eq!(env_value(&ci_fix, "AIDA_CONTAINED"), Some(Some("1".into())));
-    let advisor = build_phase_driver_advisor_command(
+    assert_eq!(
+        env_value(&mut ci_fix, "AIDA_CONTAINED"),
+        Some(Some("1".into()))
+    );
+    let mut advisor = build_phase_driver_advisor_command(
         p,
         "claude",
         &[],
@@ -284,12 +299,12 @@ fn contained_child_commands_export_aida_contained() {
     )
     .unwrap();
     assert_eq!(
-        env_value(&advisor, "AIDA_CONTAINED"),
+        env_value(&mut advisor, "AIDA_CONTAINED"),
         Some(Some("1".into()))
     );
 
     // Uncontained still strips an inherited marker (BUG-2124 unchanged).
-    let ci_fix_plain = build_phase_driver_ci_fix_command(
+    let mut ci_fix_plain = build_phase_driver_ci_fix_command(
         p,
         "claude",
         &[],
@@ -300,7 +315,7 @@ fn contained_child_commands_export_aida_contained() {
         "",
     )
     .unwrap();
-    assert_eq!(env_value(&ci_fix_plain, "AIDA_CONTAINED"), None);
+    assert_eq!(env_value(&mut ci_fix_plain, "AIDA_CONTAINED"), None);
 }
 
 #[test]

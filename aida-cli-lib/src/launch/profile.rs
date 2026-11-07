@@ -140,7 +140,7 @@ impl VendorProfile {
 /// Command has no API to erase that removal entry without clearing all env
 /// decisions, so inheriting commands retain this harmless reserved tombstone.
 // trace:STORY-2326 | ai:codex
-pub(super) fn environment_is_cleared(child: &mut Command) -> bool {
+pub(crate) fn environment_is_cleared(child: &mut Command) -> bool {
     const PROBE: &str = "__AIDA_LAUNCH_INHERITANCE_PROBE";
     child.env_remove(PROBE);
     !child.get_envs().any(|(key, _)| key == PROBE)

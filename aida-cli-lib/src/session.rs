@@ -2187,7 +2187,7 @@ fn spawn_vendor_headless_forking(
     if wrapper {
         let result = (|| -> Result<_> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
-                &cmd,
+                &mut cmd,
                 &headless_worktree_root(),
                 host_main,
             )?
@@ -7276,7 +7276,7 @@ fn run_vendor_headless_child(
         let mut registered = false;
         let result = (|| -> Result<std::process::ExitStatus> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
-                &child_cmd,
+                &mut child_cmd,
                 &headless_worktree_root(),
                 host_main,
             )?

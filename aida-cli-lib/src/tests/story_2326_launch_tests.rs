@@ -1198,10 +1198,7 @@ fn story_2326_pr_b_phase_builders_preserve_none_argv_and_seat() {
             );
             assert_eq!(cmd.get_current_dir(), Some(tmp.path()));
             let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
-            assert!(env
-                .get(OsStr::new("AIDA_CONTAINED"))
-                .and_then(|v| *v)
-                .is_none());
+            assert_eq!(env.get(OsStr::new("AIDA_CONTAINED")), Some(&None));
             assert_eq!(
                 env.get(OsStr::new("AIDA_CONTAINMENT_POSTURE")),
                 Some(&Some(OsStr::new("none")))
@@ -1695,4 +1692,82 @@ fn story_2326_reviewer_verdict_is_explicit_after_clear() {
         .unwrap()
         .lines()
         .any(|line| line == "AIDA_REVIEW_VERDICT_FILE=/site/verdict.json"));
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_cleared_claude_advisor_transports_current_grant() {
+    let root = tempfile::tempdir().unwrap();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        Some("advisor"),
+        &[
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_SESSION_PURPOSE", Some("launcher purpose")),
+        ],
+    );
+    for grant in ["advisor-consult-grant", ""] {
+        ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+        let mut cmd = crate::phase_driver::build_phase_driver_advisor_command(
+            root.path(),
+            "claude",
+            &["-p".into(), "consult".into()],
+            &root.path().join("request"),
+            &root.path().join("response"),
+            "CEILING",
+            "10",
+            crate::session::HeadlessVendor::Claude,
+            false,
+        )
+        .unwrap();
+        assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+        let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            env.get(OsStr::new("AIDA_SESSION_GRANT")),
+            Some(&Some(OsStr::new(grant)))
+        );
+        assert_eq!(
+            env.get(OsStr::new("AIDA_SESSION_ROLE")),
+            Some(&Some(OsStr::new("advisor")))
+        );
+        assert!(!env.contains_key(OsStr::new("AIDA_SESSION_PURPOSE")));
+    }
+}
+
+// Compete has no delegated seat; clearing Claude intentionally drops the
+// parent's owned selectors rather than turning an arm into its parent session.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_cleared_claude_compete_has_no_parent_seat() {
+    let root = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        Some("advisor"),
+        &[
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_SESSION_GRANT", Some("parent-grant")),
+            ("AIDA_SESSION_PURPOSE", Some("parent purpose")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let mut cmd = crate::compete_cmd::build_compete_arm_command(
+        root.path(),
+        root.path(),
+        "claude",
+        &["-p".into(), "candidate".into()],
+        "claude",
+    )
+    .unwrap();
+    assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+    for key in [
+        "AIDA_SESSION_ROLE",
+        "AIDA_SESSION_GRANT",
+        "AIDA_SESSION_PURPOSE",
+    ] {
+        assert!(
+            !cmd.get_envs().any(|(k, _)| k == key),
+            "parent selector {key}"
+        );
+    }
 }

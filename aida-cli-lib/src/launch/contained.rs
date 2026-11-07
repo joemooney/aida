@@ -826,11 +826,15 @@ impl PreparedLaunch {
     /// `host_main` is the launcher's main checkout, resolved once at the
     /// launch entry point (TASK-2032); `None` recognises no seat clone.
     // trace:TASK-2708 TASK-2032 | ai:claude
-    pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
+    pub(crate) fn prepare(
+        child: &mut Command,
+        root: &Path,
+        host_main: Option<&Path>,
+    ) -> Result<Self> {
         Self::prepare_for_owner(child, root, host_main, unsafe { libc::getuid() })
     }
     fn prepare_for_owner(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
@@ -845,7 +849,7 @@ impl PreparedLaunch {
         )
     }
     pub(crate) fn prepare_interactive(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
     ) -> Result<Self> {
@@ -861,13 +865,21 @@ impl PreparedLaunch {
     // trace:STORY-2593 | ai:codex — inject the binary pin while keeping
     // ambient reads under their existing ExecContext ledger owner.
     fn prepare_with_io(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
         io: LaunchIo,
         codex_sha256: &str,
     ) -> Result<Self> {
+        // Projection turns ambient values into explicit pairs, which this
+        // wrapper would mistake for site decisions. All wrapper entrypoints
+        // must receive an unprojected command, including future launch sites.
+        // trace:STORY-2326 | ai:codex
+        anyhow::ensure!(
+            !super::profile::environment_is_cleared(child),
+            "contained wrapper requires an unprojected command environment"
+        );
         let store_profile = selected_store_profile(child)?;
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.

@@ -569,7 +569,10 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "advisor seat builder only; intake/questions finalize via coordinator spawn",
         ),
     ),
-    ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
+    // Explicit advisor assignment transports the launcher's selector for Claude;
+    // the Codex caller replaces it with a delegated grant before finalization.
+    // trace:STORY-2326 | ai:codex
+    ("phase_driver.rs", 3, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     (

@@ -7448,7 +7448,7 @@ pub(crate) fn run_agent_generation(
     let mut contained = if wrapper {
         Some(
             crate::containment::launch::PreparedLaunch::prepare_interactive(
-                &command,
+                &mut command,
                 &plan.launch_cwd,
                 crate::seat_clone::launcher_main().as_deref(),
             )?

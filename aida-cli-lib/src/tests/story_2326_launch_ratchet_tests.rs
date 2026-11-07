@@ -53,7 +53,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
     ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
-    ("aida-cli-lib/src/phase_driver.rs", 5, "slice C: phase advisor and auto-punt control child"),
+    ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
     ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
@@ -454,10 +454,9 @@ fn has_legacy_child_issuer(src: &str) -> bool {
         .any(|word| {
             matches!(
                 word,
-                "issue_launch_child_with_delegation" | "issue_child_from"
+                "issue_launch_child_with_delegation" | "issue_child_from" | "issue_child"
             )
         })
-        || src.contains("seat_authority::issue_child(")
 }
 
 #[test]
@@ -468,6 +467,10 @@ fn story_2326_grant_owner_mutants() {
         "use crate::gate::seat_authority::issue_launch_child_with_delegation as mint; mint(root)",
         "use crate::gate::seat_authority::{issue_launch_child_with_delegation as mint}; mint(root)",
         "use crate::gate::seat_authority::issue_child_from as mint; mint(root)",
+        "seat_authority::issue_child(root)",
+        "use crate::gate::seat_authority::issue_child; issue_child(root)",
+        "use crate::gate::seat_authority::issue_child as mint; mint(root)",
+        "use crate::gate::seat_authority::{issue_child as mint}; mint(root)",
     ] {
         assert!(has_legacy_child_issuer(mutant), "escaped: {mutant}");
     }
