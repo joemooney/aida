@@ -199,6 +199,11 @@ fn host_primitive_positives(f: &Fixture, profile: &WriteProfile) {
         "version=1\nauthoritative=true\n",
     )
     .unwrap();
+    std::fs::set_permissions(
+        f.main.join(".git/aida-allocation.toml"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let store = f.main.join(".aida-store");
     let mut row = aida_core::Requirement::new("fixture".into(), "before".into());
     row.spec_id = Some("TASK-3223".into());
@@ -280,6 +285,50 @@ fn mediated_profile_pins_readonly_targets_and_fresh_private_cache() {
             );
         }
     }
+}
+
+#[test]
+fn mediated_profile_private_caches_are_owner_only_fresh_and_independent() {
+    let f = Fixture::new(false);
+    let (_, first) = f.profile();
+    let second_state = f._tmp.path().join("second-state");
+    std::fs::create_dir(&second_state).unwrap();
+    let second = WriteProfile::new()
+        .seal_mediated_store(&f.lane, &f.main, &second_state)
+        .unwrap();
+    for cache in [&first, &second] {
+        assert_eq!(
+            std::fs::metadata(cache.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+        assert!(!cache.exists());
+    }
+    let first_db = aida_core::db::Cache::open(&first).unwrap();
+    assert!(
+        !second.exists(),
+        "another lane must not inherit derived bytes"
+    );
+    let second_db = aida_core::db::Cache::open(&second).unwrap();
+    assert_ne!(
+        std::fs::metadata(&first).unwrap().ino(),
+        std::fs::metadata(&second).unwrap().ino()
+    );
+    drop((first_db, second_db));
+    // Reusing a state directory must fail, including a planted symlink.
+    assert!(WriteProfile::new()
+        .seal_mediated_store(&f.lane, &f.main, &f.state)
+        .is_err());
+    let planted_state = f._tmp.path().join("planted-state");
+    std::fs::create_dir(&planted_state).unwrap();
+    std::os::unix::fs::symlink(first.parent().unwrap(), planted_state.join("derived-cache"))
+        .unwrap();
+    assert!(WriteProfile::new()
+        .seal_mediated_store(&f.lane, &f.main, &planted_state)
+        .is_err());
 }
 
 #[test]
