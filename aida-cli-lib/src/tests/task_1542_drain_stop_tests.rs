@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 use super::*;
 
 // trace:TASK-1542 | ai:codex
@@ -10,6 +11,9 @@ fn write_child_lease(
     interrupted: bool,
 ) {
     let mut body = format!("id = \"{id}\"\ncreator_pid = {creator}\nactive_pid = {pid}\n");
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        body.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
     if let Some(start) = start {
         body.push_str(&format!(
             "active_pid_start_time = {}\n",

@@ -7,6 +7,7 @@
 // trace:STORY-2254 | ai:claude
 use super::*;
 use std::path::Path;
+// trace:BUG-2476 | ai:codex
 
 fn git(dir: &Path, args: &[&str]) {
     let out = crate::test_git::git_command()
@@ -28,7 +29,7 @@ fn git(dir: &Path, args: &[&str]) {
 /// The lease shape `agent new codex --bg` leaves after the supervisor stamps
 /// its worker (`stamp_lease_detached_worker_at`).
 fn detached_codex_lease(id: &str, pool: &Path, worker: u32, worker_start: &str) -> String {
-    format!(
+    let mut body = format!(
         r#"id = "{id}"
 scope = "TASK-2881"
 slug = "task-2881"
@@ -46,7 +47,11 @@ active_pid_start_time = "{worker_start}"
 "#,
         pool = aida_core::toml_quote::toml_string(&pool.to_string_lossy()),
         started = chrono::Utc::now().to_rfc3339(),
-    )
+    );
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        body.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
+    body
 }
 
 #[cfg(target_os = "linux")]

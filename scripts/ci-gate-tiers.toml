@@ -47,6 +47,8 @@
 # trace:BUG-2475 | ai:codex
 # Both engines are mandatory; gawk is installed by CI but optional on dev hosts.
 "Mail notice hook JSON protocol" = "full"
+# trace:BUG-2476 | ai:codex
+"Run fixture PID namespace binding tests" = "fast"
 # trace:TASK-3222 | ai:codex
 "Store writer inventory ratchet" = "fast"
 "Store writer inventory mutation fixtures" = "fast"

@@ -1,5 +1,6 @@
 //! STORY-2254: private runtime receipts and detached scope admission.
 // trace:STORY-2254 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use super::*;
 use std::os::unix::fs::PermissionsExt;
@@ -317,6 +318,12 @@ fn write_scope_lease(root: &Path, id: &str, scope: &str) {
         ("role", "implementer".into()),
     ] {
         lease.insert(key.into(), toml::Value::String(value));
+    }
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        lease.insert(
+            "pid_namespace".into(),
+            toml::Value::Integer(namespace as i64),
+        );
     }
     std::fs::write(
         sessions.join(format!("{id}.toml")),

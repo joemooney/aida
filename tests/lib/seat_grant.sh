@@ -1,3 +1,4 @@
+# trace:BUG-2476 | ai:codex
 # STORY-1473 / ADR-66 seat fixture for shell gates.
 #
 # An env role (`AIDA_SESSION_ROLE`) is only a display/routing hint, so a shell
@@ -60,11 +61,18 @@ aida_seat_grant() {
     # every command the gate invokes, as `proc:<pid>@linux-starttime:<field
     # 22 of its stat file>`, the format process_start_identity reads.
     # Refuse rather than mint an unbindable grant. trace:BUG-1934 | ai:claude
-    local stat ticks binding
+    local stat ticks namespace start binding
     stat=$(cat "/proc/$$/stat") || return 1
     ticks=$(printf '%s\n' "${stat##*)}" | awk '{print $20}')
     [ -n "$ticks" ] || return 1
-    binding="proc:$$@linux-starttime:$ticks"
+    namespace=$(python3 -c 'import os,sys; print(os.stat("/proc/" + sys.argv[1] + "/ns/pid").st_ino)' "$$") || return 1
+    [[ "$namespace" =~ ^[0-9]+$ ]] || return 1
+    start="linux-starttime:$ticks"
+    # Linux reserves this inode for the initial namespace (BUG-2419).
+    if [ "$namespace" != "$((0xEFFFFFFC))" ]; then
+        start="pidns-$namespace/$start"
+    fi
+    binding="proc:$$@$start"
 
     mkdir -p "$home/.aida/session-grants"
     cat >"$home/.aida/session-grants/$id.json" <<EOF

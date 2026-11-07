@@ -3,6 +3,7 @@
 //! companions no longer refuse every launch, while a corrupt lease still
 //! fails closed.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 use crate::dispatch::check_live_worktree_or_branch_occupant;
 
@@ -78,13 +79,16 @@ fn bug_012_lease_companion_names() {
 fn lease_and_companions(root: &std::path::Path, wt: &std::path::Path, pid: u32) {
     let sessions = crate::leases::leases_dir(root);
     std::fs::create_dir_all(&sessions).expect("sessions dir");
-    let body = format!(
+    let mut body = format!(
         "id = \"aaaa11112222\"\nscope = \"TASK-77\"\nslug = \"task-77\"\n\
          owner = \"test@example.com\"\nworktree_path = {:?}\nbranch = \"task-77\"\n\
          started_at = \"2026-10-18T00:00:00Z\"\nhostname = \"testhost\"\n\
          creator_pid = {pid}\n",
         wt.to_string_lossy()
     );
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        body.push_str(&format!("pid_namespace = {namespace}\n"));
+    }
     for name in [
         "aaaa11112222.toml",
         "aaaa11112222.activity.toml",

@@ -459,6 +459,11 @@ jobs:
       # trace:TASK-453 | ai:claude
       # Runs in gates: contracts was the next-longest lane once lib split.
       # trace:TASK-1979 | ai:claude
+      # trace:BUG-2476 | ai:codex
+      - name: Run fixture PID namespace binding tests
+        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        run: python3 tests/test_fixture_pid_namespace.py
+
       - name: Run MCP stdio compatibility tests
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_mcp_stdio.sh

@@ -1,4 +1,5 @@
 #![cfg(target_os = "linux")]
+// trace:BUG-2476 | ai:codex
 //! Black-box witnesses that ordinary store sync, the direct merge gate and the
 //! canonical mailbox digest run as store-writer transactions under the
 //! existing store write lock, and that the lock is released before any push.
@@ -246,7 +247,14 @@ locks() { for f in /proc/"$1"/fd/*; do readlink "$f"; done 2>/dev/null | grep '\
 # is matched too: an ancestor (cargo, the test binary) may hold an unrelated
 # flock whose inode number collides on another filesystem.
 lock_file=$(readlink -f "$T1717_LOCK")
-lock_id=$(printf '%02x:%02x:%s' $(stat -c '%Hd %Ld %i' "$lock_file" 2>/dev/null))
+# Jammy's stat does not support %Hd/%Ld; use the platform device-number API.
+lock_id=$(python3 - "$lock_file" <<'PY'
+import os
+import sys
+s = os.stat(sys.argv[1])
+print(f"{os.major(s.st_dev):02x}:{os.minor(s.st_dev):02x}:{s.st_ino}")
+PY
+)
 ppid_of() { awk '/^PPid:/ { print $2 }' /proc/"$1"/status 2>/dev/null; }
 # The aida process and its ancestors: a parent that holds the lock and pushes
 # from a child (a wrapper, a refresh or auto-push worker) is in the tree too.
