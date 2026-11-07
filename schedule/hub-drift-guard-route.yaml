@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-07T00:15:15.183451464Z
+last_run: 2026-11-07T09:24:22.718063465Z
 last_by:
   seat: advisor
-  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  session: 01a1b441-8158-7162-ad75-f7915b45ee33
   vendor: claude
 result: done
-note: reconciled aida-store union c95bf6c0 to both hubs
-due_since: 2026-11-07T03:05:13.738003076Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-07T09:08:19.930111093Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: 02:35 aida-store diverged (gitlab +30, origin +1, local ahead of both); aida remote reconcile --execute pushed the union 6720484 to both hubs
