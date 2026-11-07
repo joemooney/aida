@@ -15,6 +15,15 @@ The readable access-token risk remains accepted; this does not narrow the
 bearer's upstream lifetime or scope. New versions require another compatibility
 probe and code update. Host refresh and keyring login remain unsupported.
 
+The launcher verifies the resolved executable against the recorded SHA-256
+`b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8`
+without executing it on the host. A binary mismatch refuses before reading
+credentials. Vendor code executes only inside the contained lane; inherited
+version context and self-reported version output grant no compatibility credit.
+Put the probed native `codex` executable first on PATH for this path; npm/JS
+launch wrappers have different bytes and refuse, even if they report the same
+version. The recorded native executable is approximately 305 MiB.
+
 `launch/codex_auth.rs` opens bounded, non-symlink, single-link, current-owner
 mode-0600 file credentials. It requires ChatGPT auth mode, access-token expiry
 and identity account routing, rejects conflicting account IDs, and requires

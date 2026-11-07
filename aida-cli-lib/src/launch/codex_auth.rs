@@ -15,6 +15,44 @@ pub(super) const RELAUNCH: &str =
 const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
 const BOUND: usize = 65536;
+pub(super) const PROGRAM_SHA256: &str =
+    "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8";
+
+/// Pin the probed interface without executing lane-selected code on the host.
+/// The actual vendor execution still happens only within the contained lane.
+pub(super) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(program)
+        .context("contained ChatGPT executable unavailable")?;
+    let md = file.metadata()?;
+    // The recorded musl executable is approximately 305 MiB.
+    let limit = 512 * 1024 * 1024;
+    anyhow::ensure!(
+        md.is_file() && md.len() <= limit,
+        "contained ChatGPT executable refused"
+    );
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 65536];
+    let mut total = 0;
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        total += n as u64;
+        anyhow::ensure!(total <= limit, "contained ChatGPT executable exceeds bound");
+        digest.update(&buffer[..n]);
+    }
+    anyhow::ensure!(
+        format!("{:x}", digest.finalize()) == expected_sha256,
+        "contained ChatGPT auth refused: re-probe this codex binary (supported: codex-cli 0.166.0 SHA-256 {PROGRAM_SHA256}); put the probed native codex binary first on PATH"
+    );
+    Ok(())
+}
 pub(super) const OAUTH_HOSTS: [&str; 4] = [
     "auth.openai.com",
     "auth0.openai.com",

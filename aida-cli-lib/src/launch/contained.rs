@@ -784,6 +784,23 @@ impl PreparedLaunch {
         credential_owner: u32,
         io: LaunchIo,
     ) -> Result<Self> {
+        Self::prepare_with_codex_pin(
+            child,
+            root,
+            host_main,
+            credential_owner,
+            io,
+            codex_auth::PROGRAM_SHA256,
+        )
+    }
+    fn prepare_with_codex_pin(
+        child: &Command,
+        root: &Path,
+        host_main: Option<&Path>,
+        credential_owner: u32,
+        io: LaunchIo,
+        codex_sha256: &str,
+    ) -> Result<Self> {
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
         let required = explicit(child, "AIDA_STORE_MUTATION_REQUIRED");
@@ -901,20 +918,16 @@ impl PreparedLaunch {
         // unusable one is a named refusal, never a lane without it.
         let auth = match vendor.auth {
             VendorAuth::OpenAiApiKey => {
-                // trace:STORY-2593 | ai:codex — probe the resolved executable,
-                // never trust inherited informational version context.
+                // trace:STORY-2593 | ai:codex — pin the probed executable;
+                // never execute vendor code on the host to obtain a version.
                 match std::fs::symlink_metadata(codex_home.join("auth.json")) {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
-                        let version = crate::agent_launch::reported_harness_version(
-                            program.as_os_str(),
-                            &["--version".into()],
-                            Some(&root),
-                        );
+                        codex_auth::require_program(&program, codex_sha256)?;
                         let auth = codex_auth::prepare(
                             &codex_home,
                             credential_owner,
-                            version.as_deref(),
+                            Some("codex-cli 0.166.0"),
                             ttl,
                         )?;
                         codex_auth::exclude_oauth_hosts(&mut allowed);

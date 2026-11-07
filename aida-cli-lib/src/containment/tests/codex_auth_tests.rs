@@ -35,6 +35,30 @@ fn error(home: &Path) -> String {
     }
 }
 #[test]
+fn story_2593_binary_pin_never_executes_host_code() {
+    use sha2::{Digest, Sha256};
+    let root = tempfile::tempdir().unwrap();
+    let program = root.path().join("codex");
+    let sentinel = root.path().join("executed");
+    let script = format!(
+        "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+        sentinel.display()
+    );
+    std::fs::write(&program, &script).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let error = codex_auth::require_program(&program, codex_auth::PROGRAM_SHA256).unwrap_err();
+    assert!(error.to_string().contains("re-probe this codex binary"));
+    let pin = format!("{:x}", Sha256::digest(script.as_bytes()));
+    codex_auth::require_program(&program, &pin).unwrap();
+    std::fs::write(&program, "changed executable").unwrap();
+    assert!(codex_auth::require_program(&program, &pin).is_err());
+    assert!(!sentinel.exists());
+    assert!(codex_auth::require_program(root.path(), &pin).is_err());
+    let link = root.path().join("linked-codex");
+    std::os::unix::fs::symlink(&program, &link).unwrap();
+    assert!(codex_auth::require_program(&link, &pin).is_err());
+}
+#[test]
 fn story_2593_reduced_sealed_leaf_and_lifetime() {
     let home = tempfile::tempdir().unwrap();
     let original = host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
@@ -366,7 +390,7 @@ fn story_2593_live_host_deadline_stops_lane() {
         .filter_map(|(k, v)| Some((k.to_str()?.into(), v?.to_str()?.into())))
         .collect();
     let root = plan._state.path().to_path_buf();
-    let mut plan = PreparedLaunch::from_config(
+    let plan = PreparedLaunch::from_config(
         plan.profile,
         plan._state,
         "synthetic-sha".into(),
@@ -376,8 +400,15 @@ fn story_2593_live_host_deadline_stops_lane() {
     )
     .unwrap();
     let mut output = tempfile::tempfile().unwrap();
-    plan.command.stderr(output.try_clone().unwrap());
-    let mut run = plan.spawn(Stdio::null()).unwrap();
+    // spawn() deliberately inherits stderr; use the explicit IO seam to
+    // capture the host's expiry diagnostic as well as the exit status.
+    let mut run = plan
+        .spawn_io(
+            Stdio::null(),
+            Stdio::null(),
+            output.try_clone().unwrap().into(),
+        )
+        .unwrap();
     run.release().unwrap();
     let end = Instant::now() + Duration::from_secs(8);
     let status = loop {
@@ -456,7 +487,15 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     let bin = home.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let program = bin.join("codex");
-    std::fs::write(&program, "#!/bin/sh\necho 'codex-cli 0.166.0'\n").unwrap();
+    let sentinel = home.join("host-vendor-executed");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+            sentinel.display()
+        ),
+    )
+    .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let _env = crate::test_env::EnvVarsGuard::set(&[("CODEX_HOME", relocated.to_str().unwrap())]);
     let mut child = Command::new(&program);
@@ -467,8 +506,24 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         .env("AIDA_SESSION_ROLE", "companion")
         .env("AIDA_ROLE_INSTANCE", "companion")
         .env("OPENAI_API_KEY", "alternate-credential-sentinel");
-    let plan = PreparedLaunch::prepare(&child, root.path(), None).unwrap();
+    // Only this fixture supplies a synthetic binary pin. Production entry
+    // points always use the recorded compatibility-probe digest.
+    use sha2::{Digest, Sha256};
+    let pin = format!("{:x}", Sha256::digest(std::fs::read(&program).unwrap()));
+    let plan = PreparedLaunch::prepare_with_codex_pin(
+        &child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() },
+        LaunchIo::Headless,
+        &pin,
+    )
+    .unwrap();
     assert!(plan.chatgpt_deadline.is_some());
+    assert!(
+        !sentinel.exists(),
+        "prepare executed vendor code on the host"
+    );
     let env: BTreeMap<_, _> = plan
         .command
         .get_envs()
@@ -513,7 +568,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     let result = PreparedLaunch::prepare(&child, root.path(), None);
     assert!(match result {
         Ok(_) => false,
-        Err(e) => format!("{e:#}").contains("re-probe this codex version"),
+        Err(e) => format!("{e:#}").contains("re-probe this codex binary"),
     });
 }
 
