@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T02:29:34.883301886Z
+modified_at: 2026-11-07T02:30:49.381392882Z
 req_type: Story
 tags:
 - architecture
@@ -326,6 +326,11 @@ comments:
   modified_at: 2026-11-07T02:16:05.638793922Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b3d8-2525-7370-9cf5-84d1206fb040
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits), but the advisor''s main merge b49e7a4 left the exact-site ledger stale: check-exec-context.py --base origin/main reports 6 new sites and 1 retired site, so the PR''s own ExecContext ratchet step in CI (gates) will fail at this head; gates/lib-0/lib-1 still pending.. No triage reason was given.'
+  created_at: 2026-11-07T02:30:49.381390130Z
+  modified_at: 2026-11-07T02:30:49.381390130Z
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
@@ -588,6 +593,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b3d8-2525-7370-9cf5-84c03e18f57d
+  author: joe
+  timestamp: 2026-11-07T02:30:49.381380833Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
   branch: main
@@ -596,11 +608,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits), but the advisor''s main merge b49e7a4 left the exact-site ledger stale: check-exec-context.py --base origin/main reports 6 new sites and 1 retired site, so the PR''s own ExecContext ratchet step in CI (gates) will fail at this head; gates/lib-0/lib-1 still pending.'
-  recovery_hint: address the review findings, move STORY-2538 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T02:29:34.883301886Z
