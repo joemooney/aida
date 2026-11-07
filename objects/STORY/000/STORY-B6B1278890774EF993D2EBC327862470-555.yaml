@@ -1,0 +1,36 @@
+id: 01a1b6de-aa6c-7e93-9a92-1f0c39840d02
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-555
+agreed_id: STORY-2632
+title: 'Review PR-3603: [AI:codex] feat(launch): clear Claude child environments through vendor policy (Refs STORY-2326)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b6b7`) for branch `story-2326-prd`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3603>
+  - Branch: `story-2326-prd` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2326
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3603` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T16:36:48.364263551Z
+modified_at: 2026-11-07T16:36:48.364263551Z
+req_type: Story
+filed_at:
+  code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
+  session: 01a1b6b729b4
