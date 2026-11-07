@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-06T23:53:53.533080630Z
+modified_at: 2026-11-07T00:14:35.316648945Z
 req_type: Task
 tags:
 - architecture
@@ -202,6 +202,13 @@ comments:
   created_at: 2026-11-06T23:53:53.533080630Z
   modified_at: 2026-11-06T23:53:53.533080630Z
   session_id: 01a1b30ef0e0
+- id: 01a1b35b-6b34-7240-b74b-13e11e778eb9
+  author: joe
+  content: '[advisor 2026-11-06 17:16] #3547 hand-merged onto main at d41de2b: one conflict in agent_launch.rs run_agent_generation. Kept the PR''s pre-supervision register closure and moved it to main''s register_spawned_agent_with_row with delegate_seats (BUG-2467), so contained launches keep delegation. Re-review must cover the merge resolution.'
+  created_at: 2026-11-07T00:14:35.316648945Z
+  modified_at: 2026-11-07T00:14:35.316648945Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
