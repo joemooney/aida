@@ -9,12 +9,12 @@ description: |-
 
   PR: #3549
   Reviewed sha: 0078f69a32eba21b22c7234b0f7328da36f88732
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T01:19:58.971135069Z
-modified_at: 2026-11-07T01:38:55.834525023Z
+modified_at: 2026-11-07T02:42:25.165055246Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-903
@@ -92,6 +92,20 @@ history:
   author: joe
   timestamp: 2026-11-07T01:44:48.581770075Z
   changes: []
+- id: 01a1b3e2-c2e9-71d1-8f18-efdace793118
+  author: aida-auto-bump
+  timestamp: 2026-11-07T02:42:25.129357111Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b3e2-c30d-7c22-8e89-c9e557e1bdf8
+  timestamp: 2026-11-07T02:42:25.165045553Z
+  agent: aida
+  commit_sha: dafe9ad4b7fdb2250c3a406cbd972560607d28b3
+  summary: 'Doc-only fix: authority-and-seats.md delegation bullets, example, and image alt now match BUG-2467 behaviour (child_delegable_seats: advisor/integrator inherit or narrow parent set, workers cannot; ancestor chain revalidated; TTL bounded by parent). Showcase html + search-data regenerated consistently; also resolves superseded TASK-2960/2961. PR CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
   branch: main
@@ -99,3 +113,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e94aeb3d
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T02:42:25.129352434Z
+  completion_sha: dafe9ad4b7fdb2250c3a406cbd972560607d28b3
