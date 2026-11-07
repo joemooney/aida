@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T18:31:35.164728443Z
+modified_at: 2026-11-07T18:31:46.228689854Z
 req_type: Story
 tags:
 - architecture
@@ -839,6 +839,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 coordinator wrapper leak, Some(None) restores and verdict-file transport are fixed, but Claude env_clear silently drops the drain advisor-consult''s intentionally inherited grant; PR body still carries the round-2 resource-projection claim; CI at head not yet green.. No triage reason was given.'
   created_at: 2026-11-07T18:31:35.164720564Z
   modified_at: 2026-11-07T18:31:35.164720564Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b747-d91e-7722-a60d-b6aa249b3e53
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3603):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5efc5ca56d56
+    Recorded: 2026-11-07T18:24:50.824141791+00:00
+    Findings:
+    1. MAJOR (regression, authority transport): build_phase_driver_advisor_command (aida-cli-lib/src/phase_driver.rs:2522-2548) builds the non-Aida-posture advisor consult through spawn_agent and documents at :2541 'Intentionally inherits the drain launcher's grant because the consult runs at the launcher's own advisor authority'. For Claude, spawn_agent now env_clears (launch/spawn.rs:37-42) and EnvPolicy::project drops every Decided owned key, including AIDA_SESSION_GRANT. The site sets AIDA_SESSION_ROLE=advisor explicitly, but no grant is set for Claude: phase_driver.rs:2324-2347 sets GRANT_ENV only for Codex. So an uncontained or native drain's Claude advisor tier now runs with an advisor label and no grant, which is ungranted. Nothing fails at launch. bug_2165 phase_driver_advisor_command_scrubs_purpose and story_2326 PR-B tests never assert the grant. Fix: make the decision explicit, either through assign_seat(SeatDecision::ThisSession{..}) or by setting GRANT_ENV from current_grant_id() at this site, or mint a child advisor grant as the Codex arm does. Add a cleared-Claude test proving the consult child carries the intended grant. Also update the stale comment. Then re-audit the other spawn_agent sites that relied on inherited Decided keys without calling assign_seat (compete_cmd.rs:1164 Claude arms, phase_driver.rs:2539) and record each disposition.
+    2. BLOCKING (CI): no green PR CI at 5efc5ca56d56. Run 42400569891 (cli-0/1, lib-0/1, gates, contracts, rest) was still queued or pending at review time. Cite a green run at the new head. merge-hold-gate failing is the expected supervised-spec human hold, not a code defect.
+    3. MINOR (PR body accuracy, round-1 finding 4 / round-2 finding 3 still open): the PR body still says 'Declared cargo resources project their two overrides through the same ChildEnv policy'. spawn_agent passes resources=None (launch/spawn.rs:40), and SandboxResources::child_env has no production caller. The round-8 comment on the spec gives the exact replacement known-limitation sentence. Apply it with gh pr edit.
+    4. MINOR (weakened assertions on inheriting vendors, residual of round-2 finding 4): story_2326_pr_b_phase_builders_preserve_none_argv_and_seat (story_2326_launch_tests.rs ~1198) loops only Codex and Agy. Neither vendor is env-cleared (clears_environment()=false), yet the test relaxes AIDA_CONTAINED from Some(&None) (explicit removal) to absent-or-removed. If the builder's env_remove(AIDA_CONTAINED) were deleted, an inheriting Codex/Agy child would carry a parent's AIDA_CONTAINED and the test would still pass. Restore Some(&None) for vendors where clears_environment() is false. The new filter(|v| v.is_some()) helpers in bug_2133/bug_2165/bug_2171 tests turn Claude 'scrubbed' assertions into 'not set'. Pair them with an environment_is_cleared assertion (as cleared_owned_ops does) so reverting env_clear cannot pass silently.
+    5. MINOR (design, round-2 finding 1 option not taken): the wrapper-environment decision is still per-site (.with_wrapper_environment at session.rs:2130 and 6582, agent_launch.rs:7301). Each site computes it independently: contained_wrapper_launch uses headless_worktree_root(), while coordinator_status_with_handle_guard (session.rs:6487-6497) re-decides from the command's cwd and the AIDA_CLAUDE_COORDINATOR_WRAPPER marker. No ratchet requires that a Command reaching PreparedLaunch::prepare/prepare_interactive came from a wrapper-flagged LaunchContext. A future wrapper-owning site that forgets the flag silently reopens the ambient-to-explicit leak. Add a ratchet, or a debug assertion inside PreparedLaunch that refuses a cleared/projected Command, so the boundary fails closed.
+    6. COSMETIC (ratchet coverage): has_legacy_child_issuer (story_2326_launch_ratchet_tests.rs:450) catches imports and aliases for issue_launch_child_with_delegation and issue_child_from. For seat_authority::issue_child it still matches only the qualified call text 'seat_authority::issue_child(', so 'use crate::gate::seat_authority::issue_child; issue_child(..)' evades it. Add issue_child to the identifier match, or a mutant fixture showing why it is safe.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T18:31:41.598924445Z
+  modified_at: 2026-11-07T18:31:41.598924445Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
