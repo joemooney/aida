@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T02:22:13.124757905Z
+modified_at: 2026-11-07T10:42:51.554179600Z
 req_type: Story
 tags:
 - architecture
@@ -407,6 +407,13 @@ comments:
   created_at: 2026-11-07T02:22:13.124757905Z
   modified_at: 2026-11-07T02:22:13.124757905Z
   session_id: 01a1b3bdcc7a
+- id: 01a1b59a-9dc4-72b3-b40b-e769006c6db1
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 03:35, RATCHET SCOPE APPROVED (sketch step 4): a token-aware vendor-literal ratchet test, aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs, in the style of task_2143_clone_git_ratchet_tests.rs. Inventory production string literals "claude"|"codex"|"agy"|"antigravity" and typed vendor matches OUTSIDE vendors/, keyed by path plus enclosing item; tests/fixtures/docs are excluded; no additions allowed; add mutant fixtures (new literal, new match arm, alias). In the same PR, move headless argv/settings composition into VendorProfile and shrink the inventory. Test: the ratchet plus story_2539_registry_and_consumers_preserve_vendor_contracts. Refs STORY-2539.'
+  created_at: 2026-11-07T10:42:51.460634401Z
+  modified_at: 2026-11-07T10:42:51.460634401Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
