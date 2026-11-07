@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T16:07:13.960105021Z
+modified_at: 2026-11-07T16:36:11.692896914Z
 req_type: Story
 tags:
 - architecture
@@ -790,6 +790,12 @@ comments:
   content: 'Round 7 native-seat rework: wrapper-owned launches retain environment provenance by bypassing ambient projection; reviewer seat assignment deliberately transports the standalone verdict path without replacing an explicit site path. Added wrapper/session/rotation/PATH and cleared-reviewer regressions, backend-import/alias mutants, env-clear-compatible fixture captures and absence assertions, and a narrow grant-file inventory exemption. Cargo resource projection remains plumbing only, and dropped-key reporting remains an accepted known limitation; both are recorded for the PR body in docs/plans/2026-11-07-story-2326-prd-round7.md. Targeted validation and LIGHT gate are running. No commit, publication, hold clearance or queue completion from this native seat.'
   created_at: 2026-11-07T16:07:13.960105021Z
   modified_at: 2026-11-07T16:07:13.960105021Z
+  session_id: 01a1b6b729b4
+- id: 01a1b6de-1b2c-7942-b20a-c75301d672ff
+  author: joe
+  content: 'Round 7 final validation: make check-ci-fast passed all 44 gates; focused library run passed 93 tests; CLI bug_2139_headless_child_grant and bug_2201_outside_project_reviewer suites passed all 9 tests. The requested story_2326_spawn_agent_clears_env, removed-marker rebuild, explicit reviewer verdict transport, wrapper ambient provenance, issuer import/alias mutants and grant guard all pass. Initial broader library run: 92 passed, 3 failed; the reported builder test was pinned to the existing hermetic checkout and now passes. Two additional bwrap fixture tests are excluded from the focused rerun because their nested repos resolve through this native seat host binding and refuse before launch; production guards and CI tests are unchanged. Host must publish and establish green hosted CI; merge hold remains untouched. All changed files, audit details, PR limitation lines, test commands/results and blockers are in docs/plans/2026-11-07-story-2326-prd-round7.md. Edits remain uncommitted as required for native host publication.'
+  created_at: 2026-11-07T16:36:11.692896914Z
+  modified_at: 2026-11-07T16:36:11.692896914Z
   session_id: 01a1b6b729b4
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
