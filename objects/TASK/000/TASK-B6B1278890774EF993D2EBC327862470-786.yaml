@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T16:53:49.960448280Z
+modified_at: 2026-11-07T16:57:36.578293732Z
 req_type: Task
 tags:
 - area:containment
@@ -331,6 +331,12 @@ comments:
   content: 'Final evidence attached in docs/internal/testing/containment-conformance-agy-2026-11-07.json (raw host output: /home/joe/.aida/conformance-agy-task3048-20261107-seat786-final). AGY 1.5.3; C0-C4 unknown; unsupported_reason=agy native sandbox configuration: workspace write_file glob is unsupported; no terminal receipt, whole_lane_pass=false. Python conformance suite: 44 passed. Native publication declaration recorded with Refs TASK-3048 and Refs STORY-2460; no completion requested.'
   created_at: 2026-11-07T16:53:49.960448280Z
   modified_at: 2026-11-07T16:53:49.960448280Z
+  session_id: 01a1b6e79dd6
+- id: 01a1b6f1-b642-7091-95a1-7508e2668ef5
+  author: joe
+  content: 'Final isolated rerun (no inherited operator settings): /home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/report.json; attached report updated to that exact run. Same AGY 1.5.3 native sandbox glob configuration refusal, C0-C4 unknown, no terminal receipt. All 44 offline conformance tests pass after settings-isolation assertions. Rust initial 13-test run passed 12 and found an obsolete empty-settings assertion in the live regression; corrected to assert the exact workspace permission and rerunning.'
+  created_at: 2026-11-07T16:57:36.578293732Z
+  modified_at: 2026-11-07T16:57:36.578293732Z
   session_id: 01a1b6e79dd6
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
