@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-241
 agreed_id: BUG-2475
 title: aida-mail-notice.sh JSON escaping under mawk (Ubuntu's default awk) turns backslashes into control characters
 description: 'Source: work GDMS CI report. aida-core/templates/hooks/aida-mail-notice.sh:161 escapes with gsub(/\\/, "\\\\"). mawk reads the replacement string differently from gawk, so backslashes in a notice decode into control characters and the hook emits corrupt JSON. Fix it in the template master, then make sync-templates. Acceptance: a test runs the hook under mawk and under gawk with input containing backslashes, quotes and tabs, and the output parses as valid JSON with the original text.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:09.119639981Z
-modified_at: 2026-11-07T06:02:56.264544917Z
+modified_at: 2026-11-07T06:12:58.430296028Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -93,6 +93,15 @@ history:
   timestamp: 2026-11-07T06:01:34.182354713Z
   session_id: 01a1b4988553
   changes: []
+- id: 01a1b4a3-87be-7260-8342-6937bd5facd1
+  author: aida-orchestrator
+  timestamp: 2026-11-07T06:12:58.430323273Z
+  session_id: 01a1b4a22219
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
@@ -102,3 +111,11 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Hook fix is correct and meets acceptance, but the new Python test adds forbidden ambient-env sites (ExecContext ratchet red in CI gates) and the fast-tier gate hard-fails on hosts without gawk
+  recovery_hint: address the review findings, move BUG-2475 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T06:12:58.430296028Z
