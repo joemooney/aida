@@ -787,7 +787,9 @@ vendor can select the partial backend.
 <!-- trace:BUG-2486 | ai:codex -->
 Contained Codex file-based ChatGPT launches shorten the delegated child grant to
 access-token expiry minus 300 seconds when necessary. The parent grant is unchanged.
-Launch diagnostics report requested and effective seconds and token expiry.
+Direct session grants remain unchanged; the contained lane still uses the capped
+lifetime. Launch diagnostics report requested and effective seconds, the effective
+grant deadline, and token expiry.
 Trusted default-branch `[contained] codex_min_grant_secs = 1800` sets the minimum
 usable launch lifetime when the token shortens the grant (positive integer seconds,
 default 30 minutes). Only a token-capped lifetime below this floor refuses with

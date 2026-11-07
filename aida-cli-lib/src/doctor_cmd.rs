@@ -16454,7 +16454,7 @@ mod bug_2486_tests {
             assert!(rendered.contains("codex_token_lifetime"));
             assert!(!rendered.contains("secret-") && !rendered.contains(&access));
         }
-        let expired = serde_json::json!({"tokens":{"access_token":format!("e30.{}.secret-signature",
+        let expired = serde_json::json!({"auth_mode":"chatgpt", "tokens":{"access_token":format!("e30.{}.secret-signature",
             URL_SAFE_NO_PAD.encode("{\"exp\":1}"))}});
         std::fs::write(&path, expired.to_string()).unwrap();
         let expired = codex_token_lifetime(&env, None).unwrap().unwrap();

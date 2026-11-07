@@ -2938,13 +2938,17 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
 }
 
 /// Only shorten a delegated grant minted by this launcher. Preserve every other
-/// field under the existing stamp/revocation lock; never alter a parent grant.
+/// field under the existing stamp/revocation lock. Direct session grants stay
+/// unchanged: their contained lane is bounded by the effective credential TTL.
 // trace:BUG-2486 | ai:codex
 pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
     let at = DateTime::<Utc>::from_timestamp(deadline, 0).context("invalid child deadline")?;
     anyhow::ensure!(at > Utc::now(), "child grant deadline is already expired");
     // An ample token needs no mutation, including for a direct session grant.
-    if read_grant(id)?.expires_at <= at {
+    let grant = read_grant(id)?;
+    // A direct session grant is not owned by this launch. The caller supplies
+    // the credential-capped TTL to the lane without changing session authority.
+    if grant.parent_grant_id.is_none() || grant.expires_at <= at {
         return Ok(());
     }
     let launcher = own_process_token().context("launcher identity unavailable")?;

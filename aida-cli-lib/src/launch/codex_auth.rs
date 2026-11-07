@@ -116,6 +116,17 @@ pub(super) struct Credential {
     pub expires_at: i64,
 }
 
+// trace:BUG-2486 | ai:codex
+impl Credential {
+    /// Keep the lane TTL and its launch diagnostic bound to the same deadline.
+    pub(super) fn launch_lifetime(&self, requested: i64, now: i64) -> (i64, String) {
+        let effective = self.deadline.saturating_sub(now);
+        let diagnostic =
+            hints::launch_lifetime(requested, effective, self.deadline, self.expires_at);
+        (effective, diagnostic)
+    }
+}
+
 /// No endpoint-level TLS inspection exists in the CONNECT broker. Deny the
 /// entire OAuth hosts, even if trusted policy allows them for other vendors.
 pub(super) fn exclude_oauth_hosts(allowed: &mut Vec<String>) {

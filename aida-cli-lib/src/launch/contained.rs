@@ -1020,17 +1020,9 @@ impl PreparedLaunch {
                                 auth.expires_at.saturating_sub(codex_auth::MARGIN),
                             )?;
                         }
-                        let effective =
-                            auth.deadline.saturating_sub(chrono::Utc::now().timestamp());
-                        eprintln!(
-                            "{}",
-                            crate::vendors::codex_auth_hints::launch_lifetime(
-                                ttl,
-                                effective,
-                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
-                                auth.expires_at
-                            )
-                        );
+                        let (effective, diagnostic) =
+                            auth.launch_lifetime(ttl, chrono::Utc::now().timestamp());
+                        eprintln!("{diagnostic}");
                         ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)

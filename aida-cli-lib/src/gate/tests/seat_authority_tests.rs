@@ -655,7 +655,12 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
         std::fs::read(grant_path(&parent).unwrap()).unwrap(),
         parent_before
     );
-    assert!(cap_launch_child_expiry(&parent, deadline).is_err());
+    // Direct session launches use a capped lane TTL, retaining the session grant.
+    cap_launch_child_expiry(&parent, deadline).unwrap();
+    assert_eq!(
+        std::fs::read(grant_path(&parent).unwrap()).unwrap(),
+        parent_before
+    );
     let mut revoked = capped;
     revoked.revoked_at = Some(Utc::now());
     write_grant(&revoked).unwrap();

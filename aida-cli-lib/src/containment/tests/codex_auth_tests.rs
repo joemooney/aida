@@ -822,10 +822,22 @@ fn bug_2486_trusted_floor_policy_and_launch_diagnostic() {
     assert!(prepare_auth(home.path(), 86400).is_err());
     let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 86400, floor).unwrap();
     assert_eq!(auth.deadline, exp - 300);
-    let effective = auth.deadline - chrono::Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp();
+    let (effective, diagnostic) = auth.launch_lifetime(86400, now);
     assert!(effective > 600 && effective <= 900);
-    assert_eq!(crate::vendors::codex_auth_hints::launch_lifetime(86400, effective, auth.deadline, auth.expires_at),
+    assert_eq!(effective, auth.deadline - now);
+    assert_eq!(diagnostic,
         format!("contained Codex ChatGPT grant: requested 86400s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", exp - 300));
+    // Exercise the same argument computation PreparedLaunch uses when the token
+    // is ample: the diagnostic deadline must be the grant's, not the token cap.
+    let exp = now + 90000;
+    host_auth(home.path(), exp);
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 3600, floor).unwrap();
+    let (effective, diagnostic) = auth.launch_lifetime(3600, now);
+    assert_eq!(effective, auth.deadline - now);
+    assert!(auth.deadline < exp - codex_auth::MARGIN);
+    assert_eq!(diagnostic,
+        format!("contained Codex ChatGPT grant: requested 3600s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", auth.deadline));
     for value in ["0", "-1", "1.5", "\"600\"", "true"] {
         let policy: toml::Value =
             toml::from_str(&format!("[contained]\ncodex_min_grant_secs = {value}")).unwrap();
