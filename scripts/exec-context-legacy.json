@@ -1,5 +1,5 @@
 {
-  "ceiling": 1236,
+  "ceiling": 1241,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -1168,6 +1168,11 @@
     "tests/test_seat_takeover_lifecycle.py:main:os.environ:d30b27289acc2502f701": 1,
     "tests/test_show_latency.py:check_in:os.environ:d30b27289acc2502f701": 1,
     "tests/test_skill_discovery.py:check:os.environ:d30b27289acc2502f701": 1,
+    "tests/test_store_mutation.py:live_helper:os.environ:6f0cbececdb5c7d738ca": 1,
+    "tests/test_store_mutation.py:test_live_broker_preflight_receipt_and_post_exec_probe:os.environ:f127fe3fe3e334753ea6": 1,
+    "tests/test_store_mutation.py:test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive:os.environ:f127fe3fe3e334753ea6": 1,
+    "tests/test_store_mutation.py:test_live_required_launch_refuses_absence_stale_epoch_empty_grant_and_revocation:os.environ:f127fe3fe3e334753ea6": 1,
+    "tests/test_store_mutation.py:test_real_sibling_namespace_connect_transfer_and_proc_fd_refuse:os.environ:f127fe3fe3e334753ea6": 1,
     "tests/test_story_1843_pr3.py:check:os.environ:d30b27289acc2502f701": 1,
     "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:5669a4474ea92d5cb7d0": 1,
     "tests/test_test_touched.py:test_only_1_true_yes_lift_the_cap:os.environ:7bd404f46f1c610eb55d": 1,
