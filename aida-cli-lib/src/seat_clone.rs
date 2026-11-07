@@ -47,15 +47,7 @@ pub(crate) const ACCESSOR_ENV: &str = "AIDA_SEAT_CLONE_ACCESSOR";
 /// before BUG-2169 carry no key and read as `Worktree`.
 // trace:BUG-2169 | ai:claude
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    serde::Serialize,
-    serde::Deserialize,
-    ts_rs_forge::TS,
+    Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS,
 )]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum TreeKind {

@@ -215,7 +215,7 @@ fn prompt_for_forge_profile(
         .as_deref()
         .and_then(|name| options.iter().position(|o| o == name))
         .unwrap_or(options.len() - 1);
-    let selected = inquire::Select::new("Remote forge", options)
+    let selected = crate::prompt_select::select("Remote forge", options)
         .with_starting_cursor(default_index)
         .prompt()
         .context("reading forge profile selection")?;
