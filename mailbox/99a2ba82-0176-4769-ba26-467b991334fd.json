@@ -1,0 +1,19 @@
+{
+  "id": "99a2ba82-0176-4769-ba26-467b991334fd",
+  "thread_id": "99a2ba82-0176-4769-ba26-467b991334fd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794061238827,
+  "body": "Codex queue-work lane 01a1b65b4866 for STORY-b6b1278890774ef993d2ebc327862470-368 exited with no pending changes in /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-368-2 (clean_exit=true). Check its existing PR and failing checks; a still-red PR needs a new rework assignment.",
+  "subject": "Queue-work lane exited without changes",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
