@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T19:13:02.303029014Z
+modified_at: 2026-11-07T19:16:23.597214607Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -183,6 +183,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b770-c5ad-76e0-bff3-532a0d808b49
+  author: joe
+  timestamp: 2026-11-07T19:16:23.597235559Z
+  session_id: 01a1b76da885
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -192,3 +200,9 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Slice 1 is already approved in PR 3607 round 3. Slice 2 is blocked by installed codegraph 1.6.0: from this Codex seat both normal symlink routing and explicit primary -p calls fail. strace confirms readable primary DB but denied O_RDWR DB and WAL creation (EROFS), then missing read-only WAL (ENOENT). The query path opens a writable adapter and runs migrations/healing. AC2 forbids granting the writes it needs; AC5 cannot honestly pass. Decide supported WAL-safe read-only upstream client versus an explicitly authorized AIDA adapter and host-maintained WAL layout. Evidence: docs/internal/testing/story-2630-read-only-client-blocker.md. No containment code or host index changed.'
+  lean: Use a supported upstream read-only query path with no migrations/healing and host-managed WAL reader prerequisites; preserve the read-only boundary. Do not grant writable DB or sidecar access.
+  raised_by: implementer
+  raised_at: 2026-11-07T19:16:23.597214607Z
