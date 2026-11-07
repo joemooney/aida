@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T12:23:21.464362055Z
+modified_at: 2026-11-07T12:23:25.322516194Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -31,6 +31,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge-lock ProcIdentity capture/judge/covers/fencing are sound, but the PR deletes merge-lock expiry outright instead of adding the CLOCK_BOOTTIME deadline that the advisor signoff assigned to slice 2. Legacy, foreign, refused and release.sh leases now wedge forever, with only manual rm as recovery, which aida merge-lock does not report.. No triage reason was given.'
   created_at: 2026-11-07T12:23:21.464359754Z
   modified_at: 2026-11-07T12:23:21.464359754Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5f6-af25-7892-b77a-aa6d5050c996
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3364):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 86e4fad489d6
+    Recorded: 2026-11-07T12:18:24.941972259+00:00
+    Findings:
+    1. BLOCKING (diverges from signoff): merge_lock.rs:35 sets DEFAULT_TTL_SECS=i64::MAX and stale_reason (merge_lock.rs:323) ignores ttl_secs, so the merge lock no longer has any expiry. The STORY-2537 advisor signoff (comment 2026-11-06T03:48) signs clock/expiry separation, with 'lease expired' reported apart from Dead, and simplification (2) says 'CLOCK_BOOTTIME persisted deadlines are deferred to the merge-lock slice (2)'. This is slice 2, and it removes expiry rather than making it clock-safe. Result: a crashed holder whose verdict is ForeignUnknown (other PID namespace, e.g. a sandboxed caller, or another node), refused, or legacy wedges that branch's merges and trains forever (live_status/pr_train.rs:1794 and acquire both retain it). Before this PR there was a 600s backstop. Fix: persist a boot-local CLOCK_BOOTTIME deadline (boot_id plus boottime) and report Expired separately from Dead for non-Alive holders. An Alive holder must still never be stolen, and that must hold across a wall-clock jump. Or obtain and cite an explicit advisor ruling that drops merge-lock expiry.
+    2. BLOCKING (signoff simplification 1 unmet): there is no one-time rewrite of existing records, and no reported operator repair. A lease that an old binary left at upgrade (process field absent) reads MissingIdentity and is retained forever. The only recovery is a hand rm, documented in docs/cli/04-git-lifecycle.md. The signoff requires a record that cannot be rebound to become ForeignUnknown 'and an operator repair is only reported'. Yet handle_merge_lock_status (merge_hold_cmd.rs:34) still prints only host/pid/age, and its JSON has no verdict, reason or repair hint, while the docs tell operators to 'inspect aida merge-lock'. Fix: rewrite or rebind legacy records once where that is safe. Surface the holder_verdict (Alive/Dead/ForeignUnknown(reason)/Refused(reason)) plus a concrete repair line in text and JSON output.
+    3. MAJOR: scripts/release.sh no longer reclaims anything. lease_is_live returns live for every complete record, including a Rust holder that the shared judge proves Dead. Its own records carry no process field, so Rust readers also retain them forever (MissingIdentity). One SIGKILLed release.sh, or a crashed train seen from the script, therefore blocks all releases and trains on that branch until a manual rm. Before this PR the script reclaimed a dead same-namespace PID and had a 3600s TTL. tests/test_release_pr_flow.sh Test 4b was rewritten to assert this retention, and the dead-pid reclaim assertion is gone. Fix: have the script consult the shared judge (for example a verdict field in 'aida merge-lock --json', or an aida helper that captures and publishes the script's holder) instead of retaining everything.
+    4. MINOR: MergeLease::do_release (merge_lock.rs:374-391) returns early when the record was replaced, and also when remove_file fails. On those paths it skips ownership::dual::train_lease_released, so the ownership shadow record for the train is left behind. On a 2s mutation_guard timeout it returns with held still true and the lock file still in place. With no TTL, that lease stays until the process exits and is judged Dead. Release the train ownership record on the replaced path, and log or retry on guard timeout.
+    5. MINOR: scripts/release.sh lease_release (line 276) returns 1 when lease_guard_lock times out after 2s, and the lease file stays in place. Combined with finding 3, script records are never reclaimable, so a guard contention at EXIT leaves a permanent wedge. Retry the guard with a bounded wait, or warn loudly with the exact recovery step.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T12:23:25.221910992Z
+  modified_at: 2026-11-07T12:23:25.221910992Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
