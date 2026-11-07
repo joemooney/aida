@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T02:38:28.256981711Z
+modified_at: 2026-11-07T03:02:22.402975147Z
 req_type: Story
 relationships:
 - rel_type:
@@ -407,6 +407,12 @@ comments:
   created_at: 2026-11-07T01:59:48.388678441Z
   modified_at: 2026-11-07T01:59:48.388678441Z
   session_id: 01a1b3aec16e
+- id: 01a1b3f5-07c2-70f1-a763-75fea9d0dd22
+  author: joe
+  content: 'Slice-4 native handoff: existing resumable journal and BUG-2463 are integrated. Closed the remaining nested approval/corpus proof fetch boundary in gate/review_carryover.rs and approval timestamp fetch in gate/approval.rs. Journal persistence failures prevent remote calls; cached base refs cannot swallow an unavailable intent, and that refusal is non-deterministic. Updated the frozen gate dependency inventory and added a PATH-isolated production-helper regression. Final-source pr_train: 176 passed; focused gate inventory ratchet: 1 passed; check-ci-fast: all 38 gates passed; formatting and diff checks passed. Five files remain uncommitted, including the slice plan. Native Refs declaration accepted: [AI:codex] fix(train): checkpoint nested approval proof fetches (Refs STORY-2401). Host owns commit/PR publication; existing punt/hold vetoes remain. Slice 5 stays outstanding. No commit, push, merge, review record or queue completion performed.'
+  created_at: 2026-11-07T03:02:22.402975147Z
+  modified_at: 2026-11-07T03:02:22.402975147Z
+  session_id: 01a1b3df1d4d
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
