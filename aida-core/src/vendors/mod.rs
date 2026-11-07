@@ -193,3 +193,6 @@ impl VendorProfile {
         self.interactive_prompt.expand(prompt.into())
     }
 }
+
+mod headless;
+pub mod headless_posture;

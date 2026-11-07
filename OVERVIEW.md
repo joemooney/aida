@@ -421,13 +421,20 @@ identity spellings, interactive prompt transport, hook paths and closed
 wake/resume/background/sandbox capabilities. `launch_policy` re-exports the
 existing vendor key. Session identity, wake selection, resume eligibility and
 operator hints consume these descriptors; `aida-cli-lib/src/vendors/` renders
-vendor-facing hints. The effectful `launch/profile.rs` adapter references the
-same descriptor and retains the existing finalizer. Capabilities do not admit
+vendor-facing hints and resolves headless posture inputs. The core profile's
+`headless_args` composes argv and no-background settings from those resolved
+inputs; compatibility session helpers and the AI client's posture exports keep
+their existing interfaces. A token-aware test inventories production vendor
+strings and typed references outside `vendors/` by path and enclosing item.
+Its checked-in ledger permits reductions only and excludes tests, fixtures and
+docs, including `cfg(all(test, ...))` and qualified test attributes. Cheap
+source/literal candidate checks retain escaped strings before decoding; mutant
+fixtures exercise new literals, match arms and aliases.
+The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
-still refuses pending conformance. Headless argv/settings, hook event/backend
-and resume/fork backend migration, the effectful adapter move and the shrinking
-production vendor-literal ratchet remain later slices. See the
-[approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
+still refuses pending conformance. Hook event/backend and resume/fork backend
+migration, the effectful adapter move and further vendor-debt reductions remain
+later slices. See the [approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
 <!-- trace:STORY-2539 | ai:codex -->
 
 ### The four layers
@@ -1507,6 +1514,21 @@ use lowercase SHA-256 hex in both schemas.
 until installed objects have transactional Git/event publication. `own_claim`
 and `queue_done` remain unsupported. Quarantine diagnostics name the affected
 file and the [operator recovery procedure](docs/advanced/store-redo-recovery.md).
+<!-- trace:TASK-3223 | ai:codex -->
+
+The shared boundary has a staged `Mediated` store-write profile, distinct from
+the compatibility profile. It removes canonical store/cache write grants and
+seals resolved store, project authority, Git metadata and shared-cache targets
+read-only after broader grants, including primary-checkout and linked/symlink
+layouts. Its fresh private derived-cache path is an explicit reader input;
+it never overlays or copies the shared cache. Missing protected mountpoints or
+a private state root inside protected state refuse. Explicit child selection
+`AIDA_STORE_MUTATION_PROFILE=mediated` currently refuses before launch setup:
+CLI/MCP routing, transactional Git/event publication and integrated comment/edit
+positives remain prerequisites to activation. The read-only service requirement
+does not select this profile. Claude and native compatibility retain their
+existing grants and labels; these staged filesystem fixtures grant no vendor
+conformance credit.
 <!-- trace:TASK-3223 | ai:codex -->
 
 The lane probes its actual channel before the receipt barrier; the host checks

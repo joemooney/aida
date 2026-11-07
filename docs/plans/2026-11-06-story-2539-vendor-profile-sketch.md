@@ -1,9 +1,11 @@
 > Approved by Joe on 2026-11-06 (STORY-2539 comments). PR-C merged as
 > #3531; the 2026-11-07 01:52 UTC ruling authorizes implementation now.
 > The proposal below is preserved verbatim, including its historical gate text.
-> Current slice: registry, identity compatibility, capability consumers and hints.
-> Remaining: headless argv/settings migration, hook event/backend migration,
-> resume/fork backend migration and the inventoried production vendor ratchet.
+> Implemented slices: registry, identity compatibility, capability consumers, hints,
+> headless argv/settings composition and the inventoried production vendor ratchet
+> (scope approved by Joe on 2026-11-07 at 10:42 UTC).
+> Remaining: hook event/backend, resume/fork backend and effectful adapter migration,
+> with further reductions to the vendor-debt ledger.
 > STORY-782 remains deferred; BUG-2390 remains Completed. No fan-out or launch
 > admission is added. Publish this slice with `(Refs STORY-2539)`.
 

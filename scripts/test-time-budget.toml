@@ -32,6 +32,12 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# Whole-workspace token/AST inventory. PR #3595 run 42371593774 measured
+# 58.028s before candidate filtering. Same-host debug probes: 34.51s before,
+# 15.50s after (55% lower); allow 60s for CI concurrency while retaining the
+# ordinary 180s nextest kill. Session/registry tests in that run were <1.5s.
+# trace:STORY-2539 | ai:codex
+"aida-cli-lib story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet" = 60
 # Three real AIDA-sized source commits, cold revalidation and native gate consumption.
 # trace:TASK-3232 | ai:codex
 "aida-cli-lib forge::commit_ci::tests::aida_sized_relay_native_statuses_reach_required_pr_and_train_gates" = 480
