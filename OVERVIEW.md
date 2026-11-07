@@ -1391,6 +1391,77 @@ queue results require explicit recovery; a queue receipt is not mail read/ack
 evidence. See [installation and recovery](docs/advanced/codex-mail-wake.md).
 <!-- trace:TASK-2347 | ai:codex -->
 
+### Read-only store service channel
+
+The finalized shared headless launcher accepts an explicit
+`AIDA_STORE_MUTATION_REQUIRED=1` assignment on its host-built `Command`.
+This is an opt-in transport slice: CLI/MCP writers do not route through it,
+no mutation operation exists, and current raw-store/cache grants remain in
+place. Context construction, previews and native launches create no service.
+The launcher requires a nonempty validated child grant, an unambiguous owned
+worktree lease and a resolved canonical spec. Project, worktree and store roots
+remain pinned by directory handles; grant/parent lifetime, roster, lease and
+worker binding are checked through a private host-only authorization channel.
+Requests never select those facts or change the server's session environment.
+
+`aida-cli-lib/src/store_mutation/` owns the read-only protocol, client and
+launch authorization owner. The shared connect broker recognizes exactly
+`/run/aida-mutation/<fresh-uuid>/service` and replaces only an AF_UNIX
+SOCK_SEQPACKET socket belonging to this lane. There is no host pathname
+listener or prefix grant. Its peer requires SO_PASSCRED and SO_PASSPIDFD;
+SCM_CREDENTIALS plus the kernel-held sender pidfd prevent a transferred FD or
+queued packet from borrowing the socketpair creator's identity or a recycled
+PID. Pinned worker pidfd, process start and PID/user/mount namespace handles
+refuse foreign or dead senders. Unsupported kernel facilities refuse the
+required launch. Host-private descriptors do not cross vendor exec, the helper
+is non-dumpable, and the lane has its own procfs.
+
+Version 1 accepts only `session_probe {challenge}` and
+`request_status {request_id}` in a closed JSON envelope with `version`,
+`launch_epoch`, `request_id`, `op` and `data`. UUID spellings are canonical.
+Unknown/duplicate fields, paths/authority selectors, mutation verbs, rights,
+truncated packets, control characters and invalid shapes refuse. Bounds are
+64 KiB per packet/response, depth 16, 32 keys per object, 16 KiB per string,
+128 bytes per challenge, eight connections, five seconds of channel idle/I/O
+admission and 4096 accepted IDs. Dispatch is serial. Dedupe binds epoch and
+request ID to the canonical typed payload digest; changed payloads conflict,
+capacity refuses without eviction, and live authority is rechecked before
+replay and acceptance. Status `unknown` says nothing about a target operation's
+success. The client retains one request ID across at most two retries. S1's
+memory-only dedupe is safe for read-only probes; recoverable canonical mutation
+transactions still require separate approval before S2 enables any writer.
+
+The lane probes its actual channel before the receipt barrier; the host checks
+that receipt's exact epoch/readiness and the existing authority owner's worker
+stamp before releasing tools. Revocation, lease loss or authority-channel
+failure closes the service and stops the helper's child. Normal exit and failed
+setup close channels, then reap the helper; resume creates a fresh epoch.
+The authorization reader has one thread per launch, never one per request.
+External storage stalls return unavailable to the helper within its deadline.
+An authority timeout permanently shuts down the shared endpoint, including the
+Rust receipt-barrier owner's duplicate, so late replies cannot authorize a later
+request or worker binding. Unreadable leases and leases with unresolved or
+unrelated worktrees are ignored during selection; matching ownership must still
+be unique and remains mandatory throughout the session.
+Teardown shuts down its capability immediately and waits at most 200 ms for
+the reader thread, which may finish later in a long-lived launcher.
+
+`python3 -m unittest tests.test_store_mutation` covers protocol refusals,
+credentials/rights/truncation, replay/capacity, broker address/type refusal and
+lifecycle. Its independently watchdog-bounded live fixture runs the actual
+bubblewrap/seccomp helper through preflight, receipt and post-exec probes with
+a synthetic authority responder and keyring bypass confined to test code.
+It is transport evidence, not real grant issuance or vendor conformance.
+`AIDA_REQUIRE_STORE_MUTATION_LIVE=1` makes missing live prerequisites fail
+instead of skip and is mandatory in the full-CI gates shard after namespace
+setup. Real sibling user/mount namespaces test direct connect refusal,
+SCM_RIGHTS-transferred client descriptors and procfs descriptor reopening.
+Rust owner fixtures exercise prepare refusals and live project/worktree/store,
+roster, lease, child/parent grant and worker-binding changes. Launch tests also
+cover absent/empty bindings and receipt mismatches. Native launch labeling and
+grant behavior remain unchanged.
+<!-- trace:TASK-3225 | ai:codex -->
+
 ### Explicit vendor containment policy
 
 When containment is requested, `[contained.vendors]` in the trusted default-branch
