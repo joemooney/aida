@@ -197,7 +197,10 @@ display ID, never a friendly node alias.
 `auto-queue-review` refuses `train/` branches with a nonzero exit before forge
 or store access. Train members receive their own reviews; the landing PR must
 not get a reviewer story. The session-end backup also refuses to file one.
+The refusal omits the manual retry hint because retrying a train branch cannot
+create a reviewer story.
 <!-- trace:BUG-2472 | ai:codex -->
+<!-- trace:TASK-2963 | ai:codex -->
 
 **Post-merge cleanup.** The main merge lease covers check → merge → pull and
 is released before session cleanup, including when pull is skipped or fails.

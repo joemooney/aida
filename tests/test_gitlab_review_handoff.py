@@ -43,7 +43,8 @@ def check(binary, forge, fail_first=False, enumeration_shim=None):
         git("commit", "--allow-empty", "-qm", "base")
         aida("init", "--no-skills", "--no-hooks")
         added = aida("add", "--type", "bug", "--title", "handoff fixture")
-        spec = re.search(r"BUG-\d+(?:-\d+)?", added.stdout).group()
+        # Accept both numeric IDs and clone-local allocation IDs.
+        spec = re.search(r"\bBUG-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\b", added.stdout).group()
         git("checkout", "-qb", "bug-fixture")
         git("commit", "--allow-empty", "-qm", f"fix: fixture ({spec})")
         # URL only selects the forge. Fake CLIs answer every request, and no
@@ -66,12 +67,27 @@ def check(binary, forge, fail_first=False, enumeration_shim=None):
                  if cli == "gh" and forge == "github" else "sys.exit(93)\n"))
             script.chmod(0o755)
         queue = root / ".aida-store/registry/queues/fixture.yaml"
+        # A train refusal must retain its diagnostic and nonzero exit without
+        # suggesting the same command that can only refuse again.
+        # trace:TASK-2963 | ai:codex
+        before = {p: p.read_bytes() for p in (root / ".aida-store").rglob("*.yaml")}
+        train = run([binary, "pr", "auto-queue-review", "--branch", "train/fixture"], root, env)
+        output = train.stdout + train.stderr
+        assert train.returncode != 0, output
+        assert "train members are reviewed individually" in output, output
+        assert "Re-run manually:" not in output, output
+        assert {p: p.read_bytes() for p in (root / ".aida-store").rglob("*.yaml")} == before
+        # Ordinary by-design skips still offer the existing retry command.
+        skipped = aida("pr", "auto-queue-review", "--branch", "pr-35")
+        assert "Re-run manually:" in skipped.stderr, skipped.stderr
+        assert "aida pr auto-queue-review --branch pr-35" in skipped.stderr
         if fail_first:
             queue.parent.mkdir(parents=True, exist_ok=True)
             queue.write_text("[invalid yaml\n")
             first = run([binary, "pr", "auto-queue-review", "--branch", "bug-fixture"], root, env)
             assert first.returncode != 0, (first.stdout, first.stderr)
             assert "queue insertion failed" in first.stderr, first.stderr
+            assert "Re-run manually:" in first.stderr, first.stderr
             assert "→ reviewer queue" not in first.stdout
             queue.unlink()  # fixture recovery; permanent lock sidecar stays
         else:
@@ -80,7 +96,7 @@ def check(binary, forge, fail_first=False, enumeration_shim=None):
         objects = list((root / ".aida-store/objects").rglob("*.yaml"))
         stories = [p for p in objects if f"Review {noun}-35:" in p.read_text()]
         assert len(stories) == 1, stories
-        story = stories[0].stem
+        story = json.loads(aida("show", stories[0].stem, "--format", "json").stdout)["spec_id"]
         # The creation gate must reject an incomplete canonical inventory even
         # when its stale cache still holds the valid pre-corruption story.
         # trace:BUG-1807 | ai:codex
