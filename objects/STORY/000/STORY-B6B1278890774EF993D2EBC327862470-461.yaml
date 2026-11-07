@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T02:51:16.696584780Z
+modified_at: 2026-11-07T02:51:32.632229238Z
 req_type: Story
 tags:
 - architecture
@@ -355,6 +355,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits in the PR diff), but merge 1615536 pulled in main #3516 (TASK-3225) and the exact-site ledger was not regenerated: check-exec-context.py --base origin/main fails with 5 new sites, so the gates ExecContext step will fail; all 7 CI jobs still pending.. No triage reason was given.'
   created_at: 2026-11-07T02:51:16.696583123Z
   modified_at: 2026-11-07T02:51:16.696583123Z
+- id: 01a1b3eb-1ce9-7911-b8b5-4c52668f366f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1615536b48bb
+    Recorded: 2026-11-07T02:47:16.747264494+00:00
+    Findings:
+    1. BLOCKING: ledger stale at head 1615536. 'python3 scripts/check-exec-context.py --base origin/main' (origin/main = eaebcf25a0b) exits 1 with 5 new sites (forbidden), all from tests/test_store_mutation.py added by main #3516 (TASK-3225) via merge 1615536: live_helper:os.environ; test_live_broker_preflight_receipt_and_post_exec_probe:os.environ; test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive:os.environ; test_live_required_launch_refuses_absence_stale_epoch_empty_grant_and_revocation:os.environ; test_real_sibling_namespace_connect_transfer_and_proc_fd_refuse:os.environ. No retired sites. The ledger (ceiling 1236) is unchanged since ef6e684, so the merge was pushed without the binding post-merge regeneration step. Fix (ledger only, no code): run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' at the current head after merging any newer origin/main, commit only scripts/exec-context-legacy.json (expect ceiling 1241), and push. Process note: whoever merges main into this branch (host or advisor) must run that command before pushing; this is the fourth round where a merge without it left the ledger stale.
+    2. BLOCKING (carried over): no green CI at the exact head. Run 42330593524 at 1615536 has all 7 CI jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates 'ExecContext environment ratchet' step and the lib shards that run the exec_context and launch_policy tests. merge-hold-gate fails by design (supervised hold), not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:51:32.457918963Z
+  modified_at: 2026-11-07T02:51:32.457918963Z
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
