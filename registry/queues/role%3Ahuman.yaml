@@ -1,0 +1,7 @@
+- user_id: role:human
+  requirement_id: 019efd98-c566-7012-9b2a-9c477cdfc5a5
+  position: 1000
+  added_by: aida:defer-resurface
+  note: 'manual condition older than 14 days; manual:operator: manual (waiting on operator to decide)'
+  added_at: 2026-11-07T20:29:02.001481742Z
+  for_role: human
