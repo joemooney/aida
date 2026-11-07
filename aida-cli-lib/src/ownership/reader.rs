@@ -167,30 +167,12 @@ pub(crate) fn require_rotation_owner(root: &Path, session: &str) -> Result<()> {
     }
 }
 
-/// Old probe-ref names carry only a PID. Join them to an exact recorded
-/// witness before judging; missing/ambiguous evidence keeps the fetch artifact.
-/// This never makes a process scan an ownership authority.
-// trace:STORY-2325 | ai:codex
-pub(crate) fn probe_owner_retained(root: &Path, pid: u32) -> bool {
-    let Ok(Some(store)) = super::store::OwnershipStore::for_project(root) else {
-        return true;
-    };
-    let (records, errors) = store.list();
-    if !errors.is_empty() {
-        return true;
+pub(crate) fn owner_label(verdict: &OwnerVerdict) -> String {
+    match verdict {
+        OwnerVerdict::Alive { witness } => format!("live ({witness})"),
+        OwnerVerdict::Dead { proof } => format!("dead ({proof})"),
+        OwnerVerdict::Unknown { why } => format!("unknown ({why})"),
     }
-    let mut matching = records.iter().filter(|record| {
-        record.holder.as_ref().is_some_and(|holder| {
-            holder
-                .witnesses
-                .iter()
-                .any(|w| matches!(&w.kind, super::WitnessKind::Process { id, .. } if id.pid == pid))
-        })
-    });
-    let Some(record) = matching.next() else {
-        return true;
-    };
-    matching.next().is_some() || !matches!(owner(record), OwnerVerdict::Dead { .. })
 }
 
 #[cfg(test)]

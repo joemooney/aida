@@ -1,3 +1,11 @@
+PR-D ownership fixes retain clean dead non-PR implementer lanes only when remote
+coverage is unknown or incomplete; zero missing commits permit journaled reclaim
+before a first branch push. Recovery dry-runs inspect live/unknown ownership;
+session listings render unknown evidence as `?`. The 2026-11-07 13:50 advisor
+ruling splits mail retention and four legacy relaunch readers to TASK-3420;
+PR-D references STORY-2325 without completing it. See OVERVIEW.md.
+<!-- trace:STORY-2325 | ai:codex -->
+
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
 refusals, including edits followed by reverts; the separate behind-base gate

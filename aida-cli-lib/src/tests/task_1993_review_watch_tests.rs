@@ -567,8 +567,11 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    let cwd = std::env::current_dir().unwrap();
-    if let Ok(ticket) = std::fs::read_to_string(cwd.join(".aida/task1993-process-ticket")) {
+    if let Some((cwd, ticket)) = std::env::current_dir().ok().and_then(|cwd| {
+        std::fs::read_to_string(cwd.join(".aida/task1993-process-ticket"))
+            .ok()
+            .map(|ticket| (cwd, ticket))
+    }) {
         let repo = forge::Repository::load(&cwd).unwrap();
         child_with_program(
             &cwd,
@@ -579,6 +582,12 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         .unwrap();
         return;
     }
+    // The isolated child may inherit another fixture's deleted cwd from
+    // the parent harness, even under --test-threads=1. Its parent's unique
+    // TMPDIR lives until this child exits; restore there between forge cases.
+    // trace:STORY-2325 trace:BUG-1994 | ai:codex
+    let cwd = std::env::temp_dir();
+    std::env::set_current_dir(&cwd).unwrap();
     for gitlab in [false, true] {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("repo");

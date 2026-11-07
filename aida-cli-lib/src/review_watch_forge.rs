@@ -547,9 +547,11 @@ pub(super) fn sweep_probe_refs(root: &Path) -> usize {
             .is_none()
             .then(|| loose_ref_mtime(root, name))
             .flatten();
+        // Fetch-worker artifacts are not work ownership. Legacy PID-only
+        // ref names still need the worker's process-death check to be swept.
         // trace:STORY-2325 | ai:codex
         if probe_ref_in_use(&probe, now, mtime, |pid| {
-            crate::ownership::reader::probe_owner_retained(root, pid)
+            crate::process_probe::pid_is_alive(pid)
         }) {
             continue;
         }

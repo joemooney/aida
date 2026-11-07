@@ -11635,8 +11635,12 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
     }
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = reclaim {
-        crate::ownership::reader::journal_reclaim(root, lease)
-            .with_context(|| format!("ownership reclaim could not end lease {}", lease.id))?;
+        crate::ownership::reader::journal_reclaim(root, lease).with_context(|| {
+            format!(
+                "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                lease.id, lease.id
+            )
+        })?;
     }
     aida_core::worktree_holders::check_worktree_removal(&path)?;
     aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
@@ -16286,12 +16290,12 @@ pub(crate) fn handle_queue_recover(
     println!("🔎 recovery inspection for {}", spec.bold());
     println!("  {:<14} {}", "status".dimmed(), status_label);
     match (&lease, &lease_state) {
-        (Some(l), Some(verdict)) => println!("  lease {}: {verdict:?}", l.id),
+        (Some(l), Some(verdict)) => println!(
+            "  lease {}: {}",
+            l.id,
+            crate::ownership::reader::owner_label(verdict)
+        ),
         _ => println!("  lease none"),
-    }
-    if let Some(verdict) = &lease_state {
-        anyhow::ensure!(matches!(verdict, crate::ownership::OwnerVerdict::Dead { .. }),
-            "recovery retains ownership: {verdict:?}; ask the holder to run `aida session end <id>`, or inspect `aida own migrate --dry-run` on the host");
     }
     match &branch {
         Some(b) => println!(
@@ -16356,8 +16360,12 @@ pub(crate) fn handle_queue_recover(
     // immediately before dispatch; a prior inspection is not a reclaim grant.
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = &lease {
-        crate::ownership::reader::journal_reclaim(&project_root, lease)
-            .with_context(|| format!("ownership reclaim could not end lease {}", lease.id))?;
+        crate::ownership::reader::journal_reclaim(&project_root, lease).with_context(|| {
+            format!(
+                "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                lease.id, lease.id
+            )
+        })?;
     }
     let aida = crate::aida_exe_path();
     // Helper: run an `aida` subcommand from the project root, surfacing its

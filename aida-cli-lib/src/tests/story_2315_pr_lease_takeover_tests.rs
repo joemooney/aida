@@ -348,7 +348,10 @@ fn end_action_maps_every_verdict() {
     );
     assert_eq!(
         end_action(&lease, "feat", &PrLeaseCheck::NotProvable("x".into())),
-        LeaseEndAction::Bail("ownership retained: x".into())
+        LeaseEndAction::Bail(format!(
+            "ownership retained: x; inspect `aida session end {}`",
+            lease.id
+        ))
     );
     match end_action(
         &lease,

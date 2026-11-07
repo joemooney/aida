@@ -4482,9 +4482,54 @@ pub(crate) fn preflight_agent_launch_lease(
     }
     // Ownership and tree occupancy are independent: death never permits double occupancy.
     // trace:STORY-2325 | ai:codex
-    aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path)
-        .context("owning tree is still in use; re-entry refused")?;
+    dispatch_occupancy_verdict(
+        fresh,
+        aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path),
+    )
+    .context("owning tree is still in use; re-entry refused")?;
     Ok(Some(lease))
+}
+
+// Only invocation-local fresh setup may downgrade a holderless namespace
+// refusal. Independent re-entry and visible holders always retain the tree.
+// trace:STORY-2325 | ai:codex
+fn dispatch_occupancy_verdict(
+    fresh: bool,
+    verdict: std::result::Result<(), aida_core::worktree_holders::WorktreeInUse>,
+) -> std::result::Result<(), aida_core::worktree_holders::WorktreeInUse> {
+    if fresh {
+        aida_core::worktree_holders::downgrade_unverified(verdict).map(|warning| {
+            if let Some(warning) = warning {
+                eprintln!("{warning}");
+            }
+        })
+    } else {
+        verdict
+    }
+}
+
+#[cfg(test)]
+mod dispatch_occupancy_tests {
+    use super::*;
+    // trace:STORY-2325 | ai:codex
+    #[test]
+    fn only_fresh_dispatch_accepts_a_holderless_unverified_namespace() {
+        use aida_core::worktree_holders::{HoldKind, WorktreeHolder, WorktreeInUse};
+        let mut refusal = WorktreeInUse {
+            worktree: "/tmp/owned".into(),
+            holders: vec![],
+            unverified: Some("separate pid namespace".into()),
+            pid_namespace: true,
+        };
+        assert!(dispatch_occupancy_verdict(true, Err(refusal.clone())).is_ok());
+        assert!(dispatch_occupancy_verdict(false, Err(refusal.clone())).is_err());
+        refusal.holders.push(WorktreeHolder {
+            pid: 42,
+            command: "worker".into(),
+            hold: HoldKind::Cwd,
+        });
+        assert!(dispatch_occupancy_verdict(true, Err(refusal)).is_err());
+    }
 }
 
 // A child gets its own lease identity, or sheds the launcher's unrelated one.

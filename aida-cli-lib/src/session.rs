@@ -325,6 +325,16 @@ impl ProcessResolver {
                     .as_deref()
                     .and_then(|path| sl::transcript_spinning(path, self.now)),
             );
+            if owned_lease.is_some_and(|lease| {
+                self.root.as_deref().is_none_or(|root| {
+                    matches!(
+                        crate::ownership::reader::lease_owner(root, lease),
+                        crate::ownership::OwnerVerdict::Unknown { .. }
+                    )
+                })
+            }) {
+                s.process.liveness = sl::Liveness::Unknown;
+            }
             if s.role.is_none() {
                 s.role = s.process.lease_role.clone();
             }
@@ -543,6 +553,40 @@ mod normalize_specs_tests {
             path: None,
             process: Default::default(),
         }
+    }
+
+    // trace:STORY-2325 | ai:codex
+    #[test]
+    fn recordless_leased_conversation_renders_unknown_even_when_old() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut row = meta(None);
+        row.age_seconds = 86400;
+        let lease: crate::SessionLease = serde_json::from_value(serde_json::json!({
+            "id": "owner", "scope": uuid::Uuid::from_u128(7).to_string(),
+            "slug": "owned", "owner": "tester", "worktree_path": tmp.path(),
+            "branch": "work", "started_at": chrono::Utc::now(), "hostname": "test",
+            "active_pid": std::process::id(), "role": "implementer",
+        }))
+        .unwrap();
+        let manifest = serde_json::from_value(serde_json::json!({
+            "session_id": "owner", "claude_session_id": row.id,
+            "planned_at": chrono::Utc::now(), "plan_source": "test", "items": [],
+        }))
+        .unwrap();
+        let resolver = ProcessResolver {
+            root: Some(tmp.path().to_path_buf()),
+            procs: vec![],
+            leases: vec![lease],
+            manifests: vec![manifest],
+            now: chrono::Utc::now(),
+        };
+        resolver.fill(std::slice::from_mut(&mut row));
+        assert_eq!(
+            row.process.liveness,
+            crate::session_liveness::Liveness::Unknown
+        );
+        assert_eq!(process_liveness_glyph(&row), "?");
+        assert_eq!(row.process.liveness.label(), "unknown");
     }
 
     fn req(spec_id: &str, agreed_id: Option<&str>) -> aida_core::Requirement {
@@ -9413,6 +9457,7 @@ fn process_liveness_glyph(s: &SessionMeta) -> &'static str {
         Liveness::Spinning => "⟳",
         Liveness::FileTouched => glyph(crate::glyphs::Glyph::InFlight),
         Liveness::None => " ",
+        Liveness::Unknown => "?",
     }
 }
 
@@ -9466,6 +9511,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             crate::session_liveness::Liveness::Spinning => live.yellow().bold().to_string(),
             crate::session_liveness::Liveness::FileTouched => live.yellow().to_string(),
             crate::session_liveness::Liveness::None => live.dimmed().to_string(),
+            crate::session_liveness::Liveness::Unknown => live.yellow().to_string(),
         };
         println!(
             "{} {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<term_w$}  {:<wt_w$}  {}",

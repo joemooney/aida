@@ -1794,3 +1794,23 @@ The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
+
+
+### PR-D ownership recovery limits
+
+<!-- trace:STORY-2325 | ai:codex -->
+
+A proven-dead non-PR implementer lane with a clean tree and zero commits missing
+from remotes can be reclaimed through the ownership journal even before its
+branch has a head on origin. Dirty or unpushed work, unknown ownership, PR-scoped
+leases and reviewer leases retain their stricter safeguards. Queue recovery dry-runs inspect
+live and unknown records without mutation; session listings show unknown
+ownership as `?` rather than dead. Only invocation-local fresh dispatch may warn
+and continue after a holderless unverified PID-namespace scan; independent
+re-entry and scans with visible holders still refuse.
+
+The 2026-11-07 13:50 advisor ruling supersedes the earlier completing-slice
+ruling: PR-D references STORY-2325. TASK-3420 owns canonical message-state
+retention and the four grandfathered relaunch readers. Their build-identity gate
+and legacy ratchet entries remain unchanged in PR-D. Fetch-worker probe refs
+use process death for artifact cleanup because watcher PIDs are not work owners.
