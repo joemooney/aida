@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-07T00:21:10.086554375Z
+modified_at: 2026-11-07T00:21:11.655093814Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -406,6 +406,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b361-7767-72d3-8166-df4bcb2be126
+  author: joe
+  timestamp: 2026-11-07T00:21:11.655092021Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -418,3 +427,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
+  completed_at: 2026-11-07T00:21:11.655074759Z
