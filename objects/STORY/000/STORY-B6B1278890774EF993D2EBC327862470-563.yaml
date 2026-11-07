@@ -1,0 +1,38 @@
+id: 01a1b78b-825c-7ec1-9774-f5b7b29c05b6
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-563
+agreed_id: STORY-2640
+title: Host runs make check-ci-fast on every lane head before publishing its PR; a failing gate gets one seat fix round
+description: |
+  ## Problem
+  Headless implementer lanes open PRs that have not run the pre-push gate. On 2026-11-07 every local lane result said `untested=true`. Of the last 35 completed CI runs, 11 failed, mostly on gates that `make check-ci-fast` catches in about 90s with no build (test-time budgets, ratchets, inventories, docs verifiers). Each red run costs one more lane round (about 1h) plus a 17-minute CI rerun. Contained seats cannot run `make check-ci-fast` themselves: the lane job runner accepts only `cargo` jobs.
+
+  Contributing cause (fixed in the advisor scripts on 2026-11-07): the Codex filler set `AIDA_OS_WRAP=0`, a BUG-2440 workaround, which turned off the lane test runner for every Codex lane.
+
+  ## Proposal
+  Before the host opens or updates a lane's PR (native publication and pr-open in standalone_implementer / the drain's phase 1), the HOST runs `make check-ci-fast` in the seat's worktree at the head it is about to publish:
+  - Green: publish as today, and record `fast_gate=pass` on the result line.
+  - Red: do not publish. Send the failing gate names and output tail back to the seat for ONE fix round (same session or resume), then re-run the gate. If it is still red, publish with `fast_gate=fail` on the result line and in the PR body, so the reviewer and advisor see it, rather than blocking forever.
+  - The gate runs on the host, outside the seat's sandbox. It runs offline against the seat worktree with a cleared environment, and is bounded by a timeout (default 5 min).
+
+  ## Acceptance
+  1. A lane whose head fails any `check-ci-fast` gate does not open or push its PR on the first attempt; the seat receives the gate failure and gets one fix round.
+  2. The result line always carries `fast_gate=pass|fail|skipped(<reason>)`; `untested=true` keeps its current meaning (no cargo test ran).
+  3. A lane that passes behaves exactly as today, plus the marker.
+  4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
+  5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T19:45:35.836129088Z
+modified_at: 2026-11-07T19:45:35.836129088Z
+req_type: Story
+filed_at:
+  code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cd520a47e97
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
