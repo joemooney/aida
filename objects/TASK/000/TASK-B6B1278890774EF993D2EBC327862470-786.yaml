@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T16:46:38.094144780Z
+modified_at: 2026-11-07T16:52:18.244127757Z
 req_type: Task
 tags:
 - area:containment
@@ -320,6 +320,12 @@ comments:
   modified_at: 2026-11-07T16:43:26.273411137Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6ec-dac4-73d2-ab29-935c6e98990c
+  author: joe
+  content: 'Implemented the binding 2026-11-07 private workspace write permission as vendor data on the shared wrapper: write_file(<workspace>/**), without host paths/canaries. Removed blanket bypass from candidate argv and auto mode from the native fixture. Fresh AGY 1.5.3 host fixture run at /home/joe/.aida/conformance-agy-task3048-20261107-seat786/report.json: C0-C4 unknown; exact runner refused by native sandbox: readwrite <workspace>/**: globs not supported. No terminal receipt or whole-lane credit. Keeping production admission and incomplete auth inventory closed; adding named configuration diagnostics and regression coverage, attaching fresh report. This is Refs-only; integrated all-tool conformance, auth/refresh inventory and mediated-write controls remain.'
+  created_at: 2026-11-07T16:52:18.244127757Z
+  modified_at: 2026-11-07T16:52:18.244127757Z
+  session_id: 01a1b6e79dd6
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
