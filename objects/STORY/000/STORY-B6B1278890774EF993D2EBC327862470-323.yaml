@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T17:30:19.522355889Z
+modified_at: 2026-11-07T17:32:43.476481062Z
 req_type: Story
 tags:
 - architecture
@@ -481,6 +481,12 @@ comments:
   modified_at: 2026-11-07T17:25:44.145716318Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b711-dc54-7683-9e81-7496128ac0f0
+  author: joe
+  content: 'Round 5 PR #3600 review fixes: regenerated store-writers.toml, classified the five new OwnershipStore read_lock/recover sites with actual permanent ownership-flock policy and host-only/contained-refusal gates, and removed three stale sites. Documented store-wide discovery/read failures retaining pid-backed review markers past process death/TTL, with a three-case regression (discovery, lock-open, pending recovery) that verifies expiry resumes after repair. Detached-rework ship dry-run now states the pending branch fast-forward and that the branch lacks rework commits. Validation: store writer gate passes (3349 sites/293 mappings); inventory fixtures 41 pass; formatting and git diff --check pass; documentation audience/link coverage passes. Reviewed-run logs confirm the fixture panic is expected (enclosing test passes), the writer ratchet is the actual CI failure and Build is consequential. Rust validation untested=true: lane job run refuses because lease 01a1b70cdaa1 has no lane job runner; stopped queued direct Cargo. Full make check-ci-fast incomplete (Cargo queued; native Git metadata also refuses portability fetch). No commit/push from this native seat; host must validate Rust and publish a new Refs commit. Merge hold remains an advisor/human gate.'
+  created_at: 2026-11-07T17:32:43.476481062Z
+  modified_at: 2026-11-07T17:32:43.476481062Z
+  session_id: 01a1b70cdaa1
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
