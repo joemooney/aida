@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-06T18:03:00.679654480Z
+modified_at: 2026-11-07T00:29:45.044922021Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-06T18:03:00.679654480Z
   modified_at: 2026-11-06T18:03:00.679654480Z
   session_id: 01a1b1f46d3d
+- id: 01a1b369-4cd4-7282-b88f-3132df477bc1
+  author: joe
+  content: '[advisor 17:31] Fix landed #3524 (9ac1e87, 19:19Z); in the live binary since the 00:10Z promote. Acceptance 3 = 24h guard window at unchanged thresholds, ends ~2026-11-08 00:10Z. No lane needed; the advisor completes it when performance-guard passes over that window (the 20:52Z trip predates the deploy).'
+  created_at: 2026-11-07T00:29:45.044922021Z
+  modified_at: 2026-11-07T00:29:45.044922021Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
