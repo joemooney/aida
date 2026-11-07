@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T16:53:25.509863564Z
+modified_at: 2026-11-07T18:05:32.480084892Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -502,6 +502,13 @@ comments:
   content: 'ADVISOR 2026-11-07 10:00: third operator run (after codex login) got through auth and the containment receipt; codex 0.166.0 then rejected ''-P aida''. The pin contradicts the launcher. BUG-2487 re-pins to 0.167.0. C0-C4 are still unmeasured; rerun after BUG-2487 lands and home codex is upgraded.'
   created_at: 2026-11-07T16:53:25.509863564Z
   modified_at: 2026-11-07T16:53:25.509863564Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b72f-e7c0-7082-8789-e97556460f2f
+  author: joe
+  content: 'ADVISOR 2026-11-07 11:15: correction to 10:00. A re-pin is NOT needed. ''-P aida'' is invalid for every codex exec (sandbox-subcommand only). BUG-2487 re-scoped to fix the launcher argv and keep 0.166.0. The operator does NOT need to upgrade codex. Rerun conformance after #3611 lands.'
+  created_at: 2026-11-07T18:05:32.480084892Z
+  modified_at: 2026-11-07T18:05:32.480084892Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
