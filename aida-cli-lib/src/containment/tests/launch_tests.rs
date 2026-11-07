@@ -2465,6 +2465,7 @@ fn task_3048_runtime_descriptor_masks_host_state_for_every_vendor() {
         masks,
         crate::containment::runtime_host_parents(host.path()).unwrap()
     );
+}
 
 // trace:TASK-3225 | ai:codex
 #[test]
