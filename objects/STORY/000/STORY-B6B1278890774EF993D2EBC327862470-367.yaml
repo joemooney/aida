@@ -19,12 +19,12 @@ description: |-
   - **Dependencies:** BUG-2433 should land as slice 1. It feeds STORY-2324 (gate inputs must be tri-state, so it must never read "unknown" as "fail") and STORY-2325 (train ownership).
 
   Acceptance: (1) every forge read goes through one Observed<T> = Known|Pending|Transient type, and a ratchet forbids branching on raw gh exit status outside forge.rs; (2) eject, close, mark-failed and spec-state flips require a confirmed negative (re-read after a bounded backoff plus a ground-truth check such as pinned head ancestor of origin/main); (3) the train writes an intent journal before each forge call and resumes from forge truth after an error or crash; (4) CI evidence is keyed by (head SHA, workflow-definition digest). Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T07:24:58.830938012Z
+modified_at: 2026-11-07T07:25:39.894561013Z
 req_type: Story
 relationships:
 - rel_type:
@@ -431,6 +431,13 @@ comments:
   created_at: 2026-11-07T06:41:21.471951160Z
   modified_at: 2026-11-07T06:41:21.471951160Z
   session_id: 01a1b4a79338
+- id: 01a1b4e6-14b6-7103-b4e2-547d9c5f5ebf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 4 (AC3, Refs STORY-2401): journal, checkpoints, recovery and SIGKILL resume look sound and the round-7 findings are addressed, but CI lib-1 is red at a02fe289da9 because of a test this PR added (raw current_exe ratchet). AC1/AC2 shipped in slices 1-3; AC4 is slice 5. Fix the ratchet break plus the minor items, then re-review.. No triage reason was given.'
+  created_at: 2026-11-07T07:25:39.894554669Z
+  modified_at: 2026-11-07T07:25:39.894554669Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
@@ -834,6 +841,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b4e6-14b6-7103-b4e2-546198c8fb9d
+  author: joe
+  timestamp: 2026-11-07T07:25:39.894545866Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -842,11 +858,3 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Slice 4 (AC3, Refs STORY-2401): journal, checkpoints, recovery and SIGKILL resume look sound and the round-7 findings are addressed, but CI lib-1 is red at a02fe289da9 because of a test this PR added (raw current_exe ratchet). AC1/AC2 shipped in slices 1-3; AC4 is slice 5. Fix the ratchet break plus the minor items, then re-review.'
-  recovery_hint: address the review findings, move STORY-2401 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T07:24:58.830938012Z
