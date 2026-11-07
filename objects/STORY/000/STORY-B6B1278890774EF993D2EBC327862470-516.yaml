@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T04:46:24.695398186Z
+modified_at: 2026-11-07T04:56:07.010889995Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -268,6 +268,13 @@ comments:
   content: '[advisor 21:56] REVIEW SCOPE for #3560 @086a272: this is now the docs-only step-1 evidence record (retitled docs(plans) with a Refs trailer; it does not complete the story). Judge only whether the plan doc accurately records the probes and the 21:55 interface ruling''s premise. AC1-AC3 move to the implementation round that follows it.'
   created_at: 2026-11-07T04:46:24.695398186Z
   modified_at: 2026-11-07T04:46:24.695398186Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b45d-2a62-7543-8822-44ead50dbe7b
+  author: joe
+  content: '[advisor 22:07] Changed the publication plan for consistency with TASK-3223: closing #3560 unmerged, because its commits e58b7e8/14ef038 carry closing (STORY-2593) subjects that a squash body would carry into main. The step-1 evidence doc lands with the implementation PR instead; recover it with: git show origin/story-2593-r1923:docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md. Implement under the 21:55 interface ruling. Mode drive.'
+  created_at: 2026-11-07T04:56:07.010889995Z
+  modified_at: 2026-11-07T04:56:07.010889995Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
