@@ -51,7 +51,7 @@ fn skip_under(required: bool, reason: &str) -> bool {
     eprintln!("SKIP: {reason}");
     false
 }
-fn skip(reason: &str) -> bool {
+pub(super) fn skip(reason: &str) -> bool {
     skip_under(live_required(), reason)
 }
 fn live_available() -> bool {
