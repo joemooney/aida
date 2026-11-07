@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-07T22:36:21.524085439Z
+modified_at: 2026-11-07T22:51:09.590134603Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -93,6 +93,25 @@ comments:
   modified_at: 2026-11-07T22:34:49.071120503Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b835-6596-7841-b64e-4c7a61324e94
+  author: joe
+  content: |
+    Round 2 rework for PR #3634 (reviewed head 5e201481dfd5). Native seat: edits remain uncommitted for host publication; no commit/push/merge/queue completion performed.
+
+    Findings 1-3: private inbox verification accepts a native-session match with a heartbeat <=5 minutes old ONLY for NamespaceMismatch of a complete ProcIdentity. Known-dead, incomplete procfs, missing tuples, stale rows and numeric CLAUDE_PID-only selection still refuse. The regression runs verify with the shared judge under foreign observer coordinates and asserts the numeric PID is never probed. Registration/heartbeat/MCP use a positive local capture to upgrade matching legacy ticks in place (PID equal, namespace matching or absent), preserving launcher fields; passive reads still leave legacy identity unknown. The heartbeat regression checks full retained metadata, including armed wake, native thread, role, handle, delegation and resumed-from. Wake releases the allocator lock before snapshot/external I/O and rechecks the row under short lock holds before and after tick. Its replacement callback regression writes the row during submission and checks the accepted receipt survives the detected replacement.
+
+    Finding 4: docs/internal/testing/proc-identity-s4.md records the family boundary: registry/mail-wake are liveness observers, not cooperative-holder admission or signal owners. Subreaper adoption does not alter their liveness policy; adopted live processes are alive, retained exited children are dead. Holder-specific subreaper policy belongs to authority consumers.
+
+    Finding 5: explicit probe injection exercises the actual issue_direct issuance path with changed target metadata, expects the pre-mint replacement refusal and checks that no grant directory was written.
+
+    Findings 7-9: removed the S4 per-change paragraphs from AGENTS.md and OVERVIEW.md, relocated policy detail to docs/internal/testing/proc-identity-s4.md, centralized raw-tick transport in ProcIdentity::legacy_ticks_start, and removed always-Some identity plumbing.
+
+    Finding 6: local validation and CI evidence are recorded below. Green CI at the reworked head can only follow host publication. The active merge hold requires its separate authorized clearance path; this seat has not cleared it. No finding is disputed.
+
+    Validation so far: make check-ci-fast PASS, 43/43 fast gates, including no-default-features build, TUI all-target check, portability, formatting, ExecContext and store-writer inventory. Standalone rustfmt --check, git diff --check and check-store-writers.py also PASS. Executed Rust tests remain pending: first lane job j20261107T223825068-2-0 is compiling; j20261107T223837556-3-0 (core S4), j20261107T224303638-3244950-0 (both crates' proc_identity_ and ratchet on final source) and j20261107T224519961-2-0 (existing registry/mail-wake/grant-binding families) are queued. No executed Rust test success is claimed yet.
+  created_at: 2026-11-07T22:51:09.590134603Z
+  modified_at: 2026-11-07T22:51:09.590134603Z
+  session_id: 01a1b827cdad
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
