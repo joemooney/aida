@@ -1,5 +1,6 @@
 id: 01a1b331-3ccf-7920-9b28-b7614318fab7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-904
+agreed_id: TASK-2953
 title: '[cosmetic, non-blocking] docs/showcase/assets/authority-delegation.svg still sa…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2467, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,10 @@ history:
   timestamp: 2026-11-07T00:22:26.808623452Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1b371-452d-7343-8619-c99b56122a57
+  author: joe
+  timestamp: 2026-11-07T00:38:27.373862046Z
   changes: []
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792

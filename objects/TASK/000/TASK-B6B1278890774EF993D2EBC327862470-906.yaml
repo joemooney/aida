@@ -1,5 +1,6 @@
 id: 01a1b331-5677-7be0-ac0f-34c8999baca6
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-906
+agreed_id: TASK-2957
 title: 'minor (non-blocking): submit_with_runner_status (deputy_shell_cmd.rs:336) only …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-897, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,10 @@ history:
   timestamp: 2026-11-07T00:22:37.018343159Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1b371-4597-7be0-8716-194ea152053d
+  author: joe
+  timestamp: 2026-11-07T00:38:27.479497446Z
   changes: []
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
