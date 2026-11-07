@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-251
 agreed_id: BUG-2486
 title: Contained Codex launch refuses when the ChatGPT token expires before the grant; cap the child grant at the token's life instead
 description: 'STORY-2593 delivers pinned, non-renewing ChatGPT credentials and requires the access token to stay valid for the grant TTL plus 300s. Role grants default to 24h, so any token with less than 24h05m left refuses: ''contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch (grant plus 300s margin required)''. Repro 2026-11-07 16:47Z: the operator''s token had 10.8h left; conformance out=~/.aida/conformance-codex-aida-1794070028. Acceptance: the contained Codex launch caps the delegated child grant at (token exp - 300s) and records the cap in launch diagnostics. It refuses only when the capped TTL falls below a configured floor (default 30 min), naming the token expiry and ''codex login'' as the fix. aida doctor shows the token''s remaining life. Tests for capped, floor-refused and unchanged-when-ample cases.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T19:25:05.633699696Z
+modified_at: 2026-11-07T19:27:40.423443952Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1b77b-1987-7f61-854f-4ab2d1acc56d
+  author: aida-session-start
+  timestamp: 2026-11-07T19:27:40.423439373Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
