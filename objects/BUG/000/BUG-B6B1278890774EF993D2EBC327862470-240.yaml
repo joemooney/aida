@@ -1,0 +1,32 @@
+id: 01a1b37a-0200-7b42-b22b-c0e428ba7241
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-240
+agreed_id: BUG-2474
+title: A newer APPROVED verdict keyed on PR-N does not supersede an older request-changes verdict keyed on the spec at the same head, so the train refuses an approved PR
+description: |
+  Observed 2026-11-06 17:45 MST on PR #3544 (STORY-2593 design record) at head ef3e9d4bc65d:
+  - 22:10Z: claude reviewer recorded CHANGES REQUESTED keyed STORY-2593 at ef3e9d4.
+  - 00:36Z: an independent reviewer recorded APPROVED keyed PR-3544 at the same ef3e9d4. The merge-hold lifted.
+  - The train then re-placed the hold and refused: "PR-3544 has an outstanding request-changes verdict for STORY-2593 at its current head ef3e9d4bc65d — the verdict corpus holds the merge regardless of which producer wrote the artifact".
+
+  The verdict-corpus check treats each key independently. A later verdict on the same PR at the same head, from an independent reviewer, should supersede the earlier one regardless of key (PR-N vs the spec ID). Otherwise the only fixes are pushing a dummy head or routing a second spec-keyed review (what the advisor had to do).
+
+  Acceptance:
+  1. For one PR at one head, the newest verdict among the PR-N key and the spec keys of the PR's trailers decides the merge hold and the train gate. An older request-changes at the same head no longer holds.
+  2. Regression test: CR(spec, sha X, t1) then APPROVED(PR-N, sha X, t2>t1) means train admits; reversed order holds.
+  3. A newer request-changes still re-holds.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T00:48:00.000573110Z
+modified_at: 2026-11-07T00:48:00.000573110Z
+req_type: Bug
+filed_at:
+  code_sha: 37c695e340639ae667426824967c5ca3c708e25e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
+  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
