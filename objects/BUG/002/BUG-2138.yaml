@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:19.695580202Z
-modified_at: 2026-11-07T20:55:26.899707111Z
+modified_at: 2026-11-07T20:55:28.736321311Z
 req_type: Bug
 tags:
 - capture
@@ -22,6 +22,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:28:17.495167767Z
   modified_at: 2026-11-07T20:28:17.495167767Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cb-7ce0-7f51-8ad2-e00dcb9fdc93
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. STORY-1662 completed; no repeat; STORY-2325 ownership record covers claims.'
+  created_at: 2026-11-07T20:55:28.736321311Z
+  modified_at: 2026-11-07T20:55:28.736321311Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
