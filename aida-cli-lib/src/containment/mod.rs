@@ -124,6 +124,16 @@ pub(crate) struct RuntimePolicy {
     pub raw_git_writes: bool,
     pub argv_prefix: Vec<String>,
     pub prompt_options: Vec<String>,
+    #[serde(default)]
+    pub workspace_permission: Option<WorkspacePermission>,
+}
+
+/// Closed permission vocabulary; vendor rows select data, never shell templates.
+// trace:TASK-3048 | ai:codex
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum WorkspacePermission {
+    WriteFile,
 }
 
 /// Legacy launchers may not supply an outer-only vendor's permission bypass.
@@ -204,6 +214,23 @@ pub(crate) fn runtime_host_parents(home: &Path) -> anyhow::Result<Vec<std::path:
 }
 
 impl RuntimePolicy {
+    // Admit only the selected workspace subtree, never host runtime or canaries.
+    // trace:TASK-3048 | ai:codex
+    pub(crate) fn settings(&self, workspace: &Path) -> anyhow::Result<serde_json::Value> {
+        match self.workspace_permission {
+            Some(WorkspacePermission::WriteFile) => {
+                let root =
+                    crate::contained_boundary::root_rule_path(workspace).ok_or_else(|| {
+                        anyhow::anyhow!("runtime permission requires an exact workspace path")
+                    })?;
+                Ok(
+                    serde_json::json!({"permissions": {"allow": [format!("write_file({root}/**)")]}}),
+                )
+            }
+            None => Ok(serde_json::json!({})),
+        }
+    }
+
     pub(crate) fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             !self.prompt_options.is_empty()
