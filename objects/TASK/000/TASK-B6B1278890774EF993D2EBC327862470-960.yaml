@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-07T23:39:41.575597710Z
+modified_at: 2026-11-07T23:51:53.722930848Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T23:40:02.824548064Z
+comments:
+- id: 01a1b86d-007a-75d3-ae18-4d12eea38c3f
+  author: joe
+  content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: the glob-import count is 170 files (82 _cmd/_args), not 104; skip files in open PRs (#3619''s 52-file footprint especially). Ship as 3-4 PRs of <=50 files. The ledger relocation script must include a totality check that no stale old path remains.'
+  created_at: 2026-11-07T23:51:53.722930848Z
+  modified_at: 2026-11-07T23:51:53.722930848Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
