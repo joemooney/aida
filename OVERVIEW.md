@@ -1594,10 +1594,27 @@ and reviewer phases through `launch/contained.rs`. `/usr/bin/python3 -I -S`
 and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;
-bubblewrap inherits it unchanged. Only `OPENAI_API_KEY` carries authentication.
-An existing Codex `auth.json` refuses by name until the ChatGPT-auth design lands.
-The launcher writes no credential files and forwards neither registry nor handle
-launch tokens. Tool shells cannot bind their own registry/handle records.
+bubblewrap inherits it unchanged. API-key authentication uses `OPENAI_API_KEY`.
+Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.166.0`:
+the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
+access-token expiry and identity account routing, and requires grant lifetime
+plus a 300-second margin. A sealed memfd supplies only the access token, host ID
+token and `refresh_token=""`, plus derived account routing and a generated
+delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
+leaf; no full cache or host refresh token enters the lane. Baseline lanes last
+at most one hour.
+Unsupported versions, malformed or insufficient validity and keyring logins
+refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
+there is no renewal. The host supervisor enforces the absolute deadline and
+failed ChatGPT exits at or after that deadline, or after a host-denied OAuth
+CONNECT, request host reauthentication and relaunch. Other failures preserve
+the vendor exit status. Readable bearer exposure remains an accepted risk.
+These changes have no live ChatGPT C0-C4 pass credit until the advisor runs
+that evidence; see the
+[credential boundary plan](docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md).
+The launcher writes no secret credential files and forwards neither registry nor
+handle launch tokens. Tool shells cannot bind their own registry/handle records.
+<!-- trace:STORY-2593 | ai:codex -->
 
 Each launch has private Codex state. HOME retains the issuer's canonical AIDA
 home, read-only, so core-filtered tools resolve the same grant records without
