@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T10:01:57.419729970Z
+modified_at: 2026-11-07T19:36:32.037505329Z
 req_type: Story
 tags:
 - area:advisor
@@ -336,6 +336,13 @@ comments:
   created_at: 2026-11-07T10:01:57.419729970Z
   modified_at: 2026-11-07T10:01:57.419729970Z
   session_id: 01a1b574555a
+- id: 01a1b783-3625-7912-8380-7beefd15a0cd
+  author: joe
+  content: 'ADVISOR 2026-11-07 12:35: running on a dell1 codex lane (log dell1:~/lanes/lane-STORY-2571.log). dell1 partition: do not pass to local fill-slots/auto-rework until its PR opens.'
+  created_at: 2026-11-07T19:36:32.037505329Z
+  modified_at: 2026-11-07T19:36:32.037505329Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
