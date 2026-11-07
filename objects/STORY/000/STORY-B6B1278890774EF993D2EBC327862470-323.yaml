@@ -8,10 +8,11 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T14:50:39.962756015Z
+modified_at: 2026-11-07T15:06:30.857102488Z
 req_type: Story
 tags:
 - architecture
+- docs:impacted
 - needs-sketch
 - regroup
 comments:
@@ -387,6 +388,12 @@ comments:
   modified_at: 2026-11-07T14:49:26.103145077Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b68c-0049-7982-912b-1dc6ab8f7691
+  author: joe
+  content: 'PR #3600 round 2: addressed findings 1-8 with best-effort post-open handoff restricted to the branch lease owner, retained lease retirement handles, canonical seat paths, manual review TTL fallback plus prefix/case ownership matching, human-TTY/host-only own release KEY (journaled, CAS, rider release, no tree mutation), delta journal redo with idempotent append-offset recovery and shared read locks. Added guarded SafeEnd -> session_end(force=false), handoff -> cleanup, refusal, rollback, marker Dead/Closed, train rider/stall and operator gate regressions. Finding 9: removed unused stall body parameter and documented test-only legacy fixture deletion debt in ownership/mod.rs for the deletion slice. Validation: 16 cutover regressions and 285 surrounding tests passed from no-default-features lib test build; cargo fmt --check, portability guard, static CLI manual guard and git diff --check passed. Native seat leaves 15 changed files uncommitted for host publication. Refs STORY-2325; human/advisor merge hold unchanged. Native publication subject recorded: [AI:codex] fix(ownership): preserve ship cleanup and add release recovery (Refs STORY-2325).'
+  created_at: 2026-11-07T15:06:30.857102488Z
+  modified_at: 2026-11-07T15:06:30.857102488Z
+  session_id: 01a1b67d70a0
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
@@ -541,6 +548,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b688-2e7f-7aa3-9be8-59eb0fb9b80e
+  author: joe
+  timestamp: 2026-11-07T15:02:20.543722216Z
+  session_id: 01a1b67d70a0
+  changes: []
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
