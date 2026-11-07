@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T20:46:39.637448323Z
+modified_at: 2026-11-07T21:30:16.785411020Z
 req_type: Story
 tags:
 - area:advisor
@@ -355,6 +355,13 @@ comments:
   content: 'ADVISOR 2026-11-07 14:00: TASK-3368 (ProcIdentity observer, S6 of STORY-2537) is signed to run as an operation of STORY-2571''s supervised host service (sketch step 2), not as a separate daemon. Design the step-2 transport to carry it: one request per connection, SO_PEERPIDFD at accept, no ancillary fds.'
   created_at: 2026-11-07T20:46:39.637448323Z
   modified_at: 2026-11-07T20:46:39.637448323Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7eb-5951-7100-a638-0863c15c99fe
+  author: joe
+  content: 'Requirement from 2026-11-07 (advisor): the dispatch/slot-cap command (AC3) must know which HOST a spec''s lane runs on. Today auto-rework/fill-slots3 relaunch locally any spec with a change-request verdict, including specs whose lane runs on dell1 (TASK-1214 at 14:27; STORY-2640 relaunched locally). Leases are per host, so nothing refuses the duplicate. Record a host partition on the spec or lease, and have dispatch honour it.'
+  created_at: 2026-11-07T21:30:16.785411020Z
+  modified_at: 2026-11-07T21:30:16.785411020Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
