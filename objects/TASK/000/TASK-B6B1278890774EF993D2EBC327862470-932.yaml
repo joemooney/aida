@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T15:40:09.401240938Z
+modified_at: 2026-11-07T15:40:15.569566076Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -110,6 +110,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge-lock ProcIdentity migration meets TASK-3364 acceptance (legacy pid-only checks removed from merge_lock.rs and release.sh; liveness baseline shrunk, merge_lock.rs 3->0 and dual.rs 2->1; namespace/pid-reuse/subreaper/clock-jump cases in merge_lock::tests; boot-clock expiry and legacy repair from earlier rounds intact; the sed -i fix is correct and the portability ratchet now passes). Blocked: CI (gates) is red at this head because the PR''s new writer sites are missing from the store-writer inventory.. It was punted on: blocked-dependency: Advisor-scoped portability fix is complete in tests/test_release_pr_flow.sh:381 with the identical sed substitution and portable temporary-file plus mv replacement. Ratchet baseline unchanged. bash -n and git diff --check passed; make check-ci-fast passed the Rust test portability ratchet but failed later at Store writer inventory ratchet: seven unclassified writer/caller sites in merge_lock.rs and scripts/release.sh plus two stale lease_acquire inventory rows. Those files are unchanged by this patch. The ruling permits only the sed fix and forbids baseline changes, so resolving this separate required-gate failure needs advisor or host action. Edits remain uncommitted under native-seat instructions; no commit, push, PR, queue completion, review record or publication declaration performed.. No triage reason was given.'
   created_at: 2026-11-07T15:40:09.401239546Z
   modified_at: 2026-11-07T15:40:09.401239546Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6aa-e179-70b3-9806-15cfda8ccc48
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3364):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 551f783bbbc3
+    Recorded: 2026-11-07T15:38:45.870124662+00:00
+    Findings:
+    1. BLOCKING (CI red at 551f783, CI (gates) step 'Store writer inventory ratchet' = python3 scripts/check-store-writers.py, reproduced locally): the PR adds writer/caller sink sites that scripts/store-writers.toml does not classify: aida-cli-lib/src/merge_lock.rs|migrate_legacy_deadline|fs::write, |fs::rename, |fs::remove_file; merge_lock.rs|mutation_guard|OpenOptions::new, |truncate; scripts/release.sh|lease_guard_lock|> and scripts/release.sh|lease_is_live|aida merge-lock. It also leaves 2 stale rows: scripts/release.sh|lease_acquire|> and |rm. This was hidden at 1c16205 because the job stopped at the earlier portability-ratchet failure. Fix: run 'python3 scripts/check-store-writers.py --regenerate'; review the scripts/store-writers.toml diff and classify the new rows like the existing merge_lock.rs rows (disposition blocked, blocker TASK-3223); delete the stale rows; re-run 'python3 -m unittest tests/test_store_writer_inventory.py'. The failure also skipped gates steps 80-87 (store-writer mutation fixtures, pure-move fixtures, GitLab adapter, sccache fixtures, Run clippy, glyph lint, trace/doc-header stranding, docs-drift), so those must pass on the rework head.
+    2. COSMETIC: merge_lock.rs:558 acquire calls mutation_guard(&path, remaining)? and returns a bare WouldBlock ('Resource temporarily unavailable') when the per-branch guard stays contended past the wait deadline. That skips the 'merge-lease for <branch> is retained (<verdict>); waited Ns; inspect with aida merge-lock' diagnostic built at lines 616-626. Map a guard-timeout WouldBlock to the same retained message.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T15:40:14.585295247Z
+  modified_at: 2026-11-07T15:40:14.585295247Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
