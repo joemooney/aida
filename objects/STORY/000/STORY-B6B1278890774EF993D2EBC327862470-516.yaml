@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T04:56:07.010889995Z
+modified_at: 2026-11-07T04:56:40.038188256Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -275,6 +275,13 @@ comments:
   content: '[advisor 22:07] Changed the publication plan for consistency with TASK-3223: closing #3560 unmerged, because its commits e58b7e8/14ef038 carry closing (STORY-2593) subjects that a squash body would carry into main. The step-1 evidence doc lands with the implementation PR instead; recover it with: git show origin/story-2593-r1923:docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md. Implement under the 21:55 interface ruling. Mode drive.'
   created_at: 2026-11-07T04:56:07.010889995Z
   modified_at: 2026-11-07T04:56:07.010889995Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b45d-ab66-7bc2-8913-56a100cbac84
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 8 at 086a27225e26: findings 1-3 are accepted and remain unmet: refuse_chatgpt is defined at contained.rs:624 and called at :851; no real ChatGPT C0-C4 run under --boundary aida, credential-visibility sentinels, or policy/binary/receipt hashes exist; BUG-2447 and BUG-2448 are Approved and blocked. Explicit dispute: treating findings 1-3 as implementable before finding 5 is resolved contradicts the signed step-1 stop condition. The approved no-refresh-field credential leaf failed the installed codex exec compatibility gate. Advisor/operator must explicitly choose the ID-token-shaped/empty-refresh auth.json representation with security/compatibility requirements, or name another supported codex exec interface. Requeue and findings relay contain no such decision. Finding 4 remains host-only: retitle PR #3560 to [AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593), or close unmerged; prior feat/completion commits e58b7e8cafc and 14ef038e232 do not establish completion. Preserve merge hold and publication veto. Escalate finding 5 and stop the docs-only rework loop until the interface choice is recorded on STORY-2593. No source edits, credential access, new containment claims, commit/push/PR operations or queue completion in this seat.. No triage reason was given.'
+  created_at: 2026-11-07T04:56:40.038184157Z
+  modified_at: 2026-11-07T04:56:40.038184157Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -590,6 +597,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b45d-ab66-7bc2-8913-569e61dc266a
+  author: joe
+  timestamp: 2026-11-07T04:56:40.038162012Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -599,9 +615,3 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
-attention_reason:
-  category: design-fork
-  detail: 'Round 8 at 086a27225e26: findings 1-3 are accepted and remain unmet: refuse_chatgpt is defined at contained.rs:624 and called at :851; no real ChatGPT C0-C4 run under --boundary aida, credential-visibility sentinels, or policy/binary/receipt hashes exist; BUG-2447 and BUG-2448 are Approved and blocked. Explicit dispute: treating findings 1-3 as implementable before finding 5 is resolved contradicts the signed step-1 stop condition. The approved no-refresh-field credential leaf failed the installed codex exec compatibility gate. Advisor/operator must explicitly choose the ID-token-shaped/empty-refresh auth.json representation with security/compatibility requirements, or name another supported codex exec interface. Requeue and findings relay contain no such decision. Finding 4 remains host-only: retitle PR #3560 to [AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593), or close unmerged; prior feat/completion commits e58b7e8cafc and 14ef038e232 do not establish completion. Preserve merge hold and publication veto. Escalate finding 5 and stop the docs-only rework loop until the interface choice is recorded on STORY-2593. No source edits, credential access, new containment claims, commit/push/PR operations or queue completion in this seat.'
-  lean: Keep the refusal and hold. Obtain a recorded advisor/operator interface decision before resuming implementer steps 1-3; advisor/deputy-3 owns live conformance steps 4-5.
-  raised_by: implementer
-  raised_at: 2026-11-07T03:39:06.455165814Z
