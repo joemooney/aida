@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-933
 agreed_id: TASK-3365
 title: 'STORY-2537 S3: ProcIdentity for review-watch reservations and dispatchers'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:37.400718782Z
-modified_at: 2026-11-07T17:36:37.191444149Z
+modified_at: 2026-11-07T17:41:20.536896230Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -40,6 +40,12 @@ comments:
   modified_at: 2026-11-07T17:32:56.742939412Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b719-c018-7300-97de-5e50b3f2840a
+  author: joe
+  content: 'Round 2 implementation: MissingIdentity capacity now uses the existing reboot/foreign-TTL backstop (no new expiry clock). Retained queue-work/reviewer Child handles use shared ProcIdentity capture that permits unreaped exited children, without granting holder admission. Restored fast-exit reviewer coverage, added deterministic zombie-worker/core tests and subreaper adoption/no-signal coverage. Caller capture intentionally fails closed on incomplete procfs, now with host-retry diagnostic and documented policy. Changes remain uncommitted for native-seat host publication; targeted validation is running locally because this seat has no lane job runner.'
+  created_at: 2026-11-07T17:41:20.536896230Z
+  modified_at: 2026-11-07T17:41:20.536896230Z
+  session_id: 01a1b715615a
 history:
 - id: 01a1b59d-50c9-7572-acd5-ba4354eb1e1d
   author: joe
@@ -69,6 +75,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b719-9d9b-7e70-a8d4-1ad92f4a79f7
+  author: aida-orchestrator
+  timestamp: 2026-11-07T17:41:11.707486943Z
+  session_id: 01a1b7188d89
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -82,7 +97,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Migration to ProcIdentity is mostly right (ratchet 5->3 real, pidfd pin-then-verdict safe, wire format unchanged), but two capacity regressions break the sketch's 'preserve capacity and spawning ambiguity / no expiry change without a clock-safe backstop plan'. Also an existing fast-exit test was weakened and the subreaper case is untested. CI was still pending at review time.
+  detail: 'Head 1ec6679 adds only a merge of main (3301d13, docs-only TASK-3387) over the already-reviewed 83ecdb2; the TASK-3365 diff is byte-identical, so all five round-1 findings stand unaddressed. AC status: migrate review-watch Identity to ProcIdentity = verified (review_watch.rs:165-214, signal.rs:262-275); remove legacy pid-only checks + shrink ratchet = verified (baseline 5->3); pid-reuse case = verified (task_3365_watch_shared_identity_reuse_and_missing_evidence); namespace case = verified indirectly (bug_2425_foreign_* via NamespaceMismatch); subreaper case = unverified (no test); preserve capacity/spawning ambiguity + no expiry change without clock-safe backstop (sketch slice 3) = FAILED (findings 1-2). CI: lib/cli jobs still pending at review; merge-hold-gate red is the supervised hold, not a code defect.'
   recovery_hint: address the review findings, move TASK-3365 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-07T17:19:44.175041111Z
+  shelved_at: 2026-11-07T17:41:11.707462295Z
