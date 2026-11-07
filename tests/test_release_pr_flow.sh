@@ -303,25 +303,21 @@ grep -q "would refuse to start" <<<"$out" || fail "dry run did not warn about th
 grep -qF "gh pr create" <<<"$out" || fail "dry run under a lease printed no plan: $out"
 pass "--dry-run warns and still prints the plan"
 
-info "Test 4b: a dead or expired holder does not block"
+# trace:TASK-3364 | ai:codex
+info "Test 4b: incomplete identity never authorizes shell reclamation"
 sleep 0 & dead_pid=$!; wait "$dead_pid"
-write_lease "$dead_pid" "$(date +%s)"
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "dead-pid lease blocked the release"
-write_lease "$$" "$(( $(date +%s) - 4000 ))"
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired lease blocked the release"
-pass "stale leases (dead pid, past TTL) are not treated as an in-flight ship"
-
-info "Test 4b1: a dead pid from another PID namespace is TTL-only (BUG-2417)"
-for ns in 1 ""; do
-    write_lease "$dead_pid" "$(date +%s)" "$ns"
-    if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
-        fail "a fresh lease with pid_ns='$ns' was judged dead by pid"
-    fi
-    grep -q "merge-lease" <<<"$out" || fail "pid_ns='$ns': refusal does not name the merge-lease: $out"
+for pid in "$dead_pid" "$$"; do
+    for ns in 1 "" "$(readlink /proc/self/ns/pid | tr -cd '0-9')"; do
+        write_lease "$pid" "$(( $(date +%s) - 4000 ))" "$ns"
+        if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+            fail "legacy dead/expired/foreign holder was reclaimed by shell"
+        fi
+        grep -q "merge-lease" <<<"$out" || fail "missing lease refusal: $out"
+        out=$(run_release "$F4" patch --dry-run 2>&1) || fail "preview failed: $out"
+        grep -q "would refuse to start" <<<"$out" || fail "preview hid retained unknown holder"
+    done
 done
-write_lease "$dead_pid" "$(( $(date +%s) - 4000 ))" 1
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired foreign-namespace lease blocked the release"
-pass "a foreign or unrecorded namespace holder blocks until its TTL"
+pass "shell retains old/foreign/reused PID records without a private probe"
 
 info "Test 4b2: an empty, just-created lease blocks; an old empty one does not"
 # trace:TASK-1955 | ai:claude (TASK-1-421)
@@ -442,7 +438,7 @@ mkdir -p "$F9/work/.aida/merge-locks"
 run_release "$F9" patch --yes --skip-docs-check >/dev/null 2>&1 || fail "release under the lease watcher failed"
 touch "$F9/state/stop-watch"; wait "$watcher"
 [ ! -e "$F9/state/partial-lease" ] || fail "a reader saw an empty or partial lease"
-[ -z "$(ls -A "$F9/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls -A "$F9/work/.aida/merge-locks/")"
+[ "$(ls -A "$F9/work/.aida/merge-locks/" 2>/dev/null)" = ".guard-main" ] || fail "lease temp files left behind: $(ls -A "$F9/work/.aida/merge-locks/")"
 pass "a concurrent reader never sees a partial lease; no temp files remain"
 
 # ─── 4f. the base moves while the confirmation prompt waits (TASK-1688) ───

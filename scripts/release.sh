@@ -142,7 +142,9 @@ common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
 main_root=$(cd "$common_dir/.." && pwd)
 lease_file="$main_root/.aida/merge-locks/${release_base//\//_}"
 lease_host=${AIDA_HOST_OVERRIDE:-$(uname -n)}
-lease_ttl=${AIDA_RELEASE_LEASE_TTL_SECS:-3600}
+lease_ttl=9223372036854775807 # compatibility: old readers must not expire a live writer
+lease_record=
+lease_guard_fd=
 lease_held=0
 lease_tmp=
 
@@ -159,7 +161,7 @@ lease_pid_start() {
 
 # This process's PID namespace inode and boot id, as merge_lock.rs records
 # them (BUG-2417); empty when unreadable. A holder whose pid_ns or boot is
-# missing or differs from ours is TTL-only: its pid is never probed here.
+# missing remains unknown: these fields never admit the shell as a holder.
 # trace:BUG-2417 | ai:claude
 lease_pid_ns() {
     local link
@@ -175,53 +177,32 @@ lease_field() {
     sed -n "s/^$1=//p" "$lease_file" 2>/dev/null | head -n1
 }
 
-# Exit 0 when the lease file names a live holder, mirroring merge_lock.rs's
-# stale_reason: a holder whose pid is probeable here (same host, boot and PID
-# namespace) and dead (or recycled, or a zombie) is stale, and so is any
-# holder aged past its TTL.
+# Shell cannot supply cooperative holder admission or call the shared judge.
+# Retain every complete record, including legacy/unknown/refused holders; never
+# infer process death or expiry with a private PID probe. An abandoned script
+# record needs operator recovery. Rust consumers use HolderRecord::observe.
+# trace:TASK-3364 | ai:codex
 lease_is_live() {
-    [ -f "$lease_file" ] || return 1
-    local host pid start ttl acquired age live_start state mtime pidns boot local_ns local_boot
-    # An empty or cut-short record is a writer mid-publish (merge_lock.rs
-    # before TASK-1-421 created the file, then wrote it): live for a 30s grace
-    # after its mtime, not acquired_at=0 and TTL-stale.
-    # trace:TASK-1955 | ai:claude (TASK-1-421)
-    if ! grep -q '^ttl_secs=' "$lease_file" 2>/dev/null; then
-        mtime=$(stat -c %Y "$lease_file" 2>/dev/null || stat -f %m "$lease_file" 2>/dev/null) || return 1  # portable-fallback: BSD stat reads the mtime with -f %m
-        # A future mtime is as far off as a past one, so it cannot read live forever.
+    [ -e "$lease_file" ] || [ -L "$lease_file" ] || return 1
+    # Preserve the pre-existing partial-publication grace. Unreadable records hold.
+    local mtime age body
+    body=$(cat "$lease_file" 2>/dev/null) || return 0
+    if ! grep -q '^ttl_secs=' <<< "$body"; then
+        mtime=$(stat -c %Y "$lease_file" 2>/dev/null) || return 0
         age=$(( $(date +%s) - mtime ))
         [ "${age#-}" -gt 30 ] && return 1
-        return 0
-    fi
-    host=$(lease_field host)
-    pid=$(lease_field pid)
-    start=$(lease_field pid_start)
-    pidns=$(lease_field pid_ns)
-    boot=$(lease_field boot)
-    ttl=$(lease_field ttl_secs)
-    acquired=$(lease_field acquired_at)
-    case "$ttl" in ''|*[!0-9]*|0) ttl=600 ;; esac
-    case "$acquired" in ''|*[!0-9]*) acquired=0 ;; esac
-    age=$(( $(date +%s) - acquired ))
-    [ "$age" -gt "$ttl" ] && return 1
-    local_ns=$(lease_pid_ns)
-    local_boot=$(lease_boot)
-    if [ -n "$host" ] && [ "$host" = "$lease_host" ] \
-        && [ -n "$pidns" ] && [ "$pidns" = "$local_ns" ] \
-        && [ -n "$boot" ] && [ "$boot" = "$local_boot" ]; then
-        case "$pid" in ''|*[!0-9]*|0) return 1 ;; esac
-        kill -0 "$pid" 2>/dev/null || [ -d "/proc/$pid" ] || return 1
-        state=$(sed -n 's/.*) \([A-Z]\).*/\1/p' "/proc/$pid/stat" 2>/dev/null)
-        [ "$state" = "Z" ] && return 1
-        case "$start" in
-            linux-starttime:*)
-                live_start=$(lease_pid_start "$pid")
-                [ -n "$live_start" ] && [ "$live_start" != "$start" ] && return 1
-                ;;
-        esac
     fi
     return 0
 }
+
+# The permanent sidecar coordinates compare/delete with upgraded Rust writers.
+lease_guard_lock() {
+    if [ -z "$lease_guard_fd" ]; then
+        exec {lease_guard_fd}>"$(dirname "$lease_file")/.guard-$(basename "$lease_file")"
+    fi
+    flock -x -w "${1:-2}" "$lease_guard_fd"
+}
+lease_guard_unlock() { flock -u "$lease_guard_fd"; }
 
 lease_describe() {
     local pr note
@@ -230,11 +211,32 @@ lease_describe() {
     printf '%s (pid %s on %s%s)' "${note:-a merger}" "$(lease_field pid)" "$(lease_field host)" "${pr:+, PR #$pr}"
 }
 
+# Local monotonic, suspend-inclusive time; never persist or compare across domains.
+# trace:TASK-3364 | ai:codex
+lease_clock() {
+    local uptime unused
+    read -r uptime unused < /proc/uptime || return 1
+    uptime=${uptime%%.*}
+    case "$uptime" in ''|*[!0-9]*) return 1 ;; esac
+    printf '%s' "$uptime"
+}
+lease_wait_expired() {
+    local now
+    now=$(lease_clock) || return 0 # unavailable timing refuses a longer wait
+    [ "$now" -ge "$1" ]
+}
+
 lease_acquire() {
-    local wait_secs=${1:-0} deadline
-    deadline=$(( $(date +%s) + wait_secs ))
+    local wait_secs=${1:-0} deadline clock_now
+    clock_now=$(lease_clock) || return 1
+    deadline=$(( clock_now + wait_secs ))
     mkdir -p "$(dirname "$lease_file")"
     while :; do
+        lease_guard_lock 0 || {
+            lease_wait_expired "$deadline" && return 1
+            sleep 1
+            continue
+        }
         # Write the full record to a temp file in the same directory, then
         # hard-link it into place: link(2) fails if the lease exists, so the
         # claim is atomic and a reader never sees a partial or empty lease.
@@ -243,22 +245,30 @@ lease_acquire() {
         # trace:TASK-1955 | ai:claude (TASK-1-422)
         lease_tmp=$(mktemp "$(dirname "$lease_file")/.$(basename "$lease_file").XXXXXX")
         local tmp=$lease_tmp
-        printf 'host=%s\npid=%s\npid_start=%s\npid_ns=%s\nboot=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
-            "$lease_host" "$$" "$(lease_pid_start "$$")" "$(lease_pid_ns)" "$(lease_boot)" "${2:-}" \
+        printf 'generation=%s\nhost=%s\npid=%s\npid_start=%s\npid_ns=%s\nboot=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+            "$(cat /proc/sys/kernel/random/uuid)" "$lease_host" "$$" "$(lease_pid_start "$$")" "proc-identity-v1:$(lease_pid_ns)" "$(lease_boot)" "${2:-}" \
             "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
         if ln "$tmp" "$lease_file" 2>/dev/null; then
             rm -f "$tmp"
             lease_tmp=
+            lease_record=$(cat "$lease_file")
             lease_held=1
+            lease_guard_unlock
             return 0
         fi
         rm -f "$tmp"
         lease_tmp=
+        if [ ! -e "$lease_file" ] && [ ! -L "$lease_file" ]; then
+            lease_guard_unlock
+            return 1 # link failed without a contender; do not retry forever
+        fi
         if ! lease_is_live; then
-            rm -f "$lease_file"
+            rm -f "$lease_file" || { lease_guard_unlock; return 1; }
+            lease_guard_unlock
             continue
         fi
-        [ "$(date +%s)" -ge "$deadline" ] && return 1
+        lease_guard_unlock
+        lease_wait_expired "$deadline" && return 1
         sleep 2
     done
 }
@@ -266,8 +276,12 @@ lease_acquire() {
 lease_release() {
     [ -n "$lease_tmp" ] && rm -f "$lease_tmp"
     lease_tmp=
-    if [ "$lease_held" = "1" ] && [ "$(lease_field pid)" = "$$" ]; then
-        rm -f "$lease_file"
+    if [ "$lease_held" = "1" ]; then
+        lease_guard_lock || return 1
+        if [ "$(cat "$lease_file" 2>/dev/null)" = "$lease_record" ]; then
+            rm -f "$lease_file" || { lease_guard_unlock; return 1; }
+        fi
+        lease_guard_unlock
     fi
     lease_held=0
 }

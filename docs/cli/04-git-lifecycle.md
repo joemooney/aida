@@ -447,6 +447,38 @@ failures: the train PR is closed and its members are ejected with that reason.
 
 ---
 
+#### Merge serialization and recovery
+
+<!-- trace:TASK-3364 | ai:codex -->
+
+The branch merge lease at `.aida/merge-locks/<branch>` records a cooperative
+`ProcIdentity` holder generation. Only a shared-judge **Dead** result permits
+automatic recovery of a complete record. Live, foreign, unreadable, legacy and
+refused holders retain the lease; acquisition refusals include their observation
+diagnostic. Wall-clock age and the compatibility `ttl_secs` field never prove
+process death. Local acquisition waits use monotonic deadlines. Incomplete
+publications retain their existing 30-second mtime grace.
+
+Writers preserve the line-oriented format and add a JSON `process` field. The
+`pid_ns=proc-identity-v1:<inode>` spelling makes old Rust and shell readers treat
+new records as unprobeable, and `ttl_secs=9223372036854775807` disables their
+expiry backstop. New readers retain old records without recapturing the current
+occupant of an old PID. Upgrade all mergers and `scripts/release.sh` together;
+retire old processes before rollback, since old writers do not share the new
+mutation guard. Read-only inspection never upgrades a legacy record.
+
+`scripts/release.sh` has no cooperative Rust holder handoff: its records remain
+unadmitted, and its reader conservatively retains every complete lease rather
+than implementing a second process judge. Normal script exit releases only its
+exact publication. An abandoned script or legacy record requires operator
+recovery. Stop all mergers for that branch, inspect `aida merge-lock` and the
+record on its owning node, establish that no merge is in progress, then remove
+only that branch's inspected lease file. Preserve `.guard-<branch>`: this
+permanent sidecar serializes publication and generation-fenced deletion in
+upgraded Rust and script writers. Never delete a lease merely because its
+wall-clock age is large, or because its numeric PID is absent in another view.
+`AIDA_RELEASE_LEASE_TTL_SECS` no longer changes recovery policy.
+
 ### `aida review`
 
 **One line** — drive human review of a spec against its acceptance criteria.
