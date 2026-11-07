@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-07T00:00:02.053250121Z
+modified_at: 2026-11-07T00:00:04.652662827Z
 req_type: Task
 tags:
 - architecture
@@ -472,6 +472,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 9 (post-merge refresh): S1a design, mutants, F2-F4 and CI wiring remain met, but merge 01383fd pulled #3506 (defer resurface) and the store-writer ratchet is stale at head; CI Gates step 73 ''Store writer inventory ratchet'' FAILED (job 128215644218), step 74 mutation fixtures SKIPPED.. No triage reason was given.'
   created_at: 2026-11-07T00:00:02.053248443Z
   modified_at: 2026-11-07T00:00:02.053248443Z
+  session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b34e-219a-7fb2-b85f-a18062c94507
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 01383fd77a9a
+    Recorded: 2026-11-06T23:58:48.548122614+00:00
+    Findings:
+    1. BLOCKER (inventory stale at head 01383fd): merge 01383fd pulled #3506 (584e94a, STORY-2402), adding aida-cli-lib/src/defer_resurface.rs whose fn sweep holds backend.update_spec_atomically (:138) and backend.queue_add (:164); fn run (:92) is a wrapper over sweep, and defer_cmd.rs run_defer (:275, call at :294 crate::defer_resurface::run) is a new wrapper caller. scripts/store-writers.toml has no defer_resurface.rs rows at all (only defer_cmd.rs rows :351-355), so check() reports additions and CI (gates) job 128215644218 step 73 'Store writer inventory ratchet' FAILED at this exact head (step 74 skipped). The same merge also changed defer_cmd.rs (new clear_deferral, DeferCommand::Resurface), condition_cmd.rs, queue_cmd.rs, maintenance_schedule.rs, agent_launch.rs, agent_registry.rs, agent_handle.rs, gate/seat_authority.rs, deputy_shell_cmd.rs, agent_codex_background.rs, which may add more drift. Fix: python3 scripts/check-store-writers.py --regenerate on the merged tree, review every addition/stale row (new rows blocked for TASK-3223), and confirm the cli:defer operation mapping (store-writers.toml:3341) includes the resurface sites or a blocker row for 'defer resurface'; commit and push. No other changes requested.
+    2. UNVERIFIED (CI at 01383fd): cli-0/1, lib-0/1, rest and contracts are green, but Gates failed at step 73 so 'Store writer inventory mutation fixtures' (step 74) never ran at this head. Required: Gates shard green at the new exact head including both store-writer steps. merge-hold-gate red is the supervised merge hold (human-gated clear / auto-release), not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T00:00:04.506092784Z
+  modified_at: 2026-11-07T00:00:04.506092784Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
