@@ -154,10 +154,36 @@ impl PrivatePty {
                 }
             }
             if let Some(status) = child.try_wait()? {
+                // Exit can race the bounded relay reads above. Keep forwarding
+                // queued bytes, including terminal reset sequences, until the
+                // final slave closes; WouldBlock is not end of output.
+                drain_exited_master(&mut self.master, &mut output)?;
                 return Ok(status);
             }
         }
     }
+}
+
+// trace:TASK-3219 | ai:codex
+fn drain_exited_master(master: &mut File, output: &mut File) -> Result<()> {
+    let flags = unsafe { libc::fcntl(master.as_raw_fd(), libc::F_GETFL) };
+    anyhow::ensure!(flags >= 0, "PTY flags unavailable");
+    anyhow::ensure!(
+        unsafe { libc::fcntl(master.as_raw_fd(), libc::F_SETFL, flags & !libc::O_NONBLOCK) } == 0,
+        "PTY final drain mode failed"
+    );
+    let mut buf = [0; 8192];
+    loop {
+        match master.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => output.write_all(&buf[..n])?,
+            Err(e) if e.raw_os_error() == Some(libc::EIO) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    output.flush()?;
+    Ok(())
 }
 
 struct RawTerminal {
@@ -324,6 +350,51 @@ mod tests {
             )
         );
     }
+    // An already-reaped child can still have unread terminal reset bytes.
+    // Also exercise more than one relay iteration's output budget.
+    // trace:TASK-3219 | ai:codex
+    #[test]
+    fn task_3219_pty_drains_exit_sequences_and_large_output() {
+        let reset = b"\x1b[?1049l\x1b[?25h\x1b[?2004l";
+        for exited in [true, false] {
+            let host = PrivatePty::open().unwrap();
+            let (_, slave) = host.test_endpoints();
+            let mut lane = PrivatePty::open().unwrap();
+            let [input, output, error] = lane.stdio().unwrap();
+            let count = if exited { 1024 } else { 256 * 1024 };
+            let reset_hex = reset.iter().map(|b| format!("{b:02x}")).collect::<String>();
+            let script = format!(
+                "import sys; sys.stdout.buffer.write(b'x'*{count}+bytes.fromhex('{reset_hex}')); sys.stdout.buffer.flush()"
+            );
+            let mut child = std::process::Command::new("/usr/bin/python3")
+                .args(["-c", &script])
+                .stdin(input)
+                .stdout(output)
+                .stderr(error)
+                .spawn()
+                .unwrap();
+            let mut captured = tempfile::tempfile().unwrap();
+            if exited {
+                assert!(child.wait().unwrap().success());
+                drop(lane.slave);
+                drain_exited_master(&mut lane.master, &mut captured).unwrap();
+            } else {
+                assert!(lane
+                    .wait(&mut child, slave, captured.try_clone().unwrap())
+                    .unwrap()
+                    .success());
+            }
+            use std::io::{Seek, SeekFrom};
+            captured.seek(SeekFrom::Start(0)).unwrap();
+            let mut actual = Vec::new();
+            captured.read_to_end(&mut actual).unwrap();
+            let mut expected = vec![b'x'; count];
+            expected.extend_from_slice(reset);
+            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual, expected);
+        }
+    }
+
     #[test]
     fn task_3219_pty_resize_and_cloexec() {
         let host = PrivatePty::open().unwrap();
@@ -400,4 +471,34 @@ impl Drop for WorkerSignals {
             let _ = thread.join();
         }
     }
+}
+
+// Observe the actual receipt-bound grant while the exec barrier is held, and
+// inject a refusal there without changing production launch decisions.
+// trace:TASK-3219 | ai:codex
+#[cfg(test)]
+type BeforeRelease = Box<dyn FnMut(&str, u32) -> Result<()>>;
+#[cfg(test)]
+thread_local! { static BEFORE_RELEASE: std::cell::RefCell<Option<BeforeRelease>> = const { std::cell::RefCell::new(None) }; }
+#[cfg(test)]
+pub(crate) fn before_release(grant: &str, pid: u32) -> Result<()> {
+    BEFORE_RELEASE.with(|hook| match hook.borrow_mut().as_mut() {
+        Some(hook) => hook(grant, pid),
+        None => Ok(()),
+    })
+}
+#[cfg(test)]
+pub(crate) struct TestBeforeRelease;
+#[cfg(test)]
+impl Drop for TestBeforeRelease {
+    fn drop(&mut self) {
+        BEFORE_RELEASE.with(|hook| {
+            hook.borrow_mut().take();
+        });
+    }
+}
+#[cfg(test)]
+pub(crate) fn test_before_release(hook: BeforeRelease) -> TestBeforeRelease {
+    BEFORE_RELEASE.with(|slot| assert!(slot.borrow_mut().replace(hook).is_none()));
+    TestBeforeRelease
 }

@@ -7493,6 +7493,8 @@ pub(crate) fn run_agent_generation(
             .and_then(|v| v.to_str())
             .context("interactive wrapper requires explicit child grant")?;
         crate::gate::seat_authority::bind_contained_launch_worker(grant, run.receipt())?;
+        #[cfg(test)]
+        crate::launch::contained::pty::before_release(grant, run.receipt().worker_pid())?;
     } else {
         grant_rollback.disarm();
         on_spawn.take().expect("spawn callback")();

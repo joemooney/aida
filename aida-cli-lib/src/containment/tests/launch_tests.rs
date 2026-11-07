@@ -2730,6 +2730,19 @@ fn task_3219_coordinator_composition_scope_and_native_argv() {
 #[cfg(target_os = "linux")]
 #[test]
 fn task_3219_live_claude_interactive_private_pty() {
+    claude_interactive_private_pty(false);
+}
+
+// The real agent-new issuer, receipt-bound worker and pre-release rollback.
+// trace:TASK-3219 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3219_live_claude_interactive_grant() {
+    claude_interactive_private_pty(true);
+}
+
+#[cfg(target_os = "linux")]
+fn claude_interactive_private_pty(granted: bool) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -2781,7 +2794,7 @@ assert os.tcgetpgrp(0)==os.getpgrp()
 assert os.environ['AIDA_HEADLESS']=='0'
 assert os.environ['AIDA_HARNESS_VERSION']=='synthetic-3219-pty'
 assert os.environ['AIDA_SESSION_ROLE']=='implementer'
-assert os.environ['AIDA_SESSION_GRANT']==''
+assert bool(os.environ['AIDA_SESSION_GRANT'])==Path('expect-grant').exists()
 assert os.environ['AIDA_USER']=='pty-3219'
 assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
 assert 'AIDA_AGENT_REGISTRY_TOKEN' not in os.environ
@@ -2794,8 +2807,8 @@ try: Path('.git/config').write_text('escape');raise AssertionError('git writable
 except OSError as e: assert e.errno in (errno.EROFS,errno.EACCES,errno.EPERM)
 Path('model-ran').write_text('yes')
 print('PTY-READY',flush=True)
-signal.signal(signal.SIGINT,lambda *_: (print('PTY-INT',flush=True),sys.exit(7)))
-signal.signal(signal.SIGTERM,lambda *_: (print('PTY-TERM',flush=True),sys.exit(8)))
+signal.signal(signal.SIGINT,lambda *_: (os.write(1,b'PTY-INT\n'),os._exit(7)))
+signal.signal(signal.SIGTERM,lambda *_: (os.write(1,b'PTY-TERM\n'),os._exit(8)))
 assert input()=='hello private terminal'
 print('PTY-INPUT',flush=True)
 end=time.monotonic()+5
@@ -2817,7 +2830,7 @@ while True: signal.pause()
     }
     let _aida = crate::kernel::test_aida_exe::set(aida.clone());
     let path = format!("{}:/usr/bin:/bin", bin.display());
-    let _env = crate::test_env::AmbientGuard::hermetic_and(
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
         root.path(),
         None,
         &[
@@ -2832,7 +2845,7 @@ while True: signal.pause()
         let _scope = crate::session::ClaudeWrapperComposition::enter();
         crate::session::claude_contained_flags_for(None, root.path()).unwrap()
     };
-    let config = AgentLaunchConfig {
+    let mut config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
         default_args: flags,
@@ -2840,7 +2853,7 @@ while True: signal.pause()
         contained: true,
         delegate_seats: vec!["reviewer".into()],
     };
-    let plan = AgentLaunchPlan {
+    let mut plan = AgentLaunchPlan {
         project_root: root.path().into(),
         launch_cwd: root.path().into(),
         role: None,
@@ -2851,7 +2864,56 @@ while True: signal.pause()
         native_session_id: None,
         resumed_from: None,
     };
+    use crate::gate::seat_authority as authority;
+    let parent = if granted {
+        std::fs::write(root.path().join("expect-grant"), "yes").unwrap();
+        env.set_key("AIDA_USER", "pty-parent");
+        let id = authority::test_support::mint_grant_for_with_ttl(
+            root.path(),
+            "pty-parent",
+            "advisor",
+            &["implementer"],
+            Some(chrono::Duration::hours(1)),
+        );
+        env.set_key(authority::GRANT_ENV, &id);
+        plan.role = Some("implementer".into());
+        config.delegate_seats.clear();
+        Some(id)
+    } else {
+        None
+    };
+    let observed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let _binding = if let Some(parent) = parent.clone() {
+        let observed = observed.clone();
+        let root = root.path().to_path_buf();
+        Some(crate::launch::contained::pty::test_before_release(
+            Box::new(move |id, pid| {
+                assert!(
+                    !root.join("model-ran").exists(),
+                    "vendor ran before release"
+                );
+                let child = authority::read_grant(id).unwrap();
+                assert_eq!(child.parent_grant_id.as_deref(), Some(parent.as_str()));
+                assert_eq!(child.subject, "pty-3219");
+                assert_eq!(child.seat, "implementer");
+                assert!(child.revoked_at.is_none());
+                assert!(
+                    child
+                        .binding
+                        .iter()
+                        .filter_map(|b| authority::binding_process(b))
+                        .any(|(bound, _, _)| bound == pid),
+                    "grant not bound to attested worker"
+                );
+                observed.borrow_mut().push(id.to_string());
+                Ok(())
+            }),
+        ))
+    } else {
+        None
+    };
     for external_term in [false, true] {
+        let _ = std::fs::remove_file(root.path().join("model-ran"));
         let host = PrivatePty::open().unwrap();
         let (mut master, slave) = host.test_endpoints();
         let mut original = unsafe { std::mem::zeroed::<libc::termios>() };
@@ -2980,6 +3042,56 @@ while True: signal.pause()
                 original.c_cc
             )
         );
+    }
+    drop(_binding);
+    if granted {
+        assert_eq!(observed.borrow().len(), 2, "both live workers were bound");
+        for id in observed.borrow().iter() {
+            authority::revoke_by_id(id).unwrap();
+        }
+        std::fs::remove_file(root.path().join("model-ran")).unwrap();
+        // Refuse after binding but before release, then inspect the actual
+        // child grant after IssuedLaunchGrant has unwound.
+        let refused_observed = observed.clone();
+        let _refuse =
+            crate::launch::contained::pty::test_before_release(Box::new(move |id, pid| {
+                let child = authority::read_grant(id).unwrap();
+                assert!(child
+                    .binding
+                    .iter()
+                    .filter_map(|b| authority::binding_process(b))
+                    .any(|(bound, _, _)| bound == pid));
+                refused_observed.borrow_mut().push(id.to_string());
+                anyhow::bail!("injected pre-release refusal")
+            }));
+        let host = PrivatePty::open().unwrap();
+        let (_, slave) = host.test_endpoints();
+        let _stdio = test_stdio(slave.try_clone().unwrap(), slave.try_clone().unwrap());
+        let error = run_agent_generation(
+            &program,
+            &config,
+            &plan,
+            None,
+            &[],
+            None,
+            false,
+            false,
+            None,
+            None,
+            || panic!("released refused worker"),
+        )
+        .err()
+        .expect("pre-release refusal must fail generation");
+        assert!(format!("{error:#}").contains("injected pre-release refusal"));
+        assert_eq!(observed.borrow().len(), 3);
+        let id = observed.borrow().last().unwrap().clone();
+        assert!(authority::read_grant(&id).unwrap().revoked_at.is_some());
+        assert!(authority::read_grant(parent.as_ref().unwrap())
+            .unwrap()
+            .revoked_at
+            .is_none());
+        assert!(!root.path().join("model-ran").exists());
+        return;
     }
     let host = PrivatePty::open().unwrap();
     let (_, slave) = host.test_endpoints();
