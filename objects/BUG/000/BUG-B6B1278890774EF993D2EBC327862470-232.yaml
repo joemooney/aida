@@ -16,12 +16,12 @@ description: |
   1. Find where slow `show` calls wait: lock acquisition, cache refresh, or git/store I/O. Instrument the phases if the usage log cannot already attribute them.
   2. A read-only `show` must not block behind a writer or a cache rebuild for longer than the ceiling. Serve the last consistent snapshot, or time out to it.
   3. Over the 24h window after the fix lands, the performance-guard passes at the unchanged budget (2000 ms, 10%, 5000 ms ceiling). Do not loosen the budget (ADR-53).
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-07T23:47:30.493855952Z
+modified_at: 2026-11-07T23:47:35.539999391Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -127,6 +127,15 @@ history:
   timestamp: 2026-11-07T09:24:28.681832555Z
   session_id: 01a1b5527fbf
   changes: []
+- id: 01a1b869-10a2-7a93-87e1-bb63807e7db1
+  author: joe
+  timestamp: 2026-11-07T23:47:35.714386680Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
   branch: main
