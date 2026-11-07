@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-06T23:59:23.033653662Z
+modified_at: 2026-11-07T00:18:41.436430620Z
 req_type: Story
 relationships:
 - rel_type:
@@ -379,6 +379,16 @@ comments:
   created_at: 2026-11-06T21:59:55.304413361Z
   modified_at: 2026-11-06T21:59:55.304413361Z
   session_id: 01a1b2d10e25
+- id: 01a1b35f-2c9c-70c2-8322-680d2820d933
+  author: joe
+  content: |
+    Slice-4 integration follow-up complete. Starting checkout already included the resumable train journal, BUG-2463 (#3519), and both SIGKILL recovery fixtures. Added missing per-call intent checkpoints for LiveChecks labels and PR title/body reads. PATH-isolated production member-read regression proves unavailable journal refuses both reads without spawning gh, retaining pinned Gate recovery evidence. No slice-5 workflow-digest work.
+    Changed files: aida-cli-lib/src/pr_train.rs; aida-cli-lib/src/tests/story_1690_train_tests.rs; docs/plans/2026-11-06-story-2401-confirmed-negatives.md.
+    Validation: AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train: 171 passed, zero failures (includes both SIGKILL seams), runtime 76.84s; AIDA_CARGO_NO_SLOT=1 make check-ci-fast: all 38 gates passed; cargo fmt --all -- --check and git diff --check passed. Logs: /tmp/story2401-nested-member-train.log and /tmp/story2401-nested-member-fast.log.
+    Native publication declaration accepted: [AI:codex] fix(train): checkpoint nested member gate reads (Refs STORY-2401). Edits left uncommitted for host publication. No commit, push, PR creation, merge, review record, queue done or hold clearance. No implementation/validation blocker. Existing punt/hold signals remain publication vetoes; slice 5 remains outstanding.
+  created_at: 2026-11-07T00:18:41.436430620Z
+  modified_at: 2026-11-07T00:18:41.436430620Z
+  session_id: 01a1b34d7795
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
