@@ -104,7 +104,7 @@ pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerd
             },
         },
         Ok(None) => OwnerVerdict::Unknown {
-            why: "ownership record missing; migrate or rebind the session".into(),
+            why: "ownership record missing; on the host run `aida own migrate --dry-run`, then `aida own migrate --execute`; inspect `aida session leases --all` for unresolved holder bindings".into(),
         },
         Err(error) => OwnerVerdict::Unknown {
             why: format!("ownership evidence unreadable: {error:#}"),
@@ -112,7 +112,7 @@ pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerd
     }
 }
 
-/// Record a positive death proof before guarded retirement. CAS refuses a
+/// Record a reclaim attempt with positive death proof before guarded retirement. CAS refuses a
 /// replacement during preflight; the holder remains until session_end succeeds.
 /// This journal entry grants no permission to discard a tree or pending mail.
 // trace:STORY-2325 | ai:codex
@@ -128,13 +128,16 @@ pub(crate) fn journal_reclaim(root: &Path, lease: &crate::SessionLease) -> Resul
         .ok_or_else(|| anyhow::anyhow!("ownership store unavailable"))?;
     store.update(
         &record.key,
-        "reclaim",
+        "reclaim_attempt",
         Expect::Generation(record.generation),
         |current| {
             current.map(|current| {
                 (
                     current.clone(),
-                    Some(format!("session {} reclaim: {proof}", lease.id)),
+                    Some(format!(
+                        "session {} reclaim attempt (guarded session end still pending): {proof}",
+                        lease.id
+                    )),
                 )
             })
         },
@@ -162,4 +165,61 @@ pub(crate) fn require_rotation_owner(root: &Path, session: &str) -> Result<()> {
         OwnerVerdict::Alive { .. } => Ok(()),
         verdict => anyhow::bail!("rotation ownership is not alive: {verdict:?}"),
     }
+}
+
+/// Old probe-ref names carry only a PID. Join them to an exact recorded
+/// witness before judging; missing/ambiguous evidence keeps the fetch artifact.
+/// This never makes a process scan an ownership authority.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn probe_owner_retained(root: &Path, pid: u32) -> bool {
+    let Ok(Some(store)) = super::store::OwnershipStore::for_project(root) else {
+        return true;
+    };
+    let (records, errors) = store.list();
+    if !errors.is_empty() {
+        return true;
+    }
+    let mut matching = records.iter().filter(|record| {
+        record.holder.as_ref().is_some_and(|holder| {
+            holder
+                .witnesses
+                .iter()
+                .any(|w| matches!(&w.kind, super::WitnessKind::Process { id, .. } if id.pid == pid))
+        })
+    });
+    let Some(record) = matching.next() else {
+        return true;
+    };
+    matching.next().is_some() || !matches!(owner(record), OwnerVerdict::Dead { .. })
+}
+
+#[cfg(test)]
+pub(crate) fn seed_lease_heartbeat(
+    root: &Path,
+    lease: &crate::SessionLease,
+    key: WorkKey,
+    alive: bool,
+) {
+    let at = Utc::now() - chrono::Duration::days(if alive { 0 } else { 2 });
+    let mut holder = dual::holder_for_lease(lease, &dual::WriterFacts::here(), at);
+    holder.witnesses = vec![super::Witness {
+        admission: None,
+        kind: super::WitnessKind::Heartbeat { at, every_secs: 10 },
+        recorded_at: at,
+    }];
+    super::store::OwnershipStore::for_project(root)
+        .unwrap()
+        .unwrap()
+        .update(&key, "test", super::store::Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
 }

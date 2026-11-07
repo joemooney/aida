@@ -340,7 +340,7 @@ pub(crate) fn stamp_lease_role_checked(
             toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
         if is_live(&lease) {
             anyhow::bail!(
-                "the worktree {} is held by a live session (lease {lease_id}, role {}); \
+                "the worktree {} has retained ownership (live or unknown; lease {lease_id}, role {}); \
                  end that session before giving its lane a new role",
                 lease.worktree_path.display(),
                 lease.role.as_deref().unwrap_or("none")

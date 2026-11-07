@@ -547,7 +547,10 @@ pub(super) fn sweep_probe_refs(root: &Path) -> usize {
             .is_none()
             .then(|| loose_ref_mtime(root, name))
             .flatten();
-        if probe_ref_in_use(&probe, now, mtime, aida_core::liveness::pid_is_alive) {
+        // trace:STORY-2325 | ai:codex
+        if probe_ref_in_use(&probe, now, mtime, |pid| {
+            crate::ownership::reader::probe_owner_retained(root, pid)
+        }) {
             continue;
         }
         if git(root, &["update-ref", "-d", name]).is_ok() {

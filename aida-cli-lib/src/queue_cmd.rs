@@ -5739,6 +5739,7 @@ pub(crate) fn handle_queue_command(
             panes,
             strict,
         } => {
+            refuse_retired_steal(*steal)?;
             let user_id = get_user(user);
             // TASK-1120: opt-in pane hosting. Export the requested host so every
             // implementer this drain spawns (single / --batch / nextN) reads it
@@ -7918,6 +7919,7 @@ pub(crate) fn handle_rework_entry(
     id: Option<&str>,
     flags: &ReworkFlags<'_>,
 ) -> Result<()> {
+    refuse_retired_steal(flags.steal)?;
     if let Some(id) = id {
         // The ruling is recorded first so a chained `--work` launch reads it
         // into its pickup prompt. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
@@ -8224,6 +8226,7 @@ pub(crate) fn handle_queue_rework(
     no_pull: bool,
     user: Option<&str>,
 ) -> Result<()> {
+    refuse_retired_steal(steal)?;
     // `--resume` chains through to `aida queue work --resume` (TASK-112,
     // shipped). It implies `--work` — there is nothing to resume without
     // launching a session. trace:BUG-236 | ai:claude
@@ -11506,7 +11509,10 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
                 && crate::worktree::canonical_or_self(&lease.worktree_path)
                     == crate::worktree::canonical_or_self(&path)
                 && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-                && crate::leases::lease_owner_gone(lease) == Some(true) =>
+                && matches!(
+                    crate::ownership::reader::lease_owner(root, lease),
+                    crate::ownership::OwnerVerdict::Dead { .. }
+                ) =>
         {
             Some(lease)
         }
@@ -11610,8 +11616,10 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
     // trace:BUG-2469 | ai:codex
     if let Some(lease) = reclaim {
         anyhow::ensure!(
-            crate::leases::lease_owner_gone(lease) == Some(true)
-                && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
+            matches!(
+                crate::ownership::reader::lease_owner(root, lease),
+                crate::ownership::OwnerVerdict::Dead { .. }
+            ) && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
                 && working_tree_clean(&path) == Some(true),
             "review ownership or working tree changed before retirement"
         );
@@ -11624,6 +11632,11 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
             current.len() == 1 && current[0].id == lease.id,
             "review lease ownership became ambiguous"
         );
+    }
+    // trace:STORY-2325 | ai:codex
+    if let Some(lease) = reclaim {
+        crate::ownership::reader::journal_reclaim(root, lease)
+            .with_context(|| format!("ownership reclaim could not end lease {}", lease.id))?;
     }
     aida_core::worktree_holders::check_worktree_removal(&path)?;
     aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
@@ -12066,6 +12079,12 @@ pub(crate) fn scope_conflict_resume_hint(
     }
 }
 
+// trace:STORY-2325 | ai:codex
+fn refuse_retired_steal(steal: bool) -> Result<()> {
+    anyhow::ensure!(!steal, "`--steal` is retired: ownership decides reclaim automatically; live or unknown owners retain their lane. Ask the owner to use `aida session end <id>` for voluntary handoff");
+    Ok(())
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -12092,7 +12111,7 @@ pub(crate) fn handle_queue_work(
     stack: bool,
     base: Option<&str>,
     force_base: bool,
-    _steal: bool,
+    steal: bool,
     force: bool,
     force_claim: bool,
     resume: Option<&str>,
@@ -12156,6 +12175,7 @@ pub(crate) fn handle_queue_work(
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
 ) -> Result<()> {
+    refuse_retired_steal(steal)?;
     let role_override = role_input.pickup;
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -13233,14 +13253,6 @@ pub(crate) fn handle_queue_work(
             adopting,
         ) {
             let conflict_id = conflict.id.as_str();
-            if let Some(reason) = unattended_git_mutation_refusal(
-                &project_root_for_conflict,
-                &plan.scope,
-                "reclaim",
-                Some(conflict.branch.as_str()),
-            ) {
-                anyhow::bail!("reclaim refused for scope `{}`: {}", plan.scope, reason);
-            }
             let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
                 &project_root_for_conflict,
                 &conflict,
@@ -13266,7 +13278,10 @@ pub(crate) fn handle_queue_work(
                     );
                 }
             };
-            crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)?;
+            crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)
+                .with_context(|| {
+                    format!("ownership reclaim could not end lease {}", conflict.id)
+                })?;
             session_end(
                 Some(&conflict.id),
                 /* spec */ None,
@@ -16213,10 +16228,10 @@ pub(crate) fn handle_queue_recover(
     // Lease state — does a session still hold this spec's scope?
     let leases = list_leases(&project_root);
     let lease = find_lease_by_spec(&spec, &leases).ok();
-    let now = chrono::Utc::now();
-    let live = process_probe::probe_live_claude_sessions();
-    // BUG-511: review-verb leases classify by creator PID, not worktree.
-    let lease_state = lease.as_ref().map(|l| lease_state_for(l, &live, now));
+    // trace:STORY-2325 | ai:codex — recovery never substitutes a PID/cwd scan.
+    let lease_state = lease
+        .as_ref()
+        .map(|l| crate::ownership::reader::lease_owner(&project_root, l));
 
     // The branch we inspect for commits-ahead / dirty: prefer the lease's
     // branch (where a phase-1 implementer committed), else the PR head branch.
@@ -16270,16 +16285,13 @@ pub(crate) fn handle_queue_recover(
     // --- Print the inspection result. ---
     println!("🔎 recovery inspection for {}", spec.bold());
     println!("  {:<14} {}", "status".dimmed(), status_label);
-    match (&lease, lease_state) {
-        (Some(l), Some(st)) => println!(
-            "  {:<14} {} {} (id {}, branch {})",
-            "lease".dimmed(),
-            st.glyph(),
-            st.label(),
-            &l.id[..l.id.len().min(8)],
-            l.branch
-        ),
-        _ => println!("  {:<14} none", "lease".dimmed()),
+    match (&lease, &lease_state) {
+        (Some(l), Some(verdict)) => println!("  lease {}: {verdict:?}", l.id),
+        _ => println!("  lease none"),
+    }
+    if let Some(verdict) = &lease_state {
+        anyhow::ensure!(matches!(verdict, crate::ownership::OwnerVerdict::Dead { .. }),
+            "recovery retains ownership: {verdict:?}; ask the holder to run `aida session end <id>`, or inspect `aida own migrate --dry-run` on the host");
     }
     match &branch {
         Some(b) => println!(
@@ -16340,6 +16352,13 @@ pub(crate) fn handle_queue_recover(
     }
 
     // --- Execution. ---
+    // All recovery actions may end or relaunch the lane. Refresh death proof
+    // immediately before dispatch; a prior inspection is not a reclaim grant.
+    // trace:STORY-2325 | ai:codex
+    if let Some(lease) = &lease {
+        crate::ownership::reader::journal_reclaim(&project_root, lease)
+            .with_context(|| format!("ownership reclaim could not end lease {}", lease.id))?;
+    }
     let aida = crate::aida_exe_path();
     // Helper: run an `aida` subcommand from the project root, surfacing its
     // exit code. Non-zero leaves the state visible for manual resume.
@@ -18325,7 +18344,7 @@ pub(crate) struct ReworkArgs {
     /// Bypass terminal-status / already-in-progress guards.
     #[clap(long)]
     pub force: bool,
-    /// Pass `--steal` through to chained `aida queue work`.
+    /// Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically.
     #[clap(long)]
     pub steal: bool,
     /// Permission mode (only used with `--work`).

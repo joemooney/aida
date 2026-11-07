@@ -134,7 +134,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         Ok(Some(record)) => record,
         Ok(None) => {
             return PrLeaseCheck::NotProvable(
-                "ownership record missing; migrate or rebind the session".into(),
+                "ownership record missing; on the host run `aida own migrate --dry-run`, then `aida own migrate --execute`".into(),
             )
         }
         Err(e) => {
@@ -242,7 +242,7 @@ pub(crate) fn end_action(
             LeaseEndAction::Bail(refusal_message(lease, pr_branch, reason))
         }
         PrLeaseCheck::Live => {
-            LeaseEndAction::Bail("ownership holder is alive; wait for voluntary handoff".into())
+            LeaseEndAction::Bail(format!("ownership holder is alive; wait for voluntary handoff or have its owner run `aida session end {}`", lease.id))
         }
         PrLeaseCheck::NotProvable(why) => {
             LeaseEndAction::Bail(format!("ownership retained: {why}"))
@@ -259,7 +259,23 @@ pub(crate) fn plan_lease_end(
     pr_branch: Option<&str>,
 ) -> LeaseEndAction {
     match pr_branch {
-        Some(pr_branch) => end_action(lease, pr_branch, &check_pr_lease(main, lease, pr_branch)),
+        Some(pr_branch) => {
+            let check = check_pr_lease(main, lease, pr_branch);
+            let action = end_action(lease, pr_branch, &check);
+            match action {
+                LeaseEndAction::Bail(mut message) if matches!(check, PrLeaseCheck::Refuse(_)) => {
+                    message.push_str(&crate::queue_cmd::scope_conflict_resume_hint(
+                        &lease.scope,
+                        &lease.id,
+                        crate::leases::lease_adoption_refusal(main, lease),
+                        None,
+                        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+                    ));
+                    LeaseEndAction::Bail(message)
+                }
+                action => action,
+            }
+        }
         None => LeaseEndAction::Bail("PR branch unknown; ownership retained".into()),
     }
 }
@@ -290,7 +306,7 @@ pub(crate) fn refusal_message(lease: &SessionLease, pr_branch: &str, reason: &st
     };
     format!(
         "lease {} ({}, seat {}) holds branch `{}`{} and its session has exited, but it was not \
-         ended automatically: {}. Commit and push the work to the PR, or discard it with \
+         ended automatically: {}. Commit and push the work on its branch, or discard it with \
          `aida session end {} --force --discard-unpushed`, then retry",
         lease.id,
         lease.role.as_deref().unwrap_or("(unset)"),

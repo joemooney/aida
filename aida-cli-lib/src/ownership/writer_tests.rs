@@ -1554,7 +1554,7 @@ fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
             before + usize::from(expected == "dead")
         );
         if expected == "dead" {
-            assert_eq!(store.journal().last().unwrap().op, "reclaim");
+            assert_eq!(store.journal().last().unwrap().op, "reclaim_attempt");
             assert_eq!(
                 store
                     .load(&key)

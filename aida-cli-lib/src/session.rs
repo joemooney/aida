@@ -238,6 +238,7 @@ fn process_legend() -> String {
 /// directory sweep.
 // trace:STORY-993 | ai:claude
 struct ProcessResolver {
+    root: Option<std::path::PathBuf>,
     procs: Vec<crate::session_liveness::LiveAgentProcess>,
     leases: Vec<crate::SessionLease>,
     manifests: Vec<crate::session_manifest::SessionManifest>,
@@ -254,6 +255,7 @@ impl ProcessResolver {
             .map(crate::session_manifest::list_all)
             .unwrap_or_default();
         Self {
+            root,
             procs,
             leases,
             manifests,
@@ -264,26 +266,23 @@ impl ProcessResolver {
     /// Resolve pid / tty / liveness for each row — no per-row spawn, no
     /// per-row directory read. A lease covers a transcript when a session
     /// manifest joins the lease id to the transcript's `claude_session_id`;
-    /// the lease's `active_pid` (or its `creator_pid` when that pid IS a live
-    /// agent process — the launcher exec'd into the agent) then wins over the
-    /// proc-scan. Falls back to the cwd + start-window scan against live
-    /// claude/codex processes. `aida ps` parity (TASK-152): when the
-    /// transcript names no role but the lease does, the lease role fills the
-    /// ROLE cell and is always carried as `lease_role` in JSON.
+    /// its ownership judgment decides liveness. A cwd scan attributes only
+    /// unleased historical conversations and cannot revive a dead owner.
+    /// The lease role fills a missing transcript role.
     // trace:STORY-993 | ai:claude
     fn fill(&self, sessions: &mut [SessionMeta]) {
         use crate::session_liveness::{self as sl, AgentKind, LeaseFacts, TranscriptFacts};
-        let is_agent_proc = |pid: u32| self.procs.iter().any(|p| p.pid == pid);
         for s in sessions.iter_mut() {
-            let lease = self
+            // trace:STORY-2325 | ai:codex — scans cannot revive recorded ownership.
+            let owned_lease = self
                 .manifests
                 .iter()
                 .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
-                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id))
-                .map(|l| LeaseFacts {
-                    pid: l.active_pid.or(l.creator_pid.filter(|p| is_agent_proc(*p))),
-                    role: l.role.clone(),
-                });
+                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id));
+            let lease = owned_lease.map(|l| LeaseFacts {
+                pid: l.active_pid.or(l.creator_pid),
+                role: l.role.clone(),
+            });
             let cwd = s.last_cwd.as_deref().map(Path::new);
             let t = TranscriptFacts {
                 agent: s.agent.as_str(),
@@ -296,8 +295,22 @@ impl ProcessResolver {
             s.process = sl::resolve(
                 &t,
                 lease.as_ref(),
-                &self.procs,
-                &crate::process_probe::pid_is_alive,
+                if owned_lease.is_some() {
+                    &[]
+                } else {
+                    &self.procs
+                },
+                &|pid| {
+                    let Some(lease) = owned_lease else {
+                        return false;
+                    };
+                    self.root.as_deref().is_some_and(|root| {
+                        matches!(
+                            crate::ownership::reader::lease_owner(root, lease),
+                            crate::ownership::OwnerVerdict::Alive { .. }
+                        ) && lease.active_pid.or(lease.creator_pid) == Some(pid)
+                    })
+                },
                 &|pid| {
                     (
                         aida_core::liveness::process_start_time(pid),

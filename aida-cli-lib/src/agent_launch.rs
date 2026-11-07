@@ -4385,6 +4385,24 @@ pub(crate) fn agent_new_delegation_refusal(
     }
 }
 
+thread_local! {
+    // Only session_start's successful setup may dispatch its just-created lease.
+    // This is invocation-local, never an environment or caller-supplied grant.
+    static FRESH_DISPATCH: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+// trace:STORY-2325 | ai:codex
+pub(crate) fn dispatch_fresh_session<T>(id: &str, run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            FRESH_DISPATCH.with(|slot| *slot.borrow_mut() = self.0.take());
+        }
+    }
+    let _restore = Restore(FRESH_DISPATCH.with(|slot| slot.replace(Some(id.to_owned()))));
+    run()
+}
+
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
 /// Both launch paths call this before prompts, and plan creation checks it again.
 // trace:BUG-2002 | ai:codex
@@ -4413,7 +4431,16 @@ pub(crate) fn preflight_agent_launch_lease(
         .zip(lease.worktree_path.canonicalize().ok())
         .is_some_and(|(cwd, owned)| cwd == owned && owned.is_dir());
     let same_role = role.is_none_or(|role| lease.role.as_deref() == Some(role));
-    let active = agent_launch_lease_is_active(project_root, &lease, &[]);
+    let fresh = FRESH_DISPATCH.with(|slot| slot.borrow().as_deref() == Some(lease.id.as_str()))
+        && match crate::ownership::reader::lease_record(project_root, &lease) {
+            Ok(None) => true, // This invocation's setup receipt covers a failed diagnostic dual-write.
+            Ok(Some(record)) => record
+                .holder
+                .as_ref()
+                .is_some_and(|h| h.session == lease.id),
+            Err(_) => false,
+        };
+    let active = !fresh && agent_launch_lease_is_active(project_root, &lease);
     if !same_cwd || !same_role || active {
         anyhow::bail!(
             "this work is already owned by session {} ({}, worktree: {}).\n  \
@@ -4453,6 +4480,10 @@ pub(crate) fn preflight_agent_launch_lease(
             "the owning worktree no longer matches its recorded branch; inspect `aida session leases --all` before redispatching"
         );
     }
+    // Ownership and tree occupancy are independent: death never permits double occupancy.
+    // trace:STORY-2325 | ai:codex
+    aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path)
+        .context("owning tree is still in use; re-entry refused")?;
     Ok(Some(lease))
 }
 
@@ -4467,13 +4498,8 @@ fn apply_agent_lease_identity(command: &mut std::process::Command, lease_id: Opt
 }
 
 // trace:BUG-2002 | ai:codex
-fn agent_launch_lease_is_active(
-    project_root: &std::path::Path,
-    lease: &SessionLease,
-    live: &[process_probe::LiveSession],
-) -> bool {
+fn agent_launch_lease_is_active(project_root: &std::path::Path, lease: &SessionLease) -> bool {
     // trace:STORY-2325 | ai:codex
-    let _ = live; // Historical test callers may supply a process scan.
     !matches!(
         crate::ownership::reader::lease_owner(project_root, lease),
         crate::ownership::OwnerVerdict::Dead { .. }
