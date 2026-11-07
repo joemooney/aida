@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T16:04:29.222716303Z
+modified_at: 2026-11-07T16:34:52.661165519Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -23,6 +23,12 @@ comments:
   content: 'Slice 1 implementation is uncommitted in the native seat: shared setup plans/links the primary .codegraph directory through the existing worktree runtime writer; the AGENTS template and queue pickup/reviewer prompts share one navigation template; doctor check codegraph reports missing binary, unreadable/invalid index, and >1h DB/WAL freshness. Root guidance and symlink ignore updated. launch/spawn.rs and launch/profile.rs untouched. Corrected store-writer inventory scan passes without ledger additions; make check-templates and formatting/whitespace checks pass. make sync-templates fails only at portable .agents pack writes (native read-only .agents); host rerun needed. Targeted cargo tests and final fast-gate rerun are still building/queued after a cold build; no final test-pass claim yet. Native Refs publication declaration recorded: [AI:codex] feat(codegraph): share primary index with lane setup (Refs STORY-2630). Slice 2 containment read grant and successful lane-call evidence remain pending; a read-only SQLite open of the primary index is refused in this current seat.'
   created_at: 2026-11-07T16:04:29.222698420Z
   modified_at: 2026-11-07T16:04:29.222698420Z
+- id: 01a1b6dc-e675-7fb3-a370-9e9619d9cd7a
+  author: joe
+  content: 'Final Slice 1 native handoff: final revision passed cargo test --profile agent -p aida-cli-lib codegraph::tests -- --nocapture (5 passed, 0 failed), make check-ci-fast (44 gates passed), make check-templates, rustfmt checks and git diff --check. The inventory refusal was fixed by routing the navigation link through the existing setup writer; no inventory/allowlist additions. Changed: .gitignore; AGENTS.md; aida-cli-lib/src/{codegraph,doctor_cmd,doctor_root,lib,rework_direction,worktree_gc}.rs; aida-core/src/scaffolding/codex_md.rs; aida-core/templates/dispatch/code-navigation.md. Edits remain uncommitted. Host must rerun make sync-templates: portable .agents pack writes are refused by this native seat (read-only filesystem, os error 30); final check-templates passes with the portable pack absent. Slice 2 containment read admission and successful live lane-call evidence remain pending. Native declaration recorded: [AI:codex] feat(codegraph): share primary index with lane setup (Refs STORY-2630). No commit, push, PR, queue completion, ship merge or review record performed.'
+  created_at: 2026-11-07T16:34:52.661165519Z
+  modified_at: 2026-11-07T16:34:52.661165519Z
+  session_id: 01a1b6a8d06a
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
