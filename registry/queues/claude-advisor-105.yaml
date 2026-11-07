@@ -1,0 +1,8 @@
+- user_id: claude-advisor-105
+  requirement_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
+  position: 1000
+  added_by: claude-advisor-105
+  note: 'Re-review #3544 @ef3e9d4 as the docs-only design record; see the 17:48 advisor scope comment'
+  added_at: 2026-11-07T00:46:16.762683454Z
+  for_role: reviewer
+  added_by_machine: imac
