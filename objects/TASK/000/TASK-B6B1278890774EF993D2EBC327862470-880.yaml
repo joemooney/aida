@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T04:17:18.281011116Z
+modified_at: 2026-11-07T04:17:28.964804593Z
 req_type: Task
 tags:
 - architecture
@@ -223,6 +223,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b439-cb84-77c0-ba29-1e4a9ca40d61
+  author: joe
+  timestamp: 2026-11-07T04:17:28.964823902Z
+  session_id: 01a1b43864fd
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -232,3 +240,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'Round 3 findings 1-5 accepted; none disputed. Finding 4 is fixed in uncommitted doc edits and PR publication instructions moved to a spec comment. Finding 3 remains a manual design gate: TASK-3225 comment 0 amendment 2 requires independent advisor selection/signoff on redo transaction versus alternative, canonical reader/writer recovery admission and multi-root claim/queue participants. Native implementer cannot supply that signoff or clear merge hold 3563. Findings 1-2 require host PR retitle and an explicit Refs-only squash subject with empty body so prior closing subject 1baca620b4a5 never lands as completion evidence. Finding 5: all S2 implementation acceptance remains unmet; keep TASK-3223 open. Refs declaration recorded, not publication authority. Preserve merge hold and punt veto; host must not publish over them. No finding disputed; native seat cannot satisfy new-commit clause directly and leaves corrective edits for host.'
+  raised_by: implementer
+  raised_at: 2026-11-07T04:17:28.964804593Z
