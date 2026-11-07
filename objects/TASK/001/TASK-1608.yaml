@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:06.818167687Z
-modified_at: 2026-10-19T15:50:31.774172620Z
+modified_at: 2026-11-07T20:27:38.954702185Z
 req_type: Task
 tags:
 - guided-lane
@@ -73,6 +73,16 @@ comments:
   created_at: 2026-10-11T07:01:37.358744136Z
   modified_at: 2026-10-11T07:01:37.358744136Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a1b7b2-024a-74c0-aa70-472c452240e1
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-10-19T15:50:31.774172620Z","deferred_until":"when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:38.954691731Z
+  modified_at: 2026-11-07T20:27:38.954691731Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1140a-404d-7d10-b7bc-73b33bd3898b
   author: joe
@@ -88,7 +98,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-10-19T15:50:31.774172620Z
-deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_until: manual:operator
 deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 execution_mode: guided
 filed_at:
