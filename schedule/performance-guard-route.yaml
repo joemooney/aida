@@ -1,27 +1,7 @@
 job: performance-guard-route
-last_run: 2026-11-07T09:24:29.701944126Z
+last_run: 2026-11-07T15:49:35.669706618Z
 last_by:
   seat: advisor
-  session: 01a1b441-8158-7162-ad75-f7915b45ee33
+  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   vendor: claude
 result: done
-note: aida show tail latency (15% over 2s) is BUG-2466; a lane was relaunched for it at 02:30
-due_since: 2026-11-07T15:23:24.829713874Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-11-07T15:15:31.347644721Z
-  performance:
-  - command: show
-    budget_ms: 2000
-    over_budget: 123
-    denominator: 831
-    proportion_millipercent: 14801
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 13911
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: true
-  job: performance-guard
-  error: 'exit 1: '
