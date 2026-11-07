@@ -1,0 +1,36 @@
+id: 01a1b5dd-5329-7170-9f3a-14e2068470e9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-547
+agreed_id: STORY-2624
+title: 'Review PR-3592: [AI:codex] fix(ownership): reconcile legacy and superseded holders (Refs STORY-2325)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b5c2`) for branch `story-b6b1278890774ef993d2ebc327862470-323`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3592>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-323` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2325
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3592` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T11:55:43.273746574Z
+modified_at: 2026-11-07T11:55:43.273746574Z
+req_type: Story
+filed_at:
+  code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4803b66ade9
+  vendor: claude
+  session: 01a1b5c2862d
