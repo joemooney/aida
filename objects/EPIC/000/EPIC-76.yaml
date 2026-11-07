@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T19:07:37.843699330Z
-modified_at: 2026-11-07T20:56:02.302760949Z
+modified_at: 2026-11-07T20:56:04.746727271Z
 req_type: Epic
 tags:
 - architecture
@@ -116,6 +116,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:27:40.506409260Z
   modified_at: 2026-11-07T20:27:40.506409260Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cc-098a-76f3-a1be-fcfd7cf313c8
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Children gone or done; launch authority moved to STORY-2326/2325.'
+  created_at: 2026-11-07T20:56:04.746727271Z
+  modified_at: 2026-11-07T20:56:04.746727271Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
