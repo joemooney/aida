@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T03:45:03.135886828Z
+modified_at: 2026-11-07T03:46:27.156238458Z
 req_type: Task
 tags:
 - architecture
@@ -31,6 +31,15 @@ relationships:
   target_id: 01a1b12f-fd86-7b40-a906-aca362cd3b47
   created_at: 2026-11-06T14:08:31.321086278Z
   created_by: joe
+comments:
+- id: 01a1b41d-62d4-7f50-8550-801cd4fe6f58
+  author: mcp
+  content: |-
+    SKETCH v1 — transaction approval required before implementation. Proposal saved in docs/plans/2026-11-06-task-3223-mediated-transactions.md (trace:TASK-3223 | ai:codex). Confirmed TASK-3225 comment 0's binding amendment: S2 cannot enable mutation verbs until a separate transaction sketch is approved. No approval is recorded on TASK-3223; parent rulings select synchronous mediation/shared bwrap but not the recovery transaction. Current service accepts only read-only probe/status and keeps dedupe in memory. GitBackend::update_atomically_tracked locks but installs metadata/objects separately; atomic file replacement is insufficient for mutation plus dedupe outcome.
+
+    Proposed decision for independent signoff: host-owned durable redo transaction containing binding/epoch/request/digest, preimage hashes, postimages and result, under the canonical writer lock. Fsync decision before installing; recover exact postimages without rerunning business logic; unexpected/corrupt evidence returns OutcomeUnknown. Every canonical reader/writer must honor transaction recovery/admission, including incompatible old binaries; a service-only sidecar cannot provide this guarantee. Claims/global queues require a separately specified recoverable multi-root participant protocol and lock order before those verbs can be enabled. Alternative is changing canonical representation to a transactional store, a broader architecture change. Sketch includes typed CLI/MCP routing, refusal of unsupported writers, protected-subtree cutover and fault/concurrency/C2 validation plan. No runtime or permission edits, no tests/conformance claim, no publication declaration. Punt design-fork now rather than wait in headless mode; existing grants and read-only service remain unchanged.
+  created_at: 2026-11-07T03:46:27.156222749Z
+  modified_at: 2026-11-07T03:46:27.156222749Z
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
