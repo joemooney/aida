@@ -1881,7 +1881,10 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     let tmp = tempfile::tempdir().unwrap();
     let clone = tmp.path();
     std::os::unix::fs::symlink(tmp.path(), clone.join(".aida-store")).unwrap();
+    // trace:STORY-2630 | ai:codex
+    std::os::unix::fs::symlink(tmp.path(), clone.join(".codegraph")).unwrap();
     for noise in [
+        "? .codegraph",
         "? .aida-store",
         "? .aida/cache.db",
         "? .aida/cache.db-wal",
@@ -1902,6 +1905,9 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     let other = tempfile::tempdir().unwrap();
     std::fs::create_dir(other.path().join(".aida-store")).unwrap();
     assert!(!is_runtime_noise_entry(other.path(), "? .aida-store"));
+    std::fs::create_dir(other.path().join(".codegraph")).unwrap();
+    assert!(!is_runtime_noise_entry(other.path(), "? .codegraph/"));
+    assert!(!is_runtime_noise_entry(clone, "1 .M N... .codegraph"));
 }
 
 /// A seat clone (lease `id`) whose one commit on `feat` was pushed to origin
