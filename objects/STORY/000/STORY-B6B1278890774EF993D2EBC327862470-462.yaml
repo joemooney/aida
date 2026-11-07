@@ -4,12 +4,12 @@ agreed_id: STORY-2539
 title: 'Vendor profile as data beyond spawn: one VendorProfile registry (regroup R5)'
 description: |
   Regroup R5: a VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture including today's agy outer-only ruling, mail-wake support, hint text, resume semantics); vendor-name literals allowed only in vendors/; user hints rendered from the profile. Evidence: about 70 vendor commits in 14 days, 430 non-test "claude" literals, STORY-782 and BUG-2390 (both fold here). Trigger: STORY-2326 PR-B merged (the spawn half and its posture tables exist). Sketch-first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T01:50:24.429308048Z
+modified_at: 2026-11-07T01:51:09.699074360Z
 req_type: Story
 tags:
 - architecture
@@ -431,6 +431,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b3b3-d583-7ee2-947c-2ee477192e56
+  author: joe
+  timestamp: 2026-11-07T01:51:09.699090931Z
+  session_id: 01a1b3b31c1d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
@@ -440,3 +448,9 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: design-fork
+  detail: 'ROUND 2 review disposition, findings 1-4: finding 1 is disputed as a still-open closure/signoff request: PR #3512 is already CLOSED (verified with gh), its title is now [AI:codex] docs(plans): STORY-2539 vendor profile registry sketch (Refs STORY-2539), and advisor signoff was recorded 2026-11-06T16:19:41Z. Finding 2 is accepted: historical commit 8ddf1a7891bd has a completing feat trailer and must not be merged or reused as a completion subject; this seat will not rewrite Git history or publish. Any future partial slice needs a non-completing Refs STORY-2539 subject. Finding 3 is accepted as an implementation gap, but disputed as a requirement to implement in this authoritative sketch-only review round: the registry, vendors modules, profile-rendered hints and literal ratchet remain future implementation work; BUG-2390 stays Completed and STORY-782 fan-out stays deferred. Advisor subsequently authorized implementation at 2026-11-07T01:45:22Z after PR-C #3531 merged, while the current authoritative round directs sketch-only handling and design-fork signoff. Advisor must resolve this lane conflict and explicitly retire or replace the stale rejected review before another implementation pickup. Finding 4 is accepted: the reviewed markdown-only change was docs(plans), not feat; the closed PR title is corrected, and any future sketch publication must use docs(plans) with Refs after signoff. No finding is silently waived, no implementation completion is claimed, and no PR, commit, push or queue-done is performed from this native seat. Retain publication veto.'
+  lean: 'Keep PR #3512 closed and STORY-2539 incomplete. Advisor should reconcile the stale sketch-only review with the newer implementation authorization, then dispatch a bounded Refs implementation slice based on the signed sketch and merged launch/profile.rs.'
+  raised_by: implementer
+  raised_at: 2026-11-07T01:51:09.699074360Z
