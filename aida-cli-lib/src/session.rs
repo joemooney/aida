@@ -6575,7 +6575,12 @@ fn build_coordinator_headless_command_inner(
     // trace:TASK-2631 | ai:codex
     let posture = containment_posture(vendor, contained)?;
     // trace:STORY-2326 TASK-2032 | ai:claude
-    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?;
+    // The exec and coordinator owners both prepare this command through the
+    // receipt-owning wrapper. Keep ambient values implicit for its selector.
+    // trace:STORY-2326 | ai:codex
+    let wrapper = contained_wrapper_launch(vendor, contained)?;
+    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?
+        .with_wrapper_environment(wrapper);
     let mut child_cmd = crate::launch::spawn_agent(&ctx)?;
     child_cmd
         .env("AIDA_HEADLESS", "1")
@@ -14455,11 +14460,18 @@ mod tests {
                     Some(Some(std::ffi::OsStr::new(seat))),
                     "{vendor:?}: the routed seat, not the launcher's"
                 );
-                assert_eq!(
-                    get("AIDA_SESSION_PURPOSE").flatten(),
-                    None,
-                    "{vendor:?}: the launcher's purpose is scrubbed"
-                );
+                let cleared =
+                    crate::launch::profile::VendorProfile::for_vendor(vendor.launch_vendor())
+                        .clears_environment();
+                if cleared {
+                    assert_eq!(get("AIDA_SESSION_PURPOSE").flatten(), None);
+                } else {
+                    assert_eq!(
+                        get("AIDA_SESSION_PURPOSE"),
+                        Some(None),
+                        "{vendor:?}: inheriting commands must explicitly scrub the launcher's purpose"
+                    );
+                }
             }
         }
     }

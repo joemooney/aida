@@ -3443,3 +3443,80 @@ fn story_2326_wrapper_environment_keeps_ambient_values_implicit() {
         "/site/verdict.json"
     );
 }
+
+/// Exercise both callers of the shared command builder under real trusted
+/// wrapper policy, rather than setting LaunchContext's flag in the test.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_headless_builders_keep_parent_context_out_of_selection() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{self, HeadlessVendor};
+    use aida_core::agents_config::AgentSeat;
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_SESSION_ID", Some("parent-session")),
+            ("AIDA_HARNESS_VERSION", Some("parent-harness")),
+            ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+            ("AIDA_AGENT_CONTEXT_FILE", Some("/parent/context")),
+        ],
+    );
+    let coordinator = session::build_coordinator_headless_command(
+        None,
+        HeadlessVendor::Claude,
+        "prompt",
+        "dontAsk",
+        AgentSeat::Advisor,
+        "",
+        true,
+        false,
+    )
+    .unwrap();
+    let exec = {
+        let _composition = session::ClaudeWrapperComposition::enter();
+        session::build_exec_vendor_headless_command(
+            None,
+            HeadlessVendor::Claude,
+            "prompt",
+            "child-session",
+            true,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap()
+    };
+    for mut cmd in [coordinator, exec] {
+        let env = selected_environment(&cmd);
+        for key in [
+            "AIDA_SESSION_ID",
+            "AIDA_ROTATION_HANDOFF",
+            "AIDA_AGENT_CONTEXT_FILE",
+        ] {
+            assert!(
+                explicit(&cmd, key).is_none(),
+                "ambient {key} became explicit"
+            );
+            assert!(
+                !env.contains_key(key),
+                "ambient {key} crossed wrapper selection"
+            );
+        }
+        assert_ne!(
+            env.get("AIDA_HARNESS_VERSION").map(String::as_str),
+            Some("parent-harness")
+        );
+        // A child lease assigned by the owner remains transportable.
+        cmd.env("AIDA_SESSION_ID", "child-lease");
+        assert_eq!(selected_environment(&cmd)["AIDA_SESSION_ID"], "child-lease");
+    }
+}
