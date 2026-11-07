@@ -15,6 +15,13 @@ relationships:
   target_id: 01a1ae37-9822-7172-a4a8-bd3141b4ff5e
   created_at: 2026-11-07T10:46:54.918529693Z
 comments:
+- id: 01a1b783-3fc5-71b2-97ab-8146fb628d1d
+  author: dirtlab
+  content: 'Draft S6 sketch: docs/plans/2026-11-07-task-3368-proc-identity-broker.md. Observation-only proposal covers kernel peer authentication, namespace coordinates, scoped handles, replay/revocation, restart, rollout and host verification. Advisor decisions required on per-message sender authentication/descriptor transfer and narrow sandbox transport before implementation. Validation: aida plan verify PASS; referenced paths exist; git diff --check PASS. One new uncommitted documentation file; no production code changes or Cargo tests. Native host handoff must preserve the punt publication veto.'
+  created_at: 2026-11-07T19:36:34.501288736Z
+  modified_at: 2026-11-07T19:36:34.501288736Z
+  session_id: 01a1b7815a58
+  harness_version: codex-cli 0.167.0
 - id: 01a1b783-43c9-7d82-a5bf-1b47195e4473
   author: joe
   content: 'ADVISOR 2026-11-07 12:35: running on a dell1 codex lane (log dell1:~/lanes/lane-TASK-3368.log). dell1 partition: do not pass to local fill-slots/auto-rework until its PR opens.'
@@ -51,6 +58,15 @@ history:
   session_id: 01a1b7815a58
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b783-4b3e-7720-9a77-d80040b03a1f
+  author: dirtlab
+  timestamp: 2026-11-07T19:36:37.438194140Z
+  session_id: 01a1b7815a58
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1b788-c06b-7152-b82f-071410e17a23
   author: aida-orchestrator
   timestamp: 2026-11-07T19:42:35.115348689Z
