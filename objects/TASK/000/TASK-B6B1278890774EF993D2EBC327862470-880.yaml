@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T07:38:34.812041515Z
+modified_at: 2026-11-07T07:56:03.774292428Z
 req_type: Task
 tags:
 - architecture
@@ -282,6 +282,21 @@ comments:
   modified_at: 2026-11-07T07:33:01.534445779Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b501-e93e-7783-9da6-b8524ac3e074
+  author: joe
+  content: |-
+    Implemented the binding advisor code round, left UNCOMMITTED in the native seat for host publication (Refs TASK-3223).
+
+    Canonical-only redo module: version-1 marker and checksummed bounded host-generated records; fixed binding/epoch/request/digest, preimage hashes, complete canonical postimages and exact results. Record file and directory fsync precede installation; atomic replacement and directory sync precede success. Every outermost shared store writer-lock acquisition recovers accepted pending decisions without rerunning business logic. Corrupt/unexpected/unavailable participant evidence is quarantined with OutcomeUnknown and fences later writers. Completed retry evidence is retained, capacity refuses new work without evicting prior results, and changed payloads conflict. Read-only per-file reader behavior remains unchanged; a durable generation invalidates derived caches when object installation has no Git commit. Redo runtime evidence is excluded from Git publication.
+
+    Typed Python schemas and a closed Rust host enum now support comment_add and spec_edit (title/description only), with explicit canonical SHA-256 expected_revision. Framed/correlated helper-to-host RPC keeps all persistence in Rust. Grant/lease/root identity and owned canonical UUID are checked under bounded five-second admission, and checked again immediately before durable acceptance. Provenance, row history and hypothesis policy are preserved. own_claim and queue_done remain UnsupportedOperation for TASK-3326.
+
+    Validation: cargo test -p aida-core --offline db::redo::tests --lib: 13 passed, including real subprocess exit/restart at journal durability, both installs, final durability and reply; exact-result retry and exactly one comment; stale/concurrent/changed requests, revocation during planning and after acceptance, corrupt evidence, unknown format, symlink quarantine, journal capacity, cache refresh and hypothesis locks. python3 -m unittest tests.test_store_mutation: 24 passed. cargo check -p aida-cli-lib --offline passed. make check-ci-fast passed all 43 gates. cargo fmt --all -- --check and git diff --check passed. Writer inventory reconciled and new journal sinks classified host-only.
+
+    Remaining S2a work is intentionally separate: shared CLI/MCP entry-point routing, permission/profile cutover, raw-write denial, lane-private caches, broader edit policies and full workflow validation. This canonical-only primitive adds no per-operation Git publication or separate oplog write; those integrations remain for the routing slice. No claim of TASK-3223 completion or real-vendor conformance. No implementation blocker or new punt. No commit, push, PR, ship/merge action, review verdict or queue completion from the seat; only the native Refs publication declaration is requested next.
+  created_at: 2026-11-07T07:56:03.774292428Z
+  modified_at: 2026-11-07T07:56:03.774292428Z
+  session_id: 01a1b4f1df40
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
