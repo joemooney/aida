@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-247
 agreed_id: BUG-2482
 title: 'tests/test_session_role_grant.sh inherits the caller''s AIDA session env: ''no label: role addendum stays silent'' fails from an advisor shell'
 description: 'Found 2026-11-07 00:45 during an advisor hand merge. Running bash tests/test_session_role_grant.sh from a rotated advisor shell fails ''no label: role addendum stays silent'' (expected [] but an addendum printed). It passes under env -i. Scrubbing only AIDA_SESSION_ROLE/GRANT/PURPOSE/PROJECT/PERMISSION_MODE isn''t enough, so some other ambient AIDA_* variable (AIDA_ROTATION_*, AIDA_ROLE_INSTANCE, AIDA_AGENT_TYPE, ...) reaches the code under test. make check-ci-fast therefore goes red locally for any agent with a seat. Fix: start the test with an explicit env -i allowlist (HOME, PATH, TMPDIR and the fixture''s own variables), matching the hermetic-fixture rule. Acceptance: the test passes when run with every AIDA_* variable from a live advisor session exported.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T07:47:58.463173503Z
-modified_at: 2026-11-07T07:53:22.553168259Z
+modified_at: 2026-11-07T08:39:19.472458749Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,20 @@ history:
   timestamp: 2026-11-07T07:53:23.682315820Z
   session_id: 01a1b4fd6876
   changes: []
+- id: 01a1b529-847c-7250-828b-188b328cfaf0
+  author: aida-auto-bump
+  timestamp: 2026-11-07T08:39:19.420708441Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b529-84b0-7850-81ed-555f18fb58d9
+  timestamp: 2026-11-07T08:39:19.472455222Z
+  agent: aida
+  commit_sha: dbca1c07e68815d8bf151db70725e809cde0d6b3
+  summary: 'Both fixture launchers (run, under_daemon) now use env -i with an explicit allowlist (fixture HOME, TMPDIR, PATH, CLAUDE_PROJECT_DIR, AIDA_MAIN_CHECKOUT_DRIFT, per-case args), so ambient AIDA_ROTATION_*/AIDA_AGENT_NAME/CLAUDE_ENV_FILE can no longer reach the hooks; CI gates step ''Run session role grant banner test'' passed at the head. Bug protocol: PR touches a test file (met).'
+  review_verdict: approved
 filed_at:
   code_sha: bb6eef8efe4999767677c9c822ae26a35966b6e8
   branch: main
@@ -59,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T08:39:19.420702655Z
+  completion_sha: dbca1c07e68815d8bf151db70725e809cde0d6b3
