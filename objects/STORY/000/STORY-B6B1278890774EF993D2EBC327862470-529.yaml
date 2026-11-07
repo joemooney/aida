@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-529
 agreed_id: STORY-2606
 title: 'Upstream the work GitLab CI adapter: .gitlab/ci/gdma.yml plus ci/gdma/run-upstream.py, which runs ci.yml''s own steps under GitLab'
 description: 'Source: work GDMS CI report. The work pipeline ran only integrity checks and scans, not the real suite. The work branch adds .gitlab/ci/gdma.yml with seven lanes (lib-0, lib-1, cli-0, cli-1, rest, gates, contracts). ci/gdma/run-upstream.py parses the supported GitHub-expression subset out of .github/workflows/ci.yml, refuses unsupported input, and collects JUnit. ci.yml stays the only source of truth. Upstreaming it lets the STORY-2480 relay validate receipt job names against a job set that home main defines. Bring in: gdma.yml, run-upstream.py, check-sources.py, README, tests/test_gdma_ci.py, and the dev_build.rs change (drop automatic sccache daemon management; prefer the child''s rustc-wrapper override). Keep out (work-only): the Nexus URL rewrite of package-lock.json, the cargo registry config, the gitleaks fingerprint and secret-false-positives.md, runner and image config, cache-key/keyring/job-session scripts, and the RUST_MIN_STACK=64MiB / CARGO_BUILD_JOBS=4 environment. Make the registry and runner tags variables, not committed work hostnames. Acceptance: home CI passes test_gdma_ci.py; the job names in gdma.yml are admitted by the relay inventory (TASK-3232); no work hostname, registry URL or credential is committed.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T09:01:33.629177794Z
+modified_at: 2026-11-07T09:03:24.266973523Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -69,6 +69,13 @@ comments:
   content: '[advisor 01:15] Hand-merged origin/main into #3578 (ci-gate-tiers.toml: kept both independent entries). make check-ci-fast passes all 44 gates (clean env).'
   created_at: 2026-11-07T08:16:52.937011795Z
   modified_at: 2026-11-07T08:16:52.937011795Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b53f-906a-7da2-9de5-01a29e86d334
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 fixed (injected environ, GIT_STRATEGY clone + artifact cleanup, closed job/strategy/matrix keys, case-insensitive compare). New blockers: the adapter does not map two ci.yml inputs that the merge from main brought in, so the gates lane would fail under GitLab. ACs: AC1 (home CI passes test_gdma_ci.py) unverified, gates job still in progress at dbeedb4; AC2 (relay inventory admits gdma-ci: [lane]) verified by ci_inventory.rs gitlab_jobs test + test_work_ci_relay new receipt test (green at 91b4643, pending at head); AC3 (no work hostname/registry/credential) verified by diff inspection (only .invalid placeholders, image/tag/registries are CI variables, no RUST_MIN_STACK/CARGO_BUILD_JOBS/Nexus); bring-in list present, dev_build.rs sccache change already on main (dev_build_tests.rs:2230).. No triage reason was given.'
+  created_at: 2026-11-07T09:03:24.266972276Z
+  modified_at: 2026-11-07T09:03:24.266972276Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -138,6 +145,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b53f-906a-7da2-9de5-01952726343a
+  author: joe
+  timestamp: 2026-11-07T09:03:24.266963863Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
@@ -147,11 +163,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 findings 1-4 fixed (injected environ, GIT_STRATEGY clone + artifact cleanup, closed job/strategy/matrix keys, case-insensitive compare). New blockers: the adapter does not map two ci.yml inputs that the merge from main brought in, so the gates lane would fail under GitLab. ACs: AC1 (home CI passes test_gdma_ci.py) unverified, gates job still in progress at dbeedb4; AC2 (relay inventory admits gdma-ci: [lane]) verified by ci_inventory.rs gitlab_jobs test + test_work_ci_relay new receipt test (green at 91b4643, pending at head); AC3 (no work hostname/registry/credential) verified by diff inspection (only .invalid placeholders, image/tag/registries are CI variables, no RUST_MIN_STACK/CARGO_BUILD_JOBS/Nexus); bring-in list present, dev_build.rs sccache change already on main (dev_build_tests.rs:2230).'
-  recovery_hint: address the review findings, move STORY-2606 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T09:01:33.629177794Z
