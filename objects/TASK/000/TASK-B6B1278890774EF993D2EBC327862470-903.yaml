@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T23:28:30.815832225Z
-modified_at: 2026-11-07T00:28:28.609769107Z
+modified_at: 2026-11-07T00:30:15.372191436Z
 req_type: Task
 tags:
 - carried-from:BUG-2467
@@ -33,6 +33,12 @@ comments:
   modified_at: 2026-11-07T00:22:21.155461922Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b369-c34c-7161-a1c4-8ecd88cad355
+  author: joe
+  content: 'Updated the delegation SVG and rebuilt authority.html accessibility text. Diagram now distinguishes non-delegating implementer/reviewer children from advisor/integrator children, shows parent-set bounds and optional --delegate-seat narrowing, and preserves grant-chain expiry/revocation. Validation: showcase build --check, SVG XML parse, cargo fmt --all -- --check, git diff --check passed; visually inspected a librsvg PNG render. Chromium screenshot unavailable due to sandbox DBus transient-scope failure; librsvg rendering succeeded. Native implementer handoff: edits remain uncommitted for host publication; no blockers.'
+  created_at: 2026-11-07T00:30:15.372191436Z
+  modified_at: 2026-11-07T00:30:15.372191436Z
+  session_id: 01a1b36819ce
 history:
 - id: 01a1b362-8b5d-75e3-8b3a-a6d71e0344d7
   author: joe
@@ -56,6 +62,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b368-89ea-7692-ab3d-2883d3a597b0
+  author: joe
+  timestamp: 2026-11-07T00:28:55.146709327Z
+  session_id: 01a1b36819ce
+  changes: []
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
   branch: main
