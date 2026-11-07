@@ -267,7 +267,17 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
                 continue;
             }
             let src = production_source(&rel);
-            let flat: String = src.split_whitespace().collect();
+            // trace:STORY-2539 | ai:codex
+            // Inline test fixtures can spell argv directly; only production
+            // builders must delegate to the shared write-set helper.
+            let lines: Vec<_> = src.lines().collect();
+            let tests = crate::seat_clone::clone_git_ratchet_tests::test_module_lines(&lines);
+            let flat: String = lines
+                .iter()
+                .enumerate()
+                .filter(|(line, _)| !tests.contains(line))
+                .flat_map(|(_, text)| text.split_whitespace())
+                .collect();
             // An argv that spells the posture itself instead of asking the
             // helper. `config_cmd.rs` renders it for display only.
             let builds = flat.contains("\"--sandbox\".to_string(),\"workspace-write\"")
@@ -358,9 +368,21 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
             + session
                 .matches("crate::tool_contained_flags(host_main,\"codex\")")
                 .count(),
-        2,
-        "only headless_vendor_args (rescoped by seat) and the interactive session config \
-         (rescoped by agent new) may take the cwd-resolved, role-less set"
+        1,
+        "only the interactive session config (rescoped by agent new) may take \
+         the cwd-resolved, role-less set in session.rs"
+    );
+    // trace:STORY-2539 | ai:codex
+    // Headless composition moved behind the vendor profile. Keep the same
+    // role-less-helper count and seat-rescoping requirement across that move.
+    let headless: String = production_source("vendors/headless.rs")
+        .split_whitespace()
+        .collect();
+    assert_eq!(headless.matches("crate::tool_contained_flags(").count(), 1);
+    assert!(
+        headless
+            .contains("Some(crate::tool_contained_flags(host_main,vendor.profile().executable,)?)"),
+        "headless_vendor_args must obtain its profile's posture from the shared helper"
     );
     let queue: String = production_source("queue_cmd.rs")
         .split_whitespace()
