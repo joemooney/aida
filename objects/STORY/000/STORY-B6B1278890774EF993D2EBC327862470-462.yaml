@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T01:52:54.386494549Z
+modified_at: 2026-11-07T01:54:58.716330125Z
 req_type: Story
 tags:
 - architecture
@@ -382,6 +382,23 @@ comments:
   content: 'stale sketch-only directive from closed #3512; advisor ruling supersedes'
   created_at: 2026-11-07T01:52:54.179690531Z
   modified_at: 2026-11-07T01:52:54.179690531Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b3b7-53a6-7223-879f-c098bb853a33
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2539):
+    Verdict: REJECTED
+    Reviewed commit: 8ddf1a7891bd
+    Recorded: 2026-11-06T16:13:54.223855583+00:00
+    Findings:
+    1. Process violation: the 2026-11-06 advisor comment on STORY-2539 says the first lane is SKETCH-ONLY, 'punt as design-fork for advisor signoff, and open no PR'. The committed doc itself (docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md:6-7) states 'No PR, production changes, new vendor admission, or completion is authorized here.' PR-3512 contradicts both. Close it; the sketch is already posted as a spec comment, so route signoff via aida punt --kind design-fork.
+    2. Merge-time completion hazard: commit subject '[AI:codex] feat: ... (STORY-2539)' carries the bare trailing trailer that drives merge-time completion, so merging would mark STORY-2539 Completed although no VendorProfile registry, vendors/ module, profile-rendered hints, or literal ratchet exists (aida-core/src/vendors and aida-cli-lib/src/vendors absent at 8ddf1a7). If the sketch file is wanted on main, it must ship as a docs commit with a non-completing reference (Refs STORY-2539), only after advisor signoff.
+    3. AC unmet (description-derived, spec has no checklist): VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture incl. agy outer-only ruling, mail-wake, hint text, resume) - unverified/not implemented; vendor-name literals confined to vendors/ - not implemented; user hints rendered from profile - not implemented; STORY-782/BUG-2390 folded - sketch-only (BUG-2390 already Completed, sketch correctly does not reopen it).
+    4. Commit type mislabelled: a 148-line docs/plans markdown-only change is labelled 'feat', which misstates the change class in history and changelog tooling; use docs(plans).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T01:54:58.598929097Z
+  modified_at: 2026-11-07T01:54:58.598929097Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 history:
