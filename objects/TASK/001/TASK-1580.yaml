@@ -3,12 +3,12 @@ spec_id: TASK-1580
 agreed_id: TASK-1580
 title: 'DECISION GATE: operator authorization of a protected-launch installer/backend package (BUG-1669 revisit trigger)'
 description: 'This spec exists as the machine-readable hold for BUG-1669 (deferral decision 2026-10-03, recorded in BUG-1669''s comments alongside hold decisions 01a0e125/01a0e10c). It stays DRAFT until the operator authorizes a concrete installer/backend/credential package for the protected broker/worker boundary (SPIKE-91, ADR-61). Do NOT approve or implement this spec on agent initiative — approval IS the operator''s authorization act. Revisit triggers (any one): (a) a second human works this repo; (b) seats run on hosts the operator does not control; (c) the product serves external users. When triggered: operator approves this spec with the chosen package named, then BUG-1669 unblocks and starts sketch-first.'
-status: Draft
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-11-07T20:54:40.346332131Z
+modified_at: 2026-11-07T20:54:50.805465482Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -59,3 +59,12 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7ca-e8b5-72f3-ae67-aa30218fb1c1
+  author: joe
+  timestamp: 2026-11-07T20:54:50.805457880Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
