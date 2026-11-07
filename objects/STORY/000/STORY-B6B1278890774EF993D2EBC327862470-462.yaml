@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T12:32:29.973510477Z
+modified_at: 2026-11-07T12:32:36.766219533Z
 req_type: Story
 tags:
 - architecture
@@ -436,6 +436,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Headless argv/settings move into VendorProfile is behavior-preserving and the token ratchet meets the 10:42 ruling''s shape, but PR CI is red at the head (lib-1 Run tests, lib-0 Test time budget, Require every CI lane) while main 4803b66 is green on the same lanes.. No triage reason was given.'
   created_at: 2026-11-07T12:32:29.973509182Z
   modified_at: 2026-11-07T12:32:29.973509182Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5ff-1926-7550-8eba-72d9deeeec55
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3595):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: da77ae60829e
+    Recorded: 2026-11-07T12:31:23.988739892+00:00
+    Findings:
+    1. CI red at da77ae60829e on PR-caused lanes: CI (lib-1) step 'Run tests' failed, CI (lib-0) step 'Test time budget' failed, Build 'Require every CI lane' failed; main 4803b66ade9 (run 42363704418) is green on the same lanes. Logs were not readable from the reviewer sandbox, so identify the failing test from run 42371593774. Most likely cause: story_2539_vendor_literal_ratchet (aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs:145-224) runs syn::parse_file over all ~47 MB of workspace Rust, re-lexes every file into a token stream, and calls syn::parse_str::<LitStr> on every literal token, in CI's debug profile, with no entry in scripts/test-time-budget.toml (default_limit 10s, nextest kill 180s). Make the scan cheap, e.g. skip files whose text has no case-insensitive claude|codex|agy|antigravity|vendor substring before parsing (aliases need the original name in the same file, so this is sound), and check the literal's raw text for a vendor substring before parse_str. Then add a measured budget entry if one is still needed. Also note that tests in the touched session.rs and vendors/mod.rs are now held to strict limits (BUG-2414 untouched_factor no longer applies), so budget any of those that run over. Get the PR's lib lanes green.
+    2. Minor: test_attrs (story_2539_vendor_literal_ratchet_tests.rs:22-28) only treats an exact #[test] or #[cfg(test)] as test code. #[cfg(all(test, unix))] modules and path-qualified #[tokio::test] fns are counted as production debt, which contradicts the ruling's 'tests excluded'. Concrete instance: ledger line 'aida-cli-lib/src/init_cmd.rs|bug_1645_agents_md_link_tests::init_with_agents_link|literal:codex' (init_cmd.rs:6428 is #[cfg(all(test, unix))]), so editing that test trips the ratchet. Treat a cfg whose predicate is test or all(..., test, ...) as test-only, and any attribute path whose last segment is test as a test; add an exclusion fixture for both; drop that ledger line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T12:32:36.646185858Z
+  modified_at: 2026-11-07T12:32:36.646185858Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
