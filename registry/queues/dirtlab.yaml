@@ -1,1 +1,6 @@
-[]
+- user_id: dirtlab
+  requirement_id: 01a1b59e-3913-7c73-bc2d-d8c93d129a05
+  position: 1000
+  added_by: dirtlab
+  added_at: 2026-11-07T19:33:59.793581861Z
+  for_role: implementer
