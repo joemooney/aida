@@ -2140,7 +2140,8 @@ fn spawn_vendor_headless_forking(
     // trace:TASK-2631 | ai:codex
     let posture = containment_posture(vendor, contained)?;
     // trace:STORY-2326 TASK-2032 | ai:claude
-    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?;
+    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?
+        .with_wrapper_environment(wrapper);
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // TASK-2708: the headless env sits beside its compose_headless_command
     // build (BUG-342); the child grant is issued just after.
@@ -2199,7 +2200,7 @@ fn spawn_vendor_headless_forking(
     if wrapper {
         let result = (|| -> Result<_> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
-                &cmd,
+                &mut cmd,
                 &headless_worktree_root(),
                 host_main,
             )?
@@ -6587,7 +6588,12 @@ fn build_coordinator_headless_command_inner(
     // trace:TASK-2631 | ai:codex
     let posture = containment_posture(vendor, contained)?;
     // trace:STORY-2326 TASK-2032 | ai:claude
-    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?;
+    // The exec and coordinator owners both prepare this command through the
+    // receipt-owning wrapper. Keep ambient values implicit for its selector.
+    // trace:STORY-2326 | ai:codex
+    let wrapper = contained_wrapper_launch(vendor, contained)?;
+    let ctx = headless_launch_context(host_main, vendor, program, args, posture)?
+        .with_wrapper_environment(wrapper);
     let mut child_cmd = crate::launch::spawn_agent(&ctx)?;
     child_cmd
         .env("AIDA_HEADLESS", "1")
@@ -7283,7 +7289,7 @@ fn run_vendor_headless_child(
         let mut registered = false;
         let result = (|| -> Result<std::process::ExitStatus> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
-                &child_cmd,
+                &mut child_cmd,
                 &headless_worktree_root(),
                 host_main,
             )?
@@ -14209,7 +14215,7 @@ mod tests {
         assert!(
             envs_uncontained
                 .iter()
-                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+                .all(|(k, v)| *k != "AIDA_CONTAINED" || v.is_none()),
             "uncontained build_claude_exec_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
         );
     }
@@ -14250,7 +14256,7 @@ mod tests {
         assert!(
             envs_uncontained
                 .iter()
-                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+                .all(|(k, v)| *k != "AIDA_CONTAINED" || v.is_none()),
             "uncontained build_run_claude_session_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
         );
     }
@@ -14467,11 +14473,18 @@ mod tests {
                     Some(Some(std::ffi::OsStr::new(seat))),
                     "{vendor:?}: the routed seat, not the launcher's"
                 );
-                assert_eq!(
-                    get("AIDA_SESSION_PURPOSE"),
-                    Some(None),
-                    "{vendor:?}: the launcher's purpose is scrubbed"
-                );
+                let cleared =
+                    crate::launch::profile::VendorProfile::for_vendor(vendor.launch_vendor())
+                        .clears_environment();
+                if cleared {
+                    assert_eq!(get("AIDA_SESSION_PURPOSE").flatten(), None);
+                } else {
+                    assert_eq!(
+                        get("AIDA_SESSION_PURPOSE"),
+                        Some(None),
+                        "{vendor:?}: inheriting commands must explicitly scrub the launcher's purpose"
+                    );
+                }
             }
         }
     }
@@ -14746,6 +14759,12 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_exec_vendor_headless_command_exports_only_for_claude() {
+        // Keep this argv/env contract independent of a native seat's host
+        // binding; it must not resolve the operator's checkout or store.
+        // trace:STORY-2326 | ai:codex
+        let root = contained_cwd_seam::hermetic_checkout();
+        let _cwd = contained_cwd_seam::pin(root);
+        let _main = crate::seat_clone::LauncherMainPin::new(root);
         // TASK-1794: also pin os_wrap off — an ambient or racing
         // AIDA_OS_WRAP=1 routes the contained launch through the bwrap
         // preflight, which fails closed on userns-restricted CI runners.
@@ -14792,7 +14811,7 @@ mod tests {
             cmd_claude_uncontained.get_envs().collect();
         assert!(
             envs.iter()
-                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+                .all(|(k, v)| *k != "AIDA_CONTAINED" || v.is_none()),
             "uncontained Claude exec headless must strip AIDA_CONTAINED: {envs:?}"
         );
 

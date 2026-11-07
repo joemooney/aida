@@ -548,10 +548,13 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
         ),
     ),
     // trace:STORY-2326 | ai:claude — the one seat writer; its Codex callers
-    // finalize at their own (inventoried) sites.
+    // finalize at their own (inventoried) sites. Four grant writes cover
+    // Child, Lane and ThisSession's restored/current or explicit selector.
+    // The restoration branch requires an already cleared environment and
+    // obtains only the validated current grant; it creates no authority.
     (
         "launch/spawn.rs",
-        3,
+        4,
         Finalization::NotACodexLaunch(
             "launch::assign_seat, the seat writer every converted site calls",
         ),
@@ -566,7 +569,10 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "advisor seat builder only; intake/questions finalize via coordinator spawn",
         ),
     ),
-    ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
+    // Explicit advisor assignment transports the launcher's selector for Claude;
+    // the Codex caller replaces it with a delegated grant before finalization.
+    // trace:STORY-2326 | ai:codex
+    ("phase_driver.rs", 3, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     (

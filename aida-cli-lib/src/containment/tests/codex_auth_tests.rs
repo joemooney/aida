@@ -564,7 +564,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     use sha2::{Digest, Sha256};
     let pin = format!("{:x}", Sha256::digest(std::fs::read(&program).unwrap()));
     let plan = PreparedLaunch::prepare_with_io(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() },
@@ -624,7 +624,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     }
     drop(plan);
     std::fs::write(&program, "#!/bin/sh\necho 'codex-cli 0.166.1'\n").unwrap();
-    let result = PreparedLaunch::prepare(&child, root.path(), None);
+    let result = PreparedLaunch::prepare(&mut child, root.path(), None);
     assert!(match result {
         Ok(_) => false,
         Err(e) => format!("{e:#}").contains("re-probe this codex binary"),
