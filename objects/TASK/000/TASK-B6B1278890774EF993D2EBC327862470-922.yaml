@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-922
 agreed_id: TASK-2968
 title: Standalone aida-core without native features fails before dependency migration
 description: 'While validating TASK-3325, cargo test -p aida-core --test yaml_compatibility --no-default-features failed with 63 feature-gating errors (unresolved templates, mailbox_identity, git_ops, process_probe and related native-only modules). An untouched HEAD copy in /tmp/task3325-baseline reproduced the same 63 errors using the original dependency set, so this predates the migration. Native YAML tests pass. This is separate from the required aida-cli --no-default-features guard, which retains native aida-core. Triage whether standalone non-native aida-core remains supported; no fix included in TASK-3325. Evidence: /tmp/task3325-core.log and /tmp/task3325-baseline.log.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T05:05:59.420450766Z
-modified_at: 2026-11-07T13:57:42.711583373Z
+modified_at: 2026-11-07T13:57:44.659289724Z
 req_type: Task
 tags:
 - from-advisor:TASK-3325
@@ -28,6 +28,15 @@ history:
   author: joe
   timestamp: 2026-11-07T06:06:16.934429725Z
   changes: []
+- id: 01a1b64d-0a53-7152-a845-07e95d42225b
+  author: joe
+  timestamp: 2026-11-07T13:57:44.659285122Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 110130adbc7
