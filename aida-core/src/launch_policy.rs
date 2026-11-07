@@ -79,6 +79,135 @@ pub fn decided_keys() -> impl Iterator<Item = &'static str> {
         .map(|(key, _)| *key)
 }
 
+// trace:STORY-2538 | ai:codex
+/// The environment recipient matters: vendor-only tokens cannot reach tools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvRecipient {
+    VendorProcess,
+    ToolShell,
+}
+
+/// A pure, explicit projection specification. This is NOT an activated vendor
+/// allowlist: STORY-2326 owns the compatibility-gated policy declarations and
+/// env_clear integration. Callers supply exact keys, never a prefix wildcard.
+/// Owned-key semantics come only from OWNED_KEYS above.
+/// No Debug/serialization: key selections can themselves be sensitive.
+pub struct EnvPolicy {
+    vendor: LaunchVendor,
+    kind: LaunchKind,
+    recipient: EnvRecipient,
+    forwarded: Vec<std::ffi::OsString>,
+}
+
+/// A refused projection, deliberately omitting keys and values from diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnvPolicyRefusal;
+
+impl fmt::Display for EnvPolicyRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("environment projection violates launch policy")
+    }
+}
+impl std::error::Error for EnvPolicyRefusal {}
+
+/// A complete child environment, not an overlay on the parent. A future launch
+/// adapter must clear inheritance before applying these pairs. This type does
+/// not execute commands, validate grants or confer launcher authority.
+#[derive(Clone)]
+pub struct ChildEnv(std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString>);
+
+impl ChildEnv {
+    pub fn get(&self, key: impl AsRef<std::ffi::OsStr>) -> Option<&std::ffi::OsStr> {
+        self.0.get(key.as_ref()).map(std::ffi::OsString::as_os_str)
+    }
+
+    pub fn pairs(&self) -> impl Iterator<Item = (&std::ffi::OsStr, &std::ffi::OsStr)> {
+        self.0.iter().map(|(k, v)| (k.as_os_str(), v.as_os_str()))
+    }
+}
+
+impl EnvPolicy {
+    pub fn new(
+        vendor: LaunchVendor,
+        kind: LaunchKind,
+        recipient: EnvRecipient,
+        forwarded: impl IntoIterator<Item = std::ffi::OsString>,
+    ) -> Result<Self, EnvPolicyRefusal> {
+        let policy = Self {
+            vendor,
+            kind,
+            recipient,
+            forwarded: forwarded.into_iter().collect(),
+        };
+        for key in &policy.forwarded {
+            policy.check_key(key)?;
+            let owned = OWNED_KEYS
+                .iter()
+                .find(|(k, _)| std::ffi::OsStr::new(k) == key);
+            if matches!(owned, Some((_, Owned::Decided))) {
+                return Err(EnvPolicyRefusal);
+            }
+            // Unknown AIDA names cannot expand child authority. Fixture and
+            // required-live inputs are never vendor allowlist entries.
+            if key.as_encoded_bytes().starts_with(b"AIDA_") && owned.is_none() {
+                return Err(EnvPolicyRefusal);
+            }
+        }
+        Ok(policy)
+    }
+
+    pub fn vendor(&self) -> LaunchVendor {
+        self.vendor
+    }
+
+    fn check_key(&self, key: &std::ffi::OsStr) -> Result<(), EnvPolicyRefusal> {
+        let bytes = key.as_encoded_bytes();
+        if bytes.is_empty()
+            || bytes.contains(&0)
+            || bytes.contains(&b'=')
+            || (self.kind == LaunchKind::Background
+                && BACKGROUND_FORBIDDEN_KEYS.iter().any(|k| key == *k))
+            || (self.recipient == EnvRecipient::ToolShell
+                && VENDOR_PROCESS_ONLY_KEYS.iter().any(|k| key == *k))
+        {
+            return Err(EnvPolicyRefusal);
+        }
+        Ok(())
+    }
+
+    /// `decisions` are already validated launcher inputs, never ambient values.
+    /// Omitted Decided keys are absent, including when present in the parent.
+    /// Forwarded owned keys may also be explicitly replaced or removed.
+    pub fn project(
+        &self,
+        parent: &crate::exec_context::Environment,
+        decisions: impl IntoIterator<Item = (std::ffi::OsString, Option<std::ffi::OsString>)>,
+    ) -> Result<ChildEnv, EnvPolicyRefusal> {
+        let mut child = std::collections::BTreeMap::new();
+        for key in &self.forwarded {
+            if let Some(value) = parent.get(key) {
+                child.insert(key.clone(), value.to_owned());
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for (key, value) in decisions {
+            self.check_key(&key)?;
+            if !OWNED_KEYS.iter().any(|(k, _)| key == *k) || !seen.insert(key.clone()) {
+                return Err(EnvPolicyRefusal);
+            }
+            if let Some(value) = value {
+                child.insert(key, value);
+            } else {
+                child.remove(&key);
+            }
+        }
+        if child.values().any(|v| v.as_encoded_bytes().contains(&0)) {
+            return Err(EnvPolicyRefusal);
+        }
+        Ok(ChildEnv(child))
+    }
+}
+
 // Compatibility path: identity and descriptors have one owner.
 // trace:STORY-2539 | ai:codex
 pub use crate::vendors::{LaunchVendor, UnknownVendor};
@@ -211,6 +340,128 @@ pub fn refuse_posture_flags(args: &[String]) -> Result<(), PostureFlag> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exec_context_projection_excludes_secrets_and_fixture_inputs() {
+        use crate::exec_context::Environment;
+        let parent = Environment::from_pairs([
+            ("PATH".into(), "/fixture".into()),
+            ("GH_TOKEN".into(), "secret".into()),
+            (ROLE_ENV.into(), "advisor".into()),
+            ("AIDA_TEST_ROOT".into(), "/host".into()),
+            ("AIDA_REQUIRE_BWRAP_LIVE".into(), "1".into()),
+        ]);
+        let policy = EnvPolicy::new(
+            LaunchVendor::Codex,
+            LaunchKind::Fresh,
+            EnvRecipient::VendorProcess,
+            ["PATH".into()],
+        )
+        .unwrap();
+        let child = policy
+            .project(&parent, [(ROLE_ENV.into(), Some("implementer".into()))])
+            .unwrap();
+        assert_eq!(child.get("PATH"), Some(std::ffi::OsStr::new("/fixture")));
+        assert_eq!(
+            child.get(ROLE_ENV),
+            Some(std::ffi::OsStr::new("implementer"))
+        );
+        assert_eq!(child.pairs().count(), 2);
+        for forbidden in [
+            "AIDA_TEST_ROOT",
+            "AIDA_REQUIRE_BWRAP_LIVE",
+            "AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE",
+            "AIDA_UNKNOWN",
+            ROLE_ENV,
+        ] {
+            assert!(EnvPolicy::new(
+                LaunchVendor::Codex,
+                LaunchKind::Fresh,
+                EnvRecipient::VendorProcess,
+                [forbidden.into()]
+            )
+            .is_err());
+        }
+        assert!(policy
+            .project(&parent, [("GH_TOKEN".into(), Some("secret".into()))])
+            .is_err());
+        assert!(policy
+            .project(&parent, [(ROLE_ENV.into(), None), (ROLE_ENV.into(), None)])
+            .is_err());
+        let absent = policy.project(&parent, []).unwrap();
+        assert!(absent.get(ROLE_ENV).is_none());
+    }
+
+    #[test]
+    fn exec_context_projection_preserves_owned_background_and_tool_boundaries() {
+        use crate::exec_context::Environment;
+        for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+            for key in BACKGROUND_FORBIDDEN_KEYS {
+                let policy = EnvPolicy::new(
+                    vendor,
+                    LaunchKind::Background,
+                    EnvRecipient::VendorProcess,
+                    [],
+                )
+                .unwrap();
+                assert!(policy
+                    .project(&Environment::default(), [((*key).into(), Some("x".into()))])
+                    .is_err());
+            }
+            for key in VENDOR_PROCESS_ONLY_KEYS {
+                assert!(EnvPolicy::new(
+                    vendor,
+                    LaunchKind::Fresh,
+                    EnvRecipient::ToolShell,
+                    [(*key).into()]
+                )
+                .is_err());
+                let tools =
+                    EnvPolicy::new(vendor, LaunchKind::Fresh, EnvRecipient::ToolShell, []).unwrap();
+                assert!(tools
+                    .project(&Environment::default(), [((*key).into(), Some("x".into()))])
+                    .is_err());
+                let policy = EnvPolicy::new(
+                    vendor,
+                    LaunchKind::Fresh,
+                    EnvRecipient::VendorProcess,
+                    [(*key).into()],
+                )
+                .unwrap();
+                assert_eq!(policy.vendor(), vendor);
+                let parent = Environment::from_pairs([((*key).into(), "token".into())]);
+                assert!(policy.project(&parent, []).unwrap().get(key).is_some());
+                assert!(policy
+                    .project(&parent, [((*key).into(), None)])
+                    .unwrap()
+                    .get(key)
+                    .is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn exec_context_projection_rejects_invalid_process_pairs() {
+        use crate::exec_context::Environment;
+        for key in ["", "A=B", "A\0B"] {
+            assert!(EnvPolicy::new(
+                LaunchVendor::Claude,
+                LaunchKind::Query,
+                EnvRecipient::VendorProcess,
+                [key.into()]
+            )
+            .is_err());
+        }
+        let policy = EnvPolicy::new(
+            LaunchVendor::Claude,
+            LaunchKind::Query,
+            EnvRecipient::VendorProcess,
+            ["PATH".into()],
+        )
+        .unwrap();
+        let parent = Environment::from_pairs([("PATH".into(), "a\0b".into())]);
+        assert!(policy.project(&parent, []).is_err());
+    }
 
     fn argv(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| s.to_string()).collect()
