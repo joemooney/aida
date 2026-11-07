@@ -3,12 +3,12 @@ spec_id: BUG-2138
 agreed_id: BUG-2138
 title: 'Two seats implemented BUG-2009 in parallel (#2642 and #2644): claiming the spec did not prevent duplicate work'
 description: 'Observed 2026-10-14: a seat opened #2642 (BUG-2009) at 23:34Z while an advisor-launched fixer, claiming BUG-2009+BUG-2003, built #2644. #2642 was closed as superseded. Investigate whether the second claim was refused or warned, whether subagent fixers skipped the claim, or whether the claim lease was not visible. Expected: the second claimant is refused, or told who holds it.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:19.695580202Z
-modified_at: 2026-11-07T20:55:28.736321311Z
+modified_at: 2026-11-07T20:55:30.736828236Z
 req_type: Bug
 tags:
 - capture
@@ -43,6 +43,15 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7cb-84b0-7493-9c40-a5a1be0552ae
+  author: joe
+  timestamp: 2026-11-07T20:55:30.736818521Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
