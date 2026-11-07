@@ -1,0 +1,29 @@
+id: 01a1b397-696d-7a43-903d-8dcc4cbf98c5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-913
+title: '[cosmetic, non-blocking] docs/advanced/authority-and-seats.md:52 / authority.ht…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-903, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, non-blocking] docs/advanced/authority-and-seats.md:52 / authority.html:43 example enters advisor with --delegate-seat implementer --delegate-seat reviewer only, while the figure's direct grant shows set 'implementer, reviewer, advisor, integrator'; add the two seats to the example or note the larger set.
+
+  PR: #3549
+  Reviewed sha: 0078f69a32eba21b22c7234b0f7328da36f88732
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T01:20:07.021012612Z
+modified_at: 2026-11-07T01:20:07.021012612Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-903
+- finding-hash:6c94b931
+- from-review:PR-3549
+- kind:carried-forward
+filed_at:
+  code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
