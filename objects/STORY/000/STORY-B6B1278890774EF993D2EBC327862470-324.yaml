@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-06T23:46:35.538799075Z
+modified_at: 2026-11-07T00:55:35.635768298Z
 req_type: Story
 tags:
 - architecture
@@ -712,6 +712,13 @@ comments:
   created_at: 2026-11-06T23:46:35.538799075Z
   modified_at: 2026-11-06T23:46:35.538799075Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b380-f5d3-7151-91b8-9a0396303fa2
+  author: joe
+  content: '[advisor 17:58] #3531 @978e95e: the reviewer APPROVED, but review record was refused (parent grant revoked 00:11Z when the prior advisor session ended), so no verdict was recorded; re-review dispatched. Non-blocking findings ruled once, all ACCEPTED, no rework: (1) ratchet does not forbid direct issue_launch_child_with_delegation/issue_child_from outside launch/: minor, the remaining callers are the sanctioned issuer paths; tighten when slice D converts them. (2) stale ''slice C'' ledger labels: cosmetic. (3) control children''s comm stays ''exe'': cosmetic, cmdline/loop detection are correct. The re-review should not block on these.'
+  created_at: 2026-11-07T00:55:35.635768298Z
+  modified_at: 2026-11-07T00:55:35.635768298Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
