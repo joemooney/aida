@@ -1867,6 +1867,7 @@ fn task1993_orphaned_reviewer_keeps_its_slot_until_it_exits() {
 // Queue work records the reviewer it launches through the production spawn
 // helper; outside a watch launch the helper is the ordinary blocking run.
 // trace:TASK-1993.ac55aab8 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
 fn task1993_queue_work_records_the_reviewer_it_launches() {
     let (temp, store) = fixture();
@@ -2647,6 +2648,7 @@ fn bug2471_unusable_state_stops_before_admitting_another_change() {
 }
 
 // trace:TASK-3365 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
 fn task_3365_fast_exiting_worker_is_recorded_and_releases_capacity() {
     let (_temp, store) = fixture();

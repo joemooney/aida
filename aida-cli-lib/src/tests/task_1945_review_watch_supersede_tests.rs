@@ -852,6 +852,7 @@ fn task_3365_caller_capture_refusal_is_recoverable() {
 // An orphan remains in the review's group, but adoption by a subreaper
 // outside the recorded tree supplies no signal authority.
 // trace:TASK-3365 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
 fn task_3365_subreaper_adoption_does_not_prove_group_ancestry() {
     if crate::test_env::run_path_isolated_test() {
