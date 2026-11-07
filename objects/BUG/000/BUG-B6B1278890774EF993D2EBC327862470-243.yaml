@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-243
 agreed_id: BUG-2477
 title: status_awaiting.rs keys on the display ID, so a label collision misclassifies an escalation
 description: 'Source: work GDMS CI report. status_awaiting resolves records by their display label. When two records share a label, an escalation is attributed to the wrong record. Read by the summary''s unique UUID instead. Acceptance: a regression test with two records that share a display label classifies each escalation correctly. The work branch has a reference fix plus a story_465/story_1680 test.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:32.761539508Z
-modified_at: 2026-11-07T04:39:15.688485195Z
+modified_at: 2026-11-07T05:19:01.995957210Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b472-256b-75b1-9a58-8c21c2bfba4a
+  author: aida-session-start
+  timestamp: 2026-11-07T05:19:01.995956253Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
