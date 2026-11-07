@@ -1,0 +1,29 @@
+id: 01a1b589-0e83-7dd2-ad77-fd3307e07c50
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-931
+title: 'COSMETIC (non-blocking): run-upstream.py starts each step with start_new_sessio…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2606, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC (non-blocking): run-upstream.py starts each step with start_new_session=True but installs no SIGTERM handler, so a GitLab cancel on a shell executor (interruptible: true) signals the adapter but not the detached step process group; docker executors tear down the container so this is moot for the documented image deployment. Consider forwarding SIGTERM to os.killpg of the active step.
+
+  PR: #3578
+  Reviewed sha: ced59dd90096fabcd57930a0df264607d42b824a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T10:23:40.675895077Z
+modified_at: 2026-11-07T10:23:40.675895077Z
+req_type: Task
+tags:
+- carried-from:STORY-2606
+- finding-hash:e9769903
+- from-review:PR-3578
+- kind:carried-forward
+filed_at:
+  code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b39018a304
+  vendor: claude
