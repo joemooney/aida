@@ -1762,9 +1762,9 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             // the re-run command, and never fails the ship — the PR is open.
             // trace:BUG-2217 | ai:claude
             let _ = queue_review_for_open_pr(&project_root, &branch);
-            // Dual-write: the seat hands its work to the PR (Q2; the seat
-            // HEAD is not detached before PR-C). // trace:STORY-2325 | ai:claude
-            crate::ownership::dual::handed_off(&project_root, &project_root, &branch, &spec, pr);
+            // The owner detaches its seat and hands ownership to the PR.
+            // trace:STORY-2325 | ai:codex
+            crate::ownership::dual::handed_off(&project_root, &project_root, &branch, &spec, pr)?;
             eprintln!(
                 "{} aida ship — PR-{} open for {} (--no-merge; not merged). Review + merge it, \
                  or finish with `aida ship`.",
@@ -2641,7 +2641,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                             &branch,
                             &shipped_spec,
                             new_n,
-                        );
+                        )?;
                         log_ship_activity(
                             &main_worktree,
                             Some(new_n),

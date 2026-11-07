@@ -519,7 +519,7 @@ fn q2_handoff_check_refuses_a_dirty_or_unpushed_seat() {
     assert!(err.contains("is not the head"), "{err}");
     // A seat that fails the check records nothing.
     dual::enable_for_test();
-    dual::handed_off(p, p, "main", "", 9);
+    assert!(dual::handed_off(p, p, "main", "", 9).is_err());
     assert!(!p.join(".aida").join(store::DIR).exists());
 }
 
@@ -1137,4 +1137,197 @@ fn proc_identity_lease_selects_worker_never_creator() {
         judge_owner(&refused, &facts, now()),
         OwnerVerdict::Unknown { .. }
     ));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_staging_failure_does_not_publish_any_record_or_journal() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(holder("owner")), Phase::Leased), None))
+        })
+        .unwrap();
+    let journal = std::fs::read(store.journal_path()).unwrap();
+    let error = store
+        .update_all_checked(
+            vec![Step {
+                key: spec(1),
+                op: "handoff".into(),
+                expect: Expect::Generation(1),
+                transition: Box::new(|current| ops::release(current, "owner", "ended")),
+            }],
+            || anyhow::bail!("injected staging refusal"),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("staging refusal"));
+    assert_eq!(
+        store
+            .load(&spec(1))
+            .unwrap()
+            .unwrap()
+            .holder
+            .unwrap()
+            .session,
+        "owner"
+    );
+    assert_eq!(std::fs::read(store.journal_path()).unwrap(), journal);
+    assert!(!store.dir().join(".pending.json").exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_pending_batch_recovery_is_complete_and_idempotent() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), None, Phase::Leased), None))
+        })
+        .unwrap();
+    let mut first = rec(spec(1), Some(holder("new")), Phase::Leased);
+    first.generation = 2;
+    let mut second = rec(spec(2), Some(holder("new")), Phase::Leased);
+    second.generation = 1;
+    // Crash after the first record was applied, before the second and journal.
+    std::fs::write(
+        store.path_for(&spec(1)),
+        serde_json::to_vec(&first).unwrap(),
+    )
+    .unwrap();
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [first, second], "journal": journal,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let all = store.list();
+    assert!(all.1.is_empty());
+    assert_eq!(all.0.len(), 2);
+    assert!(all
+        .0
+        .iter()
+        .all(|r| r.holder.as_ref().unwrap().session == "new"));
+    assert!(!store.dir().join(".pending.json").exists());
+    assert_eq!(store.load(&spec(1)).unwrap().unwrap().generation, 2);
+    assert_eq!(store.load(&spec(2)).unwrap().unwrap().generation, 1);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_unrecoverable_batch_refuses_all_readers() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), None, Phase::Leased), None))
+        })
+        .unwrap();
+    let record = rec(spec(2), None, Phase::Leased);
+    std::fs::create_dir_all(store.path_for(&spec(2))).unwrap();
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [record], "journal": "",
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(store.load(&spec(1)).is_err());
+    let (records, errors) = store.list();
+    assert!(records.is_empty());
+    assert_eq!(errors.len(), 1);
+    assert!(store.dir().join(".pending.json").exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_handoff_detaches_only_the_owner_at_the_pushed_head() {
+    let dir = repo();
+    let p = dir.path();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = OwnershipStore::at(p.join(".aida/ownership"));
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: p.to_path_buf(),
+        kind: TreeKind::Worktree,
+        branch: Some("main".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    assert!(dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "intruder").is_err());
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "refs/heads/main"
+    );
+    std::fs::write(p.join("untracked"), "salvage").unwrap();
+    assert!(dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner").is_err());
+    std::fs::remove_file(p.join("untracked")).unwrap();
+    dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner").unwrap();
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "-q", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "the handed-off branch must be free"
+    );
+    for key in [
+        spec(1),
+        WorkKey::Change {
+            change: dual::change(9),
+        },
+    ] {
+        let record = store.load(&key).unwrap().unwrap();
+        assert!(record.holder.is_none());
+        assert!(matches!(record.phase, Phase::InPr { .. }));
+    }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_readers_do_not_infer_death_from_absence_or_elapsed_time() {
+    let dir = repo();
+    let key = WorkKey::Train {
+        train: dual::change(9),
+    };
+    assert!(reader::ended(dir.path(), &key).unwrap().is_none());
+    let store = OwnershipStore::for_project(dir.path()).unwrap().unwrap();
+    store
+        .update(&key, "seed", Expect::Absent, |_| {
+            Some((
+                rec(
+                    key.clone(),
+                    Some(holder("unknown")),
+                    Phase::Training {
+                        train: dual::change(9),
+                    },
+                ),
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(reader::ended(dir.path(), &key).unwrap().is_none());
+    store
+        .update(&key, "release", Expect::Generation(1), |current| {
+            ops::release(current, "unknown", "explicit release")
+        })
+        .unwrap();
+    assert_eq!(
+        reader::ended(dir.path(), &key).unwrap(),
+        Some("explicit release".into())
+    );
 }

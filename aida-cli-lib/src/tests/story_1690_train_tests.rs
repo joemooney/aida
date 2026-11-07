@@ -3197,6 +3197,37 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("main");
     write_retry_config(&root);
+    crate::test_git::git_command()
+        .arg("-C")
+        .arg(&root)
+        .args(["init", "-q"])
+        .status()
+        .unwrap();
+    let ownership = crate::ownership::store::OwnershipStore::at(root.join(".aida/ownership"));
+    let key = crate::ownership::WorkKey::Train {
+        train: crate::ownership::dual::change(3248),
+    };
+    ownership
+        .update(
+            &key,
+            "release",
+            crate::ownership::store::Expect::Absent,
+            |_| {
+                Some((
+                    crate::ownership::Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        holder: None,
+                        phase: crate::ownership::Phase::Closed {
+                            why: "released".into(),
+                        },
+                    },
+                    None,
+                ))
+            },
+        )
+        .unwrap();
+    let ended = ownership.load(&key).unwrap().unwrap();
     let dead = bug_2412_local_owner("train-host", 999_999_999, "linux-starttime:1");
     let foreign = TrainOwner {
         pid_ns: Some("1".into()),
@@ -3250,7 +3281,7 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
     let (open, leased, abandoned) = live_trains(&root).unwrap();
     assert_eq!(
         abandoned,
-        vec![(3248, "train/killed-1".to_string(), dead.clone())]
+        vec![(3248, "train/killed-1".to_string(), ended.clone())]
     );
     assert_eq!(
         open,
@@ -3271,13 +3302,13 @@ fn story_2401_abandoned_cleanup_unknown_blocks_new_train() {
         train_rider_refusal(3214, &open, &leased).is_some(),
         "an ownerless train is not judged dead and still blocks"
     );
-    close_abandoned_train(&root, 3248, "train/killed-1", &dead, true).unwrap();
+    close_abandoned_train(&root, 3248, "train/killed-1", &ended, true).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(
         !calls.contains("pr close"),
         "a dry run closes nothing: {calls}"
     );
-    assert!(close_abandoned_train(&root, 3248, "train/killed-1", &dead, false).is_err());
+    assert!(close_abandoned_train(&root, 3248, "train/killed-1", &ended, false).is_err());
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(!calls.contains("pr close"), "{calls}");
     // A live train merge-lease still naming #3248 means a train is landing

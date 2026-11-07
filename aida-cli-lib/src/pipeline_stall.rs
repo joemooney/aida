@@ -1068,15 +1068,16 @@ fn parse_stall_prs(
 fn train_pr_running(
     root: &Path,
     number: u64,
-    body: &str,
+    _body: &str,
     details: &mut Vec<String>,
 ) -> Option<bool> {
-    if crate::pr_train::train_abandoned(
-        body,
-        &crate::coordination::hostname(),
-        crate::process_probe::process_identity_is_alive,
-    )
-    .is_some()
+    let key = crate::ownership::WorkKey::Train {
+        train: crate::ownership::dual::change(number),
+    };
+    if crate::ownership::reader::ended(root, &key)
+        .ok()
+        .flatten()
+        .is_some()
     {
         Some(false)
     } else {

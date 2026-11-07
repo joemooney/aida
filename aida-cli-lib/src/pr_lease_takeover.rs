@@ -1,39 +1,21 @@
-//! STORY-2315: may a relaunch end a finished lane's dead lease by itself?
+//! Relaunch I/O adapter for the authoritative ownership record.
 //!
-//! A rework (`aida queue work --steal`, which `queue rework --work` chains) or
-//! a review launch (`aida session start --review N`) finds the PR's branch
-//! still held by the lease of a lane that already shipped and exited. Plain
-//! `session end` refused those leases, so every relaunch stopped on "could not
-//! end dead lease … add --force". This module is the safe check an operator
-//! ran by hand before adding `--force`:
-//!
-//! 1. the lease's owning process is verifiably gone (a live one is skipped);
-//! 2. its seat holds no uncommitted change;
-//! 3. every commit on HEAD or any local branch is reachable from a remote.
-//!    Local copies in the host repository alone do not establish this.
-//!
-//! When all three hold, nothing in the seat is lost by `session end --force`,
-//! and the caller ends the lease itself. A dirty seat, or a seat with commits
-//! absent from remotes, refuses with that reason. A lease whose death cannot be
-//! proven, whose seat cannot be read, or whose PR head cannot be read, is not
-//! judged here: the caller keeps its previous behavior (plain `session end`,
-//! whose own guards apply).
-//!
-//! Both relaunch paths turn the verdict into an action through the one
-//! mapping [`end_action`], so they cannot drift apart.
-//!
-//! `session end` itself is not changed: this module only decides whether its
-//! callers pass `--force`.
-// trace:STORY-2315 | ai:claude
+//! The shared judge supplies process liveness and reclaim safety. Missing,
+//! unreadable or superseded ownership refuses cleanup. A positive death proof
+//! plus a clean, remotely covered tree permits ordinary guarded session end;
+//! automated callers never receive a force override. Free work does not grant
+//! permission to remove its old tree. Legacy pure fixtures remain test-only.
+// trace:STORY-2325 | ai:codex
 
 use crate::leases::SessionLease;
-use aida_core::liveness::StaleLeaseRecovery;
+
 use std::path::Path;
 
 /// Whether the lease's owning process is gone, from the same classifier
 /// `aida ps` renders.
 // trace:STORY-2315 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
 pub(crate) enum OwnerLiveness {
     Live,
     Dead,
@@ -65,8 +47,8 @@ pub(crate) enum SeatReading {
 // trace:STORY-2315 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PrLeaseCheck {
-    /// Owner gone, seat clean and fully pushed: end it with `--force`.
-    SafeToForceEnd,
+    /// Owner proved dead, seat clean and covered: guarded end by safe rule.
+    SafeToEnd,
     /// A live process backs the lease: never ended here.
     Live,
     /// Ending it could lose work; the text says what.
@@ -79,6 +61,7 @@ pub(crate) enum PrLeaseCheck {
 /// The pure decision. `is_ancestor(seat_head, pr_head)` answers whether the
 /// seat's HEAD is contained in the PR head.
 // trace:STORY-2315 | ai:claude
+#[cfg(test)]
 pub(crate) fn classify(
     liveness: OwnerLiveness,
     seat: &SeatReading,
@@ -96,7 +79,7 @@ pub(crate) fn classify(
         OwnerLiveness::Dead => {}
     }
     let (dirty, unpushed, head) = match seat {
-        SeatReading::Missing => return PrLeaseCheck::SafeToForceEnd,
+        SeatReading::Missing => return PrLeaseCheck::SafeToEnd,
         SeatReading::Unreadable(why) => {
             return PrLeaseCheck::NotProvable(format!("its seat could not be read ({why})"))
         }
@@ -121,7 +104,7 @@ pub(crate) fn classify(
     }
     let Some(head) = head.as_deref() else {
         // An unborn HEAD with a clean tree holds nothing.
-        return PrLeaseCheck::SafeToForceEnd;
+        return PrLeaseCheck::SafeToEnd;
     };
     let Some(pr_head) = pr_head else {
         return PrLeaseCheck::NotProvable(
@@ -129,7 +112,7 @@ pub(crate) fn classify(
         );
     };
     if head == pr_head || is_ancestor(head, pr_head) {
-        PrLeaseCheck::SafeToForceEnd
+        PrLeaseCheck::SafeToEnd
     } else {
         PrLeaseCheck::Refuse(format!(
             "its seat's HEAD {} has commits the PR head {} lacks",
@@ -144,31 +127,43 @@ pub(crate) fn classify(
 /// the PR it reviews, not its local branch).
 // trace:STORY-2315 | ai:claude
 pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str) -> PrLeaseCheck {
-    let liveness = owner_liveness(lease);
-    if liveness != OwnerLiveness::Dead {
-        return classify(liveness, &SeatReading::Missing, None, |_, _| false);
+    // The record is authoritative. Free grants no permission to remove a tree;
+    // retained handed-off seats still pass session_end's independent guards.
+    // trace:STORY-2325 | ai:codex
+    let record = match crate::ownership::reader::lease_record(main, lease) {
+        Ok(Some(record)) => record,
+        Ok(None) => {
+            return PrLeaseCheck::NotProvable(
+                "ownership record missing; migrate or rebind the session".into(),
+            )
+        }
+        Err(e) => {
+            return PrLeaseCheck::NotProvable(format!("ownership evidence unreadable: {e:#}"))
+        }
+    };
+    let Some(_) = record.holder.as_ref().filter(|h| h.session == lease.id) else {
+        return PrLeaseCheck::NotProvable("this lease no longer holds the ownership record".into());
+    };
+    match crate::ownership::reader::owner(&record) {
+        crate::ownership::OwnerVerdict::Alive { .. } => return PrLeaseCheck::Live,
+        crate::ownership::OwnerVerdict::Unknown { why } => return PrLeaseCheck::NotProvable(why),
+        crate::ownership::OwnerVerdict::Dead { .. } => {}
     }
     let seat = read_seat(main, lease, pr_branch);
-    // A finished seat can have moved to another pushed branch since the
-    // PR head. Remote coverage of the seat's HEAD and lease branch (all local
-    // branches for a private clone) protects that work too;
-    // comparing only HEAD to this PR incorrectly refuses a clean pushed seat.
-    // trace:BUG-2450 | ai:codex
     if matches!(&seat, SeatReading::Read { dirty, .. } if dirty.is_empty()) {
         match crate::session_end::remote_missing_commits_for_lease(main, lease) {
-            Ok(0) => return PrLeaseCheck::SafeToForceEnd,
+            Ok(0) => {}
             Ok(n) => {
                 return PrLeaseCheck::Refuse(format!(
-                    "its seat has {n} commit(s) on HEAD or local branches that no remote has"
+                    "its seat has {n} commit(s) that no remote has"
                 ))
             }
-            Err(error) => {
-                return PrLeaseCheck::NotProvable(format!(
-                    "remote commit coverage could not be read: {error:#}"
-                ))
+            Err(e) => {
+                return PrLeaseCheck::NotProvable(format!("remote coverage unreadable: {e:#}"))
             }
         }
     }
+
     let pr_head = match &seat {
         SeatReading::Read {
             dirty,
@@ -177,27 +172,44 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         } if dirty.is_empty() && unpushed.is_empty() => pr_head_on_origin(main, pr_branch),
         _ => None,
     };
-    classify(liveness, &seat, pr_head.as_deref(), |seat_head, pr_head| {
-        is_ancestor(main, seat_head, pr_head)
-    })
+    let tree = match seat {
+        SeatReading::Missing => crate::ownership::TreeReading::Missing,
+        SeatReading::Unreadable(why) => crate::ownership::TreeReading::Unreadable(why),
+        SeatReading::Read {
+            dirty,
+            unpushed,
+            head,
+        } => crate::ownership::TreeReading::Read {
+            dirty,
+            unpushed,
+            head,
+        },
+    };
+    // The owner was judged above; the shared reclaim rule protects the tree.
+    match crate::ownership::reclaim_dead_tree(&tree, pr_head.as_deref(), &|a, b| {
+        is_ancestor(main, a, b)
+    }) {
+        crate::ownership::Reclaim::EndBySafeRule => PrLeaseCheck::SafeToEnd,
+        crate::ownership::Reclaim::Refuse(why) => PrLeaseCheck::Refuse(why),
+        crate::ownership::Reclaim::Keep(why) => PrLeaseCheck::NotProvable(why),
+        crate::ownership::Reclaim::Free => {
+            PrLeaseCheck::NotProvable("free work does not authorize tree removal".into())
+        }
+    }
 }
 
 /// How a relaunch ends one lease blocking the PR.
 // trace:STORY-2315 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LeaseEndAction {
-    /// `session end --force`: the seat holds no unpublished work.
-    ForceEnd,
-    /// Plain `session end`, whose own guards (dirty tree, live process)
-    /// decide, as before STORY-2315.
-    PlainEnd,
+    /// Guarded session end: the dead seat holds no unpublished work.
+    SafeEnd,
     /// Stop the relaunch with this message: ending the lease could lose work.
     Bail(String),
 }
 
-/// The one verdict-to-action mapping both relaunch paths (`queue work
-/// --steal` and the review launch) use. Only a provable risk to work bails;
-/// a live or unjudged lease keeps the plain end and its guards.
+/// Both relaunch paths retain live or unknown ownership. SafeEnd still
+/// passes every ordinary session-end tree and live-process guard.
 // trace:STORY-2315 | ai:claude
 pub(crate) fn end_action(
     lease: &SessionLease,
@@ -205,16 +217,21 @@ pub(crate) fn end_action(
     check: &PrLeaseCheck,
 ) -> LeaseEndAction {
     match check {
-        PrLeaseCheck::SafeToForceEnd => LeaseEndAction::ForceEnd,
+        PrLeaseCheck::SafeToEnd => LeaseEndAction::SafeEnd,
         PrLeaseCheck::Refuse(reason) => {
             LeaseEndAction::Bail(refusal_message(lease, pr_branch, reason))
         }
-        PrLeaseCheck::Live | PrLeaseCheck::NotProvable(_) => LeaseEndAction::PlainEnd,
+        PrLeaseCheck::Live => {
+            LeaseEndAction::Bail("ownership holder is alive; wait for voluntary handoff".into())
+        }
+        PrLeaseCheck::NotProvable(why) => {
+            LeaseEndAction::Bail(format!("ownership retained: {why}"))
+        }
     }
 }
 
 /// Read and decide for one lease. `pr_branch` is `None` when the PR a
-/// reviewer's `pr-N` lease reviews cannot be named: the plain end applies.
+/// reviewer's `pr-N` lease reviews cannot be named, ownership is retained.
 // trace:STORY-2315 | ai:claude
 pub(crate) fn plan_lease_end(
     main: &Path,
@@ -223,7 +240,7 @@ pub(crate) fn plan_lease_end(
 ) -> LeaseEndAction {
     match pr_branch {
         Some(pr_branch) => end_action(lease, pr_branch, &check_pr_lease(main, lease, pr_branch)),
-        None => LeaseEndAction::PlainEnd,
+        None => LeaseEndAction::Bail("PR branch unknown; ownership retained".into()),
     }
 }
 
@@ -355,16 +372,6 @@ pub(crate) fn fetch_review_head(
         "cannot release temporary review-head ref"
     );
     Ok(head)
-}
-
-fn owner_liveness(lease: &SessionLease) -> OwnerLiveness {
-    match crate::leases::stale_lease_recovery_for_lease(lease).verdict {
-        StaleLeaseRecovery::Live => OwnerLiveness::Live,
-        StaleLeaseRecovery::UnknownLiveness => OwnerLiveness::Unknown,
-        StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
-            OwnerLiveness::Dead
-        }
-    }
 }
 
 /// Read the seat. Host git never runs in a seat clone: a clone is read through

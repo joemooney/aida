@@ -231,6 +231,7 @@ pub(crate) fn list(root: &Path) -> Vec<Marker> {
 }
 
 /// `Some(reason)` when the marker no longer stands for a live review.
+#[cfg(test)]
 pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<String> {
     if m.pid != 0
         && !m.host.is_empty()
@@ -251,7 +252,22 @@ pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<Str
     None
 }
 
-/// Is `m` still a live review (not expired by pid or TTL)?
+/// Missing evidence retains the review. TTL is display metadata; only the
+/// ownership judge or an explicit release ends the review.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
+    ownership_ended(root, m).is_none()
+}
+
+fn ownership_ended(root: &Path, m: &Marker) -> Option<String> {
+    let key = crate::ownership::WorkKey::Review {
+        change: crate::ownership::dual::change(m.pr),
+        head: m.head_sha.clone(),
+    };
+    crate::ownership::reader::ended(root, &key).ok().flatten()
+}
+
+#[cfg(test)]
 pub(crate) fn is_live(m: &Marker) -> bool {
     expired_reason(m, &crate::coordination::hostname(), now_secs()).is_none()
 }
@@ -295,7 +311,7 @@ pub(crate) fn merge_gate(
     let Some(m) = read(root, pr) else {
         return MergeGate::Clear;
     };
-    if let Some(reason) = expired_reason(&m, &crate::coordination::hostname(), now_secs()) {
+    if let Some(reason) = ownership_ended(root, &m) {
         clear(root, pr);
         return MergeGate::ExpiredCleared(m, reason);
     }
@@ -311,7 +327,7 @@ pub(crate) fn merge_gate(
 /// `pr` covering `current_head`, else `None`. Never removes anything.
 pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>) -> Option<String> {
     let m = read(root, pr)?;
-    (is_live(&m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
+    (is_live_at(root, &m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].

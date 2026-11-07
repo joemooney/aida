@@ -53,14 +53,13 @@ fn marker_at_different_head_does_not_block() {
 }
 
 #[test]
-fn ttl_expired_marker_does_not_block_and_is_removed() {
+fn ttl_expired_marker_without_ownership_proof_keeps_blocking() {
     let dir = tempfile::tempdir().unwrap();
     let old = now_secs() - CLAIM_TTL_SECS - 60;
     write(dir.path(), &claim(7, "abc", old, CLAIM_TTL_SECS)).unwrap();
-    let gate = merge_gate(dir.path(), 7, || panic!("expired marker needs no head"));
-    assert!(matches!(gate, MergeGate::ExpiredCleared(_, _)));
-    assert!(proceed_note(&gate).unwrap().contains("expired"));
-    assert!(read(dir.path(), 7).is_none());
+    let gate = merge_gate(dir.path(), 7, || Some("abc".into()));
+    assert!(matches!(gate, MergeGate::UnderReview(_)));
+    assert!(read(dir.path(), 7).is_some());
 }
 
 #[test]

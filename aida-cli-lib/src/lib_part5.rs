@@ -2822,7 +2822,7 @@ pub(crate) fn handle_review_claim(
             .map(|info| info.head_oid)
         });
     if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
-        if crate::gate::review_marker::is_live(&prev) {
+        if crate::gate::review_marker::is_live_at(&root, &prev) {
             eprintln!(
                 "  {} replacing a live review claim on PR-{pr}: {}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),

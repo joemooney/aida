@@ -258,10 +258,13 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         fetch_head
     );
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), first_head);
-    assert_eq!(
+    // No admitted ownership record: branch takeover retains the seat even
+    // though the independent remote-coverage guard can prove its commits safe.
+    // trace:STORY-2325 | ai:codex
+    assert!(matches!(
         crate::pr_lease_takeover::check_pr_lease(&fx.main, &lease, "missing-source-branch"),
-        crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd
-    );
+        crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_)
+    ));
     let mut implementer = lease.clone();
     implementer.review_verb = false;
     assert!(crate::session_end::guard_remote_commits(&fx.main, &implementer, false).is_err());
