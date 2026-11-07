@@ -628,7 +628,7 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
         args.iter()
             .filter(|a| a.as_str() == "--dangerously-skip-permissions")
             .count(),
-        1
+        0
     );
     assert!(args
         .windows(2)
@@ -2273,6 +2273,7 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     use std::os::unix::fs::symlink;
     let home = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
     let policy = crate::containment::runtime_policy("agy").unwrap();
     let host = home.path().join(&policy.relative);
     std::fs::create_dir_all(&host).unwrap();
@@ -2280,14 +2281,23 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     let token = host.join(&policy.credential);
     std::fs::write(&token, "synthetic-credential").unwrap();
     let mut profile = WriteProfile::new();
-    let runtime =
-        install_private_runtime(&mut profile, state.path(), home.path(), &policy).unwrap();
+    let runtime = install_private_runtime(
+        &mut profile,
+        state.path(),
+        home.path(),
+        &policy,
+        workspace.path(),
+    )
+    .unwrap();
     assert_eq!(runtime, host);
     let source = state.path().join("vendor-runtime");
     assert_eq!(std::fs::metadata(&source).unwrap().mode() & 0o777, 0o700);
     assert_eq!(
-        std::fs::read_to_string(source.join("settings.json")).unwrap(),
-        "{}"
+        serde_json::from_slice::<serde_json::Value>(
+            &std::fs::read(source.join("settings.json")).unwrap()
+        )
+        .unwrap(),
+        serde_json::json!({"permissions": {"allow": [format!("write_file({}/**)", workspace.path().display())]}})
     );
     assert!(std::fs::read(source.join(&policy.credential))
         .unwrap()
@@ -2401,6 +2411,8 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
             path
         })
         .into();
+    let workspace = tempfile::tempdir().unwrap();
+    let settings_json = policy.settings(workspace.path()).unwrap().to_string();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
     let protected_json = serde_json::to_string(&protected).unwrap();
@@ -2409,7 +2421,7 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
         r#"
 import pathlib,errno,subprocess,sys,json,os
 runtime=pathlib.Path({runtime_json})
-assert (runtime/'settings.json').read_text()=='{{}}'
+assert json.loads((runtime/'settings.json').read_text())=={settings_json}
 assert not (runtime/'host-plugin').exists()
 token=runtime/{leaf_json}
 assert token.read_text()=='synthetic-credential'
@@ -2479,7 +2491,14 @@ for name in ('file-helper','url-helper','stdio-server'):
     std::fs::create_dir_all(empty.join("antigravity-cli")).unwrap();
     plan.profile.add(&empty, false).unwrap();
     plan.profile.mounts.last_mut().unwrap().path = home.path().join(".gemini");
-    install_private_runtime(&mut plan.profile, plan._state.path(), home.path(), &policy).unwrap();
+    install_private_runtime(
+        &mut plan.profile,
+        plan._state.path(),
+        home.path(),
+        &policy,
+        workspace.path(),
+    )
+    .unwrap();
     bind_runtime_credential(
         &mut plan.profile,
         &runtime,

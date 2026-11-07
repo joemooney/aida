@@ -22,7 +22,7 @@ pub(crate) mod pty;
 mod store_mutation;
 
 #[path = "codex_auth.rs"]
-mod codex_auth;
+pub(crate) mod codex_auth;
 
 // trace:TASK-3219 | ai:codex
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -457,6 +457,7 @@ fn install_private_runtime(
     state: &Path,
     home: &Path,
     policy: &crate::containment::RuntimePolicy,
+    workspace: &Path,
 ) -> Result<PathBuf> {
     policy.validate()?;
     let destination = home.join(&policy.relative);
@@ -467,8 +468,11 @@ fn install_private_runtime(
     let source = state.join("vendor-runtime");
     ensure_dir(&source)?;
     std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o700))?;
-    // An empty settings document inherits no host plugins, MCP or hooks.
-    std::fs::write(source.join("settings.json"), "{}")?;
+    // Private settings inherit no host plugins, MCP or hooks.
+    std::fs::write(
+        source.join("settings.json"),
+        serde_json::to_vec(&policy.settings(workspace)?)?,
+    )?;
     std::fs::write(source.join(&policy.credential), "")?;
     profile.add(&source, true)?;
     profile
@@ -978,6 +982,9 @@ impl PreparedLaunch {
                 .num_seconds()
                 .max(1)
         };
+        // Retain the checked path so verification and execution use one leaf.
+        // trace:BUG-2484 | ai:codex
+        let mut pinned_program = None;
         // Credentials resolve BEFORE any mount or state: a missing or
         // unusable one is a named refusal, never a lane without it.
         let auth = match vendor.auth {
@@ -987,7 +994,9 @@ impl PreparedLaunch {
                 match std::fs::symlink_metadata(codex_home.join("auth.json")) {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
+                        let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
+                        pinned_program = Some(program);
                         let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
@@ -1150,7 +1159,7 @@ impl PreparedLaunch {
         let private_home = if let Some(policy) = &runtime_policy {
             // The vendor resolves this conventional path itself; mount only a
             // launch-owned runtime there, never the host settings/plugins/logs.
-            install_private_runtime(&mut profile, state.path(), &host_home, policy)?
+            install_private_runtime(&mut profile, state.path(), &host_home, policy, &root)?
         } else {
             let path = state.path().join(vendor.key);
             ensure_dir(&path)?;
@@ -1298,7 +1307,19 @@ impl PreparedLaunch {
                 service.endpoint.clone(),
             );
         }
-        let program = resolve_program(child, &env)?;
+        // API-key lanes share npm discovery, while only ChatGPT requires the pin.
+        // trace:BUG-2484 | ai:codex
+        let program = match pinned_program {
+            Some(program) => program,
+            None => {
+                let program = resolve_program(child, &env)?;
+                if vendor.auth == VendorAuth::OpenAiApiKey {
+                    codex_auth::resolve_native_program(&program)?
+                } else {
+                    program
+                }
+            }
+        };
         let original: Vec<_> = child
             .get_args()
             .map(|v| v.to_string_lossy().into_owned())

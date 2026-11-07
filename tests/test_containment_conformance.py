@@ -694,7 +694,7 @@ else:
         settings = c.agy_fixture_settings(self.workspace, runner, manifest)
         invocation = c.shlex.join([c.sys.executable, str(runner), "--payload", str(manifest)])
         self.assertEqual(settings, {"permissions": {"allow": [
-            f"write_file({self.workspace})", f"command({invocation})"]}})
+            f"write_file({self.workspace}/**)", f"command({invocation})"]}})
         for bad in (Path("/"), Path("relative"), self.workspace / "..", self.workspace / "glob*",
                     self.workspace / "injection)\ncommand(*)"):
             with self.assertRaises(ValueError):
@@ -712,7 +712,10 @@ else:
     def test_agy_run_reports_private_log_tool_safety_refusal_per_check(self):
         self.run_agy_fixture("runtime/log/cli-test.log", violation=True)
 
-    def run_agy_fixture(self, refusal_path=None, violation=False):
+    def test_agy_run_reports_workspace_glob_sandbox_error_per_check(self):
+        self.run_agy_fixture("stdout.jsonl", sandbox_error=True)
+
+    def run_agy_fixture(self, refusal_path=None, violation=False, sandbox_error=False):
         args = type("Args", (), {"vendor": "agy", "output": self.root / "agy-run", "timeout": 1})()
         real_open = os.open
         def open_fixture(path, flags, *args):
@@ -721,12 +724,15 @@ else:
             return real_open(path, flags, *args)
         def launch(argv, workspace, env, root, seconds, pass_fds):
             self.assertNotIn("--dangerously-skip-permissions", argv)
+            self.assertNotIn("--mode", argv)
+            self.assertNotIn(str(Path.home() / ".gemini/antigravity-cli/settings.json"), argv)
+            self.assertFalse((root / "runtime/settings.json").exists())
             self.assertEqual(argv[-2], "-p")
             settings_path = Path(argv[argv.index("--settings") + 1])
             self.assertEqual(settings_path.name, "conformance-settings.json")
             generated = json.loads((root / "runtime" / settings_path.name).read_text())
             self.assertEqual(generated, c.agy_fixture_settings(workspace, root / "payload/runner.py", root / "payload/manifest.json"))
-            self.assertEqual(generated["permissions"]["allow"][0], f"write_file({workspace})")
+            self.assertEqual(generated["permissions"]["allow"][0], f"write_file({workspace}/**)")
             self.assertEqual((root / "runtime").stat().st_mode & 0o777, 0o700)
             self.assertNotIn("write_file(*)", json.dumps(generated))
             (root / "stdout.jsonl").touch()
@@ -735,6 +741,9 @@ else:
                 log.parent.mkdir(parents=True, exist_ok=True)
                 log.write_text(json.dumps({"message": "auto unavailable; continuing in the default mode"}) + "\n" +
                                json.dumps({"message": 'Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"'}) + "\n")
+            if sandbox_error:
+                with (root / "stdout.jsonl").open("a") as stream:
+                    stream.write(json.dumps({"output": f"Command failed to run: sandbox configuration error: readwrite {workspace}/**: globs not supported."}) + "\n")
             if violation:
                 (root / "outside/create-sentinel").write_text("measured violation")
             return {"exit_code": 0}
@@ -752,7 +761,8 @@ else:
         self.assertEqual(report["agy_posture"],
                          "aida outer-only (native_layer=none); applied ContainmentReceipt required")
         if refusal_path:
-            reason = "default-mode tool safety: unsupported_tool write_file"
+            reason = ("agy native sandbox configuration: workspace write_file glob is unsupported"
+                      if sandbox_error else "default-mode tool safety: unsupported_tool write_file")
             self.assertEqual(report["unsupported_reason"], reason)
             self.assertFalse(report["verified_terminal_receipt"])
             self.assertEqual(set(report["checks"]), {"C0", "C1", "C2", "C3", "C4"})
