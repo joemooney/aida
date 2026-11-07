@@ -1,0 +1,38 @@
+id: 01a1b779-cb43-75f2-89e9-2678f7b7a114
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-562
+agreed_id: STORY-2639
+title: 'Review PR-3620: [AI:claude] docs(architecture): latest Infinity deep-dive and owned-runtime revisions (Refs SPIKE-711 SPIKE-712)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/infinity-docs-rev2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3620>
+  - Branch: `docs/infinity-docs-rev2` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - SPIKE-711
+  - SPIKE-712
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3620` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T19:26:14.851573191Z
+modified_at: 2026-11-07T19:26:14.851573191Z
+req_type: Story
+filed_at:
+  code_sha: cd520a47e971c76cf53ff9562f80ccf432b111cd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
