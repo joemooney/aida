@@ -4,12 +4,12 @@ agreed_id: STORY-2539
 title: 'Vendor profile as data beyond spawn: one VendorProfile registry (regroup R5)'
 description: |
   Regroup R5: a VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture including today's agy outer-only ruling, mail-wake support, hint text, resume semantics); vendor-name literals allowed only in vendors/; user hints rendered from the profile. Evidence: about 70 vendor commits in 14 days, 430 non-test "claude" literals, STORY-782 and BUG-2390 (both fold here). Trigger: STORY-2326 PR-B merged (the spawn half and its posture tables exist). Sketch-first.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T12:31:24.923556624Z
+modified_at: 2026-11-07T12:32:29.973510477Z
 req_type: Story
 tags:
 - architecture
@@ -431,6 +431,13 @@ comments:
   created_at: 2026-11-07T12:13:45.083064375Z
   modified_at: 2026-11-07T12:13:45.083064375Z
   session_id: 01a1b5d29b3a
+- id: 01a1b5fe-ff15-7441-aa94-5104f6197de4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Headless argv/settings move into VendorProfile is behavior-preserving and the token ratchet meets the 10:42 ruling''s shape, but PR CI is red at the head (lib-1 Run tests, lib-0 Test time budget, Require every CI lane) while main 4803b66 is green on the same lanes.. No triage reason was given.'
+  created_at: 2026-11-07T12:32:29.973509182Z
+  modified_at: 2026-11-07T12:32:29.973509182Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
@@ -554,6 +561,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b5fe-ff15-7441-aa94-50f771fcd4ae
+  author: joe
+  timestamp: 2026-11-07T12:32:29.973500826Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
@@ -563,11 +579,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Headless argv/settings move into VendorProfile is behavior-preserving and the token ratchet meets the 10:42 ruling's shape, but PR CI is red at the head (lib-1 Run tests, lib-0 Test time budget, Require every CI lane) while main 4803b66 is green on the same lanes.
-  recovery_hint: address the review findings, move STORY-2539 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T12:31:24.923556624Z
