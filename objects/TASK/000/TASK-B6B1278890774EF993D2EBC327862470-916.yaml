@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T02:13:19.656979457Z
-modified_at: 2026-11-07T07:38:31.859941238Z
+modified_at: 2026-11-07T07:52:00.631542550Z
 req_type: Task
 tags:
 - carried-from:BUG-2474
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-11-07T07:12:32.478168633Z
   modified_at: 2026-11-07T07:12:32.478168633Z
   session_id: 01a1b4ce017e
+- id: 01a1b4fe-3377-7b62-bbcc-c1df91e2d4cd
+  author: joe
+  content: 'Pickup verification at HEAD 75aef493acc: the advisor ruling and folded TASK-2965 are already implemented by existing branch commits db332192ee7 and 0068c98d981, and queue next reports APPROVED review at 0068c98d9814. No additional source edits were necessary. Fresh local validation passed: six focused TASK-2964 regressions; 198 related verdict/ledger/phase/corpus/display/real-recorder authority tests (including those six); 58 verified-train tests, for 256 distinct targeted tests. cargo fmt --all -- --check and git diff --check passed. Working tree clean. No commit, push, PR creation, queue completion, review record or merge performed by this seat. Existing human merge-hold clearance remains outside this verification; host publication/completion workflow remains responsible for next steps.'
+  created_at: 2026-11-07T07:52:00.631542550Z
+  modified_at: 2026-11-07T07:52:00.631542550Z
+  session_id: 01a1b4f1d3d4
 history:
 - id: 01a1b3e2-36ae-7cf3-b019-cfdaf99c87f3
   author: joe
