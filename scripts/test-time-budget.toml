@@ -32,6 +32,9 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# CI at 5ef082e760 measured 10.1s; allow headroom for the shared-store CLI probes.
+# trace:STORY-2402 | ai:codex
+"aida-cli::bug_1502_format_json_audit story2402_s3_migration_global_json_matches_dedicated_json" = 15
 # Whole-workspace token/AST inventory. PR #3595 run 42371593774 measured
 # 58.028s before candidate filtering. Same-host debug probes: 34.51s before,
 # 15.50s after (55% lower); allow 60s for CI concurrency while retaining the
