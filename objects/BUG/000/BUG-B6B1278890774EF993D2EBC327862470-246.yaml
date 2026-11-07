@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T08:23:55.822627700Z
+modified_at: 2026-11-07T08:23:59.108720009Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -67,6 +67,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Batched epic rollup is correct and the 7k-row cold-cache regression is wired and green in CI contracts, but CI is red at head: the new CI step is unclassified in scripts/ci-gate-tiers.toml (gates fails), and lib-0 Run tests failed while main passed it.. No triage reason was given.'
   created_at: 2026-11-07T08:23:55.822625042Z
   modified_at: 2026-11-07T08:23:55.822625042Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b51b-78c0-7803-a90d-4f49fa1f6887
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2481):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a56e1fbf5116
+    Recorded: 2026-11-07T08:21:13.813549031+00:00
+    Findings:
+    1. BLOCKING (CI gates red, caused by this PR): .github/workflows/ci.yml adds step 'Run full-status cold-cache latency regression' but scripts/ci-gate-tiers.toml does not classify it. Reproduced: 'python3 scripts/check-ci-gates.py --list --tier all' exits 2 with "CI gate is not classified: 'Run full-status cold-cache latency regression'", so tests/test_ci_test_shards.py::test_check_ci_list_labels_run_tests_with_its_real_local_command (check=True) fails in gates step 'STORY-1853 test-speed tooling tests' (job 128345887866). Fix: add '"Run full-status cold-cache latency regression" = "full"' with a '# trace:BUG-2481' comment next to the 'Run single-spec show latency regression' entry (scripts/ci-gate-tiers.toml:81). Run make check-ci-fast before pushing; it would have caught this.
+    2. BLOCKING (CI lib-0 red, cause unknown to the reviewer): CI (lib-0) 'Run tests' failed at a56e1fbf (job 128345887957), but main passed lib-0 at 6ac3f69d635, the commit this branch merged in (run 42353156199). The reviewer sandbox cannot download job logs (blob host denied), so the failing test is unidentified. Find the failing test in the job log. If this PR's compute_epic_statuses/child_status_rollups change caused it, fix it. If it is a flake, show a green lib-0 rerun at the new head.
+    3. MINOR (round-1 finding 2 still open): the PR body still has no CI timing evidence. The contracts step 'Run full-status cold-cache latency regression' passed at this head (job 128345887901, 08:11:09-08:11:28Z, about 19s for cold plus warm on the debug binary). Put its printed cold/warm timings and job link in the PR body.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T08:23:58.912883701Z
+  modified_at: 2026-11-07T08:23:58.912883701Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
