@@ -177,20 +177,14 @@ lease_field() {
     sed -n "s/^$1=//p" "$lease_file" 2>/dev/null | head -n1
 }
 
-# Shell cannot supply cooperative holder admission or call the shared judge.
-# Retain every complete record, including legacy/unknown/refused holders; never
-# infer process death or expiry with a private PID probe. An abandoned script
-# record needs operator recovery. Rust consumers use HolderRecord::observe.
+# Shared Rust judge owns reclamation. An unavailable/older helper fails closed.
 # trace:TASK-3364 | ai:codex
 lease_is_live() {
     [ -e "$lease_file" ] || [ -L "$lease_file" ] || return 1
-    # Preserve the pre-existing partial-publication grace. Unreadable records hold.
-    local mtime age body
-    body=$(cat "$lease_file" 2>/dev/null) || return 0
-    if ! grep -q '^ttl_secs=' <<< "$body"; then
-        mtime=$(stat -c %Y "$lease_file" 2>/dev/null) || return 0
-        age=$(( $(date +%s) - mtime ))
-        [ "${age#-}" -gt 30 ] && return 1
+    local observation
+    observation=$(aida merge-lock --check-file "$lease_file" --json 2>/dev/null) || return 0
+    if grep -q '"reclaimable":true' <<< "$observation"; then
+        return 1
     fi
     return 0
 }
@@ -244,8 +238,12 @@ lease_acquire() {
         # the EXIT trap removes it if the script dies before the link.
         # trace:TASK-1955 | ai:claude (TASK-1-422)
         lease_tmp=$(mktemp "$(dirname "$lease_file")/.$(basename "$lease_file").XXXXXX")
-        local tmp=$lease_tmp
-        printf 'generation=%s\nhost=%s\npid=%s\npid_start=%s\npid_ns=%s\nboot=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+        local tmp=$lease_tmp record_clock record_boot
+        record_clock=$(lease_clock) || { lease_guard_unlock; return 1; }
+        record_boot=$(lease_boot)
+        [ -n "$record_boot" ] || { lease_guard_unlock; return 1; }
+        printf 'deadline_boot=%s\ndeadline_boottime=%s\ngeneration=%s\nhost=%s\npid=%s\npid_start=%s\npid_ns=%s\nboot=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+            "$record_boot" "$(( record_clock + 3600 ))" \
             "$(cat /proc/sys/kernel/random/uuid)" "$lease_host" "$$" "$(lease_pid_start "$$")" "proc-identity-v1:$(lease_pid_ns)" "$(lease_boot)" "${2:-}" \
             "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
         if ln "$tmp" "$lease_file" 2>/dev/null; then
@@ -263,7 +261,7 @@ lease_acquire() {
             return 1 # link failed without a contender; do not retry forever
         fi
         if ! lease_is_live; then
-            rm -f "$lease_file" || { lease_guard_unlock; return 1; }
+            rm -f "$lease_file" || { echo "warning: could not remove $lease_file; inspect aida merge-lock before manual recovery" >&2; lease_guard_unlock; return 1; }
             lease_guard_unlock
             continue
         fi
@@ -277,9 +275,12 @@ lease_release() {
     [ -n "$lease_tmp" ] && rm -f "$lease_tmp"
     lease_tmp=
     if [ "$lease_held" = "1" ]; then
-        lease_guard_lock || return 1
+        lease_guard_lock 5 || {
+            echo "warning: merge-lease release guard timed out; stop all mergers, verify no merge is running, then remove only $lease_file (preserve .guard sidecar)" >&2
+            return 1
+        }
         if [ "$(cat "$lease_file" 2>/dev/null)" = "$lease_record" ]; then
-            rm -f "$lease_file" || { lease_guard_unlock; return 1; }
+            rm -f "$lease_file" || { echo "warning: could not remove $lease_file; inspect aida merge-lock before manual recovery" >&2; lease_guard_unlock; return 1; }
         fi
         lease_guard_unlock
     fi

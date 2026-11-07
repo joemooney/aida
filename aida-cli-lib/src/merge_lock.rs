@@ -15,7 +15,7 @@
 //!
 //! Contention (decision 2): bounded-wait-then-refuse. Stale-lock recovery mirrors
 //! the drain-lock (coordination.rs) / index.lock (BUG-1164): a same-host DEAD pid
-//! is reclaimed immediately; unknown or refused holders require operator recovery.
+//! is reclaimed immediately; non-Alive holders also have a boot-clock expiry.
 // trace:STORY-1171 | ai:claude
 
 use aida_core::proc_identity::{HolderRecord, HolderRefusal, UnknownReason, Verdict};
@@ -28,11 +28,12 @@ pub(crate) const DEFAULT_WAIT: Duration = Duration::from_secs(180);
 /// Poll cadence while waiting for a held lock to free.
 const POLL: Duration = Duration::from_secs(2);
 /// Compatibility field for older readers: disable their wall-time TTL backstop.
-/// New readers reclaim only a proven dead admitted process. Retire old binaries
+/// New readers use shared process verdicts plus a separate boot deadline. Retire old binaries
 /// before rollback; new records also fence their PID probes with a versioned
 /// namespace spelling that old readers treat as foreign.
 // trace:TASK-3364 | ai:codex
 const DEFAULT_TTL_SECS: u64 = i64::MAX as u64;
+const LEASE_SECS: u64 = 600;
 /// A lease file with no complete record (empty or cut short) is a writer
 /// mid-publish — `acquire` before TASK-1-421 created the file, then wrote it.
 /// It reads live for this long after its mtime, and stale after.
@@ -99,7 +100,7 @@ fn now_secs() -> u64 {
 /// The recorded holder of a merge-lease — enough for stale-recovery + `status`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Holder {
-    /// Cooperative admission and generation; absent legacy records remain unknown.
+    /// Cooperative admission and generation; absent legacy evidence remains unknown.
     // trace:TASK-3364 | ai:codex
     pub process: Option<HolderRecord>,
     pub host: String,
@@ -122,11 +123,13 @@ pub(crate) struct Holder {
     pub note: String,
     pub acquired_at: u64,
     pub ttl_secs: u64,
+    pub deadline_boot: Option<String>,
+    pub deadline_boottime: Option<u64>,
 }
 
 fn serialize(h: &Holder) -> String {
     format!(
-        "process={}\nhost={}\npid={}\npid_start={}\npid_ns={}\nboot={}\npr={}\nnote={}\nacquired_at={}\nttl_secs={}\n",
+        "process={}\nhost={}\npid={}\npid_start={}\npid_ns={}\nboot={}\npr={}\nnote={}\nacquired_at={}\ndeadline_boot={}\ndeadline_boottime={}\nttl_secs={}\n",
         h.process.as_ref().map(|p| serde_json::to_string(p).expect("holder JSON")).unwrap_or_default(),
         h.host,
         h.pid,
@@ -136,6 +139,8 @@ fn serialize(h: &Holder) -> String {
         h.pr.map(|p| p.to_string()).unwrap_or_default(),
         h.note.replace('\n', " "),
         h.acquired_at,
+        h.deadline_boot.as_deref().unwrap_or_default(),
+        h.deadline_boottime.map(|n| n.to_string()).unwrap_or_default(),
         h.ttl_secs,
     )
 }
@@ -154,6 +159,8 @@ fn parse(body: &str) -> Holder {
         note: String::new(),
         acquired_at: 0,
         ttl_secs: DEFAULT_TTL_SECS,
+        deadline_boot: None,
+        deadline_boottime: None,
     };
     for line in body.lines() {
         if let Some((k, v)) = line.split_once('=') {
@@ -168,6 +175,10 @@ fn parse(body: &str) -> Holder {
                 "pr" => h.pr = v.parse().ok(),
                 "note" => h.note = v.to_string(),
                 "acquired_at" => h.acquired_at = v.parse().unwrap_or(0),
+                "deadline_boot" => {
+                    h.deadline_boot = Some(v.into()).filter(|v: &String| !v.is_empty())
+                }
+                "deadline_boottime" => h.deadline_boottime = v.parse().ok(),
                 "ttl_secs" => h.ttl_secs = v.parse().unwrap_or(DEFAULT_TTL_SECS),
                 _ => {}
             }
@@ -230,8 +241,12 @@ fn is_complete_record(body: &str) -> bool {
 // trace:TASK-1955 | ai:claude (TASK-1-421)
 fn file_stale_reason(path: &Path, our_host: &str) -> Option<String> {
     let body = std::fs::read_to_string(path).ok()?;
-    if is_complete_record(&body) {
-        return stale_reason(&parse(&body), our_host);
+    body_stale_reason(path, &body, our_host)
+}
+
+fn body_stale_reason(path: &Path, body: &str, our_host: &str) -> Option<String> {
+    if is_complete_record(body) {
+        return stale_reason(&parse(body), our_host);
     }
     let age = mtime_distance_secs(path)?;
     (age > PARTIAL_GRACE_SECS).then(|| {
@@ -317,14 +332,112 @@ fn temp_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.{}.{nanos}.tmp", std::process::id()))
 }
 
-/// Expiry is not process death. Complete legacy, unknown and refused records
-/// require operator recovery; even a wall-clock jump never steals a live merger.
+/// Suspend-inclusive boot clock. Wall time is diagnostic only.
 // trace:TASK-3364 | ai:codex
-fn stale_reason(h: &Holder, _our_host: &str) -> Option<String> {
-    match holder_verdict(h) {
-        Ok(Verdict::Dead(reason)) => Some(format!("holder process ended: {reason:?}")),
-        _ => None,
+fn boot_clock() -> std::io::Result<(String, u64)> {
+    let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?;
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: clock_gettime writes to a valid timespec.
+    if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut time) } != 0 {
+        return Err(std::io::Error::last_os_error());
     }
+    Ok((boot.trim().into(), time.tv_sec as u64))
+}
+
+fn stale_at(h: &Holder, clock: Option<(&str, u64)>) -> Option<String> {
+    match holder_verdict(h) {
+        Ok(Verdict::Alive) => return None,
+        Ok(Verdict::Dead(reason)) => return Some(format!("Dead({reason:?})")),
+        _ => {}
+    }
+    let (boot, now) = clock?;
+    let deadline_boot = h.deadline_boot.as_deref()?;
+    let deadline = h.deadline_boottime?;
+    (boot != deadline_boot || now >= deadline).then(|| "Expired: lease expired (boot clock)".into())
+}
+
+pub(crate) fn stale_reason(h: &Holder, _our_host: &str) -> Option<String> {
+    let clock = boot_clock().ok();
+    stale_at(h, clock.as_ref().map(|(b, n)| (b.as_str(), *n)))
+}
+
+pub(crate) fn diagnostic(h: &Holder) -> (String, String) {
+    match holder_verdict(h) {
+        Ok(Verdict::Alive) => ("Alive".into(), String::new()),
+        Ok(Verdict::Dead(r)) => ("Dead".into(), format!("{r:?}")),
+        Ok(Verdict::ForeignUnknown(r)) => ("ForeignUnknown".into(), format!("{r:?}")),
+        Err(r) => ("Refused".into(), format!("{r:?}")),
+    }
+}
+
+pub(crate) fn repair_hint(path: &Path) -> String {
+    format!("For legacy records, run `aida merge-lock --migrate-legacy` to arm a boot deadline. For immediate repair, stop all mergers for this branch; verify on the owning node that no merge is running; then remove only {}; preserve its .guard sidecar", path.display())
+}
+
+/// Read-only helper used by shell consumers, under their mutation guard.
+pub(crate) fn inspect_file(path: &Path) -> serde_json::Value {
+    match std::fs::read_to_string(path) {
+        Ok(body) => {
+            let h = parse(&body);
+            let (verdict, reason) = diagnostic(&h);
+            let stale = body_stale_reason(path, &body, "");
+            serde_json::json!({"holder_verdict": verdict, "reason": reason,
+                "lease_state": if stale.as_deref().is_some_and(|s| s.starts_with("Expired")) { "Expired" } else if verdict == "Dead" { "Dead" } else { "Retained" },
+                "reclaimable": stale.is_some(), "reclaim_reason": stale, "repair_hint": repair_hint(path)})
+        }
+        Err(e) => {
+            serde_json::json!({"reclaimable": false, "reason": e.to_string(), "repair_hint": repair_hint(path)})
+        }
+    }
+}
+
+/// One-time deadline migration at the mutation boundary. No legacy PID is
+/// recaptured: cooperative admission cannot be retroactively established.
+/// Inspections remain read-only and report repair for unrebindable identities.
+fn migrate_legacy_deadline(path: &Path) -> std::io::Result<bool> {
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return Ok(false);
+    };
+    if !is_complete_record(&body) {
+        return Ok(false);
+    }
+    let mut h = parse(&body);
+    if h.deadline_boot.is_some() || h.deadline_boottime.is_some() {
+        return Ok(false);
+    }
+    let (boot, now) = boot_clock()?;
+    h.deadline_boot = Some(boot);
+    h.deadline_boottime = Some(now.saturating_add(h.ttl_secs.min(LEASE_SECS)));
+    h.ttl_secs = DEFAULT_TTL_SECS;
+    let tmp = temp_path(path);
+    std::fs::write(&tmp, serialize(&h))?;
+    let result = std::fs::rename(&tmp, path);
+    let _ = std::fs::remove_file(tmp);
+    result.map(|()| true)
+}
+
+/// Explicit upgrade/repair action; status and train observations never mutate.
+// trace:TASK-3364 | ai:codex
+pub(crate) fn migrate_legacy(project_root: &Path) -> std::io::Result<usize> {
+    let entries = match std::fs::read_dir(locks_dir(project_root)) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e),
+    };
+    let mut changed = 0;
+    for entry in entries {
+        let entry = entry?;
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        let _guard = mutation_guard(&path, Duration::from_secs(5))?;
+        changed += usize::from(migrate_legacy_deadline(&path)?);
+    }
+    Ok(changed)
 }
 
 /// RAII guard: dropping it removes the lockfile IF we hold it. Release early
@@ -373,15 +486,35 @@ impl MergeLease {
     // caller; `drop(lease)` is the same operation.
     fn do_release(&mut self) {
         if self.held {
-            let Ok(_guard) = mutation_guard(&self.path, Duration::from_secs(2)) else {
-                return;
+            let _guard = match mutation_guard(&self.path, Duration::from_secs(5)) {
+                Ok(guard) => guard,
+                Err(e) => {
+                    eprintln!(
+                        "warning: merge-lease release guard failed: {e}; {}",
+                        repair_hint(&self.path)
+                    );
+                    return;
+                }
             };
-            if std::fs::read_to_string(&self.path).ok().as_deref() != Some(&self.record) {
-                self.held = false;
-                return;
-            }
-            if std::fs::remove_file(&self.path).is_err() {
-                return;
+            match std::fs::read_to_string(&self.path) {
+                Ok(body) if body == self.record => {
+                    if let Err(e) = std::fs::remove_file(&self.path) {
+                        eprintln!(
+                            "warning: merge-lease release failed: {e}; {}",
+                            repair_hint(&self.path)
+                        );
+                        return;
+                    }
+                }
+                Ok(_) => {} // Replaced: release our shadow, never remove their lease.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    eprintln!(
+                        "warning: merge-lease release could not read holder: {e}; {}",
+                        repair_hint(&self.path)
+                    );
+                    return;
+                }
             }
             self.held = false;
             // trace:STORY-2325 | ai:claude
@@ -399,7 +532,7 @@ impl Drop for MergeLease {
 }
 
 /// Acquire the merge-lease for `branch`, waiting up to `wait` on contention
-/// (decision 2). Reclaims a proven dead admitted holder.
+/// (decision 2). Reclaims Dead or separately Expired non-Alive holders.
 /// Returns `WouldBlock` if a live holder outlasts the wait — the caller REFUSES.
 pub(crate) fn acquire(
     project_root: &Path,
@@ -423,7 +556,11 @@ pub(crate) fn acquire(
         .clone();
     loop {
         let guard = mutation_guard(&path, deadline.saturating_duration_since(Instant::now()))?;
+        migrate_legacy_deadline(&path)?;
+        let (deadline_boot, clock_now) = boot_clock()?;
         let h = Holder {
+            deadline_boot: Some(deadline_boot),
+            deadline_boottime: Some(clock_now.saturating_add(LEASE_SECS)),
             process: Some(process.clone()),
             host: our_host.clone(),
             pid: std::process::id(),
@@ -496,7 +633,7 @@ pub(crate) fn acquire(
     }
 }
 
-/// Active merge-leases: exclude proven dead holders, retain unknown/refused ones.
+/// Active merge-leases: exclude Dead and Expired holders; always retain Alive.
 // trace:BUG-2220 | ai:claude
 pub(crate) fn live_status(project_root: &Path) -> Vec<(String, Holder)> {
     let our_host = crate::coordination::hostname();
@@ -529,6 +666,9 @@ pub(crate) fn observed_train_running(root: &Path) -> Option<bool> {
             continue;
         }
         if h.note != crate::pr_train::TRAIN_LEASE_NOTE {
+            continue;
+        }
+        if stale_reason(&h, "").is_some() {
             continue;
         }
         match holder_verdict(&h) {
@@ -581,6 +721,8 @@ mod tests {
             note: crate::pr_train::TRAIN_LEASE_NOTE.into(),
             acquired_at: 0,
             ttl_secs: 1,
+            deadline_boot: None,
+            deadline_boottime: None,
         }
     }
     fn change_identity(h: &mut Holder, key: &str, value: serde_json::Value) {
@@ -681,6 +823,72 @@ mod tests {
             Err(HolderRefusal::IdentityChanged)
         );
     }
+    // trace:TASK-3364 | ai:codex
+    #[test]
+    fn boot_deadline_expires_unknown_and_refused_but_never_alive() {
+        let mut h = current_holder();
+        h.deadline_boot = Some("boot-a".into());
+        h.deadline_boottime = Some(100);
+        for acquired_at in [0, u64::MAX] {
+            h.acquired_at = acquired_at;
+            for clock in [("boot-a", 99), ("boot-a", 101), ("boot-b", 1)] {
+                assert!(
+                    stale_at(&h, Some(clock)).is_none(),
+                    "Alive wins over clock/boot"
+                );
+            }
+        }
+        for process in [None, Some(HolderRecord::refused(HolderRefusal::Subreaper))] {
+            h.process = process;
+            assert!(stale_at(&h, Some(("boot-a", 99))).is_none());
+            assert!(stale_at(&h, None).is_none());
+            for clock in [("boot-a", 100), ("boot-a", 101), ("boot-b", 1)] {
+                assert!(stale_at(&h, Some(clock)).unwrap().starts_with("Expired"));
+            }
+        }
+        let mut foreign = current_holder();
+        change_identity(&mut foreign, "pidns_inode", 1.into());
+        foreign.deadline_boot = h.deadline_boot;
+        foreign.deadline_boottime = h.deadline_boottime;
+        assert!(stale_at(&foreign, Some(("boot-a", 101)))
+            .unwrap()
+            .starts_with("Expired"));
+    }
+
+    #[test]
+    fn legacy_migration_is_once_and_inspection_reports_repair_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(locks_dir(dir.path())).unwrap();
+        let path = lock_path(dir.path(), "main");
+        let mut h = current_holder();
+        h.process = None;
+        h.ttl_secs = LEASE_SECS;
+        let legacy = serialize(&h);
+        std::fs::write(&path, &legacy).unwrap();
+        let view = inspect_file(&path);
+        assert_eq!(view["holder_verdict"], "ForeignUnknown");
+        assert_eq!(view["reason"], "MissingIdentity");
+        assert!(view["repair_hint"]
+            .as_str()
+            .unwrap()
+            .contains(path.to_str().unwrap()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), legacy);
+        assert!(acquire(dir.path(), "main", None, "blocked", Duration::ZERO).is_err());
+        let migrated = std::fs::read_to_string(&path).unwrap();
+        let h = parse(&migrated);
+        assert!(h.process.is_none());
+        assert!(h.deadline_boottime.is_some());
+        migrate_legacy_deadline(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), migrated);
+        let mut expired = h;
+        expired.deadline_boottime = Some(0);
+        std::fs::write(&path, serialize(&expired)).unwrap();
+        assert_eq!(inspect_file(&path)["lease_state"], "Expired");
+        assert!(live_status(dir.path()).is_empty());
+        assert_eq!(observed_train_running(dir.path()), Some(false));
+        let _lease = acquire(dir.path(), "main", None, "recovered", Duration::ZERO).unwrap();
+    }
+
     #[test]
     fn proven_dead_child_is_reclaimed() {
         let mut command = std::process::Command::new("/bin/sleep");
@@ -738,9 +946,24 @@ mod tests {
         assert!(!path.exists());
     }
     #[test]
+    fn release_retries_guard_past_old_two_second_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lease = acquire(dir.path(), "main", None, "held", Duration::ZERO).unwrap();
+        let guard = mutation_guard(lease.path(), Duration::ZERO).unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(2100));
+            drop(guard);
+        });
+        lease.do_release();
+        release.join().unwrap();
+        assert!(!lease.held);
+        assert!(!lease.path().exists());
+    }
+
+    #[test]
     fn covers_and_drop_are_generation_fenced() {
         let dir = tempfile::tempdir().unwrap();
-        let lease = acquire(
+        let mut lease = acquire(
             dir.path(),
             "main",
             Some(42),
@@ -752,6 +975,9 @@ mod tests {
         let replacement = serialize(&current_holder());
         std::fs::write(lease.path(), &replacement).unwrap();
         assert!(!lease.covers(dir.path(), "main", 42));
+        lease.do_release();
+        assert!(!lease.held);
+        assert!(lease.train_root.is_none());
         drop(lease);
         assert_eq!(
             std::fs::read_to_string(lock_path(dir.path(), "main")).unwrap(),
