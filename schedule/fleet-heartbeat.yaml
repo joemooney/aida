@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: '17:27: lanes 3 live codex (TASK-3048, STORY-2401, TASK-3222) + filler for BUG-2466/BUG-2473; reviewers 2 (PR-3531 @978e95e, PR-3516); train #3548 (3537+3535) waiting CI; approved queued for next train: #3536 #3533. Acted: #3547 hand-merged d41de2b, store hubs reconciled, BUG-2458 completed (delivered by #3483), BUG-2473 filed. Human-waiting: none. Oldest stall: 14 salvage trees (BUG-2473).'
+due_since: 2026-11-07T01:21:54.134273120Z
+due_reason: every 1h
