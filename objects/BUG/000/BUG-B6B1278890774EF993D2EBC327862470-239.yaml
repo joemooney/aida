@@ -20,8 +20,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T00:29:40.028211467Z
+modified_at: 2026-11-07T00:41:45.824117178Z
 req_type: Bug
+comments:
+- id: 01a1b374-4c60-7e02-bfbe-165fc702ac03
+  author: joe
+  content: 'Native implementer handoff: implemented sandboxed, host-anchored dispatch snapshots for private seat clones, including legacy MCP claims with missing tree_kind/branch. Hygiene rechecks actual dirt; unreadable clone state becomes Unknown with the diagnostic. Hints use the probed branch/subject and explicit unavailable placeholders. Remote coverage selects the clone sandbox from the physical path even when a legacy lease defaults to Worktree; guard_remote_commits includes the full error chain in ordinary Display while retaining the source. Existing deletion/merge/liveness/remote-coverage gates remain unchanged. Changed files: aida-cli-lib/src/{dispatch_health_ps.rs,ps_integrate.rs,seat_clone.rs,session_end.rs,session_hygiene.rs,tests/task_2053_seat_clone_lifecycle_tests.rs}, docs/cli/06-roles-sessions.md. Validation on final source: BUG-2473 2/2 (live bwrap); dispatch_health_ps 23/23; hygiene 9/9; bug2450 12/12; task_2143 Git ratchet 4/4; host-Git clone refusal 1/1; bug_1941 17/17; bug_1656 17/18. The unchanged adoption fixture fails in this PID namespace and also fails alone; filed minor draft finding TASK-b6b1278890774ef993d2ebc327862470-910 with cause and reproduction. cargo fmt --all -- --check and git diff --check pass. All edits intentionally uncommitted; no push, PR, queue-done or publication command run. Host launcher owns publication and completion.'
+  created_at: 2026-11-07T00:41:45.824117178Z
+  modified_at: 2026-11-07T00:41:45.824117178Z
+  session_id: 01a1b368e9b4
 history:
 - id: 01a1b368-f22a-7ab3-bbec-f4bcc959f0e9
   author: aida-session-start
