@@ -1,0 +1,29 @@
+id: 01a1b3c8-20a8-7242-9c7e-a088693ab86a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-916
+title: 'minor (non-blocking): supersession trusts wall-clock recorded_at from any node …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2474, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): supersession trusts wall-clock recorded_at from any node (store is shared across 11 nodes). A recording stamped in the future (clock skew) beats a genuinely later request-changes at the same head, which weakens criterion 3. Consider rejecting/clamping recorded_at later than now plus a small skew allowance, or ordering by ledger append sequence.
+
+  PR: #3553
+  Reviewed sha: fac034a61de5a2b8e92f3386169de3dd25944704
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T02:13:19.656979457Z
+modified_at: 2026-11-07T02:13:19.656979457Z
+req_type: Task
+tags:
+- carried-from:BUG-2474
+- finding-hash:fe307b36
+- from-review:PR-3553
+- kind:carried-forward
+filed_at:
+  code_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b8fe51ef0f4
+  vendor: claude
