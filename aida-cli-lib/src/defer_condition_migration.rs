@@ -2,7 +2,7 @@
 // trace:STORY-2402 | ai:codex
 
 use aida_core::condition::Condition;
-use aida_core::{CachedGitBackend, Comment, DatabaseBackend, Requirement};
+use aida_core::{CachedGitBackend, Comment, DatabaseBackend, Requirement, RequirementStatus};
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -19,7 +19,7 @@ fn infer(raw: &str) -> Option<String> {
         return Some(condition.to_string());
     }
     static SPEC: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)^(?:(?:when|after)\s+)?(STORY-[a-z0-9]+(?:-[a-z0-9]+)*)\s+(?:completes|ships|lands)[.!]?$").unwrap()
+        Regex::new(r"(?i)^(?:(?:when|after)\s+)?([a-z]+-[a-z0-9]+(?:-[a-z0-9]+)*)\s+([a-z][a-z _-]*)[.!]?$").unwrap()
     });
     static PR: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)^(?:(?:when|after)\s+)?#([0-9]+)\s+merges[.!]?$").unwrap()
@@ -32,7 +32,13 @@ fn infer(raw: &str) -> Option<String> {
     });
     let raw = raw.trim();
     let candidate = if let Some(c) = SPEC.captures(raw) {
-        format!("spec:{}=completed", &c[1])
+        let status = match c[2].to_ascii_lowercase().as_str() {
+            "completes" | "ships" | "lands" | "merges" | "shipped" | "landed" | "merged" => {
+                RequirementStatus::Completed
+            }
+            _ => RequirementStatus::from_filter_str(&c[2])?,
+        };
+        format!("spec:{}={}", &c[1], status.cache_key())
     } else if let Some(c) = PR.captures(raw) {
         format!("pr:{}=merged", &c[1])
     } else if let Some(c) = VERSION.captures(raw) {

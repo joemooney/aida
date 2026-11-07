@@ -898,7 +898,7 @@ fn run_db(
                     let outcome = crate::defer_condition_migration::run_migration(
                         backend, store_path, args.apply,
                     )?;
-                    if args.json {
+                    if args.json || output_format_is_json() {
                         println!("{}", crate::cache_output::json_pretty(&outcome)?);
                     } else {
                         print!(

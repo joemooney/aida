@@ -155,12 +155,14 @@ Convert legacy deferral text and `deferred:<x>` tags into typed revisit conditio
 The default invocation is a dry run; use `--apply` to write, and `--json` for a
 structured report. The command runs only against a git-backed store.
 
-Simple story completion, shipping or landing phrases become spec-completion
-conditions; `#N merges` becomes a PR-merged condition; versions become release
-thresholds; ISO dates become date conditions. Compound, conflicting or unknown
-text becomes `manual:<owner>`, falling back to `manual:operator` when the owner
-is empty or cannot be expressed as a single token. Malformed typed input is
-identified separately in the report and also falls back to manual review.
+Simple spec completion, shipping, landing or merging phrases (including past
+tense) become spec-completion conditions; an ID followed by a recognized status
+(such as `<ID> approved`) becomes a condition for that status. `#N merges`
+becomes a PR-merged condition; versions become release thresholds; ISO dates
+become date conditions. Compound, conflicting or unknown text becomes
+`manual:<owner>`, falling back to `manual:operator` when the owner is empty
+or cannot be expressed as a single token. Malformed typed input is identified
+separately in the report and also falls back to manual review.
 
 Valid typed conditions stay intact. Legacy tags are removed after recording
 their exact originals, together with the original trigger, in an
@@ -172,6 +174,9 @@ The migration never evaluates conditions or resurfaces work itself.
 Each row is re-read and re-planned under the store writer lock, then written
 individually. A successful re-apply changes nothing. Preview the report before
 applying: inferred conditions can become eligible for the hourly resurfacing job.
+Manual conditions older than the configured manual-age threshold (14 days by
+default) route to `aida human` on the next hourly run, so migrating old deferrals
+can add many human-queue entries at once.
 
 ```bash
 aida db migrate-defer-conditions

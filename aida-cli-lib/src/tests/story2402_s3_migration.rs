@@ -6,6 +6,14 @@ use super::*;
 fn story2402_s3_migration_heuristics_and_conservative_fallback() {
     for (raw, expected) in [
         ("STORY-123 completes", "spec:STORY-123=completed"),
+        ("STORY-2492 completed", "spec:STORY-2492=completed"),
+        ("STORY-1469 approved", "spec:STORY-1469=approved"),
+        ("TASK-42 shipped", "spec:TASK-42=completed"),
+        ("BUG-1-234 landed", "spec:BUG-1-234=completed"),
+        ("after EPIC-42 merged.", "spec:EPIC-42=completed"),
+        ("SPIKE-42 rejected", "spec:SPIKE-42=rejected"),
+        ("TASK-42 In Progress", "spec:TASK-42=in-progress"),
+        ("BUG-42 needs-attention", "spec:BUG-42=needs-attention"),
         ("after story-1-234 ships", "spec:STORY-1-234=completed"),
         ("when STORY-42 lands.", "spec:STORY-42=completed"),
         ("#3491 merges", "pr:3491=merged"),
@@ -24,6 +32,10 @@ fn story2402_s3_migration_heuristics_and_conservative_fallback() {
         "date:bad",
         "spec:",
         "STORY-42 lands and testing finishes",
+        "STORY-2492 completed and STORY-1469 approved",
+        "TASK-42 approved after testing",
+        "BUG-42 unknown",
+        "unrelated words TASK-42 completed",
         "not before 0.16.2",
     ] {
         assert!(infer(raw).is_none(), "{raw}");
