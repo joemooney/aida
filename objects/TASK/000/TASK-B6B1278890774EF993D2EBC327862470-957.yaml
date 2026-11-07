@@ -8,12 +8,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T22:11:42.128507852Z
+modified_at: 2026-11-07T22:13:56.198352673Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T22:11:58.514694935Z
+comments:
+- id: 01a1b813-5166-76a2-9235-7069e1e1d9ea
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-07 15:15: the plan is not on main yet. Read it with: git fetch origin docs/crate-split-deep-dive && git show FETCH_HEAD:docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md. One PR, completing (TASK-3424). Pure moves: if anything beyond the stated scope seems necessary, punt rather than widen. TASK-3424 and TASK-3425 run in parallel; both may touch the same ledgers, so rebase before pushing.'
+  created_at: 2026-11-07T22:13:56.198352673Z
+  modified_at: 2026-11-07T22:13:56.198352673Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b811-8c0e-7771-8649-78ed09e623f5
   author: joe
