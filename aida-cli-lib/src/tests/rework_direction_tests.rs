@@ -168,7 +168,9 @@ fn newer_brief_leads_and_supersedes_the_older_verdict_end_to_end() {
         !prompt.contains("AUTHORITATIVE TASK"),
         "the superseded verdict is not the authoritative round: {prompt}"
     );
-    assert!(prompt.ends_with("/aida-pickup BUG-051"), "pickup line last");
+    assert!(prompt.ends_with(
+        include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
+    ));
 
     // Control: without the brief the same inputs DO produce the
     // authoritative round, so the assertion above is not vacuous.
@@ -239,7 +241,9 @@ fn brief_older_than_the_verdict_defers_to_the_findings() {
         task_at < older_at,
         "the findings come first; the stale brief is background below them: {prompt}"
     );
-    assert!(prompt.ends_with("/aida-pickup BUG-051"));
+    assert!(prompt.ends_with(
+        include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
+    ));
 }
 
 /// Brief item 3(d), end to end: findings with no verdict time at all stay
@@ -261,7 +265,9 @@ fn untimed_findings_stay_authoritative_over_a_brief_end_to_end() {
         task_at < older_at,
         "brief sits below the findings: {prompt}"
     );
-    assert!(prompt.ends_with("/aida-pickup BUG-051"));
+    assert!(prompt.ends_with(
+        include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
+    ));
 }
 
 /// Round 3, finding 1, the real-world order: verdict recorded at T0, the
@@ -339,14 +345,16 @@ fn conflicting_pr_adds_resolve_conflicts_first() {
     assert!(prompt.contains("session_end.rs"));
     assert!(prompt.contains("git merge origin/main"));
     assert!(prompt.find("ADVISOR BRIEF").unwrap() > prompt.find("FIRST TASK").unwrap());
-    assert!(prompt.ends_with("/aida-pickup BUG-051"));
+    assert!(prompt.ends_with(
+        include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
+    ));
 
-    // No conflict or direction: retain shared navigation before pickup.
+    // No conflict or direction: keep the skill invocation first.
     // trace:STORY-2630 | ai:codex
     assert_eq!(
         assemble(&item_plan(), None, &[], None),
         format!(
-            "{}\n\n/aida-pickup BUG-051",
+            "/aida-pickup BUG-051\n\n{}",
             include_str!("../../../aida-core/templates/dispatch/code-navigation.md").trim()
         )
     );

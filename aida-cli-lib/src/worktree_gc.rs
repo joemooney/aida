@@ -1121,9 +1121,14 @@ pub(crate) fn link_worktree_runtime_state(
     // index conflict or I/O failure prevent session setup or recovery.
     // trace:STORY-2630 | ai:codex
     let navigation = (|| -> Result<()> {
-        if let Some((source, destination)) =
-            crate::codegraph::primary_index_link(project_root, worktree_path)?
-        {
+        let link = crate::codegraph::primary_index_link(project_root, worktree_path)?;
+        // Reused seat clones predate the symlink-safe exclude. Heal before
+        // linking so salvage never sees an untracked symlink to a directory.
+        // Also heal a correct link left by an older setup invocation.
+        if link.is_some() || worktree_path.join(".codegraph").is_symlink() {
+            aida_core::git_ops::ensure_aida_runtime_excluded(worktree_path)?;
+        }
+        if let Some((source, destination)) = link {
             std::os::unix::fs::symlink(&source, &destination).with_context(|| {
                 format!(
                     "symlink {} -> {} failed",

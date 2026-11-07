@@ -3,6 +3,7 @@
 // trace:STORY-2630 | ai:codex
 use crate::doctor_root::DoctorFinding;
 use anyhow::Result;
+use rusqlite::OptionalExtension;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -81,9 +82,11 @@ fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFindi
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )?;
         conn.busy_timeout(Duration::from_millis(100))?;
-        // Read the schema to distinguish a readable SQLite index from an
-        // empty/corrupt file, without scanning a potentially large graph.
-        let _: i64 = conn.query_row("SELECT count(*) FROM files", [], |row| row.get(0))?;
+        // Probe the files table without scanning a potentially large graph.
+        // An empty but valid index is reachable too.
+        let _: Option<i64> = conn
+            .query_row("SELECT 1 FROM files LIMIT 1", [], |row| row.get(0))
+            .optional()?;
         let mut modified = meta.modified()?;
         if let Ok(wal) = std::fs::metadata(root.join(".codegraph/codegraph.db-wal")) {
             if wal.len() > 0 {
@@ -123,6 +126,7 @@ mod tests {
         let seat = tmp.path().join("seat");
         std::fs::create_dir_all(&seat).unwrap();
         index(&primary);
+        aida_core::git_ops::init(&seat).unwrap();
         crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).unwrap();
         crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).unwrap();
         assert!(seat.join(".codegraph").is_symlink());
@@ -206,17 +210,27 @@ mod tests {
     }
 
     #[test]
-    fn implementer_and_reviewer_prompts_include_navigation() {
+    fn assembled_skill_prompts_keep_invocation_first_and_include_navigation() {
         use crate::queue_cmd::{QueueWorkMode, QueueWorkPlan};
+        use crate::session_start::ReviewForge;
         let plan = QueueWorkPlan {
             mode: QueueWorkMode::Item,
             entries: Vec::new(),
             scope: "STORY-2630".into(),
-            review_target: None,
+            review_target: Some((ReviewForge::GitHub, 3607)),
             anchor_display: "STORY-2630".into(),
             anchor_title: "navigation".into(),
         };
-        for role in ["implementer", "reviewer"] {
+        for (role, gate) in [
+            ("implementer", None),
+            ("reviewer", None),
+            ("security", Some("security")),
+        ] {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_GATE_NAME", gate),
+                ("AIDA_AGENT_GATE_ROLE", gate),
+                ("AIDA_REVIEW_ROUND", Some("1")),
+            ]);
             let prompt = crate::rework_direction::assemble_pickup_prompt(
                 &crate::rework_direction::PickupInputs {
                     plan: &plan,
@@ -229,10 +243,64 @@ mod tests {
                     ci_failures: None,
                 },
             );
+            let invocation = if role == "implementer" {
+                "/aida-pickup STORY-2630"
+            } else {
+                "/aida-review --pr 3607"
+            };
+            assert_eq!(prompt.lines().next(), Some(invocation), "{prompt}");
+            if gate.is_some() {
+                assert!(prompt.contains("AIDA_REVIEW_VERDICT_FILE"), "{prompt}");
+            } else if role == "reviewer" {
+                assert!(prompt.contains("ROUND 1"), "{prompt}");
+            }
             assert!(prompt.contains(
                 include_str!("../../aida-core/templates/dispatch/code-navigation.md").trim()
             ));
         }
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[test]
+    fn root_agents_navigation_matches_template_master() {
+        let agents = include_str!("../../AGENTS.md");
+        let navigation = agents
+            .split("For code navigation, ")
+            .nth(1)
+            .unwrap()
+            .split("\n<!-- trace:STORY-2630")
+            .next()
+            .unwrap();
+        assert_eq!(
+            format!("For code navigation, {navigation}").trim(),
+            include_str!("../../aida-core/templates/dispatch/code-navigation.md").trim()
+        );
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[test]
+    fn reentered_old_seat_excludes_navigation_link_idempotently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let primary = tmp.path().join("primary");
+        let seat = tmp.path().join("seat");
+        index(&primary);
+        aida_core::git_ops::init(&seat).unwrap();
+        std::fs::write(seat.join(".gitignore"), ".codegraph/\n").unwrap();
+        let exclude = seat.join(".git/info/exclude");
+        std::fs::write(&exclude, "# old seat\n/.aida/*\n.aida-store\n").unwrap();
+        for _ in 0..2 {
+            crate::worktree_gc::link_worktree_runtime_state(&primary, &seat).unwrap();
+            assert!(seat.join(".codegraph").is_symlink());
+            let ignored = crate::test_git::git_command()
+                .current_dir(&seat)
+                .args(["check-ignore", ".codegraph"])
+                .output()
+                .unwrap();
+            assert!(ignored.status.success(), "{ignored:?}");
+        }
+        let body = std::fs::read_to_string(exclude).unwrap();
+        assert!(body.starts_with("# old seat\n"), "{body}");
+        assert_eq!(body.lines().filter(|line| *line == ".codegraph").count(), 1);
     }
 
     #[test]

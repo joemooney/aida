@@ -7786,7 +7786,7 @@ mod tests {
         let migrated = std::fs::read_to_string(&exclude_path).unwrap();
         assert_eq!(
             migrated,
-            "# user\nfoo/\n/.aida/*\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n"
+            "# user\nfoo/\n/.aida/*\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n.codegraph\n"
         );
         assert!(!bug_2141_ignored(&worktree, ".aida/discipline/new.md"));
 
