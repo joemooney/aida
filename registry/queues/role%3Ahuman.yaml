@@ -194,3 +194,10 @@
   note: 'operator hold retained; spec:STORY-2326=completed: met (STORY-2326 is completed)'
   added_at: 2026-11-07T23:52:11.360480213Z
   for_role: human
+- user_id: role:human
+  requirement_id: 01a13390-7b59-7570-a329-3542db098e83
+  position: 43000
+  added_by: aida:defer-resurface
+  note: 'operator hold retained; spec:STORY-2326=completed: met (STORY-2326 is completed)'
+  added_at: 2026-11-07T23:52:11.360480213Z
+  for_role: human
