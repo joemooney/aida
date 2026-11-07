@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T04:14:51.877655529Z
+modified_at: 2026-11-07T04:14:54.573482477Z
 req_type: Task
 tags:
 - architecture
@@ -83,6 +83,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 sketch doc is accurate and correctly marked UNAPPROVED, but PR #3563 still carries the closing (TASK-3223) title claiming full S2; a squash merge would auto-complete TASK-3223 with all implementation acceptance unmet, and the required advisor signoff/merge-hold clearance is absent.. It was punted on: design-fork: Round 2 findings 1-4 accepted: updated the sketch to explicitly UNAPPROVED v1, documentation-only, with every S2 acceptance gap and a docs(plans) Refs-only corrective/PR/squash subject. No runtime implementation or advisor signoff exists. Binding TASK-3225 comment 0 amendment 2 still requires independent advisor selection of redo transaction versus alternative, reader/writer recovery admission and multi-root claim/queue participant protocol before mutation implementation. Native seat cannot create the requested new commit or retitle PR #3563; host must correct its closing title/squash subject before any authorized publication, without landing old 1baca620 as completion evidence. Preserve active merge hold and punt publication veto; do not complete TASK-3223. No finding is disputed; edits remain available for host review.. No triage reason was given.'
   created_at: 2026-11-07T04:14:51.877654252Z
   modified_at: 2026-11-07T04:14:51.877654252Z
+- id: 01a1b437-6fed-74d0-9ad6-4ced51d19a15
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3223):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0c650b3d5e78
+    Recorded: 2026-11-07T04:09:51.023660316+00:00
+    Findings:
+    1. PR title is still '[AI:codex] chore: STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary (TASK-3223)'. GitHub's squash subject defaults to the PR title and its trailing (TASK-3223) drives merge-time completion, so merging marks TASK-3223 Completed with zero implementation. Retitle PR #3563 to '[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)' before merge (the doc itself, docs/plans/2026-11-06-task-3223-mediated-transactions.md:18-30, says the host must do this; it has not been done).
+    2. Commit 1baca620b4a5 on the branch keeps the closing subject '... (TASK-3223)' with type 'chore'. A squash merge's default body lists every commit subject; ensure the final squash message (subject and body) carries only the Refs docs(plans) subject, or rewrite the branch to a single Refs-only commit, so the closing subject cannot land as completion evidence.
+    3. No independent advisor signoff is recorded on TASK-3223 for the redo-transaction / reader-writer recovery admission / multi-root claim-queue participant design (TASK-3225 comment 0 amendment 2; repo rule: architecture changes need advisor signoff). merge-hold-gate fails at 0c650b3d5e78 for this reason; it must be cleared by the human/advisor path (aida merge-hold clear 3563), which a reviewer verdict cannot substitute for.
+    4. docs/plans/2026-11-06-task-3223-mediated-transactions.md:16-30 ('Review and publication scope') embeds per-PR process instructions to the host about PR #3563's title, squash subject and merge hold. Per CLAUDE.md, per-change notes belong in the PR body and an aida comment on the spec, not in a durable docs file; this section becomes stale noise once merged. Move it to the PR body / spec comment and keep the doc to the design proposal and its unapproved status.
+    5. None of TASK-3223's implementation acceptance is met by this PR (expected for a sketch): no CLI/MCP writer routed through store_mutation (service.py:11 MUTATION_VERBS still only session_probe/request_status); contained_boundary.rs contained_store_write_paths still grants store/cache writes (ancestor/symlink/primary/resume untouched); no lane-private derived cache; no gated mediated profile; no stale-base / concurrent-mutation / persist-before-reply tests. TASK-3223 must not be marked Done/Completed from this PR; it should stay open as Refs-only.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T04:14:54.445222855Z
+  modified_at: 2026-11-07T04:14:54.445222855Z
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
