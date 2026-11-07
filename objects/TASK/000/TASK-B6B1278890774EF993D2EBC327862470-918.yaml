@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T03:15:26.912968294Z
-modified_at: 2026-11-07T03:15:26.912968294Z
+modified_at: 2026-11-07T04:47:42.020918617Z
 req_type: Task
 tags:
 - carried-from:BUG-2473
 - finding-hash:ffe38d92
 - from-review:PR-3551
 - kind:carried-forward
+comments:
+- id: 01a1b455-75c4-7a92-8ccb-adf0b25fa272
+  author: joe
+  content: '[advisor ruling] Accepted, no change: each probe is capped at 5s, and with BUG-2473 reaping stale seat-clone leases, the count of probed clones stays small. BUG-2466 tracks aida show/ps latency if this shows up in the measurements.'
+  created_at: 2026-11-07T04:47:42.020918617Z
+  modified_at: 2026-11-07T04:47:42.020918617Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b419-001f-7d41-b29e-58eeaee79a4b
   author: joe
