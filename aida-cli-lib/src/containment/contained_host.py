@@ -741,10 +741,16 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 mutation.poll()
             drain_pending_sends()
             ready, _, _ = select.select(watch, [], [], 0.05 if SEND_PENDING else 0.2)
-            if notification in ready and not broker_connect_contained(
-                    notification, state_fd, state_prefix, connector, port, lane_net, lane_user, mutation):
-                if select.poll and _hung_up(notification):
+            if notification in ready:
+                # A hung-up listener is readable, but RECV can block after all
+                # filtered tasks exit. Check before entering the broker so the
+                # supervisor can still observe the wrapper's exit.
+                # trace:BUG-2480 | ai:codex
+                if _hung_up(notification):
                     watch.remove(notification)
+                else:
+                    broker_connect_contained(notification, state_fd, state_prefix, connector, port,
+                                             lane_net, lane_user, mutation)
             if proxy in ready:
                 data, got = receive(proxy)
                 if not data:
