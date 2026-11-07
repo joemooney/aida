@@ -16,12 +16,12 @@ description: |-
   4. Metadata not fixed (round-1 finding 4 repeated): the new commit ef3e9d4bc65 again uses the subject '[AI:codex] feat: ... replace the ... refusal with a brokered credential path (STORY-2593)', and the PR title is unchanged. The doc itself recommends '[AI:codex] docs(plans): ... (Refs STORY-2593)' but the commit does not use it. As is, a merge would auto-complete an unimplemented guided story. Fix it one of two ways: (1) re-subject both commits and the PR title as docs with a non-completing trailer, or (2) keep the PR unmerged until steps 1-5 land.
   5. Guided gate still open (round-1 finding 5): the spec has no recorded master/operator sign-off on option (a) and its residual bearer-token risk. Implementation (sketch steps 1-5) cannot start, and this PR cannot be approved as completing STORY-2593, until that sign-off is on the spec. This needs operator action, not implementer rework; route via punt/escalation instead of another docs-only rework round.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T00:36:42.860473587Z
-modified_at: 2026-11-07T01:30:11.631731671Z
+modified_at: 2026-11-07T01:30:13.234085754Z
 req_type: Task
 tags:
 - from-advisor:STORY-2593
@@ -43,6 +43,15 @@ history:
   author: joe
   timestamp: 2026-11-07T00:38:27.465911199Z
   changes: []
+- id: 01a1b3a0-a972-7490-9eff-f8529387d1c6
+  author: joe
+  timestamp: 2026-11-07T01:30:13.234081175Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
   branch: main
