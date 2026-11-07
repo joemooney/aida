@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T09:31:19.466690445Z
+modified_at: 2026-11-07T09:31:28.272916269Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -440,6 +440,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 13 at 369a425: lib-1 fixed (green) and the unconfined host --version replaced by a non-executing SHA-256 pin; AC1 verified, AC2/AC3 remain advisor-owned steps 4-5 (Refs slice). Blocking: CI gates ''ExecContext environment ratchet'' is red because prepare_with_io''s body moved into new fn prepare_with_codex_pin, re-keying 6 ledgered env reads. lib-0/lib-1/cli/contracts/rest green.. No triage reason was given.'
   created_at: 2026-11-07T09:31:19.466683701Z
   modified_at: 2026-11-07T09:31:19.466683701Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b559-420e-78a2-912d-1785f6f82c59
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3575):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 369a42548b05
+    Recorded: 2026-11-07T09:30:05.958382981+00:00
+    Findings:
+    1. [major, CI-blocking] CI (gates) step 'ExecContext environment ratchet' fails at 369a42548b05 (job 128362074768), and Build 'Require every CI lane' fails as a consequence. Cause: commit 369a425 turned contained.rs:780 prepare_with_io into a thin wrapper and moved its whole body into a new fn prepare_with_codex_pin (contained.rs:796). The ratchet keys sites by enclosing function, and scripts/exec-context-legacy.json:295-300 ledgers the six ambient reads (CODEX_HOME, CLAUDE_CONFIG_DIR, OPENAI_API_KEY, CARGO_HOME, ...) under 'launch/contained.rs:prepare_with_io:var*'. They now count as six new forbidden sites under prepare_with_codex_pin. Fix: keep the body in prepare_with_io and inject the pin without renaming it, e.g. add a codex_sha256: &str parameter to prepare_with_io and pass codex_auth::PROGRAM_SHA256 from prepare() and the other existing callers, with the test passing its synthetic pin. Do not regenerate the ledger. Re-run python3 scripts/check-exec-context.py --base origin/main (zero additions) before pushing. (The reviewer sandbox cannot download job logs; the cause was found from source: the function rename plus ledger keys, with 0 ledger entries for prepare_with_codex_pin.)
+    2. [cosmetic, non-blocking] contained.rs:930 now always passes the hard-coded Some("codex-cli 0.166.0") to codex_auth::prepare, so the version gate at codex_auth.rs:92-93 can never fire in production. The SHA-256 pin is the real gate. Drop the version parameter (or the dead check) so the 're-probe this codex version' refusal and its test at codex_auth_tests.rs:103 do not suggest a live check.
+    3. [cosmetic, non-blocking] codex_auth::require_program SHA-256-hashes the roughly 305 MiB native codex binary synchronously on every contained ChatGPT launch. This is acceptable for now; consider caching by (dev, ino, size, mtime) if launch latency matters.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T09:31:28.142150213Z
+  modified_at: 2026-11-07T09:31:28.142150213Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
