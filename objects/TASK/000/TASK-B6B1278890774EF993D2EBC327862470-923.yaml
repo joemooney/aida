@@ -1,5 +1,6 @@
 id: 01a1b46e-0129-7693-afa8-8419fe748e9d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-923
+agreed_id: TASK-2969
 title: BUG-2479 cold full-status acceptance remains unverified
 description: Partial native implementation fixes idle candidate resolution and passes all 20 targeted tests. On isolated real-store snapshots, patched unoptimized debug full status with a prepared cache completed in 5.291s for 7,247 rows (2 idle, 17 orphaned). A separate first run with no derived cache on 7,246 rows exceeded the 50s watchdog while the cache still contained zero rows. The exact work CI timed test and prepare-status-fixture.sh are absent here. Keep the unchanged 10s cold-first-run acceptance open; reproduce with the original harness/build profile and distinguish cache construction from the repeated idle YAML-scan defect. Do not silently add warm-up or claim completion from the prepared-cache result.
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:BUG-2479
 - severity:major
+history:
+- id: 01a1b49d-6768-76a0-a370-9f5be9327f77
+  author: joe
+  timestamp: 2026-11-07T06:06:16.936399943Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 110130adbc7
