@@ -1,0 +1,36 @@
+id: 01a1b866-2dbe-76f2-9fdb-10308217d435
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-573
+agreed_id: STORY-2650
+title: 'Review PR-3640: [AI:codex] feat(advisor): supervise review-watch grant rotation (Refs STORY-2571)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b846`) for branch `story-2571-d1520`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3640>
+  - Branch: `story-2571-d1520` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2571
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3640` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T23:44:26.558367274Z
+modified_at: 2026-11-07T23:44:26.558367274Z
+req_type: Story
+filed_at:
+  code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a7fe186bdc
+  vendor: claude
+  session: 01a1b8464b27
