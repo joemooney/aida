@@ -1,14 +1,8 @@
 job: session-hygiene-route
-last_run: 2026-11-07T00:20:18.073742184Z
+last_run: 2026-11-07T01:18:56.924002930Z
 last_by:
   seat: advisor
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   vendor: claude
 result: done
-note: '14 KEEP items: 3 dirty trees + 3 squash-merged local commits on Completed specs (left; salvage needs operator OK for discard), 8 clean+pushed false positives filed as BUG-b6b1278890774ef993d2ebc327862470-239'
-due_since: 2026-11-07T01:18:49.224863050Z
-due_reason: on CronJobFailed:session-hygiene
-due_failure:
-  trip_id: session-hygiene@2026-11-07T01:14:59.957186771Z
-  job: session-hygiene
-  error: 'exit 1: '
+note: 'same 14 KEEP items; tracked by BUG-2473 (rework lane running for #3551)'
