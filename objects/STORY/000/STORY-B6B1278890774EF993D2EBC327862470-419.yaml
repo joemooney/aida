@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-05T04:49:46.738276724Z
+modified_at: 2026-11-07T20:28:32.195817504Z
 req_type: Story
 tags:
 - operator-held
@@ -19,6 +19,16 @@ comments:
   created_at: 2026-11-05T04:41:46.686395166Z
   modified_at: 2026-11-05T04:41:46.686395166Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1b7b2-d243-7b31-9a45-3b7c42b9d2f0
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-11-05T04:49:39.954255893Z","deferred_until":"STORY-2492 completed","legacy_tags":[]}
+    Migrated condition: spec:STORY-2492=completed
+  created_at: 2026-11-07T20:28:32.195806910Z
+  modified_at: 2026-11-07T20:28:32.195806910Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
@@ -32,7 +42,7 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-11-05T04:49:39.954255893Z
-deferred_until: STORY-2492 completed
+deferred_until: spec:STORY-2492=completed
 deferred_reason: 'Operator 2026-11-04: do trusted-node cross-machine review (STORY-2492) first'
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
