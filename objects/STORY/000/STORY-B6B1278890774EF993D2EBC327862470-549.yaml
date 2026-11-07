@@ -1,0 +1,34 @@
+id: 01a1b5ed-27c4-7061-9d61-144dcd52675b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-549
+agreed_id: STORY-2626
+title: 'Review PR-3594: [AI:codex] chore: STORY-2537 S2: ProcIdentity for the merge lock (TASK-3364)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b5db`) for branch `task-b6b1278890774ef993d2ebc327862470-932`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3594>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-932` → `main`
+
+  ## Covers
+
+  - TASK-3364
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3594` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T12:13:00.740173254Z
+modified_at: 2026-11-07T12:13:00.740173254Z
+req_type: Story
+filed_at:
+  code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4803b66ade9
+  vendor: claude
+  session: 01a1b5dbf154
