@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:31:45.399075033Z
-modified_at: 2026-11-07T20:54:12.817530712Z
+modified_at: 2026-11-07T20:54:14.933987892Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -33,6 +33,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:28:25.573313399Z
   modified_at: 2026-11-07T20:28:25.573313399Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ca-5c95-7c40-9af3-43aa4f9950c1
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Lane-liveness landed (STORY-1688); per-site lease registration moot under STORY-2326''s single spawn_agent.'
+  created_at: 2026-11-07T20:54:14.933987892Z
+  modified_at: 2026-11-07T20:54:14.933987892Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
