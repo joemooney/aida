@@ -279,6 +279,14 @@ It checks again before merging because the head and gates can change during
 the wait. The stale-check and stale-approval overrides apply in both phases;
 they do not bypass verdict reconciliation or holds.
 
+For one PR at one head, verdict reconciliation uses the newest timestamped
+verdict across its PR key and associated spec keys. A later approval can
+supersede an earlier request for changes at that same head; a later refusal
+holds it again. Opposing verdicts with tied, missing or invalid timestamps
+remain unresolved, and malformed retained evidence still refuses. Review
+authority and other merge-hold clearance requirements continue to apply.
+<!-- trace:BUG-2474 | ai:codex -->
+
 `aida pr ship [N] --wait [SECS]` bounds drive ownership, registration, and
 CI settlement with one deadline. Bare `--wait` uses 300 seconds. Omit `--wait` for an unbounded wait. Pending state is printed
 on each poll; expiry leaves the PR open. Informational checks remain excluded

@@ -816,17 +816,16 @@ pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
 }
 
 /// Reconcile every review recording from multiple artifacts at `current_sha`.
-/// Retained rounds are durable evidence, so an ill-formed or unattributed
-/// round is an integrity error rather than something a later approval may
-/// silently hide.
+/// The newest dated recording at that head supersedes older dated verdicts
+/// across PR/spec aliases. Tied or undated opposing recordings still conflict.
+/// Retained rounds are validated before ordering: ill-formed or unattributed
+/// rounds remain integrity errors that a later approval cannot hide.
 // trace:BUG-1581 | ai:codex
 pub fn reconcile_artifacts_for_sha<'a>(
     bodies: impl IntoIterator<Item = &'a str>,
     current_sha: &str,
 ) -> Result<Option<VerdictKind>, String> {
-    let mut approvals = Vec::new();
-    let mut blockers = Vec::new();
-    let mut saw_current = false;
+    let mut at_head = Vec::new();
 
     for body in bodies {
         let value: serde_json::Value = serde_json::from_str(body)
@@ -876,16 +875,38 @@ pub fn reconcile_artifacts_for_sha<'a>(
             if !same_reviewed_sha(&sha, current_sha) {
                 continue;
             }
-            saw_current = true;
-            let reviewer = reviewer.unwrap_or("unknown reviewer").to_string();
-            match kind {
-                VerdictKind::Approved => approvals.push(reviewer),
-                VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
-                VerdictKind::Unknown => unreachable!(),
-            }
+            let recorded_at = RECORDED_AT_KEYS
+                .iter()
+                .find_map(|key| recording.get(*key).and_then(|v| v.as_str()));
+            let timestamp =
+                recorded_at.and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
+            at_head.push((
+                kind,
+                reviewer.unwrap_or("unknown reviewer").to_string(),
+                timestamp,
+            ));
         }
     }
 
+    // trace:BUG-2474 | ai:codex
+    // Keys are aliases for this PR's review corpus. A strictly newer dated
+    // recording at this head supersedes older ones, regardless of key or
+    // reviewer. Keep undated recordings and timestamp ties in contention:
+    // their order cannot be established. Validate every round before reducing
+    // so a later approval cannot conceal malformed historical evidence.
+    let newest = at_head.iter().filter_map(|(_, _, at)| *at).max();
+    let mut approvals = Vec::new();
+    let mut blockers = Vec::new();
+    for (kind, reviewer, at) in at_head {
+        if at.is_some() && at < newest {
+            continue;
+        }
+        match kind {
+            VerdictKind::Approved => approvals.push(reviewer),
+            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+            VerdictKind::Unknown => unreachable!(),
+        }
+    }
     approvals.sort();
     approvals.dedup();
     blockers.sort();
@@ -905,8 +926,6 @@ pub fn reconcile_artifacts_for_sha<'a>(
         Ok(Some(VerdictKind::RequestChanges))
     } else if !approvals.is_empty() {
         Ok(Some(VerdictKind::Approved))
-    } else if saw_current {
-        unreachable!()
     } else {
         Ok(None)
     }
