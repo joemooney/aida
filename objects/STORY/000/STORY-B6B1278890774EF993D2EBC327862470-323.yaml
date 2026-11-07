@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T15:16:33.890457043Z
+modified_at: 2026-11-07T15:16:40.213860302Z
 req_type: Story
 tags:
 - architecture
@@ -399,6 +399,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 fixes findings 1-9 from round 1 (handoff errors no longer fail ship, lease kept, TTL fallback for manual claims, operator ''aida own release'', staged delta journal, SafeEnd e2e test). But keeping the lease after handoff breaks relaunch cleanup, the detached seat HEAD blocks re-running ''aida ship'', and Closed review records clear new manual claims (fail-open). CI pending at head; merge-hold is the expected supervised hold.. No triage reason was given.'
   created_at: 2026-11-07T15:16:33.890455482Z
   modified_at: 2026-11-07T15:16:33.890455482Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b695-4c0f-7e01-924e-07ba2915be8d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3600):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0a17ab0221eb
+    Recorded: 2026-11-07T15:12:54.228580286+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3600#issuecomment-6708797036
+    Findings:
+    1. [major] Relaunch cleanup now bails after every successful handoff (STORY-2315 regression on the happy path). check_pr_lease (pr_lease_takeover.rs:144-146) requires record.holder.session == lease.id. But handoff_seat moves the Spec/Change records to InPr with holder None (ops.rs handoff), and round 2 deliberately keeps the lease (dual.rs:528-534). So in the standard flow (lane ships, handoff succeeds, lane exits), 'queue work --steal' / 'queue rework --work' (queue_cmd.rs:13536) and the 'session start --review N' AutoEnd (session_start.rs:2726) return NotProvable('this lease no longer holds the ownership record') and then Bail. Reclaim::Free also maps to NotProvable (pr_lease_takeover.rs:195), so an InPr record can never reach SafeEnd. prc_ship_handoff_keeps_lease_until_guarded_cleanup calls session_end directly and never goes through plan_lease_end. Fix: when the record is InPr/Free and was handed off by this lease's session, judge the lease's own process witness, apply reclaim_dead_tree, and return SafeEnd (session_end still guards the tree). Add a test: handoff, then plan_lease_end == SafeEnd for a dead clean seat.
+    2. [major] Detaching the seat HEAD on PR open breaks every later 'aida ship' from that seat. handoff_seat runs 'git update-ref --no-deref HEAD' (dual.rs ~620) when ship opens the PR. Both ship entry points then refuse a detached HEAD: pr_cmd.rs:1550 ('could not detect the current branch (detached HEAD?)') and pr_cmd.rs:2466. The --no-merge ceremony itself tells the user to 'finish with aida ship' (pr_cmd.rs:1768-1770). That re-run, a pr_ship re-run after a merge-hold blocked the merge (the normal supervised case), and a 'queue rework --work --resume' in the same seat all hit that refusal, and nothing reattaches the branch. Fix: resolve the branch from the lease or the InPr record when HEAD is detached at the recorded PR head, or reattach on resume/re-acquire. Add a test: ship --no-merge, then re-run ship in the same seat.
+    3. [major] Fail-open: a new manual review claim is cleared immediately when an earlier review record for that head is Closed. ownership_ended (gate/review_marker.rs:265-289) matches every Review record for the PR at a covering head, with nothing tying the record to this marker's holder or start time. Review records stay on disk Closed after the reviewer session ends (ops.rs:104-108 release). So 'aida review claim --pr N' at a head an earlier reviewer already closed (common: an independent re-review at the same head) is judged ended at once. A marker with an empty head_sha is worse: it covers every recorded head, so any closed record on the PR ends it. merge_gate then returns ExpiredCleared and deletes it (:349-351), and 'aida pr ship' can merge mid-review. prc_recorded_review_uses_matching_ownership_and_clears_closed_or_dead asserts this clearing without telling the two cases apart. Fix: ignore records not held by this marker's session/pid, or records Closed before marker.started_at, and fall back to the TTL. Add a refusal test.
+    4. [minor] The operator override fails exactly when it is needed. operator_release (ownership_cmd.rs, the store.list() errors.is_empty() ensure) refuses if any record anywhere in the store is unreadable. Those same read errors make every review marker permanent, including manual TTL claims (review_marker.rs:262-264 returns None on any list error), and abort the whole 'aida pr train' run (pr_train.rs live_trains: reader::load(...)?). One malformed file therefore wedges merges and trains, and the only escape is hand-editing .aida/ownership. Fix: release by loading the exact key only (refuse only if that key is unreadable), and let the marker fall back to the TTL when the unrelated evidence is unreadable. Test with an unrelated malformed record.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T15:16:40.079401680Z
+  modified_at: 2026-11-07T15:16:40.079401680Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
