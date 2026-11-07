@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T11:26:29.056758049Z
+modified_at: 2026-11-07T11:55:06.144102766Z
 req_type: Story
 tags:
 - architecture
@@ -299,6 +299,12 @@ comments:
   modified_at: 2026-11-07T10:41:01.350632719Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5dc-c220-7191-9a90-6258f61a531f
+  author: joe
+  content: 'PR-C0 implementation ready in native seat, uncommitted for host publication. Adds journaled release-by-rule for pre-admission holders with no session lease; re-migrates superseded records from the preferred current lease, keeping Live preference then newest timestamp. Comparison stays read-only, names pending repairs, and accounts for stale retained duplicate leases only when the recorded session has another lease for the same canonical key; a second live lease remains unexplained. Strict lease reads refuse incomplete evidence before collection. Tests cover both advisor cases, journal entries, idempotence, CAS refusal, salvage retention, admitted/merge-lease retention, malformed lease evidence and duplicate aliases. Final validation: cargo test --profile agent -p aida-cli-lib --lib ownership: 64 passed; make check-ci-fast: all 44 gates passed; formatting and git diff --check passed. Host snapshot before repair: 27 unexplained (five mismatches, 22 orphan rows); TASK-2708 has a retained stale duplicate lease. Host records were not mutated. Acceptance still requires the updated host binary, operator-TTY aida own migrate --dry-run then --execute, and aida own show --compare confirming zero unexplained. PR-C cutover, seat-HEAD detach and staged writes remain deferred. Native Refs publication declaration recorded.'
+  created_at: 2026-11-07T11:55:06.144102766Z
+  modified_at: 2026-11-07T11:55:06.144102766Z
+  session_id: 01a1b5c2862d
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
