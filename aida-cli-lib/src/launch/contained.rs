@@ -1,4 +1,4 @@
-//! The one AIDA contained headless boundary. Vendor
+//! The one AIDA contained boundary (headless and interactive). Vendor
 //! differences are rows of [`CONTAINED_VENDORS`] plus each vendor's argv
 //! finisher; credentials exist only in the exact child env (API key) or as a
 //! read-only credentials leaf (Claude and brokered Codex ChatGPT).
@@ -16,11 +16,20 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "contained_pty.rs"]
+pub(crate) mod pty;
 #[path = "../store_mutation/mod.rs"]
 mod store_mutation;
 
 #[path = "codex_auth.rs"]
 mod codex_auth;
+
+// trace:TASK-3219 | ai:codex
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LaunchIo {
+    Headless,
+    Interactive,
+}
 
 const COMMON: &str = include_str!("../containment/egress_probe.py");
 const LANE: &str = include_str!("../containment/contained_lane.py");
@@ -737,6 +746,7 @@ pub(crate) struct PreparedLaunch {
     oauth_denial: File,
     outer_only: Option<&'static str>,
     mutation: Option<store_mutation::Session>,
+    io: LaunchIo,
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
@@ -751,6 +761,28 @@ impl PreparedLaunch {
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
+    ) -> Result<Self> {
+        Self::prepare_with_io(child, root, host_main, credential_owner, LaunchIo::Headless)
+    }
+    pub(crate) fn prepare_interactive(
+        child: &Command,
+        root: &Path,
+        host_main: Option<&Path>,
+    ) -> Result<Self> {
+        Self::prepare_with_io(
+            child,
+            root,
+            host_main,
+            unsafe { libc::getuid() },
+            LaunchIo::Interactive,
+        )
+    }
+    fn prepare_with_io(
+        child: &Command,
+        root: &Path,
+        host_main: Option<&Path>,
+        credential_owner: u32,
+        io: LaunchIo,
     ) -> Result<Self> {
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
@@ -770,7 +802,21 @@ impl PreparedLaunch {
         let vendor = ContainedVendor::for_program(child.get_program())?;
         let label = vendor.label;
         anyhow::ensure!(
-            explicit(child, "AIDA_HEADLESS").as_deref() == Some("1"),
+            io == LaunchIo::Headless || vendor.key == "claude",
+            "interactive wrapper supports Claude only"
+        );
+
+        // Reject widening/resume/daemon flags before private state or broker setup.
+        // trace:TASK-3219 | ai:codex
+        if io == LaunchIo::Interactive {
+            let args = child
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            claude_argv(&args, 1, &[])?;
+        }
+        anyhow::ensure!(
+            io == LaunchIo::Interactive || explicit(child, "AIDA_HEADLESS").as_deref() == Some("1"),
             "{label} AIDA posture currently supports foreground headless launches only (PR2 pending)"
         );
         anyhow::ensure!(
@@ -1127,10 +1173,28 @@ impl PreparedLaunch {
             ),
             ("AIDA_HOME", authority_home.to_string_lossy().into_owned()),
             ("AIDA_CONTAINED", "1".into()),
-            ("AIDA_HEADLESS", "1".into()),
+            (
+                "AIDA_HEADLESS",
+                if io == LaunchIo::Headless { "1" } else { "0" }.into(),
+            ),
             ("AIDA_CONTAINMENT_POSTURE", "aida".into()),
         ] {
             env.insert(name.into(), value);
+        }
+        if io == LaunchIo::Interactive {
+            env.insert("TERM".into(), "xterm-256color".into());
+            // Only finalized assignments from this generation, never ambient rotation state.
+            for name in [
+                crate::agent_rotation::GENERATION_ENV,
+                crate::agent_rotation::HANDOFF_ENV,
+                crate::agent_rotation::PREVIOUS_SESSION_ENV,
+                crate::agent_rotation::HANDOFF_STAMP_ENV,
+                crate::agent_rotation::SEAT_ENV,
+            ] {
+                if let Some(value) = explicit(child, name) {
+                    env.insert(name.into(), value);
+                }
+            }
         }
         // trace:TASK-2708 | ai:claude — the vendor's data rows.
         for name in vendor.private_home_env {
@@ -1203,6 +1267,7 @@ impl PreparedLaunch {
         prepared.credentials = credentials;
         prepared.chatgpt_deadline = codex_deadline;
         prepared.outer_only = runtime_policy.map(|_| vendor.key);
+        prepared.io = io;
         Ok(prepared)
     }
 }
@@ -1318,6 +1383,10 @@ fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec
             !arg.starts_with("--settings="),
             "contained Claude settings must be the one generated --settings value"
         );
+        anyhow::ensure!(
+            arg != "--bg",
+            "contained Claude background launch requires an AIDA-owned supervisor"
+        );
         // A resumed session lives in a config dir the lane's fresh private
         // one does not hold. trace:TASK-2708 | ai:claude
         anyhow::ensure!(
@@ -1418,9 +1487,29 @@ impl PreparedLaunch {
             oauth_denial,
             outer_only: None,
             mutation: None,
+            io: LaunchIo::Headless,
         })
     }
-    pub(crate) fn spawn(mut self, stdout: Stdio) -> Result<ContainedChild> {
+    pub(crate) fn spawn(self, stdout: Stdio) -> Result<ContainedChild> {
+        anyhow::ensure!(
+            self.io == LaunchIo::Headless,
+            "interactive launch requires a private PTY"
+        );
+        self.spawn_io(Stdio::null(), stdout, Stdio::inherit())
+    }
+    pub(crate) fn spawn_interactive(self, pty: &pty::PrivatePty) -> Result<ContainedChild> {
+        anyhow::ensure!(
+            self.io == LaunchIo::Interactive,
+            "headless launch cannot inherit terminal IO"
+        );
+        let [input, output, error] = pty.stdio()?;
+        let result = self.spawn_io(input, output, error);
+        if result.is_err() {
+            pty.report_refusal();
+        }
+        result
+    }
+    fn spawn_io(mut self, stdin: Stdio, stdout: Stdio, stderr: Stdio) -> Result<ContainedChild> {
         let mut fds: Vec<_> = self
             .profile
             .mounts
@@ -1456,8 +1545,9 @@ impl PreparedLaunch {
         }
         let child = self
             .command
-            .stdin(Stdio::null())
+            .stdin(stdin)
             .stdout(stdout)
+            .stderr(stderr)
             .spawn()
             .context("contained host helper unavailable")?;
         let mut run = ContainedChild {

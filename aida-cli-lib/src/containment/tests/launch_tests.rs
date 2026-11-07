@@ -1337,7 +1337,7 @@ fn trusted_policy(root: &Path, vendors: &str) {
 
 /// Only an explicit trusted `claude = "aida"` selects the wrapper; then
 /// every Claude AIDA composition outside a wrapper-owned headless launch
-/// (interactive, --bg, resume) refuses by name, and inside one
+/// outside owned composition scopes refuses by name, and inside one
 /// the legacy os_wrap is not applied. Applied credit for Claude with a
 /// receipt is the receipt's acceptance, never the Claude-native credit.
 #[test]
@@ -2780,3 +2780,534 @@ fn task_3219_coordinator_composition_scope_and_native_argv() {
 
 #[path = "codex_auth_tests.rs"]
 mod codex_auth_tests;
+
+/// S2: exercise the actual foreground generation with synthetic Claude and
+/// host terminal, including input, window changes, signal and refusal paths.
+// trace:TASK-3219 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3219_live_claude_interactive_private_pty() {
+    claude_interactive_private_pty(false);
+}
+
+// The real agent-new issuer, receipt-bound worker and pre-release rollback.
+// trace:TASK-3219 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3219_live_claude_interactive_grant() {
+    claude_interactive_private_pty(true);
+}
+
+#[cfg(target_os = "linux")]
+fn claude_interactive_private_pty(granted: bool) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !live_available() {
+        return;
+    }
+    use crate::agent_launch::{
+        run_agent_generation, AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle,
+    };
+    use crate::launch::contained::pty::{test_stdio, PrivatePty};
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = crate::session::contained_cwd_seam::pin(root.path());
+    for p in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    std::fs::write(
+        root.path().join("host-net"),
+        std::fs::read_link("/proc/self/ns/net")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let home = crate::home_dir().unwrap();
+    let config_home = home.join(".claude");
+    std::fs::create_dir_all(&config_home).unwrap();
+    credentials_expiring_in(&config_home, 8 * 3600);
+    let bin = root.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let program = bin.join("claude");
+    std::fs::write(
+        &program,
+        r#"#!/usr/bin/python3
+import os,sys,json,errno,fcntl,termios,signal,time
+from pathlib import Path
+if '--version' in sys.argv:
+    if os.readlink('/proc/self/ns/net')==Path('host-net').read_text():
+        Path(__file__).with_name('unconfined-version-ran').write_text('refused')
+    assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
+    assert 'AIDA_SESSION_GRANT' not in os.environ and 'AIDA_SESSION_ROLE' not in os.environ
+    assert os.readlink('/proc/self/ns/net')!=Path('host-net').read_text()
+    assert Path('preflight-ran').read_text()=='yes'
+    Path(__file__).with_name('version-ran').write_text('confined query')
+    print('synthetic-3219-pty');sys.exit(0)
+signal.alarm(10)
+assert all(os.isatty(fd) for fd in (0,1,2))
+assert os.tcgetpgrp(0)==os.getpgrp()
+assert os.environ['AIDA_HEADLESS']=='0'
+assert os.environ['AIDA_HARNESS_VERSION']=='synthetic-3219-pty'
+assert os.environ['AIDA_SESSION_ROLE']=='implementer'
+assert bool(os.environ['AIDA_SESSION_GRANT'])==Path('expect-grant').exists()
+assert os.environ['AIDA_USER']=='pty-3219'
+assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
+assert 'AIDA_AGENT_REGISTRY_TOKEN' not in os.environ
+assert Path('preflight-ran').read_text()=='yes'
+settings=json.loads(sys.argv[sys.argv.index('--settings')+1])
+assert settings['sandbox']['enabled'] and settings['sandbox']['failIfUnavailable']
+assert not settings['sandbox']['allowUnsandboxedCommands']
+assert '--mcp-config' not in sys.argv and '--strict-mcp-config' not in sys.argv
+try: Path('.git/config').write_text('escape');raise AssertionError('git writable')
+except OSError as e: assert e.errno in (errno.EROFS,errno.EACCES,errno.EPERM)
+Path('model-ran').write_text('yes')
+print('PTY-READY',flush=True)
+signal.signal(signal.SIGINT,lambda *_: (os.write(1,b'PTY-INT\n'),os._exit(7)))
+signal.signal(signal.SIGTERM,lambda *_: (os.write(1,b'PTY-TERM\n'),os._exit(8)))
+assert input()=='hello private terminal'
+print('PTY-INPUT',flush=True)
+end=time.monotonic()+5
+while os.get_terminal_size().columns!=113 and time.monotonic()<end: time.sleep(.01)
+assert os.get_terminal_size().columns==113
+print('PTY-RESIZED',flush=True)
+while True: signal.pause()
+"#,
+    )
+    .unwrap();
+    let aida = bin.join("aida");
+    std::fs::write(
+        &aida,
+        "#!/bin/sh\nprintf yes > preflight-ran\necho 'seat_grant_valid=true expected_seat=true'\n",
+    )
+    .unwrap();
+    for p in [&program, &aida] {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let _aida = crate::kernel::test_aida_exe::set(aida.clone());
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_OS_WRAP", Some("1")),
+            ("CLAUDE_CONFIG_DIR", Some(config_home.to_str().unwrap())),
+        ],
+    );
+    let flags = {
+        let _scope = crate::session::ClaudeWrapperComposition::enter();
+        crate::session::claude_contained_flags_for(None, root.path()).unwrap()
+    };
+    let mut config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: flags,
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+        delegate_seats: vec!["reviewer".into()],
+    };
+    let mut plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: None,
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "pty-3219".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    use crate::gate::seat_authority as authority;
+    let parent = if granted {
+        std::fs::write(root.path().join("expect-grant"), "yes").unwrap();
+        env.set_key("AIDA_USER", "pty-parent");
+        let id = authority::test_support::mint_grant_for_with_ttl(
+            root.path(),
+            "pty-parent",
+            "advisor",
+            &["implementer"],
+            Some(chrono::Duration::hours(1)),
+        );
+        env.set_key(authority::GRANT_ENV, &id);
+        plan.role = Some("implementer".into());
+        config.delegate_seats.clear();
+        Some(id)
+    } else {
+        None
+    };
+    let observed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let _binding = if let Some(parent) = parent.clone() {
+        let observed = observed.clone();
+        let root = root.path().to_path_buf();
+        Some(crate::launch::contained::pty::test_before_release(
+            Box::new(move |id, pid| {
+                assert!(
+                    !root.join("model-ran").exists(),
+                    "vendor ran before release"
+                );
+                let child = authority::read_grant(id).unwrap();
+                assert_eq!(child.parent_grant_id.as_deref(), Some(parent.as_str()));
+                assert_eq!(child.subject, "pty-3219");
+                assert_eq!(child.seat, "implementer");
+                assert!(child.revoked_at.is_none());
+                assert!(
+                    child
+                        .binding
+                        .iter()
+                        .filter_map(|b| authority::binding_process(b))
+                        .any(|(bound, _, _)| bound == pid),
+                    "grant not bound to attested worker"
+                );
+                observed.borrow_mut().push(id.to_string());
+                Ok(())
+            }),
+        ))
+    } else {
+        None
+    };
+    for external_term in [false, true] {
+        let _ = std::fs::remove_file(root.path().join("model-ran"));
+        let host = PrivatePty::open().unwrap();
+        let (mut master, slave) = host.test_endpoints();
+        let mut original = unsafe { std::mem::zeroed::<libc::termios>() };
+        assert_eq!(
+            unsafe { libc::tcgetattr(slave.as_raw_fd(), &mut original) },
+            0
+        );
+        let _stdio = test_stdio(slave.try_clone().unwrap(), slave.try_clone().unwrap());
+        // Always collect a bounded terminal tail before checking the exit. A
+        // worker traceback must survive early failure as well as the happy path.
+        let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let driver_finished = finished.clone();
+        let driver = std::thread::spawn(move || {
+            let end = Instant::now() + Duration::from_secs(40);
+            let mut tail = Vec::new();
+            let (mut sent, mut resized, mut interrupted) = (false, false, false);
+            while Instant::now() < end {
+                let mut poll = libc::pollfd {
+                    fd: master.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                if unsafe { libc::poll(&mut poll, 1, 100) } <= 0 {
+                    if driver_finished.load(std::sync::atomic::Ordering::Acquire) {
+                        break;
+                    }
+                    continue;
+                }
+                let mut buf = [0; 4096];
+                match master.read(&mut buf) {
+                    Ok(n) if n > 0 => tail.extend_from_slice(&buf[..n]),
+                    _ => break,
+                }
+                if tail.len() > 65536 {
+                    tail.drain(..tail.len() - 65536);
+                }
+                let text = String::from_utf8_lossy(&tail);
+                if !sent && text.contains("PTY-READY") {
+                    master.write_all(b"hello private terminal\n").unwrap();
+                    sent = true;
+                }
+                if !resized && text.contains("PTY-INPUT") {
+                    let size = libc::winsize {
+                        ws_row: 37,
+                        ws_col: 113,
+                        ws_xpixel: 0,
+                        ws_ypixel: 0,
+                    };
+                    assert_eq!(
+                        unsafe { libc::ioctl(master.as_raw_fd(), libc::TIOCSWINSZ, &size) },
+                        0
+                    );
+                    resized = true;
+                }
+                if !interrupted && text.contains("PTY-RESIZED") {
+                    if external_term {
+                        assert_eq!(
+                            unsafe { libc::kill(std::process::id() as i32, libc::SIGTERM) },
+                            0
+                        );
+                    } else {
+                        master.write_all(&[3]).unwrap();
+                    }
+                    interrupted = true;
+                }
+                if text.contains(if external_term { "PTY-TERM" } else { "PTY-INT" }) {
+                    return text.into_owned();
+                }
+            }
+            String::from_utf8_lossy(&tail).into_owned()
+        });
+        let result = run_agent_generation(
+            &program,
+            &config,
+            &plan,
+            None,
+            &[],
+            None,
+            false,
+            false,
+            None,
+            None,
+            || {
+                // Regress the main-merge resolution: registry binding still
+                // precedes supervision and retains the launcher's narrowing.
+                let rows = crate::agent_registry::load_entries(root.path());
+                let (_, row) = rows
+                    .iter()
+                    .find(|(_, row)| {
+                        row.name.as_deref() == Some("pty-3219") && row.ended_at.is_none()
+                    })
+                    .expect("registered before spawn callback");
+                assert_eq!(row.delegate_seats, config.delegate_seats);
+                assert_ne!(row.pid, std::process::id());
+            },
+        );
+        finished.store(true, std::sync::atomic::Ordering::Release);
+        let terminal = driver.join().expect("PTY driver panicked");
+        let result =
+            result.unwrap_or_else(|error| panic!("generation refused: {error:#}\n{terminal}"));
+        assert_eq!(
+            result.status.code(),
+            Some(if external_term { 8 } else { 7 }),
+            "unexpected worker exit; PTY tail:\n{terminal}"
+        );
+        assert!(
+            terminal.contains(if external_term { "PTY-TERM" } else { "PTY-INT" }),
+            "incomplete terminal exchange; PTY tail:\n{terminal}"
+        );
+        let mut restored = unsafe { std::mem::zeroed::<libc::termios>() };
+        assert_eq!(
+            unsafe { libc::tcgetattr(slave.as_raw_fd(), &mut restored) },
+            0
+        );
+        assert_eq!(
+            (
+                restored.c_iflag,
+                restored.c_oflag,
+                restored.c_lflag,
+                restored.c_cc
+            ),
+            (
+                original.c_iflag,
+                original.c_oflag,
+                original.c_lflag,
+                original.c_cc
+            )
+        );
+    }
+    drop(_binding);
+    if granted {
+        assert_eq!(observed.borrow().len(), 2, "both live workers were bound");
+        for id in observed.borrow().iter() {
+            authority::revoke_by_id(id).unwrap();
+        }
+        std::fs::remove_file(root.path().join("model-ran")).unwrap();
+        // Refuse after binding but before release, then inspect the actual
+        // child grant after IssuedLaunchGrant has unwound.
+        let refused_observed = observed.clone();
+        let _refuse =
+            crate::launch::contained::pty::test_before_release(Box::new(move |id, pid| {
+                let child = authority::read_grant(id).unwrap();
+                assert!(child
+                    .binding
+                    .iter()
+                    .filter_map(|b| authority::binding_process(b))
+                    .any(|(bound, _, _)| bound == pid));
+                refused_observed.borrow_mut().push(id.to_string());
+                anyhow::bail!("injected pre-release refusal")
+            }));
+        let host = PrivatePty::open().unwrap();
+        let (_, slave) = host.test_endpoints();
+        let _stdio = test_stdio(slave.try_clone().unwrap(), slave.try_clone().unwrap());
+        let error = run_agent_generation(
+            &program,
+            &config,
+            &plan,
+            None,
+            &[],
+            None,
+            false,
+            false,
+            None,
+            None,
+            || panic!("released refused worker"),
+        )
+        .err()
+        .expect("pre-release refusal must fail generation");
+        assert!(format!("{error:#}").contains("injected pre-release refusal"));
+        assert_eq!(observed.borrow().len(), 3);
+        let id = observed.borrow().last().unwrap().clone();
+        assert!(authority::read_grant(&id).unwrap().revoked_at.is_some());
+        assert!(authority::read_grant(parent.as_ref().unwrap())
+            .unwrap()
+            .revoked_at
+            .is_none());
+        assert!(!root.path().join("model-ran").exists());
+        return;
+    }
+    let host = PrivatePty::open().unwrap();
+    let (_, slave) = host.test_endpoints();
+    let _stdio = test_stdio(slave.try_clone().unwrap(), slave.try_clone().unwrap());
+    assert_eq!(
+        std::fs::read_to_string(bin.join("version-ran")).unwrap(),
+        "confined query"
+    );
+    assert!(!bin.join("unconfined-version-ran").exists());
+    std::fs::remove_file(root.path().join("model-ran")).unwrap();
+    std::fs::write(&aida, "#!/bin/sh\nexit 1\n").unwrap();
+    assert!(run_agent_generation(
+        &program,
+        &config,
+        &plan,
+        None,
+        &[],
+        None,
+        false,
+        false,
+        None,
+        None,
+        || panic!("released refused worker")
+    )
+    .is_err());
+    assert!(!root.path().join("model-ran").exists());
+}
+
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_interactive_native_generation_and_early_refusals() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::agent_launch::{
+        run_agent_generation, AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle,
+    };
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "");
+    let _cwd = crate::session::contained_cwd_seam::pin(root.path());
+    let program = root.path().join("claude");
+    std::fs::write(&program,"#!/bin/sh\nif [ \"$1\" = --version ]; then echo native-3219; exit 0; fi\n[ \"$1\" = native-argument ] || exit 1\n[ \"$AIDA_CONTAINMENT_POSTURE\" = aida ] || exit 2\n[ -z \"${AIDA_SESSION_GRANT:-}\" ] || exit 3\nprintf native > native-ran\nexit 9\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_AGENT_CMD", None),
+        ],
+    );
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec!["native-argument".into()],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+        delegate_seats: vec!["reviewer".into()],
+    };
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: None,
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "native-3219".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let mut spawned = false;
+    let result = run_agent_generation(
+        &program,
+        &config,
+        &plan,
+        None,
+        &[],
+        None,
+        false,
+        false,
+        None,
+        None,
+        || {
+            spawned = true;
+        },
+    )
+    .unwrap();
+    assert!(spawned);
+    let rows = crate::agent_registry::load_entries(root.path());
+    let (_, row) = rows
+        .iter()
+        .find(|(_, row)| row.name.as_deref() == Some("native-3219"))
+        .expect("native generation registered");
+    assert_eq!(row.delegate_seats, config.delegate_seats);
+    assert!(row.ended_at.is_some());
+    assert_eq!(result.status.code(), Some(9));
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("native-ran")).unwrap(),
+        "native"
+    );
+    // These refuse before policy/credential/state work, even on a nonexistent root.
+    for flag in [
+        "--bg",
+        "--resume",
+        "--continue",
+        "--fork-session",
+        "--dangerously-skip-permissions",
+    ] {
+        let mut cmd = Command::new("claude");
+        cmd.arg(flag);
+        let error = PreparedLaunch::prepare_interactive(&cmd, Path::new("/nonexistent/3219"), None)
+            .err()
+            .expect("unsupported surface");
+        assert!(
+            error.to_string().contains(if flag == "--bg" {
+                "supervisor"
+            } else if flag == "--dangerously-skip-permissions" {
+                "permission"
+            } else {
+                "resume"
+            }),
+            "{error:#}"
+        );
+    }
+}
+
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_interactive_version_query_bounds_and_cleanup() {
+    let check = r#"
+import tempfile,pathlib,time
+with tempfile.TemporaryDirectory() as directory:
+    program=pathlib.Path(directory)/'claude'
+    def query(body):
+        program.write_text('#!/bin/sh\n'+body)
+        program.chmod(0o700)
+        return interactive_harness_version(str(program))
+    assert query('printf "synthetic-version\\n"')=='synthetic-version'
+    assert query('printf "two\\nlines\\n"') is None
+    assert query('printf version; exit 1') is None
+    assert query('printf "%0258d" 0') is None
+    start=time.monotonic()
+    assert query('sleep 30') is None
+    assert time.monotonic()-start<5
+    start=time.monotonic()
+    assert query('(sleep 30) &\nprintf version') is None
+    assert time.monotonic()-start<5
+print('bounded version cases: 6 passed')
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c"])
+        .arg(format!("{COMMON}\n{LANE}\n{check}"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("6 passed"));
+}

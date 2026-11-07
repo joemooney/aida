@@ -16,7 +16,11 @@ SESSION, POSSESSOR_ONLY = -3, 0x3f000000
 
 
 def keyctl(*args):
-    return LIBC.syscall(250, *[C.c_long(a) if isinstance(a, int) else a for a in args])
+    # syscall is variadic: omitted registers are undefined, not zero. In
+    # particular KEYCTL_SEARCH needs an explicit zero destination keyring.
+    # trace:TASK-3219 | ai:codex
+    padded = list(args) + [0] * (5 - len(args))
+    return LIBC.syscall(250, *[C.c_long(a) if isinstance(a, int) else a for a in padded])
 
 
 def isolate_keyring(grant, ttl):
