@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-07T23:13:18.190249526Z
+modified_at: 2026-11-07T23:37:19.595790394Z
 req_type: Task
 tags:
 - cleanup
@@ -78,6 +78,12 @@ comments:
   content: 'Validation checkpoint: launcher job j20261107T223320684-2-0 timed out after 900s before executing tests. Retrying the final TASK-1222 fixture/forge/CLI/schedule suite with AIDA_CARGO_TIMEOUT=3600 in job j20261107T224828734-2-0; it has acquired a cargo slot and is compiling aida-cli-lib. No executed test result yet. Formatting, git diff --check, and schedule TOML parsing pass. CLI help golden regeneration and existing remote-coverage regression remain pending after this build. Source edits remain uncommitted for the host launcher; no host cleanup performed.'
   created_at: 2026-11-07T23:01:16.697531763Z
   modified_at: 2026-11-07T23:01:16.697531763Z
+  session_id: 01a1b8210422
+- id: 01a1b85f-a9eb-7b91-9d8c-8ef7ea447754
+  author: joe
+  content: 'Validation checkpoint: the initial TASK-1222 suite executed and passed all 10 tests (j20261107T224828734-2-0), and initial help regeneration passed (j20261107T231059494-2-0). Final review added origin-advertised PR/MR-ref coverage for squash-merged source branches that have been deleted, carried the origin-proven pinned HEAD into guarded teardown, and added a real squash/deleted-branch fixture with stash and side-branch preservation. Final source and help wording are now frozen. Combined job j20261107T232859754-2-0 is compiling the expanded TASK-1222 tests, existing bug2450 remote-coverage regression, and final help regeneration. A normal (non-update) help snapshot verification remains after it. No host cleanup or publication performed.'
+  created_at: 2026-11-07T23:37:19.595790394Z
+  modified_at: 2026-11-07T23:37:19.595790394Z
   session_id: 01a1b8210422
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
