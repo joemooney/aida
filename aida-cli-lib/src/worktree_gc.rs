@@ -1072,14 +1072,19 @@ pub(crate) fn link_worktree_runtime_state(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
 ) -> Result<()> {
+    // trace:STORY-2630 | ai:codex
+    let codegraph_link = crate::codegraph::primary_index_link(project_root, worktree_path)?;
     let store_src = project_root.join(".aida-store");
     let store_dst = worktree_path.join(".aida-store");
-    if store_src.exists() && !store_dst.exists() {
-        std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
+    let store_link = (store_src.exists() && !store_dst.exists()).then_some((store_src, store_dst));
+    // Route navigation through the same setup writer as the store link.
+    // trace:STORY-2630 | ai:codex
+    for (source, destination) in store_link.into_iter().chain(codegraph_link) {
+        std::os::unix::fs::symlink(&source, &destination).with_context(|| {
             format!(
                 "symlink {} -> {} failed",
-                store_dst.display(),
-                store_src.display()
+                destination.display(),
+                source.display()
             )
         })?;
     }

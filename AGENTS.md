@@ -469,6 +469,9 @@ next agent.
 
 ## Project Orientation
 
+For code navigation, use `codegraph callers <symbol>`, `codegraph callees <symbol>` or `codegraph impact <symbol>` against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes.
+<!-- trace:STORY-2630 | ai:codex -->
+
 AIDA is an agent-collaboration substrate: stable spec IDs, typed
 requirement relationships, code-to-spec trace comments, an autonomous
 queue/orchestrator, and an MCP server that exposes the same graph to

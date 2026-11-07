@@ -239,6 +239,8 @@ mod relay_mail;
 mod relay_stall;
 // trace:TASK-2347 | ai:codex
 mod codex_mail_health;
+// trace:STORY-2630 | ai:codex
+mod codegraph;
 // trace:BUG-2386 | ai:claude
 pub(crate) mod codex_resume;
 // trace:STORY-HOME-128 | ai:claude
