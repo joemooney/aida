@@ -1,9 +1,8 @@
 - user_id: role:implementer
   requirement_id: 01a1ae38-168d-7190-ba2f-72217d9ef655
-  position: -32000
+  position: -33000
   added_by: role:implementer
-  note: 'advisor resolved the recurrence: round-4 scope; this round is CI-only at 7fa530d'
-  added_at: 2026-11-07T00:35:56.790203462Z
+  added_at: 2026-11-07T00:37:39.499566049Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1b115-f1ba-79f0-a93c-3cf5b3d25fcf
