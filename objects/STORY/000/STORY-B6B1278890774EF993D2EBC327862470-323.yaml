@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-323
 agreed_id: STORY-2325
 title: One ownership and liveness record per piece of work (lease, PR, train, reviewer, mailbox scope)
 description: 'Regroup target 2, 2026-11-02. One typed ownership record with a single liveness rule: pid plus start identity, a heartbeat, or ''the seat HEAD is already in the PR''. Ownership passes from lease to PR when the PR opens. Dead owners are reclaimed by rule, never with --force. Trains, reviewers and relaunches query it. Mail retention is checked against message state, not the build id. Evidence: STORY-2315, BUG-2412, BUG-2220, BUG-2411, BUG-2327, TASK-1715, TASK-2021, BUG-2138, STORY-1665. Sketch-first; advisor signoff required.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T18:32:59.483260300Z
+modified_at: 2026-11-07T18:33:01.341382648Z
 req_type: Story
 tags:
 - architecture
@@ -733,6 +733,15 @@ history:
   timestamp: 2026-11-07T17:30:24.413582725Z
   session_id: 01a1b70cdaa1
   changes: []
+- id: 01a1b749-113b-7180-af0f-4fc6d7f95c37
+  author: joe
+  timestamp: 2026-11-07T18:33:01.499386188Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
