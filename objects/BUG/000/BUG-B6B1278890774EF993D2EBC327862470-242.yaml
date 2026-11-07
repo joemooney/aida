@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T04:29:21.829119860Z
-modified_at: 2026-11-07T04:30:34.832156347Z
+modified_at: 2026-11-07T04:39:14.116479624Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a1a977-b3b6-7502-a0ee-01f971e843f3
   created_at: 2026-11-07T04:29:27.116638238Z
+comments:
+- id: 01a1b44d-b5c4-7851-859d-9d54ab905263
+  author: joe
+  content: 'Advisor: operator approved (2026-11-06 21:37) using the work branch''s fix as a reference. Patch: /home/joe/ai/aida/.aida/work-ref/BUG-2476/reference.patch (see ../README.md). Reference only: port the hunks this spec needs; don''t git-apply it whole (different base; some files mix in unrelated containment work). Work identifiers are replaced with <WORK_*> placeholders; never commit a work hostname, registry, runner name or credential.'
+  created_at: 2026-11-07T04:39:14.116479624Z
+  modified_at: 2026-11-07T04:39:14.116479624Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b444-c55a-7471-81b1-e959b0bd0cbb
   author: joe
