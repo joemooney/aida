@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T16:54:02.780756358Z
+modified_at: 2026-11-07T17:06:41.744453648Z
 req_type: Bug
+comments:
+- id: 01a1b6fa-07d0-74c3-8523-95156f6028fe
+  author: joe
+  content: 'Implemented in the native worktree; left uncommitted for host publication. Contained ChatGPT launches cap only the delegated child grant at access-token expiry minus 300s using the existing locked grant updater; ample tokens preserve grant bytes and parent grants/revocations are retained. Trusted contained.codex_min_grant_secs sets the positive minimum (default 1800s). Launch diagnostics show requested/effective TTL and expiry; floor refusals name expiry and host codex login. Doctor reports remaining token life in human/JSON/TOON output using the bounded credential reader. Validation: 3 BUG-2486 tests; credential suite 12 passed with one watchdog-only ignored test and the installed-Codex probe opt-in skipped; 10 config-trust tests; 3 vendor ratchet tests; 41 store-writer fixture tests; 19 exec-context fixture tests; store-writer and exec-context inventory guards; cargo fmt and git diff whitespace checks. Live synthetic credential/OAuth/deadline wrapper tests passed. No implementation blockers. Host must commit/publish and complete the queue item after publication.'
+  created_at: 2026-11-07T17:06:41.744453648Z
+  modified_at: 2026-11-07T17:06:41.744453648Z
+  session_id: 01a1b6ed0c88
 history:
 - id: 01a1b6ea-5313-7aa0-90fc-6964f99ff91a
   author: joe
