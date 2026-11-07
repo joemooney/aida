@@ -156,9 +156,12 @@ class StoreMutationTests(unittest.TestCase):
             self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
             for field in ('author', 'path', 'status', 'grant', 'replacement'):
                 self.refuses('InvalidRequest', self.request(op, dict(data, **{field: 'x'})))
-        for fields in ({'status': 'Completed'}, {}, {'title': None}, {'title': ''}):
+        for fields in ({'status': 'Completed'}, {}, {'title': None}, {'title': ''},
+                       {'title': None, 'description': 'text'},
+                       {'title': 'title', 'description': None}):
             self.refuses('InvalidRequest', self.request('spec_edit', dict(spec_id='TASK-1', expected_revision='a' * 64, fields=fields)))
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='stale', content='hi')))
+        self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='A' * 64, content='hi')))
 
     def test_staged_canonical_verbs_refuse_without_calling_host(self):
         for op, extra in [('comment_add', {'content': 'hello'}),

@@ -136,6 +136,16 @@ fn known_decision(path: &Path) -> Result<Decision> {
     }
 }
 fn replace(path: &Path, bytes: &[u8]) -> Result<()> {
+    replace_with_fault(path, bytes, &mut |_| Ok(()))
+}
+// Expose the record's pre-acceptance boundaries to the restart harness too.
+// Temporary files are never decisions: only a directory-synced .pending name
+// establishes acceptance, and canonical installation must come after it.
+fn replace_with_fault(
+    path: &Path,
+    bytes: &[u8],
+    fault: &mut impl FnMut(&str) -> Result<()>,
+) -> Result<()> {
     let tmp = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
     let mut f = fs::OpenOptions::new()
         .write(true)
@@ -143,8 +153,11 @@ fn replace(path: &Path, bytes: &[u8]) -> Result<()> {
         .mode(0o600)
         .open(&tmp)?;
     f.write_all(bytes)?;
+    fault("record_write")?;
     f.sync_all()?;
+    fault("record_sync")?;
     fs::rename(&tmp, path)?;
+    fault("record_rename")?;
     sync(path.parent().unwrap())
 }
 fn journal(root: &Path) -> Result<PathBuf> {
@@ -260,6 +273,10 @@ fn recover_inner(root: &Path) -> Result<()> {
                 path.file_stem().and_then(|s| s.to_str()) == Some(name(&d).as_str()),
                 "decision name mismatch"
             );
+            // A process may have died after renaming the fsynced record but
+            // before syncing this directory. Make that visible decision durable
+            // before recovery starts replacing canonical objects as well.
+            sync(&dir)?;
             install(root, &d, &mut |_| Ok(()))?;
             fs::rename(&path, path.with_extension("done"))?;
             sync(&dir)
@@ -350,7 +367,7 @@ fn commit_with_fault(
     ensure!(bytes.len() <= LIMIT, "decision too large");
     let path = dir.join(format!("{}.pending", name(&d)));
     ensure!(!present(&path)?, "OutcomeUnknown");
-    replace(&path, &bytes).map_err(|_| OutcomeUnknown(path.clone()))?; // file AND directory fsynced before any canonical write
+    replace_with_fault(&path, &bytes, fault).map_err(|_| OutcomeUnknown(path.clone()))?; // file AND directory fsynced before any canonical write
     let accepted = (|| -> Result<()> {
         fault("journal")?;
         install(root, &d, fault)?;

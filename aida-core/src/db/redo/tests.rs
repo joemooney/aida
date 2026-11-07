@@ -72,11 +72,12 @@ fn child(root: &Path, checkpoint: &str) -> std::process::ExitStatus {
 }
 #[test]
 fn restart_child() {
-    let Some(root) = std::env::var_os("AIDA_TEST_REDO_ROOT") else {
+    let environment = crate::exec_context::Environment::capture();
+    let Some(root) = environment.get("AIDA_TEST_REDO_ROOT") else {
         return;
     };
     let root = PathBuf::from(root);
-    let checkpoint = std::env::var("AIDA_TEST_REDO_CHECKPOINT").unwrap();
+    let checkpoint = environment.var("AIDA_TEST_REDO_CHECKPOINT").unwrap();
     if checkpoint == "recover" {
         with_store_write_lock(&root, || {
             let row = crate::object_store::read_object(&root.join("objects"), "TASK-1")?;
@@ -93,13 +94,22 @@ fn restart_child() {
             serde_json::from_slice(&fs::read(root.join("decision.json")).unwrap()).unwrap();
         let mut installs = 0;
         with_store_write_lock(&root, || {
-            commit_with_fault(&root, d, &mut |point| {
+            commit_with_fault(&root, d.clone(), &mut |point| {
                 if point == "install" {
                     installs += 1;
                 }
                 if checkpoint == point
                     || checkpoint == format!("install-{installs}") && point == "install"
                 {
+                    if point.starts_with("record_") || point == "journal" {
+                        for image in &d.images {
+                            assert_eq!(
+                                hash(&object_bytes(&root, &image.spec_id).unwrap()),
+                                image.before,
+                                "canonical write preceded journal durability"
+                            );
+                        }
+                    }
                     std::process::exit(72);
                 }
                 Ok(())
@@ -111,7 +121,14 @@ fn restart_child() {
 }
 #[test]
 fn restart_recovers_each_boundary_and_replays_exact_result_once() {
-    for point in ["journal", "install-1", "install-2", "durable", "reply"] {
+    for point in [
+        "record_rename",
+        "journal",
+        "install-1",
+        "install-2",
+        "durable",
+        "reply",
+    ] {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let (d, op) = fixture(root);
@@ -162,6 +179,41 @@ fn restart_recovers_each_boundary_and_replays_exact_result_once() {
             .unwrap_err()
             .to_string()
             .contains("Conflict"));
+    }
+}
+#[test]
+fn restart_before_record_rename_does_not_accept_temporary_evidence() {
+    for point in ["record_write", "record_sync"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (d, op) = fixture(root);
+        fs::write(root.join("decision.json"), serde_json::to_vec(&d).unwrap()).unwrap();
+        assert_eq!(child(root, point).code(), Some(72), "{point}");
+        with_store_write_lock(root, || {
+            assert!(!status(root, &d.binding, d.epoch, d.request_id)?);
+            assert!(lookup(root, &d.binding, d.epoch, d.request_id, &d.digest)?.is_none());
+            for image in &d.images {
+                assert_eq!(hash(&object_bytes(root, &image.spec_id)?), image.before);
+            }
+            Ok(())
+        })
+        .unwrap();
+        let backend = GitBackend::new(root).unwrap();
+        let retry = || {
+            backend
+                .mutate_canonical("fixed", d.epoch, d.request_id, "bound author", &op, || {
+                    Ok(())
+                })
+                .unwrap()
+        };
+        assert_eq!(retry(), retry());
+        assert_eq!(
+            crate::object_store::read_object(&root.join("objects"), "TASK-1")
+                .unwrap()
+                .comments
+                .len(),
+            1
+        );
     }
 }
 #[test]
@@ -266,7 +318,7 @@ fn canonical_comment_edit_stale_and_concurrent_requests() {
 
 #[test]
 fn io_failure_never_replies_success_and_next_writer_recovers() {
-    for point in ["journal", "install", "durable", "reply"] {
+    for point in ["record_rename", "journal", "install", "durable", "reply"] {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let (d, _) = fixture(root);
