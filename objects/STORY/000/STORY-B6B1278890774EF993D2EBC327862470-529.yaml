@@ -1,0 +1,21 @@
+id: 01a1b445-5817-7aa2-a0a1-8d7435918526
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-529
+agreed_id: STORY-2606
+title: 'Upstream the work GitLab CI adapter: .gitlab/ci/gdma.yml plus ci/gdma/run-upstream.py, which runs ci.yml''s own steps under GitLab'
+description: 'Source: work GDMS CI report. The work pipeline ran only integrity checks and scans, not the real suite. The work branch adds .gitlab/ci/gdma.yml with seven lanes (lib-0, lib-1, cli-0, cli-1, rest, gates, contracts). ci/gdma/run-upstream.py parses the supported GitHub-expression subset out of .github/workflows/ci.yml, refuses unsupported input, and collects JUnit. ci.yml stays the only source of truth. Upstreaming it lets the STORY-2480 relay validate receipt job names against a job set that home main defines. Bring in: gdma.yml, run-upstream.py, check-sources.py, README, tests/test_gdma_ci.py, and the dev_build.rs change (drop automatic sccache daemon management; prefer the child''s rustc-wrapper override). Keep out (work-only): the Nexus URL rewrite of package-lock.json, the cargo registry config, the gitleaks fingerprint and secret-false-positives.md, runner and image config, cache-key/keyring/job-session scripts, and the RUST_MIN_STACK=64MiB / CARGO_BUILD_JOBS=4 environment. Make the registry and runner tags variables, not committed work hostnames. Acceptance: home CI passes test_gdma_ci.py; the job names in gdma.yml are admitted by the relay inventory (TASK-3232); no work hostname, registry URL or credential is committed.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T04:30:05.847916747Z
+modified_at: 2026-11-07T04:30:05.847916747Z
+req_type: Story
+filed_at:
+  code_sha: 110130adbc78a756f5070181576814c206c0dd54
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 110130adbc7
+  vendor: claude
+  session: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
