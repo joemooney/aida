@@ -79,6 +79,8 @@
 "Run history template CLI/config/MCP contract tests" = "full"
 # trace:BUG-1801 | ai:codex
 "Run single-spec show latency regression" = "full"
+# trace:BUG-2481 | ai:codex
+"Run full-status cold-cache latency regression" = "full"
 # trace:STORY-1468 | ai:codex
 "Run originating prompt CLI output regression" = "full"
 "Run MCP doc-consistency test" = "full"

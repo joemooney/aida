@@ -42,7 +42,8 @@ def check(binary, cold_budget=15, warm_budget=5):
                    GIT_COMMITTER_NAME="Test", GIT_COMMITTER_EMAIL="test@example.invalid",
                    AIDA_TELEMETRY="0", AIDA_OUTPUT_FORMAT="human")
         run(["git", "init", "-q"], root, env)
-        run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "init",
+        run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+             "-c", "core.hooksPath=/dev/null", "commit", "-qm", "init",
              "--allow-empty"], root, env)
         run([binary, "init", "--no-skills", "--no-hooks", "--no-agent-config",
              "--no-roles"], root, env)
@@ -73,7 +74,8 @@ def check(binary, cold_budget=15, warm_budget=5):
             # JSON is valid YAML; this keeps the generated fixture stdlib-only.
             path.write_text(json.dumps(obj), encoding="utf-8")
         run(["git", "add", "objects"], store, env)
-        run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture"],
+        run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+             "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture"],
             store, env)
         cache = root / ".aida/cache-db/cache.db"
         for path in cache.parent.glob("cache.db*"):
