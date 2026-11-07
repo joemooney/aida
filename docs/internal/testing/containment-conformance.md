@@ -379,15 +379,28 @@ stdout remains a private captured eval block. The shell continuation receives
 that block through its own stdin pipe, then restores the inherited terminal stdin
 from a passed descriptor before evaluating it. Successful eval blocks never enter
 argv, environment variables, reports or files. Both seat transitions retain the
-operator's terminal session and the supervised timeout cleanup.
+operator's terminal session and the supervised timeout cleanup. Each role entry
+announces that it is waiting for the operator and allows five minutes for prompts,
+including the advisor delegation question (whose default remains no). The harness
+lends terminal foreground ownership to each continuation before releasing its
+script, so implementer prompts can read the controlling terminal. Supervisors
+return foreground ownership after nested cleanup, blocking SIGTTOU while
+reclaiming it. Attribute restoration runs only in the foreground group; the outer
+supervisor restores attributes after continuation exit and timeout or SIGTERM
+cleanup. While a continuation owns the foreground, Ctrl+C reaches that group;
+both implementer setup and vendor-run continuations record
+`harness-interrupted: SIGINT` before exiting, and the supervisors reclaim the
+terminal without replacing that reason with a generic launch refusal. Top-level SIGTERM
+reports `harness-terminated: SIGTERM`, distinct from continuation timeout cleanup.
+<!-- trace:BUG-2485 | ai:codex -->
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 
 The advisor setup seat requests no child delegation; only the implementer seat
 requests `--delegate-seat implementer`. Closed inherited stdin refuses with
 `fixture-terminal-stdin-unavailable` before starting a continuation. The outer
-continuation budget is the vendor timeout plus 330 seconds: four 30-second setup
-calls, the inner timeout's 180-second overhead, and 30 seconds for inner cleanup
-and reporting. On interruption the outer supervisor allows 25 seconds for setup
+continuation budget is the vendor timeout plus 600 seconds: three 30-second setup
+calls, five minutes for implementer entry, the inner timeout's 180-second overhead,
+and 30 seconds for inner cleanup and reporting. On interruption the outer supervisor allows 25 seconds for setup
 cleanup, exceeding the inner supervisor's 10-second SIGTERM grace and 5-second
 SIGKILL reap budget so the inner group is killed before setup is killed.
 <!-- trace:TASK-2941 | ai:codex -->

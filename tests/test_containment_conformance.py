@@ -202,6 +202,268 @@ items = [{name = "preserved", enabled = true}]
             self.assertNotIn("private-key-adoption", saved)
             self.assertIn("offline-launch-reached", saved)
 
+    # trace:BUG-2485 | ai:codex
+    def test_role_entry_allows_operator_time_and_restores_terminal_on_every_exit(self):
+        for outcome in ("success", "refusal", "timeout", "interrupt", "termination", "spawn-error"):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                master, terminal = pty.openpty()
+                before = c.termios.tcgetattr(terminal)
+                duplicate = os.dup
+                report = {"setup": [], "checks": {}, "containment_receipt_sha256": None}
+                def entered(argv, **kwargs):
+                    self.assertEqual(kwargs["timeout"], 300)
+                    self.assertNotIn("stdin", kwargs)
+                    self.assertNotIn("stderr", kwargs)
+                    self.assertNotIn("--delegate-seat", argv)
+                    damaged = c.termios.tcgetattr(terminal)
+                    damaged[1] &= ~c.termios.OPOST
+                    damaged[3] &= ~(c.termios.ECHO | c.termios.ICANON)
+                    c.termios.tcsetattr(terminal, c.termios.TCSANOW, damaged)
+                    if outcome == "timeout":
+                        raise c.subprocess.TimeoutExpired(argv, 300)
+                    if outcome == "interrupt":
+                        raise KeyboardInterrupt()
+                    if outcome == "termination":
+                        c.continuation_terminated(c.signal.SIGTERM, None)
+                    if outcome == "spawn-error":
+                        raise OSError("fixture spawn error")
+                    return c.subprocess.CompletedProcess(argv, int(outcome == "refusal"), stdout=
+                        "#aida:eval:begin\nprivate-key-adoption\n#aida:eval:end\n")
+                try:
+                    with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)), \
+                            mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
+                            mock.patch.object(c.subprocess, "run", side_effect=entered), \
+                            contextlib.redirect_stderr(io.StringIO()) as diagnostics:
+                        if outcome == "success":
+                            self.assertEqual(c.fixture_role_enter("aida", root, {}, root, report, "advisor"),
+                                             "private-key-adoption")
+                        else:
+                            expected = {"timeout": c.subprocess.TimeoutExpired,
+                                        "interrupt": KeyboardInterrupt, "spawn-error": OSError}.get(outcome, ValueError)
+                            with self.assertRaises(expected):
+                                c.fixture_role_enter("aida", root, {}, root, report, "advisor")
+                    self.assertEqual(c.termios.tcgetattr(terminal), before)
+                    self.assertIn("Waiting for operator role entry (advisor)", diagnostics.getvalue())
+                    self.assertIn("5 minutes", diagnostics.getvalue())
+                    if outcome == "success":
+                        self.assertNotIn("private-key-adoption", str(report) + diagnostics.getvalue())
+                finally:
+                    os.close(master)
+                    os.close(terminal)
+
+    def test_disconnected_terminal_does_not_mask_original_error(self):
+        with mock.patch.object(c.os, "isatty", return_value=True), \
+                mock.patch.object(c.termios, "tcgetattr", return_value=[]), \
+                mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
+                mock.patch.object(c.termios, "tcsetattr", side_effect=c.termios.error("disconnected")):
+            with self.assertRaisesRegex(ValueError, "original failure"):
+                with c.preserved_terminal():
+                    raise ValueError("original failure")
+
+    # trace:BUG-2485 | ai:codex
+    def test_supervisor_restores_terminal_after_forced_child_cleanup(self):
+        master, terminal = pty.openpty()
+        duplicate = os.dup
+        before = c.termios.tcgetattr(terminal)
+        script = "exec " + c.shlex.join([c.sys.executable, "-c", """
+import os, signal, termios
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+a = termios.tcgetattr(0)
+a[1] &= ~termios.OPOST
+a[3] &= ~(termios.ECHO | termios.ICANON)
+termios.tcsetattr(0, termios.TCSANOW, a)
+print('terminal changed', flush=True)
+signal.pause()
+"""])
+        try:
+            with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)), \
+                    mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp()), \
+                    mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()):
+                with self.assertRaisesRegex(ValueError, "continuation-timeout"):
+                    c.launch_aida_continuation(script, Path("."), {"PATH": os.defpath}, 1, cleanup_grace=0.1)
+            self.assertEqual(c.termios.tcgetattr(terminal), before)
+        finally:
+            os.close(master)
+            os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_background_terminal_restore_is_skipped(self):
+        with mock.patch.object(c.os, "isatty", return_value=True), \
+                mock.patch.object(c.termios, "tcgetattr", return_value=[]), \
+                mock.patch.object(c.os, "tcgetpgrp", return_value=os.getpgrp() + 1), \
+                mock.patch.object(c.termios, "tcsetattr") as restore:
+            with c.preserved_terminal():
+                pass
+        restore.assert_not_called()
+
+    # trace:BUG-2485 | ai:codex
+    def test_controlling_terminal_supports_implementer_and_nested_prompts(self):
+        import select
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            role = root / "role"
+            role.write_text("#!/bin/sh\nstty -echo -opost\necho PROMPT >/dev/tty\nread answer\n"
+                            "test \"$answer\" = yes || exit 1\n"
+                            "printf '#aida:eval:begin\\ntrue\\n#aida:eval:end\\n'\n")
+            role.chmod(0o700)
+            supervisor = f"""
+import importlib.util, os, pathlib
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+root = pathlib.Path({str(root)!r})
+assert os.tcgetpgrp(0) == os.getpgrp()
+c.fixture_role_enter({str(role)!r}, root, dict(os.environ), root, {{'setup': []}}, 'implementer')
+assert c.launch_aida_continuation('echo PROMPT >/dev/tty; read answer; test "$answer" = yes',
+                                  root, dict(os.environ), 5) == 0
+assert os.tcgetpgrp(0) == os.getpgrp()
+"""
+            script = "exec " + c.shlex.join([c.sys.executable, "-c", supervisor])
+            worker = f"""
+import fcntl, importlib.util, os, pathlib, termios
+fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+before = termios.tcgetattr(0)
+assert c.launch_aida_continuation({script!r}, pathlib.Path({str(root)!r}), dict(os.environ), 10) == 0
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+try:
+    c.launch_aida_continuation('stty -echo -opost; trap "" TERM; exec sleep 30',
+                               pathlib.Path({str(root)!r}), dict(os.environ), 0.3, cleanup_grace=0.1)
+except ValueError as error:
+    assert 'continuation-timeout' in str(error)
+else:
+    raise AssertionError('expected forced cleanup')
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+"""
+            master, terminal = pty.openpty()
+            child = c.subprocess.Popen([c.sys.executable, "-c", worker], stdin=terminal,
+                                       stdout=terminal, stderr=terminal, start_new_session=True)
+            output = b""
+            prompts = 0
+            deadline = time.monotonic() + 15
+            try:
+                while child.poll() is None and time.monotonic() < deadline:
+                    if select.select([master], [], [], 0.1)[0]:
+                        output += os.read(master, 65536)
+                        count = output.count(b"PROMPT")
+                        while prompts < count:
+                            os.write(master, b"yes\n")
+                            prompts += 1
+                self.assertEqual(child.poll(), 0, output.decode(errors="replace"))
+                self.assertEqual(prompts, 2)
+            finally:
+                # Bound a regression that stops a process group on SIGTTIN/TTOU.
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+                os.close(master)
+                os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_foreground_sigint_records_refusal_and_restores_terminal(self):
+        import select
+        for mode in ("--aida-setup", "--aida-continue"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "repository").mkdir()
+                c.write_json(root / "aida-state.json", {
+                    "aida": "fixture", "spec": "TASK-1", "timeout": 5,
+                    "report": {"setup": [], "checks": {"C0": {"status": "unknown"}},
+                               "containment_receipt_sha256": None}})
+                continuation = f"""
+import importlib.util, pathlib, signal, sys, termios
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+root = pathlib.Path({str(root)!r})
+def interruptible(*args, **kwargs):
+    attrs = termios.tcgetattr(0)
+    attrs[1] &= ~termios.OPOST
+    attrs[3] &= ~(termios.ECHO | termios.ICANON)
+    termios.tcsetattr(0, termios.TCSANOW, attrs)
+    print('INTERRUPT_READY', flush=True)
+    signal.pause()
+c.fixture_command = lambda *args: 'TASK-1'
+if {mode!r} == '--aida-setup':
+    c.fixture_role_enter = interruptible
+else:
+    class Network:
+        config = {{}}
+        receipts = list(range(8))
+        def __init__(self, *args): pass
+        def close(self): (root / 'network-closed').touch()
+    c.Network = Network
+    c.network_attempts = lambda *args: {{'control': {{'result': 'allowed'}}}}
+    c.bounded_launch = interruptible
+sys.argv = [c.__file__, {mode!r}, str(root)]
+c.main()
+"""
+                script = "exec " + c.shlex.join([c.sys.executable, "-c", continuation])
+                worker = f"""
+import fcntl, importlib.util, os, pathlib, termios
+fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+spec = importlib.util.spec_from_file_location('conformance', {c.__file__!r})
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+before = termios.tcgetattr(0)
+assert c.launch_aida_continuation({script!r}, pathlib.Path({str(root)!r}),
+                                  {{'PATH': os.defpath}}, 10) == 2
+assert os.tcgetpgrp(0) == os.getpgrp()
+assert termios.tcgetattr(0) == before
+"""
+                master, terminal = pty.openpty()
+                child = c.subprocess.Popen([c.sys.executable, "-c", worker], stdin=terminal,
+                                           stdout=terminal, stderr=terminal, start_new_session=True)
+                output = b""
+                interrupted = False
+                deadline = time.monotonic() + 15
+                try:
+                    while child.poll() is None and time.monotonic() < deadline:
+                        if select.select([master], [], [], 0.1)[0]:
+                            output += os.read(master, 65536)
+                            if b"INTERRUPT_READY" in output and not interrupted:
+                                foreground = os.tcgetpgrp(master)
+                                self.assertNotEqual(foreground, child.pid)
+                                os.killpg(foreground, c.signal.SIGINT)
+                                interrupted = True
+                    self.assertTrue(interrupted, output.decode(errors="replace"))
+                    self.assertEqual(child.poll(), 0, output.decode(errors="replace"))
+                    self.assertNotIn(b"Traceback", output)
+                    report = json.loads((root / "report.json").read_text())
+                    self.assertEqual(report["unsupported_reason"], "harness-interrupted: SIGINT")
+                    if mode == "--aida-continue":
+                        self.assertTrue((root / "network-closed").exists())
+                finally:
+                    if child.poll() is None:
+                        child.kill()
+                    child.wait(timeout=5)
+                    os.close(master)
+                    os.close(terminal)
+
+    # trace:BUG-2485 | ai:codex
+    def test_main_installs_distinct_harness_termination_handler(self):
+        for boundary in ("native", "aida"):
+            with self.subTest(boundary=boundary), \
+                    mock.patch.object(c.sys, "argv", [c.__file__, "--vendor", "codex",
+                                                      "--boundary", boundary, "--output", "fixture"]), \
+                    mock.patch.object(c.signal, "signal") as install, \
+                    mock.patch.object(c, "run") as run, \
+                    contextlib.redirect_stderr(io.StringIO()) as diagnostics:
+                def terminate(_args):
+                    install.assert_called_once_with(c.signal.SIGTERM, c.harness_terminated)
+                    install.call_args.args[1](c.signal.SIGTERM, None)
+                run.side_effect = terminate
+                with self.assertRaises(SystemExit) as exit:
+                    c.main()
+                self.assertEqual(exit.exception.code, 2)
+                self.assertIn("harness-terminated: SIGTERM", diagnostics.getvalue())
+                self.assertNotIn("continuation-timeout", diagnostics.getvalue())
+
     def test_setup_refusal_never_enters_implementer_or_launches(self):
         for refused in ("setup-seat-preflight", "spec-add", "queue-add"):
             with self.subTest(stage=refused), tempfile.TemporaryDirectory() as directory:
@@ -355,9 +617,9 @@ items = [{name = "preserved", enabled = true}]
                 return "fixture"
             # trace:TASK-2941 | ai:codex
             def timeout(script, repo, env, seconds, cleanup_grace):
-                # Cover all four 30s setup calls, the full inner budget, its
+                # Cover three 30s setup calls, the 300s role entry, the inner budget, its
                 # TERM/KILL cleanup and time to publish the real outcome.
-                self.assertEqual(seconds, args.timeout + 4 * 30 + 180 + 30)
+                self.assertEqual(seconds, args.timeout + 3 * 30 + 300 + 180 + 30)
                 self.assertEqual(cleanup_grace, 25)
                 report = json.loads((root / "aida-state.json").read_text())["report"]
                 report["setup"].append({"stage": "continuation-only-evidence"})
