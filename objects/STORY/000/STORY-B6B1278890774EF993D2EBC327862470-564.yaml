@@ -1,0 +1,36 @@
+id: 01a1b798-2d7f-7d21-a26b-947530a339b7
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-564
+agreed_id: STORY-2641
+title: 'Lane test jobs use the host''s sccache: bind a writable cache dir and reach the server inside the job bubblewrap'
+description: |
+  ## Problem
+  Lane test jobs run in bubblewrap with a cleared environment and a read-only cargo home. They appear not to use sccache: on the primary, sccache stats show 3 compile requests and 0 executed while lanes were active. Each seat clone therefore compiles every dependency cold. dell1's target dir is 76G.
+
+  ## Proposal
+  When the host's cargo config sets `build.rustc-wrapper` to sccache, the lane job profile:
+  - passes `RUSTC_WRAPPER` (or keeps cargo config resolution) and a host-owned `SCCACHE_DIR`;
+  - binds that cache dir writable and makes the sccache server reachable (either the host's server socket or a per-job local server);
+  - keeps cargo home read-only and the job offline.
+  Seat code cannot poison the shared cache beyond what sccache's keying already allows; document that residual risk, or use a lane-only cache dir separate from the operator's.
+
+  ## Acceptance
+  1. A second lane job building the same dependency set shows sccache cache hits (`sccache --show-stats` delta > 0) on the primary and on dell1.
+  2. Without sccache configured, behaviour is unchanged.
+  3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
+  4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T19:59:26.079479533Z
+modified_at: 2026-11-07T19:59:26.079479533Z
+req_type: Story
+filed_at:
+  code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cd520a47e97
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
