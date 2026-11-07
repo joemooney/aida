@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T22:30:23.320260308Z
+modified_at: 2026-11-07T23:45:52.045662774Z
 req_type: Story
 tags:
 - architecture
@@ -633,6 +633,13 @@ comments:
   created_at: 2026-11-07T22:30:23.320260308Z
   modified_at: 2026-11-07T22:30:23.320260308Z
   session_id: 01a1b7b65058
+- id: 01a1b867-7bad-7012-a4bb-db34c2fde8f1
+  author: joe
+  content: 'Advisor 2026-11-07 17:25 MST: merged main into PR #3619 (story-2325-prd) to clear the AGENTS.md conflict; resolution keeps main''s AGENTS.md and drops the PR''s prepended per-change note (repo CLAUDE.md: per-change notes go in the PR body). Compile-checked on dell1 (cargo check -p aida-cli-lib --tests, exit 0). The advisor authored this merge commit, so the next review must come from an independent reviewer.'
+  created_at: 2026-11-07T23:45:52.045662774Z
+  modified_at: 2026-11-07T23:45:52.045662774Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
