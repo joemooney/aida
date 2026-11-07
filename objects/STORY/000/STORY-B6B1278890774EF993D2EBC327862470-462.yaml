@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T15:14:35.459712877Z
+modified_at: 2026-11-07T23:44:48.527674691Z
 req_type: Story
 tags:
 - architecture
@@ -478,6 +478,13 @@ comments:
   created_at: 2026-11-07T15:14:35.459712877Z
   modified_at: 2026-11-07T15:14:35.459712877Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b866-838f-7c21-9d78-f1ac56d06dc0
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 17:15 MST: UNBLOCKED. STORY-2326 PR-D merged as #3603 (7a18c0d52a6). Proceed with sketch step 3a per the 08:25 ruling (hook event/backend layout into VendorProfile, hook path/event fixture parity and safe-writer tests, shrink story_2539_vendor_literals.tsv). New branch off current main. LIGHT gate.'
+  created_at: 2026-11-07T23:44:48.527674691Z
+  modified_at: 2026-11-07T23:44:48.527674691Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
