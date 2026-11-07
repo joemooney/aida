@@ -347,6 +347,10 @@ pub(crate) fn handle_db_command(
                 "!".yellow()
             );
         }
+        // trace:STORY-2402 | ai:codex
+        DbCommand::MigrateDeferConditions(_) => {
+            anyhow::bail!("db migrate-defer-conditions only applies to git-backed stores.");
+        }
         // trace:BUG-2017 | ai:claude
         DbCommand::AuditIds(_) => {
             anyhow::bail!("db audit-ids only applies to git-backed stores.");
@@ -886,6 +890,22 @@ fn run_db(
                     inner: DbCommand::AuditIds(audit),
                 } => {
                     crate::db_audit_ids::run(store_path, audit)?;
+                }
+                // trace:STORY-2402 | ai:codex
+                DbArgs {
+                    inner: DbCommand::MigrateDeferConditions(args),
+                } => {
+                    let outcome = crate::defer_condition_migration::run_migration(
+                        backend, store_path, args.apply,
+                    )?;
+                    if args.json || output_format_is_json() {
+                        println!("{}", crate::cache_output::json_pretty(&outcome)?);
+                    } else {
+                        print!(
+                            "{}",
+                            crate::defer_condition_migration::render_outcome(&outcome)
+                        );
+                    }
                 }
                 // trace:TASK-1426 | ai:claude
                 DbArgs {
