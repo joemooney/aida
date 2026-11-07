@@ -12,17 +12,18 @@ use anyhow::Result;
 use std::process::Command;
 
 /// The effectful half of the vendor profile, keyed by the existing closed enum.
-pub(crate) struct VendorProfile(LaunchVendor);
+// trace:STORY-2539 | ai:codex
+pub(crate) struct VendorProfile(&'static aida_core::vendors::VendorProfile);
 
 impl VendorProfile {
     pub(crate) fn for_vendor(vendor: LaunchVendor) -> Self {
-        Self(vendor)
+        Self(aida_core::vendors::profile(vendor))
     }
 
     /// Last step before spawn/exec. Receipt-owning AIDA Codex launches use
     /// containment::launch instead; this adapter deliberately refuses them.
     pub(crate) fn finalize(&self, child: &mut Command) -> Result<()> {
-        match self.0 {
+        match self.0.vendor {
             LaunchVendor::Codex => prepare_launch(child),
             LaunchVendor::Claude | LaunchVendor::Agy => Ok(()),
         }
