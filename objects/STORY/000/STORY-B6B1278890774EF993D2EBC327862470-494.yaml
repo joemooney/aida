@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T09:55:04.307566321Z
+modified_at: 2026-11-07T09:59:17.192982516Z
 req_type: Story
 tags:
 - area:advisor
@@ -308,6 +308,13 @@ comments:
   created_at: 2026-11-07T09:50:34.258700429Z
   modified_at: 2026-11-07T09:50:34.258700429Z
   session_id: 01a1b5696289
+- id: 01a1b572-b9c8-78d1-a16f-7bcd3fce21b7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Doc-only reconciliation with the v2 signoff is accurate except it cites the wrong landing PR for BUG-2471 (#3536 is BUG-2472; BUG-2471 landed as #3535, commit 37c695e3406), plus one stale ''proposed'' wording. AC1 verified (inventory present/updated); AC2-6 not applicable (Refs doc lane, no runtime claim). CI: rest/cli/lib/merge-hold pass; contracts+gates still pending at review time.. No triage reason was given.'
+  created_at: 2026-11-07T09:59:17.192981116Z
+  modified_at: 2026-11-07T09:59:17.192981116Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
@@ -397,6 +404,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b572-b9c8-78d1-a16f-7bb13e647baa
+  author: joe
+  timestamp: 2026-11-07T09:59:17.192972912Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
@@ -406,11 +422,3 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Doc-only reconciliation with the v2 signoff is accurate except it cites the wrong landing PR for BUG-2471 (#3536 is BUG-2472; BUG-2471 landed as #3535, commit 37c695e3406), plus one stale ''proposed'' wording. AC1 verified (inventory present/updated); AC2-6 not applicable (Refs doc lane, no runtime claim). CI: rest/cli/lib/merge-hold pass; contracts+gates still pending at review time.'
-  recovery_hint: address the review findings, move STORY-2571 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T09:55:04.307566321Z
