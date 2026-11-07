@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:12.323674694Z
-modified_at: 2026-11-06T00:16:21.608397701Z
+modified_at: 2026-11-07T20:26:40.204679275Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -33,6 +33,16 @@ comments:
   created_at: 2026-11-06T00:16:21.608397701Z
   modified_at: 2026-11-06T00:16:21.608397701Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-1ccc-7ea0-9df0-02cda897f200
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-07T02:28:10.038037102Z","deferred_until":"next time the operator is at the work machine","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:40.204670027Z
+  modified_at: 2026-11-07T20:26:40.204670027Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-07T02:28:10.038037102Z
-deferred_until: next time the operator is at the work machine
+deferred_until: manual:operator
