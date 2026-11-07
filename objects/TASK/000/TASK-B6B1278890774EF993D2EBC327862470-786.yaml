@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-07T09:30:37.273000834Z
+modified_at: 2026-11-07T09:50:19.181507903Z
 req_type: Task
 tags:
 - area:containment
@@ -269,6 +269,19 @@ comments:
   created_at: 2026-11-07T00:53:28.734918553Z
   modified_at: 2026-11-07T00:53:28.734918553Z
   session_id: 01a1b3786470
+- id: 01a1b56a-842d-7013-8d9d-91919b4063a0
+  author: joe
+  content: |
+    Partial S2 follow-up from origin/main (which already includes #3518 and #3545): expanded the common wrapper's private-runtime regression to execute external file/URL helpers and a stdio request server without a native permission layer. Each descendant must write private runtime state, refuse overwrites of readable host canaries, refuse reachable host UNIX/TCP endpoints, and retain access to the inherited relay. Host positive controls run before containment; the parent checks host canaries and runtime isolation afterward. No AGY-specific containment engine or production admission change was introduced. Updated AGENTS.md, OVERVIEW.md and docs/internal/testing/containment-conformance.md to distinguish this synthetic inheritance evidence from actual AGY tool/browser/MCP conformance.
+
+    Validation: 13 targeted task_3048 Rust tests passed, including the expanded live runtime regression. The new regression also passed separately with AIDA_REQUIRE_BWRAP_LIVE=1 (no skip). All 43 offline containment conformance tests passed. make check-ci-fast passed all 43 gates, including the feature-disabled CLI build and TUI seam. cargo fmt --all -- --check and git diff --check passed.
+
+    TASK-3048 remains open. Remaining acceptance: advisor-owned complete auth/login/refresh host inventory and trusted approval; private read-only token refresh/expiry validation; mediated Git/AIDA write positive controls; wire and pass the production AGY all-tool conformance path before opening admission. Existing endpoint data remains incomplete rather than inventing auth hosts or treating synthetic helper processes as AGY receipts. No real vendor/model calls, credentials copied/logged, deputies contacted, queue completion, review verdict, commit, push or PR operation occurred.
+
+    Four files remain uncommitted for the host launcher: aida-cli-lib/src/containment/tests/launch_tests.rs, AGENTS.md, OVERVIEW.md, docs/internal/testing/containment-conformance.md. Native publication declaration recorded: [AI:codex] test(containment): verify private-runtime tool descendants; Refs STORY-2460 (Refs TASK-3048). This is non-completing work; host publication and independent review remain separate.
+  created_at: 2026-11-07T09:50:19.181507903Z
+  modified_at: 2026-11-07T09:50:19.181507903Z
+  session_id: 01a1b55871a8
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
