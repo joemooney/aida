@@ -15,12 +15,12 @@ description: |
   1. The salvage probe classifies a worktree with a clean status and every local branch/HEAD covered by a remote ref as reapable, not salvageable (regression test on a seat-clone fixture).
   2. guard_remote_commits surfaces the underlying error (print the full chain, {:#}).
   3. Hygiene hint text never prints an empty branch / "(no commits yet)" for a tree that has commits.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:20:01.282059557Z
-modified_at: 2026-11-07T00:58:58.403604227Z
+modified_at: 2026-11-07T01:09:56.045204434Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -35,6 +35,13 @@ comments:
   created_at: 2026-11-07T00:41:45.824117178Z
   modified_at: 2026-11-07T00:41:45.824117178Z
   session_id: 01a1b368e9b4
+- id: 01a1b38e-16cd-7df3-9d88-1a7de277c292
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2 and AC3 verified. AC1 only partly met: probe, ps and hygiene salvage now handle legacy seat clones, but session reap still routes on lease.tree_kind, so a legacy clone lease is never reaped. CI still pending at review time (lib-1/cli-1/rest green).. No triage reason was given.'
+  created_at: 2026-11-07T01:09:56.045202903Z
+  modified_at: 2026-11-07T01:09:56.045202903Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b368-f22a-7ab3-bbec-f4bcc959f0e9
   author: aida-session-start
@@ -62,6 +69,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b38e-16cd-7df3-9d88-1a60769352c6
+  author: joe
+  timestamp: 2026-11-07T01:09:56.045183681Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
   branch: main
@@ -71,11 +87,3 @@ filed_at:
   vendor: claude
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC2 and AC3 verified. AC1 only partly met: probe, ps and hygiene salvage now handle legacy seat clones, but session reap still routes on lease.tree_kind, so a legacy clone lease is never reaped. CI still pending at review time (lib-1/cli-1/rest green).'
-  recovery_hint: address the review findings, move BUG-2473 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T00:58:58.403604227Z
