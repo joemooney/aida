@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-934
 agreed_id: TASK-3366
 title: 'STORY-2537 S4: ProcIdentity for the agent registry and mail-wake'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-07T21:26:14.715741169Z
+modified_at: 2026-11-07T22:18:32.420595905Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -45,6 +45,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b817-8864-7d22-86ba-46d40a5073e1
+  author: joe
+  timestamp: 2026-11-07T22:18:32.420617357Z
+  session_id: 01a1b7e79d67
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -54,3 +62,9 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: S4 source edits are prepared, but the LIGHT gate cannot be completed on this host-owned build seed. Combined ProcIdentity and registry-only cargo tests each timed out after 900 seconds with zero executed tests; the registry run reports overlay-stale because the primary rewrote generation agent-65a17c57ad652b4a in place. The runner retains that pinned generation and refuses target-dir overrides, so the native seat cannot safely repair it. Host must reseed/relaunch, run the final ProcIdentity and affected-family tests, and finish make check-ci-fast before publication/completion. Final rustfmt, portability, diff hygiene and store-writer inventory checks passed; the other non-build fast gates passed. untested=true. Preserve the uncommitted edits and Refs declaration; TASK-3366 and STORY-2537 are not completed.
+  lean: Refresh the host-owned target generation and rerun the LIGHT gate in a fresh lane before clearing this punt.
+  raised_by: implementer
+  raised_at: 2026-11-07T22:18:32.420595905Z
