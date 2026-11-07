@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:49:17.175578411Z
-modified_at: 2026-11-07T21:08:19.682752909Z
+modified_at: 2026-11-07T21:08:23.666196199Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 fixed (floor applies only when token binds, shared MARGIN, doctor category gating + expired wording, read-only knob row). But the new doctor test cannot pass: its expired-token fixture omits auth_mode, so it renders ''unavailable'' rather than ''expired''. CI lib shards were still running at review time.. No triage reason was given.'
   created_at: 2026-11-07T21:08:19.682751403Z
   modified_at: 2026-11-07T21:08:19.682751403Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7d7-4f7f-7e63-bf78-a48c100220f5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9537f6782335
+    Recorded: 2026-11-07T21:02:36.272378817+00:00
+    Findings:
+    1. MAJOR (test fails) aida-cli-lib/src/doctor_cmd.rs bug_2486_doctor_reports_lifetime_without_credential_material: the expired fixture {"tokens":{"access_token":...exp:1}} has no "auth_mode":"chatgpt". read_credentials (codex_auth.rs:160-163) rejects it ('ChatGPT file login required...'), so codex_token_lifetime returns token_unavailable(...) and assert!(expired.contains("expired")) fails. Add auth_mode to the fixture. The 'expired' rendering path is otherwise untested.
+    2. MINOR aida-cli-lib/src/launch/contained.rs:1024-1032: launch_lifetime's 'deadline' argument is always exp-300 (the token cap), even when the token is ample and the effective deadline is now+ttl. The diagnostic then prints a 'deadline' that is not the grant deadline. Pass auth.deadline as the deadline (it already equals the cap when capped), or label the field 'token cap'.
+    3. MINOR test gap: bug_2486_trusted_floor_policy_and_launch_diagnostic asserts the launch_lifetime formatter with auth.deadline, which is not what production passes (exp-300), and does not assert the line PreparedLaunch emits. The 'records the cap in launch diagnostics' criterion is covered only at the formatter level. Assert through prepare_with_io output, or extract the argument computation into a tested helper.
+    4. MINOR aida-cli-lib/src/gate/seat_authority.rs cap_launch_child_expiry: a direct (non-delegated) session grant with a token shorter than the grant fails with 'cannot cap ChatGPT child grant: requires this launcher's live delegated grant'. That error names neither the token expiry nor 'codex login'. Either refuse with floor_refusal-style guidance, or rely on the capped lane ttl (ttl=effective is already passed to the launcher) without mutating a non-child grant.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T21:08:23.551010157Z
+  modified_at: 2026-11-07T21:08:23.551010157Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
