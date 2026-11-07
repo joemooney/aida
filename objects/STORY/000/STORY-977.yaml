@@ -17,13 +17,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:58.191330588Z
-modified_at: 2026-11-07T20:26:42.098149487Z
+modified_at: 2026-11-07T21:05:46.208190240Z
 req_type: Story
 tags:
 - aida-why
 - architecture
 - crate-split
 - from-product
+- operator-held
 - recommend:approve
 - risk:medium
 comments:
@@ -49,6 +50,14 @@ comments:
   modified_at: 2026-11-07T20:26:42.098141763Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1b7d4-e95c-70b1-87bc-462c608794f3
+  author: joe
+  timestamp: 2026-11-07T21:05:46.332910944Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 deferred: true
 deferred_at: 2026-09-07T17:00:43.759211553Z
-deferred_until: manual:operator
+deferred_until: date:2027-01-15
+deferred_reason: 'OPERATOR RULING 2026-11-07 14:05 (product-pass triage, via advisor): keep parked; revisit 2027-01-15.'
