@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T10:44:34.235403847Z
+modified_at: 2026-11-07T10:44:47.217437036Z
 req_type: Story
 tags:
 - architecture
@@ -391,6 +391,13 @@ comments:
   created_at: 2026-11-07T09:53:00.268648146Z
   modified_at: 2026-11-07T09:53:00.268648146Z
   session_id: 01a1b55ed722
+- id: 01a1b59c-61f1-7961-a85f-92617489d46d
+  author: joe
+  content: '[advisor 03:35] NEXT = slice B per the signed sketch section 4: migrate launch parent facts/resources (launch/context.rs, launch/resources.rs, LaunchContext::resolve), then one config/home/tool cluster; ExecContext passed explicitly, no global accessor; regenerate the ledger with --write-ledger --base origin/main and lower the ceiling. BLOCKED BY STORY-2326 PR-D (same files); dispatch after it lands.'
+  created_at: 2026-11-07T10:44:47.217437036Z
+  modified_at: 2026-11-07T10:44:47.217437036Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
