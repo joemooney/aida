@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3222",
+  "publishes": [
+    {
+      "at": "2026-11-07T03:41:57.105000282Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-06T16:25:58.282356310Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T19:04:48.072021878Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T20:28:53.928389877Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T22:51:50.622457295Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T00:00:02.953233120Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T02:53:06.372679875Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T03:41:33.568055016Z",
+      "spec": "TASK-3222",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3511
+      }
+    },
+    {
+      "ts": "2026-11-07T03:41:56.929409177Z",
+      "spec": "TASK-3222",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "110130adbc78a756f5070181576814c206c0dd54",
+        "pr": 3511,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
