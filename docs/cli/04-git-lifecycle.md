@@ -284,15 +284,17 @@ It checks again before merging because the head and gates can change during
 the wait. The stale-check and stale-approval overrides apply in both phases;
 they do not bypass verdict reconciliation or holds.
 
-For one PR at one head, verdict reconciliation uses the newest timestamped
-verdict across its PR key and associated spec keys. A later approval can
-supersede an earlier request for changes at that same head; a later refusal
-holds it again. Opposing verdicts with tied, missing or invalid timestamps
-remain unresolved. Timestamps beyond the reader's five-minute clock-skew
-ceiling also remain unordered: capping a future approval must not let it erase
-a later refusal. Phase-3, drive and approval views use this same reconciliation,
-and malformed retained evidence still refuses. Review
-authority and other merge-hold clearance requirements continue to apply.
+For one PR at one head, verdict reconciliation uses append order. Retained
+`rounds` are oldest first; the top-level recording is later than every retained
+round. Ledger-backed aliases retain the shared ledger's append sequence. An
+identical recording connects histories across artifacts; unrelated opposing
+artifacts remain unresolved. `recorded_at` never establishes supersession, so
+clock skew cannot make an older approval erase a later refusal, even after the
+skewed timestamp elapses. A subsequent appended approval resolves the refusal.
+Phase-3, drive and approval views use this same rule and preserve the selected
+request-changes or rejected outcome. Malformed retained evidence or
+contradictory append histories refuse. Review authority and other merge-hold
+clearance requirements continue to apply.
 <!-- trace:BUG-2474 trace:TASK-2964 | ai:codex -->
 
 `aida pr ship [N] --wait [SECS]` bounds drive ownership, registration, and

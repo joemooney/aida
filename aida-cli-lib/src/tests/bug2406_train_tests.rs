@@ -786,9 +786,10 @@ fn bug2406_new_refusal_refuses(key: &str) {
 /// BUG-2438: append the incident's PR-3330 ledger shape under PR-11: an
 /// earlier spec-stamped refusal reviewed at `refusal_sha`, then `approval`
 /// recorded with no spec (review watch). Returns the canonical spec key.
-// trace:BUG-2438 | ai:claude
+// The displaced refusal deliberately has a clock ahead of the later approval.
+// trace:BUG-2438 trace:TASK-2964 | ai:codex
 fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static str {
-    let earlier = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    let earlier = (chrono::Utc::now() + chrono::Duration::minutes(3)).to_rfc3339();
     let stale = json!({"verdict":"request-changes", "reviewed_sha":refusal_sha,
         "reviewed_branch":"source/BUG-2400", "recorded_at":earlier,
         "recorded_by":"fixture earlier-round reviewer"});

@@ -848,13 +848,6 @@ pub(crate) fn outcome_of_verdict_body(
         })?;
     let selected = match reconciled {
         Some(crate::gate::review_verdict::VerdictKind::Approved) => "approved",
-        // Reconciliation groups both refusal kinds. Preserve the existing
-        // terminal rejection outcome when the current recording is rejected.
-        Some(crate::gate::review_verdict::VerdictKind::RequestChanges)
-            if auto_complete::Verdict::parse(raw) == Some(auto_complete::Verdict::Rejected) =>
-        {
-            "rejected"
-        }
         Some(crate::gate::review_verdict::VerdictKind::RequestChanges) => "request-changes",
         Some(crate::gate::review_verdict::VerdictKind::Rejected) => "rejected",
         _ => raw,

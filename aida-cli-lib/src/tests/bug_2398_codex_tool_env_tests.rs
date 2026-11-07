@@ -1068,15 +1068,24 @@ fn assert_recorded_authority_boundaries(root: &Path, child_grant: &str, authoriz
     std::fs::create_dir_all(pr_path.parent().unwrap()).unwrap();
     // trace:TASK-2964 | ai:codex
     // Exercise the real positive-authority view with an older independent
-    // refusal at this head. Its retained audit must not veto this approval.
+    // refusal at this head with a clock three minutes ahead of the approval.
+    // Its retained audit must not veto this later appended approval.
     let mut pr_body: serde_json::Value = serde_json::from_str(&body).unwrap();
     let earlier = chrono::DateTime::parse_from_rfc3339(v.recorded_at.as_deref().unwrap()).unwrap()
-        - chrono::Duration::seconds(1);
+        + chrono::Duration::minutes(3);
     pr_body["rounds"] = serde_json::json!([{
         "verdict": "request-changes", "reviewed_sha": head,
         "recorded_by": "earlier-independent-reviewer", "recorded_at": earlier.to_rfc3339()
     }]);
     std::fs::write(&pr_path, pr_body.to_string()).unwrap();
+    assert_eq!(
+        crate::phase_gates::outcome_of_verdict_body(&pr_body.to_string()).unwrap(),
+        crate::auto_complete::ReviewerOutcome::Verdict(crate::auto_complete::Verdict::Approved)
+    );
+    assert_eq!(
+        crate::phase_gates::read_verdict_file_for_head_since(&pr_path, Some(head), None).unwrap(),
+        crate::auto_complete::ReviewerOutcome::Verdict(crate::auto_complete::Verdict::Approved)
+    );
     let mut req = aida_core::Requirement::new("fixture".into(), "desc".into());
     req.spec_id = Some("TASK-1".into());
 

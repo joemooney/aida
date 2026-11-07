@@ -33,6 +33,9 @@ pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number:
     let Some(v) = crate::gate::review_verdict::parse_recorded_verdict(&current.body) else {
         return false;
     };
+    // trace:TASK-2964 | ai:codex
+    // At this artifact's own head, append order selects its top-level act.
+    // The outcome and authority checks therefore refer to the same recording.
     matches!(
         crate::phase_gates::outcome_of_verdict_body(&current.body),
         Ok(auto_complete::ReviewerOutcome::Verdict(
