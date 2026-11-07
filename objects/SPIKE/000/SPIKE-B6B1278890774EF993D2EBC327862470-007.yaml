@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:00:50.385855628Z
-modified_at: 2026-11-07T19:32:17.579317783Z
+modified_at: 2026-11-07T21:21:48.286069562Z
 req_type: Spike
+comments:
+- id: 01a1b7e3-96fe-7402-a2b3-98f18e1451e4
+  author: joe
+  content: 'ADVISOR BRIEF 2026-11-07 14:25. AC1 met (#3620 landed). For each candidate row in docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md (turn-boundary fork: claude --resume --fork-session, codex fork, AGY invoke_subagent; pre-compaction handoff via PreCompact/--autocompact; process exit plus resume across a human wait), record a yes/no/unverified lifecycle-test result in the doc with evidence (exact command, version, observed transcript state). Run what this seat can run. Anything that needs a host vendor login outside the sandbox is recorded as ''unverified: needs host run'', with the exact command to run. One docs PR, Refs SPIKE-711. File each ''yes'' as its own DRAFT spec (the advisor approves). No runtime adoption, no product code. FASTTRACK gate (make check-ci-fast only).'
+  created_at: 2026-11-07T21:21:48.286069562Z
+  modified_at: 2026-11-07T21:21:48.286069562Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b762-cb76-7e13-b7cf-4b2737c734fc
   author: joe
