@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T02:44:03.318856346Z
+modified_at: 2026-11-07T02:44:17.906013297Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -152,6 +152,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs-only evidence update (61 lines in the plan file) recording the failed step-1 interface gate; STORY-2593 AC1-AC3 remain unmet, and the commit/PR again carry a feat subject with a completing (STORY-2593) trailer.. It was punted on: design-fork: Round 3: explicitly dispute finding 5 as a current blocker: advisor sign-off on option (a) and residual bearer risk is recorded at 2026-11-07T00:33:24Z. Finding 4 is superseded for the landed design record by docs/Refs squash 90d0ec0baf4 (#3544). A DISTINCT signed step-1 stop condition has now been reached: synthetic codex exec 0.166.0 probes show the approved no-refresh-field auth shape sends neither bearer nor account routing. login status rejects missing id_token/refresh_token. A control with a synthetic ID token and empty refresh string sends both to a loopback recorder, but the approved design explicitly requires no refresh field. Need advisor decision on this different credential representation or another supported exec interface; not another sign-off on the already-approved risk. Findings 1-3 remain open: production refusal unchanged, no credential-visibility/C0-C4 containment evidence, and BUG-2447/2448 remain blocked (currently Approved). No operator credentials read; no production code changed. Local plan evidence edits remain uncommitted. This punt vetoes host publication and completion.. No triage reason was given.'
   created_at: 2026-11-07T02:44:03.318854984Z
   modified_at: 2026-11-07T02:44:03.318854984Z
+- id: 01a1b3e4-7afd-7d92-a76b-2c25f88b982b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e58b7e8cafc7
+    Recorded: 2026-11-07T02:39:11.596467322+00:00
+    Findings:
+    1. AC1 unmet: refuse_chatgpt() is still defined and called (aida-cli-lib/src/launch/contained.rs:614, :818). The PR changes no code, and the doc itself says not to remove the refusal because the signed step-1 gate failed.
+    2. AC2 unmet: no C0-C4 run under --boundary aida with the operator's ChatGPT login, no policy/binary/receipt hashes and no credential-visibility sentinels. The new table shows synthetic login-status/exec interface probes against a loopback recorder, and the doc says outright that they are not containment evidence.
+    3. AC3 unmet: BUG-2447 and BUG-2448 are Approved and still blocked by this story. They are neither closed nor re-scoped from C3/C4 evidence.
+    4. Metadata misrepresents the change (repeat of round-1/2 finding 4, now on a new PR): commit e58b7e8cafc7 and the PR #3560 title say '[AI:codex] feat: ... replace the ... refusal with a brokered credential path (STORY-2593)'. The trailing (STORY-2593) would complete an unimplemented story at merge. The implementer's own punt (spec comments 10-11) says the edits were a handoff with publication vetoed. Either re-subject the commit and PR as '[AI:codex] docs(plans): STORY-2593 round-3 interface-gate evidence (Refs STORY-2593)' or close the PR without merging.
+    5. Blocking decision belongs to the advisor/operator, not implementer rework: the signed design requires a leaf with no refresh field, and installed codex-cli 0.166.0 refuses that shape. An interface decision is needed (accept the ID-token-shaped/empty-refresh schema, or name another supported exec interface) before steps 1-3 can proceed. Route it by escalation, not another docs-only round.
+    6. Minor, docs: the header Status line (plan file lines 5-6) still reads only 'option (a) signed off by the advisor'. Add that the step-1 compatibility gate failed on 2026-11-06 and implementation is blocked pending an interface decision, so a reader who stops at the header does not take the design as ready to implement.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:44:17.789525257Z
+  modified_at: 2026-11-07T02:44:17.789525257Z
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
