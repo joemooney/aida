@@ -14,12 +14,12 @@ description: |
 
   ## See also
   DOC-7 (Lessons), #2577, #2584
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T06:17:24.784149600Z
-modified_at: 2026-11-07T20:56:43.687811130Z
+modified_at: 2026-11-07T20:56:44.978623029Z
 req_type: Story
 tags:
 - handoff
@@ -54,6 +54,15 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7cc-a6b2-7b70-95a8-8234f452a49d
+  author: joe
+  timestamp: 2026-11-07T20:56:44.978616865Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
