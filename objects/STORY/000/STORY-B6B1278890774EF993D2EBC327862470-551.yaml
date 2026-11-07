@@ -1,0 +1,36 @@
+id: 01a1b65e-f19b-7c40-b94b-a2a9c5865c52
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-551
+agreed_id: STORY-2628
+title: 'Review PR-3598: [AI:codex] feat(containment): stage gated mediated store boundary and private caches (Refs TASK-3223)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b64a`) for branch `task-3223-r0651`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3598>
+  - Branch: `task-3223-r0651` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3223
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3598` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T14:17:17.979531417Z
+modified_at: 2026-11-07T14:17:17.979531417Z
+req_type: Story
+filed_at:
+  code_sha: 02790568d5ef592f46ede38d73e4d82ac21a9d66
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9f75814f194
+  vendor: claude
+  session: 01a1b64aa1cf
