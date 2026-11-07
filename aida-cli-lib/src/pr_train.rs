@@ -2593,6 +2593,9 @@ impl TrainForge for LiveTrainForge<'_> {
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
+            // A prior response may have arrived after intent storage failed.
+            // trace:STORY-2401 | ai:codex
+            journal::before("read CI registration")?;
             // trace:BUG-2423 | ai:claude
             match self
                 .forge
@@ -2624,15 +2627,18 @@ impl TrainForge for LiveTrainForge<'_> {
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude
-                let tolerated = self.forge.check_rows(change).is_ok_and(|rows| {
-                    hold_gate_tolerance(&rows, &train.cars, |pr| {
-                        crate::merge_hold::fetch_pinned_change(
-                            &self.project_root,
-                            self.forge.kind(),
-                            pr,
-                        )
-                        .map_err(|e| e.to_string())
-                    })
+                // Refuse persistence errors before the best-effort tolerance
+                // fallback can turn them into an ordinary red CI verdict.
+                // trace:STORY-2401 | ai:codex
+                journal::before("read post-watch CI rows")?;
+                let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+                let tolerated = hold_gate_tolerance(&rows, &train.cars, |pr| {
+                    crate::merge_hold::fetch_pinned_change(
+                        &self.project_root,
+                        self.forge.kind(),
+                        pr,
+                    )
+                    .map_err(|e| e.to_string())
                 });
                 if tolerated {
                     println!(

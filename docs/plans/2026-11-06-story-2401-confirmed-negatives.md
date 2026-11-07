@@ -644,3 +644,44 @@ Fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast` completed
 read-only `.git/FETCH_HEAD` refusals passed using their local-evidence path.
 No implementation or validation blocker remains. The host owns commit creation
 and publication under the accepted Refs subject. Slice 5 remains outstanding.
+
+
+## Slice-4 integration follow-up: GitLab CI calls (2026-11-06)
+
+The starting checkout already contains the resumable journal, both SIGKILL
+recovery fixtures and BUG-2463. GitLab CI registration polling and nested
+pipeline/job reads still bypassed durable per-call intent. Registration, watch
+and post-watch rows now checkpoint; the GitLab API read runner checkpoints each
+nested read. Post-watch row errors propagate as unavailable evidence instead of
+becoming a red verdict.
+
+A PATH-isolated production-adapter regression makes the journal unavailable
+before registration, after registration, after watch, or between pipeline and
+job reads (directly and within the post-watch fallback). It asserts exact remote
+call counts and retained pinned CI recovery evidence. Slice 5 remains excluded.
+
+Changed files: `aida-cli-lib/src/forge.rs`, `aida-cli-lib/src/pr_train.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, `AGENTS.md`, `OVERVIEW.md`,
+and this plan. Validation and native host handoff follow below.
+
+<!-- trace:STORY-2401 | ai:codex -->
+
+Validation passed:
+
+- `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib --lib pr_train`:
+  **177 passed, zero failures**, 12,632 unrelated tests filtered out;
+  runtime **66.85s**, fresh build **5m 12s**. Both SIGKILL recovery seams
+  and the new GitLab CI regression passed.
+  Log: `/tmp/story2401-gitlab-train.log`.
+- `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`: **all 39 gates passed**,
+  including formatting, feature-disabled CLI and standalone TUI checks.
+  Log: `/tmp/story2401-gitlab-fast.log`. Guards reporting native read-only
+  `.git/FETCH_HEAD` refusals passed using their local-evidence path.
+- `git diff --check`: passed.
+
+Native-seat handoff: the six files above remain uncommitted for the host.
+Publication subject:
+`[AI:codex] fix(train): checkpoint GitLab CI reads before calls (Refs STORY-2401)`.
+No implementation or validation blocker remains. No commit, push, PR creation,
+merge, review record, hold clearance or queue completion occurred in this seat.
+Slice 5 remains outstanding; existing punt/hold signals remain publication vetoes.

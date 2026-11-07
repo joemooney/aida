@@ -2742,6 +2742,9 @@ impl GitLabForge {
         let mut cmd = Command::new(&glab);
         cmd.current_dir(&self.project_root)
             .args(args.iter().map(String::as_str));
+        // Nested pipeline/job reads each need durable train intent.
+        // trace:STORY-2401 | ai:codex
+        crate::pr_train::before_train_forge_call("read GitLab API")?;
         crate::forge_lookup_output(cmd)
             .context("could not invoke `glab` — is the GitLab CLI installed?")?
             .ok_or_else(|| anyhow::anyhow!(crate::FORGE_LOOKUP_TIMED_OUT))

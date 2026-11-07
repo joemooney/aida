@@ -4564,3 +4564,97 @@ fn pr_train_journal_prunes_old_done_and_reports_corrupt_path() {
     .unwrap();
     assert!(journal::entries(dir.path()).unwrap().is_empty());
 }
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_gitlab_ci_calls_require_durable_intent() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::forge::Forge;
+    // Refuse before registration, watch, fallback rows, or the nested jobs read.
+    for seam in ["initial", "registration", "watch", "jobs", "fallback-jobs"] {
+        let root = repo();
+        let r = root.path();
+        let glab = r.join("glab");
+        crate::test_exec::write_executable(
+            &glab,
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> glab-calls
+seam=$(cat seam)
+case "$*" in
+  'api -X GET projects/:id/pipelines'*)
+    if [ "$seam" = registration ] || [ "$seam" = jobs ] || [ -f watched ]; then
+      mv intent intent-saved || exit 2
+      printf unavailable > intent
+    fi
+    printf '%s\n' '[{"id":42,"status":"success"}]'
+    ;;
+  'ci status -b '*)
+    if [ "$seam" = fallback-jobs ]; then
+      touch watched
+    else
+      mv intent intent-saved || exit 2
+      printf unavailable > intent
+    fi
+    exit 1
+    ;;
+  *) echo 'unexpected call' >&2; exit 2 ;;
+esac
+"#,
+        );
+        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", &path),
+            ("AIDA_TEST_GLAB_BINARY", glab.to_str().unwrap()),
+        ]);
+        write(r, "seam", seam);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry = journal::Entry::new(train_of("main", &fms(&[1])), "train/gitlab-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Ci;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        if seam == "initial" {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        }
+        let change = crate::forge::ChangeRef {
+            id: 901,
+            url: String::new(),
+            branch: "train/gitlab-1".into(),
+            base: "main".into(),
+            title: None,
+        };
+        let forge = crate::forge::GitLabForge::new(r);
+        let error = if seam == "jobs" {
+            forge.check_rows(&change).unwrap_err()
+        } else {
+            let mut host = LiveTrainForge {
+                project_root: r.into(),
+                main_worktree: r.into(),
+                base: "main".into(),
+                forge: &forge,
+                named: true,
+                dispatch_ctx: None,
+                dispatch_abort: None,
+            };
+            host.wait_ci(&change, &train_of("main", &fms(&[1])))
+                .expect_err("intent failure must suspend CI waiting")
+        };
+        assert!(format!("{error:#}").contains("could not persist train intent"));
+        let calls = std::fs::read_to_string(r.join("glab-calls")).unwrap_or_default();
+        let expected = match seam {
+            "initial" => 0,
+            "watch" => 2,
+            "fallback-jobs" => 3,
+            _ => 1,
+        };
+        assert_eq!(calls.lines().count(), expected, "{seam}: {calls}");
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Ci);
+        assert_eq!(saved[0].train.tip, "car1");
+    }
+}

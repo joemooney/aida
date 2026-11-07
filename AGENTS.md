@@ -4,7 +4,8 @@ startup recovers unfinished entries under `run.lock` from fresh forge confirmati
 unknown evidence stops admission. Recovery skips completed merges/member closes
 and rechecks live authority; journaled retirement retains remote branches. Nested
 metadata retries in the final merge gate and confirmation's base/head fetches
-also require a durable checkpoint. See OVERVIEW.md.
+also require a durable checkpoint. GitLab CI polling and nested pipeline/job
+reads checkpoint as well; unavailable post-watch rows suspend. See OVERVIEW.md.
 <!-- trace:STORY-2401 | ai:codex -->
 
 Question parking with an empty consequence preserves an existing deferral trigger
