@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T18:17:08.620809919Z
+modified_at: 2026-11-07T18:17:15.664915022Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -69,6 +69,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 are fixed (exclude/noise/ignore, warn-and-skip after the AIDA links, doctor noise suppression, AC2 limitation recorded). But the new navigation prefix in assemble_pickup_prompt pushes the /aida-review or /aida-pickup invocation off the start of the prompt, which breaks skill expansion. AC1 and AC4 are covered by unit tests (CI pending at review time). AC3 is delivered but placed wrong. AC2 and AC5 belong to slice 2. merge-hold-gate red = supervised hold, not a code defect.. No triage reason was given.'
   created_at: 2026-11-07T18:17:08.620808302Z
   modified_at: 2026-11-07T18:17:08.620808302Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b73a-a21c-7832-b340-c1871598b69e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1880ffee58ec
+    Recorded: 2026-11-07T18:11:53.504869202+00:00
+    Findings:
+    1. BLOCKING: rework_direction.rs:380-385 prepends code-navigation.md to EVERY assembled queue-work prompt, reviewer role and agent gates included. As a result the prompt no longer starts with the slash invocation. Scenario: aida queue work PR-N --role reviewer --no-human used to build '/aida-review --pr N\n\nROUND 1 ...' (queue_cmd.rs:10711, reviewer_prompt_for_round), and now builds 'For code navigation, use ...\n\n/aida-review --pr N ...'. (a) Codex/agy: codex_inline_prompt (session.rs:1692, prompt.strip_prefix('/')?) and codex_interactive_prompt (session.rs:1720, lines[0].starts_with('/aida-')) both return the raw prompt, so the skill body and its verdict-file handshake are no longer inlined. That is a regression of BUG-799/BUG-2387. (b) Claude -p only expands a slash command at the start of the input, so the reviewer skill is no longer invoked natively either; this is the load-bearing reviewer path. The agent-gate prompt (queue_cmd.rs:10698) has the same problem. Existing tests only check the lower-level builders (queue_work_tests.rs:1145, story_1476:639, task_1993:772), so nothing end-to-end catches this. Fix: keep the invocation first. Insert the navigation block after the invocation line/paragraph (or append it), and add an assemble_pickup_prompt test that the reviewer, agent-gate and plain implementer item prompts still start with '/aida-' and still contain the navigation line. Update the conflicting_pr_adds_resolve_conflicts_first expectation (rework_direction_tests.rs:346) to match.
+    2. minor: seat clones created by an older binary keep an info/exclude without '.codegraph', because seat_exclude_body runs only in seat_clone::create (seat_clone.rs:561), and ensure_aida_runtime_excluded runs only on the git-worktree add path (session_start.rs:3142). When such a clone is re-entered (BUG-2223) on a branch whose .gitignore has only '.codegraph/', link_worktree_runtime_state now adds an untracked .codegraph symlink-to-directory. is_runtime_noise_entry keeps the dirty gate clean, but SALVAGE_SCRIPT (seat_clone.rs:2517-2519) fails the whole salvage with 'symlink to a directory' whenever the target is visible. Fix: when linking .codegraph into a seat clone, also make sure its info/exclude carries '.codegraph' (idempotent append), or skip the link when git check-ignore says it is not ignored.
+    3. cosmetic: codegraph.rs:82-84 says the probe reads the schema 'without scanning a potentially large graph', but SELECT count(*) FROM files walks the whole files b-tree. Use 'SELECT 1 FROM files LIMIT 1' (or query sqlite_master) so the comment is true and a full doctor run stays cheap on a large index.
+    4. cosmetic: root AGENTS.md:472 hand-copies the code-navigation.md text instead of deriving it, and no test pins the two as equal, so they will drift on the next edit to the template master. Add an include_str! equality assertion (like codegraph::tests::implementer_and_reviewer_prompts_include_navigation) for AGENTS.md.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T18:17:15.548942233Z
+  modified_at: 2026-11-07T18:17:15.548942233Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
