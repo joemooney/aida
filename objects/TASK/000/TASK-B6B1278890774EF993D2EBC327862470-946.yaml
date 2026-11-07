@@ -1,0 +1,29 @@
+id: 01a1b72d-69f9-7840-9963-f0ff904f501a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-946
+title: 'cosmetic (non-blocking): every unfiltered aida doctor run SHA-256 hashes the fu…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2484, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): every unfiltered aida doctor run SHA-256 hashes the full native codex binary (~100MB+) via codex_binary_diagnostic.
+
+  PR: #3609
+  Reviewed sha: c69bbae990092548dcc582d01443ee91ade9f44b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T18:02:49.209302186Z
+modified_at: 2026-11-07T18:02:49.209302186Z
+req_type: Task
+tags:
+- carried-from:BUG-2484
+- finding-hash:325aa11b
+- from-review:PR-3609
+- kind:carried-forward
+filed_at:
+  code_sha: 9a9d2bdab8c27097e5f6fc80bd57c5a686895a68
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: ac1f7e0a9c4
+  vendor: claude
