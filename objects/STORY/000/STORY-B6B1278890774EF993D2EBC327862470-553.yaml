@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T18:18:41.639285795Z
+modified_at: 2026-11-07T18:38:32.038128726Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -88,6 +88,12 @@ comments:
   modified_at: 2026-11-07T18:17:15.548942233Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b74e-1c66-70c0-9e3f-fce9573babe2
+  author: joe
+  content: 'Round 3 Slice 1 rework: all four findings implemented in the native seat. Shared navigation appends after complete pickup assembly, preserving leading reviewer/agent-gate/plain pickup slash invocations and existing rework context ordering; assembled-prompt regression covers all three roles. Runtime setup repairs excludes before a new codegraph link and on matching existing links; an old-seat regression covers slash-only gitignore and idempotent repair. Doctor uses SELECT 1 FROM files LIMIT 1 with valid-empty-table support. Root AGENTS navigation is equality-checked against the template master. CI BUG-2141 expected exclude updated. Completed validation: 43 fast gates, check-templates, workspace formatting, git diff --check, BUG-2141 migration test and materialized-worktree runtime-exclude test pass. CLI codegraph tests are still compiling in a cold agent-profile build; no pass claim for those yet. sync-templates refreshed Claude links and discipline mirror but portable .agents writes failed read-only; host rerun required. Installed CLI rejects doctor codegraph category; primary index remains inaccessible here. AC2/AC5 stay Slice 2; merge hold unchanged. No launch/spawn.rs or launch/profile.rs edits. Native Refs declaration recorded: [AI:codex] fix(codegraph): preserve skill invocations and heal reused seat excludes (Refs STORY-2630). Edits remain uncommitted for host publication.'
+  created_at: 2026-11-07T18:38:32.038128726Z
+  modified_at: 2026-11-07T18:38:32.038128726Z
+  session_id: 01a1b73be9c5
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
