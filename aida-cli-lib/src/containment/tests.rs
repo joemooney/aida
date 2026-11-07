@@ -219,11 +219,14 @@ fn task_3048_only_signed_agy_descriptor_selects_outer_only() {
         data.vendor["agy"].credentials,
         CredentialLayout::Unverified
     ));
-    // The capability row is not a production profile or launch admission.
-    assert!(
-        crate::launch::contained::ContainedVendor::for_program(std::ffi::OsStr::new("agy"))
-            .is_err()
-    );
+    // A common-wrapper row is preparation data, not launch admission.
+    let runtime = runtime_policy("agy").unwrap();
+    assert!(runtime
+        .require_auth_policy(&runtime.auth_hosts)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }
 
 // Same fixture never reads the live repo/config or executes config commands.

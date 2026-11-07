@@ -3868,8 +3868,8 @@ pub(crate) fn preflight_vendor_binary(vendor: HeadlessVendor) -> Result<()> {
 /// already calls before mutating state closes it for every reviewer AND
 /// implementer entry point at once.
 ///
-/// A headless (`interactive = false`) launch supports Agy — only the
-/// binary check applies.
+/// AGY headless admission also checks the pending all-tool evidence before
+/// callers create state; the historical bypass argv cannot launch directly.
 // trace:BUG-1607 | ai:claude
 pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool) -> Result<()> {
     if interactive && vendor == HeadlessVendor::Agy {
@@ -3878,6 +3878,10 @@ pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool)
              `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor \
              codex`, or use `--no-launch`."
         );
+    }
+    // trace:TASK-3048 | ai:codex
+    if vendor == HeadlessVendor::Agy {
+        crate::launch::agy::AGY.require_conformance()?;
     }
     preflight_vendor_binary(vendor)
 }
@@ -12350,8 +12354,8 @@ mod tests {
     /// that arrives after state was already mutated. Prove the fix two ways:
     /// (1) an interactive Agy launch refuses EVEN WHEN the binary is
     /// reachable — vendor support is checked, not just presence; (2) the
-    /// SAME resolved vendor, launched headlessly, still succeeds — the fix
-    /// must not regress AGY's real (headless) support.
+    /// SAME resolved vendor, launched headlessly, now refuses on the separate
+    /// all-tool admission gate before callers can create state.
     // trace:BUG-1607 | ai:claude
     #[test]
     fn preflight_launch_vendor_refuses_interactive_agy_even_when_binary_reachable() {
@@ -12375,11 +12379,10 @@ mod tests {
         assert!(msg.contains("--vendor claude"), "{msg}");
         assert!(msg.contains("--vendor codex"), "{msg}");
 
-        // A headless launch of the SAME resolved vendor is unaffected — the
-        // fix narrows the gap, it doesn't remove Agy's real (headless)
-        // support.
-        preflight_launch_vendor(HeadlessVendor::Agy, false)
-            .expect("headless Agy launches remain supported");
+        // trace:TASK-3048 | ai:codex
+        let error = preflight_launch_vendor(HeadlessVendor::Agy, false)
+            .expect_err("legacy headless bypass must refuse before state creation");
+        assert!(error.to_string().contains("fresh all-tool conformance"));
     }
 
     /// BUG-1607: vendor support is checked BEFORE binary reachability, so an
@@ -14155,7 +14158,7 @@ mod tests {
                     ("AIDA_CONTAINED", None),
                 ],
             );
-            let status = spawn_vendor_headless_with_seat(
+            let result = spawn_vendor_headless_with_seat(
                 vendor,
                 aida_core::agents_config::AgentSeat::Implementer,
                 "prompt",
@@ -14163,8 +14166,15 @@ mod tests {
                 &log_path,
                 &tee_opts,
                 false,
-            )
-            .unwrap();
+            );
+            // trace:TASK-3048 | ai:codex
+            if vendor == HeadlessVendor::Agy {
+                let error = result.expect_err("unreceipted AGY bypass must refuse");
+                assert!(format!("{error:#}").contains("applied AIDA ContainmentReceipt"));
+                assert!(!env_out.exists());
+                continue;
+            }
+            let status = result.unwrap();
             assert!(status.success(), "{vendor:?}: {status}");
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
@@ -14519,10 +14529,17 @@ mod tests {
                 ("reviewer", child),
                 ("implementer", ""),
             ] {
-                let cmd = build_exec_vendor_headless_command(
+                let result = build_exec_vendor_headless_command(
                     None, vendor, "prompt", "sid", false, None, None, seat, grant,
-                )
-                .unwrap();
+                );
+                // trace:TASK-3048 | ai:codex
+                if vendor == HeadlessVendor::Agy {
+                    let error =
+                        result.expect_err("AGY bypass requires the receipt-bearing wrapper");
+                    assert!(format!("{error:#}").contains("applied AIDA ContainmentReceipt"));
+                    continue;
+                }
+                let cmd = result.unwrap();
                 let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
                 let get = |k: &str| envs.get(std::ffi::OsStr::new(k)).copied();
                 assert_eq!(
@@ -14868,13 +14885,9 @@ mod tests {
             "implementer",
             "",
         )
-        .unwrap();
-        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd_agy.get_envs().collect();
-        assert!(
-            envs.iter()
-                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
-            "uncontained Agy exec headless must strip AIDA_CONTAINED: {envs:?}"
-        );
+        .expect_err("uncontained AGY bypass requires a receipt too");
+        // trace:TASK-3048 | ai:codex
+        assert!(format!("{cmd_agy:#}").contains("applied AIDA ContainmentReceipt"));
     }
     // trace:STORY-1843 | ai:codex
     #[test]
