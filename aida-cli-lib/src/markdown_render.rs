@@ -1,3 +1,4 @@
+// trace:TASK-3325 | ai:codex
 //! Render markdown for a human reading it in a terminal.
 //!
 //! `aida show` used to print descriptions and comments as raw markdown:
@@ -25,7 +26,7 @@
 // trace:STORY-1652 | ai:claude
 
 use crate::glyphs::{Glyph, GlyphProfile, LineArt};
-use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Environment variable that forces raw markdown in human output when set to
@@ -583,10 +584,11 @@ impl Builder {
     fn start(&mut self, tag: Tag<'_>) -> Result<(), MarkdownRenderError> {
         match tag {
             Tag::Paragraph => self.stack.push(Frame::Para(Vec::new())),
-            Tag::Heading(level, _, _) => self
+            Tag::Heading { level, .. } => self
                 .stack
                 .push(Frame::Heading(heading_level(level), Vec::new())),
-            Tag::BlockQuote => self.stack.push(Frame::Quote(Vec::new())),
+            Tag::BlockQuote(_) => self.stack.push(Frame::Quote(Vec::new())),
+            Tag::HtmlBlock => {}
             Tag::CodeBlock(_) => self.stack.push(Frame::Code(String::new())),
             Tag::List(start) => self.stack.push(Frame::List {
                 start,
@@ -624,42 +626,44 @@ impl Builder {
                 self.strike_depth += 1;
                 self.style.strike = true;
             }
-            Tag::Link(_, url, _) => {
+            Tag::Link { dest_url: url, .. } => {
                 let at = self.inline_len();
                 self.links.push((url.to_string(), at));
                 self.style.underline = true;
             }
-            Tag::Image(_, url, _) => {
+            Tag::Image { dest_url: url, .. } => {
                 let at = self.inline_len();
                 self.links.push((url.to_string(), at));
             }
+            _ => return Err(MarkdownRenderError::Structure("unsupported start tag")),
         }
         Ok(())
     }
 
-    fn end(&mut self, tag: Tag<'_>) -> Result<(), MarkdownRenderError> {
+    fn end(&mut self, tag: TagEnd) -> Result<(), MarkdownRenderError> {
         match tag {
-            Tag::Paragraph => match self.pop()? {
+            TagEnd::Paragraph => match self.pop()? {
                 Frame::Para(v) => self.push_block(Block::Para(v)),
                 _ => Err(MarkdownRenderError::Structure("paragraph end")),
             },
-            Tag::Heading(..) => match self.pop()? {
+            TagEnd::Heading(_) => match self.pop()? {
                 Frame::Heading(level, v) => self.push_block(Block::Heading(level, v)),
                 _ => Err(MarkdownRenderError::Structure("heading end")),
             },
-            Tag::BlockQuote => match self.pop()? {
+            TagEnd::BlockQuote(_) => match self.pop()? {
                 Frame::Quote(v) => self.push_block(Block::Quote(v)),
                 _ => Err(MarkdownRenderError::Structure("quote end")),
             },
-            Tag::CodeBlock(_) => match self.pop()? {
+            TagEnd::CodeBlock => match self.pop()? {
                 Frame::Code(buf) => self.push_block(Block::Code(buf)),
                 _ => Err(MarkdownRenderError::Structure("code end")),
             },
-            Tag::List(_) => match self.pop()? {
+            TagEnd::HtmlBlock => Ok(()),
+            TagEnd::List(_) => match self.pop()? {
                 Frame::List { start, items } => self.push_block(Block::List { start, items }),
                 _ => Err(MarkdownRenderError::Structure("list end")),
             },
-            Tag::Item => match self.pop()? {
+            TagEnd::Item => match self.pop()? {
                 Frame::Item {
                     task,
                     mut blocks,
@@ -678,7 +682,7 @@ impl Builder {
                 }
                 _ => Err(MarkdownRenderError::Structure("item end")),
             },
-            Tag::FootnoteDefinition(_) => {
+            TagEnd::FootnoteDefinition => {
                 match self.pop()? {
                     Frame::Footnote(mut v) => {
                         // Join "[^label]:" with the first body paragraph.
@@ -700,27 +704,27 @@ impl Builder {
                     _ => Err(MarkdownRenderError::Structure("footnote end")),
                 }
             }
-            Tag::Table(_) => match self.pop()? {
+            TagEnd::Table => match self.pop()? {
                 Frame::Table {
                     aligns, head, rows, ..
                 } => self.push_block(Block::Table { aligns, head, rows }),
                 _ => Err(MarkdownRenderError::Structure("table end")),
             },
-            Tag::TableHead => match self.stack.last_mut() {
+            TagEnd::TableHead => match self.stack.last_mut() {
                 Some(Frame::Table { head, row, .. }) => {
                     *head = std::mem::take(row);
                     Ok(())
                 }
                 _ => Err(MarkdownRenderError::Structure("table head end")),
             },
-            Tag::TableRow => match self.stack.last_mut() {
+            TagEnd::TableRow => match self.stack.last_mut() {
                 Some(Frame::Table { rows, row, .. }) => {
                     rows.push(std::mem::take(row));
                     Ok(())
                 }
                 _ => Err(MarkdownRenderError::Structure("table row end")),
             },
-            Tag::TableCell => match self.pop()? {
+            TagEnd::TableCell => match self.pop()? {
                 Frame::Cell(v) => match self.stack.last_mut() {
                     Some(Frame::Table { row, .. }) => {
                         row.push(v);
@@ -730,23 +734,23 @@ impl Builder {
                 },
                 _ => Err(MarkdownRenderError::Structure("cell end")),
             },
-            Tag::Emphasis => {
+            TagEnd::Emphasis => {
                 self.italic_depth = self.italic_depth.saturating_sub(1);
                 self.style.italic = self.italic_depth > 0;
                 Ok(())
             }
-            Tag::Strong => {
+            TagEnd::Strong => {
                 self.bold_depth = self.bold_depth.saturating_sub(1);
                 self.style.bold = self.bold_depth > 0;
                 Ok(())
             }
-            Tag::Strikethrough => {
+            TagEnd::Strikethrough => {
                 self.strike_depth = self.strike_depth.saturating_sub(1);
                 self.style.strike = self.strike_depth > 0;
                 Ok(())
             }
-            Tag::Link(..) | Tag::Image(..) => {
-                let is_link = matches!(tag, Tag::Link(..));
+            TagEnd::Link | TagEnd::Image => {
+                let is_link = matches!(tag, TagEnd::Link);
                 if is_link {
                     self.style.underline = false;
                 }
@@ -768,6 +772,7 @@ impl Builder {
                 }
                 Ok(())
             }
+            _ => Err(MarkdownRenderError::Structure("unsupported end tag")),
         }
     }
 }
@@ -776,7 +781,7 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
     let options = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES;
+        | Options::ENABLE_OLD_FOOTNOTES;
     let mut b = Builder {
         stack: vec![Frame::Root(Vec::new())],
         style: Style::default(),
@@ -805,7 +810,7 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
                 };
                 b.push_inline(Inline::Text(t.to_string(), style))?;
             }
-            Event::Html(t) => {
+            Event::Html(t) | Event::InlineHtml(t) => {
                 // Raw HTML is shown as written. pulldown-cmark emits an HTML
                 // block one line per event; events that abut in the source
                 // are one block and are merged into a single gutter block.
@@ -830,6 +835,7 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
                     *task = Some(done);
                 }
             }
+            Event::InlineMath(t) | Event::DisplayMath(t) => b.text(&t)?,
         }
     }
     match (b.stack.pop(), b.stack.is_empty()) {

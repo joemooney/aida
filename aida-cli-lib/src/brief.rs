@@ -564,7 +564,7 @@ pub(crate) fn brief_relationship_lines(
 }
 
 // trace:TASK-714
-#[derive(Debug, Clone, PartialEq, Eq, ts_rs_forge::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, ts_rs::TS)]
 pub(crate) struct BriefListEntry {
     pub(crate) path: std::path::PathBuf,
     pub(crate) spec_id: String,
