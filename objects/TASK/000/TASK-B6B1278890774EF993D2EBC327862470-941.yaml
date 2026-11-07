@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-941
 agreed_id: TASK-3387
 title: Separate Infinity lessons for vendor harness support from AIDA-owned agent research
 description: 'Documentation-only request from Joe: split the Infinity architecture deep dive into two independently readable documents. One covers benefits to existing Codex, Claude and AGY support, current capabilities, adapter limitations and incremental validation. The other covers the optional AIDA-owned agent runtime, durable execution risks, prototype scope and a separate investment decision. Cross-link the documents and preserve useful source analysis. No runtime implementation or runtime adoption is authorized.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T14:58:25.585224297Z
-modified_at: 2026-11-07T15:02:13.816859182Z
+modified_at: 2026-11-07T16:06:28.303219684Z
 req_type: Task
 comments:
 - id: 01a1b688-1438-7dc1-87bf-340cf18e483d
@@ -16,6 +16,16 @@ comments:
   content: Prepared two cross-linked documentation drafts in branch docs/infinity-docs-draft, commit a78d8d357a0. Existing-harness analysis separates Codex queue, Claude per-turn hook and AGY unsupported live-wake/resume capabilities from runtime-only history, compaction and exact continuation features. Optional owned-runtime exploration records crash recovery, durable deferral, evidence retention, current authority checks and a bounded prototype decision gate. Local links and whitespace verified. Original untracked source on main preserved. Documentation only; runtime implementation/adoption remains unapproved.
   created_at: 2026-11-07T15:02:13.816859182Z
   modified_at: 2026-11-07T15:02:13.816859182Z
+history:
+- id: 01a1b6c2-e4cf-7d10-ab19-cb08755df6d7
+  author: joe
+  timestamp: 2026-11-07T16:06:28.303212883Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
