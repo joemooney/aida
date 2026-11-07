@@ -34,10 +34,18 @@ pub(crate) enum WakeAdapter {
 
 impl WakeAdapter {
     pub(crate) fn for_vendor(agent_type: &str) -> Self {
-        match aida_core::mailbox_identity::normalize_agent_type(agent_type).as_str() {
-            "codex" => Self::Codex,
-            "antigravity" => Self::Unsupported,
-            _ => Self::NotApplicable,
+        // Historical/unknown mailbox identities retain their per-turn fallback;
+        // descriptor lookup never admits them as launch vendors.
+        // trace:STORY-2539 | ai:codex
+        use aida_core::vendors::{profile, LaunchVendor, MailWake};
+        let normalized = aida_core::mailbox_identity::normalize_agent_type(agent_type);
+        match LaunchVendor::parse(&normalized)
+            .ok()
+            .map(|v| profile(v).mail_wake)
+        {
+            Some(MailWake::ExactThreadQueue) => Self::Codex,
+            Some(MailWake::Unsupported) => Self::Unsupported,
+            Some(MailWake::PerTurnHooks) | None => Self::NotApplicable,
         }
     }
 }

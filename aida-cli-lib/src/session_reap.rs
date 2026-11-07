@@ -969,8 +969,12 @@ pub(crate) fn scan_reapable_with(
 
         // TASK-2053: a seat clone is judged from the sandboxed probe and the
         // forge, never from host git in the clone or main's branch refs.
+        // Legacy MCP leases may default to Worktree for a physical clone.
+        // trace:BUG-2473 | ai:codex
         // trace:TASK-2053 | ai:claude
-        if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        if lease.tree_kind == crate::seat_clone::TreeKind::Clone
+            || crate::seat_clone::seat_clone_root(&lease.worktree_path).is_some()
+        {
             let row = scan_clone_lease(project_root, lease, spec_finished, &live, &active, now);
             match row.verdict {
                 "reap" => report.reapable.push(row),
@@ -1137,8 +1141,12 @@ fn reap_one_with_clear_hooks(
     after_final_registration_check: impl FnOnce(),
 ) -> String {
     let lease = &reap_view(lease, project_root);
+    // Legacy clone detection must match the scan's sandboxed dispatch.
+    // trace:BUG-2473 | ai:codex
     // trace:TASK-2053 | ai:claude
-    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone
+        || crate::seat_clone::seat_clone_root(&lease.worktree_path).is_some()
+    {
         return reap_one_clone(project_root, lease, checked_tip);
     }
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
@@ -1316,6 +1324,27 @@ pub(crate) fn classify_clone_reap(
     )
 }
 
+/// Legacy MCP leases have no branch. Read it inside the clone sandbox before
+/// querying shipped heads; an unreadable or detached HEAD never grants cleanup.
+// trace:BUG-2473 | ai:codex
+fn clone_reap_branch(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> anyhow::Result<String> {
+    if !lease.branch.trim().is_empty() {
+        return Ok(lease.branch.clone());
+    }
+    let snapshot = crate::seat_clone::dispatch_snapshot(project_root, &lease.worktree_path)?;
+    let branch =
+        std::str::from_utf8(snapshot.split(|b| *b == 0).next().unwrap_or_default())?.trim();
+    anyhow::ensure!(!branch.is_empty(), "seat clone has no session branch");
+    anyhow::ensure!(
+        !branch_is_protected(branch, resolve_default_branch_ref(project_root).as_deref()),
+        "seat clone session branch is protected"
+    );
+    Ok(branch.to_owned())
+}
+
 /// Scan one `clone` lease. The row's `branch_tip` is the HEAD the probe saw;
 /// [`reap_one_clone`] removes the clone only while HEAD is still there.
 // trace:TASK-2053 | ai:claude
@@ -1333,18 +1362,29 @@ fn scan_clone_lease(
         owner_gone,
         worktree_is_active(&lease.worktree_path, active),
     );
+    // Preserve the cheap liveness/completion gates before any clone probe.
+    // trace:BUG-2473 | ai:codex
+    let resolved_branch = if process_exited && spec_finished {
+        clone_reap_branch(project_root, lease)
+    } else {
+        Ok(lease.branch.clone())
+    };
+    let branch = resolved_branch.as_deref().unwrap_or(&lease.branch);
     let mut branch_tip = None;
     let verdict = classify_clone_reap(
         || {
+            if let Err(error) = &resolved_branch {
+                return crate::seat_clone::Probe::Unknown(format!("{error:#}"));
+            }
             // TASK-2110: a squash-merged PR's head counts as shipped.
             // trace:TASK-2110 | ai:claude
-            let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+            let shipped = crate::seat_clone::merged_pr_heads(project_root, branch);
             // BUG-051: the ancestor-of-origin rule session end applies.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
             let probe = crate::seat_clone::probe_counting_origin(
                 project_root,
                 &lease.worktree_path,
-                Some(&lease.branch),
+                Some(branch),
                 &shipped,
                 None,
             );
@@ -1353,12 +1393,12 @@ fn scan_clone_lease(
             }
             probe
         },
-        &lease.branch,
+        branch,
         process_exited,
         spec_finished,
         || {
             matches!(
-                detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
+                detect_merged_pr_for_branch_via_forge(project_root, branch),
                 PrLookup::Found(_)
             )
         },
@@ -1367,7 +1407,7 @@ fn scan_clone_lease(
         session: lease.id.clone(),
         scope: lease.scope.clone(),
         worktree: lease.worktree_path.display().to_string(),
-        branch: lease.branch.clone(),
+        branch: branch.to_owned(),
         verdict: match verdict {
             ReapVerdict::Reap(_) => "reap",
             ReapVerdict::Skip(_) => "skip",
@@ -1409,8 +1449,14 @@ pub(crate) fn reap_one_clone(
     let Some(tip) = checked_tip else {
         return "skipped — the scan recorded no HEAD for the seat clone".to_string();
     };
+    // Resolve legacy empty branches again at the destructive boundary.
+    // trace:BUG-2473 | ai:codex
+    let branch = match clone_reap_branch(project_root, lease) {
+        Ok(branch) => branch,
+        Err(error) => return format!("skipped — seat clone branch could not be read ({error:#})"),
+    };
     // trace:TASK-2110 | ai:claude
-    let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+    let shipped = crate::seat_clone::merged_pr_heads(project_root, &branch);
     // The clone's mail is retired first: a refusal keeps the session,
     // ending-retained with its grant revoked, as the worktree path does.
     // trace:STORY-1843 | ai:claude

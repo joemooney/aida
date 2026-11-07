@@ -1452,6 +1452,43 @@ fn probe_run(
         .map_err(|failure| failure.to_string())
 }
 
+/// Dispatch inspection uses the same read-only sandbox even for old MCP
+/// claims that did not record tree_kind or a branch. This grants no teardown
+/// authority and never runs seat-written Git configuration on the host.
+// trace:BUG-2473 | ai:codex
+pub(crate) fn dispatch_snapshot(main: &Path, clone: &Path) -> Result<Vec<u8>> {
+    anyhow::ensure!(
+        aida_core::seat_clone_detect::has_real_git_dir(clone),
+        "seat clone .git is not a real directory"
+    );
+    let script = r#"set -eu
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+printf '%s\0' "$branch"
+if git rev-parse --verify --quiet HEAD >/dev/null; then
+  git log -1 --format='%at%x09%s'
+else
+  # Only an unborn symbolic HEAD is allowed to have no last commit.
+  [ -n "$branch" ]
+  if git show-ref --verify --quiet "refs/heads/$branch"; then exit 1; else
+    [ "$?" -eq 1 ]
+  fi
+fi
+printf '\0'
+ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || git rev-list --count main..HEAD 2>/dev/null || printf '0')
+printf '%s\0' "$ahead"
+git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
+"#;
+    run_sandboxed_until(
+        clone,
+        main,
+        "sh",
+        &["-c".as_ref(), script.as_ref()],
+        PROBE_OUTPUT_CAP,
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+}
+
 /// Read only HEAD reachability for final lane reporting, inside the clone sandbox.
 // trace:BUG-2464 | ai:codex
 pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<bool> {
@@ -2276,7 +2313,7 @@ pub(crate) fn parse_status_v2(out: &str) -> ProbeFacts {
 /// placeholder the Claude Code sandbox creates for a protected path. Only
 /// file metadata is read; nothing in the clone is opened or run.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
-fn is_empty_gitmodules_placeholder(clone: &Path) -> bool {
+pub(crate) fn is_empty_gitmodules_placeholder(clone: &Path) -> bool {
     std::fs::symlink_metadata(clone.join(".gitmodules"))
         .is_ok_and(|meta| meta.file_type().is_file() && meta.len() == 0)
 }

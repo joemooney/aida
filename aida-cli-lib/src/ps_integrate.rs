@@ -2081,7 +2081,7 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
         &leases,
         &live,
         now,
-        dispatch_health_ps::probe_worktree,
+        |path| dispatch_health_ps::probe_worktree_from(project_root, path),
         |wt| worktree_lock::read_authorized_by(project_root, wt),
         pid_start_time,
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
@@ -2459,15 +2459,36 @@ pub(crate) fn build_running_work(
                 // trace:STORY-1843 | ai:claude
                 let ds =
                     dispatch_health_ps::apply_ending_retained(ds, l.ending_retained_at.is_some());
+                // trace:BUG-2473 | ai:codex
+                let ds = if probe.error.is_some()
+                    && ds != dispatch_health_ps::DispatchState::EndingRetained
+                {
+                    dispatch_health_ps::DispatchState::Unknown
+                } else {
+                    ds
+                };
                 let hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
-                    &l.branch,
+                    probe.branch.as_deref().unwrap_or(&l.branch),
                     probe.last_commit_subject.as_deref(),
                     spec.as_deref(),
                     manual_enter_secs.is_some(),
                     probe.untracked_only,
                 );
+                let hint = if let Some(error) = &probe.error {
+                    let retained = if ds == dispatch_health_ps::DispatchState::EndingRetained {
+                        hint.as_deref().map(|h| format!("{h}; ")).unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    Some(format!(
+                        "{retained}worktree state could not be read: {error}; inspect {} before cleanup",
+                        l.worktree_path.display()
+                    ))
+                } else {
+                    hint
+                };
                 Some(PsDispatch {
                     state: ds,
                     hint,

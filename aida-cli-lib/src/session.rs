@@ -3332,38 +3332,37 @@ pub enum HeadlessVendor {
     Agy,
 }
 
+// trace:STORY-2539 | ai:codex
 impl HeadlessVendor {
-    /// The PATH binary this vendor spawns (`claude` / `codex` / `agy`).
+    pub(crate) fn launch_vendor(self) -> aida_core::launch_policy::LaunchVendor {
+        use aida_core::launch_policy::LaunchVendor;
+        match self {
+            Self::Claude => LaunchVendor::Claude,
+            Self::Codex => LaunchVendor::Codex,
+            Self::Agy => LaunchVendor::Agy,
+        }
+    }
+
+    pub(crate) fn profile(self) -> &'static aida_core::vendors::VendorProfile {
+        aida_core::vendors::profile(self.launch_vendor())
+    }
+
     pub fn program(self) -> &'static str {
-        match self {
-            HeadlessVendor::Claude => "claude",
-            HeadlessVendor::Codex => "codex",
-            HeadlessVendor::Agy => "agy",
-        }
+        self.profile().executable
     }
 
-    /// The canonical lowercase token (`claude` / `codex` / `agy`).
+    /// Preserve session/config spelling, including `agy` versus `antigravity`.
     pub fn as_str(self) -> &'static str {
-        match self {
-            HeadlessVendor::Claude => "claude",
-            HeadlessVendor::Codex => "codex",
-            HeadlessVendor::Agy => "agy",
-        }
+        self.profile().session_name
     }
 
-    /// Parse a vendor token. Case-insensitive, surrounding whitespace tolerated.
-    /// `None` for an unrecognized token so the caller can fall through to the
-    /// default rather than launch an unknown binary. `agy` is the canonical
-    /// Antigravity token; `antigravity` is accepted as an alias (matching
-    /// `aida agent new antigravity`).
-    // trace:STORY-683 TASK-1048 | ai:claude
-    pub fn parse(raw: &str) -> Option<HeadlessVendor> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "claude" => Some(HeadlessVendor::Claude),
-            "codex" => Some(HeadlessVendor::Codex),
-            "agy" | "antigravity" => Some(HeadlessVendor::Agy),
-            _ => None,
-        }
+    pub fn parse(raw: &str) -> Option<Self> {
+        use aida_core::launch_policy::LaunchVendor;
+        Some(match LaunchVendor::parse(raw).ok()? {
+            LaunchVendor::Claude => Self::Claude,
+            LaunchVendor::Codex => Self::Codex,
+            LaunchVendor::Agy => Self::Agy,
+        })
     }
 }
 
@@ -6915,8 +6914,9 @@ pub(crate) fn drain_resume_lane<'a>(
 /// BUG-2386: whether `vendor`'s sessions can be resumed (Claude by its
 /// `--session-id`, Codex by its bound thread id). Agy cannot.
 // trace:BUG-2386 | ai:claude
+// trace:STORY-2539 | ai:codex
 pub(crate) fn vendor_can_resume(vendor: HeadlessVendor) -> bool {
-    matches!(vendor, HeadlessVendor::Claude | HeadlessVendor::Codex)
+    vendor.profile().resume != aida_core::vendors::Resume::Unsupported
 }
 
 /// BUG-050: run the `--auto-complete` drain's phase-1 implementer on `lease`
