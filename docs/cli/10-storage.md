@@ -56,6 +56,7 @@ The check covers syncs AIDA runs while it holds the store write lock. A raw `git
 - `check` — store integrity audit (currently `--collisions`: two specs claiming the same short id). The recovery-side counterpart to the gate-time prevention.
 - `audit-ids` — read-only audit of allocation claims (global ID ranges, node bindings, display IDs) across the store and any local refs you name, with a manual repair plan. Runs the check every store sync runs before it merges, and also reports conflicts already inside `HEAD` that a sync admits. See its own entry below.
 - `migrate-related-edges` — a one-time repair for custom-typed edges whose spelling resolves to a standard relationship type (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), which graph traversals don't follow. Converts each to its standard type, or deletes it when an edge of that type to the same target already exists. See its own entry below.
+- `migrate-defer-conditions` — preview legacy deferral text and tag conversion to typed conditions; write only with `--apply`. Original input is preserved in audit comments. See its own entry below.
 - `block` — pre-allocates blocks of agreed IDs to a node so offline `trace:` comments can cite a final id. Distributed-multi-node housekeeping; single-machine projects never need it.
 - `workspace-init` / `retire-legacy-ids` — the rare ones. `workspace-init` sets up multiple code repos sharing one store; `retire-legacy-ids` is a one-time migration collapsing old zero-padded ids onto their short agreed ids. Both are setup/migration events, not daily verbs.
 
@@ -143,6 +144,51 @@ Every other custom edge type — for example `implements`, `implemented-by`, or 
 **Gotchas.** Each changed spec gets its own store commit; the store is never rewritten wholesale. The command checks the planned result before it writes anything, and it refuses to run if a spec it would change still ends up holding two edges of the same type to one target. It re-reads each spec after writing and checks it again. The plan is measured from the store on every run, so a second run after a successful one finds nothing to do.
 
 **Chains with** — `aida db migrate-related-edges --dry-run` → review → `aida db migrate-related-edges` → `aida push` to publish the store commits.
+
+---
+
+### `aida db migrate-defer-conditions`
+
+<!-- doc-intent: STORY-2402 -->
+
+Convert legacy deferral text and `deferred:<x>` tags into typed revisit conditions.
+The default invocation is a dry run; use `--apply` to write, and `--json` for a
+structured report. The command runs only against a git-backed store.
+
+Simple spec completion, shipping, landing or merging phrases (including past
+tense) become spec-completion conditions; an ID followed by a recognized status
+(such as `<ID> approved`) becomes a condition for that status. `#N merges`
+becomes a PR-merged condition; versions become release thresholds; ISO dates
+become date conditions. Inferred spec IDs (`<spec-id>`) must have numeric segments
+and resolve unambiguously in the strict store snapshot; absent
+or ambiguous targets fall back to manual review. Compound, conflicting or unknown
+text becomes
+`manual:<owner>`, falling back to `manual:operator` when the owner is empty
+or cannot be expressed as a single token. Malformed typed input is identified
+separately in the report and also falls back to manual review.
+
+Valid typed conditions stay intact. Legacy tags are removed after recording
+their exact originals, together with the original trigger, in an
+`[aida:defer-migration]` comment. Tag-only deferrals gain the deferred flag;
+missing timestamps on any migrated deferral use the spec's previous modification
+time. Non-deferred rows with no legacy tags are skipped, including leftover prose.
+Existing
+deferral timestamps, reasons, holds and lifecycle statuses are preserved.
+The migration never evaluates conditions or resurfaces work itself.
+
+Each row is re-read and re-planned under the store writer lock, then written
+individually. A successful re-apply changes nothing. Preview the report before
+applying: inferred conditions can become eligible for the hourly resurfacing job.
+Manual conditions older than the configured manual-age threshold (14 days by
+default) route to `aida human` on the next hourly run, so migrating old deferrals
+can add many human-queue entries at once. The report counts resulting active
+manual conditions already past the default 14-day threshold, using the timestamp
+that apply will preserve or backfill. A custom hourly-job threshold may differ.
+
+```bash
+aida db migrate-defer-conditions
+aida db migrate-defer-conditions --apply
+```
 
 ---
 

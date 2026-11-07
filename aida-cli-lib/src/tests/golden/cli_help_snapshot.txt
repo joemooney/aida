@@ -4001,39 +4001,44 @@ Database management commands
 Usage: aida db [OPTIONS] <COMMAND>
 
 Commands:
-  path                   Print the path to the active store (the orphan-branch worktree, in
-                         distributed mode). The legacy `--name` registry lookup was dropped in Phase
-                         1 of the kernel/module audit
-  info                   Show database statistics and info
-  sync                   Sync git-backed store with remote (push/pull)
-  merge-gate             Assign agreed IDs (short IDs) to all objects that don't have one. Run this
-                         at merge-to-trunk to collapse a node-aware distributed id (e.g. `FR-N-NNN`)
-                         down to its short form (`FR-NNN`)
-  retire-legacy-ids      Collapse legacy origin spec_ids onto their agreed_ids. For each requirement
-                         where spec_id ≠ agreed_id (typically a legacy zero-padded origin id with a
-                         later-assigned short agreed id), set spec_id := agreed_id and clear
-                         agreed_id. The on-disk YAML moves to the new sharded path; relationships
-                         are unaffected (they use UUIDs). Run with --dry-run first to preview
-  workspace-init         Initialize a multi-repo workspace (multiple code repos sharing one store)
-  status                 Show status of the git-backed store (changes, sync state, conflicts)
-  block                  Manage pre-allocated agreed ID blocks for offline-safe trace comments
-  reconcile-status       Replay the Done → Completed auto-bump scan over a wider commit range than
-                         `aida pull` saw, recovering specs that got stranded at Done. The pull-time
-                         auto-bump only scans commits the current pull brings in; if a spec's YAML
-                         was unreadable at pull time, or the user pulled before flipping the spec to
-                         Done, the bump silently misses and the spec is stuck without manual
-                         intervention
-  check                  Audit the store for consistency problems. Currently supports `--collisions`
-                         (two requirements claiming the same short id, which the gate-time check
-                         prevents going forward but doesn't retroactively detect)
-  migrate-related-edges  Repair custom edges that graph traversals do not follow
-  audit-ids              Audit allocation claims for conflicts, read-only. Reads the store's
-                         committed HEAD plus every `--against` ref (already-local commits only;
-                         nothing is fetched) and all their merge bases, and reports every global ID
-                         range, node binding and display ID that two claims dispute, with a manual
-                         repair plan. Changes nothing. Exits non-zero when it finds a conflict or
-                         cannot read every claim
-  help                   Print this message or the help of the given subcommand(s)
+  path                      Print the path to the active store (the orphan-branch worktree, in
+                            distributed mode). The legacy `--name` registry lookup was dropped in
+                            Phase 1 of the kernel/module audit
+  info                      Show database statistics and info
+  sync                      Sync git-backed store with remote (push/pull)
+  merge-gate                Assign agreed IDs (short IDs) to all objects that don't have one. Run
+                            this at merge-to-trunk to collapse a node-aware distributed id (e.g.
+                            `FR-N-NNN`) down to its short form (`FR-NNN`)
+  retire-legacy-ids         Collapse legacy origin spec_ids onto their agreed_ids. For each
+                            requirement where spec_id ≠ agreed_id (typically a legacy zero-padded
+                            origin id with a later-assigned short agreed id), set spec_id :=
+                            agreed_id and clear agreed_id. The on-disk YAML moves to the new sharded
+                            path; relationships are unaffected (they use UUIDs). Run with --dry-run
+                            first to preview
+  workspace-init            Initialize a multi-repo workspace (multiple code repos sharing one
+                            store)
+  status                    Show status of the git-backed store (changes, sync state, conflicts)
+  block                     Manage pre-allocated agreed ID blocks for offline-safe trace comments
+  reconcile-status          Replay the Done → Completed auto-bump scan over a wider commit range
+                            than `aida pull` saw, recovering specs that got stranded at Done. The
+                            pull-time auto-bump only scans commits the current pull brings in; if a
+                            spec's YAML was unreadable at pull time, or the user pulled before
+                            flipping the spec to Done, the bump silently misses and the spec is
+                            stuck without manual intervention
+  check                     Audit the store for consistency problems. Currently supports
+                            `--collisions` (two requirements claiming the same short id, which the
+                            gate-time check prevents going forward but doesn't retroactively detect)
+  migrate-related-edges     Repair custom edges that graph traversals do not follow
+  migrate-defer-conditions  Migrate legacy deferral prose and deferred:<x> tags to typed conditions.
+                            Reports only unless --apply is supplied; preserves original input in a
+                            comment
+  audit-ids                 Audit allocation claims for conflicts, read-only. Reads the store's
+                            committed HEAD plus every `--against` ref (already-local commits only;
+                            nothing is fetched) and all their merge bases, and reports every global
+                            ID range, node binding and display ID that two claims dispute, with a
+                            manual repair plan. Changes nothing. Exits non-zero when it finds a
+                            conflict or cannot read every claim
+  help                      Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -4511,6 +4516,35 @@ Options:
 
       --json
           Emit the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida db migrate-defer-conditions
+Migrate legacy deferral prose and deferred:<x> tags to typed conditions. Reports only unless --apply
+is supplied; preserves original input in a comment
+
+Usage: aida db migrate-defer-conditions [OPTIONS]
+
+Options:
+      --apply
+          Write the proposed migration. Without this flag, report only
+
+      --json
+          Emit the migration report as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -35848,6 +35882,42 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit the report as JSON"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "db",
+      "migrate-defer-conditions"
+    ],
+    "about": "Migrate legacy deferral prose and deferred:<x> tags to typed conditions. Reports only unless --apply is supplied; preserves original input in a comment",
+    "flags": [
+      {
+        "name": "apply",
+        "takes_value": false,
+        "help": "Write the proposed migration. Without this flag, report only"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the migration report as JSON"
       }
     ],
     "hidden": true
