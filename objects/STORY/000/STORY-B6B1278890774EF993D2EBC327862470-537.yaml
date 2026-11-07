@@ -1,0 +1,36 @@
+id: 01a1b48d-39ff-7843-b057-9d723be25996
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-537
+agreed_id: STORY-2614
+title: 'Review PR-3575: [AI:codex] feat(launch): deliver pinned non-renewing ChatGPT credentials (Refs STORY-2593)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b475`) for branch `story-2593-r2219`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3575>
+  - Branch: `story-2593-r2219` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2593
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3575` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T05:48:36.735638292Z
+modified_at: 2026-11-07T05:48:36.735638292Z
+req_type: Story
+filed_at:
+  code_sha: 36fc675baec589c06c273135f0021eefcfe35db7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 36fc675baec
+  vendor: claude
+  session: 01a1b47530f4
