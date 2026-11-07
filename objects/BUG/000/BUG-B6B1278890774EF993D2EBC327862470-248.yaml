@@ -1,0 +1,21 @@
+id: 01a1b672-a99f-73e3-856d-902b331ce789
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-248
+agreed_id: BUG-2483
+title: 'aida ship PR-open guard refuses Refs-only slices: (Refs ID) trailers are not counted as attribution'
+description: 'run_pr_open_spec_guard (aida-cli-lib/src/trace.rs) refuses to open a PR unless a commit carries a completing (SPEC-ID) trailer. extract_spec_ids_from_commit does not count ''(Refs SPEC-ID)'', so every Refs slice (the normal multi-PR pattern) is refused with ''no commit on this branch carries a (SPEC-ID) trailer at all''. Repro 2026-11-07: branch story-2325-prc, commit 7408ec769f ''[AI:codex] refactor(ownership): cut over train and review readers (Refs STORY-2325)''. The dell1 codex lane punted on it and ''aida ship STORY-2325 --no-merge'' on the home host refused the same way; the advisor opened the PR with gh. Also check: the comparison is a literal case-insensitive string match, so a node-local friendly label (STORY-2325) never matches a canonical lease scope (STORY-b6b...-323) on another node. Acceptance: a Refs trailer naming the leased spec, by friendly label or canonical id, passes the guard; a trailer naming a different spec still refuses; tests for both.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T14:38:50.271312640Z
+modified_at: 2026-11-07T14:38:50.271312640Z
+req_type: Bug
+filed_at:
+  code_sha: 02790568d5ef592f46ede38d73e4d82ac21a9d66
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02790568d5e
+  vendor: claude
+  session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
