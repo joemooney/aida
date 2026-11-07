@@ -1,0 +1,34 @@
+id: 01a1b3a8-6d40-7ce3-bcaf-d8e97d26005a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-524
+agreed_id: STORY-2601
+title: 'Review PR-3555: [AI:codex] chore: [minor, non-blocking] docs/advanced/authority-and-seats.md:59 (generated into d… (TASK-b6b1278890774ef993d2ebc327862470-911)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b3a6`) for branch `task-b6b1278890774ef993d2ebc327862470-911`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3555>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-911` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-911
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3555` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T01:38:42.112027913Z
+modified_at: 2026-11-07T01:38:42.112027913Z
+req_type: Story
+filed_at:
+  code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b8fe51ef0f4
+  vendor: claude
+  session: 01a1b3a6e557
