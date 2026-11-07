@@ -3,9 +3,9 @@
 <!-- trace:STORY-2630 | ai:codex -->
 
 Measured 2026-11-07 19:15 UTC from the native Codex implementer seat at
-`34dc5896bbdcdd669f23cedef35888f8a29331dc`. Slice 1 is present; subsequent
-round-4 review requested a fix for its CI failure. This investigation concerns
-the remaining Slice 2 acceptance items: read-only containment access (AC2)
+`34dc5896bbdcdd669f23cedef35888f8a29331dc`. Slice 1 is present. This
+investigation concerns the remaining Slice 2 acceptance items: read-only
+containment access (AC2)
 and a successful lane call (AC5). Neither is claimed complete here.
 
 ## Reproduction and observations
@@ -80,48 +80,28 @@ failure reproduced above.
   no-op for this clone. No templates were changed in this investigation.
 - `git diff --check`: passed.
 
-The investigating seat recorded a design-fork punt for STORY-2630 and left
-this note uncommitted for handoff. The host subsequently committed it at
-`ae96e54ce1a4` and published it on Slice 1's PR #3607. That publication does
-not resolve the Slice 2 client decision or clear any punt or merge hold.
-The advisor must confirm whether this historical investigation belongs on
-the Slice 1 PR or should move to the Slice 2 change; the implementer grants
-no publication exception. Unit tests validate Slice 1 behavior; they do not
+The host published this investigation at `ae96e54ce1a4` on Slice 1's PR
+#3607. That publication does not resolve the Slice 2 client decision or clear
+any punt or merge hold. Unit tests validate Slice 1 behavior; they do not
 satisfy AC2 or AC5.
 
-## Round 4: Slice 1 CI regression
+## Slice 1 clone exclude regression
 
-The lib-1 log for job `128506720072` identifies the failing test as
-`seat_clone::tests::codegraph_runtime_link_is_clean_on_an_older_clone_base`.
-Its diagnostic is:
+Runtime-exclude repair in a private clone must use its real `.git/info/exclude`
+without invoking host Git. Linked worktrees resolve the common exclude through
+Git. The regression test models an older seat by removing the modern clone
+exclude, asserts that host Git remains refused, and checks linking, clean
+status, preserved ignore rules and idempotent repair.
 
-```text
-warning: skipping primary codegraph index link: git rev-parse --git-path info/exclude failed: refusing to run git in /tmp/.tmpB762Rz/seats/aida-seat-aida-codegraph: it is a contained seat's private clone, and its git configuration and hooks are writable by the seat
-assertion failed: dest.join(".codegraph").is_symlink()
-```
+Clone metadata is seat-writable: the host pins real `.git` and `info`
+directories, refuses non-regular excludes, reads with a bounded no-follow
+handle, and replaces the exclude through an exclusively created no-follow temp
+file in the pinned directory. Unsafe metadata skips optional navigation setup.
+The refusal tests cover an exclude symlink to an outside secret and an info
+symlink to an outside directory, checking that the secret is not copied and
+that nothing is written outside the clone.
 
-This is a deterministic setup defect, not a claimed flake. Runtime-exclude
-repair must use the detected clone's real `.git/info/exclude` directly,
-without invoking host Git in the clone. Linked worktrees still resolve the
-common exclude through Git. The regression now removes the modern clone
-exclude to model an older seat, asserts that host Git remains refused, and
-checks linking, clean status, preserved ignore rules and idempotent repair.
-
-Round-4 native validation: formatting, `git diff --check`, template-hook
-checks, the store-writer inventory and all eight Git-maintenance guard tests
-passed. The exact clone regression lane job
-`j20261107T195741173-2146033-0` timed out after 900 seconds during compilation;
-it executed no tests. At handoff, the broader `codegraph` run
-`j20261107T195919096-2173288-0` was running and the core linked-worktree
-exclude run `j20261107T195920264-2173350-0` was queued. No Rust test pass is
-claimed for this round (`untested=true`). Full `make check-templates` and
-`make check-ci-fast` stopped when they invoked local Cargo; host reruns are
-needed under this lane's runner-only Cargo rule. The installed doctor still
-lacks the codegraph category.
-
-The native seat recorded the scoped host subject
-`[AI:codex] fix(codegraph): repair clone excludes and correct blocker handoff (Refs STORY-2630)`
-and left all three changed files uncommitted. It punted round-4 finding 3's
-note-placement decision to the advisor; that punt remains a publication
-veto until resolved. AC2/AC5 and the existing merge hold remain outside this
-Slice 1 rework.
+The prior exclude repair was published at `02d9c1304b46`; its durable CI
+evidence is [run 42410096051](https://github.com/joemooney/aida/actions/runs/42410096051).
+Per-round validation, launcher handoff and publication state belong in
+STORY-2630 comments and the PR trail, rather than this investigation note.
