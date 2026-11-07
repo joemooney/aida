@@ -2608,6 +2608,7 @@ while True: signal.pause()
         default_args: flags,
         prompt_style: AgentPromptStyle::Positional,
         contained: true,
+        delegate_seats: Vec::new(),
     };
     let plan = AgentLaunchPlan {
         project_root: root.path().into(),
@@ -2781,6 +2782,7 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
         default_args: vec!["native-argument".into()],
         prompt_style: AgentPromptStyle::Positional,
         contained: true,
+        delegate_seats: Vec::new(),
     };
     let plan = AgentLaunchPlan {
         project_root: root.path().into(),
