@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T04:58:42.854655542Z
+modified_at: 2026-11-07T05:01:11.180515394Z
 req_type: Task
 tags:
 - architecture
@@ -186,6 +186,13 @@ comments:
   modified_at: 2026-11-07T04:56:45.225102589Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b461-ce8c-78e2-a77c-6bef1fa1adc5
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-07T05:01:11.180511042Z
+  modified_at: 2026-11-07T05:01:11.180511042Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -354,6 +361,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1b461-ce8c-78e2-a77c-6bd1b613ae68
+  author: joe
+  timestamp: 2026-11-07T05:01:11.180504832Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
