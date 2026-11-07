@@ -2445,3 +2445,140 @@ fn bug2454_hanging_sandbox_allows_explicit_lease_release() {
     );
     assert_eq!(std::fs::read_to_string(calls).unwrap().lines().count(), 4);
 }
+
+/// A legacy MCP claim must inspect the physical clone through the sandbox,
+/// even when it omitted the branch and tree_kind. A clean published clone is
+/// not salvageable; the existing completion/merge gates still decide reap.
+// trace:BUG-2473 | ai:codex
+#[test]
+fn bug_2473_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "hygiene", "c0ffee002473");
+    seat_commit(&clone, "published.txt");
+    git_ok(&clone, &["push", "-q", "origin", "feat"]);
+    // Include another local branch to exercise all-branch remote coverage.
+    git_ok(&clone, &["branch", "also-published"]);
+    git_ok(&clone, &["push", "-q", "origin", "also-published"]);
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    lease.tree_kind = TreeKind::Worktree;
+    lease.branch.clear();
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    lease.active_pid = Some(999_999_999);
+    std::fs::write(clone.join(".gitmodules"), "").unwrap();
+    std::fs::create_dir_all(clone.join("target")).unwrap();
+    std::fs::write(clone.join("target/output"), "cache").unwrap();
+    let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    let snapshot = inspect();
+    assert!(snapshot.error.is_none(), "{snapshot:?}");
+    assert!(!snapshot.dirty, "{snapshot:?}");
+    assert_eq!(snapshot.branch.as_deref(), Some("feat"));
+    assert_eq!(snapshot.last_commit_subject.as_deref(), Some("seat work"));
+    crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
+    let rows = crate::ps_integrate::build_running_work(
+        &[],
+        &[lease],
+        &[],
+        chrono::Utc::now(),
+        |_| inspect(),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| crate::ps_integrate::MailIdentityStatus::Unknown,
+        |_, _| crate::ps_integrate::SeatActivity::Unknown,
+    )
+    .0;
+    let dispatch = rows[0].dispatch.as_ref().unwrap();
+    assert_ne!(
+        dispatch.state,
+        crate::dispatch_health_ps::DispatchState::Salvageable
+    );
+    let hint = dispatch.hint.as_deref().unwrap_or_default();
+    assert!(!hint.contains("branch ,"), "{hint}");
+    assert!(!hint.contains("(no commits yet)"), "{hint}");
+    assert!(matches!(
+        crate::session_reap::classify_clone_reap(
+            || probe(&fx.main, &clone),
+            "feat",
+            true,
+            true,
+            || true,
+        ),
+        crate::session_reap::ReapVerdict::Reap(_)
+    ));
+
+    // An extra unpublished branch must still stop the session-end guard.
+    git_ok(&clone, &["checkout", "-q", "-b", "unpublished"]);
+    seat_commit(&clone, "local.txt");
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
+    std::fs::write(clone.join("published.txt"), "unsaved change\n").unwrap();
+    let dirty = inspect();
+    assert!(dirty.error.is_none(), "{dirty:?}");
+    assert!(dirty.dirty, "{dirty:?}");
+    let hint = crate::dispatch_health_ps::next_command_hint_with_untracked(
+        crate::dispatch_health_ps::DispatchState::Salvageable,
+        &clone,
+        dirty.branch.as_deref().unwrap(),
+        dirty.last_commit_subject.as_deref(),
+        None,
+        false,
+        false,
+    )
+    .unwrap();
+    assert!(hint.contains("branch feat"), "{hint}");
+    assert!(hint.contains("seat work"), "{hint}");
+}
+
+/// A broken clone is unknown, and the guard's ordinary Display carries the
+/// underlying error rather than hiding it behind an anyhow context boundary.
+// trace:BUG-2473 | ai:codex
+#[test]
+fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
+    let fx = fixture();
+    let clone = seat(&fx, "hygiene-broken", "c0ffee002474");
+    std::fs::rename(clone.join(".git"), clone.join("saved-git")).unwrap();
+    let inspect = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(inspect
+        .error
+        .as_deref()
+        .unwrap()
+        .contains("not a real directory"));
+    assert!(!inspect.dirty);
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    lease.active_pid = Some(999_999_999);
+    let rows = crate::ps_integrate::build_running_work(
+        &[],
+        &[lease.clone()],
+        &[],
+        chrono::Utc::now(),
+        |_| inspect.clone(),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| crate::ps_integrate::MailIdentityStatus::Unknown,
+        |_, _| crate::ps_integrate::SeatActivity::Unknown,
+    )
+    .0;
+    let dispatch = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        dispatch.state,
+        crate::dispatch_health_ps::DispatchState::Unknown
+    );
+    let hint = dispatch.hint.as_deref().unwrap();
+    assert!(hint.contains("not a real directory"), "{hint}");
+    assert!(!hint.contains("salvage-commit"), "{hint}");
+    let error = crate::session_end::guard_remote_commits(&fx.main, &lease, false)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("session was NOT ended:"), "{error}");
+    assert!(error.contains("sandboxed"), "{error}");
+    assert!(clone.exists());
+    assert!(!crate::list_leases(&fx.main).is_empty());
+}
