@@ -1,0 +1,21 @@
+id: 01a1b374-0402-7991-a5b1-bbac15b43611
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-910
+title: Legacy adoption test omits PID namespace and fails in a native sandbox
+description: While validating BUG-2473, the unchanged leases::bug_1656_subagent_liveness_tests::bug_1656_adoption_stamps_harness_pid_and_keeps_unknown_keys failed at aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs:520 (adoption returned None instead of aaaa11112222). Reproduces as an exact isolated test and with AIDA_TRUST_PID_NAMESPACE=1. Its adoption_lease_fixture does not stamp pid_namespace; adopt_spec_lease_unlocked in leases.rs rejects an unstamped record through PidObserver::can_observe(None) outside the non-isolated initial namespace. Neither the test nor leases.rs nor pid_observer.rs changed for BUG-2473. The other 17 tests under bug_1656 pass. Update the fixture to express a current-namespace owner (or explicitly model legacy-namespace refusal) while retaining the production fail-closed observation rule. BUG-2473 targeted tests and adjacent dispatch/hygiene/remote-coverage/Git-access suites pass.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T00:41:27.298433170Z
+modified_at: 2026-11-07T00:41:27.298433170Z
+req_type: Task
+tags:
+- from-advisor:BUG-2473
+- kind:observation
+- linked:BUG-2473
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: codex
+  session: 01a1b368e9b4
