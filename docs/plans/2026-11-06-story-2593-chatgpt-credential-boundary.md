@@ -2,8 +2,8 @@
 
 <!-- trace:STORY-2593 | ai:codex -->
 
-Status: proposed; master/operator sign-off required before implementation.
-This is the guided design checkpoint, not a completed containment change.
+Status: option (a) signed off by the advisor on 2026-11-06 (recorded on
+STORY-2593). This is the design record, not a completed containment change.
 This file is the canonical design; the STORY-2593 comment points here rather
 than maintaining a second copy.
 
@@ -32,8 +32,8 @@ and clearance path; it is not a failing implementation test to bypass.
 The master/operator must record explicit sign-off on STORY-2593 for option (a),
 including the residual readable bearer-token risk, the no-in-lane-renewal
 deadline, and the requirement to return to this gate if installed `codex exec`
-cannot consume access-only credentials. No such sign-off is present at this
-checkpoint. Until then, punt findings 1-5 rather than claim story completion.
+cannot consume access-only credentials. The advisor recorded that sign-off on
+STORY-2593 on 2026-11-06; implementation proceeds under its conditions.
 
 ## Observed implementation
 
