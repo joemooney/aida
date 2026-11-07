@@ -685,3 +685,54 @@ Publication subject:
 No implementation or validation blocker remains. No commit, push, PR creation,
 merge, review record, hold clearance or queue completion occurred in this seat.
 Slice 5 remains outstanding; existing punt/hold signals remain publication vetoes.
+
+## Slice-4 integration follow-up: verified required-check reads (2026-11-07)
+
+The starting checkout includes the resumable journal, both SIGKILL recovery
+fixtures and BUG-2463 (#3519). The final verified train proof's nested
+`github_required_checks` read still bypassed per-call persistence. It now
+checkpoints active train intent immediately before invoking the forge. Outside
+an active train this remains a no-op. Workflow-definition digests stay in slice 5.
+
+A PATH-isolated production-helper regression refuses a read when the journal
+is unavailable, and separately allows one read that makes it unavailable before
+the next proof refresh. It inspects the checkpoint captured at call time,
+asserts zero/one actual forge calls, and retains the pinned Merge entry with its
+change number, train head and member head. The existing SIGKILL-after-merge and
+SIGKILL-after-eject cases remain in the binding `pr_train` filter.
+
+Changed files: `aida-cli-lib/src/forge.rs`,
+`aida-cli-lib/src/tests/story_1690_train_tests.rs`, and this plan. Native-seat
+edits remain uncommitted for the host. Validation results and the Refs
+publication declaration follow below.
+
+<!-- trace:STORY-2401 | ai:codex -->
+
+The first fast-gate run exposed an integration mismatch with main's newly
+merged TASK-3222 writer inventory: journal sinks were absent and the activity
+writer still named the old `member_landed` function. Regenerated and reviewed
+`scripts/store-writers.toml`, adding the journal's shared run-lock and live
+confirmation boundary notes and replacing the stale activity-writer identity.
+All rows retain their blocked S2 disposition; no runtime authority is added.
+This inventory is the fourth changed file.
+
+Targeted validation passed: `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib
+--lib pr_train` ran **178 tests, zero failures**, 12,632 filtered out; test
+runtime **79.04s**, cold build **5m 34s**. Both SIGKILL recovery seams and
+the new required-check checkpoint regression passed. Log:
+`/tmp/story2401-required-train.log`. Formatting and `git diff --check` passed.
+
+Native publication declaration accepted:
+`[AI:codex] fix(train): checkpoint verified required-check reads (Refs STORY-2401)`.
+This records host publication intent only; no commit, push, PR creation,
+merge, review recording or queue completion occurred in this seat.
+
+Final fast validation passed: `AIDA_CARGO_NO_SLOT=1 make check-ci-fast`
+completed **all 41 gates**, including the reconciled store-writer inventory,
+feature-disabled CLI, standalone TUI and formatting checks. Log:
+`/tmp/story2401-required-fast-final.log`. Guards reporting native read-only
+`.git/FETCH_HEAD` refusals passed using their local-evidence path.
+`git diff --check` passed. No implementation or validation blocker remains.
+The host owns commit creation and publication under the accepted Refs subject;
+slice 5 remains outstanding and existing punt/hold signals retain their veto.
+Turn ends with the four changed files uncommitted.

@@ -1849,6 +1849,10 @@ fn merge_gate_live_head(forge: &dyn Forge, c: &ChangeRef) -> Option<String> {
 /// Unlike the informational trait accessor, authorization cannot turn a failed
 /// required-check read into an empty list.
 pub(crate) fn github_required_checks(root: &Path, change: &ChangeRef) -> Result<Vec<String>> {
+    // The verified train proof reads this again before each merge attempt.
+    // An earlier successful checkpoint cannot cover this nested call.
+    // trace:STORY-2401 | ai:codex
+    crate::pr_train::before_train_forge_call("GitHub required checks")?;
     let out = Command::new("gh")
         .current_dir(root)
         .args([

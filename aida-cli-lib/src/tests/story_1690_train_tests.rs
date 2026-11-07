@@ -4658,3 +4658,66 @@ esac
         assert_eq!(saved[0].train.tip, "car1");
     }
 }
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn pr_train_journal_verified_required_checks_require_durable_intent() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for fail_before_first in [true, false] {
+        let root = repo();
+        let r = root.path();
+        crate::test_exec::write_executable(
+            &r.join("gh"),
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+cp intent/required-1.json checkpoint.json || exit 2
+mv intent intent-saved || exit 2
+printf unavailable > intent
+printf '%s\n' '[{"name":"Build","bucket":"pass","workflow":"CI","link":""}]'
+"#,
+        );
+        let path = format!("{}:{}", r.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+        let dir = r.join("intent");
+        std::fs::create_dir(&dir).unwrap();
+        let mut entry =
+            journal::Entry::new(train_of("main", &fms(&[1])), "train/required-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(&dir, entry).unwrap();
+        let _scope = journal::Scope;
+        let change = crate::forge::ChangeRef {
+            id: 901,
+            url: String::new(),
+            branch: "train/required-1".into(),
+            base: "main".into(),
+            title: None,
+        };
+        if fail_before_first {
+            std::fs::rename(&dir, r.join("intent-saved")).unwrap();
+            std::fs::write(&dir, "unavailable").unwrap();
+        } else {
+            assert_eq!(
+                crate::forge::github_required_checks(r, &change).unwrap(),
+                vec!["Build".to_string()]
+            );
+            // Inspect the receipt captured by the forge stub at call time:
+            // the nested read must have persisted its own call checkpoint.
+            let checkpoint: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(r.join("checkpoint.json")).unwrap()).unwrap();
+            assert_eq!(checkpoint["call"], "GitHub required checks");
+        }
+        let error = crate::forge::github_required_checks(r, &change).unwrap_err();
+        assert!(format!("{error:#}").contains("could not persist train intent"));
+        let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap_or_default();
+        assert_eq!(calls.lines().count(), usize::from(!fail_before_first));
+        let saved = journal::entries(&r.join("intent-saved")).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].step, journal::Step::Merge);
+        assert_eq!(saved[0].change_id, Some(901));
+        assert_eq!(saved[0].train.tip, "car1");
+        assert_eq!(saved[0].train.members()[0].head, "head1");
+    }
+}
