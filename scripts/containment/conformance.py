@@ -4,6 +4,7 @@
 trace:TASK-3046 | ai:codex
 """
 import argparse
+import contextlib
 import datetime
 import hashlib
 import http.server
@@ -22,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import termios
 import threading
 import time
 import tomllib
@@ -532,9 +534,66 @@ def role_enter_refusal(diagnostic):
     return "fixture-role-enter-refused"
 
 
+# Prompt libraries can leave raw/no-output-processing modes behind when killed.
+# Hold our own fd until children have been reaped, including supervisor cleanup.
+# trace:BUG-2485 | ai:codex
+@contextlib.contextmanager
+def preserved_terminal():
+    terminal = None
+    attributes = None
+    try:
+        terminal = os.dup(0)
+        if os.isatty(terminal):
+            attributes = termios.tcgetattr(terminal)
+    except (OSError, termios.error):
+        pass
+    try:
+        yield
+    finally:
+        if terminal is not None:
+            try:
+                if attributes is not None and os.tcgetpgrp(terminal) == os.getpgrp():
+                    termios.tcsetattr(terminal, termios.TCSANOW, attributes)
+            except (OSError, termios.error):
+                pass  # A disconnected terminal cannot be restored.
+            finally:
+                os.close(terminal)
+
+
+# trace:BUG-2485 | ai:codex
+@contextlib.contextmanager
+def foreground_continuation(group):
+    """Lend a controlling terminal to the child before releasing its script."""
+    terminal = os.dup(0)
+    previous = None
+    try:
+        try:
+            if os.isatty(terminal) and os.tcgetpgrp(terminal) == os.getpgrp():
+                previous = os.getpgrp()
+                os.tcsetpgrp(terminal, group)
+        except OSError:
+            # Pipes and non-controlling PTYs have no foreground group to lend.
+            # A real handoff failure must refuse before the child can prompt.
+            if previous is not None:
+                raise
+        yield
+    finally:
+        try:
+            if previous is not None:
+                # We are now background. Reclaiming the tty must not stop us.
+                mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+                try:
+                    os.tcsetpgrp(terminal, previous)
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        finally:
+            os.close(terminal)
+
+
 # Retain the operator's terminal session, but own a group for continuation
 # setup. SIGTERM unwinds the continuation's lane-group and Network finally
 # blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
+@preserved_terminal()
 def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
     # Transport secret eval output only through a pipe, then restore the
     # inherited terminal stdin for the later production role-entry call.
@@ -552,12 +611,14 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
     finally:
         os.close(terminal)
     script = f"exec 0<&{terminal}\nexec {terminal}<&-\n" + script
-    with child:
+    with child, contextlib.ExitStack() as terminal_owner:
         try:
+            terminal_owner.enter_context(foreground_continuation(child.pid))
             child.communicate(script, timeout=seconds)
         except BaseException as error:
-            # The separate group does not receive the operator's Ctrl+C.
-            # Every interrupted wait must request continuation cleanup.
+            # Keep foreground ownership through nested cleanup, then reclaim
+            # the operator's group. This handles interruptions delivered to this
+            # supervisor; foreground Ctrl+C is recorded by the continuation.
             try:
                 os.killpg(child.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -574,6 +635,11 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
                 raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
             raise
         return child.returncode
+
+
+# trace:BUG-2485 | ai:codex
+def harness_terminated(signum, _frame):
+    raise ValueError(f"harness-terminated: {signal.Signals(signum).name}")
 
 
 def continuation_terminated(_signum, _frame):
@@ -697,17 +763,17 @@ def run_aida(args):
         script = continuation_script(block, root, "--aida-setup")
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
-        # Four setup calls (advisor probe, spec add, queue add, implementer
-        # entry) take up to 4*30s, followed by the inner timeout+180s budget.
+        # Three setup calls take 3*30s; implementer entry allows 300s for
+        # operator prompts, followed by the inner timeout+180s budget.
         # Add 30s for inner timeout cleanup (10s TERM + 5s reap) and reporting:
-        # total timeout+330s. On interruption, give the setup supervisor 25s
+        # total timeout+600s. On interruption, give the setup supervisor 25s
         # to kill/reap the inner group and publish before killing its own group.
-        # trace:TASK-2941 | ai:codex
-        result = launch_aida_continuation(script, repo, env, args.timeout + 330,
+        # trace:TASK-2941 trace:BUG-2485 | ai:codex
+        result = launch_aida_continuation(script, repo, env, args.timeout + 600,
                                           cleanup_grace=25)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The continuation owns newer setup evidence. Never overwrite it
         # with the pre-continuation snapshot on an outer timeout.
         # trace:TASK-3194 | ai:codex
@@ -715,13 +781,15 @@ def run_aida(args):
         if saved.exists():
             report = json.loads(saved.read_text())
         if not report.get("unsupported_reason"):
-            aida_refuse(root, report, str(error))
+            aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
         raise
 
 
 # Successful role output includes a secret key-adoption heredoc. Keep it only
 # in memory; failed output is displayable diagnostic evidence.
 # trace:BUG-2465 | ai:codex
+@preserved_terminal()
 def fixture_role_enter(aida, repo, env, root, report, seat):
     # Only the executing seat needs to delegate to the queue-work child.
     # trace:TASK-2941 | ai:codex
@@ -729,7 +797,12 @@ def fixture_role_enter(aida, repo, env, root, report, seat):
     if seat == "implementer":
         argv += ["--delegate-seat", "implementer"]
     argv += ["--no-resume", "--no-title"]
-    entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
+    # Real operator prompts keep their default (no extra delegation authority).
+    # Give the operator minutes rather than the ordinary setup's 30 seconds.
+    # trace:BUG-2485 | ai:codex
+    print(f"Waiting for operator role entry ({seat}); answer any terminal prompts "
+          "within 5 minutes (Ctrl+C cancels).", file=sys.stderr, flush=True)
+    entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=300)
     report["setup"].append({"stage": "role-enter", "argv": argv, "exit_code": entered.returncode})
     if entered.returncode:
         print(entered.stdout, file=sys.stderr, end="")
@@ -778,13 +851,14 @@ def setup_aida(root):
                                           repo, env, state["timeout"] + 180)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The launch continuation owns newer evidence after the seat switch.
         saved = root / "report.json"
         if saved.exists():
             report = json.loads(saved.read_text())
         if not report.get("unsupported_reason"):
-            aida_refuse(root, report, str(error))
+            aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
         raise
 
 
@@ -895,8 +969,9 @@ def continue_aida(root):
             aida_refuse(root, report, "production-containment-receipt-unavailable")
         write_json(root / "report.json", report)
         print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
-        aida_refuse(root, report, str(error))
+    except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
+        aida_refuse(root, report, "harness-interrupted: SIGINT"
+                        if isinstance(error, KeyboardInterrupt) else str(error))
     finally:
         if network is not None:
             network.close()
@@ -1138,6 +1213,7 @@ def main():
         if args.boundary == "native" and args.vendor == "claude":
             parser.error("native-boundary-unsupported-vendor: claude")
         try:
+            signal.signal(signal.SIGTERM, harness_terminated)
             run(args)
         except ValueError as error:
             parser.exit(2, f"conformance: {error}\n")
