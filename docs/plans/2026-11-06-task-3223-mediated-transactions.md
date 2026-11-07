@@ -1,4 +1,4 @@
-# TASK-3223 transaction sketch v1 — awaiting signoff
+# TASK-3223 mediated-transaction sketch v1 — UNAPPROVED
 
 <!-- trace:TASK-3223 | ai:codex -->
 
@@ -7,6 +7,42 @@ TASK-3225's first comment records the binding advisor amendment: S2 cannot
 enable mutation verbs until a separate recoverable-transaction sketch is approved.
 The parent operator ruling approves synchronous mediation and the shared bwrap
 boundary; it does not select this transaction design. TASK-3223 remains guided.
+
+**Status: unapproved v1 design proposal, documentation only.** No independent
+advisor approval is recorded on TASK-3223. A code-review verdict or merging this
+document does not supply that architecture approval. The full S2 contract stays
+open; this sketch implements none of its acceptance criteria.
+
+## Review and publication scope
+
+For PR #3563, use this documentation-only subject for the corrective commit, PR
+title and eventual squash commit, if publication is authorized:
+
+```text
+[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)
+```
+
+The earlier `1baca620b4a5` subject incorrectly claims the full implementation and
+uses a closing trailer. A follow-up documentation commit does not rewrite that
+subject. The host must correct the PR title and squash subject before merge and
+ensure the earlier closing subject cannot land as completion evidence. Preserve
+the active merge hold and any punt: this text grants no publication or clearance
+authority. Do not mark TASK-3223 Done or Completed for this sketch.
+
+The following acceptance work remains unimplemented by this PR:
+
+| TASK-3223 contract | Current evidence / remaining work |
+| --- | --- |
+| Route every inventoried CLI/MCP writer through mediation | Service accepts only `session_probe` / `request_status`; typed mutation routing is pending. |
+| Deny raw store, authority metadata and shared-cache writes | Existing store/cache write grants remain; protected ancestor, symlink, primary-checkout and resume layouts need implementation and tests. |
+| Provide lane-private or read-only derived caches | No cache cutover is implemented here. |
+| Gate the mediated profile and preserve Claude/native compatibility | No gated mutation profile or workflow validation is implemented here. |
+| Prove stale-base, concurrent-mutation and persist-before-reply recovery | These tests remain required after transaction approval and implementation. |
+
+Independent advisor signoff must select the redo-transaction design (or an
+alternative), canonical reader/writer recovery admission, and the multi-root
+claim/queue participant protocol. Until then this document remains an unapproved
+proposal, even if retained in repository history as a Refs-only sketch.
 
 ## Observed implementation
 
