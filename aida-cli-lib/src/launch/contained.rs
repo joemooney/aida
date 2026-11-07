@@ -1193,6 +1193,7 @@ impl PreparedLaunch {
         let mut cfg = cfg;
         if let Some(deadline) = codex_deadline {
             cfg["chatgpt_deadline"] = deadline.into();
+            cfg["oauth_hosts"] = serde_json::json!(codex_auth::OAUTH_HOSTS);
         }
         if let Some(service) = &mutation {
             cfg["mutation"] = service.config.clone();

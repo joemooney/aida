@@ -242,6 +242,7 @@ raise SystemExit(1)
     let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
     cfg["allowed"] = serde_json::json!(allowed);
     cfg["chatgpt_deadline"] = deadline.into();
+    cfg["oauth_hosts"] = serde_json::json!(codex_auth::OAUTH_HOSTS);
     cfg["bwrap"] = serde_json::json!(plan.profile.args(plan._state.path()));
     let env = plan
         .command
@@ -303,13 +304,9 @@ raise SystemExit(1)
 
 #[test]
 fn story_2593_oauth_policy_denies_before_resolution() {
-    let mut allowed = vec![
-        "auth.openai.com".into(),
-        "auth0.openai.com".into(),
-        "openai.auth0.com".into(),
-        "auth.chatgpt.com".into(),
-        "chatgpt.com".into(),
-    ];
+    let oauth_hosts = codex_auth::OAUTH_HOSTS;
+    let mut allowed: Vec<String> = oauth_hosts.iter().map(|h| (*h).into()).collect();
+    allowed.push("chatgpt.com".into());
     codex_auth::exclude_oauth_hosts(&mut allowed);
     assert_eq!(allowed, vec!["chatgpt.com"]);
     let script = format!(
@@ -331,14 +328,13 @@ assert b.recv(100)==b'denied-v1'
 # All excluded OAuth hosts record denial before replying; other refusals and
 # launches without the ChatGPT channel do not produce refresh evidence.
 fd=os.memfd_create('oauth-denial-test',os.MFD_CLOEXEC)
-for host,expected in [('auth.openai.com',b'1'),('auth0.openai.com',b'1'),
-                      ('openai.auth0.com',b'1'),('auth.chatgpt.com',b'1'),
-                      ('other.example',b'0')]:
+oauth_hosts={oauth_hosts:?}
+for host,expected in [(h,b'1') for h in oauth_hosts]+[('other.example',b'0')]:
     os.pwrite(fd,b'0',0)
     request=dict(version=1,method='CONNECT',host=host,port=443,
                  host_header=host+':443',protocol='tcp')
     a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
-    proxy_request(json.dumps(request).encode(),[a.detach()],set(),None,fd)
+    proxy_request(json.dumps(request).encode(),[a.detach()],set(),None,fd,oauth_hosts)
     assert b.recv(100)==b'denied-v1'
     assert os.pread(fd,1,0)==expected
     b.close()
@@ -499,6 +495,10 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     let args: Vec<_> = plan.command.get_args().collect();
     let cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
     assert_eq!(cfg["chatgpt_deadline"].as_i64(), plan.chatgpt_deadline);
+    assert_eq!(
+        cfg["oauth_hosts"],
+        serde_json::json!(codex_auth::OAUTH_HOSTS)
+    );
     assert!(plan.chatgpt_deadline.unwrap() > chrono::Utc::now().timestamp());
     let diagnostic = format!("{:?}", plan.command);
     for secret in [
@@ -523,7 +523,8 @@ fn story_2593_installed_codex_exact_leaf_probe() {
         eprintln!("SKIP: exact installed-Codex credential probe requires AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1");
         return;
     }
-    let env = BTreeMap::from([("PATH".into(), std::env::var("PATH").unwrap())]);
+    let environment = aida_core::exec_context::Environment::capture();
+    let env = BTreeMap::from([("PATH".into(), environment.var("PATH").unwrap().into())]);
     let program = resolve_program(&Command::new("codex"), &env).unwrap();
     let host = tempfile::tempdir().unwrap();
     host_auth(host.path(), 4102444800);

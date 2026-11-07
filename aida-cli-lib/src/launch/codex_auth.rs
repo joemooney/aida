@@ -15,6 +15,12 @@ pub(super) const RELAUNCH: &str =
 const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
 const BOUND: usize = 65536;
+pub(super) const OAUTH_HOSTS: [&str; 4] = [
+    "auth.openai.com",
+    "auth0.openai.com",
+    "openai.auth0.com",
+    "auth.chatgpt.com",
+];
 
 // Intentionally no Debug/Serialize: only the sealed reduced leaf can cross.
 pub(super) struct Credential {
@@ -25,12 +31,7 @@ pub(super) struct Credential {
 /// No endpoint-level TLS inspection exists in the CONNECT broker. Deny the
 /// entire OAuth hosts, even if trusted policy allows them for other vendors.
 pub(super) fn exclude_oauth_hosts(allowed: &mut Vec<String>) {
-    allowed.retain(|h| {
-        !matches!(
-            h.as_str(),
-            "auth.openai.com" | "auth0.openai.com" | "openai.auth0.com" | "auth.chatgpt.com"
-        )
-    });
+    allowed.retain(|h| !OAUTH_HOSTS.contains(&h.as_str()));
 }
 
 // This reads lifetime/routing metadata from the trusted host cache, not a

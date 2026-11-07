@@ -541,7 +541,7 @@ def _hung_up(fd):
     return any(ev & (select.POLLHUP | select.POLLERR) for _, ev in p.poll(0))
 
 
-def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None):
+def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts=()):
     """Validate one typed CONNECT, pin a checked public address, connect on
     the host and hand the connected socket back over the per-request pair."""
     reply_fd = fds[0] if len(fds) == 1 else None
@@ -576,9 +576,7 @@ def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None):
             # The descriptor is never passed to bwrap or mounted in lane state.
             # trace:STORY-2593 | ai:codex
             if (oauth_denial_fd is not None and str(error) == 'proxy destination refused'
-                    and host_name(request['host']) in (
-                        'auth.openai.com', 'auth0.openai.com',
-                        'openai.auth0.com', 'auth.chatgpt.com')):
+                    and host_name(request['host']) in oauth_hosts):
                 os.pwrite(oauth_denial_fd, b'1', 0)
             try:
                 reply.send(b'denied-v1')
@@ -606,6 +604,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 'contained ChatGPT credentials expired; reauthenticate on the host, then relaunch')
     credential_deadline()
     oauth_denial_fd = cfg.get('oauth_denial_fd')
+    oauth_hosts = frozenset(cfg.get('oauth_hosts', ()))
     port = cfg['port']
     allowed = {(h, 443) for h in cfg['allowed']}
     fixture = tuple(cfg['fixture']) if cfg.get('fixture') else None
@@ -713,7 +712,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts),
                                  daemon=True).start()
             if broker in ready:
                 data, ancillary, flags, _ = broker.recvmsg(32, socket.CMSG_SPACE(12))
@@ -772,7 +771,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 if not data:
                     watch.remove(proxy)
                     continue
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts),
                                  daemon=True).start()
         rc = process.wait()
         return rc if rc >= 0 else 128 - rc
