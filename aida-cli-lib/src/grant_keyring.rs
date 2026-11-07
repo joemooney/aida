@@ -67,6 +67,10 @@ impl std::error::Error for InstallError {}
 
 #[cfg(test)]
 thread_local! {
+    /// Exercise contained key-install refusal even on kernels without keyctl.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) static FORCE_AVAILABLE: std::cell::Cell<Option<bool>> =
+        const { std::cell::Cell::new(None) };
     /// Test seam: make this thread's next [`install`] fail with this errno.
     pub(crate) static FORCE_INSTALL_ERRNO: std::cell::Cell<Option<i32>> =
         const { std::cell::Cell::new(None) };
@@ -326,6 +330,10 @@ mod sys {
 
 /// Whether this process can use a session keyring at all.
 pub(crate) fn available() -> bool {
+    #[cfg(test)]
+    if let Some(available) = FORCE_AVAILABLE.with(std::cell::Cell::get) {
+        return available;
+    }
     #[cfg(target_os = "linux")]
     {
         sys::available()

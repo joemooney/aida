@@ -1067,11 +1067,6 @@ pub(crate) fn orchestrator_phase_child_env(
     variant: auto_complete::AutoCompleteVariant,
     queue_user_id: &str,
 ) -> Vec<(&'static str, String)> {
-    let phase_role = match phase {
-        auto_complete::Phase::Implementer => Some("implementer"),
-        auto_complete::Phase::Reviewer => Some("reviewer"),
-        _ => None,
-    };
     // trace:BUG-901 | ai:codex
     let mut env = vec![
         (orchestrator::AUTO_COMPLETE_ENV, "1".to_string()),
@@ -1082,9 +1077,6 @@ pub(crate) fn orchestrator_phase_child_env(
     // trace:BUG-1038 | ai:codex
     if !queue_user_id.trim().is_empty() {
         env.push(("AIDA_USER", queue_user_id.to_string()));
-    }
-    if let Some(role) = phase_role {
-        env.push(("AIDA_SESSION_ROLE", role.to_string()));
     }
     env
 }
@@ -1541,7 +1533,9 @@ impl RealPhaseDriver {
             auto_complete::Phase::Reviewer,
         )?;
 
-        let mut cmd = std::process::Command::new(self.aida_exe());
+        let mut cmd = self
+            .control_child()
+            .map_err(|e| auto_complete::PhaseFailure::new(format!("control child: {e:#}")))?;
         cmd.current_dir(&self.project_root)
             .args([
                 "queue",
@@ -1565,7 +1559,6 @@ impl RealPhaseDriver {
         ) {
             cmd.env(key, value);
         }
-        cmd.env("AIDA_SESSION_ROLE", &gate.role);
         if let Some(mode) = self.no_human {
             cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
         }

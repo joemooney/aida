@@ -1012,8 +1012,7 @@ pub(crate) fn handle_intake_command(
     )?;
 
     let child_grant =
-        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+        crate::launch::assign_advisor_child(&project_root, vendor, contained, &mut command)?;
 
     // trace:BUG-2398 | ai:claude
     let status_code = session::coordinator_status_with_handle_guard(
@@ -1025,7 +1024,7 @@ pub(crate) fn handle_intake_command(
     )
     .with_context(|| format!("failed to launch {} headless intake pass", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
-    crate::session::revoke_headless_child_grant(&child_grant.id);
+    drop(child_grant);
     let status_code = status_code?;
 
     if status_code.success() {
@@ -1068,8 +1067,6 @@ pub(crate) fn build_autopilot_intake_command(
     command
         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         .env(crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1")
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
         .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
         .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))

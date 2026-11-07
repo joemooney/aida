@@ -3627,7 +3627,7 @@ pub(crate) fn agent_new_bg_dispatch(
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     if config.agent_type == "codex" {
         command.env(crate::gate::seat_authority::GRANT_ENV, "");
-        crate::codex_tool_env::prepare_launch(&mut command)?;
+        crate::launch::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::null())
@@ -7361,7 +7361,7 @@ pub(crate) fn run_agent_generation(
     if let Some(role) = &plan.role {
         // A contained role launch is sandboxed the same way a contained
         // reviewer is. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-        let grant = crate::gate::seat_authority::issue_launch_child_with_delegation(
+        let grant = crate::launch::issue_launch_child_with_delegation(
             &plan.project_root,
             &canonical_role_name(role),
             &plan.name,
@@ -7392,7 +7392,7 @@ pub(crate) fn run_agent_generation(
         if plan.role.is_none() {
             command.env(crate::gate::seat_authority::GRANT_ENV, "");
         }
-        crate::codex_tool_env::prepare_launch(&mut command)?;
+        crate::launch::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::inherit())

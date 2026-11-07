@@ -966,3 +966,34 @@ fn invalid_or_unknown_authority_cancels_ack_and_release_without_demotion() {
         }
     }
 }
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_control_child_argv0_preserves_loop_anchor() {
+    const CHILD: &str = "AIDA_TEST_CONTROL_ARGV0";
+    if std::env::var_os(CHILD).is_some() {
+        let raw = std::fs::read("/proc/self/cmdline").unwrap();
+        let argv0 = std::str::from_utf8(raw.split(|b| *b == 0).next().unwrap()).unwrap();
+        assert_eq!(std::path::Path::new(argv0).file_name().unwrap(), "aida");
+        let mut facts = proc(std::process::id(), 0, "exe");
+        facts.cmd = [argv0, "queue", "work", "--auto-complete"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(facts.command_label(), "aida");
+        assert!(loop_anchor(&facts));
+        return;
+    }
+    let output = crate::launch::control_child()
+        .unwrap()
+        .args([
+            "--exact",
+            "seat_occupancy::tests::story_2326_control_child_argv0_preserves_loop_anchor",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+}
