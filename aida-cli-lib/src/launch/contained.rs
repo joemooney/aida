@@ -762,7 +762,14 @@ impl PreparedLaunch {
         host_main: Option<&Path>,
         credential_owner: u32,
     ) -> Result<Self> {
-        Self::prepare_with_io(child, root, host_main, credential_owner, LaunchIo::Headless)
+        Self::prepare_with_io(
+            child,
+            root,
+            host_main,
+            credential_owner,
+            LaunchIo::Headless,
+            codex_auth::PROGRAM_SHA256,
+        )
     }
     pub(crate) fn prepare_interactive(
         child: &Command,
@@ -775,25 +782,12 @@ impl PreparedLaunch {
             host_main,
             unsafe { libc::getuid() },
             LaunchIo::Interactive,
-        )
-    }
-    fn prepare_with_io(
-        child: &Command,
-        root: &Path,
-        host_main: Option<&Path>,
-        credential_owner: u32,
-        io: LaunchIo,
-    ) -> Result<Self> {
-        Self::prepare_with_codex_pin(
-            child,
-            root,
-            host_main,
-            credential_owner,
-            io,
             codex_auth::PROGRAM_SHA256,
         )
     }
-    fn prepare_with_codex_pin(
+    // trace:STORY-2593 | ai:codex — inject the binary pin while keeping
+    // ambient reads under their existing ExecContext ledger owner.
+    fn prepare_with_io(
         child: &Command,
         root: &Path,
         host_main: Option<&Path>,
@@ -924,12 +918,7 @@ impl PreparedLaunch {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
                         codex_auth::require_program(&program, codex_sha256)?;
-                        let auth = codex_auth::prepare(
-                            &codex_home,
-                            credential_owner,
-                            Some("codex-cli 0.166.0"),
-                            ttl,
-                        )?;
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }

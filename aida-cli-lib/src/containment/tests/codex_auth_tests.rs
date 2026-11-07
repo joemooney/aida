@@ -21,12 +21,7 @@ fn host_auth(home: &Path, exp: i64) -> serde_json::Value {
     value
 }
 fn prepare_auth(home: &Path, ttl: i64) -> Result<codex_auth::Credential> {
-    codex_auth::prepare(
-        home,
-        unsafe { libc::getuid() },
-        Some("codex-cli 0.166.0"),
-        ttl,
-    )
+    codex_auth::prepare(home, unsafe { libc::getuid() }, ttl)
 }
 fn error(home: &Path) -> String {
     match prepare_auth(home, 3600) {
@@ -94,16 +89,6 @@ fn story_2593_reduced_sealed_leaf_and_lifetime() {
         host_auth(home.path(), exp);
         assert!(error(home.path()).contains("relaunch"));
     }
-    host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
-    for version in [None, Some("codex-cli 0.166.1"), Some("0.166.0")] {
-        let error = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, version, 3600)
-            .err()
-            .expect("unsupported version admitted");
-        assert!(
-            error.to_string().contains("re-probe this codex version"),
-            "{error:#}"
-        );
-    }
 }
 #[test]
 fn story_2593_credential_identity_schema_and_redaction() {
@@ -111,13 +96,9 @@ fn story_2593_credential_identity_schema_and_redaction() {
     let path = home.path().join("auth.json");
     assert!(error(home.path()).contains("keyring"));
     host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
-    assert!(codex_auth::prepare(
-        home.path(),
-        unsafe { libc::getuid() }.wrapping_add(1),
-        Some("codex-cli 0.166.0"),
-        3600
-    )
-    .is_err());
+    assert!(
+        codex_auth::prepare(home.path(), unsafe { libc::getuid() }.wrapping_add(1), 3600).is_err()
+    );
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(error(home.path()).contains("permissions"));
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
@@ -510,7 +491,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     // points always use the recorded compatibility-probe digest.
     use sha2::{Digest, Sha256};
     let pin = format!("{:x}", Sha256::digest(std::fs::read(&program).unwrap()));
-    let plan = PreparedLaunch::prepare_with_codex_pin(
+    let plan = PreparedLaunch::prepare_with_io(
         &child,
         root.path(),
         None,

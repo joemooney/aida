@@ -83,14 +83,8 @@ fn claims(token: &str) -> Result<serde_json::Value> {
     serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("ChatGPT token claims invalid"))
 }
 
-pub(super) fn prepare(
-    home: &Path,
-    owner: u32,
-    version: Option<&str>,
-    ttl: i64,
-) -> Result<Credential> {
-    anyhow::ensure!(version == Some("codex-cli 0.166.0"),
-        "contained ChatGPT auth refused: re-probe this codex version (supported: codex-cli 0.166.0)");
+// Executable compatibility is enforced by require_program before this reader.
+pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
     let file = std::fs::OpenOptions::new().read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
         .open(home.join("auth.json"))
