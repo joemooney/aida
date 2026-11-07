@@ -466,6 +466,11 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
+Launch adapters and the shared grant issuer live under `aida-cli-lib/src/launch/`.
+Control children execute `/proc/self/exe` and forward selectors to that running image;
+requested routing roles belong in argv. See [launch architecture](OVERVIEW.md#agent-launch-migration).
+<!-- trace:STORY-2326 | ai:codex -->
+
 The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
 and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.

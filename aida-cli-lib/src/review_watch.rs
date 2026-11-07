@@ -2160,6 +2160,7 @@ pub(crate) fn run_with_program(
         eprintln!("review-watch: removed {swept} leaked probe ref(s)");
     }
     let mut children = Vec::<Dispatcher>::new();
+    let mut reported_trains = BTreeSet::new();
     loop {
         children.retain_mut(|d| match d.child.try_wait() {
             Ok(Some(status)) => {
@@ -2203,38 +2204,62 @@ pub(crate) fn run_with_program(
                 Ok(Some(cause)) => eprintln!("{key}: {cause}"),
                 Ok(None) => {}
                 Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
-                Err(error) if stops_watcher(&error, false) => return Err(error),
+                Err(error) if stops_watcher(&error) => return Err(error),
                 Err(error) => eprintln!("{key}: refused: {error:#}"),
             }
         }
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
-        for change in changes {
-            let key = change.key();
-            match watch_change(
-                &root,
-                &repo,
-                &store,
-                args,
-                &mut children,
-                &authors,
-                change,
-                program,
-            ) {
-                Ok(()) => {}
-                Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
-                Err(error) if stops_watcher(&error, args.once) => {
-                    return Err(error.context(format!("{key}: review watch refused")))
-                }
-                Err(error) => eprintln!("{key}: refused: {error:#}"),
-            }
-        }
+        watch_changes(
+            &store,
+            reviewable_changes(changes, &mut reported_trains),
+            |change| {
+                watch_change(
+                    &root,
+                    &repo,
+                    &store,
+                    args,
+                    &mut children,
+                    &authors,
+                    change,
+                    program,
+                )
+            },
+        )?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Train members were reviewed at their own heads. Exclude the landing PR
+// before probes, stale-author updates, reservations or reviewer spawning.
+// Keep diagnostics once per change for this watcher, across polling passes.
+// trace:BUG-2472 | ai:codex
+fn reviewable_changes(
+    changes: Vec<forge::Change>,
+    reported_trains: &mut BTreeSet<String>,
+) -> Vec<forge::Change> {
+    changes
+        .into_iter()
+        .filter(|change| {
+            if change
+                .head_branch
+                .as_deref()
+                .is_some_and(|branch| branch.starts_with(crate::pr_train::BRANCH_PREFIX))
+            {
+                let key = change.key();
+                if reported_trains.insert(key.clone()) {
+                    eprintln!("{key}: train PR: not reviewed");
+                }
+                false
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 // A transient synchronization refusal skips only this pass. `--once` retains
@@ -2255,11 +2280,46 @@ pub(crate) fn fixture_sync_pass(root: &Path, once: bool) -> Result<bool> {
     sync_pass(root, once)
 }
 
-/// Only whole-state failure stops a continuous watcher; one change's refusal
-/// must not stall every other change. `--once` reports any refusal.
-// trace:TASK-1993 | ai:claude
-fn stops_watcher(error: &anyhow::Error, once: bool) -> bool {
-    once || error.downcast_ref::<GlobalState>().is_some()
+/// Per-change refusals are durable diagnostics, never a reason to abandon the
+/// remaining changes in this pass (including `--once`).
+// trace:BUG-2471 | ai:codex
+fn watch_changes(
+    store: &Store,
+    changes: Vec<forge::Change>,
+    mut watch: impl FnMut(forge::Change) -> Result<()>,
+) -> Result<()> {
+    for change in changes {
+        let key = change.key();
+        match watch(change.clone()) {
+            Ok(()) => {}
+            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+            Err(error) if stops_watcher(&error) => {
+                return Err(error.context(format!("{key}: review watch refused")))
+            }
+            Err(error) => {
+                let reason = format!("refused: {error:#}");
+                eprintln!("{key}: {reason}");
+                // Diagnostic contention or per-change I/O must not stop the pass.
+                // Preserve only the whole-state failures tagged by store.load().
+                match retry_busy(|| record_skip(store, &change, Some(&reason))) {
+                    Ok(()) => {}
+                    Err(error) if is_busy(&error) => {
+                        eprintln!("{key}: could not record refusal: watcher admission is busy")
+                    }
+                    Err(error) if stops_watcher(&error) => return Err(error),
+                    Err(error) => eprintln!("{key}: could not record refusal: {error:#}"),
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Only whole-state failure stops the watcher; one change's refusal must not
+/// stall every other change.
+// trace:BUG-2471 | ai:codex
+fn stops_watcher(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<GlobalState>().is_some()
 }
 
 struct Dispatcher {

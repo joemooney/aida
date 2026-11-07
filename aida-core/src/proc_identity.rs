@@ -53,6 +53,20 @@ fn valid_boot_id(boot: &str) -> bool {
 }
 
 impl ProcIdentity {
+    /// Observe a currently live process in the reader's proven local coordinates.
+    /// This supplies identity evidence only, never cooperative holder admission.
+    // trace:TASK-3225 | ai:codex
+    pub fn capture(pid: u32) -> Result<Self, String> {
+        let view = LocalView::read()?;
+        let record = crate::process_probe::ProbeSource::system().capture(pid)?;
+        let id = Self::from_record(&record, Some(view.namespace))
+            .ok_or("incomplete process identity")?;
+        match observe(&id, true) {
+            Verdict::Alive => Ok(id),
+            verdict => Err(format!("process identity unavailable: {verdict:?}")),
+        }
+    }
+
     /// Read an existing exact record; never recapture today's process at an old PID.
     pub fn from_record(id: &ProcessIdentity, namespace: Option<u64>) -> Option<Self> {
         let (boot, ticks) = crate::process_probe::parse_start_identity(&id.start)?;

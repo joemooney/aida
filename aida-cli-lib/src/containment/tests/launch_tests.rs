@@ -1,5 +1,8 @@
 // trace:TASK-2707 | ai:codex
 use super::*;
+
+// trace:TASK-3225 | ai:codex — broker fixtures load the same fixed service definitions.
+const MUTATION: &str = store_mutation::SOURCE;
 #[test]
 fn task_2707_chatgpt_auth_named_refusal() {
     let home = tempfile::tempdir().unwrap();
@@ -551,7 +554,7 @@ print('seat_grant_valid=true expected_seat=true')
 fn task_2707_posture_without_receipt_refuses_unhandled_launch() {
     let mut cmd = Command::new("codex");
     cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    assert!(crate::codex_tool_env::prepare_launch(&mut cmd)
+    assert!(crate::launch::profile::finalize_codex(&mut cmd)
         .unwrap_err()
         .to_string()
         .contains("receipt-owning headless launch boundary"));
@@ -579,6 +582,36 @@ fn task_2707_no_deserialized_receipt_grants_applied_credit() {
             .unwrap_err()
             .to_string()
             .contains("not an approved outer-only vendor"));
+    }
+}
+
+// The wrapper must reject site-owned options before adding receipt-gated argv.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let runtime = Path::new("/private/agy-runtime");
+    let prompt = "--settings /host/settings.json --dangerously-skip-permissions";
+    let args = runtime_argv(&policy, runtime, &["-p".into(), prompt.into()]).unwrap();
+    assert_eq!(&args[args.len() - 2..], &["-p", prompt]);
+    assert_eq!(
+        args.iter()
+            .filter(|arg| arg.as_str() == "--settings")
+            .count(),
+        1
+    );
+    for original in [
+        vec![],
+        vec!["-p"],
+        vec!["--prompt", "text"],
+        vec!["--settings", "/host/settings.json", "-p", "text"],
+        vec!["-p", "text", "-dangerously-skip-permissions"],
+    ] {
+        let original = original.into_iter().map(String::from).collect::<Vec<_>>();
+        assert!(runtime_argv(&policy, runtime, &original)
+            .unwrap_err()
+            .to_string()
+            .contains("requires exactly -p <prompt>"));
     }
 }
 
@@ -634,7 +667,7 @@ fn task_2708_relocated_codex_home_and_sqlite_home_are_masked() {
     std::fs::create_dir_all(&sqlite).unwrap();
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap();
 
-    let masks = host_vendor_state_masks(&host, &relocated, Some(&sqlite));
+    let masks = host_vendor_state_masks(&host, &relocated, Some(&sqlite)).unwrap();
     assert_eq!(
         masks,
         vec![
@@ -645,7 +678,7 @@ fn task_2708_relocated_codex_home_and_sqlite_home_are_masked() {
         ]
     );
 
-    let default = host_vendor_state_masks(&host, &host.join(".codex"), None);
+    let default = host_vendor_state_masks(&host, &host.join(".codex"), None).unwrap();
     assert_eq!(
         default,
         vec![canon(&host.join(".codex")), canon(&host.join(".claude"))]
@@ -653,11 +686,14 @@ fn task_2708_relocated_codex_home_and_sqlite_home_are_masked() {
 
     let link = tmp.path().join("link-to-default");
     std::os::unix::fs::symlink(host.join(".codex"), &link).unwrap();
-    assert_eq!(host_vendor_state_masks(&host, &link, None), default);
+    assert_eq!(
+        host_vendor_state_masks(&host, &link, None).unwrap(),
+        default
+    );
 
     let missing = tmp.path().join("never-created");
     assert_eq!(
-        host_vendor_state_masks(&host, &missing, Some(&missing)),
+        host_vendor_state_masks(&host, &missing, Some(&missing)).unwrap(),
         default
     );
 }
@@ -1081,7 +1117,10 @@ fn task_2708_vendor_rows_are_data() {
     assert!(!codex.nested_userns);
     assert_eq!(codex.auth, VendorAuth::OpenAiApiKey);
     assert_eq!(codex.private_home_env, ["CODEX_HOME", "CODEX_SQLITE_HOME"]);
-    for other in ["agy", "opencode", "claude-wrapper", ""] {
+    let runtime = ContainedVendor::for_program(std::ffi::OsStr::new("agy")).unwrap();
+    assert_eq!(runtime.auth, VendorAuth::RuntimeCredentialsFile);
+    assert!(!runtime.nested_userns);
+    for other in ["opencode", "claude-wrapper", ""] {
         assert!(
             ContainedVendor::for_program(std::ffi::OsStr::new(other)).is_err(),
             "{other}"
@@ -1241,6 +1280,7 @@ fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
         receipt: None,
         acceptance: None,
         credentials,
+        mutation: None,
         _state: tempfile::tempdir().unwrap(),
     };
     let failed = Command::new("/bin/false").status().unwrap();
@@ -1633,7 +1673,7 @@ print('Claude prepare live mounts ok')
 #[test]
 fn task_2708_socket_ancestry_and_connect_deadline() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 with tempfile.TemporaryDirectory() as root:
@@ -1796,7 +1836,7 @@ print('blocking and large stream sends ok')
 #[test]
 fn task_2708_send_bounds_namespace_timeout_queue_and_cancellation() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 responses=[]
@@ -1963,7 +2003,7 @@ print('send bounds namespace timeout queue cancellation and kernel gate ok')
 #[test]
 fn task_2708_target_socket_old_kernel_thread_file_tables() {
     let code = format!(
-        "{COMMON}\n{LANE}\n{HOST}\n{}",
+        "{COMMON}\n{LANE}\n{MUTATION}\n{HOST}\n{}",
         r#"
 import tempfile
 leader=os.getpid()
@@ -2221,6 +2261,8 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
         relay_port: 8080,
         policy_sha: policy_sha.into(),
         keyring: "isolated_child_only".into(),
+        mutation_epoch: None,
+        mutation_ready: false,
     };
     assert_eq!(
         receipt_diagnostic(&receipt, policy_sha).unwrap(),
@@ -2229,6 +2271,255 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
             " policy_sha=0123456789abcdef0123456789abcdef01234567"
         )
     );
+}
+
+// No model calls or real credentials: exercise the shared filesystem inputs.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_private_runtime_pins_only_the_credential_leaf() {
+    use std::os::unix::fs::symlink;
+    let home = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let host = home.path().join(&policy.relative);
+    std::fs::create_dir_all(&host).unwrap();
+    std::fs::write(host.join("settings.json"), "host settings must not inherit").unwrap();
+    let token = host.join(&policy.credential);
+    std::fs::write(&token, "synthetic-credential").unwrap();
+    let mut profile = WriteProfile::new();
+    let runtime =
+        install_private_runtime(&mut profile, state.path(), home.path(), &policy).unwrap();
+    assert_eq!(runtime, host);
+    let source = state.path().join("vendor-runtime");
+    assert_eq!(std::fs::metadata(&source).unwrap().mode() & 0o777, 0o700);
+    assert_eq!(
+        std::fs::read_to_string(source.join("settings.json")).unwrap(),
+        "{}"
+    );
+    assert!(std::fs::read(source.join(&policy.credential))
+        .unwrap()
+        .is_empty());
+    bind_runtime_credential(&mut profile, &runtime, &token, &policy.credential, unsafe {
+        libc::getuid()
+    })
+    .unwrap();
+    assert!(profile.mounts[0].writable);
+    assert_eq!(profile.mounts[0].path, host);
+    assert!(!profile.mounts[1].writable);
+    assert_eq!(profile.mounts[1].path, token);
+    // Mount pins the original inode, even if the host replaces the pathname.
+    std::fs::rename(&token, host.join("old-token")).unwrap();
+    std::fs::write(&token, "replacement").unwrap();
+    let mut pinned = String::new();
+    profile.mounts[1]
+        .file
+        .try_clone()
+        .unwrap()
+        .read_to_string(&mut pinned)
+        .unwrap();
+    assert_eq!(pinned, "synthetic-credential");
+    std::fs::remove_file(&token).unwrap();
+    symlink(host.join("old-token"), &token).unwrap();
+    assert!(
+        bind_runtime_credential(&mut profile, &runtime, &token, &policy.credential, unsafe {
+            libc::getuid()
+        })
+        .is_err()
+    );
+    std::fs::remove_file(&token).unwrap();
+    std::fs::hard_link(host.join("old-token"), &token).unwrap();
+    assert!(
+        bind_runtime_credential(&mut profile, &runtime, &token, &policy.credential, unsafe {
+            libc::getuid()
+        })
+        .is_err()
+    );
+}
+
+// Inventory entries are requirements on policy, never grants or wildcard rules.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_runtime_policy_fails_closed_before_launch() {
+    let mut policy = crate::containment::runtime_policy("agy").unwrap();
+    assert!(policy
+        .require_auth_policy(&policy.auth_hosts)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    policy.auth_inventory_complete = true; // synthetic complete inventory only
+    assert!(policy
+        .require_auth_policy(&[])
+        .unwrap_err()
+        .to_string()
+        .contains("requires trusted"));
+    policy.require_auth_policy(&policy.auth_hosts).unwrap();
+    for bad in [
+        "*.googleapis.com",
+        "127.0.0.1",
+        "https://accounts.google.com",
+        "UPPER.com",
+        "",
+    ] {
+        policy.auth_hosts = vec![bad.into()];
+        assert!(policy.validate().is_err(), "{bad}");
+    }
+    policy = crate::containment::runtime_policy("agy").unwrap();
+    for bad in ["/private/escape", "../escape", "", ".gemini/../.aida"] {
+        policy.relative = bad.into();
+        assert!(policy.validate().is_err(), "{bad}");
+    }
+    policy = crate::containment::runtime_policy("agy").unwrap();
+    policy.raw_store_writes = true;
+    assert!(policy.validate().is_err());
+}
+
+// Uses the actual common process boundary with synthetic credentials, not AGY
+// execution or vendor conformance. It covers the nested runtime remount after
+// masking the host parent, which argv/mount-list assertions cannot validate.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_live_private_runtime_preserves_read_only_credential() {
+    if !live_available() {
+        return;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let runtime = home.path().join(&policy.relative);
+    std::fs::create_dir_all(&runtime).unwrap();
+    std::fs::write(runtime.join("settings.json"), "host-settings").unwrap();
+    std::fs::write(runtime.join("host-plugin"), "host-plugin").unwrap();
+    let token = runtime.join(&policy.credential);
+    std::fs::write(&token, "synthetic-credential").unwrap();
+    let runtime_json = serde_json::to_string(&runtime).unwrap();
+    let leaf_json = serde_json::to_string(&policy.credential).unwrap();
+    let script = format!(
+        r#"
+import pathlib,errno,subprocess,sys
+runtime=pathlib.Path({runtime_json})
+assert (runtime/'settings.json').read_text()=='{{}}'
+assert not (runtime/'host-plugin').exists()
+token=runtime/{leaf_json}
+assert token.read_text()=='synthetic-credential'
+try:
+    token.write_text('replace')
+    raise AssertionError('credential writable')
+except OSError as e:
+    assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS),e
+# An exec descendant uses the same runtime mount, with no native permission layer.
+subprocess.run([sys.executable,'-c',"import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('private')",str(runtime/'child-state')],check=True)
+assert (runtime/'child-state').read_text()=='private'
+"#
+    );
+    let mut plan = fixture(&script, "print('seat_grant_valid=true expected_seat=true')");
+    plan.profile.add(home.path(), false).unwrap();
+    let empty = plan._state.path().join("empty-runtime-parent");
+    std::fs::create_dir_all(empty.join("antigravity-cli")).unwrap();
+    plan.profile.add(&empty, false).unwrap();
+    plan.profile.mounts.last_mut().unwrap().path = home.path().join(".gemini");
+    install_private_runtime(&mut plan.profile, plan._state.path(), home.path(), &policy).unwrap();
+    bind_runtime_credential(
+        &mut plan.profile,
+        &runtime,
+        &token,
+        &policy.credential,
+        unsafe { libc::getuid() },
+    )
+    .unwrap();
+    let args: Vec<_> = plan.command.get_args().map(|a| a.to_os_string()).collect();
+    let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
+    cfg["bwrap"] = serde_json::json!(plan.profile.args(plan._state.path()));
+    let env = plan
+        .command
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.into(), v?.to_str()?.into())))
+        .collect();
+    let root = plan._state.path().to_path_buf();
+    let plan = PreparedLaunch::from_config(
+        plan.profile,
+        plan._state,
+        "synthetic-sha".into(),
+        cfg,
+        env,
+        &root,
+    )
+    .unwrap();
+    let mut run = plan.spawn(Stdio::inherit()).unwrap();
+    run.release().unwrap();
+    assert!(run.child.wait().unwrap().success());
+    assert!(!runtime.join("child-state").exists());
+    assert_eq!(
+        std::fs::read_to_string(&token).unwrap(),
+        "synthetic-credential"
+    );
+}
+
+// Masking is derived from descriptor data even for a different active vendor.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_runtime_descriptor_masks_host_state_for_every_vendor() {
+    let host = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    std::fs::create_dir_all(host.path().join(policy.relative)).unwrap();
+    let masks = host_vendor_state_masks(host.path(), &host.path().join("absent"), None).unwrap();
+    assert_eq!(
+        masks,
+        crate::containment::runtime_host_parents(host.path()).unwrap()
+    );
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_service_required_refuses_absent_and_empty_binding_before_setup() {
+    let root = tempfile::tempdir().unwrap();
+    for grant in [None, Some("")] {
+        let mut command = Command::new("codex");
+        command.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+        if let Some(grant) = grant {
+            command.env(crate::gate::seat_authority::GRANT_ENV, grant);
+        }
+        let error = match PreparedLaunch::prepare(&command, root.path(), None) {
+            Ok(_) => panic!("service admitted missing binding"),
+            Err(error) => error,
+        };
+        assert!(error
+            .to_string()
+            .contains("nonempty explicit grant binding"));
+    }
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_service_receipt_and_empty_worker_binding_refuse() {
+    let mut receipt: ContainmentReceipt = serde_json::from_value(serde_json::json!({
+        "version":1,"posture":"aida","worker_pid":123,"worker_start":"456",
+        "wrapper_pid":789,"namespaces":{},"uid_map_identity":true,"seat_preflight":true,
+        "broker":"seccomp_notify_addfd","relay_port":8080,"policy_sha":"test",
+        "keyring":"isolated_child_only"
+    }))
+    .unwrap();
+    assert!(validate_service_receipt(&receipt, None).is_ok());
+    let epoch = "11111111-1111-4111-8111-111111111111";
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_err());
+    receipt.mutation_epoch = Some(epoch.into());
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_err());
+    receipt.mutation_ready = true;
+    assert!(validate_service_receipt(&receipt, Some(epoch)).is_ok());
+    assert!(validate_service_receipt(&receipt, None).is_err());
+    assert!(validate_service_receipt(&receipt, Some("other")).is_err());
+    receipt.accepted = true;
+    let error =
+        crate::gate::seat_authority::bind_contained_launch_worker("", &receipt).unwrap_err();
+    assert!(error.to_string().contains("nonempty grant binding"));
+}
+
+// trace:TASK-3225 | ai:codex
+#[test]
+fn task_3225_required_service_refuses_unwrapped_launch() {
+    let mut child = Command::new("codex");
+    assert!(require_store_service_surface(&child, false).is_ok());
+    child.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+    assert!(require_store_service_surface(&child, false).is_err());
+    assert!(require_store_service_surface(&child, true).is_ok());
 }
 
 /// S1 exercises the coordinator builder and its actual spawn adapter. All

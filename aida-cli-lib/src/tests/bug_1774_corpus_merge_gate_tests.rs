@@ -169,6 +169,131 @@ fn a_conflicting_corpus_at_the_head_refuses() {
     assert!(message.contains("cannot be reconciled"), "{message}");
 }
 
+// trace:BUG-2474 | ai:codex
+fn dated_body(verdict: &str, sha: &str, reviewer: &str, at: &str) -> String {
+    let mut value: serde_json::Value =
+        serde_json::from_str(&body_by(verdict, sha, reviewer, None)).unwrap();
+    value["recorded_at"] = at.into();
+    value.to_string()
+}
+
+// The train and merge chokepoint share this decision with the hold view.
+// Key order, reader order and reviewer identity must not override chronology.
+// trace:BUG-2474 | ai:codex
+#[test]
+fn bug_2474_newest_same_head_verdict_decides_across_pr_and_spec_keys() {
+    use crate::gate::{merge_hold_core::corpus_merge_gate, review_verdict as rv};
+    const T1: &str = "2026-11-06T22:10:00Z";
+    const T2: &str = "2026-11-07T00:36:00Z";
+    const T3: &str = "2026-11-07T00:40:00Z";
+    for (blocked_key, approved_key) in [("STORY-2593", "PR-7"), ("PR-7", "STORY-2593")] {
+        for (blocked_at, approved_at, holds) in [(T1, T2, false), (T2, T1, true)] {
+            let mut bodies = vec![
+                keyed(
+                    blocked_key,
+                    dated_body("request-changes", HEAD, "reviewer-a", blocked_at),
+                ),
+                keyed(
+                    approved_key,
+                    dated_body("approved", HEAD, "reviewer-b", approved_at),
+                ),
+            ];
+            for _ in 0..2 {
+                assert_eq!(
+                    matches!(
+                        corpus_merge_gate(7, &bodies, Some(HEAD)),
+                        CorpusMergeGate::Refuse { .. }
+                    ),
+                    holds
+                );
+                let raw: Vec<_> = bodies.iter().map(|(_, b)| b.clone()).collect();
+                assert_eq!(
+                    rv::corpus_hold_at_head(&raw, Some(HEAD), false).is_some(),
+                    holds
+                );
+                assert_eq!(
+                    rv::reconcile_artifacts_for_sha(raw.iter().map(String::as_str), HEAD).unwrap(),
+                    Some(if holds {
+                        rv::VerdictKind::RequestChanges
+                    } else {
+                        rv::VerdictKind::Approved
+                    })
+                );
+                bodies.reverse();
+            }
+            // A subsequent refusal re-arms the hold after an approval.
+            bodies.push(keyed(
+                "TASK-10",
+                dated_body("request-changes", HEAD, "reviewer-c", T3),
+            ));
+            let (_, arm) = refusal_of(corpus_merge_gate(7, &bodies, Some(HEAD)));
+            assert!(arm.is_some());
+        }
+    }
+}
+
+// Timestamp ordering never lets stale-head approval or uncertain evidence
+// erase a refusal, and parses RFC3339 instants rather than sorting strings.
+// trace:BUG-2474 | ai:codex
+#[test]
+fn bug_2474_supersession_requires_ordered_same_head_evidence() {
+    use crate::gate::merge_hold_core::corpus_merge_gate;
+    let approval = dated_body("approved", HEAD, "reviewer-b", "2026-11-07T00:36:00Z");
+    for at in ["2026-11-07T00:36:00Z", "invalid", ""] {
+        let refusal = dated_body("request-changes", HEAD, "reviewer-a", at);
+        let (_, arm) = refusal_of(corpus_merge_gate(
+            7,
+            &[
+                keyed("STORY-2593", refusal),
+                keyed("PR-7", approval.clone()),
+            ],
+            Some(HEAD),
+        ));
+        assert!(
+            arm.is_none(),
+            "unordered opposing reviews remain an integrity refusal"
+        );
+    }
+    let refusal = dated_body(
+        "request-changes",
+        HEAD,
+        "reviewer-a",
+        "2026-11-06T22:10:00Z",
+    );
+    let stale = dated_body("approved", OLD, "reviewer-b", "2026-11-07T00:36:00Z");
+    assert!(refusal_of(corpus_merge_gate(
+        7,
+        &[keyed("STORY-2593", refusal), keyed("PR-7", stale)],
+        Some(HEAD)
+    ))
+    .1
+    .is_some());
+    let offset = dated_body(
+        "request-changes",
+        HEAD,
+        "reviewer-a",
+        "2026-11-06T23:10:00-02:00",
+    );
+    assert!(refusal_of(corpus_merge_gate(
+        7,
+        &[keyed("STORY-2593", offset), keyed("PR-7", approval.clone())],
+        Some(HEAD)
+    ))
+    .1
+    .is_some());
+    // Even superseded historical rounds must retain their required provenance.
+    let malformed = serde_json::json!({"verdict":"request-changes", "reviewed_sha":HEAD,
+        "recorded_at":"2026-11-06T22:10:00Z", "rounds":[{"verdict":"approved"}]})
+    .to_string();
+    assert!(refusal_of(corpus_merge_gate(
+        7,
+        &[keyed("STORY-2593", malformed), keyed("PR-7", approval)],
+        Some(HEAD)
+    ))
+    .1
+    .is_none());
+}
+
 // ── the enforcement wrapper (filesystem) ─────────────────────────────────────
 
 fn write_artifact(root: &std::path::Path, key: &str, body: &str) {

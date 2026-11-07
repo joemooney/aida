@@ -576,8 +576,11 @@ use `aida-deputy-shell submit N <file>` or stop it and restart with
 observe host processes from its PID namespace, it reports `runner: UNKNOWN
 (cannot see host processes from this sandbox)`. Unreadable process information
 also reports `UNKNOWN`; check from the host terminal before restarting a deputy.
+When native `submit` cannot verify a live runner and the status is `UNKNOWN`,
+it refuses with that reason and the same host-terminal guidance.
 <!-- trace:BUG-2468 | ai:codex -->
 <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex -->
 
 - **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../advanced/deputies.md#letting-a-sandboxed-advisor-submit).
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
@@ -709,6 +712,18 @@ reviewer seat. `--once` performs one discovery pass and leaves admitted reviews
 running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts one or two reviewers (default two).
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
+
+A refusal or setup failure for one change is reported against that change and
+leaves the watcher processing the other changes in the same pass, including
+with `--once`. The reason is visible in `aida awaiting`; observed pickup exits
+also retain their attempt diagnostic. Watch-level failures, such as an invalid
+grant or unusable shared state, still exit nonzero.
+<!-- trace:BUG-2471 | ai:codex -->
+
+Landing PRs with a `train/` head branch are excluded before review probes or
+reservations: their members are reviewed individually. The watcher logs
+`train PR: not reviewed` once per change during a watcher run.
+<!-- trace:BUG-2472 | ai:codex -->
 
 The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
 per-command timeouts; the watcher avoids unbounded version-detection probes.

@@ -194,6 +194,11 @@ display ID, never a friendly node alias.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+`auto-queue-review` refuses `train/` branches with a nonzero exit before forge
+or store access. Train members receive their own reviews; the landing PR must
+not get a reviewer story. The session-end backup also refuses to file one.
+<!-- trace:BUG-2472 | ai:codex -->
+
 **Post-merge cleanup.** The main merge lease covers check → merge → pull and
 is released before session cleanup, including when pull is skipped or fails.
 Session end, reap and merged-worktree pruning run sequentially in one cleanup
@@ -278,6 +283,14 @@ label without a local marker), and stale CI definitions before watching CI.
 It checks again before merging because the head and gates can change during
 the wait. The stale-check and stale-approval overrides apply in both phases;
 they do not bypass verdict reconciliation or holds.
+
+For one PR at one head, verdict reconciliation uses the newest timestamped
+verdict across its PR key and associated spec keys. A later approval can
+supersede an earlier request for changes at that same head; a later refusal
+holds it again. Opposing verdicts with tied, missing or invalid timestamps
+remain unresolved, and malformed retained evidence still refuses. Review
+authority and other merge-hold clearance requirements continue to apply.
+<!-- trace:BUG-2474 | ai:codex -->
 
 `aida pr ship [N] --wait [SECS]` bounds drive ownership, registration, and
 CI settlement with one deadline. Bare `--wait` uses 300 seconds. Omit `--wait` for an unbounded wait. Pending state is printed

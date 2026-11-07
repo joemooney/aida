@@ -653,7 +653,7 @@ pub(crate) fn resume_with(
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
-        return exec_or_spawn_agent(&mut cmd);
+        return crate::launch::spawn::exec_agent(&mut cmd);
     }
     exec_resume_command(&target, None, false)
 }
@@ -864,26 +864,6 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
     file.write_all(&bytes)
         .with_context(|| format!("writing {}", dest.display()))?;
     Ok(())
-}
-
-/// Replace this process with `cmd` (spawn + wait where exec is unavailable).
-// trace:BUG-2157 | ai:claude
-fn exec_or_spawn_agent(cmd: &mut std::process::Command) -> Result<()> {
-    // BUG-2386: a Codex resume execs through here too; name the real program.
-    let program = cmd.get_program().to_string_lossy().into_owned();
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = cmd.exec();
-        anyhow::bail!("failed to exec {program}: {}", err);
-    }
-    #[cfg(not(unix))]
-    {
-        let status = cmd
-            .status()
-            .with_context(|| format!("failed to spawn {program}"))?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
@@ -2043,7 +2023,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     contained: bool,
 ) -> Result<(std::process::ExitStatus, String)> {
     spawn_vendor_headless_forking(
-        host_main, vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
+        host_main, vendor, seat, prompt, session_id, log_path, tee_opts, contained, None, None,
     )
 }
 
@@ -2072,6 +2052,7 @@ pub(crate) fn spawn_codex_headless_fork(
         tee_opts,
         contained,
         Some(thread),
+        None,
     )
     .map(|(status, _)| status)
 }
@@ -2087,6 +2068,7 @@ fn spawn_vendor_headless_forking(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
     fork_thread: Option<&str>,
+    customize: Option<&dyn Fn(&mut std::process::Command)>,
 ) -> Result<(std::process::ExitStatus, String)> {
     use std::process::Stdio;
     // trace:BUG-2172 | ai:codex
@@ -2158,8 +2140,15 @@ fn spawn_vendor_headless_forking(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // Match the command customization boundary of run_vendor_headless_child.
+    // trace:TASK-3225 | ai:codex
+    if let Some(customize) = customize {
+        customize(&mut cmd);
+    }
+    // trace:TASK-3225 | ai:codex — refuse before issuing a grant or spawning natively.
+    crate::containment::launch::require_store_service_surface(&cmd, wrapper)?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
+    let child_grant = crate::launch::issue_launch_child(
         &headless_worktree_root(),
         seat.as_str(),
         &crate::current_user_id(None),
@@ -2187,7 +2176,7 @@ fn spawn_vendor_headless_forking(
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
     }
     if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&child_grant.id);
             return Err(error);
         }
@@ -2925,7 +2914,7 @@ pub fn exec_codex_session(
             cmd.env(key, value);
         }
     }
-    crate::codex_tool_env::prepare_launch(&mut cmd)?;
+    crate::launch::profile::finalize_codex(&mut cmd)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -3031,7 +3020,7 @@ pub fn exec_codex_resume(
 /// [`build_codex_resume_command`] exactly like a fresh interactive Codex
 /// launch ([`exec_codex_session`]): public child metadata, the seat the
 /// delegated grant names (unless the caller already set one), then
-/// [`crate::codex_tool_env::prepare_launch`]. Call last, after the caller's
+/// [`crate::launch::profile::finalize_codex`]. Call last, after the caller's
 /// cwd/seat customization and before any stdio or spawn/exec. A caller that
 /// issued the grant revokes it when this refuses.
 // trace:BUG-2386 | ai:claude
@@ -3060,7 +3049,7 @@ pub(crate) fn finalize_codex_resume(
     cmd.env("AIDA_USER", user)
         .env("AIDA_PROJECT_ROOT", project_root)
         .env("AIDA_AGENT_TYPE", "codex");
-    crate::codex_tool_env::prepare_launch(cmd)
+    crate::launch::profile::finalize_codex(cmd)
 }
 
 /// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
@@ -3282,7 +3271,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     // A contained reviewer's tool calls run in a sandbox, where only a
     // keyring-held key presents its grant: refuse before the review is spent.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let grant = crate::gate::seat_authority::issue_launch_child(
+    let grant = crate::launch::issue_launch_child(
         project_root,
         "reviewer",
         &crate::current_user_id(None),
@@ -3307,7 +3296,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if plan.vendor == HeadlessVendor::Codex {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", project_root);
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&grant.id);
             return Err(error);
         }
@@ -3868,8 +3857,8 @@ pub(crate) fn preflight_vendor_binary(vendor: HeadlessVendor) -> Result<()> {
 /// already calls before mutating state closes it for every reviewer AND
 /// implementer entry point at once.
 ///
-/// A headless (`interactive = false`) launch supports Agy — only the
-/// binary check applies.
+/// AGY headless admission also checks the pending all-tool evidence before
+/// callers create state; the historical bypass argv cannot launch directly.
 // trace:BUG-1607 | ai:claude
 pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool) -> Result<()> {
     if interactive && vendor == HeadlessVendor::Agy {
@@ -3878,6 +3867,10 @@ pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool)
              `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor \
              codex`, or use `--no-launch`."
         );
+    }
+    // trace:TASK-3048 | ai:codex
+    if vendor == HeadlessVendor::Agy {
+        crate::launch::agy::AGY.require_conformance()?;
     }
     preflight_vendor_binary(vendor)
 }
@@ -6549,7 +6542,7 @@ pub(crate) fn finalize_coordinator_launch(
     }
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", project_root);
-    crate::codex_tool_env::prepare_launch(cmd)
+    crate::launch::profile::finalize_codex(cmd)
 }
 
 /// Finalize, then wait on a coordinator `cmd`, releasing the child handle
@@ -7331,6 +7324,8 @@ fn run_vendor_headless_child(
     if let Some(customize) = hooks.customize {
         customize(&mut child_cmd);
     }
+    // trace:TASK-3225 | ai:codex — an explicit requirement cannot downgrade to native.
+    crate::containment::launch::require_store_service_surface(&child_cmd, wrapper)?;
     // BUG-050: name the lane's processes, so its launcher finds the build it
     // left running (standalone and drain alike).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
@@ -7348,7 +7343,7 @@ fn run_vendor_headless_child(
     if vendor == HeadlessVendor::Codex
         && containment_posture(vendor, contained)? != ContainmentPosture::Aida
     {
-        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
+        crate::launch::profile::finalize_codex(&mut child_cmd)?;
     }
     // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
     // broker and proxy until the wrapper is reaped. No model before receipt.
@@ -8165,12 +8160,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     }
     // A contained resume is sandboxed like a fresh launch: refuse a grant
     // its tool calls could not present. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
-        cwd,
-        seat,
-        &crate::current_user_id(None),
-        contained,
-    )?;
+    let child_grant =
+        crate::launch::issue_launch_child(cwd, seat, &crate::current_user_id(None), contained)?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
         .args(args)
@@ -8313,7 +8304,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
             target.resume_id,
         )?,
     )?;
-    let child_grant = crate::gate::seat_authority::issue_launch_child(
+    let child_grant = crate::launch::issue_launch_child(
         cwd,
         seat,
         &crate::current_user_id(None),
@@ -8339,7 +8330,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     // live child grant. trace:BUG-2386 | ai:claude
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", headless_worktree_root());
-    if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+    if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
         tee.stop();
         revoke_headless_child_grant(&child_grant.id);
         return Err(error);
@@ -9738,7 +9729,7 @@ fn exec_resume_command(
         // BUG-2386: exec `codex resume <id>` rather than printing it. The
         // resume is native (no bypass): a resume never widens the posture a
         // fresh `aida session new` would need consent for.
-        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(
+        "codex" => crate::launch::spawn::exec_agent(&mut codex_session_resume_command(
             host_main.as_deref(),
             target,
             contained,
@@ -9855,7 +9846,7 @@ pub fn exec_claude_resume(
 ) -> Result<()> {
     let mut cmd =
         build_claude_resume_exec_command(host_main, id, permission_mode, contained, grant_id)?;
-    exec_or_spawn_agent(&mut cmd)
+    crate::launch::spawn::exec_agent(&mut cmd)
 }
 
 /// TASK-2031: the tree a contained `aida session resume` is bounded to: the
@@ -12350,8 +12341,8 @@ mod tests {
     /// that arrives after state was already mutated. Prove the fix two ways:
     /// (1) an interactive Agy launch refuses EVEN WHEN the binary is
     /// reachable — vendor support is checked, not just presence; (2) the
-    /// SAME resolved vendor, launched headlessly, still succeeds — the fix
-    /// must not regress AGY's real (headless) support.
+    /// SAME resolved vendor, launched headlessly, now refuses on the separate
+    /// all-tool admission gate before callers can create state.
     // trace:BUG-1607 | ai:claude
     #[test]
     fn preflight_launch_vendor_refuses_interactive_agy_even_when_binary_reachable() {
@@ -12375,11 +12366,10 @@ mod tests {
         assert!(msg.contains("--vendor claude"), "{msg}");
         assert!(msg.contains("--vendor codex"), "{msg}");
 
-        // A headless launch of the SAME resolved vendor is unaffected — the
-        // fix narrows the gap, it doesn't remove Agy's real (headless)
-        // support.
-        preflight_launch_vendor(HeadlessVendor::Agy, false)
-            .expect("headless Agy launches remain supported");
+        // trace:TASK-3048 | ai:codex
+        let error = preflight_launch_vendor(HeadlessVendor::Agy, false)
+            .expect_err("legacy headless bypass must refuse before state creation");
+        assert!(error.to_string().contains("fresh all-tool conformance"));
     }
 
     /// BUG-1607: vendor support is checked BEFORE binary reachability, so an
@@ -14155,7 +14145,7 @@ mod tests {
                     ("AIDA_CONTAINED", None),
                 ],
             );
-            let status = spawn_vendor_headless_with_seat(
+            let result = spawn_vendor_headless_with_seat(
                 vendor,
                 aida_core::agents_config::AgentSeat::Implementer,
                 "prompt",
@@ -14163,8 +14153,15 @@ mod tests {
                 &log_path,
                 &tee_opts,
                 false,
-            )
-            .unwrap();
+            );
+            // trace:TASK-3048 | ai:codex
+            if vendor == HeadlessVendor::Agy {
+                let error = result.expect_err("unreceipted AGY bypass must refuse");
+                assert!(format!("{error:#}").contains("applied AIDA ContainmentReceipt"));
+                assert!(!env_out.exists());
+                continue;
+            }
+            let status = result.unwrap();
             assert!(status.success(), "{vendor:?}: {status}");
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
@@ -14519,10 +14516,17 @@ mod tests {
                 ("reviewer", child),
                 ("implementer", ""),
             ] {
-                let cmd = build_exec_vendor_headless_command(
+                let result = build_exec_vendor_headless_command(
                     None, vendor, "prompt", "sid", false, None, None, seat, grant,
-                )
-                .unwrap();
+                );
+                // trace:TASK-3048 | ai:codex
+                if vendor == HeadlessVendor::Agy {
+                    let error =
+                        result.expect_err("AGY bypass requires the receipt-bearing wrapper");
+                    assert!(format!("{error:#}").contains("applied AIDA ContainmentReceipt"));
+                    continue;
+                }
+                let cmd = result.unwrap();
                 let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
                 let get = |k: &str| envs.get(std::ffi::OsStr::new(k)).copied();
                 assert_eq!(
@@ -14687,6 +14691,63 @@ mod tests {
             std::fs::read_to_string(&resume_log).unwrap().trim(),
             "HV=claude 9.9.9"
         );
+    }
+
+    // trace:TASK-3225 | ai:codex
+    #[test]
+    fn task_3225_forking_session_refuses_required_service_before_native_spawn() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let marker = root.path().join("vendor-ran");
+        let vendor = root.path().join("fake-vendor");
+        crate::test_exec::write_executable(
+            &vendor,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_CONTAINED", None),
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_AGENT_CMD", vendor.to_str()),
+            ],
+        );
+        std::env::set_current_dir(root.path()).unwrap();
+        let tee = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+        for fork in [None, Some("existing-thread")] {
+            let result = spawn_vendor_headless_forking(
+                None,
+                HeadlessVendor::Codex,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &root.path().join("spawn.log"),
+                &tee,
+                false,
+                fork,
+                Some(&|cmd| {
+                    cmd.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+                }),
+            );
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("required store service is unavailable"),
+                "fresh and forked session launches must refuse before native execution"
+            );
+            assert!(
+                !marker.exists(),
+                "vendor must not run on a required-service refusal"
+            );
+        }
     }
 
     /// TASK-2066: every seat's child is labelled from its own vendor and
@@ -14868,13 +14929,9 @@ mod tests {
             "implementer",
             "",
         )
-        .unwrap();
-        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd_agy.get_envs().collect();
-        assert!(
-            envs.iter()
-                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
-            "uncontained Agy exec headless must strip AIDA_CONTAINED: {envs:?}"
-        );
+        .expect_err("uncontained AGY bypass requires a receipt too");
+        // trace:TASK-3048 | ai:codex
+        assert!(format!("{cmd_agy:#}").contains("applied AIDA ContainmentReceipt"));
     }
     // trace:STORY-1843 | ai:codex
     #[test]
