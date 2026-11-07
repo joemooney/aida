@@ -164,6 +164,56 @@ fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
     }
 }
 
+// trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
+#[test]
+fn submit_preserves_unknown_runner_reasons_without_queueing() {
+    let f = Fixture::new("t");
+    let file = f.root().join("job.sh");
+    std::fs::write(&file, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    for status in [
+        RunnerStatus::Unknown("cannot see host processes from this sandbox"),
+        RunnerStatus::Unknown("cannot read runner process information"),
+        RunnerStatus::Unknown("invalid runner.json"),
+        RunnerStatus::NotRunning,
+    ] {
+        let unknown_reason = match &status {
+            RunnerStatus::Unknown(why) => Some(*why),
+            _ => None,
+        };
+        let mut out = Vec::new();
+        let err = crate::deputy_shell_cmd::submit_with_runner_status(
+            &f.q,
+            &args,
+            submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+            &["advisor".into()],
+            &mut out,
+            || status,
+        )
+        .unwrap_err()
+        .to_string();
+        if let Some(why) = unknown_reason {
+            assert!(err.contains(&format!("UNKNOWN ({why})")), "{err}");
+            assert!(err.contains("check from the host terminal"), "{err}");
+            assert!(!err.contains("no script deputy"), "{err}");
+        } else {
+            assert!(err.contains("no script deputy"), "{err}");
+            assert!(err.contains("aida deputy shell run --name t"), "{err}");
+            assert!(!err.contains("UNKNOWN"), "{err}");
+        }
+        assert!(out.is_empty());
+        assert!(f.q.queued_ids().is_empty());
+        assert!(f.q.job_ids().is_empty());
+        assert!(!f.q.socket_path().exists());
+    }
+}
+
 // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
 #[test]
 fn legacy_runner_bare_names_do_not_match_other_verbs_or_invalid_start_names() {
@@ -2014,6 +2064,7 @@ fn a_file_dropped_where_submitters_used_to_write_is_never_claimed() {
 }
 
 // trace:STORY-2343 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
 #[cfg(unix)]
 #[test]
 fn submit_without_a_live_runner_says_to_start_one_and_names_the_sandbox_opt_in() {
@@ -2027,12 +2078,13 @@ fn submit_without_a_live_runner_says_to_start_one_and_names_the_sandbox_opt_in()
         spec: None,
         wait: false,
     };
-    let err = crate::deputy_shell_cmd::submit(
+    let err = crate::deputy_shell_cmd::submit_with_runner_status(
         &f.q,
         &args,
         submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
         &["advisor".into()],
         &mut Vec::new(),
+        || RunnerStatus::NotRunning,
     )
     .unwrap_err()
     .to_string();
