@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-07T23:40:23.786364333Z
+modified_at: 2026-11-07T23:51:59.631224972Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -18,6 +18,14 @@ relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T23:40:30.726736777Z
+comments:
+- id: 01a1b86d-178f-7441-b6f6-91d6ac57ed71
+  author: joe
+  content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: add acceptance (0): first move mcp::mcp_claim_path (used by session_end.rs:2129,2602) and mcp::tool_descriptors (used by mcp_cmd.rs:79) below the new crate boundary, so nothing in aida-cli-lib depends on aida-mcp.'
+  created_at: 2026-11-07T23:51:59.631224972Z
+  modified_at: 2026-11-07T23:51:59.631224972Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
