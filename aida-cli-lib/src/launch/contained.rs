@@ -22,7 +22,7 @@ pub(crate) mod pty;
 mod store_mutation;
 
 #[path = "codex_auth.rs"]
-mod codex_auth;
+pub(crate) mod codex_auth;
 
 // trace:TASK-3219 | ai:codex
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -970,7 +970,7 @@ impl PreparedLaunch {
             .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
-        let ttl = if grant.is_empty() {
+        let mut ttl = if grant.is_empty() {
             0
         } else {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
@@ -987,7 +987,36 @@ impl PreparedLaunch {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
                         codex_auth::require_program(&program, codex_sha256)?;
-                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
+                        // trace:BUG-2486 | ai:codex — pinned trusted policy only.
+                        let floor = policy
+                            .get("contained")
+                            .and_then(|c| c.get(crate::vendors::codex_auth_hints::MIN_GRANT_KEY))
+                            .map(|v| {
+                                v.as_integer()
+                                    .filter(|n| *n > 0)
+                                    .context(crate::vendors::codex_auth_hints::MIN_GRANT_INVALID)
+                            })
+                            .transpose()?
+                            .unwrap_or(codex_auth::DEFAULT_MIN_GRANT_SECS);
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
+                        if !grant.is_empty() {
+                            crate::gate::seat_authority::cap_launch_child_expiry(
+                                &grant,
+                                auth.expires_at.saturating_sub(300),
+                            )?;
+                        }
+                        let effective =
+                            auth.deadline.saturating_sub(chrono::Utc::now().timestamp());
+                        eprintln!(
+                            "{}",
+                            crate::vendors::codex_auth_hints::launch_lifetime(
+                                ttl,
+                                effective,
+                                auth.deadline,
+                                auth.expires_at
+                            )
+                        );
+                        ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }

@@ -772,3 +772,14 @@ This does not establish actual vendor authentication, grants, Git/store/cache
 integration or network/Unix-socket policy for arbitrary programs. No ordinary
 vendor can select the partial backend.
 <!-- trace:TASK-2705 | ai:codex -->
+
+### Contained Codex credential lifetime
+
+<!-- trace:BUG-2486 | ai:codex -->
+Contained Codex file-based ChatGPT launches shorten the delegated child grant to
+access-token expiry minus 300 seconds when necessary. The parent grant is unchanged.
+Launch diagnostics report requested and effective seconds and token expiry.
+Trusted default-branch `[contained] codex_min_grant_secs = 1800` sets the minimum
+usable launch lifetime (positive integer seconds, default 30 minutes). A shorter
+usable lifetime refuses with token expiry and host `codex login` guidance.
+`aida doctor` reports remaining token life without refreshing or exposing tokens.

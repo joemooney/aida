@@ -340,3 +340,6 @@ mod tests {
 }
 
 pub(crate) mod headless;
+
+// trace:BUG-2486 | ai:codex
+pub(crate) mod codex_auth_hints;

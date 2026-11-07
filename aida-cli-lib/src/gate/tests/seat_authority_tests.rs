@@ -625,3 +625,48 @@ fn session_grant_expiry_reads_the_record_and_its_parent() {
         );
     }
 }
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    let parent = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    let parent_before = std::fs::read(grant_path(&parent).unwrap()).unwrap();
+    let mut child = read_grant(&parent).unwrap();
+    child.id = Uuid::new_v4().to_string();
+    child.parent_grant_id = Some(parent.clone());
+    write_grant(&child).unwrap();
+    let before = std::fs::read(grant_path(&child.id).unwrap()).unwrap();
+    // Ample token lifetime makes no write, retaining fractional grant expiry.
+    cap_launch_child_expiry(&child.id, child.expires_at.timestamp() + 3600).unwrap();
+    assert_eq!(
+        std::fs::read(grant_path(&child.id).unwrap()).unwrap(),
+        before
+    );
+    let deadline = (Utc::now() + Duration::hours(2)).timestamp();
+    cap_launch_child_expiry(&child.id, deadline).unwrap();
+    let capped = read_grant(&child.id).unwrap();
+    assert_eq!(capped.expires_at.timestamp(), deadline);
+    assert_eq!(capped.binding, child.binding);
+    assert_eq!(capped.parent_grant_id, child.parent_grant_id);
+    assert_eq!(
+        std::fs::read(grant_path(&parent).unwrap()).unwrap(),
+        parent_before
+    );
+    assert!(cap_launch_child_expiry(&parent, deadline).is_err());
+    let mut revoked = capped;
+    revoked.revoked_at = Some(Utc::now());
+    write_grant(&revoked).unwrap();
+    let before = std::fs::read(grant_path(&child.id).unwrap()).unwrap();
+    assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
+    assert_eq!(
+        std::fs::read(grant_path(&child.id).unwrap()).unwrap(),
+        before
+    );
+    revoked.revoked_at = None;
+    revoked.binding.clear();
+    write_grant(&revoked).unwrap();
+    assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
+}
