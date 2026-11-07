@@ -67,6 +67,38 @@ impl ProcIdentity {
         }
     }
 
+    /// Capture a retained child, including its unreaped exited state. The Child
+    /// must not have been waited on: its zombie pins the PID until the caller
+    /// records the receipt. This is observation, never holder admission.
+    // trace:TASK-3365 | ai:codex
+    pub fn capture_child(child: &std::process::Child) -> Result<Self, String> {
+        let view = LocalView::read()?;
+        let pid = child.id();
+        let root = Path::new("/proc");
+        let boot = boot_id(root)?;
+        let StatRead::Found {
+            start_ticks, ppid, ..
+        } = read_stat(root, pid)?
+        else {
+            return Err("retained child is absent".into());
+        };
+        if ppid != std::process::id() {
+            return Err("process is not our retained child".into());
+        }
+        let id = Self::from_record(
+            &ProcessIdentity {
+                pid,
+                start: format!("linux:{boot}:{start_ticks}"),
+            },
+            Some(view.namespace),
+        )
+        .ok_or("incomplete child identity")?;
+        match observe(&id, true) {
+            Verdict::Alive | Verdict::Dead(DeadReason::Exited) => Ok(id),
+            verdict => Err(format!("child identity unavailable: {verdict:?}")),
+        }
+    }
+
     /// Read an existing exact record; never recapture today's process at an old PID.
     pub fn from_record(id: &ProcessIdentity, namespace: Option<u64>) -> Option<Self> {
         let (boot, ticks) = crate::process_probe::parse_start_identity(&id.start)?;

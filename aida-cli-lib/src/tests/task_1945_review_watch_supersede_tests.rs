@@ -3,6 +3,7 @@
 // trace:TASK-1945 | ai:claude
 use super::signal::{self, Signal};
 use super::*;
+use crate::process_retry::RetryEtxtbsy;
 use std::os::unix::process::CommandExt;
 use std::time::{Duration, Instant};
 
@@ -60,7 +61,7 @@ impl Group {
             .current_dir(dir.path())
             .stdin(Stdio::null())
             .process_group(0)
-            .spawn()
+            .spawn_retrying_etxtbsy()
             .unwrap();
         let pgid = child.id();
         signal::allow_test_group(pgid);
@@ -769,4 +770,130 @@ fn bug_2425_identity_equality_ignores_recorded_at() {
     let mut other_process = second.clone();
     other_process.pid ^= 1;
     assert_ne!(first, other_process);
+}
+
+// trace:TASK-3365 | ai:codex
+#[test]
+fn task_3365_watch_shared_identity_reuse_and_missing_evidence() {
+    use aida_core::proc_identity::{DeadReason, Verdict};
+    let current = Identity::current().unwrap();
+    assert_eq!(current.verdict(), Verdict::Alive);
+    let mut reused = current.clone();
+    reused.start = format!(
+        "linux-starttime:{}",
+        current.process_identity().unwrap().starttime + 1
+    );
+    assert_eq!(reused.verdict(), Verdict::Dead(DeadReason::Reused));
+    assert!(!reused.alive());
+    let mut incomplete = current.clone();
+    incomplete.start = "malformed".into();
+    assert!(matches!(incomplete.verdict(), Verdict::ForeignUnknown(_)));
+    assert!(
+        incomplete.alive(),
+        "unreadable identity must retain capacity"
+    );
+    let mut legacy = current.clone();
+    legacy.pid_namespace = None;
+    legacy.recorded_at = None;
+    assert!(matches!(legacy.verdict(), Verdict::ForeignUnknown(_)));
+    assert!(legacy.alive());
+    let encoded = serde_json::to_string(&current).unwrap();
+    assert_eq!(serde_json::from_str::<Identity>(&encoded).unwrap(), current);
+}
+
+// trace:TASK-3365 | ai:codex
+#[test]
+fn task_3365_legacy_capacity_uses_existing_reboot_and_ttl_backstop() {
+    let mut child = Command::new("/bin/true").spawn().unwrap();
+    let mut legacy = Identity::current().unwrap();
+    legacy.pid = child.id();
+    child.wait().unwrap();
+    legacy.pid_namespace = None;
+    legacy.recorded_at =
+        Some(chrono::Utc::now() - FOREIGN_IDENTITY_TTL - chrono::Duration::seconds(1));
+    assert!(
+        !legacy.alive(),
+        "dead legacy receipt must expire by existing TTL"
+    );
+    legacy.recorded_at = None;
+    legacy.boot = "11111111-1111-4111-8111-111111111111".into();
+    assert!(
+        !legacy.alive(),
+        "reboot frees even an undated legacy receipt"
+    );
+    legacy.boot = boot_id().unwrap();
+    legacy.start = "unparseable".into();
+    legacy.recorded_at =
+        Some(chrono::Utc::now() - FOREIGN_IDENTITY_TTL - chrono::Duration::seconds(1));
+    assert!(
+        !legacy.alive(),
+        "malformed start evidence also uses the backstop"
+    );
+}
+
+// trace:TASK-3365 | ai:codex
+#[test]
+fn task_3365_caller_capture_refusal_is_recoverable() {
+    for why in [
+        "masked process view",
+        "unverified procfs mount",
+        "procfs uses ancestor coordinates",
+        "hidepid",
+    ] {
+        let diagnostic = Identity::current_from(Err(why.into()))
+            .unwrap_err()
+            .to_string();
+        assert!(diagnostic.contains(why));
+        assert!(diagnostic.contains("retry from a host"));
+        assert!(diagnostic.contains("existing reservations remain held"));
+    }
+}
+
+// An orphan remains in the review's group, but adoption by a subreaper
+// outside the recorded tree supplies no signal authority.
+// trace:TASK-3365 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3365_subreaper_adoption_does_not_prove_group_ancestry() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // SAFETY: this exact-test child alone changes its own subreaper state.
+    assert_eq!(
+        unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) },
+        0
+    );
+    let mut group = Group::spawn(
+        "sleep 60 & echo $! > orphan; while [ ! -f release ]; do sleep 0.01; done",
+        &["orphan"],
+    );
+    let anchor = group.identity("dispatcher");
+    let orphan = group.pid("orphan").unwrap();
+    std::fs::write(group.dir.path().join("release"), "go").unwrap();
+    group.child.wait().unwrap();
+    until("orphan adopted by subreaper", || {
+        std::fs::read_to_string(format!("/proc/{orphan}/status")).is_ok_and(|s| {
+            s.lines().any(|line| {
+                line.strip_prefix("PPid:")
+                    .is_some_and(|p| p.trim() == std::process::id().to_string())
+            })
+        })
+    });
+    let held = signal::signal_attempt(
+        &[&anchor],
+        Some(group.pgid),
+        Some(&anchor),
+        Some(Signal::Kill),
+    );
+    assert!(
+        held.iter().any(|s| s.contains("cannot be proved ours")),
+        "{held:?}"
+    );
+    assert!(running_pid(orphan), "adopted group member was signalled");
+    group.kill_all();
+    // SAFETY: reap only the adopted fixture child, after the guarded kill.
+    assert_eq!(
+        unsafe { libc::waitpid(orphan as i32, std::ptr::null_mut(), 0) },
+        orphan as i32
+    );
 }
