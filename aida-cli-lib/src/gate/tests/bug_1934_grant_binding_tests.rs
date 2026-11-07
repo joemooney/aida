@@ -638,3 +638,30 @@ fn revoke_removes_the_grant_lock_and_sweeps_stale_ones() {
     );
     assert!(lock(&live).exists(), "a live grant's lock stays");
 }
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_binding_input_keeps_token_transport_and_refuses_absence() {
+    let pid = std::process::id();
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid).unwrap();
+    let target = probe_bind_target(pid).expect("verified local process metadata");
+    let start = format!("linux-starttime:{}", identity.starttime);
+    assert_eq!(target.entry.start.as_deref(), Some(start.as_str()));
+    assert_eq!(
+        pid_binding_token(pid),
+        Some(crate::gate::review_authority::author_process_token(
+            "proc",
+            pid,
+            Some(&start)
+        ))
+    );
+    assert!(probe_bind_target(i32::MAX as u32).is_none());
+    assert!(pid_binding_token(i32::MAX as u32).is_none());
+    let mut replaced = identity;
+    replaced.starttime += 1;
+    assert_ne!(
+        aida_core::proc_identity::observe(&replaced, true),
+        aida_core::proc_identity::Verdict::Alive
+    );
+}

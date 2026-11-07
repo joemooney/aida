@@ -48,6 +48,27 @@ pub struct ObserverFacts<'a> {
     pub complete_procfs: bool,
 }
 
+/// Registry wire-version boundary. Older mail readers compare the persisted
+/// ID verbatim with the filename and refuse this prefix, including session-ID
+/// selection paths that did not inspect process evidence. In-memory IDs and
+/// filenames remain stable; legacy unprefixed rows remain readable as unknown.
+// trace:TASK-3366 | ai:codex
+pub fn registry_wire_id(id: &str) -> String {
+    format!("proc-identity-v1:{id}")
+}
+pub fn deserialize_registry_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<String, D::Error> {
+    let id = String::deserialize(deserializer)?;
+    if let Some(id) = id.strip_prefix("proc-identity-v1:") {
+        return Ok(id.to_owned());
+    }
+    // Preserve unsupported versions verbatim: strict filename checks refuse
+    // them, while registry retention readers must keep an unknown row rather
+    // than silently dropping it as a parse failure.
+    Ok(id)
+}
+
 fn valid_boot_id(boot: &str) -> bool {
     uuid::Uuid::parse_str(boot).is_ok_and(|id| id.hyphenated().to_string() == boot)
 }
@@ -112,6 +133,18 @@ impl ProcIdentity {
             pid: id.pid,
             starttime: ticks,
         })
+    }
+
+    /// Decode an existing registry record without probing or upgrading its PID.
+    // trace:TASK-3366 | ai:codex
+    pub fn from_registry(pid: u32, start: Option<&str>, namespace: Option<u64>) -> Option<Self> {
+        Self::from_record(
+            &ProcessIdentity {
+                pid,
+                start: start?.to_owned(),
+            },
+            namespace,
+        )
     }
 
     pub fn legacy(&self) -> ProcessIdentity {

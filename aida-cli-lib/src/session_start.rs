@@ -3321,10 +3321,12 @@ pub(crate) fn session_start_with_receipt(
     let (creator_pid, creator_pid_start_time, active_pid, active_pid_start_time) =
         if let Some(ref agent) = session_agent {
             let pid = agent.pid;
+            // Registry v1 identity is boot-qualified; leases retain their
+            // existing raw-tick transport plus separate HolderRecord.
+            // trace:TASK-3366 | ai:codex
             let start = agent
-                .pid_start
-                .clone()
-                .or_else(|| process_probe::process_start_identity(pid));
+                .process_identity()
+                .map(|id| format!("linux-starttime:{}", id.starttime));
             (Some(pid), start.clone(), Some(pid), start)
         } else {
             let creator_pid = creator_shell_pid();

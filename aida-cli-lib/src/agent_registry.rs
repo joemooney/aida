@@ -19,6 +19,7 @@ use crate::process_retry::RetryEtxtbsy;
 #[cfg(test)]
 use aida_core::pid_observer::PidNamespaceProbe;
 pub(crate) use aida_core::pid_observer::PidObserver;
+use aida_core::proc_identity::{self, ProcIdentity, Verdict};
 use std::path::{Path, PathBuf};
 
 use aida_core::liveness::ProcTree;
@@ -83,12 +84,13 @@ impl PauseReason {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct AgentRegistryEntry {
+    #[serde(deserialize_with = "proc_identity::deserialize_registry_id")]
     pub(crate) id: String,
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
     /// Kernel start time of `pid`, so a recycled pid does not read as the
     /// live agent. Missing on entries written by older binaries; liveness
-    /// then degrades to a bare pid probe.
+    /// then remains unknown until the session registers again.
     // trace:TASK-1750 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pid_start: Option<String>,
@@ -292,7 +294,7 @@ fn update_mail_wake_on_row(
         std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let mut row: AgentRegistryEntry =
         toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
-    if row.pid != entry.pid || row.pid_start != entry.pid_start {
+    if !same_registry_process(&row, entry) {
         anyhow::bail!("the registry row now belongs to another process");
     }
     if let Some(state) = decide(row.mail_wake) {
@@ -313,9 +315,7 @@ pub(crate) fn carry_concurrent_launcher_write(
     read: Option<&AgentRegistryEntry>,
     disk: Option<&AgentRegistryEntry>,
 ) {
-    let Some(disk) = disk
-        .filter(|d| d.pid == entry.pid && d.pid_start.is_some() && d.pid_start == entry.pid_start)
-    else {
+    let Some(disk) = disk.filter(|d| same_registry_process(d, entry)) else {
         return;
     };
     // Only the launcher stamps the wake and only arming moves it on; the
@@ -730,6 +730,7 @@ fn find_launcher_ancestor_entry(
 ) -> Option<(PathBuf, AgentRegistryEntry)> {
     load_entries(project_root).into_iter().find(|(_, entry)| {
         entry.source == "agent-launcher"
+            && entry_process_verdict(entry) == Verdict::Alive
             && registry_entry_is_live(project_root, entry)
             && pid_has_ancestor(child_pid, entry.pid)
     })
@@ -751,18 +752,19 @@ pub(crate) fn touch_mcp_agent(
 
     // A row a recycled pid left belongs to a dead process: retire it, never
     // inherit its identity. trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-    let current_start = crate::process_probe::process_start_identity(pid);
+    let current_identity = Some(
+        ProcIdentity::capture(pid)
+            .map_err(anyhow::Error::msg)
+            .context("cannot verify local process coordinates; retry registration on the host")?,
+    );
     let own_row = match existing_launcher {
         Some((_, entry)) => Some(entry),
         None => match std::fs::read_to_string(&path)
             .ok()
             .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
         {
-            Some(old)
-                if old.pid_start.is_some()
-                    && current_start.is_some()
-                    && old.pid_start != current_start =>
-            {
+            Some(old) if !same_identity(old.process_identity(), current_identity.clone()) => {
+                ensure_local_replacement(&old, current_identity.as_ref())?;
                 retire_displaced_entry(project_root, &old)?;
                 None
             }
@@ -773,8 +775,8 @@ pub(crate) fn touch_mcp_agent(
         id: id.clone(),
         agent_type: agent_type.clone(),
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
-        pid_namespace: current_pid_namespace(),
+        pid_start: current_identity.as_ref().map(|id| id.legacy().start),
+        pid_namespace: current_identity.as_ref().map(|id| id.pidns_inode),
         name: None,
         description: None,
         tty: current_tty(),
@@ -805,8 +807,8 @@ pub(crate) fn touch_mcp_agent(
         entry.id = id;
         entry.agent_type = agent_type;
         if entry.pid != pid || entry.pid_start.is_none() {
-            entry.pid_start = crate::process_probe::process_start_identity(pid);
-            entry.pid_namespace = current_pid_namespace();
+            entry.pid_start = current_identity.as_ref().map(|id| id.legacy().start);
+            entry.pid_namespace = current_identity.as_ref().map(|id| id.pidns_inode);
         }
         entry.pid = pid;
     }
@@ -898,7 +900,11 @@ fn touch_session_start_agent_for(
     let id = agent_id(&agent_type, pid);
     let path = registry_path(project_root, &id);
     let session_id = session_id.filter(|s| !s.trim().is_empty());
-    let current_start = crate::process_probe::process_start_identity(pid);
+    let current_identity = Some(
+        ProcIdentity::capture(pid)
+            .map_err(anyhow::Error::msg)
+            .context("cannot verify local process coordinates; retry registration on the host")?,
+    );
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
     let (linked, launch_name) = match linked {
         Some((lease, name)) => (Some(lease), name),
@@ -918,17 +924,14 @@ fn touch_session_start_agent_for(
     // A recycled pid's entry belongs to another process: keep it only
     // while its recorded start identity is this process's. A live
     // process that starts a new session (`/clear`, a new conversation)
-    // keeps its launcher entry. Without a recorded start, fall back to
-    // the session id. trace:TASK-1955 | ai:claude (BUG-2167)
+    // keeps its launcher entry. Incomplete legacy records never contribute
+    // session/thread fields to a fresh registration. trace:TASK-3366 | ai:codex
     let same_process =
-        |old: &AgentRegistryEntry| match (old.pid_start.as_deref(), current_start.as_deref()) {
-            (Some(recorded), Some(current)) => recorded == current,
-            _ => match (session_id, old.claude_session_id.as_deref()) {
-                (Some(new), Some(old)) => new == old,
-                _ => true,
-            },
-        };
+        |old: &AgentRegistryEntry| same_identity(old.process_identity(), current_identity.clone());
     let displaced = read_row.as_ref().filter(|old| !same_process(old)).cloned();
+    if let Some(old) = &displaced {
+        ensure_local_replacement(old, current_identity.as_ref())?;
+    }
     let mut entry = read_row
         .clone()
         .filter(same_process)
@@ -936,8 +939,8 @@ fn touch_session_start_agent_for(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
-            pid_start: crate::process_probe::process_start_identity(pid),
-            pid_namespace: current_pid_namespace(),
+            pid_start: current_identity.as_ref().map(|id| id.legacy().start),
+            pid_namespace: current_identity.as_ref().map(|id| id.pidns_inode),
             name: env_name.clone(),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -967,8 +970,8 @@ fn touch_session_start_agent_for(
     entry.id = id;
     entry.agent_type = agent_type;
     if entry.pid != pid || entry.pid_start.is_none() {
-        entry.pid_start = crate::process_probe::process_start_identity(pid);
-        entry.pid_namespace = current_pid_namespace();
+        entry.pid_start = current_identity.as_ref().map(|id| id.legacy().start);
+        entry.pid_namespace = current_identity.as_ref().map(|id| id.pidns_inode);
     }
     entry.pid = pid;
     entry.last_active_at = now;
@@ -1016,6 +1019,7 @@ fn touch_session_start_agent_for(
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
     carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
     if let Some(old) = &displaced {
+        ensure_local_replacement(old, current_identity.as_ref())?;
         retire_displaced_entry(project_root, old)?;
     }
     write_entry_locked(project_root, &entry)?;
@@ -1094,12 +1098,15 @@ pub(crate) fn heartbeat_session_agent_for(
 ) -> Result<Heartbeat> {
     let session_id = session_id.map(str::trim).filter(|s| !s.is_empty());
     let path = registry_path(project_root, &agent_id(&detect_agent_type(), pid));
-    let current_start = crate::process_probe::process_start_identity(pid);
+    let current_identity = Some(
+        ProcIdentity::capture(pid)
+            .map_err(anyhow::Error::msg)
+            .context("cannot verify local process coordinates; retry registration on the host")?,
+    );
     let own = |row: &AgentRegistryEntry| {
         row.ended_at.is_none()
             && row.pid == pid
-            && row.pid_start.is_some()
-            && row.pid_start == current_start
+            && same_identity(row.process_identity(), current_identity.clone())
             && match (session_id, row.claude_session_id.as_deref()) {
                 (Some(sid), Some(recorded)) => sid == recorded,
                 (Some(_), None) => false,
@@ -1144,7 +1151,7 @@ fn retire_displaced_entry(project_root: &Path, old: &AgentRegistryEntry) -> Resu
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating agent registry dir {}", dir.display()))?;
     let path = dir.join(format!("{}.toml", row.id));
-    let body = toml::to_string_pretty(&row).context("serialising agent registry entry")?;
+    let body = registry_body(&row)?;
     aida_core::write_atomic(&path, body.as_bytes())
         .with_context(|| format!("writing agent registry entry {}", path.display()))
 }
@@ -1259,12 +1266,13 @@ pub(crate) fn register_spawned_agent_with_row(
     pid: u32,
     row: SpawnedRow<'_>,
 ) -> Result<AgentRegistryEntry> {
+    let captured = ProcIdentity::capture(pid).ok();
     register_spawned_agent_as(
         project_root,
         agent_type,
         pid,
-        crate::process_probe::process_start_identity(pid),
-        current_pid_namespace(),
+        captured.as_ref().map(|id| id.legacy().start),
+        captured.as_ref().map(|id| id.pidns_inode),
         row,
     )
 }
@@ -1297,19 +1305,20 @@ pub(crate) fn register_detached_worker(
     expected_start: &str,
     row: SpawnedRow<'_>,
 ) -> Result<AgentRegistryEntry> {
-    let start = crate::process_probe::process_start_identity(pid)
-        .context("detached worker start identity could not be read; refusing to register it")?;
+    let captured = ProcIdentity::capture(pid).map_err(anyhow::Error::msg)?;
+    // The launch receipt still transports raw ticks. Compare only after a
+    // verified capture, and persist the boot-qualified registry format.
+    let start = format!("linux-starttime:{}", captured.starttime);
     anyhow::ensure!(
         !expected_start.is_empty() && start == expected_start,
         "detached worker {pid} is no longer the spawned process (start identity changed)"
     );
-    let namespace = process_pid_namespace(pid)
-        .context("detached worker PID namespace could not be read; refusing to register it")?;
+    let namespace = captured.pidns_inode;
     let entry = register_spawned_agent_as(
         project_root,
         agent_type,
         pid,
-        Some(start.clone()),
+        Some(captured.legacy().start),
         Some(namespace),
         row,
     )?;
@@ -1319,9 +1328,7 @@ pub(crate) fn register_detached_worker(
     )
     .with_context(|| format!("parsing {}", path.display()))?;
     anyhow::ensure!(
-        persisted.pid == pid
-            && persisted.pid_start.as_deref() == Some(start.as_str())
-            && persisted.ended_at.is_none(),
+        persisted.process_identity().as_ref() == Some(&captured) && persisted.ended_at.is_none(),
         "detached worker registry row did not persist as written"
     );
     Ok(persisted)
@@ -1330,10 +1337,18 @@ pub(crate) fn register_detached_worker(
 /// The PID-namespace inode of process `pid`, when readable.
 // trace:STORY-2254 | ai:claude
 pub(crate) fn process_pid_namespace(pid: u32) -> Option<u64> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata(format!("/proc/{pid}/ns/pid"))
-        .ok()
-        .map(|m| m.ino())
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(format!("/proc/{pid}/ns/pid"))
+            .ok()
+            .map(|m| m.ino())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = pid;
+        None
+    }
 }
 
 /// STORY-2254: end the row of exactly `pid` with start `start`. A row that
@@ -1355,7 +1370,16 @@ pub(crate) fn mark_detached_worker_ended(
     };
     let entry: AgentRegistryEntry =
         toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
-    if entry.pid_start.as_deref() != Some(start) || entry.ended_at.is_some() {
+    // The legacy child receipt is local to this supervisor's boot and PID
+    // coordinates. Validate that context without recapturing the exited PID.
+    // trace:TASK-3366 | ai:codex
+    let caller = ProcIdentity::capture(std::process::id()).map_err(anyhow::Error::msg)?;
+    if entry.process_identity().is_none_or(|id| {
+        id.boot_id != caller.boot_id
+            || id.pidns_inode != caller.pidns_inode
+            || format!("linux-starttime:{}", id.starttime) != start
+    }) || entry.ended_at.is_some()
+    {
         return Ok(None);
     }
     end_entry(project_root, entry).map(Some)
@@ -1398,11 +1422,22 @@ fn register_spawned_agent_as(
             .ok()
             .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
     let (hook_row, displaced) = match disk_row {
-        Some(old) if old.pid_start.is_some() && old.pid_start == pid_start => (Some(old), None),
+        Some(old)
+            if same_identity(
+                old.process_identity(),
+                ProcIdentity::from_registry(pid, pid_start.as_deref(), pid_namespace),
+            ) =>
+        {
+            (Some(old), None)
+        }
         other => (None, other),
     };
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
     if let Some(old) = &displaced {
+        ensure_local_replacement(
+            old,
+            ProcIdentity::from_registry(pid, pid_start.as_deref(), pid_namespace).as_ref(),
+        )?;
         retire_displaced_entry(project_root, old)?;
     }
     let hook_session_id = hook_row
@@ -1459,12 +1494,13 @@ pub(crate) fn register_role_enter_agent(
     let agent_type = "shell".to_string();
     let tty = process_tty(pid).or_else(current_tty);
     let terminal = terminal_identity_for_tty(tty.clone());
+    let captured = ProcIdentity::capture(pid).ok();
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
-        pid_namespace: current_pid_namespace(),
+        pid_start: captured.as_ref().map(|id| id.legacy().start),
+        pid_namespace: captured.as_ref().map(|id| id.pidns_inode),
         name: Some(format!("role:{role}")),
         description: Some("aida role enter shell".to_string()),
         tty,
@@ -1630,12 +1666,13 @@ pub(crate) fn register_existing_agent(
     let agent_type = normalize_agent_type(agent_type.to_string());
     let tty = process_tty(pid).or_else(current_tty);
     let terminal = terminal_identity_for_tty(tty.clone());
+    let captured = ProcIdentity::capture(pid).ok();
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
-        pid_namespace: current_pid_namespace(),
+        pid_start: captured.as_ref().map(|id| id.legacy().start),
+        pid_namespace: captured.as_ref().map(|id| id.pidns_inode),
         name,
         description,
         tty,
@@ -1920,7 +1957,26 @@ pub(crate) fn mark_session_ended(
     end_entry(project_root, entry).map(Some)
 }
 
-fn end_entry(project_root: &Path, mut entry: AgentRegistryEntry) -> Result<AgentRegistryEntry> {
+fn end_entry(project_root: &Path, entry: AgentRegistryEntry) -> Result<AgentRegistryEntry> {
+    // An exit receipt must not retire a replacement's mail wake or thread.
+    // Legacy explicit endings require an unchanged row, never PID recapture.
+    // trace:TASK-3366 | ai:codex
+    let _lock = crate::agent_handle::lock_namespace_within(
+        project_root,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
+    let path = registry_path(project_root, &entry.id);
+    let current: AgentRegistryEntry = toml::from_str(
+        &aida_core::mailbox_identity::read_bounded_regular(&path)
+            .context("registry row is not a bounded readable regular file")?,
+    )?;
+    anyhow::ensure!(
+        (same_registry_process(&current, &entry) || current == entry)
+            && current.claude_session_id == entry.claude_session_id
+            && current.native_session_id == entry.native_session_id,
+        "registry row changed before session exit; retaining its mail wake"
+    );
+    let mut entry = current;
     entry.ended_at = Some(Utc::now());
     entry.last_active_at = entry.ended_at.unwrap();
     // trace:STORY-790 | ai:claude — freeze the spec's status for the resume
@@ -1940,11 +1996,7 @@ fn end_entry(project_root: &Path, mut entry: AgentRegistryEntry) -> Result<Agent
     // contention it registered through; the SessionStart budget would leave
     // a dead pid listed as running.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
-    write_entry_within(
-        project_root,
-        &entry,
-        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
-    )?;
+    write_entry_locked(project_root, &entry)?;
     Ok(entry)
 }
 
@@ -2058,6 +2110,11 @@ pub(crate) fn resolve_session_agent_for_lease(project_root: &Path) -> Option<Age
         {
             return false;
         }
+        // Unknown liveness can retain a row, but cannot bind a caller to it.
+        // trace:TASK-3366 | ai:codex
+        if entry_process_verdict(entry) != Verdict::Alive {
+            return false;
+        }
         // Anti-spoofing: caller must be the agent process or a child/descendant of it
         if current_pid != entry.pid && !pid_has_ancestor(current_pid, entry.pid) {
             return false;
@@ -2125,7 +2182,11 @@ pub(crate) fn live_agent_for_lease_or_spec<'a>(
         if active_pid != agent.pid {
             return false;
         }
-        if !crate::process_probe::process_identity_is_alive(agent.pid, Some(start_time.as_str())) {
+        if !agent.process_identity().is_some_and(|id| {
+            format!("linux-starttime:{}", id.starttime) == start_time.as_str()
+                && lease.pid_namespace == Some(id.pidns_inode)
+                && proc_identity::observe(&id, true) == Verdict::Alive
+        }) {
             return false;
         }
 
@@ -2481,13 +2542,21 @@ pub(crate) fn write_entry_within(
     write_entry_locked(project_root, entry)
 }
 
+// Version only filesystem records: ordinary JSON/display serialization keeps
+// the public agent ID stable. trace:TASK-3366 | ai:codex
+fn registry_body(entry: &AgentRegistryEntry) -> Result<String> {
+    let mut value = toml::Value::try_from(entry).context("serialising agent registry entry")?;
+    value["id"] = toml::Value::String(proc_identity::registry_wire_id(&entry.id));
+    toml::to_string_pretty(&value).context("serialising versioned agent registry entry")
+}
+
 fn write_entry_locked(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating agent registry dir {}", parent.display()))?;
     }
-    let body = toml::to_string_pretty(entry).context("serialising agent registry entry")?;
+    let body = registry_body(entry)?;
     aida_core::write_atomic(&path, body.as_bytes())
         .with_context(|| format!("writing agent registry entry {}", path.display()))
 }
@@ -2507,11 +2576,17 @@ fn view_for(
     );
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
+    let compatible_start = entry
+        .process_identity()
+        .map(|id| format!("linux-starttime:{}", id.starttime));
     AgentRegistryView {
         id: entry.id,
         agent_type: entry.agent_type,
         pid: entry.pid,
-        pid_start: entry.pid_start,
+        // Legacy display/signal adapters are inventoried for the remaining
+        // registry/GC slice; runtime row readers consume the full tuple.
+        // trace:TASK-3366 | ai:codex
+        pid_start: compatible_start,
         name: entry.name,
         description: entry.description,
         tty: entry.tty,
@@ -2606,9 +2681,14 @@ pub(crate) fn observed_liveness_from(
     if entry.ended_at.is_some() {
         return Some(false);
     }
-    observer
-        .can_observe(entry.pid_namespace)
-        .then(|| registry_entry_is_live(project_root, entry))
+    if !observer.can_observe(entry.pid_namespace) {
+        return None;
+    }
+    match entry_process_verdict(entry) {
+        Verdict::Alive => Some(registry_entry_is_live(project_root, entry)),
+        Verdict::Dead(_) => Some(false),
+        Verdict::ForeignUnknown(_) => None,
+    }
 }
 
 /// Inode of Linux's initial PID namespace.
@@ -2659,11 +2739,8 @@ pub(crate) fn observer_liveness(
     if entry.ended_at.is_some() {
         return (false, LivenessBasis::Process);
     }
-    if observer.can_observe(entry.pid_namespace) {
-        return (
-            registry_entry_is_live(project_root, entry),
-            LivenessBasis::Process,
-        );
+    if let Some(live) = observed_liveness_from(project_root, entry, observer) {
+        return (live, LivenessBasis::Process);
     }
     let age = now
         .signed_duration_since(entry.last_active_at)
@@ -2678,7 +2755,44 @@ pub(crate) fn observer_liveness(
 /// recycled pid reads dead.
 // trace:TASK-1750 | ai:claude
 fn entry_process_alive(entry: &AgentRegistryEntry) -> bool {
-    crate::process_probe::process_identity_is_alive(entry.pid, entry.pid_start.as_deref())
+    !matches!(entry_process_verdict(entry), Verdict::Dead(_))
+}
+
+// Registry files are local runtime records, never replicated node evidence.
+// Missing legacy coordinates stay unknown; inspection never recaptures an old PID.
+// trace:TASK-3366 | ai:codex
+fn entry_process_verdict(entry: &AgentRegistryEntry) -> Verdict {
+    entry.process_identity().map_or(
+        Verdict::ForeignUnknown(proc_identity::UnknownReason::MissingIdentity),
+        |id| proc_identity::observe(&id, true),
+    )
+}
+
+impl AgentRegistryEntry {
+    pub(crate) fn process_identity(&self) -> Option<ProcIdentity> {
+        if self.id.starts_with("proc-identity-v") {
+            return None;
+        }
+        ProcIdentity::from_registry(self.pid, self.pid_start.as_deref(), self.pid_namespace)
+    }
+}
+fn ensure_local_replacement(old: &AgentRegistryEntry, new: Option<&ProcIdentity>) -> Result<()> {
+    if old.ended_at.is_none()
+        && old
+            .pid_namespace
+            .zip(new)
+            .is_some_and(|(ns, new)| ns != new.pidns_inode)
+        && !matches!(entry_process_verdict(old), Verdict::Dead(_))
+    {
+        anyhow::bail!("registry PID belongs to an unobservable namespace; retry on the host");
+    }
+    Ok(())
+}
+fn same_identity(a: Option<ProcIdentity>, b: Option<ProcIdentity>) -> bool {
+    a.is_some() && a == b
+}
+pub(crate) fn same_registry_process(a: &AgentRegistryEntry, b: &AgentRegistryEntry) -> bool {
+    same_identity(a.process_identity(), b.process_identity())
 }
 
 // trace:BUG-1156 | ai:codex
@@ -2702,7 +2816,7 @@ fn role_enter_has_live_session(project_root: &Path, role_entry: &AgentRegistryEn
             entry.id != role_entry.id
                 && entry.source != "role-enter"
                 && entry.ended_at.is_none()
-                && entry_process_alive(&entry)
+                && entry_process_verdict(&entry) == Verdict::Alive
                 && role_entry
                     .role
                     .as_deref()
@@ -3518,13 +3632,117 @@ mod tests {
     use chrono::Duration;
     use tempfile::TempDir;
 
+    // trace:TASK-3366 | ai:codex
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn proc_identity_s4_registry_matrix_and_launcher_race() {
+        let root = TempDir::new().unwrap();
+        let pid = std::process::id();
+        let identity = ProcIdentity::capture(pid).unwrap();
+        let mut row = entry_with(pid, Utc::now());
+        row.pid_start = Some(identity.legacy().start);
+        row.pid_namespace = Some(identity.pidns_inode);
+        assert_eq!(entry_process_verdict(&row), Verdict::Alive);
+        assert!(same_registry_process(&row, &row));
+        let body = registry_body(&row).unwrap();
+        let old_reader: toml::Value = toml::from_str(&body).unwrap();
+        assert_ne!(
+            old_reader["id"].as_str(),
+            Some(row.id.as_str()),
+            "old strict filename checks must refuse the new row version"
+        );
+        let decoded: AgentRegistryEntry = toml::from_str(&body).unwrap();
+        assert_eq!(decoded, row);
+        assert_eq!(
+            serde_json::to_value(&row).unwrap()["id"].as_str(),
+            Some(row.id.as_str()),
+            "display/API IDs remain stable"
+        );
+        let future: AgentRegistryEntry =
+            toml::from_str(&body.replace("proc-identity-v1:", "proc-identity-v2:")).unwrap();
+        assert!(matches!(
+            entry_process_verdict(&future),
+            Verdict::ForeignUnknown(_)
+        ));
+        assert!(
+            registry_entry_is_live(root.path(), &future),
+            "unsupported records retain claims"
+        );
+        for changed in ["namespace", "ticks", "boot", "legacy", "missing"] {
+            let mut other = row.clone();
+            match changed {
+                "namespace" => other.pid_namespace = Some(identity.pidns_inode ^ 1),
+                "ticks" => {
+                    let mut id = identity.clone();
+                    id.starttime += 1;
+                    other.pid_start = Some(id.legacy().start);
+                }
+                "boot" => {
+                    let mut id = identity.clone();
+                    id.boot_id = "00000000-0000-4000-8000-000000000001".into();
+                    other.pid_start = Some(id.legacy().start);
+                }
+                "legacy" => {
+                    other.pid_start = Some(format!("linux-starttime:{}", identity.starttime))
+                }
+                _ => other.pid_namespace = None,
+            }
+            assert!(!same_registry_process(&row, &other), "{changed}");
+            row.mail_wake = None;
+            other.mail_wake = Some(MailWake::Armed);
+            carry_concurrent_launcher_write(&mut row, None, Some(&other));
+            assert_eq!(row.mail_wake, None, "{changed}: inherited successor's wake");
+        }
+        let mut reused = row.clone();
+        let mut id = identity.clone();
+        id.starttime += 1;
+        reused.pid_start = Some(id.legacy().start);
+        assert!(matches!(
+            entry_process_verdict(&reused),
+            Verdict::Dead(proc_identity::DeadReason::Reused)
+        ));
+        let mut foreign = row.clone();
+        foreign.pid_namespace = Some(identity.pidns_inode ^ 1);
+        assert!(matches!(
+            entry_process_verdict(&foreign),
+            Verdict::ForeignUnknown(_)
+        ));
+        assert!(ensure_local_replacement(&foreign, Some(&identity)).is_err());
+        let mut legacy = row.clone();
+        legacy.pid_start = None;
+        assert_eq!(
+            observed_liveness(root.path(), &legacy, Some(identity.pidns_inode)),
+            None
+        );
+        assert!(
+            registry_entry_is_live(root.path(), &legacy),
+            "unknown retains claims"
+        );
+        write_entry(root.path(), &foreign).unwrap();
+        assert!(end_entry(root.path(), row.clone()).is_err());
+        assert!(set_mail_wake_on_row(root.path(), &row, MailWake::Armed).is_err());
+        write_entry(root.path(), &row).unwrap();
+        assert_eq!(
+            set_mail_wake_on_row(root.path(), &row, MailWake::Armed)
+                .unwrap()
+                .mail_wake,
+            Some(MailWake::Armed)
+        );
+    }
+
     fn entry_with(pid: u32, last_active_at: DateTime<Utc>) -> AgentRegistryEntry {
+        let identity = ProcIdentity::capture(pid).unwrap_or_else(|_| {
+            let mut identity = ProcIdentity::capture(std::process::id()).unwrap();
+            identity.pid = pid;
+            identity.starttime = 0;
+            identity
+        });
         AgentRegistryEntry {
             id: agent_id("codex", pid),
             agent_type: "codex".to_string(),
             pid,
-            pid_start: None,
-            pid_namespace: current_pid_namespace(),
+            pid_start: Some(identity.legacy().start),
+            pid_namespace: Some(identity.pidns_inode),
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
@@ -3564,7 +3782,7 @@ mod tests {
         live.name = Some("Reviewer-Live".to_string());
         write_entry(tmp.path(), &live).unwrap();
 
-        let mut dead = entry_with(u32::MAX - 1, Utc::now());
+        let mut dead = entry_with((i32::MAX as u32) - 1, Utc::now());
         dead.id = "dead".to_string();
         dead.name = Some("reviewer-dead".to_string());
         write_entry(tmp.path(), &dead).unwrap();
@@ -4161,22 +4379,21 @@ mod tests {
     // trace:TASK-1750 | ai:claude
     #[test]
     fn recycled_pid_entry_is_not_live() {
-        let Some(ours) = crate::process_probe::process_start_identity(std::process::id()) else {
-            return; // platform cannot report start times; nothing to distinguish
-        };
         let tmp = tempfile::tempdir().unwrap();
         let mut e = entry_with(std::process::id(), Utc::now());
-        e.source = "mcp".to_string();
+        assert!(registry_entry_is_live(tmp.path(), &e));
+        let mut changed = e.process_identity().unwrap();
+        changed.starttime += 1;
+        e.pid_start = Some(changed.legacy().start);
+        assert!(!registry_entry_is_live(tmp.path(), &e));
+        e.pid_start = Some("2000-01-01T00:00:00+00:00".into());
         assert!(
             registry_entry_is_live(tmp.path(), &e),
-            "legacy entry: bare pid probe"
+            "legacy identity remains unknown"
         );
-        e.pid_start = Some(ours);
-        assert!(registry_entry_is_live(tmp.path(), &e));
-        e.pid_start = Some("2000-01-01T00:00:00+00:00".to_string());
-        assert!(
-            !registry_entry_is_live(tmp.path(), &e),
-            "recycled pid must read dead"
+        assert_eq!(
+            observed_liveness(tmp.path(), &e, current_pid_namespace()),
+            None
         );
     }
 
@@ -4397,7 +4614,7 @@ mod tests {
         write_entry(tmp.path(), &idle).unwrap();
 
         // (3) dead pid → Stale (regardless of last_active_at).
-        let mut stale = entry_with(u32::MAX - 1, now - Duration::seconds(1));
+        let mut stale = entry_with((i32::MAX as u32) - 1, now - Duration::seconds(1));
         stale.agent_type = "antigravity".to_string();
         stale.id = agent_id("antigravity", stale.pid);
         write_entry(tmp.path(), &stale).unwrap();
@@ -4420,7 +4637,7 @@ mod tests {
     fn list_agent_views_reads_toml_and_computes_stale_status() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let record = entry_with(u32::MAX - 1, now);
+        let record = entry_with((i32::MAX as u32) - 1, now);
         write_entry(tmp.path(), &record).unwrap();
 
         let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
@@ -4587,7 +4804,7 @@ mod tests {
     fn gc_dead_agents_removes_dead_non_resumable_entries() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let record = entry_with(u32::MAX - 1, now);
+        let record = entry_with((i32::MAX as u32) - 1, now);
         let path = registry_path(tmp.path(), &record.id);
         write_entry(tmp.path(), &record).unwrap();
 
@@ -4604,7 +4821,7 @@ mod tests {
     fn gc_dead_agents_retains_resumable_until_older_than_matches() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut record = entry_with(u32::MAX - 1, now - Duration::days(10));
+        let mut record = entry_with((i32::MAX as u32) - 1, now - Duration::days(10));
         record.native_session_id = Some("native-session-1".to_string());
         let path = registry_path(tmp.path(), &record.id);
         write_entry(tmp.path(), &record).unwrap();
@@ -4628,7 +4845,7 @@ mod tests {
     fn gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut record = entry_with(u32::MAX - 1, now - Duration::minutes(5));
+        let mut record = entry_with((i32::MAX as u32) - 1, now - Duration::minutes(5));
         record.native_session_id = Some("native-session-1".to_string());
         let path = registry_path(tmp.path(), &record.id);
         write_entry(tmp.path(), &record).unwrap();
@@ -4659,10 +4876,10 @@ mod tests {
     fn gc_ended_old_crash_does_not_outrank_a_recent_end_for_resume() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut crashed = entry_with(u32::MAX - 1, now - Duration::days(3));
+        let mut crashed = entry_with((i32::MAX as u32) - 1, now - Duration::days(3));
         crashed.native_session_id = Some("old-crash".to_string());
         write_entry(tmp.path(), &crashed).unwrap();
-        let mut recent = entry_with(u32::MAX - 2, now - Duration::minutes(10));
+        let mut recent = entry_with((i32::MAX as u32) - 2, now - Duration::minutes(10));
         recent.native_session_id = Some("recent-end".to_string());
         recent.ended_at = Some(now - Duration::minutes(10));
         write_entry(tmp.path(), &recent).unwrap();
@@ -4690,11 +4907,11 @@ mod tests {
         };
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut resumable = entry_with(u32::MAX - 1, now);
+        let mut resumable = entry_with((i32::MAX as u32) - 1, now);
         resumable.pid_namespace = Some(observer ^ 1);
         resumable.native_session_id = Some("native-session-1".to_string());
         write_entry(tmp.path(), &resumable).unwrap();
-        let mut plain = entry_with(u32::MAX - 2, now);
+        let mut plain = entry_with((i32::MAX as u32) - 2, now);
         plain.pid_namespace = Some(observer ^ 1);
         write_entry(tmp.path(), &plain).unwrap();
         let before: Vec<_> = load_entries(tmp.path())
@@ -4808,11 +5025,11 @@ mod tests {
     fn list_agent_views_falls_back_to_heartbeat_for_unobservable_rows() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut fresh = entry_with(u32::MAX - 1, now - chrono::Duration::minutes(5));
-        fresh.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        let mut fresh = entry_with((i32::MAX as u32) - 1, now - chrono::Duration::minutes(5));
+        fresh.pid_namespace = current_pid_namespace();
         write_entry(tmp.path(), &fresh).unwrap();
-        let mut old = entry_with(u32::MAX - 2, now - chrono::Duration::hours(25));
-        old.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        let mut old = entry_with((i32::MAX as u32) - 2, now - chrono::Duration::hours(25));
+        old.pid_namespace = current_pid_namespace();
         write_entry(tmp.path(), &old).unwrap();
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
 
@@ -4822,14 +5039,20 @@ mod tests {
         );
         let by_pid: std::collections::HashMap<u32, &AgentRegistryView> =
             views.iter().map(|v| (v.pid, v)).collect();
-        assert_eq!(by_pid[&(u32::MAX - 1)].status, AgentStatus::Idle);
-        assert_eq!(by_pid[&(u32::MAX - 1)].liveness, LivenessBasis::Heartbeat);
-        assert_eq!(by_pid[&(u32::MAX - 2)].status, AgentStatus::Stale);
-        assert_eq!(by_pid[&(u32::MAX - 2)].liveness, LivenessBasis::Heartbeat);
+        assert_eq!(by_pid[&((i32::MAX as u32) - 1)].status, AgentStatus::Idle);
+        assert_eq!(
+            by_pid[&((i32::MAX as u32) - 1)].liveness,
+            LivenessBasis::Heartbeat
+        );
+        assert_eq!(by_pid[&((i32::MAX as u32) - 2)].status, AgentStatus::Stale);
+        assert_eq!(
+            by_pid[&((i32::MAX as u32) - 2)].liveness,
+            LivenessBasis::Heartbeat
+        );
 
         // From the host the same dead pids read Stale on process evidence.
         let host = PidObserver {
-            namespace: Some(INITIAL_PID_NAMESPACE),
+            namespace: current_pid_namespace(),
             isolated: false,
         };
         let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(host));
@@ -4851,14 +5074,20 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
         // A host row whose only heartbeat is its session start, 17h ago.
-        let mut unverifiable = entry_with(u32::MAX - 1, now - chrono::Duration::hours(17));
-        unverifiable.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        let mut unverifiable = entry_with((i32::MAX as u32) - 1, now - chrono::Duration::hours(17));
+        unverifiable.pid_namespace = Some(current_pid_namespace().unwrap() ^ 1);
         unverifiable.role = Some("advisor".to_string());
         write_entry(tmp.path(), &unverifiable).unwrap();
-        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+        let sandbox = PidObserver {
+            namespace: current_pid_namespace(),
+            isolated: false,
+        };
 
         let guard = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
-        let row = guard.iter().find(|v| v.pid == u32::MAX - 1).unwrap();
+        let row = guard
+            .iter()
+            .find(|v| v.pid == (i32::MAX as u32) - 1)
+            .unwrap();
         assert_ne!(row.status, AgentStatus::Stale);
         assert_eq!(row.liveness, LivenessBasis::Heartbeat);
         let dup = crate::agent_launch::matching_live_duplicate(
@@ -4868,24 +5097,24 @@ mod tests {
             None,
         )
         .expect("an unverifiable host row refuses the duplicate launch");
-        assert_eq!(dup.pid, u32::MAX - 1);
+        assert_eq!(dup.pid, (i32::MAX as u32) - 1);
 
         // An ended row is provably dead from any namespace: launch allowed.
-        let mut ended = entry_with(u32::MAX - 2, now - chrono::Duration::minutes(1));
-        ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        let mut ended = entry_with((i32::MAX as u32) - 2, now - chrono::Duration::minutes(1));
+        ended.pid_namespace = Some(current_pid_namespace().unwrap() ^ 1);
         ended.role = Some("advisor".to_string());
         ended.ended_at = Some(now);
         write_entry(tmp.path(), &ended).unwrap();
         // A checkable dead pid (our own namespace) is provably dead too.
-        let mut dead = entry_with(u32::MAX - 3, now - chrono::Duration::minutes(1));
-        dead.pid_namespace = Some(7);
+        let mut dead = entry_with((i32::MAX as u32) - 3, now - chrono::Duration::minutes(1));
+        dead.pid_namespace = current_pid_namespace();
         dead.role = Some("advisor".to_string());
         write_entry(tmp.path(), &dead).unwrap();
 
         let sandbox_ctx = ctx(now, 30, vec![]).with_observer(sandbox);
         let provably_dead: Vec<_> = list_agent_views(tmp.path(), &sandbox_ctx)
             .into_iter()
-            .filter(|v| v.pid != u32::MAX - 1)
+            .filter(|v| v.pid != (i32::MAX as u32) - 1)
             .collect();
         assert!(provably_dead.iter().all(|v| v.status == AgentStatus::Stale));
         assert!(crate::agent_launch::matching_live_duplicate(
@@ -4902,7 +5131,7 @@ mod tests {
     fn observer_liveness_treats_ended_rows_as_dead_from_any_namespace() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut ended = entry_with(u32::MAX - 1, now);
+        let mut ended = entry_with((i32::MAX as u32) - 1, now);
         ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
         ended.ended_at = Some(now);
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
@@ -4918,7 +5147,7 @@ mod tests {
     fn manual_registered_entry_with_dead_pid_is_stale() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut record = entry_with(u32::MAX - 1, now);
+        let mut record = entry_with((i32::MAX as u32) - 1, now);
         record.source = "manual-register".to_string();
         record.name = Some("codex-raw".to_string());
         write_entry(tmp.path(), &record).unwrap();
@@ -4956,7 +5185,7 @@ mod tests {
         // One live agent alone in wt_b.
         live("b-codex-solo", &wt_b);
         // A dead agent also recorded in wt_b — must be skipped.
-        let mut dead = entry_with(u32::MAX - 1, Utc::now());
+        let mut dead = entry_with((i32::MAX as u32) - 1, Utc::now());
         dead.id = "b-codex-dead".to_string();
         dead.worktree_path = wt_b.clone();
         write_entry(root, &dead).unwrap();

@@ -677,9 +677,31 @@ fn watch_row(
     if aida_core::mailbox_identity::normalize_agent_type(&entry.agent_type) != "codex" {
         bail!("unsupported: only Codex sessions have a live wake primitive");
     }
+    // Keep cooperative row writers outside the audience/thread validation and
+    // queue submission window. Contention retries on the watcher's next pass.
+    // trace:TASK-3366 | ai:codex
+    let _namespace =
+        crate::agent_handle::lock_namespace_within(&opts.project, Duration::from_secs(2))?;
     let thread = row_thread(entry).context("the session has no Codex thread yet")?;
+    // Bind audience and thread to the same row generation. Replacements never
+    // reuse the old snapshot's thread with a successor's private audience.
+    // trace:TASK-3366 | ai:codex
+    let current: AgentRegistryEntry = toml::from_str(
+        &aida_core::mailbox_identity::read_bounded_regular(path)
+            .context("registry row is not a bounded readable regular file")?,
+    )?;
+    if !crate::agent_registry::same_registry_process(entry, &current) || current != *entry {
+        bail!("registry row changed before mail wake; retry on the next pass");
+    }
     let handle = entry.name.clone().unwrap_or_default();
     let audience = crate::mailbox_wake::audience_for_recipient(own, &handle, Some((lock, path)))?;
+    let verified: AgentRegistryEntry = toml::from_str(
+        &aida_core::mailbox_identity::read_bounded_regular(path)
+            .context("registry row is not a bounded readable regular file")?,
+    )?;
+    if verified != *entry {
+        bail!("registry row changed while verifying mail audience; retry on the next pass");
+    }
     let inbox = Inbox::from_audience(&handle, &audience, entry.role.as_deref());
     let state = ThreadState::open(&opts.state_root, &thread)?;
     let mut ledger = match state.load()? {

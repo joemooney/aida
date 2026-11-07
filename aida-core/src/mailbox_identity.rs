@@ -229,11 +229,14 @@ impl PeopleCatalogView {
 /// fields are ignored, so newer writers stay readable.
 #[derive(Debug, serde::Deserialize)]
 struct RegistryRow {
+    #[serde(deserialize_with = "crate::proc_identity::deserialize_registry_id")]
     id: String,
     agent_type: String,
     pid: u32,
     #[serde(default)]
     pid_start: Option<String>,
+    #[serde(default)]
+    pid_namespace: Option<u64>,
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
@@ -307,6 +310,16 @@ impl SessionBindingFacts {
         let by_claude_pid = vendor == "claude" && env.claude_pid == Some(parsed.pid);
         if !(by_session || by_claude_pid || is_self_or_ancestor(&parsed)) {
             return Err(BindingRefusal::NotThisProcess);
+        }
+        // Thread/PID selection is not process evidence. A recycled or foreign
+        // row must never grant its predecessor's private inbox.
+        // trace:TASK-3366 | ai:codex
+        if !parsed
+            .pid_start
+            .as_deref()
+            .is_some_and(|start| registry_process_live(parsed.pid, start, parsed.pid_namespace))
+        {
+            return Err(BindingRefusal::NotLive);
         }
         let sessions: Vec<&str> = [&parsed.claude_session_id, &parsed.native_session_id]
             .into_iter()
@@ -421,7 +434,10 @@ fn valid_handle(name: &str) -> bool {
     handle_spelling_rejection(name).is_none()
 }
 
-fn read_bounded_regular(path: &Path) -> Option<String> {
+/// Read bounded regular-file data without following a final symlink or waiting
+/// on a FIFO. This supplies bytes only; callers must validate row identity.
+// trace:TASK-3366 | ai:codex
+pub fn read_bounded_regular(path: &Path) -> Option<String> {
     use std::os::unix::fs::OpenOptionsExt;
     let file = std::fs::OpenOptions::new()
         .read(true)
@@ -439,11 +455,20 @@ fn read_bounded_regular(path: &Path) -> Option<String> {
     Some(body)
 }
 
+// Local registry runtime files supply local provenance. Legacy bare ticks,
+// missing namespace and unreadable/foreign views cannot authorize mail reads.
+// trace:TASK-3366 | ai:codex
+fn registry_process_live(pid: u32, start: &str, namespace: Option<u64>) -> bool {
+    crate::proc_identity::ProcIdentity::from_registry(pid, Some(start), namespace).is_some_and(
+        |id| crate::proc_identity::observe(&id, true) == crate::proc_identity::Verdict::Alive,
+    )
+}
+
 /// Whether the row's process is this process or one of its ancestors. A
 /// recorded start identity must positively match the live process under its
 /// own scheme, so a recycled pid never binds; a row with no recorded start,
 /// a record in an unknown scheme, or one that cannot be compared refuses
-/// (such a row binds only by session id or `CLAUDE_PID`).
+/// even when a session id or `CLAUDE_PID` selects that row.
 fn is_self_or_ancestor(row: &RegistryRow) -> bool {
     let Ok(chain) = crate::process_probe::ProbeSource::system().ancestry(std::process::id()) else {
         return false;
@@ -452,7 +477,7 @@ fn is_self_or_ancestor(row: &RegistryRow) -> bool {
         row.pid,
         row.pid_start.as_deref(),
         chain.iter().map(|p| p.identity.pid),
-        crate::liveness::process_identity_matches_strict,
+        |pid, start| registry_process_live(pid, start, row.pid_namespace),
     )
 }
 
@@ -621,13 +646,13 @@ impl MailIdentityFacts {
     /// is the only authority and a dead or recycled pid never reads.
     // trace:STORY-HOME-096 | ai:claude
     pub fn watched(row: &Path) -> Result<Self, BindingRefusal> {
-        Self::watched_with(row, crate::liveness::process_identity_matches_strict)
+        Self::watched_with(row, registry_process_live)
     }
 
     /// [`Self::watched`] with an explicit live-identity matcher.
     pub(crate) fn watched_with(
         row: &Path,
-        live: impl Fn(u32, &str) -> bool,
+        live: impl Fn(u32, &str, Option<u64>) -> bool,
     ) -> Result<Self, BindingRefusal> {
         let body = read_bounded_regular(row).ok_or(BindingRefusal::Unreadable)?;
         let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
@@ -648,7 +673,7 @@ impl MailIdentityFacts {
         if !parsed
             .pid_start
             .as_deref()
-            .is_some_and(|start| live(parsed.pid, start))
+            .is_some_and(|start| live(parsed.pid, start, parsed.pid_namespace))
         {
             return Err(BindingRefusal::NotLive);
         }
@@ -855,11 +880,14 @@ impl InspectionSubject {
         }
         let handle = parsed
             .name
+            .clone()
             .filter(|n| valid_handle(n))
             .ok_or(BindingRefusal::NoHandle)?;
-        if !parsed.pid_start.as_deref().is_some_and(|start| {
-            crate::liveness::process_identity_matches_strict(parsed.pid, start)
-        }) {
+        if !parsed
+            .pid_start
+            .as_deref()
+            .is_some_and(|start| registry_process_live(parsed.pid, start, parsed.pid_namespace))
+        {
             return Err(BindingRefusal::NotLive);
         }
         let sessions: Vec<&str> = [&parsed.claude_session_id, &parsed.native_session_id]

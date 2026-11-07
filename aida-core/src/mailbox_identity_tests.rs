@@ -155,9 +155,15 @@ fn row(dir: &Path, id: &str, body: &str) -> std::path::PathBuf {
 /// (what registration writes) unless `extra` records one itself.
 fn row_body(id: &str, pid: u32, extra: &str) -> String {
     let start = (pid == std::process::id() && !extra.contains("pid_start"))
-        .then(|| crate::liveness::process_start_identity(pid))
+        .then(|| crate::proc_identity::ProcIdentity::capture(pid).ok())
         .flatten()
-        .map(|start| format!("pid_start = \"{start}\"\n"))
+        .map(|id| {
+            format!(
+                "pid_start = \"{}\"\npid_namespace = {}\n",
+                id.legacy().start,
+                id.pidns_inode
+            )
+        })
         .unwrap_or_default();
     format!(
         "id = \"{id}\"\nagent_type = \"claude\"\npid = {pid}\nname = \"seat-a\"\n\
@@ -199,7 +205,10 @@ fn binding_verifies_only_rows_this_process_owns() {
         "sid",
         &row_body("sid", u32::MAX - 7, "native_session_id = \"sid-1\"\n"),
     );
-    assert!(SessionBindingFacts::verify(&by_sid, &with_payload).is_ok());
+    assert_eq!(
+        SessionBindingFacts::verify(&by_sid, &with_payload),
+        Err(BindingRefusal::NotLive)
+    );
     assert_eq!(
         SessionBindingFacts::verify(&by_sid, &env),
         Err(BindingRefusal::NotThisProcess)
@@ -338,13 +347,21 @@ fn binding_accepts_this_process_under_its_own_recorded_identity() {
     let dir = tempfile::tempdir().unwrap();
     let env = IdentityEnv::fixture("u", &[], None);
     let me = std::process::id();
-    let Some(start) = crate::liveness::process_start_identity(me) else {
+    let Ok(identity) = crate::proc_identity::ProcIdentity::capture(me) else {
         return;
     };
     let own = row(
         dir.path(),
         "exact",
-        &row_body("exact", me, &format!("pid_start = \"{start}\"\n")),
+        &row_body(
+            "exact",
+            me,
+            &format!(
+                "pid_start = \"{}\"\npid_namespace = {}\n",
+                identity.legacy().start,
+                identity.pidns_inode
+            ),
+        ),
     );
     assert!(SessionBindingFacts::verify(&own, &env).is_ok());
     let legacy = row(
@@ -416,12 +433,15 @@ fn a_row_with_no_recorded_start_never_binds_by_pid_alone() {
         SessionBinding::lookup_in_chain(dir.path(), &env, &[me]),
         SessionBinding::Unverified(BindingRefusal::NotThisProcess)
     );
-    // The same row still binds by the session evidence it names.
+    // Session selection cannot rehabilitate missing process evidence.
     let claude = IdentityEnv {
         claude_pid: Some(me),
         ..IdentityEnv::fixture("u", &[], None)
     };
-    assert!(SessionBindingFacts::verify(&recycled, &claude).is_ok());
+    assert_eq!(
+        SessionBindingFacts::verify(&recycled, &claude),
+        Err(BindingRefusal::NotLive)
+    );
 }
 
 /// F1 (STORY-1843 D1): a reservation gives a row its recipient UUID only
@@ -487,7 +507,7 @@ fn reservation_recipient_requires_the_row_or_its_session() {
 #[test]
 fn story_home_096_watched_row_reads_its_own_handle_and_role_only() {
     let dir = tempfile::tempdir().unwrap();
-    let live = |_: u32, start: &str| start == "S1";
+    let live = |_: u32, start: &str, _: Option<u64>| start == "S1";
     let armed = row(
         dir.path(),
         "armed",
@@ -552,4 +572,53 @@ fn story_home_096_watched_row_reads_its_own_handle_and_role_only() {
         MailIdentityFacts::watched_with(&renamed, live),
         Err(BindingRefusal::Corrupt)
     );
+}
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_watched_mail_requires_full_local_tuple() {
+    let dir = tempfile::tempdir().unwrap();
+    let identity = crate::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
+    let body = row_body(
+        "watched",
+        identity.pid,
+        r#"mail_wake = "armed"
+"#,
+    );
+    let path = row(dir.path(), "watched", &body);
+    assert!(MailIdentityFacts::watched(&path).is_ok());
+    let versioned = body.replace("id = \"watched\"", "id = \"proc-identity-v1:watched\"");
+    assert_ne!(versioned, body);
+    std::fs::write(&path, &versioned).unwrap();
+    assert!(MailIdentityFacts::watched(&path).is_ok());
+    std::fs::write(&path, &body).unwrap();
+    // Old strict readers refuse the new registry scheme; they cannot silently
+    // authorize a partial identity during a mixed-version rollout.
+    assert!(!crate::liveness::process_identity_matches_strict(
+        identity.pid,
+        &identity.legacy().start
+    ));
+    for altered in [
+        body.replace(
+            &format!("pid_namespace = {}", identity.pidns_inode),
+            &format!("pid_namespace = {}", identity.pidns_inode ^ 1),
+        ),
+        body.replace(
+            &identity.legacy().start,
+            &format!("linux-starttime:{}", identity.starttime),
+        ),
+        body.replace(&identity.legacy().start, &{
+            let mut id = identity.clone();
+            id.starttime += 1;
+            id.legacy().start
+        }),
+        body.replace(&format!("pid_namespace = {}\n", identity.pidns_inode), ""),
+    ] {
+        std::fs::write(&path, altered).unwrap();
+        assert_eq!(
+            MailIdentityFacts::watched(&path),
+            Err(BindingRefusal::NotLive)
+        );
+    }
 }

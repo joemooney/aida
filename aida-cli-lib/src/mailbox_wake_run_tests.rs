@@ -180,7 +180,8 @@ fn story_home_096_thread_state_is_private_and_round_trips() {
 fn register_self(main: &Path, handle: &str, mail_wake: Option<&str>) -> PathBuf {
     let pid = std::process::id();
     let id = format!("codex-{pid}");
-    let start = aida_core::liveness::process_start_identity(pid).unwrap();
+    let captured = aida_core::proc_identity::ProcIdentity::capture(pid).unwrap();
+    let start = captured.legacy().start;
     let mut row = toml::Table::new();
     for (key, value) in [
         ("id", id.clone()),
@@ -196,6 +197,10 @@ fn register_self(main: &Path, handle: &str, mail_wake: Option<&str>) -> PathBuf 
     ] {
         row.insert(key.into(), toml::Value::String(value));
     }
+    row.insert(
+        "pid_namespace".into(),
+        toml::Value::Integer(captured.pidns_inode as i64),
+    );
     row.insert("pid".into(), toml::Value::Integer(i64::from(pid)));
     if let Some(wake) = mail_wake {
         row.insert("mail_wake".into(), toml::Value::String(wake.into()));
@@ -728,4 +733,32 @@ fn restart_mail_wake_empty_and_unavailable_manager() {
     .unwrap_err();
     assert!(format!("{no_bus:#}").contains("Failed to connect to bus"));
     assert!(restart_enabled_services_with(&mut out, |_| anyhow::bail!("no user manager")).is_err());
+}
+
+// trace:TASK-3366 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn proc_identity_s4_changed_thread_is_not_queued() {
+    let r = mail_repo();
+    let state = tempfile::tempdir().unwrap();
+    let path = register_self(&r.main, "codex-agent-02", Some("armed"));
+    let original: AgentRegistryEntry =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut successor = original.clone();
+    successor.native_session_id = Some("01a185ba-0000-7000-8000-000000000099".into());
+    crate::agent_registry::write_entry(&r.main, &successor).unwrap();
+    let queue = FakeQueue::ok();
+    let opts = options(&r, state.path());
+    let lock = WatchLock::acquire(state.path(), &r.main).unwrap();
+    let error = watch_row(
+        &opts,
+        &lock,
+        &own("operator", None),
+        &queue,
+        &path,
+        &original,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("registry row changed"));
+    assert!(queue.sent.borrow().is_empty());
 }

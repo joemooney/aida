@@ -1010,8 +1010,10 @@ fn own_process_token() -> Option<String> {
 // trace:BUG-1934 | ai:claude
 // trace:BUG-2419 | ai:claude
 fn pid_binding_token(pid: u32) -> Option<String> {
-    let start =
-        aida_core::liveness::process_start_identity(pid).filter(|s| !s.trim().is_empty())?;
+    // Keep the established grant-token wire format; only its observation
+    // input changes in this slice. trace:TASK-3366 | ai:codex
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid).ok()?;
+    let start = format!("linux-starttime:{}", identity.starttime);
     Some(crate::gate::review_authority::author_process_token(
         "proc",
         pid,
@@ -1815,6 +1817,10 @@ pub(crate) fn issue_direct(
     // BUG-1934: bind before anything is written; an unbindable grant is
     // never minted. trace:BUG-1934 | ai:claude
     let caller = presenter_source();
+    let binding_identity = bind_pid
+        .map(aida_core::proc_identity::ProcIdentity::capture)
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let mut binding = match bind_pid {
         None => direct_issue_binding(&caller)?,
         Some(pid) => vec![check_bind_target(
@@ -1824,6 +1830,21 @@ pub(crate) fn issue_direct(
             current_uid(),
         )?],
     };
+    if let Some(pid) = bind_pid {
+        let checked =
+            check_bind_target(pid, probe_bind_target(pid).as_ref(), &caller, current_uid())?;
+        anyhow::ensure!(
+            binding == [checked],
+            "binding target changed before grant issuance"
+        );
+    }
+    if let Some(identity) = &binding_identity {
+        anyhow::ensure!(
+            aida_core::proc_identity::observe(identity, true)
+                == aida_core::proc_identity::Verdict::Alive,
+            "binding target identity changed before grant issuance"
+        );
+    }
     binding.extend(key_secret.as_deref().map(|k| key_token(k.as_bytes())));
     let grant = mint_direct(
         project_root,
@@ -2119,6 +2140,10 @@ pub(crate) fn check_bind_target(
 /// Live probe behind `--bind-pid`: one single-pid refresh, never a table scan.
 // trace:BUG-1934 | ai:claude
 fn probe_bind_target(pid: u32) -> Option<BindTarget> {
+    // Identity evidence comes from the shared coordinate-verified observer.
+    // Keep the existing token transport for presenter compatibility.
+    // trace:TASK-3366 | ai:codex
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid).ok()?;
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let spid = sysinfo::Pid::from_u32(pid);
     let mut sys = System::new();
@@ -2133,12 +2158,17 @@ fn probe_bind_target(pid: u32) -> Option<BindTarget> {
     let uid = proc.user_id().map(|u| **u);
     #[cfg(not(unix))]
     let uid = None;
+    if aida_core::proc_identity::observe(&identity, true)
+        != aida_core::proc_identity::Verdict::Alive
+    {
+        return None;
+    }
     Some(BindTarget {
         entry: crate::gate::review_authority::ProcEntry {
             pid,
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
-            start: aida_core::liveness::process_start_identity(pid),
+            start: Some(format!("linux-starttime:{}", identity.starttime)),
         },
         uid,
     })
