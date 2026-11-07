@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T21:30:16.785411020Z
+modified_at: 2026-11-07T22:16:19.189602312Z
 req_type: Story
 tags:
 - area:advisor
@@ -362,6 +362,13 @@ comments:
   content: 'Requirement from 2026-11-07 (advisor): the dispatch/slot-cap command (AC3) must know which HOST a spec''s lane runs on. Today auto-rework/fill-slots3 relaunch locally any spec with a change-request verdict, including specs whose lane runs on dell1 (TASK-1214 at 14:27; STORY-2640 relaunched locally). Leases are per host, so nothing refuses the duplicate. Record a host partition on the spec or lease, and have dispatch honour it.'
   created_at: 2026-11-07T21:30:16.785411020Z
   modified_at: 2026-11-07T21:30:16.785411020Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b815-7ff5-7201-9bc4-86309cdc2636
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 15:20: the NEXT slice is the 13:40 ADVISOR BRIEF on this spec (supervised review-watch service, ''aida advisor loops status|rebind'', re-binding on rotation). The sketch and inventory are done; do not re-validate them. One PR, Refs STORY-2571. LIGHT gate.'
+  created_at: 2026-11-07T22:16:19.189602312Z
+  modified_at: 2026-11-07T22:16:19.189602312Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
