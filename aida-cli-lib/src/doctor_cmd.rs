@@ -656,6 +656,9 @@ pub(crate) struct DoctorReport {
     // trace:TASK-2631 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     permission_postures: Vec<String>,
+    // trace:BUG-2484 | ai:codex
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    vendor_binaries: Vec<String>,
 }
 
 impl DoctorReport {
@@ -671,6 +674,7 @@ impl DoctorReport {
             runaway_seats: None,
             disk_status: None,
             permission_postures: Vec::new(),
+            vendor_binaries: Vec::new(),
         }
     }
 }
@@ -1192,6 +1196,13 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
             .into_iter()
             .map(|row| format!("{}: {}", row.agent, row.net_effect))
             .collect();
+    }
+    // Discovery and hashing only: never invoke the wrapper on the host.
+    // trace:BUG-2484 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "vendor-binary")? {
+        if let Some(diagnostic) = crate::vendors::installed_codex_binary_diagnostic() {
+            report.vendor_binaries.push(diagnostic);
+        }
     }
     report.performance_audits = performance_audits;
     report.runaway_seats = runaway_seats;
@@ -7759,6 +7770,14 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
             .collect::<Vec<_>>();
         blocks.push(table_raw("permission_postures", &["posture"], &rows));
     }
+    if !report.vendor_binaries.is_empty() {
+        let rows = report
+            .vendor_binaries
+            .iter()
+            .map(|p| vec![p.clone()])
+            .collect::<Vec<_>>();
+        blocks.push(table_raw("vendor_binaries", &["binary"], &rows));
+    }
     if report.hidden_completed_without_commit != 0 {
         blocks.push(scalar(
             "hidden_completed_without_commit",
@@ -7993,6 +8012,9 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     // trace:TASK-2631 | ai:codex
     for posture in &report.permission_postures {
         println!("  {posture}");
+    }
+    for binary in &report.vendor_binaries {
+        println!("  {binary}");
     }
     if report.findings.is_empty() && report.hidden_completed_without_commit == 0 {
         println!(
@@ -16340,4 +16362,21 @@ mod story_2326_doctor_tests {
         assert!(cargo_slot_permission_findings(&slot, uid).is_empty());
         assert!(!cargo_slot_permission_findings(&slot, uid.wrapping_add(1)).is_empty());
     }
+}
+
+// trace:BUG-2484 | ai:codex
+#[test]
+fn bug_2484_doctor_renders_resolved_binary_diagnostics() {
+    let mut report = DoctorReport::from_findings(Vec::new());
+    let diagnostic =
+        "Codex resolved binary: /fixture/vendor/bin/codex (ChatGPT SHA-256 pin matches)";
+    report.vendor_binaries.push(diagnostic.into());
+    assert_eq!(
+        serde_json::to_value(&report).unwrap()["vendor_binaries"][0],
+        diagnostic
+    );
+    let toon = render_doctor_report_toon(&report);
+    assert!(toon.contains("vendor_binaries"));
+    assert!(toon.contains(diagnostic));
+    assert_eq!(report.total, 0);
 }
