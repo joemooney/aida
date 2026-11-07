@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-246",
+  "publishes": [
+    {
+      "at": "2026-11-07T09:52:13.680864201Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-07T06:47:06.096005090Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T06:52:23.642320958Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-07T07:17:01.470394900Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-07T07:55:53.831067830Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-07T08:25:38.621881164Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-07T09:52:13.527823634Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-246",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5a0dff1aa07f227d8d9e37085b51bfca25cd4430",
+        "pr": 3581,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
