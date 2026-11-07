@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T07:22:59.600494807Z
+modified_at: 2026-11-07T07:24:52.724183195Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -796,6 +796,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b4e5-5c74-7222-8c9f-f54a07d673a1
+  author: aida-session-start
+  timestamp: 2026-11-07T07:24:52.724177935Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
