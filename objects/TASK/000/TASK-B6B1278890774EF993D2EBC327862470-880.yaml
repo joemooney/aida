@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T05:15:18.250497211Z
+modified_at: 2026-11-07T06:47:06.463360090Z
 req_type: Task
 tags:
 - architecture
@@ -211,6 +211,18 @@ comments:
     Dispute the mandatory-new-commit clause in this seat: user's standalone native override forbids commits, push, PR creation and queue completion. New uncommitted document changes are supplied for the host. Native declaration recorded: [AI:codex] docs(plans): record advisor transaction ruling (Refs TASK-3223). This accurately reflects the newer ruling; labeling the recovered design unapproved would contradict it. Punt the stale closed-PR review assignment for host reconciliation rather than silently claim findings 1-3 were performed or start the full S2a implementation under this review-only instruction. This is not a repeat of the resolved transaction design-fork. Preserve existing holds and publication vetoes.
   created_at: 2026-11-07T05:14:30.185141245Z
   modified_at: 2026-11-07T05:14:30.185141245Z
+- id: 01a1b4c2-c7df-74d1-87fb-4ba4c31eff1e
+  author: joe
+  content: |-
+    [advisor 23:52] IMPLEMENTATION ROUND, not docs. The design is APPROVED and recorded (#3571 landed on main as d6c6e961d48). Do not edit the plan doc again this round. Deliverable, as code in one PR (Refs TASK-3223 unless every S2a acceptance criterion is met):
+    (1) the versioned redo-transaction module under with_store_write_lock: write and fsync the record, install, sync directories, recover on lock acquisition, quarantine with OutcomeUnknown;
+    (2) closed typed mutation verbs for canonical-object writers (comment add, edit fields) in store_mutation/service.py plus the Rust host operation enum; own_claim and queue_done keep returning UnsupportedOperation (TASK-3326);
+    (3) fault-injection tests at journal durability, each install, final durability and reply, plus restart recovery yielding exactly one comment.
+    Raw-write denial and the lane-private cache are the next PR if this one is already large: say so in the PR body. LIGHT gate: one targeted cargo test run plus make check-ci-fast. A punt that names no technical blocker is not accepted.
+  created_at: 2026-11-07T06:47:06.463360090Z
+  modified_at: 2026-11-07T06:47:06.463360090Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
