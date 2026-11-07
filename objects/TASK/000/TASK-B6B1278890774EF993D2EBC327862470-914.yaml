@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T02:13:12.679223971Z
-modified_at: 2026-11-07T02:13:12.679223971Z
+modified_at: 2026-11-07T04:47:32.905149556Z
 req_type: Task
 tags:
 - carried-from:BUG-2472
 - finding-hash:a59da886
 - from-review:PR-3536
 - kind:carried-forward
+comments:
+- id: 01a1b455-5229-7d32-9896-6cfb8d4f7fc2
+  author: joe
+  content: '[advisor ruling] Approved, fasttrack: a hint that can only refuse again is misleading. Drop it after a train refusal, or name the real recovery.'
+  created_at: 2026-11-07T04:47:32.905149556Z
+  modified_at: 2026-11-07T04:47:32.905149556Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b3e2-3698-76a3-8ce3-e42940d43018
   author: joe
