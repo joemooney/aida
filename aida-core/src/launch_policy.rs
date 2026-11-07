@@ -79,51 +79,9 @@ pub fn decided_keys() -> impl Iterator<Item = &'static str> {
         .map(|(key, _)| *key)
 }
 
-/// A vendor AIDA can launch. Parsing is closed: an unknown name is an error,
-/// never a default, and vendors without a containment descriptor (opencode,
-/// gemini) are refused by name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LaunchVendor {
-    Claude,
-    Codex,
-    Agy,
-}
-
-/// The refusal for a vendor name [`LaunchVendor::parse`] does not accept.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnknownVendor(pub String);
-
-impl fmt::Display for UnknownVendor {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "`{}` is not a vendor AIDA can launch; use claude, codex or antigravity",
-            self.0
-        )
-    }
-}
-
-impl std::error::Error for UnknownVendor {}
-
-impl LaunchVendor {
-    /// Parse a vendor name exactly (case-insensitive, trimmed).
-    pub fn parse(raw: &str) -> Result<Self, UnknownVendor> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "claude" => Ok(Self::Claude),
-            "codex" => Ok(Self::Codex),
-            "agy" | "antigravity" => Ok(Self::Agy),
-            _ => Err(UnknownVendor(raw.trim().to_string())),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Claude => "claude",
-            Self::Codex => "codex",
-            Self::Agy => "antigravity",
-        }
-    }
-}
+// Compatibility path: identity and descriptors have one owner.
+// trace:STORY-2539 | ai:codex
+pub use crate::vendors::{LaunchVendor, UnknownVendor};
 
 /// What a launch is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

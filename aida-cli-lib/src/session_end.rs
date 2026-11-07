@@ -2668,8 +2668,13 @@ pub(crate) fn guard_remote_commits(
     if discard_unpushed {
         return Ok(());
     }
-    let count = remote_missing_commits_for_lease(main, lease)
-        .context("cannot establish remote commit coverage; session was NOT ended")?;
+    // Keep the chain visible even to CLI callers that render only Display.
+    // trace:BUG-2473 | ai:codex
+    let count = remote_missing_commits_for_lease(main, lease).map_err(|error| {
+        let message =
+            format!("cannot establish remote commit coverage; session was NOT ended: {error:#}");
+        anyhow::anyhow!(message)
+    })?;
     anyhow::ensure!(count == 0,
         "lease {} at {} holds {} commit(s) reachable from HEAD or local branches that no remote has. The session was NOT ended; push the commits, or explicitly pass --discard-unpushed to discard them (--force does not override this guard)",
         lease.id, lease.worktree_path.display(), count);
@@ -2683,10 +2688,14 @@ pub(crate) fn remote_missing_commits_for_lease(
     main: &std::path::Path,
     lease: &SessionLease,
 ) -> Result<u64> {
+    // Old MCP claims omit tree_kind; physical clone detection still selects
+    // sandboxed all-branch coverage, without granting cleanup authority.
+    // trace:BUG-2473 | ai:codex
     let ordinary = crate::seat_clone::remote_missing_commits(
         main,
         &lease.worktree_path,
-        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone
+            || crate::seat_clone::seat_clone_root(&lease.worktree_path).is_some(),
         &lease.branch,
     );
     if matches!(ordinary, Ok(0)) {

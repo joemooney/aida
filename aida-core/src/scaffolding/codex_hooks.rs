@@ -26,9 +26,14 @@
 use std::path::Path;
 
 /// Where the wiring lives, relative to the project root.
-pub const HOOKS_JSON_REL: &str = ".codex/hooks.json";
+// trace:STORY-2539 | ai:codex
+pub const HOOKS_JSON_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
+    .hooks
+    .wiring;
 /// Where the handler scripts live, relative to the project root.
-pub const HOOKS_DIR_REL: &str = ".codex/hooks";
+pub const HOOKS_DIR_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
+    .hooks
+    .handlers;
 
 /// The handlers referenced by the Codex wiring.
 ///
@@ -140,9 +145,14 @@ pub fn codex_hooks_wired(project_root: &Path) -> bool {
 
 /// Where the Antigravity wiring lives, relative to the project root.
 // trace:TASK-1744 | ai:antigravity
-pub const AGY_HOOKS_JSON_REL: &str = ".agents/hooks.json";
+// trace:STORY-2539 | ai:codex
+pub const AGY_HOOKS_JSON_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Agy)
+    .hooks
+    .wiring;
 /// Where the Antigravity handler scripts live, relative to the project root.
-pub const AGY_HOOKS_DIR_REL: &str = ".agents/hooks";
+pub const AGY_HOOKS_DIR_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Agy)
+    .hooks
+    .handlers;
 /// The named hook key AIDA manages inside `.agents/hooks.json`.
 pub const AGY_EXPIRY_NOTICE_KEY: &str = "aida-grant-expiry-notice";
 

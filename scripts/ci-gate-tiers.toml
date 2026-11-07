@@ -44,6 +44,9 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:TASK-3222 | ai:codex
+"Store writer inventory ratchet" = "fast"
+"Store writer inventory mutation fixtures" = "fast"
 # trace:STORY-1651 | ai:codex
 "Documentation audience coverage" = "fast"
 "Documentation landing smoke" = "full"

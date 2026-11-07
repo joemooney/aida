@@ -381,6 +381,8 @@ jobs:
       # trace:TASK-2825 | ai:claude
       # Force-claim clone regressions must run, never silently skip.
       # trace:BUG-2455 | ai:codex
+      # Legacy clone hygiene/reap regression must also run live.
+      # trace:BUG-2473 | ai:codex
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
@@ -395,11 +397,11 @@ jobs:
           # can split a passing test's console line. Keep console output for skips.
           # trace:STORY-2475 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture --logfile "$lib_results" \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ task_2708_claude_prepare_fake_home task_3219_live_ 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ bug_2473_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ task_2708_claude_prepare_fake_home task_3219_live_ 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture --logfile "$cli_results" \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
-          grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sed 's/^fn //' | sort -u > "$RUNNER_TEMP/live-bwrap.expected"
-          grep -hE '^ok .*' "$lib_results" "$cli_results" | grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+$' | sort -u > "$RUNNER_TEMP/live-bwrap.ran"
+          grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455|bug_2473)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sed 's/^fn //' | sort -u > "$RUNNER_TEMP/live-bwrap.expected"
+          grep -hE '^ok .*' "$lib_results" "$cli_results" | grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455|bug_2473)_bwrap_[a-z0-9_]+$' | sort -u > "$RUNNER_TEMP/live-bwrap.ran"
           expected=$(wc -l < "$RUNNER_TEMP/live-bwrap.expected")
           ran=$(wc -l < "$RUNNER_TEMP/live-bwrap.ran")
           echo "live bwrap tests: $ran of $expected ran ok"
@@ -895,6 +897,15 @@ jobs:
       - name: Test git auto-maintenance ratchet
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_git_maintenance_ratchet.py
+
+      # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
+      - name: Store writer inventory ratchet
+        if: matrix.shard == 'gates'
+        run: python3 scripts/check-store-writers.py
+
+      - name: Store writer inventory mutation fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_store_writer_inventory.py
 
       - name: Verify pure-move slice stack fixtures
         if: matrix.shard == 'gates'

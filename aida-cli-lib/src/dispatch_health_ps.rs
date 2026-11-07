@@ -406,6 +406,10 @@ pub(crate) fn dispatch_state(
 /// computes via [`crate::lease_state_for`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct WorktreeGitProbe {
+    // trace:BUG-2473 | ai:codex
+    pub(crate) branch: Option<String>,
+    /// Inspection failure is unknown state, never proof of uncommitted work.
+    pub(crate) error: Option<String>,
     /// True when `git status --porcelain` reports any tracked or untracked
     /// change (gitignored paths excluded).
     pub(crate) dirty: bool,
@@ -597,6 +601,71 @@ fn git_stdout(worktree: &Path, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Host-anchored inspection of both linked worktrees and private seat clones.
+/// Clone detection, rather than a possibly legacy lease default, chooses the
+/// sandbox. Cleanup still requires its own ownership and completion evidence.
+// trace:BUG-2473 | ai:codex
+pub(crate) fn probe_worktree_from(main: &Path, worktree: &Path) -> WorktreeGitProbe {
+    if crate::seat_clone::seat_clone_root(worktree).is_none() {
+        return probe_worktree(worktree);
+    }
+    let result = (|| -> anyhow::Result<WorktreeGitProbe> {
+        let snapshot = crate::seat_clone::dispatch_snapshot(main, worktree)?;
+        let mut fields = snapshot.splitn(4, |b| *b == 0);
+        let branch = std::str::from_utf8(fields.next().unwrap_or_default())?.trim();
+        let log = std::str::from_utf8(
+            fields
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("missing commit field"))?,
+        )?
+        .trim();
+        let ahead = std::str::from_utf8(
+            fields
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("missing ahead field"))?,
+        )?
+        .trim()
+        .parse()?;
+        let status = fields
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing status field"))?;
+        let mut records = parse_porcelain_z_bytes(status);
+        records.retain(|(xy, path)| {
+            xy != "??"
+                || !(crate::seat_clone::is_runtime_noise_entry(
+                    worktree,
+                    &format!("? {}", path.display()),
+                ) || (path == Path::new(".gitmodules")
+                    && crate::seat_clone::is_empty_gitmodules_placeholder(worktree)))
+        });
+        let paths: Vec<_> = records
+            .iter()
+            .filter(|(xy, path)| counts_toward_recent_movement(xy, &path.to_string_lossy()))
+            .map(|(_, path)| worktree.join(path))
+            .collect();
+        let (last_commit_subject, head_commit_age_secs) =
+            parse_commit_time_and_subject(log, chrono::Utc::now().timestamp());
+        Ok(WorktreeGitProbe {
+            branch: (!branch.is_empty()).then(|| branch.to_owned()),
+            dirty: !records.is_empty(),
+            ahead_of_main: ahead,
+            last_commit_subject,
+            head_commit_age_secs,
+            dirty_newest_mtime_age_secs: newest_mtime_age_secs(
+                &paths,
+                std::time::SystemTime::now(),
+            ),
+            untracked_records_only: records_are_untracked_only(&records),
+            // Conservatively retain ordinary salvage handling for clone dirt.
+            ..Default::default()
+        })
+    })();
+    result.unwrap_or_else(|error| WorktreeGitProbe {
+        error: Some(format!("{error:#}")),
+        ..Default::default()
+    })
+}
+
 /// Probe `worktree_path` for the three git-state signals dispatch-health
 /// needs. Read-only (inspection-only git subcommands, no writes) and
 /// tolerant of a missing/removed worktree — a gone directory degrades to the
@@ -656,6 +725,7 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         untracked_only,
         untracked_records_only,
         head_commit_age_secs,
+        ..Default::default()
     }
 }
 
@@ -976,7 +1046,12 @@ pub(crate) fn next_command_hint_with_untracked(
     untracked_only: bool,
 ) -> Option<String> {
     let wt = worktree_path.display();
-    let last_commit = last_commit_subject.unwrap_or("(no commits yet)");
+    let branch = if branch.trim().is_empty() {
+        "(branch unavailable)"
+    } else {
+        branch
+    };
+    let last_commit = last_commit_subject.unwrap_or("(commit unavailable)");
     // trace:BUG-778 | ai:claude
     let rebrief = if manual_enter {
         format!(
@@ -1484,7 +1559,7 @@ mod tests {
             hint.contains("aida agent new claude --cwd /tmp/wt-noscope"),
             "{hint}"
         );
-        assert!(hint.contains("(no commits yet)"), "{hint}");
+        assert!(hint.contains("(commit unavailable)"), "{hint}");
     }
 
     #[test]
