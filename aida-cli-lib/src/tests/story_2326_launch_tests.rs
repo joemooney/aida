@@ -29,11 +29,12 @@ fn request(posture: ContainmentPosture, kind: LaunchKind, tail: &[&str]) -> Laun
     }
 }
 
-/// The ops a command makes on the owned AIDA keys: `Some(v)` set, `None` removed.
+/// Explicit owned values. Cleared commands discard env_remove entries, so
+/// snapshots compare effective assignments; subprocess tests check absence.
 fn owned_ops(cmd: &std::process::Command) -> BTreeMap<String, Option<String>> {
     let owned: Vec<&str> = OWNED_KEYS.iter().map(|(k, _)| *k).collect();
     cmd.get_envs()
-        .filter(|(k, _)| owned.iter().any(|o| OsStr::new(o) == *k))
+        .filter(|(k, v)| v.is_some() && owned.iter().any(|o| OsStr::new(o) == *k))
         .map(|(k, v)| {
             (
                 k.to_string_lossy().into_owned(),
@@ -43,9 +44,17 @@ fn owned_ops(cmd: &std::process::Command) -> BTreeMap<String, Option<String>> {
         .collect()
 }
 
+// Assignment-only snapshots are valid only after proving inheritance is off.
+// trace:STORY-2326 | ai:codex
+fn cleared_owned_ops(cmd: &mut std::process::Command) -> BTreeMap<String, Option<String>> {
+    assert!(super::profile::environment_is_cleared(cmd));
+    owned_ops(cmd)
+}
+
 fn ops(items: &[(&str, Option<&str>)]) -> BTreeMap<String, Option<String>> {
     items
         .iter()
+        .filter(|(_, value)| value.is_some())
         .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
         .collect()
 }
@@ -169,9 +178,9 @@ fn spawn_agent_stamps_posture_markers() {
     let mut req = request(ContainmentPosture::Aida, LaunchKind::Fresh, &[]);
     req.cwd = tmp.path().to_path_buf();
     let ctx = LaunchContext::resolve_under(req, false).unwrap();
-    let cmd = spawn_agent(&ctx).unwrap();
+    let mut cmd = spawn_agent(&ctx).unwrap();
     assert_eq!(
-        owned_ops(&cmd),
+        cleared_owned_ops(&mut cmd),
         ops(&[
             ("AIDA_CONTAINED", Some("1")),
             ("AIDA_CONTAINMENT_POSTURE", Some("aida")),
@@ -190,9 +199,9 @@ fn spawn_agent_stamps_posture_markers() {
         let mut req = request(posture, LaunchKind::Fresh, &[]);
         req.set_cwd = true;
         let ctx = LaunchContext::resolve_under(req, false).unwrap();
-        let cmd = spawn_agent(&ctx).unwrap();
+        let mut cmd = spawn_agent(&ctx).unwrap();
         assert_eq!(
-            owned_ops(&cmd),
+            cleared_owned_ops(&mut cmd),
             ops(&[
                 ("AIDA_CONTAINED", None),
                 ("AIDA_CONTAINMENT_POSTURE", Some(value)),
@@ -209,17 +218,35 @@ fn assign_seat_table() {
         false,
     )
     .unwrap();
+    let seat_ops = |items: &[(&str, Option<&str>)]| {
+        items
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
+            .collect::<BTreeMap<_, _>>()
+    };
     let base = |seat: SeatDecision<'_>| {
         let mut cmd = std::process::Command::new("claude");
         assign_seat(&mut cmd, ctx.kind(), seat).unwrap();
-        owned_ops(&cmd)
+        cmd.get_envs()
+            .filter(|(key, _)| {
+                OWNED_KEYS
+                    .iter()
+                    .any(|(owned, _)| *key == OsStr::new(owned))
+            })
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
     };
     assert_eq!(
         base(SeatDecision::Child {
             role: "reviewer",
             grant: "g-1"
         }),
-        ops(&[
+        seat_ops(&[
             ("AIDA_SESSION_ROLE", Some("reviewer")),
             ("AIDA_SESSION_GRANT", Some("g-1")),
             ("AIDA_SESSION_PURPOSE", None),
@@ -232,7 +259,7 @@ fn assign_seat_table() {
             role: Some("implementer"),
             grant: Some("g-2")
         }),
-        ops(&[
+        seat_ops(&[
             ("AIDA_SESSION_ROLE", Some("implementer")),
             ("AIDA_SESSION_GRANT", Some("g-2")),
             ("AIDA_SESSION_PURPOSE", None),
@@ -243,16 +270,19 @@ fn assign_seat_table() {
             role: None,
             grant: None
         }),
-        ops(&[
+        seat_ops(&[
             ("AIDA_SESSION_ROLE", None),
             ("AIDA_SESSION_GRANT", None),
             ("AIDA_SESSION_PURPOSE", None),
         ])
     );
-    assert_eq!(base(SeatDecision::ThisSession { grant: None }), ops(&[]));
+    assert_eq!(
+        base(SeatDecision::ThisSession { grant: None }),
+        seat_ops(&[])
+    );
     assert_eq!(
         base(SeatDecision::ThisSession { grant: Some("g-3") }),
-        ops(&[("AIDA_SESSION_GRANT", Some("g-3"))])
+        seat_ops(&[("AIDA_SESSION_GRANT", Some("g-3"))])
     );
 }
 
@@ -298,7 +328,7 @@ fn background_handoff_env_has_no_seat_keys() {
         prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
         contained: false,
     };
-    let cmd = crate::agent_launch::build_agent_new_bg_command(
+    let mut cmd = crate::agent_launch::build_agent_new_bg_command(
         std::path::Path::new("/bin/echo"),
         &config,
         &plan,
@@ -306,9 +336,9 @@ fn background_handoff_env_has_no_seat_keys() {
         None,
     )
     .unwrap();
-    let env = owned_ops(&cmd);
+    let env = cleared_owned_ops(&mut cmd);
     for key in aida_core::launch_policy::BACKGROUND_FORBIDDEN_KEYS {
-        assert_eq!(env.get(*key), Some(&None), "{key} must be removed: {env:?}");
+        assert!(env.get(*key).is_none(), "{key} must be absent: {env:?}");
     }
     // Golden: the owned-key ops equal the pre-STORY-2326 builder's, minus the
     // listed removals (the role, previously set from the plan, and the purpose).
@@ -349,7 +379,7 @@ fn companion_marker_survives_spawn_agent() {
     ] {
         let mut cmd = spawn_agent(&ctx).unwrap();
         assign_seat(&mut cmd, ctx.kind(), seat).unwrap();
-        let env = owned_ops(&cmd);
+        let env = cleared_owned_ops(&mut cmd);
         assert!(!env.contains_key(ROLE_INSTANCE_ENV), "{seat:?}: {env:?}");
         for key in VENDOR_PROCESS_ONLY_KEYS {
             assert!(!env.contains_key(*key), "{seat:?}: {env:?}");
@@ -395,7 +425,10 @@ fn agent_cmd_override_never_crosses_the_boundary() {
     req.cwd = tmp.path().to_path_buf();
     let cmd = spawn_agent(&LaunchContext::resolve_with(req, false, true).unwrap()).unwrap();
     let env: BTreeMap<_, _> = cmd.get_envs().collect();
-    assert_eq!(env.get(OsStr::new("AIDA_AGENT_CMD")), Some(&None));
+    assert!(env
+        .get(OsStr::new("AIDA_AGENT_CMD"))
+        .and_then(|v| *v)
+        .is_none());
     let none = LaunchContext::resolve_under(
         request(ContainmentPosture::None, LaunchKind::Fresh, &[]),
         false,
@@ -446,7 +479,7 @@ fn launch_fixture() -> Launch {
         ));
     }
     body.push_str("printf -- '--\\n'\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done\n");
-    body.push_str("} > \"$AIDA_TEST_CAPTURE\"\n");
+    body.push_str(&format!("}} > '{}'\n", capture.display()));
     crate::test_exec::write_executable(&fake, body);
     Launch {
         project,
@@ -519,8 +552,8 @@ fn lines(items: &[&str]) -> Vec<String> {
 }
 
 /// The owned keys a launch decides (the forwarded handle token is per-run).
-fn decided_ops(cmd: &std::process::Command) -> BTreeMap<String, Option<String>> {
-    let mut ops = owned_ops(cmd);
+fn decided_ops(cmd: &mut std::process::Command) -> BTreeMap<String, Option<String>> {
+    let mut ops = cleared_owned_ops(cmd);
     ops.retain(|k, _| aida_core::launch_policy::decided_keys().any(|d| d == k));
     ops
 }
@@ -641,7 +674,10 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
             for cmd in [&exec, &run] {
                 let env: BTreeMap<_, _> = cmd.get_envs().collect();
                 let marker = c.then_some(OsStr::new("1"));
-                assert_eq!(env.get(OsStr::new("AIDA_CONTAINED")), Some(&marker));
+                assert_eq!(
+                    env.get(OsStr::new("AIDA_CONTAINED")).and_then(|v| *v),
+                    marker
+                );
             }
         }
     }
@@ -741,6 +777,11 @@ fn golden_interactive_claude_paths_are_unchanged() {
         ("AIDA_OS_WRAP", Some("0")),
         ("AIDA_CONTAINED", None),
         ("AIDA_AGENT_CMD", None),
+        ("AIDA_HEADLESS_LANE", None),
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_SESSION_GRANT", None),
+        ("AIDA_SESSION_PURPOSE", None),
+        ("AIDA_STANDALONE_IMPLEMENTER", None),
     ]);
     let (_git, _cwd) = pinned_git_cwd();
     let contained = ops(&[
@@ -778,11 +819,11 @@ fn golden_interactive_claude_paths_are_unchanged() {
         )
         .unwrap()
     };
-    assert_eq!(owned_ops(&exec(true, None)), contained);
-    assert_eq!(owned_ops(&exec(false, None)), uncontained);
-    assert_eq!(owned_ops(&exec(true, Some("g-9"))), granted);
-    assert_eq!(owned_ops(&run(true)), contained);
-    assert_eq!(owned_ops(&run(false)), uncontained);
+    assert_eq!(cleared_owned_ops(&mut exec(true, None)), contained);
+    assert_eq!(cleared_owned_ops(&mut exec(false, None)), uncontained);
+    assert_eq!(cleared_owned_ops(&mut exec(true, Some("g-9"))), granted);
+    assert_eq!(cleared_owned_ops(&mut run(true)), contained);
+    assert_eq!(cleared_owned_ops(&mut run(false)), uncontained);
     // The argv recorded from the pre-STORY-2326 builders (os_wrap off; the
     // generated settings JSON masked), not recomputed through their helpers.
     let session = ["--name", "n", "--session-id", "sid", "p"];
@@ -831,7 +872,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
         return;
     }
     let fx = launch_fixture();
-    let _ambient = fx.ambient();
+    let mut ambient = fx.ambient();
     std::env::set_current_dir(&fx.project).unwrap();
     let claude = crate::session::HeadlessVendor::Claude;
     let log = fx.project.join(".aida/headless.log");
@@ -918,12 +959,17 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
             miss.check("reviewer", c, mask_settings(args), golden::reviewer(c));
         }
 
+        // Command-only snapshots exercise the production projection. The
+        // surrounding spawn fixtures deliberately use the uncontained override
+        // seam, whose full-parent inheritance is separately covered.
+        // AmbientGuard owns the environment lock in this isolated test.
+        ambient.unset_key("AIDA_AGENT_CMD");
         // build_advisor_interactive_command.
-        let cmd =
+        let mut cmd =
             crate::session::build_advisor_interactive_command(None, claude, "advise", "g-adv", c)
                 .unwrap();
         assert_eq!(
-            decided_ops(&cmd),
+            decided_ops(&mut cmd),
             child_ops("advisor", "g-adv", c),
             "advisor contained={c}"
         );
@@ -935,7 +981,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
         );
 
         // build_coordinator_headless_command_inner, via the exec phase.
-        let cmd = crate::session::build_exec_vendor_headless_command(
+        let mut cmd = crate::session::build_exec_vendor_headless_command(
             None,
             claude,
             "coord",
@@ -948,7 +994,7 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
         )
         .unwrap();
         assert_eq!(
-            decided_ops(&cmd),
+            decided_ops(&mut cmd),
             child_ops("implementer", "g-c", c),
             "coordinator contained={c}"
         );
@@ -958,6 +1004,8 @@ fn golden_headless_and_lane_claude_paths_are_unchanged() {
             mask_settings(fx.argv_of(&cmd)),
             golden::coordinator(c),
         );
+
+        ambient.set_key("AIDA_AGENT_CMD", &fx.fake);
 
         // run_agent_generation (`aida agent new` foreground) without a role:
         // the seat keys are removed, and so (the listed change) is the
@@ -1066,13 +1114,13 @@ mod golden {
     }
 
     pub(super) fn advisor(contained: bool) -> Vec<String> {
-        let mut argv = lines(&["<agent>"]);
+        let mut argv = lines(&["claude"]);
         argv.extend(interactive(contained, "<uuid>", "advise"));
         argv
     }
 
     pub(super) fn coordinator(contained: bool) -> Vec<String> {
-        let mut argv = lines(&["<agent>"]);
+        let mut argv = lines(&["claude"]);
         argv.extend(headless(contained, "sid-c", "coord"));
         argv
     }
@@ -1197,7 +1245,7 @@ fn story_2326_pr_b_dispatch_background_env_and_refusal() {
         "AIDA_SESSION_GRANT",
         "AIDA_SESSION_PURPOSE",
     ] {
-        assert_eq!(env.get(OsStr::new(key)), Some(&None), "{key}");
+        assert!(env.get(OsStr::new(key)).and_then(|v| *v).is_none(), "{key}");
     }
     for (key, value) in [
         ("AIDA_SESSION_SCOPE", "STORY-2326"),
@@ -1522,5 +1570,204 @@ fn story_2326_intake_clarify_keyring_refusal_and_grant_cleanup() {
                 .is_some());
             let _ = std::fs::remove_file(&fx.capture);
         }
+    }
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_spawn_agent_clears_env() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("STORY2326_PARENT_SENTINEL", Some("secret")),
+        ("AIDA_HOME", Some("/fixture/config")),
+        ("AIDA_TEST_UNFORWARDED", Some("fixture")),
+        ("AIDA_GITHUB_TOKEN", Some("credential")),
+        ("AIDA_SESSION_PURPOSE", Some("parent purpose")),
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        ("AIDA_SESSION_GRANT", Some("explicit-session-selector")),
+    ]);
+    let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+    req.program = "/usr/bin/env".into();
+    req.args.clear();
+    let ctx = LaunchContext::resolve_under(req.clone(), false).unwrap();
+    let output = spawn_agent(&ctx).unwrap().output().unwrap();
+    assert!(output.status.success());
+    let env = String::from_utf8(output.stdout).unwrap();
+    assert!(env.lines().any(|line| line == "AIDA_HOME=/fixture/config"));
+    assert!(env.lines().any(|line| line.starts_with("PATH=")));
+    for name in [
+        "STORY2326_PARENT_SENTINEL",
+        "AIDA_TEST_UNFORWARDED",
+        "AIDA_GITHUB_TOKEN",
+    ] {
+        assert!(
+            !env.lines()
+                .any(|line| line.starts_with(&format!("{name}="))),
+            "{name}"
+        );
+    }
+    for seat in [
+        SeatDecision::Child {
+            role: "reviewer",
+            grant: "child-selector",
+        },
+        SeatDecision::Lane {
+            role: None,
+            grant: None,
+        },
+    ] {
+        let mut command = spawn_agent(&ctx).unwrap();
+        assign_seat(&mut command, LaunchKind::Fresh, seat).unwrap();
+        let output = command.output().unwrap();
+        assert!(output.status.success());
+        let env = String::from_utf8(output.stdout).unwrap();
+        assert!(!env.contains("AIDA_SESSION_PURPOSE="));
+        assert!(!env.contains("AIDA_SESSION_ROLE=advisor"));
+        assert!(!env.contains("AIDA_SESSION_GRANT=explicit-session-selector"));
+    }
+    let mut command = spawn_agent(&ctx).unwrap();
+    assign_seat(
+        &mut command,
+        LaunchKind::Fresh,
+        SeatDecision::ThisSession { grant: None },
+    )
+    .unwrap();
+    let output = command.output().unwrap();
+    assert!(output.status.success());
+    let env = String::from_utf8(output.stdout).unwrap();
+    assert!(env.lines().any(|line| line == "AIDA_SESSION_ROLE=advisor"));
+    assert!(env
+        .lines()
+        .any(|line| line == "AIDA_SESSION_GRANT=explicit-session-selector"));
+    assert!(!env.contains("STORY2326_PARENT_SENTINEL="));
+    let ctx = LaunchContext::resolve_with(req, false, true).unwrap();
+    let output = spawn_agent(&ctx).unwrap().output().unwrap();
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .contains("STORY2326_PARENT_SENTINEL=secret"));
+}
+
+// Exercise the real cleared process boundary without AIDA_AGENT_CMD inheritance.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_reviewer_verdict_is_explicit_after_clear() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_REVIEW_VERDICT_FILE",
+        Some("/review/verdict.json"),
+    )]);
+    let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+    req.program = "/usr/bin/env".into();
+    req.args.clear();
+    let ctx = LaunchContext::resolve_under(req, false).unwrap();
+    for role in ["reviewer", "implementer"] {
+        let mut cmd = spawn_agent(&ctx).unwrap();
+        assign_seat(
+            &mut cmd,
+            ctx.kind(),
+            SeatDecision::Child { role, grant: "" },
+        )
+        .unwrap();
+        let output = cmd.output().unwrap();
+        assert!(output.status.success());
+        let env = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(
+            env.lines()
+                .any(|l| l == "AIDA_REVIEW_VERDICT_FILE=/review/verdict.json"),
+            role == "reviewer"
+        );
+    }
+    let mut cmd = spawn_agent(&ctx).unwrap();
+    cmd.env("AIDA_REVIEW_VERDICT_FILE", "/site/verdict.json");
+    assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        SeatDecision::Child {
+            role: "reviewer",
+            grant: "",
+        },
+    )
+    .unwrap();
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .any(|line| line == "AIDA_REVIEW_VERDICT_FILE=/site/verdict.json"));
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_cleared_claude_advisor_transports_current_grant() {
+    let root = tempfile::tempdir().unwrap();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        Some("advisor"),
+        &[
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_SESSION_PURPOSE", Some("launcher purpose")),
+        ],
+    );
+    for grant in ["advisor-consult-grant", ""] {
+        ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+        let mut cmd = crate::phase_driver::build_phase_driver_advisor_command(
+            root.path(),
+            "claude",
+            &["-p".into(), "consult".into()],
+            &root.path().join("request"),
+            &root.path().join("response"),
+            "CEILING",
+            "10",
+            crate::session::HeadlessVendor::Claude,
+            false,
+        )
+        .unwrap();
+        assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+        let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            env.get(OsStr::new("AIDA_SESSION_GRANT")),
+            Some(&Some(OsStr::new(grant)))
+        );
+        assert_eq!(
+            env.get(OsStr::new("AIDA_SESSION_ROLE")),
+            Some(&Some(OsStr::new("advisor")))
+        );
+        assert!(!env.contains_key(OsStr::new("AIDA_SESSION_PURPOSE")));
+    }
+}
+
+// Compete has no delegated seat; clearing Claude intentionally drops the
+// parent's owned selectors rather than turning an arm into its parent session.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_cleared_claude_compete_has_no_parent_seat() {
+    let root = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        Some("advisor"),
+        &[
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_SESSION_GRANT", Some("parent-grant")),
+            ("AIDA_SESSION_PURPOSE", Some("parent purpose")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let mut cmd = crate::compete_cmd::build_compete_arm_command(
+        root.path(),
+        root.path(),
+        "claude",
+        &["-p".into(), "candidate".into()],
+        "claude",
+    )
+    .unwrap();
+    assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+    for key in [
+        "AIDA_SESSION_ROLE",
+        "AIDA_SESSION_GRANT",
+        "AIDA_SESSION_PURPOSE",
+    ] {
+        assert!(
+            !cmd.get_envs().any(|(k, _)| k == key),
+            "parent selector {key}"
+        );
     }
 }

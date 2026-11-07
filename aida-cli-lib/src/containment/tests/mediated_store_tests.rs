@@ -17,7 +17,7 @@ fn mediated_profile_admission_is_closed_before_any_launch_effect() {
     );
     for value in ["mediated", "", "unknown"] {
         child.env("AIDA_STORE_MUTATION_PROFILE", value);
-        let error = PreparedLaunch::prepare(&child, Path::new("/missing-root"), None)
+        let error = PreparedLaunch::prepare(&mut child, Path::new("/missing-root"), None)
             .err()
             .unwrap()
             .to_string();

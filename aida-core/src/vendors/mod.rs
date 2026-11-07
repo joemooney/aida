@@ -48,6 +48,25 @@ impl LaunchVendor {
     }
 }
 
+/// Values supplied by an effectful adapter, selected by the registry's closed
+/// identity. Keeps adapter configuration local without duplicating vendor arms.
+// trace:STORY-2326 | ai:codex
+pub struct VendorValues<T> {
+    pub claude: T,
+    pub codex: T,
+    pub agy: T,
+}
+
+impl<T> VendorValues<T> {
+    pub fn get(self, vendor: LaunchVendor) -> T {
+        match vendor {
+            LaunchVendor::Claude => self.claude,
+            LaunchVendor::Codex => self.codex,
+            LaunchVendor::Agy => self.agy,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillSyntax {
     Slash,
