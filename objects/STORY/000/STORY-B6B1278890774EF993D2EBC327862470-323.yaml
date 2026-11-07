@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T17:32:43.476481062Z
+modified_at: 2026-11-07T18:32:59.483260300Z
 req_type: Story
 tags:
 - architecture
@@ -487,6 +487,13 @@ comments:
   created_at: 2026-11-07T17:32:43.476481062Z
   modified_at: 2026-11-07T17:32:43.476481062Z
   session_id: 01a1b70cdaa1
+- id: 01a1b749-08d9-71c1-b376-9f9fb8e4c071
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 11:35: PR-C landed (#3600, 292b2370369): train, review, takeover and session-start readers query the ownership record. FINAL slice = PR-D, COMPLETING (STORY-2325). (1) Relaunch and rotation paths (aida agent new --rotate relaunch, review-watch relaunch, fill/queue relaunch of a dead lane) decide ''is this owned and alive'' only from the ownership record''s judge. No direct lease/pid probes remain outside ownership/. Dead owners are reclaimed by rule (journaled), never --force. (2) Mail retention checks against message state (delivered/acknowledged), not the build id. (3) A ratchet test forbids new direct lease-liveness probes outside ownership/. LIGHT gate. Runs on dell1.'
+  created_at: 2026-11-07T18:32:59.353576532Z
+  modified_at: 2026-11-07T18:32:59.353576532Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
