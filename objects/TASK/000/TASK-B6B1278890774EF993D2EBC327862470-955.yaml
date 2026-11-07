@@ -1,0 +1,29 @@
+id: 01a1b7de-e413-74e1-9b3a-b4f327bad5cf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-955
+title: COSMETIC (non-blocking) AGENTS.md:1-4 and OVERVIEW.md:1793-1801 add per-change …
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3365, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC (non-blocking) AGENTS.md:1-4 and OVERVIEW.md:1793-1801 add per-change notes, contrary to repo CLAUDE.md (per-change notes belong in the PR body + spec comment).
+
+  PR: #3615
+  Reviewed sha: f98e1d8d69cb4e460c202fb9f7aca819c53684ca
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T21:16:40.339736604Z
+modified_at: 2026-11-07T21:16:40.339736604Z
+req_type: Task
+tags:
+- carried-from:TASK-3365
+- finding-hash:333b5661
+- from-review:PR-3615
+- kind:carried-forward
+filed_at:
+  code_sha: 79603aff6b027dc2e6e68a808ea800c353af9cc2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e278eeb1d8f
+  vendor: claude
