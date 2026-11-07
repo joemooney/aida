@@ -1,0 +1,30 @@
+id: 01a1b7f2-1a41-7032-99ee-816c82ca8280
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-009
+agreed_id: SPIKE-713
+title: 'Deep dive: crate split plan for aida-cli-lib (EPIC-78 layers plus build-time parallelism), measured and sequenced against the in-flight refactors'
+description: |
+  ## Question
+  How should aida-cli-lib (about 708k non-test lines, ~1M with tests, 2026-11-07; 584k on 2026-10-12) be split into crates, both for EPIC-78's layered architecture (an aida-app use-case layer behind ports) and for build-time parallelism (STORY-772 scoping: a bin+lib split gains ~0-5%; the real lever is several independent lib crates, blocked by the pub(crate) helper web)?
+
+  ## Deliverable
+  docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md, with: (1) a module coupling graph from code evidence (codegraph/rg): clusters, fan-in hubs, and the pub(crate) widening cost per candidate boundary; (2) a clean cargo build --timings baseline (dell1), the critical path, and the estimated speedup per split; (3) a crate map reconciling EPIC-78 layers with the build-time cut, and the order; (4) incremental PRs sequenced against STORY-2326/2538/2539/2325; (5) a leaf-crate plan for the shared helper web; (6) a split plan for each hotspot file; (7) risks, and what NOT to split.
+
+  ## Acceptance
+  The doc is on main via a docs PR (Refs this spike); every claim cites file:line or a measurement; the advisor records the first slice to file when STORY-2326 lands; no code moves.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T21:37:39.393335869Z
+modified_at: 2026-11-07T21:37:39.393335869Z
+req_type: Spike
+filed_at:
+  code_sha: 79603aff6b027dc2e6e68a808ea800c353af9cc2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e278eeb1d8f
+  vendor: claude
+  session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+human_only: true
