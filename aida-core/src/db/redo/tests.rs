@@ -78,7 +78,9 @@ fn restart_child() {
     };
     let root = PathBuf::from(root);
     let checkpoint = environment.var("AIDA_TEST_REDO_CHECKPOINT").unwrap();
-    if checkpoint == "recover" {
+    if checkpoint == "recover-empty" {
+        with_store_write_lock(&root, || Ok(())).unwrap();
+    } else if checkpoint == "recover" {
         with_store_write_lock(&root, || {
             let row = crate::object_store::read_object(&root.join("objects"), "TASK-1")?;
             assert_eq!(row.comments.len(), 1);
@@ -123,6 +125,9 @@ fn restart_child() {
 fn restart_recovers_each_boundary_and_replays_exact_result_once() {
     for point in [
         "record_rename",
+        "object_write",
+        "object_sync",
+        "object_rename",
         "journal",
         "install-1",
         "install-2",
@@ -734,4 +739,112 @@ fn unreadable_redo_generation_refuses_freshness_without_inventing_a_git_sha() {
         assert!(cached.cache_snapshot_is_stale().is_err());
         assert_eq!(cached.cache().source_head_sha().unwrap(), recorded);
     }
+}
+
+#[test]
+fn read_only_queries_never_initialize_or_quarantine() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let epoch = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::new_v4();
+    assert!(!status(root, "fixed", epoch, id).unwrap());
+    assert!(lookup(root, "fixed", epoch, id, &"a".repeat(64))
+        .unwrap()
+        .is_none());
+    assert!(!root.join(".aida").exists());
+    let dir = journal(root).unwrap();
+    let path = dir.join(format!("{epoch}-{id}.done"));
+    fs::write(&path, "corrupt").unwrap();
+    assert!(status(root, "fixed", epoch, id).is_err());
+    assert!(lookup(root, "fixed", epoch, id, &"a".repeat(64)).is_err());
+    assert_eq!(fs::read(&path).unwrap(), b"corrupt");
+    assert!(!path.with_extension("unknown").exists());
+}
+
+#[test]
+fn restart_at_marker_boundaries_recovers_without_accepting_a_request() {
+    for point in ["marker_write", "marker_sync", "marker_rename"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (d, _) = fixture(root);
+        fs::write(root.join("decision.json"), serde_json::to_vec(&d).unwrap()).unwrap();
+        assert_eq!(child(root, point).code(), Some(72), "{point}");
+        // A read must also tolerate incomplete initialization without repairing it.
+        assert!(!status(root, &d.binding, d.epoch, d.request_id).unwrap());
+        assert!(child(root, "recover-empty").success(), "{point}");
+        with_store_write_lock(root, || {
+            assert!(!status(root, &d.binding, d.epoch, d.request_id)?);
+            for image in &d.images {
+                assert_eq!(hash(&object_bytes(root, &image.spec_id)?), image.before);
+            }
+            assert!(fs::read_dir(root.join(".aida/redo"))?.all(|e| !temporary(&e.unwrap().path())));
+            Ok(())
+        })
+        .unwrap();
+    }
+}
+
+#[test]
+fn crashed_staging_is_excluded_from_publication_and_cleaned_on_recovery() {
+    for point in ["record_write", "object_write"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (d, _) = fixture(root);
+        fs::write(root.join("decision.json"), serde_json::to_vec(&d).unwrap()).unwrap();
+        assert_eq!(child(root, point).code(), Some(72));
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8(out.stdout).unwrap()
+        };
+        // Even an immediate broad stage after the crash cannot sweep new
+        // canonical staging bytes or durable retry records into publication.
+        git(&["add", "-A"]);
+        let staged = git(&["diff", "--cached", "--name-only"]);
+        assert!(!staged.contains(".tmp-"), "{staged}");
+        assert!(!staged.contains(".aida/redo"), "{staged}");
+        // Simulate older same-directory staging; cleanup is precise and never
+        // follows a linked subtree or deletes unrelated user temp names.
+        let object = crate::object_store::object_path(&root.join("objects"), "TASK-1").unwrap();
+        let legacy = object.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+        fs::write(&legacy, "abandoned").unwrap();
+        let keep = object.with_extension("tmp-not-a-uuid");
+        fs::write(&keep, "keep").unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let outside_tmp = outside
+            .path()
+            .join(format!("TASK-3.tmp-{}", uuid::Uuid::new_v4()));
+        fs::write(&outside_tmp, "external").unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.join("objects/linked")).unwrap();
+        assert!(child(root, "recover-empty").success());
+        assert_eq!(fs::read(outside_tmp).unwrap(), b"external");
+        assert!(!legacy.exists());
+        assert!(keep.exists());
+        assert!(fs::read_dir(root.join(".aida/redo"))
+            .unwrap()
+            .all(|e| !temporary(&e.unwrap().path())));
+    }
+}
+
+#[test]
+fn initialized_journal_recovery_does_not_resolve_git_excludes_again() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    with_store_write_lock(root, || {
+        journal(root)?;
+        // Any Git subprocess here would fail. An existing journal must need
+        // only local journal IO, regardless of Git discovery availability.
+        fs::write(root.join(".git"), "invalid git directory")?;
+        recover(root)?;
+        Ok(())
+    })
+    .unwrap();
 }

@@ -1,13 +1,3 @@
-Canonical redo installs use a separate cache generation, preserving real Git
-SHAs for incremental refresh and write-through restamping. Journal quotas are
-per launch epoch. Restart tests cover record write, fsync and rename before
-canonical installation; unrenamed temporary files grant no acceptance.
-Typed edit schemas reject explicit null fields and require lowercase revisions.
-Live comment/edit admission remains disabled pending durable
-Git/event publication; quarantines name their recovery file and the
-[operator procedure](docs/advanced/store-redo-recovery.md).
-<!-- trace:TASK-3223 | ai:codex -->
-
 Question parking with an empty consequence preserves an existing deferral trigger
 and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.

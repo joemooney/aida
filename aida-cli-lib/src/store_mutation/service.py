@@ -284,10 +284,12 @@ class StoreMutationSession:
                           role=self.binding['role'], permitted_verbs=list(MUTATION_VERBS))
             self.probed = True
         elif request['op'] == 'request_status':
-            if hasattr(self.authorize, 'operation'):
+            if request['data']['request_id'] in self.accepted:
+                result = dict(state='completed')
+            elif hasattr(self.authorize, 'operation'):
                 result = self.authorize.operation(request)
             else:
-                result = dict(state='completed' if request['data']['request_id'] in self.accepted else 'unknown')
+                result = dict(state='unknown')
         else:
             if not hasattr(self.authorize, 'operation'):
                 raise MutationRefusal('Unavailable')

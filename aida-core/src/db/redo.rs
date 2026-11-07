@@ -120,20 +120,9 @@ pub(crate) fn cache_generation(root: &Path) -> Result<String> {
     }
     Ok(hash(&read(&path)?))
 }
+// Read paths never quarantine or otherwise mutate journal evidence.
 fn known_decision(path: &Path) -> Result<Decision> {
-    match decode(path) {
-        Ok(d) => Ok(d),
-        Err(_) => {
-            let quarantined = path.with_extension("unknown");
-            let diagnostic = if fs::rename(path, &quarantined).is_ok() {
-                quarantined
-            } else {
-                path.to_path_buf()
-            };
-            let _ = sync(path.parent().unwrap());
-            Err(OutcomeUnknown(diagnostic).into())
-        }
-    }
+    decode(path).map_err(|_| OutcomeUnknown(path.to_path_buf()).into())
 }
 fn replace(path: &Path, bytes: &[u8]) -> Result<()> {
     replace_with_fault(path, bytes, &mut |_| Ok(()))
@@ -146,7 +135,19 @@ fn replace_with_fault(
     bytes: &[u8],
     fault: &mut impl FnMut(&str) -> Result<()>,
 ) -> Result<()> {
-    let tmp = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+    replace_in(path, path.parent().unwrap(), bytes, fault)
+}
+fn replace_in(
+    path: &Path,
+    staging: &Path,
+    bytes: &[u8],
+    fault: &mut impl FnMut(&str) -> Result<()>,
+) -> Result<()> {
+    let tmp = staging.join(format!(
+        "{}.tmp-{}",
+        path.file_stem().unwrap().to_string_lossy(),
+        uuid::Uuid::new_v4()
+    ));
     let mut f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -158,28 +159,80 @@ fn replace_with_fault(
     fault("record_sync")?;
     fs::rename(&tmp, path)?;
     fault("record_rename")?;
-    sync(path.parent().unwrap())
+    sync(path.parent().unwrap())?;
+    if staging != path.parent().unwrap() {
+        sync(staging)?;
+    }
+    Ok(())
+}
+// Only our UUID-suffixed staging names are disposable, never accepted records.
+fn temporary(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .and_then(|s| s.strip_prefix("tmp-"))
+        .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok())
+}
+fn existing_journal(root: &Path) -> Result<Option<PathBuf>> {
+    let dir = root.join(".aida/redo");
+    if !present(&dir)? {
+        return Ok(None);
+    }
+    for path in [root.join(".aida"), dir.clone()] {
+        let md = fs::symlink_metadata(path)?;
+        ensure!(
+            md.is_dir() && !md.file_type().is_symlink(),
+            "unsafe transaction directory"
+        );
+    }
+    let marker = dir.join("format");
+    if !present(&marker)? {
+        for entry in fs::read_dir(&dir)? {
+            ensure!(
+                temporary(&entry?.path()),
+                "OutcomeUnknown: missing transaction format"
+            );
+        }
+        return Ok(None);
+    }
+    ensure!(
+        read(&marker)? == b"1\n",
+        "unsupported canonical transaction format"
+    );
+    Ok(Some(dir))
 }
 fn journal(root: &Path) -> Result<PathBuf> {
+    journal_with_fault(root, &mut |_| Ok(()))
+}
+fn journal_with_fault(root: &Path, fault: &mut impl FnMut(&str) -> Result<()>) -> Result<PathBuf> {
+    if let Some(dir) = existing_journal(root)? {
+        return Ok(dir);
+    }
+    // Do this only at initialization, before writing even the format temporary.
     if root.join(".git").exists() {
         crate::git_ops::ensure_store_redo_excluded(root)?;
     }
     let dir = root.join(".aida/redo");
     directory(&root.join(".aida"))?;
     directory(&dir)?;
-    let marker = dir.join("format");
-    if !present(&marker)? {
-        ensure!(
-            fs::read_dir(&dir)?.next().is_none(),
-            "OutcomeUnknown: missing transaction format"
-        );
-        replace(&marker, b"1\n")?;
-    }
-    ensure!(
-        read(&marker)? == b"1\n",
-        "unsupported canonical transaction format"
-    );
+    replace_with_fault(&dir.join("format"), b"1\n", &mut |point| {
+        fault(&point.replacen("record_", "marker_", 1))
+    })?;
     Ok(dir)
+}
+// Recovery owns the writer lock. Never follow directory links while removing
+// staging debris left by older same-directory canonical replacements.
+fn clean_temporaries(dir: &Path, recursive: bool) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_file() && temporary(&entry.path()) {
+            fs::remove_file(entry.path())?;
+            sync(dir)?;
+        } else if recursive && kind.is_dir() {
+            clean_temporaries(&entry.path(), true)?;
+        }
+    }
+    Ok(())
 }
 fn name(d: &Decision) -> String {
     format!("{}-{}", d.epoch, d.request_id)
@@ -224,7 +277,14 @@ fn install(root: &Path, d: &Decision, fault: &mut impl FnMut(&str) -> Result<()>
     )?;
     for i in &d.images {
         let path = crate::object_store::object_path(&root.join("objects"), &i.spec_id)?;
-        replace(&path, i.after.as_bytes())?;
+        // Keep canonical staging bytes under the journal's Git exclusion even
+        // if the process dies before rename. Both directories are synced.
+        replace_in(
+            &path,
+            &root.join(".aida/redo"),
+            i.after.as_bytes(),
+            &mut |point| fault(&point.replacen("record_", "object_", 1)),
+        )?;
         fault("install")?;
     }
     // Derived cache must not remain authoritative after an uncommitted install.
@@ -256,6 +316,16 @@ fn recover_inner(root: &Path) -> Result<()> {
         Ok(_) => (),
     }
     let dir = journal(root)?;
+    clean_temporaries(&dir, false)?;
+    let objects = root.join("objects");
+    if present(&objects)? {
+        let md = fs::symlink_metadata(&objects)?;
+        ensure!(
+            md.is_dir() && !md.file_type().is_symlink(),
+            "unsafe canonical directory"
+        );
+        clean_temporaries(&objects, true)?;
+    }
     let mut pending = Vec::new();
     for entry in fs::read_dir(&dir)? {
         let path = entry?.path();
@@ -297,11 +367,10 @@ pub fn lookup(
     id: uuid::Uuid,
     digest: &str,
 ) -> Result<Option<serde_json::Value>> {
-    ensure!(
-        super::store_write_lock_held(root),
-        "transaction lookup requires store lock"
-    );
-    let path = journal(root)?.join(format!("{epoch}-{id}.done"));
+    let Some(dir) = existing_journal(root)? else {
+        return Ok(None);
+    };
+    let path = dir.join(format!("{epoch}-{id}.done"));
     if !present(&path)? {
         return Ok(None);
     }
@@ -314,11 +383,10 @@ pub fn lookup(
 }
 /// Durable status scoped to the fixed launch binding.
 pub fn status(root: &Path, binding: &str, epoch: uuid::Uuid, id: uuid::Uuid) -> Result<bool> {
-    ensure!(
-        super::store_write_lock_held(root),
-        "status requires store lock"
-    );
-    let path = journal(root)?.join(format!("{epoch}-{id}.done"));
+    let Some(dir) = existing_journal(root)? else {
+        return Ok(false);
+    };
+    let path = dir.join(format!("{epoch}-{id}.done"));
     if !present(&path)? {
         return Ok(false);
     }
@@ -345,7 +413,7 @@ fn commit_with_fault(
     if let Some(r) = lookup(root, &d.binding, d.epoch, d.request_id, &d.digest)? {
         return Ok(r);
     }
-    let dir = journal(root)?;
+    let dir = journal_with_fault(root, fault)?;
     // Quota is per launch epoch. Retain old retry evidence without blocking
     // new launches; never evict an unresolved request.
     let mut retained = 0;

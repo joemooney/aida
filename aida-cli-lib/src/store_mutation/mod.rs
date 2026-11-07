@@ -96,12 +96,10 @@ fn host_operation(
             fields,
         },
         HostOperation::RequestStatus { request_id } => {
-            return aida_core::db::with_store_write_lock_bounded(root, || {
-                authorize()?;
-                Ok(
-                    serde_json::json!({"state": if redo::status(root, binding, epoch, request_id)? {"completed"} else {"unknown"}}),
-                )
-            })
+            authorize()?;
+            return Ok(
+                serde_json::json!({"state": if redo::status(root, binding, epoch, request_id)? {"completed"} else {"unknown"}}),
+            );
         }
     };
     aida_core::db::GitBackend::new(root)?.mutate_canonical(
@@ -536,4 +534,73 @@ fn staged_writes_cannot_reach_host_mutation_or_authorization() {
         .unwrap_err();
         assert_eq!(error.to_string(), "UnsupportedOperation");
     }
+}
+
+// Exercise the actual Python authority RPC against the Rust host, including a
+// held writer lock: read-only status must neither wait on it nor create redo.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)]
+#[test]
+fn request_status_real_authority_is_read_only_and_preserves_local_results() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    aida_core::db::with_store_write_lock(root, || {
+        let (mut host, helper) = UnixStream::pair()?;
+        host.set_read_timeout(Some(Duration::from_secs(5)))?;
+        let root = root.to_path_buf();
+        let worker = std::thread::spawn(move || {
+            let mut operations = 0;
+            loop {
+                let mut byte = [0];
+                match host.read_exact(&mut byte) {
+                    Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                    other => other.unwrap(),
+                }
+                if byte == [b'?'] {
+                    host.write_all(b"Y").unwrap();
+                } else {
+                    assert_eq!(byte, [b'M']);
+                    let request = read_operation(&mut host).unwrap();
+                    let result = host_operation(&root, "fixed", request.launch_epoch, &[], "author", &request, || Ok(())).unwrap();
+                    assert_eq!(result, serde_json::json!({"state":"unknown"}));
+                    let wire = serde_json::to_vec(&serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result})).unwrap();
+                    host.write_all(&(wire.len() as u32).to_be_bytes()).unwrap();
+                    host.write_all(&wire).unwrap();
+                    operations += 1;
+                }
+            }
+            assert_eq!(operations, 1, "local completed IDs must not fall through to host");
+        });
+        let script = r#"
+import json, os, socket, uuid
+from tests.test_store_mutation import ns, Service, Identity
+channel = socket.socket(fileno=0)
+authority = ns['MutationAuthority'](channel)
+epoch = str(uuid.uuid4())
+service = Service(dict(epoch=epoch, specs=[], role='implementer'), Identity(), authority)
+def dispatch(op, data):
+    request = dict(version=1, launch_epoch=epoch, request_id=str(uuid.uuid4()), op=op, data=data)
+    reply = json.loads(service.dispatch(json.dumps(request).encode(), (os.getpid(), os.getuid(), os.getgid())))
+    return request['request_id'], reply['result']
+probe, _ = dispatch('session_probe', dict(challenge='read-only'))
+status, result = dispatch('request_status', dict(request_id=probe))
+assert result == dict(state='completed'), result
+_, result = dispatch('request_status', dict(request_id=status))
+assert result == dict(state='completed'), result
+_, result = dispatch('request_status', dict(request_id=str(uuid.uuid4())))
+assert result == dict(state='unknown'), result
+service.close()
+channel.close()
+"#;
+        let file = File::from(std::os::fd::OwnedFd::from(helper));
+        let output = std::process::Command::new("python3")
+            .args(["-c", script])
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
+            .stdin(std::process::Stdio::from(file))
+            .output()?;
+        worker.join().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!tmp.path().join(".aida/redo").exists());
+        Ok(())
+    }).unwrap();
 }

@@ -1483,6 +1483,12 @@ Restart coverage includes record write, file fsync and rename: unrenamed
 temporary files are ignored as decisions, while visible pending records recover
 before another writer enters. Recovery syncs the journal directory before any
 object install, including when the prior process died immediately after rename.
+Status and retry lookup are read-only: absent journals report unknown without
+creating state or acquiring the writer lock. Status retains completed read-only
+requests from the launch's local accepted map. Git exclusion is installed only
+when initializing a journal. Canonical replacement staging stays inside that
+excluded directory; recovery removes abandoned UUID staging files there and
+legacy canonical staging files under objects before any writer can publish.
 Edit fields must be strings when present; null is refused. Expected revisions
 use lowercase SHA-256 hex in both schemas.
 **Live `comment_add` and `spec_edit` remain disabled** in both broker and host
