@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T20:45:51.848380266Z
+modified_at: 2026-11-07T20:58:34.942206476Z
 req_type: Story
 tags:
 - architecture
@@ -600,6 +600,12 @@ comments:
   modified_at: 2026-11-07T20:45:51.848380266Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ce-543e-7823-be37-b245ec257a78
+  author: joe
+  content: 'Round 7 validation checkpoint: expanded ownership-liveness ratchet passes (2 Python tests); rustfmt and git diff --check pass. First mailbox_lifecycle run executed 168 tests (165 pass, 3 old activation-based teardown fixtures failed); those fixtures now use pending delivery state and are corrected, with a rerun queued. CLI runner job j20261107T203840412-2-0 timed out after 900s before any executed-test result; launcher reported overlay-stale because the primary rewrote the shared seed generation. Replacement CLI run j20261107T204019737-2-0 is active. No final validation/completion claim yet. The clean/no-origin-branch safe rule now lives in ownership::judge, with the adapter supplying positive remote-coverage evidence.'
+  created_at: 2026-11-07T20:58:34.942206476Z
+  modified_at: 2026-11-07T20:58:34.942206476Z
+  session_id: 01a1b7b65058
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
