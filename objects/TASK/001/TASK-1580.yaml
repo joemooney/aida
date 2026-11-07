@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-11-07T20:54:38.129275470Z
+modified_at: 2026-11-07T20:54:40.346332131Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -43,6 +43,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:27:24.698296065Z
   modified_at: 2026-11-07T20:27:24.698296065Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ca-bfda-7783-93e9-1e9457c6b6aa
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Its only job was holding BUG-1669, now completed.'
+  created_at: 2026-11-07T20:54:40.346332131Z
+  modified_at: 2026-11-07T20:54:40.346332131Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
