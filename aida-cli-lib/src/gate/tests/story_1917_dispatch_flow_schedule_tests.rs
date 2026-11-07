@@ -929,6 +929,40 @@ fn story_1917_train_runner_lock_clean_store_ship_first_update_branch_and_train_f
         vec!["ship:505:try1"],
         "train must stop on first failing PR (#505) without attempting #506"
     );
+
+    // Journal contention in the single-PR train fallback must leave a runnable
+    // pending request, not a terminal ship failure. Its next claim rechecks
+    // authority and succeeds once the other train has exited.
+    // trace:STORY-2401 | ai:codex
+    TEST_FLOW_TRAIN_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, _| {
+            Err(anyhow::Error::new(crate::pr_train::TrainJournalBusy).context("single-PR fallback"))
+        }));
+    });
+    let sub_busy = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Train { prs: vec![504] },
+        now,
+    )
+    .unwrap();
+    let deferred =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_busy.request.id, true, now).unwrap();
+    assert_eq!(deferred.status, DispatchStatus::Pending, "{deferred:?}");
+    assert!(deferred.is_unclaimed());
+    assert!(deferred.finished_at().is_none());
+    assert!(deferred.summary().contains("train busy"));
+    assert!(
+        deferred.notified_at.is_none(),
+        "deferral is not a terminal notification"
+    );
+    TEST_FLOW_TRAIN_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, ctx| ctx.reverify_now(true)));
+    });
+    let retried =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_busy.request.id, true, now).unwrap();
+    assert_eq!(retried.status, DispatchStatus::Done, "{retried:?}");
 }
 
 // trace:STORY-1917 trace:TASK-2344 | ai:agy

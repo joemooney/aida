@@ -34,6 +34,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::forge_observed::Observed::Known",
             "crate::forge_observed::Observed::Pending",
             "crate::forge_observed::Observed::Transient",
+            // trace:STORY-2401 | ai:codex
+            "crate::pr_train::before_train_forge_call",
             "crate::glyph",
             "crate::glyphs::Glyph::Info",
             "crate::glyphs::Glyph::Warning",
@@ -152,6 +154,9 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         &[
             "aida_core::git_ops::configure_remote_credentials",
             "crate::pr_cmd::pr_ship_target_branch",
+            // Persist active train intent before nested proof fetches.
+            // trace:STORY-2401 | ai:codex
+            "crate::pr_train::before_train_forge_call",
         ],
     ),
     (

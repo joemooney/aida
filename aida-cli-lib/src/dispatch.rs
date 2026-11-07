@@ -1692,6 +1692,20 @@ pub(crate) fn execute_one_request_with_token(
     let now = runner_finished_at(now, started.elapsed());
 
     match runner_outcome {
+        // Retain the request for a later serve pass, without a terminal failure
+        // notification. The old claim is verified under the dispatch lock.
+        // trace:STORY-2401 | ai:codex
+        RunnerOutcome::Deferred { reason } => {
+            let _lock = acquire_dispatch_lock(main_worktree)?;
+            verify_claim_locked(main_worktree, &req.id(), &claim)?;
+            res.defer_running(reason.clone())?;
+            write_private_atomic(
+                &result_path(main_worktree, &req.id()),
+                &serde_json::to_vec_pretty(&res)?,
+            )?;
+            let _ = append_dispatch_log(main_worktree, &req.id(), &format!("deferred: {reason}\n"));
+            Ok(res)
+        }
         RunnerOutcome::Done {
             summary,
             spawned_session,
@@ -1758,6 +1772,9 @@ pub(crate) enum RunnerOutcome {
         summary: String,
         spawned_session: Option<String>,
         exit_code: Option<i32>,
+    },
+    Deferred {
+        reason: String,
     },
     Refused {
         reason: String,

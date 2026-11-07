@@ -374,12 +374,67 @@ CI wait; a missing required check after the other lanes settle keeps its
 600-second registration bound. Failed check-row reads retry three times on
 the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
-eligible. Inspect the paused PR before retrying the same member list; a later
-train retires the abandoned train through the normal owner-liveness check.
+eligible. Retry the same command to resume: before admitting riders, a non-dry
+train reads its intent journals under the main worktree's `.aida/train/` and
+reconciles the pinned heads with fresh forge confirmation. A completed merge is
+not repeated; remaining member closes finish from forge state. Recorded retirement
+decisions are confirmed again before closure. Unknown evidence stops admission and
+retains the PR and journal for inspection. A permanent run lock serializes whole
+train runs on one main worktree, including CI waits. Concurrent `pr train` calls
+refuse with a retry diagnostic. Dispatch flow/train fallback returns its request
+to Pending on this contention so a later serve pass can retry. Dry runs do not
+recover or write journals. Trains predating the journal retain the confirmed
+owner-liveness cleanup path.
+
+Recovery does not inherit terminal consent from the new invocation: recovered
+supervised members still need a current mandate cover, even when a human names
+other PRs at a terminal. Previously green trains wait again if CI is pending;
+confirmed red CI retires the train through the normal non-landing confirmation.
+Completed entries are fsynced and removed; startup also prunes valid old Done
+receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
+pins stop admission and name the evidence to inspect.
+
+**Inspecting and discarding a blocked journal.** From the main worktree, open an
+operator shell holding the same permanent lock as train recovery:
+
+```bash
+flock -n .aida/train/run.lock bash
+```
+
+If lock acquisition fails, wait for the current train to exit. In that shell,
+inspect the reported `.aida/train/<id>.json` (for example with `jq .`), its
+`change_id`, `branch`, pinned train and completed members. Use `gh pr view NUMBER`
+and fresh Git/forge evidence to reconcile the train and its members. For an
+interrupted open without a number, search all states with
+`gh pr list --state all --head BRANCH`. A malformed entry may need its branch
+recovered from the filename and forge history. Resolve remaining open train PRs
+and member cleanup deliberately before discarding their recovery intent.
+
+A crash during atomic journal replacement can leave `.<uuid>.tmp` files in this
+directory. They carry no admitted intent and are ignored by recovery. While holding
+`run.lock`, these temporary files can be removed; keep the `.json` entries until
+reconciled. Retirement deletes a remote train branch only after confirmed closure,
+with an explicit lease against its journaled tip. A moved branch or failed deletion
+retains the journal for inspection and retry.
+
+Once reconciled, move only that entry out of the live scan, retaining the file
+for inspection (replace `<id>` with the reported filename stem):
+
+```bash
+mkdir -p .aida/train/archive
+mv -n .aida/train/<id>.json .aida/train/archive/
+exit
+```
+
+Do not delete or replace `run.lock`. The archive is not scanned on startup.
+Discarding an entry neither closes a PR nor grants completion, consent or merge
+authority; after leaving the locked shell, retry `aida pr train` normally.
+<!-- trace:STORY-2401 | ai:codex -->
+
 A required check that was skipped, a train PR whose head, base or state
 changed, and a required check still missing after 600 seconds are not read
 failures: the train PR is closed and its members are ejected with that reason.
-<!-- trace:BUG-2423 | ai:codex -->
+<!-- trace:BUG-2423 STORY-2401 | ai:codex -->
 <!-- trace:STORY-1690 | ai:claude -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
