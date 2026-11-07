@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T03:37:05.846190163Z
+modified_at: 2026-11-07T03:37:11.848717474Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -240,6 +240,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 8: head 086a272 only rejoins the ragged paragraph (prior finding 6 fixed) and updates SHA references, plus a merge from main. STORY-2593 AC1-AC3 are still unmet, the PR title still reads feat with a completing (STORY-2593) trailer, and no interface decision has been recorded. Escalate to the advisor/operator; do not requeue the implementer for another docs-only round.. It was punted on: design-fork: Round 7 review of 0c3299c77788: findings 1-3 accepted as unmet; explicitly dispute the instruction to address these through another implementer rework before finding 5 is resolved. The signed 2026-11-07T00:33:24Z step-1 stop condition requires an advisor/operator interface decision. No subsequent recorded choice authorizes the ID-token-shaped/empty-refresh schema or names another supported codex exec interface. Escalate finding 5 to advisor/operator; do not requeue this implementer without that decision and its security/compatibility requirements. Production refuse_chatgpt and OPENAI_API_KEY preflight remain; no credential-visibility sentinels or live AIDA-boundary C0-C4 evidence exist. BUG-2447/2448 remain Approved and blocked, with no C3/C4 basis for closure or rescoping. Finding 4 remains host-owned: retitle PR #3560 to [AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593), or close it unmerged. Commit 0c3299c77788 is already docs/Refs but the PR squash title still claims completion. Recorded that exact native publication declaration as descriptive intent only; this punt and the merge hold veto publication and completion. Finding 6 fixed locally by reflowing the cited paragraph; updated the handoff to the reviewed head and current metadata distinction. Only docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md changed, left uncommitted; git diff --check passed. No production changes or credential access, no commit/push/PR operations or queue completion. Preserve the merge hold.. No triage reason was given.'
   created_at: 2026-11-07T03:37:05.846187717Z
   modified_at: 2026-11-07T03:37:05.846187717Z
+- id: 01a1b414-e93e-7641-a80f-2907b8cb5a5d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 086a27225e26
+    Recorded: 2026-11-07T03:33:35.744258242+00:00
+    Findings:
+    1. 1. AC1 unmet: refuse_chatgpt() is still defined and called (aida-cli-lib/src/launch/contained.rs:624, :851). The PR diff touches only docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md, and that file says the refusal stays because the signed step-1 gate failed.
+    2. 2. AC2 unmet: there is no C0-C4 run under --boundary aida with the operator's ChatGPT login, no policy/binary/receipt hashes and no credential-visibility sentinels. The plan's step-1 table holds synthetic login-status/exec probes against a loopback recorder, which the doc itself says are not containment evidence.
+    3. 3. AC3 unmet: BUG-2447 and BUG-2448 are both status approved and still blocked by this story. Neither is closed or re-scoped from C3/C4 evidence.
+    4. 4. Host action, still open: the PR #3560 title and commits e58b7e8cafc and 14ef038e232 still read '[AI:codex] feat: ... (STORY-2593)'. A squash merge takes the PR title, so it would auto-complete an unimplemented story. Retitle to '[AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593)' or close the PR unmerged. The implementer seat cannot do this.
+    5. 5. Blocking decision for the advisor/operator, still unrecorded: the only spec comments after round 7 (03:24:57Z requeue, 03:25:03Z findings relay) contain no interface choice. The options are to accept the ID-token-shaped/empty-refresh auth.json schema with stated security/compatibility requirements, or to name another supported codex exec interface. Requeueing the implementer cannot clear this; round 8 again changed only prose. Escalate and stop the rework loop.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T03:37:11.742339740Z
+  modified_at: 2026-11-07T03:37:11.742339740Z
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
