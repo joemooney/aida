@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-07T09:49:07.240699217Z
+modified_at: 2026-11-07T09:50:34.258700429Z
 req_type: Story
 tags:
 - area:advisor
@@ -302,6 +302,12 @@ comments:
   created_at: 2026-11-06T19:56:25.207997686Z
   modified_at: 2026-11-06T19:56:25.207997686Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+- id: 01a1b56a-bf12-7f41-9818-2b90640adb96
+  author: joe
+  content: 'Documentation-only follow-up under the pickup prompt: all four 19:09 UTC ruling changes were already present in this checkout. Reconciled the sketch and inventory with the later 19:56 UTC v2 signoff (14bc7fc), its supervised review-watch first-slice direction and one-Refs-PR-per-slice contract. Replaced stale claims that one PR refusal still exits watch with Completed BUG-2471 (landed PR #3536), verified against review_watch.rs. No runtime implementation or service migration in this lane. Validation passed: git diff --check, 269 unique hashed inventory entries and disposition totals, relative links, wrapper classifications and ruling coverage. Native-seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-07T09:50:34.258700429Z
+  modified_at: 2026-11-07T09:50:34.258700429Z
+  session_id: 01a1b5696289
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
