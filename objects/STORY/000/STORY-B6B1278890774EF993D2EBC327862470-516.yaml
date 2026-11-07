@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T16:49:34.526979428Z
+modified_at: 2026-11-07T16:53:25.509863564Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -495,6 +495,13 @@ comments:
   content: 'ADVISOR 2026-11-07 09:55: the second operator rerun passed the binary pin (BUG-2484 workaround), then refused on token life: 10.8h left against a 24h grant plus 300s. BUG-2486 filed (cap the child grant at token life). Interim: the operator runs codex login, then reruns.'
   created_at: 2026-11-07T16:49:34.526979428Z
   modified_at: 2026-11-07T16:49:34.526979428Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6ed-e185-7c73-9a15-24ac29590fb3
+  author: joe
+  content: 'ADVISOR 2026-11-07 10:00: third operator run (after codex login) got through auth and the containment receipt; codex 0.166.0 then rejected ''-P aida''. The pin contradicts the launcher. BUG-2487 re-pins to 0.167.0. C0-C4 are still unmeasured; rerun after BUG-2487 lands and home codex is upgraded.'
+  created_at: 2026-11-07T16:53:25.509863564Z
+  modified_at: 2026-11-07T16:53:25.509863564Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
