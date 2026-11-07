@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T06:09:27.299463276Z
+modified_at: 2026-11-07T06:18:20.098719310Z
 req_type: Task
 tags:
 - architecture
@@ -278,6 +278,12 @@ comments:
   content: 'S2 current-head continuation: private-PTY implementation and review corrections are already present. Complete the latest advisor inventory rework by replacing generic PTY sink descriptions with reviewed terminal-descriptor destinations, and explicitly documenting that prepare_with_io also bootstraps absent project/git protection leaves (not only lane-private files). Keep mixed preparation routes blocked for TASK-3223; no runtime authority change. Expected edit: scripts/store-writers.toml only. Re-run required-live wrapper/PTY selection and make check-ci-fast per the binding launch brief; report actual live counts separately. No S3/S4 implementation.'
   created_at: 2026-11-07T06:09:27.299463276Z
   modified_at: 2026-11-07T06:09:27.299463276Z
+  session_id: 01a1b49f1d8f
+- id: 01a1b4a8-7042-76c1-9933-511711dd9644
+  author: joe
+  content: 'Current-head validation found a second main-merge integration issue: make check-ci-fast refuses six unchanged ExecContext fingerprints still inventoried under prepare_for_owner after S2 extracted prepare_with_io. Adding scripts/exec-context-legacy.json to the narrow scope: relocate those exact navigation keys using the documented --write-ledger --base origin/main guard; preserve operation/expression fingerprints and total ceiling. No production source changes.'
+  created_at: 2026-11-07T06:18:20.098719310Z
+  modified_at: 2026-11-07T06:18:20.098719310Z
   session_id: 01a1b49f1d8f
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
