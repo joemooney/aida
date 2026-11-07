@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-07T19:47:43.658224150Z
+modified_at: 2026-11-07T20:46:36.549898839Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -51,6 +51,25 @@ comments:
   created_at: 2026-11-07T19:47:43.534433762Z
   modified_at: 2026-11-07T19:47:43.534433762Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7c3-5e05-7513-b53d-4f1f0af3b271
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-11-07 14:00 on the S6 broker sketch (#3622), with revisions. Every decision in its 'Advisor decisions and manual gate' section:
+    1. Observation-only scope: ACCEPTED. Grant replacement, signaling and terminal authority remain out of scope.
+    2. Same-UID threat boundary: ACCEPTED (single-user host; the operator and same-UID processes are trusted).
+    3. Sender authentication: ONE REQUEST PER CONNECTION. No sessions, no SCM_RIGHTS (refuse any ancillary fd). Authenticate with SO_PEERPIDFD at accept, then re-check that pidfd is alive after writing the response. The short deadline (5s) plus no reuse bounds the transferred-descriptor risk, which is accepted under decision 2. This removes the need for per-message credentials.
+    4. No namespace translation: ACCEPTED; foreign coordinates = ForeignUnknown.
+    5. Non-portable channel receipts: ACCEPTED.
+    6. Handles and revocation: DROPPED from v1. Connect-per-request has no handles; each request revalidates the grant.
+    7. Kernel support: require SO_PEERPIDFD (Linux >= 6.5). Refuse rather than fall back. Both hosts run kernel 7.x.
+    8. Broker lifecycle: NO separate daemon. The observer is an operation of the single supervised host service that STORY-2571 introduces (its sketch step 2, 'authenticated host liveness and bounded read transport'). One host service, one socket, one lifecycle.
+    9. Sandbox transport: that service's single socket, bind-mounted into the seat. No general AF_UNIX opening.
+    10. Rollout and host test gates: ACCEPTED as written (disabled service first, then a self-observation client, then reviewed adapters).
+    SEQUENCING: TASK-3368 implementation waits for STORY-2571's host-service slice. PR #3622 rework: append these decisions to the sketch as 'Signed decisions 2026-11-07', change the commit and PR title to (Refs TASK-3368) (the review's finding), and it can land.
+  created_at: 2026-11-07T20:46:36.549898839Z
+  modified_at: 2026-11-07T20:46:36.549898839Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
