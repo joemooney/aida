@@ -794,6 +794,18 @@ jobs:
           python3 scripts/check-template-commands.py
           python3 -m unittest tests/test_check_template_commands.py
 
+      # Exercise both awk replacement semantics with the actual shipped hook.
+      # trace:BUG-2475 | ai:codex
+      - name: Install awk engines
+        if: matrix.shard == 'gates'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mawk gawk
+
+      - name: Mail notice hook JSON protocol
+        if: matrix.shard == 'gates'
+        run: python3 tests/test_mail_notice_hook.py
+
       # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
       # trace:BUG-2014 | ai:codex
       - name: Grant expiry hook protocol

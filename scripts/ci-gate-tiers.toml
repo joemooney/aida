@@ -46,6 +46,9 @@
 [tiers]
 # trace:STORY-2606 | ai:codex
 "GitLab upstream CI adapter fixtures" = "fast"
+# trace:BUG-2475 | ai:codex
+# Both engines are mandatory; gawk is installed by CI but optional on dev hosts.
+"Mail notice hook JSON protocol" = "full"
 # trace:BUG-2476 | ai:codex
 "Run fixture PID namespace binding tests" = "fast"
 # trace:TASK-3222 | ai:codex
@@ -152,6 +155,8 @@
 # visible rather than silent, and a skip nobody sees is how this drifted in the
 # first place.
 [skips]
+# trace:BUG-2475 | ai:codex
+"Install awk engines" = "`sudo apt-get` against the runner image; full-tier hook tests require mawk and gawk on PATH"
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"
 "Pin stable toolchain & verify cargo" = "runs `rustup default stable`, which would mutate this machine's toolchain"
 "Install Linux dependencies" = "`sudo apt-get` against the runner image"
