@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T15:55:34.362119107Z
+modified_at: 2026-11-07T16:00:09.485709496Z
 req_type: Story
 tags:
 - architecture
@@ -453,6 +453,11 @@ comments:
   modified_at: 2026-11-07T15:54:21.942556168Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6bd-1d0d-7991-8950-ae4bae7055c8
+  author: mcp
+  content: 'Round 4 PR #3600: implemented both findings in native seat, edits uncommitted for host publication. Review markers without attributable ownership now use their own pid/start expiry followed by TTL; added production merge_gate/is_live_at regression cases for dead/recycled pids and a live positive control. Detached rework descendants can resume when the branch remains at the InPr head: ancestry check, occupancy check, old-value ref update, staged ownership reacquisition and pre-commit rollback. Added handoff/commit/resume/push/re-handoff fixture, divergent-HEAD refusal and dry-run preservation while retaining the original equal-head test. Validation: direct rustfmt check and git diff --check passed; CI gate audit classified all 80 gates. untested=true: aida lane job run refused because this standalone native session has no lane job runner. make check-ci-fast was stopped while queued for a cargo build slot; it did not complete. Host must run cargo test --profile agent -p aida-cli-lib --lib -- prc_ and make check-ci-fast before publishing. Native publication declaration recorded: [AI:codex] fix(ownership): restore marker expiry and recover detached rework (Refs STORY-2325). Merge hold remains for the authorized human/advisor clearance path.'
+  created_at: 2026-11-07T16:00:09.485693667Z
+  modified_at: 2026-11-07T16:00:09.485693667Z
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
