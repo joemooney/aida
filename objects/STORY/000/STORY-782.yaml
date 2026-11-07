@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:12.883065035Z
-modified_at: 2026-11-07T20:56:18.773777679Z
+modified_at: 2026-11-07T20:56:20.061492302Z
 req_type: Story
 tags:
 - codex
@@ -54,6 +54,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:26:38.502337049Z
   modified_at: 2026-11-07T20:26:38.502337049Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cc-455d-78f2-bfd3-1b83e91e217b
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. Folded into STORY-2539 VendorProfile.'
+  created_at: 2026-11-07T20:56:20.061492302Z
+  modified_at: 2026-11-07T20:56:20.061492302Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
