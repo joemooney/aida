@@ -112,6 +112,8 @@ mod db_reconcile;
 mod decide_cmd;
 mod deep_link;
 mod defer_cmd;
+// trace:STORY-2402 | ai:codex
+mod defer_condition_migration;
 mod defer_resurface;
 mod deps_cmd;
 // Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
