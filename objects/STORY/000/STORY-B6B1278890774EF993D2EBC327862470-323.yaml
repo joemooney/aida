@@ -312,6 +312,44 @@ comments:
   modified_at: 2026-11-07T14:06:52.429246383Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b66a-4158-7a53-9290-cc455c95bb6f
+  author: dirtlab
+  content: |
+    PR-C Refs slice ready on branch story-2325-prc.
+
+    Trains, reviewer markers and relaunch safety now consult the ownership record and
+    shared judge. Missing or unknown ownership retains work; forge owner prose and
+    review TTLs no longer prove death. Automated relaunch cleanup keeps ordinary
+    session-end guards and passes no force override.
+
+    Ownership batches publish a staged redo image containing all records and the
+    complete journal. Locked record readers finish interrupted batches before
+    returning data, or refuse the whole observation. Linked-seat self-handoff checks
+    session, tree, branch, generations and clean pushed HEAD under the ownership lock,
+    detaches HEAD, transfers the spec/change to InPr and releases lease facts without
+    removing the tree. Unpublished staging failures restore the branch.
+
+    This is a non-completing PR-C slice. Remaining signed-off work includes global
+    lease/claim/lane/seat/mail readers, resumed-child acquisition, contained-clone
+    handoff detachment, legacy deletions, the agreement fixture and final ratchets.
+    The existing host-side contained-bundle handoff remains unchanged. Redo recovery
+    covers interrupted processes; it does not add power-loss durability to fs_atomic.
+
+    Validation:
+    - aida dev build and binary smoke test passed; no live binary promotion.
+    - make check-ci-compile passed on the final diff; no test execution.
+    - make check-ci-fast passed all 44 gates with CI's usual umask 022.
+    - Git fixture confirms no-deref HEAD update detaches without checkout hooks.
+    - untested=true: aida lane job run refused because this standalone session has no
+      lane job runner. New ownership regression cases are compiled but not executed.
+
+    Refs STORY-2325. No completion credit requested.
+
+    No new implementer findings filed: the outstanding signed-off acceptance work remains on this story. Preparing the independent-review PR; no completion status requested.
+  created_at: 2026-11-07T14:29:39.288440581Z
+  modified_at: 2026-11-07T14:29:39.288440581Z
+  session_id: 01a1b657a4bc
+  harness_version: codex-cli 0.167.0
 - id: 01a1b672-f3aa-7933-b572-2846168da6b0
   author: joe
   content: 'ADVISOR 2026-11-07 07:50: PR-C opened as #3600 (dell1 codex lane, commit 7408ec769f). Opened with gh because of BUG-2483 (ship guard ignores Refs trailers).'
