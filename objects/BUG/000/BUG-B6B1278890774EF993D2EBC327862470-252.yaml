@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T17:22:58.661562484Z
+modified_at: 2026-11-07T17:32:32.410485235Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -49,6 +49,12 @@ comments:
   modified_at: 2026-11-07T17:19:44.560182797Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b711-b11a-7fc3-8ee2-c8f736953bef
+  author: joe
+  content: 'Round 2 handoff: accepted review findings 1-6 and punted design-fork; no advisor decision or acceptance revision was supplied. Updated only docs/internal/testing/bug-2487-codex-pin.md with explicit unmet-AC and false prior completion-attribution disposition. Fresh empty-HOME checks confirm 0.167.0 SHA cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda rejects -P at top-level and exec (exit 2), while sandbox advertises it. Validation: git diff --check passed; make check-ci-fast passed all 43 gates (Git-ref refresh attempts reported read-only FETCH_HEAD). Recorded native subject: [AI:codex] docs(containment): record unresolved exec profile blocker (Refs BUG-2487). Edits remain uncommitted; punt and merge hold veto publication. AC1-AC4 remain open; advisor must choose interface and revise acceptance, and host must correct PR completion attribution before any merge.'
+  created_at: 2026-11-07T17:32:32.410485235Z
+  modified_at: 2026-11-07T17:32:32.410485235Z
+  session_id: 01a1b7071456
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
   author: joe
