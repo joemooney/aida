@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T11:44:04.561082523Z
+modified_at: 2026-11-07T12:13:45.083064375Z
 req_type: Story
 tags:
 - architecture
@@ -414,6 +414,23 @@ comments:
   modified_at: 2026-11-07T10:42:51.460634401Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5ed-d4fb-79d2-8048-e041a8c2897b
+  author: joe
+  content: |-
+    Approved ratchet/headless-composition Refs slice implemented under Joe's 2026-11-07 10:42 UTC ruling. Added token-aware production scanning outside vendors/, keyed by path plus enclosing item and token kind, with decoded raw/escaped strings, macro inputs, conservative typed enum/variant references, renamed imports and raw identifiers. Tests/fixtures/docs and cfg(test) items are excluded. The frozen TSV ledger has no regeneration switch or write side effects. Compared against pre-migration 4803b66ade9: 786 keys/1159 occurrences -> 780 keys/1148 occurrences, with zero new or raised entries. Mutants cover new literals, qualified match arms, existing aliases, raw aliases and relocation; exclusion fixtures preserve test/doc boundaries.
+
+    VendorProfile::headless_args now composes all three vendors' fresh headless argv and Claude no-background settings. Core ai::headless_posture exports remain compatible; existing session entry points delegate through vendors/. Existing admission, wrapper checks, write-root discovery, Codex native opt-in and AGY conformance refusal remain. Extended the named registry snapshot with exact argv vectors, hostile/empty prompts, native flags, settings preservation and malformed JSON refusal.
+
+    Changed files: aida-core/src/vendors/{mod,headless,headless_posture}.rs; aida-core/src/ai/headless_posture.rs; aida-cli-lib/src/vendors/{mod,headless}.rs; aida-cli-lib/src/{session,lib}.rs; aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs; aida-cli-lib/src/tests/story_2539_vendor_literals.tsv; AGENTS.md; OVERVIEW.md; docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md.
+
+    Validation: cargo test --offline --profile agent -p aida-cli-lib story_2539 --lib passed all 3 tests (including story_2539_registry_and_consumers_preserve_vendor_contracts); the final raw-identifier scanner source was also separately compiled/run against the same parser dependencies, 2 tests passed. The built CLI test binary passed 5 existing headless argv/mandatory posture/strict settings regressions. make check-ci-fast passed all 44 gates. cargo fmt --all -- --check and git diff --check passed. The cold Rust test build took 15m43s; no test failures in final validation.
+
+    Findings 1 and 4 from the closed sketch PR are superseded by the binding implementation rulings; this round contains production refactoring and tests, not a docs-only feat. Finding 2 is handled by the non-completing declaration: [AI:codex] refactor(vendors): centralize headless composition and add literal ratchet (Refs STORY-2539). Finding 3 remains an explicitly partial migration: hook event/backend, resume/fork backend, effectful adapter relocation and further ledger reductions are still outstanding. STORY-782 remains deferred and BUG-2390 remains Completed. No story completion is claimed.
+
+    Native handoff: edits remain uncommitted; no commit, push, PR creation, queue done, merge ship or review record was performed. Host publication declaration was accepted. No implementation blockers. Turn ended after validation; the host launcher owns commit/publication.
+  created_at: 2026-11-07T12:13:45.083064375Z
+  modified_at: 2026-11-07T12:13:45.083064375Z
+  session_id: 01a1b5d29b3a
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
