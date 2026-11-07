@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-07T20:46:36.549898839Z
+modified_at: 2026-11-07T23:42:36.187564062Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -70,6 +70,25 @@ comments:
   created_at: 2026-11-07T20:46:36.549898839Z
   modified_at: 2026-11-07T20:46:36.549898839Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b864-7e9b-7232-9dd5-e3a936b6c218
+  author: joe
+  content: |-
+    ADVISOR SIGNED DECISIONS 2026-11-07 17:05 MST on docs/plans/2026-11-07-task-3368-proc-identity-broker.md (PR #3622), section "Advisor decisions and manual gate":
+    D1 Scope: ACCEPT observation-only. Grant replacement, signaling, namespace translation and human-terminal policy stay out and separately gated.
+    D2 Threat boundary: ACCEPT same-UID-trusted. No claim against same-UID malicious processes or the operator.
+    D3 Sender authentication (resolved): AF_UNIX SOCK_SEQPACKET, one request per message, with SO_PASSPIDFD set so the kernel attaches SCM_PIDFD (and SO_PASSCRED SCM_CREDENTIALS) to EVERY message. Authenticate each message from its own kernel-attached pidfd, never from the connection's SO_PEERCRED/SO_PEERPIDFD. A message without kernel-attached credentials is refused. This makes descriptor transfer harmless: the authenticated party is whoever sent that message. Caller-supplied SCM_CREDENTIALS PIDs are not trusted on their own; only the kernel pidfd is.
+    D4 Kernel support: require SO_PEERPIDFD and SO_PASSPIDFD/SCM_PIDFD (Linux >= 6.5). Probe them at broker start and refuse to start otherwise (Linux-only per ADR-72). No pidfd_open-on-numeric-PID fallback.
+    D5 Namespaces: ACCEPT no translation; mismatched coordinates return ForeignUnknown.
+    D6 Receipts: ACCEPT non-portable, channel-bound receipts. No signed receipt files in v1.
+    D7 Handles and revocation: ACCEPT as written (broker-resident, revalidated per operation, monotonic lifetime, invalidated by restart).
+    D8 Lifecycle: one explicitly started broker (`aida <service> run`-style, optionally a systemd user unit) holding an exclusive runtime lock; never auto-spawned by a client or a seat.
+    D9 Sandbox transport (resolved for v1): NONE. v1 serves host processes only; contained seats get no route to the socket. A narrow sandbox transport is a separate spec needing its own sketch.
+    D10 Rollout and test gates: ACCEPT as written, including the real-kernel host check for SCM_PIDFD per-message semantics before any consumer adapter is enabled.
+    REWORK for PR #3622 (docs only): (a) change the commit subject and PR title trailer to (Refs TASK-3368) so the merge does not complete the task; (b) fold D3, D4, D8 and D9 into the sketch's protocol section, replace the "advisor decision below" placeholders, and set Status to "approved for implementation (observation-only)". Then implementation slices are filed under TASK-3368 starting with "disabled service + protocol tests".
+  created_at: 2026-11-07T23:42:36.187564062Z
+  modified_at: 2026-11-07T23:42:36.187564062Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
