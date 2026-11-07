@@ -2608,7 +2608,7 @@ while True: signal.pause()
         default_args: flags,
         prompt_style: AgentPromptStyle::Positional,
         contained: true,
-        delegate_seats: Vec::new(),
+        delegate_seats: vec!["reviewer".into()],
     };
     let plan = AgentLaunchPlan {
         project_root: root.path().into(),
@@ -2630,9 +2630,13 @@ while True: signal.pause()
             0
         );
         let _stdio = test_stdio(slave.try_clone().unwrap(), slave.try_clone().unwrap());
+        // Always collect a bounded terminal tail before checking the exit. A
+        // worker traceback must survive early failure as well as the happy path.
+        let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let driver_finished = finished.clone();
         let driver = std::thread::spawn(move || {
             let end = Instant::now() + Duration::from_secs(40);
-            let mut text = String::new();
+            let mut tail = Vec::new();
             let (mut sent, mut resized, mut interrupted) = (false, false, false);
             while Instant::now() < end {
                 let mut poll = libc::pollfd {
@@ -2641,13 +2645,20 @@ while True: signal.pause()
                     revents: 0,
                 };
                 if unsafe { libc::poll(&mut poll, 1, 100) } <= 0 {
+                    if driver_finished.load(std::sync::atomic::Ordering::Acquire) {
+                        break;
+                    }
                     continue;
                 }
                 let mut buf = [0; 4096];
                 match master.read(&mut buf) {
-                    Ok(n) if n > 0 => text.push_str(&String::from_utf8_lossy(&buf[..n])),
+                    Ok(n) if n > 0 => tail.extend_from_slice(&buf[..n]),
                     _ => break,
                 }
+                if tail.len() > 65536 {
+                    tail.drain(..tail.len() - 65536);
+                }
+                let text = String::from_utf8_lossy(&tail);
                 if !sent && text.contains("PTY-READY") {
                     master.write_all(b"hello private terminal\n").unwrap();
                     sent = true;
@@ -2677,10 +2688,10 @@ while True: signal.pause()
                     interrupted = true;
                 }
                 if text.contains(if external_term { "PTY-TERM" } else { "PTY-INT" }) {
-                    return text;
+                    return text.into_owned();
                 }
             }
-            panic!("PTY driver deadline: {text}")
+            String::from_utf8_lossy(&tail).into_owned()
         });
         let result = run_agent_generation(
             &program,
@@ -2693,18 +2704,33 @@ while True: signal.pause()
             false,
             None,
             None,
-            || {},
-        )
-        .unwrap();
+            || {
+                // Regress the main-merge resolution: registry binding still
+                // precedes supervision and retains the launcher's narrowing.
+                let rows = crate::agent_registry::load_entries(root.path());
+                let (_, row) = rows
+                    .iter()
+                    .find(|(_, row)| {
+                        row.name.as_deref() == Some("pty-3219") && row.ended_at.is_none()
+                    })
+                    .expect("registered before spawn callback");
+                assert_eq!(row.delegate_seats, config.delegate_seats);
+                assert_ne!(row.pid, std::process::id());
+            },
+        );
+        finished.store(true, std::sync::atomic::Ordering::Release);
+        let terminal = driver.join().expect("PTY driver panicked");
+        let result =
+            result.unwrap_or_else(|error| panic!("generation refused: {error:#}\n{terminal}"));
         assert_eq!(
             result.status.code(),
-            Some(if external_term { 8 } else { 7 })
+            Some(if external_term { 8 } else { 7 }),
+            "unexpected worker exit; PTY tail:\n{terminal}"
         );
-        assert!(driver.join().unwrap().contains(if external_term {
-            "PTY-TERM"
-        } else {
-            "PTY-INT"
-        }));
+        assert!(
+            terminal.contains(if external_term { "PTY-TERM" } else { "PTY-INT" }),
+            "incomplete terminal exchange; PTY tail:\n{terminal}"
+        );
         let mut restored = unsafe { std::mem::zeroed::<libc::termios>() };
         assert_eq!(
             unsafe { libc::tcgetattr(slave.as_raw_fd(), &mut restored) },
@@ -2782,7 +2808,7 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
         default_args: vec!["native-argument".into()],
         prompt_style: AgentPromptStyle::Positional,
         contained: true,
-        delegate_seats: Vec::new(),
+        delegate_seats: vec!["reviewer".into()],
     };
     let plan = AgentLaunchPlan {
         project_root: root.path().into(),
@@ -2813,6 +2839,13 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
     )
     .unwrap();
     assert!(spawned);
+    let rows = crate::agent_registry::load_entries(root.path());
+    let (_, row) = rows
+        .iter()
+        .find(|(_, row)| row.name.as_deref() == Some("native-3219"))
+        .expect("native generation registered");
+    assert_eq!(row.delegate_seats, config.delegate_seats);
+    assert!(row.ended_at.is_some());
     assert_eq!(result.status.code(), Some(9));
     assert_eq!(
         std::fs::read_to_string(root.path().join("native-ran")).unwrap(),

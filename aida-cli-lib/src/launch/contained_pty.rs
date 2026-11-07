@@ -274,6 +274,7 @@ mod tests {
         assert_eq!(flags(), original);
         assert!(RawTerminal::new(&File::open("/dev/null").unwrap()).is_err());
     }
+    #[cfg(target_os = "linux")]
     #[test]
     fn task_3219_pty_restores_on_relay_write_failure() {
         let host = PrivatePty::open().unwrap();
