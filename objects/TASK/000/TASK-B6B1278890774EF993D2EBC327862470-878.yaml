@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-878
 agreed_id: TASK-3219
 title: Claude interactive, --bg, coordinator and resume launches on the shared contained wrapper
 description: 'Follow-up slice of TASK-2708 AC(1), after PR #3449. Under [contained.vendors] claude = "aida", interactive agent new, claude --bg, coordinators and resume currently refuse with CLAUDE_WRAPPER_UNWIRED (session.rs claude_contained_flags_for_roots). Acceptance: (1) each of those launch paths runs through the signed common wrapper with the same grants, CLI/MCP surfaces and floors as the headless path. (2) CLAUDE_WRAPPER_UNWIRED is removed. (3) With the opt-in unset, Claude stays native byte-for-byte. (4) The TASK-2708 accepted deltas (WAIT_KILLABLE_RECV signal deferral, a fail-closed 5.19+ floor, refusal of ancillary credentials and sendmmsg) apply unchanged. No new deviations without an advisor ruling. Tests: one targeted test per launch path plus the required-live bwrap count.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T21:13:44.081819959Z
+modified_at: 2026-11-07T21:29:37.768139915Z
 req_type: Task
 tags:
 - architecture
@@ -505,6 +505,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b7ea-c0e8-71e1-8105-6c9cb8a81979
+  author: aida-orchestrator
+  timestamp: 2026-11-07T21:29:37.768170094Z
+  session_id: 01a1b7de2bc4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -513,3 +522,11 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: S3 AIDA-owned Claude background supervisor matches the signed sketch (detached supervisor, receipt-before-release, worker-bound child grant revoked at exit, native --bg unchanged when the opt-in is unset, resume still refused), but CI is red at 99baa40 (cli-0, rest, lib-1 Run tests; contracts CLI-manual drift guard) while main is green, and aida agent attach can drop the worker's final output.
+  recovery_hint: address the review findings, move TASK-3219 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T21:29:37.768139915Z
