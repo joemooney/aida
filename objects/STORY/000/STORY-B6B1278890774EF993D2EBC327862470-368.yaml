@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T23:10:10.424559020Z
+modified_at: 2026-11-07T23:10:17.571073295Z
 req_type: Story
 relationships:
 - rel_type:
@@ -533,6 +533,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S5 logic meets the signed-off brief (typed --until on session handoff and findings recur via shared condition_cmd::canonical_condition, free text refused, manual needs --reason, parked rows resurface through the hourly defer-resurface sweep, story2402_s5_* tests), but the new clap flags were added without regenerating the CLI golden fixtures, so lib CI will fail; CI was still queued at review time.. No triage reason was given.'
   created_at: 2026-11-07T23:10:10.424555559Z
   modified_at: 2026-11-07T23:10:10.424555559Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b846-e949-7b21-bc7c-8ffb1344302a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0b8a233125d9
+    Recorded: 2026-11-07T22:49:31.233476356+00:00
+    Findings:
+    1. BLOCKING (contract-drift): aida-cli-lib/src/tests/golden/cli_help_snapshot.txt was not regenerated. The snapshot renders full per-subcommand help (e.g. '===== aida findings recur' at :1812 lists only --note/--format). The new flags findings recur --until/--reason (findings_gate_args.rs:71-78) and session handoff --until/--spec/--reason (agent_launch_args.rs:625-636) change that help, so help_surface_matches_golden_snapshot (story_1728_command_registry_tests.rs) fails. Regenerate with AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot and commit the diff.
+    2. BLOCKING (contract-drift): aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv is not updated. story_1728_policy_parity_tests synthesizes one invocation per clap arg (candidates/synthesize at :27-80), and the fixture has rows such as 'findings recur --note TASK-1 TASK-1' (:658) and 'session handoff --write TASK-1' (:1694). New probe rows for findings recur --until/--reason and session handoff --until/--spec/--reason are missing, so the parity test should fail. Regenerate the fixture through the test's update path and commit it.
+    3. minor (untested-path): a conditional session handoff defers a spec and removes its queue rows (session_misc.rs:1017 via defer_cmd::defer_single), but session_cli_policy (agent_launch.rs:7812-7817) has per_write_auto_push=false, whereas aida defer has per_write_auto_push=true (defer_cmd.rs:352). On a shared multi-node store the deferral and dequeue stay local until some later push, so other clones can still dispatch the parked spec. Either auto-push after the deferral write or document that limit; add a test or note covering it.
+    4. minor (race/atomicity): session_misc.rs:1017-1021 defers the spec before write_handoff_by writes the note. A filesystem failure in write_handoff_by (create_dir_all, write, or latest.md rename) then leaves the spec parked with no handoff that mentions its trigger. findings_gate.rs:1384-1427 similarly makes two separate store writes (defer, then the recurrence bump), so a failure on the second leaves the finding deferred without the bump. Consider writing the note first (or rolling back the deferral on error), or at minimum print the deferral in the error path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T23:10:17.417238955Z
+  modified_at: 2026-11-07T23:10:17.417238955Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
