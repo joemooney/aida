@@ -15,7 +15,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-07T22:41:35.086456392Z
+modified_at: 2026-11-07T23:01:16.697531763Z
 req_type: Task
 tags:
 - cleanup
@@ -59,6 +59,12 @@ comments:
   content: Implementation follows the advisor 2026-11-07 14:55 code rescope (not the historical destructive sweep). Added dry-run-first lifecycle GC for host-pinned ended seat clones and clean landed/closed-PR linked worktrees, operator-only --apply (legacy --yes --force preserved), exact PR head evidence, origin-only coverage including tags/stashes, mailbox/process teardown guards, and weekly read-only advisor routing. Remaining lease files deliberately retain even dead-process seats until session end/reap. Fixture/CLI/forge/schedule tests are added; launcher compilation is in progress. No host worktrees or branches have been deleted.
   created_at: 2026-11-07T22:41:35.086456392Z
   modified_at: 2026-11-07T22:41:35.086456392Z
+  session_id: 01a1b8210422
+- id: 01a1b83e-a919-7d21-a4da-78cce373255d
+  author: joe
+  content: 'Validation checkpoint: launcher job j20261107T223320684-2-0 timed out after 900s before executing tests. Retrying the final TASK-1222 fixture/forge/CLI/schedule suite with AIDA_CARGO_TIMEOUT=3600 in job j20261107T224828734-2-0; it has acquired a cargo slot and is compiling aida-cli-lib. No executed test result yet. Formatting, git diff --check, and schedule TOML parsing pass. CLI help golden regeneration and existing remote-coverage regression remain pending after this build. Source edits remain uncommitted for the host launcher; no host cleanup performed.'
+  created_at: 2026-11-07T23:01:16.697531763Z
+  modified_at: 2026-11-07T23:01:16.697531763Z
   session_id: 01a1b8210422
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
