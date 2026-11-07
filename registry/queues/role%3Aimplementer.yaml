@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1b6e7-82f8-78a2-8025-d2bfdfb3dfda
+  position: -106000
+  added_by: role:implementer
+  added_at: 2026-11-07T17:17:57.814180508Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   position: -105000
   added_by: role:implementer
