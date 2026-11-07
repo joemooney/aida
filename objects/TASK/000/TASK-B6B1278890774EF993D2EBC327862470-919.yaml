@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-919
 agreed_id: TASK-3325
 title: 'Replace crates the work Nexus mirror quarantines: serde_yaml, dirs, fuzzy-matcher, ts-rs-forge, pulldown-cmark 0.9, ratatui termwiz'
 description: 'Source: work GDMS CI report (2026-11-06, branch work/gdma-runners @256dd2fe). The work Nexus blocks these crates, so home main cannot build at work. Swap: serde_yaml -> serde_norway 0.9.42 (alias the old crate name; unsafe-libyaml -> unsafe-libyaml-norway), dirs 5 -> etcetera 0.11, fuzzy-matcher -> nucleo-matcher, ts-rs-forge 11 -> ts-rs 12 (keep the optional-map and bigint output), pulldown-cmark 0.9 -> 0.13.6 (CLI/TUI renderer event changes), ratatui without the Termwiz backend. Pin ctutils at 0.4.7 because 0.4.8 is quarantined. Acceptance: no quarantined crate is left in Cargo.lock; stored YAML round-trips byte-identically (add an aida-core yaml_compatibility test); generated TypeScript is byte-identical to before; markdown CLI/TUI rendering snapshots are unchanged. The work branch already has a reference implementation (about 15 source files plus Cargo.lock).'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:28:57.996084502Z
-modified_at: 2026-11-07T04:39:10.950211480Z
+modified_at: 2026-11-07T04:53:46.394241726Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b45b-051a-7340-930a-6c5065f76ae4
+  author: aida-session-start
+  timestamp: 2026-11-07T04:53:46.394240588Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
