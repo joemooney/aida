@@ -925,6 +925,11 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest discover scripts/split-lib/tests/
 
+      # trace:STORY-2606 | ai:codex
+      - name: GitLab upstream CI adapter fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_gdma_ci.py
+
       # BUG-2135: sccache tmpdir detection, restart hint, and pre-start fixtures. trace:BUG-2135 | ai:antigravity
       - name: Sccache tmpdir detection fixtures
         if: matrix.shard == 'gates'

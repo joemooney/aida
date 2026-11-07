@@ -207,3 +207,7 @@ scripts/split-lib/golden/
 
 # Generated `aida why --plain` cache. trace:STORY-1651 | ai:codex
 /docs/plain/
+
+# GitLab adapter copies reports outside target for artifact upload.
+# trace:STORY-2606 | ai:codex
+/.ci-artifacts/

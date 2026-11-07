@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""Run ci.yml shell checks under GitLab.
+
+trace:STORY-2606 | ai:codex
+"""
+
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[2]
+TOKEN = re.compile(r"\s*(\|\||&&|==|!=|[!(),]|'[^']*'|[A-Za-z_][A-Za-z0-9_.]*)")
+INSTALL_STEPS = {
+    "Install Rust toolchain", "Pin stable toolchain & verify cargo",
+    "Install Linux dependencies", "Install zsh (shell-wrapper test matrix)",
+}
+ACTIONS = {
+    "actions/checkout", "dorny/paths-filter", "dtolnay/rust-toolchain",
+    "Swatinem/rust-cache", "taiki-e/install-action", "actions/upload-artifact",
+}
+SUBSTITUTIONS = {
+    "matrix.shard": "${GDMA_LANE}",
+    "github.base_ref": "${GDMA_BASE_REF}",
+    "github.event_name": "${GDMA_EVENT_NAME}",
+}
+
+
+class Expression:
+    def __init__(self, text, context):
+        text = text.strip()
+        if text.startswith("${{") and text.endswith("}}"):
+            text = text[3:-2].strip()
+        self.tokens = []
+        position = 0
+        while position < len(text):
+            match = TOKEN.match(text, position)
+            if not match:
+                raise ValueError(f"Unsupported workflow expression near {text[position:]!r}")
+            self.tokens.append(match.group(1))
+            position = match.end()
+        self.position = 0
+        self.context = context
+
+    def take(self, token):
+        if self.position < len(self.tokens) and self.tokens[self.position] == token:
+            self.position += 1
+            return True
+        return False
+
+    def require(self, token):
+        if not self.take(token):
+            raise ValueError(f"Expected {token!r} in workflow expression")
+
+    def value(self):
+        result = self.disjunction()
+        if self.position != len(self.tokens):
+            raise ValueError("Unexpected workflow expression tokens")
+        return result
+
+    def disjunction(self):
+        result = self.conjunction()
+        while self.take("||"):
+            right = self.conjunction()
+            result = result or right
+        return result
+
+    def conjunction(self):
+        result = self.comparison()
+        while self.take("&&"):
+            right = self.comparison()
+            result = right if result else result
+        return result
+
+    def comparison(self):
+        result = self.atom()
+        if self.take("=="):
+            return result == self.atom()
+        if self.take("!="):
+            return result != self.atom()
+        return result
+
+    def atom(self):
+        if self.take("!"):
+            return not self.atom()
+        if self.take("("):
+            result = self.disjunction()
+            self.require(")")
+            return result
+        if self.position >= len(self.tokens):
+            raise ValueError("Incomplete workflow expression")
+        token = self.tokens[self.position]
+        self.position += 1
+        if token.startswith("'"):
+            return token[1:-1]
+        if self.take("("):
+            if token in {"cancelled", "always", "success"}:
+                self.require(")")
+                return self.context[token]
+            if token == "startsWith":
+                left = self.disjunction()
+                self.require(",")
+                right = self.disjunction()
+                self.require(")")
+                return str(left).startswith(str(right))
+            raise ValueError(f"Unsupported workflow function {token}")
+        if token not in self.context:
+            raise ValueError(f"Unknown workflow context {token}")
+        return self.context[token]
+
+
+def condition(text, context):
+    return Expression(text, context).value()
+
+
+def shell(text):
+    def substitute(match):
+        key = match.group(1).strip()
+        if key not in SUBSTITUTIONS:
+            raise ValueError(f"Unsupported shell interpolation {key}")
+        return SUBSTITUTIONS[key]
+    return re.sub(r"\$\{\{(.*?)\}\}", substitute, text)
+
+
+def full_ci(base):
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "-z", f"{base}...HEAD"],
+        cwd=ROOT, stdout=subprocess.PIPE, check=True,
+    )
+    paths = result.stdout.decode().split("\0")
+    return any(path and not (
+        path.startswith("docs/") or path.endswith(".md") or
+        path in {"LICENSE", ".gitignore"}
+    ) for path in paths)
+
+
+def event_name():
+    return "pull_request" if os.environ.get("CI_PIPELINE_SOURCE") == "merge_request_event" else "push"
+
+
+def context(lane, full, failed=False):
+    return {
+        "matrix.shard": lane, "runner.os": "Linux",
+        "github.event_name": event_name(),
+        "github.event.pull_request.base.sha": os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
+        "github.event.merge_group.base_sha": "",
+        "github.event.before": os.environ.get("CI_COMMIT_BEFORE_SHA", ""),
+        "steps.changes.outputs.full_ci": "true" if full else "false",
+        "cancelled": False, "always": True, "success": not failed,
+        "true": True, "false": False,
+    }
+
+
+def step_environment(step, current, parent):
+    environment = parent.copy()
+    for key, value in step.get("env", {}).items():
+        if isinstance(value, str) and value.startswith("${{"):
+            value = condition(value, current)
+        if isinstance(value, str) and "${{" in value:
+            raise ValueError("Unsupported embedded environment expression")
+        environment[key] = str(value)
+    return environment
+
+
+def validate_job(job, current):
+    allowed = {"name", "id", "if", "run", "uses", "with", "env", "shell", "timeout-minutes"}
+    step_environment(job, current, {})
+    if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
+        raise ValueError("Unsupported upstream run defaults")
+    for step in job["steps"]:
+        if set(step) - allowed:
+            raise ValueError("Unsupported upstream step settings")
+        condition(step.get("if", "true"), current)
+        step_environment(step, current, {})
+        if "uses" in step:
+            action = step["uses"].split("@", 1)[0]
+            if action not in ACTIONS:
+                raise ValueError("Unmapped upstream action")
+            if action == "dorny/paths-filter":
+                settings = step.get("with", {})
+                filters = yaml.safe_load(settings.get("filters", ""))
+                if (step.get("id") != "changes" or
+                        settings.get("predicate-quantifier") != "some-with-excludes" or
+                        filters != {"full_ci": ["**", "!docs/**", "!**/*.md", "!LICENSE", "!.gitignore"]}):
+                    raise ValueError("Unmapped upstream path-filter policy")
+        elif "run" in step:
+            if step.get("shell", "bash") not in {"bash", "bash --noprofile --norc -e -o pipefail {0}"}:
+                raise ValueError("Unsupported upstream shell")
+            shell(step["run"])
+        else:
+            raise ValueError("Unmapped upstream step")
+
+
+def collect_artifacts():
+    destination = ROOT / ".ci-artifacts"
+    destination.mkdir(exist_ok=True)
+    for pattern in ("test-run.log", "test-timings.json", "changed-files.txt",
+                    "nextest/ci/junit-*.xml", "cargo-timings/*", "ci-summary.md"):
+        for source in (ROOT / "target").glob(pattern):
+            if source.is_file():
+                relative = source.relative_to(ROOT / "target")
+                target = destination / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lane", default=os.environ.get("GDMA_LANE", "gates"))
+    parser.add_argument("--collect", action="store_true")
+    args = parser.parse_args()
+    if args.collect:
+        collect_artifacts()
+        return 0
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    job = workflow["jobs"]["build"]
+    lanes = job["strategy"]["matrix"]["shard"]
+    if args.lane not in lanes:
+        raise ValueError("Unknown CI lane")
+    # Validate the complete input before any upstream command can have effects.
+    for full in (True, False):
+        for failed in (True, False):
+            validate_job(job, context(args.lane, full, failed))
+    full = True
+    base_ref = os.environ.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or os.environ.get("CI_DEFAULT_BRANCH", "main")
+    if os.environ.get("CI_PIPELINE_SOURCE") == "merge_request_event":
+        full = full_ci(f"origin/{base_ref}")
+    else:
+        before = os.environ.get("CI_COMMIT_BEFORE_SHA", "")
+        if re.fullmatch(r"[0-9a-f]{40}", before) and before != "0" * 40:
+            full = full_ci(before)
+    # First/new-branch pushes have no baseline: conservatively run the full suite.
+    environment = os.environ.copy()
+    environment["GDMA_LANE"] = args.lane
+    environment["GDMA_BASE_REF"] = base_ref
+    environment["GDMA_EVENT_NAME"] = event_name()
+    (ROOT / "target").mkdir(exist_ok=True)
+    environment["GITHUB_STEP_SUMMARY"] = str(ROOT / "target/ci-summary.md")
+    environment.pop("AIDA_SESSION_ROLE", None)
+    initial = context(args.lane, full)
+    environment = step_environment(workflow, initial, environment)
+    environment = step_environment(job, initial, environment)
+    failed = False
+    for step in job["steps"]:
+        name = step.get("name", step.get("uses", "upstream step"))
+        current = context(args.lane, full, failed)
+        expression = step.get("if", "true")
+        selected = bool(condition(expression, current))
+        # GitHub's status functions permit cleanup/reporting after an earlier failure.
+        if failed and not re.search(r"\b(?:cancelled|always|success)\s*\(", expression):
+            selected = False
+        if not selected:
+            continue
+        if "uses" in step:
+            action = step["uses"].split("@", 1)[0]
+            if action not in ACTIONS:
+                raise ValueError(f"Unmapped upstream action: {action}")
+            continue
+        if name in INSTALL_STEPS:
+            continue
+        if "run" not in step:
+            raise ValueError(f"Unmapped upstream step: {name}")
+        print(f"\n=== {name} ===", flush=True)
+        timeout = step.get("timeout-minutes", job.get("timeout-minutes", 40)) * 60
+        try:
+            command = shell(step["run"])
+            result = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
+                cwd=ROOT, env=step_environment(step, current, environment),
+                stdin=subprocess.DEVNULL, timeout=timeout,
+            )
+            failed = failed or result.returncode != 0
+        except subprocess.TimeoutExpired:
+            print(f"Timed out: {name}", file=sys.stderr)
+            failed = True
+    collect_artifacts()
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

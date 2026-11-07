@@ -733,10 +733,27 @@ mod tests {
             "aida-core/templates/gitlab-ci-merge-hold-gate.yml".into(),
             include_bytes!("../../aida-core/templates/gitlab-ci-merge-hold-gate.yml").to_vec(),
         );
-        assert_eq!(
-            gitlab_jobs(&files).unwrap(),
-            ["bwrap-confinement".into(), "test".into(), "verify".into()].into()
+        // The seven literal adapter names must be admitted by the production
+        // relay reader, including its local-include and template expansion.
+        // trace:STORY-2606 | ai:codex
+        files.insert(
+            ".gitlab/ci/gdma.yml".into(),
+            include_bytes!("../../.gitlab/ci/gdma.yml").to_vec(),
         );
+        let mut expected: BTreeSet<String> =
+            ["bwrap-confinement".into(), "test".into(), "verify".into()].into();
+        for lane in [
+            "lib-0",
+            "lib-1",
+            "cli-0",
+            "cli-1",
+            "rest",
+            "gates",
+            "contracts",
+        ] {
+            expected.insert(format!("gdma-ci: [{lane}]"));
+        }
+        assert_eq!(gitlab_jobs(&files).unwrap(), expected);
     }
     #[test]
     fn local_includes_merge_before_root_and_extends_uses_reverse_deep_merge() {
