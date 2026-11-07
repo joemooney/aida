@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T07:17:00.842535096Z
+modified_at: 2026-11-07T07:27:29.596298929Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,11 @@ comments:
   modified_at: 2026-11-07T07:15:35.286722458Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4e7-c13c-7503-84b2-f060b5eefebf
+  author: mcp
+  content: 'Round 2 native-seat changes: wired tests/test_status_cold_cache.py into CI contracts shard immediately after single-spec show latency, with --cold-budget 30 --warm-budget 10 against target/debug/aida. Added optional budget flags retaining optimized 15s/5s defaults. Validation: current-source cargo build -p aida-cli --profile agent passed; optimized default regression passed cold 7.88s / warm 2.43s; explicit 30s/10s flags passed on that optimized binary cold 6.79s / warm 1.78s. Both verify exactly 7000 cached rows, 999 InProgress epics and one Completed epic. Older shared optimized binary timed out at 15s (run overlapped compilation). Workflow YAML/condition/command verified; cargo fmt --all -- --check and git diff --check passed. Edits remain uncommitted per native-seat contract. Finding 2 publication follow-up remains for host: after committing/pushing and CI completes, cite the contracts job''s ''Run full-status cold-cache latency regression'' step URL and actual printed cold/warm timings in PR #3581 body. Local optimized timings are not CI evidence; do not claim the debug 30s/10s gate proves optimized 15s/5s acceptance. Existing merge hold untouched.'
+  created_at: 2026-11-07T07:27:29.596282287Z
+  modified_at: 2026-11-07T07:27:29.596282287Z
 history:
 - id: 01a1b4c2-b43b-7d73-b618-1f11ca67da92
   author: joe
