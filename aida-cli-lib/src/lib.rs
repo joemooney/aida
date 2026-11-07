@@ -460,6 +460,8 @@ mod headless_tee;
 mod vendor_activity;
 // trace:BUG-2396 | ai:claude — vendor-aware next-step hints.
 mod vendor_hints;
+// trace:STORY-2539 | ai:codex
+mod vendors;
 // trace:TASK-990 | ai:claude — `aida watch` streaming event classifier.
 mod watch;
 // trace:STORY-658 | ai:claude — `aida health` at-a-glance vital-signs read.
