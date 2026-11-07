@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T06:15:00.246509367Z
+modified_at: 2026-11-07T06:32:37.475764956Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -324,6 +324,19 @@ comments:
   modified_at: 2026-11-07T06:13:55.989629612Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4b5-8563-7ee3-8e08-67be24a56504
+  author: joe
+  content: |
+    PR #3575 round 9: addressed both findings from 056f7efbf589. ContainedChild now retains the absolute ChatGPT lane deadline used by the host supervisor. Failed exits before that deadline preserve ExitStatus (including exit 1, NO_PR exit 31 and signals); failed exits at/after the deadline return RELAUNCH. Successful exits retain their status. Updated the live credential sentinel and added a non-live regression plus production deadline identity assertion. Updated OVERVIEW and the credential-boundary plan, including the requested wrap fix.
+
+    Also addressed the actual three CI source guard failures: the FIFO watchdog uses the shared exact-test executable helper; the generated private Codex config writer is classified as write-only in config-trust.toml; the Linux procfs test has an explicit Linux cfg. CI logs confirm lane_fixture_fails was an expected negative control and its enclosing 86-test group passed; the gates job actually failed on the procfs portability ratchet.
+
+    Validation: cargo test -p aida-cli-lib --lib --offline -- launch::contained::tests no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy --nocapture: 63 passed, 0 failed, 1 ignored (watchdog child separately passed). Live credential/refresh and host deadline sentinels passed. Installed-Codex opt-in probes were not enabled. Python containment conformance suite: 44 passed. cargo fmt --all -- --check, git diff --check and scripts/check-portability.sh passed. The local root-hygiene check refuses the empty sandbox-protected .aws/ directory; no tracked root artifact was added.
+
+    Native seat handoff: six files are left uncommitted; no commit, push, PR mutation, queue completion or hold clearance was performed. Native publication declaration recorded: [AI:codex] fix(containment): preserve ChatGPT lane failure statuses (Refs STORY-2593). Host must commit/publish after process exit. Existing merge hold and advisor-owned real ChatGPT C0-C4 acceptance remain outstanding; no story completion credit is claimed.
+  created_at: 2026-11-07T06:32:37.475764956Z
+  modified_at: 2026-11-07T06:32:37.475764956Z
+  session_id: 01a1b4a55a3e
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
