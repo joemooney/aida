@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:08.198553641Z
-modified_at: 2026-11-06T00:16:19.515264810Z
+modified_at: 2026-11-07T20:26:31.298741754Z
 req_type: Task
 tags:
 - codex
@@ -36,6 +36,16 @@ comments:
   created_at: 2026-11-06T00:16:19.515264810Z
   modified_at: 2026-11-06T00:16:19.515264810Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b0-fa02-7392-ba8a-d988403ee46d
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-07-20T04:46:36.222609208Z","deferred_until":"Codex ships command-backed status lines","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:31.298735072Z
+  modified_at: 2026-11-07T20:26:31.298735072Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a192ac-17ee-79d2-b225-21d52db62ccc
   author: joe
@@ -44,4 +54,4 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-07-20T04:46:36.222609208Z
-deferred_until: Codex ships command-backed status lines
+deferred_until: manual:operator
