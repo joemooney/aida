@@ -1,0 +1,34 @@
+id: 01a1b46b-d206-7a41-b08b-bf79d8943925
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-532
+agreed_id: STORY-2609
+title: 'Review PR-3569: [AI:codex] chore: Replace crates the work Nexus mirror quarantines: serde_yaml, dirs, fuzzy-matcher, ts-rs-forge, pulldown-cmark 0.9, ratatui termwiz (TASK-3325)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b45a`) for branch `task-b6b1278890774ef993d2ebc327862470-919`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3569>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-919` → `main`
+
+  ## Covers
+
+  - TASK-3325
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3569` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T05:12:07.430639600Z
+modified_at: 2026-11-07T05:12:07.430639600Z
+req_type: Story
+filed_at:
+  code_sha: 36fc675baec589c06c273135f0021eefcfe35db7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 110130adbc7
+  vendor: claude
+  session: 01a1b45afa16
