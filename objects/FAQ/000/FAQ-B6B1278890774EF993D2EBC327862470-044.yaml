@@ -3,7 +3,7 @@ spec_id: FAQ-b6b1278890774ef993d2ebc327862470-044
 agreed_id: FAQ-151
 title: How do I set up a new remote lane host like dell1?
 description: |
-  Checklist for a new remote lane host. Reference host: dell1 (user dirtlab), set up 2026-11-05..07. Keep this row current whenever a lane host's config changes.
+  Checklist for a machine that runs AIDA lanes (any project). Reference host: dell1 (user dirtlab), set up 2026-11-05..07. To be automated by `aida doctor --lane-host` (STORY-2642). Keep this row current.
 
   ## 1. Access and checkout
   - `ssh dell1` works from the primary (permission rule `Bash(ssh dell1:*)`).
@@ -23,7 +23,7 @@ description: |
   - `codex login` (ChatGPT) on the host; `~/.codex/auth.json` must exist.
 
   ## 5. Build cache
-  - sccache: NOT installed on dell1 yet (2026-11-07). The primary uses `rustc-wrapper = "~/.cargo/bin/sccache"` in `~/.cargo/config.toml`. dell1's target dir is 76G.
+  - sccache: `cargo install --locked sccache`, then add `[build] rustc-wrapper = "<HOME>/.cargo/bin/sccache"` to `~/.cargo/config.toml` (dell1: done 2026-11-07, v0.19.0). Lane test jobs do not reach it yet (STORY-2641).
 
   ## 6. Running lanes (advisor procedure)
   - Primary: `aida push && aida remote mirror-sync`. Host: `git fetch origin main && git merge --ff-only origin/main && aida pull`.
@@ -36,8 +36,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:47:52.567998136Z
-modified_at: 2026-11-07T19:47:52.567998136Z
+modified_at: 2026-11-07T20:03:40.293886492Z
 req_type: Faq
+history:
+- id: 01a1b79c-1360-77b1-b44f-5c865f1ced63
+  author: joe
+  timestamp: 2026-11-07T20:03:41.536329131Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
