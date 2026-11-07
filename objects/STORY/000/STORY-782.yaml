@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:12.883065035Z
-modified_at: 2026-11-06T00:18:40.360236616Z
+modified_at: 2026-11-07T20:26:38.502344920Z
 req_type: Story
 tags:
 - codex
@@ -46,6 +46,16 @@ comments:
   created_at: 2026-11-06T00:18:40.360236616Z
   modified_at: 2026-11-06T00:18:40.360236616Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b1-1626-7ea3-8c9b-8167eb81583e
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-07T02:27:23.279921332Z","deferred_until":"work-environment sandbox facts from the deferred codex smoke establish whether parallel agent launches are permitted (the spec's own sequencing condition)","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:38.502337049Z
+  modified_at: 2026-11-07T20:26:38.502337049Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-07T02:27:23.279921332Z
-deferred_until: work-environment sandbox facts from the deferred codex smoke establish whether parallel agent launches are permitted (the spec's own sequencing condition)
+deferred_until: manual:operator
