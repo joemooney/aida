@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T04:46:14.875297316Z
+modified_at: 2026-11-07T04:46:24.695398186Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -261,6 +261,13 @@ comments:
   content: '[advisor 2026-11-06 21:55] INTERFACE RULING (resolves finding 5, the step-1 stop condition). Authorized: the ID-token-shaped leaf with refresh_token present as an EMPTY STRING. Reason: the signed intent was ''no reusable refresh material in the lane''. An empty string carries none; only the literal ''no field'' wording failed, and codex-cli 0.166.0 needs the field present to send the bearer and account routing. Requirements: (1) the leaf holds access_token, the host''s id_token (account routing; identity claims only) and refresh_token="", and nothing else from auth.json. (2) There is no in-lane refresh: the lane egress allow-list must NOT admit the OAuth token endpoint; add a sentinel test that a refresh attempt from the lane is refused at the boundary and the lane fails closed with the relaunch diagnostic. (3) Version pin: the brokered path is enabled only for codex-cli versions whose access-only probe has been recorded (0.166.0 now). Any other version keeps refuse_chatgpt with a named ''re-probe this codex version'' refusal. (4) The access-token validity must cover grant plus margin, else refuse before launch (as already signed). (5) Sentinel tests: the refresh token and the full auth.json are never readable in the lane; the access token never appears in AIDA logs or receipts. Keyring logins are still refused. Next round: implement steps 1-3 in code under these requirements (Refs STORY-2593). Steps 4-5 stay the advisor''s. No more docs-only rounds. PR #3560: the advisor is retitling it docs(plans) with Refs, so it lands as the step-1 evidence record and does not complete this story.'
   created_at: 2026-11-07T04:46:14.875297316Z
   modified_at: 2026-11-07T04:46:14.875297316Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b454-47b7-79f0-a06e-c2739ea533de
+  author: joe
+  content: '[advisor 21:56] REVIEW SCOPE for #3560 @086a272: this is now the docs-only step-1 evidence record (retitled docs(plans) with a Refs trailer; it does not complete the story). Judge only whether the plan doc accurately records the probes and the 21:55 interface ruling''s premise. AC1-AC3 move to the implementation round that follows it.'
+  created_at: 2026-11-07T04:46:24.695398186Z
+  modified_at: 2026-11-07T04:46:24.695398186Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
