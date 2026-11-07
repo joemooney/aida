@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-910
 agreed_id: TASK-2959
 title: Legacy adoption test omits PID namespace and fails in a native sandbox
 description: While validating BUG-2473, the unchanged leases::bug_1656_subagent_liveness_tests::bug_1656_adoption_stamps_harness_pid_and_keeps_unknown_keys failed at aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs:520 (adoption returned None instead of aaaa11112222). Reproduces as an exact isolated test and with AIDA_TRUST_PID_NAMESPACE=1. Its adoption_lease_fixture does not stamp pid_namespace; adopt_spec_lease_unlocked in leases.rs rejects an unstamped record through PidObserver::can_observe(None) outside the non-isolated initial namespace. Neither the test nor leases.rs nor pid_observer.rs changed for BUG-2473. The other 17 tests under bug_1656 pass. Update the fixture to express a current-namespace owner (or explicitly model legacy-namespace refusal) while retaining the production fail-closed observation rule. BUG-2473 targeted tests and adjacent dispatch/hygiene/remote-coverage/Git-access suites pass.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T00:41:27.298433170Z
-modified_at: 2026-11-07T01:42:21.370121010Z
+modified_at: 2026-11-07T02:42:20.777019130Z
 req_type: Task
 tags:
 - from-advisor:BUG-2473
@@ -73,8 +73,26 @@ history:
   timestamp: 2026-11-07T01:42:22.495680676Z
   session_id: 01a1b3a3ab1b
   changes: []
+- id: 01a1b3e2-b1c4-7c01-96fc-ae5e2500f1ca
+  author: aida-auto-bump
+  timestamp: 2026-11-07T02:42:20.740667802Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b3e2-b1e9-7341-9a0f-4d93c7a1e911
+  timestamp: 2026-11-07T02:42:20.777015453Z
+  agent: aida
+  commit_sha: f24837d51d2985cc65bc64a428981314d5b4d551
+  summary: 'Fixture-only fix: adoption_lease_fixture stamps current_pid_namespace (same pattern as bug_2130 tests); production PidObserver::can_observe(None) fail-closed rule untouched; CI green at head 1ffa7f0.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e94aeb3d
   vendor: codex
   session: 01a1b368e9b4
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T02:42:20.740661164Z
+  completion_sha: f24837d51d2985cc65bc64a428981314d5b4d551
