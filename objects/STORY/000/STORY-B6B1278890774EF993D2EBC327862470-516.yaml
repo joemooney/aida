@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T10:16:06.627403135Z
+modified_at: 2026-11-07T15:44:26.496090469Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -476,6 +476,13 @@ comments:
   created_at: 2026-11-07T10:16:06.627403135Z
   modified_at: 2026-11-07T10:16:06.627403135Z
   session_id: 01a1b56d99da
+- id: 01a1b6ae-b980-7c91-9ead-4eb0572b22c9
+  author: joe
+  content: 'ADVISOR 2026-11-07 08:50: steps 4-5 attempted via deputy 2 (job 20261107T084217-5367e4): the harness refused with ''role grants require a human at an interactive TTY'' (fixture-roster-allow-seat-refused). The live C0-C4 run must come from the operator''s own terminal: ~/.local/share/aida/ops/advisor-scripts/conformance-codex-aida-0850.job.sh. BUG-2447/2448 are decided from its report.'
+  created_at: 2026-11-07T15:44:26.496090469Z
+  modified_at: 2026-11-07T15:44:26.496090469Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
