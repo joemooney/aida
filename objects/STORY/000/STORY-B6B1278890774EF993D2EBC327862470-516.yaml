@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T05:59:09.617437382Z
+modified_at: 2026-11-07T06:13:48.686261072Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -302,6 +302,13 @@ comments:
   created_at: 2026-11-07T05:47:36.922151377Z
   modified_at: 2026-11-07T05:47:36.922151377Z
   session_id: 01a1b47530f4
+- id: 01a1b4a4-4c0e-7da0-9584-7fa9218d4663
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Steps 1-3 slice (Refs) mostly meets the 21:55 interface ruling, but vendor_exit relabels every non-zero ChatGPT Codex exit as an auth/relaunch error and discards the real exit status. CI: contracts/cli/rest green; lib-0/lib-1/gates still pending at record time.. No triage reason was given.'
+  created_at: 2026-11-07T06:13:48.686256801Z
+  modified_at: 2026-11-07T06:13:48.686256801Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
@@ -645,6 +652,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b4a4-4c0e-7da0-9584-7f9caed5d0c8
+  author: joe
+  timestamp: 2026-11-07T06:13:48.686247416Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -654,11 +670,3 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Steps 1-3 slice (Refs) mostly meets the 21:55 interface ruling, but vendor_exit relabels every non-zero ChatGPT Codex exit as an auth/relaunch error and discards the real exit status. CI: contracts/cli/rest green; lib-0/lib-1/gates still pending at record time.'
-  recovery_hint: address the review findings, move STORY-2593 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T05:59:09.617437382Z
