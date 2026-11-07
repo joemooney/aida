@@ -58,13 +58,15 @@ pub(crate) struct JournalEntry {
 }
 
 /// Redo batch retained across process exits. Once published, every reader completes this batch under
-/// the same lock before returning any records. The complete journal image makes
-/// recovery idempotent even after a crash between records and journal publication.
+/// the same lock before returning any records. A journal offset and new lines
+/// make partial append recovery idempotent with work bounded by batch size.
 // trace:STORY-2325 | ai:codex
 #[derive(Serialize, Deserialize)]
 struct PendingBatch {
     records: Vec<Ownership>,
     journal: String,
+    #[serde(default)]
+    journal_offset: Option<u64>,
 }
 
 /// The next record for one key, from its current one; `None` = no change.
@@ -267,14 +269,24 @@ impl OwnershipStore {
             }
             planned.push((step.key, step.op, path, have, next));
         }
-        let mut journal = match std::fs::read_to_string(self.journal_path()) {
-            Ok(body) => body,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(e) => return Err(e).context("reading ownership journal before staging"),
+        // Stage only this batch's lines. The saved byte offset makes replay
+        // idempotent after a partial append, without rereading the old journal.
+        let journal_offset = match std::fs::metadata(self.journal_path()) {
+            Ok(meta) => meta.len(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(e) => return Err(e).context("reading ownership journal size"),
         };
-        if !journal.is_empty() && !journal.ends_with('\n') {
-            bail!("ownership journal has an incomplete line");
+        if journal_offset > 0 {
+            use std::io::{Read, Seek, SeekFrom};
+            let mut file = File::open(self.journal_path())?;
+            file.seek(SeekFrom::End(-1))?;
+            let mut last = [0];
+            file.read_exact(&mut last)?;
+            if last != [b'\n'] {
+                bail!("ownership journal has an incomplete line");
+            }
         }
+        let mut journal = String::new();
         let mut records = Vec::new();
         let mut out = Vec::with_capacity(planned.len());
         for (key, op, path, have, next) in planned {
@@ -305,7 +317,11 @@ impl OwnershipStore {
             out.push(Some(Committed { record: next, note }));
         }
         check_destination(&self.journal_path())?;
-        let batch = PendingBatch { records, journal };
+        let batch = PendingBatch {
+            records,
+            journal,
+            journal_offset: Some(journal_offset),
+        };
         let body = serde_json::to_string(&batch)?;
         check()?;
         aida_core::write_atomic(&self.dir.join(".pending.json"), body)?;
@@ -351,7 +367,25 @@ impl OwnershipStore {
             aida_core::write_atomic(&target, serde_json::to_string_pretty(&record)? + "\n")?;
         }
         check_destination(&self.journal_path())?;
-        aida_core::write_atomic(&self.journal_path(), batch.journal)?;
+        if let Some(offset) = batch.journal_offset {
+            use std::io::{Seek, SeekFrom, Write};
+            let mut file = OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(self.journal_path())?;
+            anyhow::ensure!(
+                file.metadata()?.len() >= offset,
+                "ownership journal shrank before recovery"
+            );
+            file.set_len(offset)?;
+            file.seek(SeekFrom::Start(offset))?;
+            file.write_all(batch.journal.as_bytes())?;
+            file.sync_all()?;
+        } else {
+            // Recover a pending batch staged by the previous CLI version.
+            aida_core::write_atomic(&self.journal_path(), batch.journal)?;
+        }
         std::fs::remove_file(path)?;
         Ok(())
     }
@@ -360,16 +394,32 @@ impl OwnershipStore {
     // seat. Existing permanent locks serialize reads with host writers.
     // trace:STORY-2325 | ai:codex
     fn read_lock(&self) -> Result<File> {
-        if !crate::session::process_contained() {
-            return self.lock(LOCK_TIMEOUT);
-        }
+        let contained = crate::session::process_contained();
         let file = OpenOptions::new()
             .read(true)
+            .write(!contained)
+            .create(!contained)
+            .truncate(false)
             .open(self.dir.join(LOCK_FILE))?;
         let deadline = Instant::now() + LOCK_TIMEOUT;
         loop {
-            match file.try_lock_exclusive() {
-                Ok(()) => return Ok(file),
+            match FileExt::try_lock_shared(&file) {
+                Ok(()) => {
+                    if !self.dir.join(".pending.json").try_exists()? {
+                        return Ok(file);
+                    }
+                    anyhow::ensure!(
+                        !contained,
+                        "ownership recovery requires the host; records retained"
+                    );
+                    // Never upgrade in place: competing readers may also need
+                    // recovery. Reacquire exclusively, then replay/recheck.
+                    FileExt::unlock(&file)?;
+                    drop(file);
+                    let lock = self.lock(LOCK_TIMEOUT)?;
+                    self.recover()?;
+                    return Ok(lock);
+                }
                 Err(e)
                     if aida_core::file_lock::is_lock_contended(&e) && Instant::now() < deadline =>
                 {

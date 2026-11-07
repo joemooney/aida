@@ -519,7 +519,7 @@ fn q2_handoff_check_refuses_a_dirty_or_unpushed_seat() {
     assert!(err.contains("is not the head"), "{err}");
     // A seat that fails the check records nothing.
     dual::enable_for_test();
-    assert!(dual::handed_off(p, p, "main", "", 9).is_err());
+    dual::handed_off(p, p, "main", "", 9).unwrap();
     assert!(!p.join(".aida").join(store::DIR).exists());
 }
 
@@ -1329,5 +1329,144 @@ fn prc_readers_do_not_infer_death_from_absence_or_elapsed_time() {
     assert_eq!(
         reader::ended(dir.path(), &key).unwrap(),
         Some("explicit release".into())
+    );
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_delta_journal_recovers_partial_append_without_duplicates() {
+    let (_d, store) = store();
+    store
+        .update_all(vec![acquire_step(spec(1), "old", Expect::Absent)])
+        .unwrap();
+    let original = std::fs::read(store.journal_path()).unwrap();
+    let next = rec(spec(2), None, Phase::Leased);
+    let line = "{\"interrupted-batch\":true}\n";
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [next], "journal": line, "journal_offset": original.len()
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(store.journal_path())
+        .unwrap()
+        .write_all(b"{\"interrupted-")
+        .unwrap();
+    assert!(store.load(&spec(2)).unwrap().is_some());
+    assert!(store.load(&spec(2)).unwrap().is_some());
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    assert_eq!(journal, String::from_utf8(original).unwrap() + line);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_handoff_restores_branch_when_staging_cannot_publish() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = repo();
+    let p = dir.path();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = repo_store(p);
+    let alias_dir = tempfile::tempdir().unwrap();
+    let alias = alias_dir.path().join("seat-link");
+    std::os::unix::fs::symlink(p, &alias).unwrap();
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: alias.clone(),
+        kind: TreeKind::Worktree,
+        branch: Some("main".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    std::fs::create_dir_all(store.dir().join("change")).unwrap();
+    std::fs::set_permissions(store.dir(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let result = dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner");
+    std::fs::set_permissions(store.dir(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(result.is_err(), "staging must fail");
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&head.stdout).trim(),
+        "refs/heads/main"
+    );
+    assert!(matches!(
+        store.load(&spec(1)).unwrap().unwrap().phase,
+        Phase::Leased
+    ));
+    // The differently spelled seat path resolves to the same canonical seat.
+    dual::handoff_seat(&store, &alias, "main", Some(spec_key(1)), 9, "owner").unwrap();
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_post_open_handoff_refusals_never_fail_ship_or_drop_the_lease() {
+    let dir = repo();
+    let p = dir.path();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic(p, None);
+    dual::enable_for_test();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    // Direct operator ship has no session, then a session without a lease.
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    ambient.set_key("AIDA_SESSION_ID", "owner");
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    let mut lease = lease("owner", &spec_key(1).0.to_string(), "");
+    lease.worktree_path = p.to_path_buf();
+    lease.branch = "main".into();
+    let path = crate::lease_path(p, "owner");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let body = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &body).unwrap();
+    // Unresolvable scope, then canonical scope with a missing ownership record.
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    let store = repo_store(p);
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: p.to_path_buf(),
+        kind: TreeKind::Worktree,
+        branch: Some("other".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    store
+        .update(&spec(1), "fix-tree", Expect::Any, |cur| {
+            let mut r = cur.unwrap().clone();
+            r.holder.as_mut().unwrap().tree.as_mut().unwrap().branch = Some("main".into());
+            Some((r, None))
+        })
+        .unwrap();
+    std::fs::write(p.join("untracked"), "keep me").unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+    assert!(matches!(
+        store.load(&spec(1)).unwrap().unwrap().phase,
+        Phase::Leased
+    ));
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&head.stdout).trim(),
+        "refs/heads/main"
     );
 }

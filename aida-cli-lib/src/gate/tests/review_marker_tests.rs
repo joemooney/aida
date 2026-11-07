@@ -53,13 +53,13 @@ fn marker_at_different_head_does_not_block() {
 }
 
 #[test]
-fn ttl_expired_marker_without_ownership_proof_keeps_blocking() {
+fn ttl_expired_marker_without_ownership_record_clears() {
     let dir = tempfile::tempdir().unwrap();
     let old = now_secs() - CLAIM_TTL_SECS - 60;
     write(dir.path(), &claim(7, "abc", old, CLAIM_TTL_SECS)).unwrap();
     let gate = merge_gate(dir.path(), 7, || Some("abc".into()));
-    assert!(matches!(gate, MergeGate::UnderReview(_)));
-    assert!(read(dir.path(), 7).is_some());
+    assert!(matches!(gate, MergeGate::ExpiredCleared(_, _)));
+    assert!(read(dir.path(), 7).is_none());
 }
 
 #[test]
@@ -146,4 +146,98 @@ fn claim_ttl_above_cap_is_clamped_and_flagged() {
         (MAX_CLAIM_TTL_MINS, true)
     );
     assert_eq!(clamp_claim_ttl_mins(u64::MAX), (MAX_CLAIM_TTL_MINS, true));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_manual_claim_expires_without_ownership() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
+    write(dir.path(), &m).unwrap();
+    assert!(!is_live_at(dir.path(), &m));
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || panic!("expired")),
+        MergeGate::ExpiredCleared(_, _)
+    ));
+    assert!(read(dir.path(), 7).is_none());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_recorded_review_uses_matching_ownership_and_clears_closed_or_dead() {
+    use crate::ownership::{
+        store::{Expect, OwnershipStore},
+        Ownership, Phase, WorkKey,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let store = OwnershipStore::at(root.join(".aida/ownership"));
+    // for_project needs a repository; all fixture writes are local.
+    assert!(crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["init", "-q"])
+        .status()
+        .unwrap()
+        .success());
+    let key = WorkKey::Review {
+        change: crate::ownership::dual::change(7),
+        head: "abcdef123456".into(),
+    };
+    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
+    store
+        .update(&key, "seed", Expect::Absent, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: None,
+                    phase: Phase::Reviewing {
+                        head: "abcdef123456".into(),
+                    },
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    write(root, &m).unwrap();
+    assert!(
+        is_live_at(root, &m),
+        "unknown matching record overrides TTL"
+    );
+    for state in ["dead", "closed"] {
+        store
+            .update(&key, state, Expect::Any, |cur| {
+                let mut r = cur.unwrap().clone();
+                if state == "closed" {
+                    r.phase = Phase::Closed { why: "done".into() };
+                } else {
+                    r.holder = Some(crate::ownership::Holder {
+                        seat: "reviewer".into(),
+                        session: "review".into(),
+                        role: crate::ownership::Role::Reviewer,
+                        tree: None,
+                        witnesses: vec![crate::ownership::Witness {
+                            admission: None,
+                            recorded_at: chrono::Utc::now(),
+                            kind: crate::ownership::WitnessKind::Heartbeat {
+                                at: chrono::Utc::now() - chrono::Duration::days(1),
+                                every_secs: 10,
+                            },
+                        }],
+                    });
+                }
+                Some((r, None))
+            })
+            .unwrap();
+        write(root, &m).unwrap();
+        assert!(
+            matches!(
+                merge_gate(root, 7, || panic!("ended")),
+                MergeGate::ExpiredCleared(_, _)
+            ),
+            "{state}"
+        );
+        assert!(read(root, 7).is_none());
+    }
 }

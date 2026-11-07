@@ -1081,3 +1081,25 @@ use [`aida mailbox disposition`](../advanced/mailbox.md#explicit-responses-to-re
 independently of read ACKs. Reading, replying or accepting a wake is not action.
 Claude/Antigravity wake delivery remains separate work.
 <!-- trace:TASK-3074 | ai:codex -->
+
+### `aida own release`
+
+**What it does.** Releases an exact ownership key from a human host terminal,
+recording an operator override in the ownership journal. Keys use the directory
+and file stem under `.aida/ownership`, for example `train/origin-12` or
+`change/origin-9`. Releasing a train also releases its rider reservations.
+
+**Reach for it when** — stale or unknown ownership blocks a rider or reviewer
+and the operator has established that the reservation should end. If a failed
+train acquisition left only a rider record, release that change key directly.
+
+**Don't reach for it when** — a session should simply finish normally. Release
+leaves leases, worktrees and cargo targets intact; use guarded `aida session end`
+for retirement. An agent session or a noninteractive caller cannot override.
+
+**Example.** `aida own release train/origin-12`
+
+Manual `aida review claim` markers without matching ownership expire after their
+requested TTL. Recorded reviews follow ownership liveness or explicit release;
+unknown recorded ownership retains the marker. Abbreviated and differently cased
+head SHAs match the same way as the merge gate's head comparison.

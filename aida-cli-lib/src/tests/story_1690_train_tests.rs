@@ -4925,3 +4925,91 @@ fn pr_train_journal_lock_contention_is_typed_and_releases_on_exit() {
     drop(lock);
     assert!(journal::lock(dir.path()).is_ok());
 }
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead() {
+    use crate::ownership::{
+        dual,
+        store::{Expect, OwnershipStore},
+        Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey,
+    };
+    let dir = repo();
+    let p = dir.path();
+    let store = OwnershipStore::for_project(p).unwrap().unwrap();
+    assert!(ownership_rider_refusal(p, 9).unwrap().is_none());
+    let key = WorkKey::Change {
+        change: dual::change(9),
+    };
+    let train = dual::change(12);
+    store
+        .update(&key, "ride", Expect::Absent, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: None,
+                    phase: Phase::Training {
+                        train: train.clone(),
+                    },
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        ownership_rider_refusal(p, 9).unwrap().is_some(),
+        "missing train retains rider"
+    );
+    let key = WorkKey::Train { train };
+    for state in ["unknown", "alive", "dead", "closed"] {
+        let witnesses = match state {
+            "alive" | "dead" => vec![Witness {
+                admission: None,
+                kind: WitnessKind::Heartbeat {
+                    at: if state == "alive" {
+                        chrono::Utc::now()
+                    } else {
+                        chrono::Utc::now() - chrono::Duration::days(1)
+                    },
+                    every_secs: 10,
+                },
+                recorded_at: chrono::Utc::now(),
+            }],
+            _ => vec![],
+        };
+        let holder = Holder {
+            seat: "train".into(),
+            session: "train-owner".into(),
+            role: Role::Train,
+            tree: None,
+            witnesses,
+        };
+        store
+            .update(&key, "seed", Expect::Any, |_| {
+                Some((
+                    Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        holder: Some(holder),
+                        phase: if state == "closed" {
+                            Phase::Closed {
+                                why: "released".into(),
+                            }
+                        } else {
+                            Phase::Leased
+                        },
+                    },
+                    None,
+                ))
+            })
+            .unwrap();
+        assert_eq!(
+            ownership_rider_refusal(p, 9).unwrap().is_some(),
+            matches!(state, "unknown" | "alive"),
+            "{state}"
+        );
+    }
+    std::fs::write(store.path_for(&key), "malformed").unwrap();
+    assert!(ownership_rider_refusal(p, 9).is_err());
+}

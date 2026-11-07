@@ -20,6 +20,11 @@ pub enum OwnCommand {
         json: bool,
     },
 
+    /// Release an exact ownership key (for example train/origin-12).
+    /// Requires a human at a host terminal. Journals the override and leaves
+    /// all leases, worktrees and cargo targets for guarded session teardown.
+    Release { key: String },
+
     /// One-time rewrite of the existing session, review and train records
     /// into ownership records. Only adds records; never changes, archives or
     /// deletes an existing record, worktree or branch.

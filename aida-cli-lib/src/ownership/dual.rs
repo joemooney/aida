@@ -1,13 +1,16 @@
 //! Dual-write adapters (STORY-2325 PR-B, advisor amendment A6).
 //!
+//! PR-C cuts train/review/relaunch readers over to these records and stages
+//! verified seat handoffs. The remaining adapters still mirror legacy writers;
+//! failures are diagnostic until their own writer cutover.
+//!
 //! Each call site that writes one of today's ownership records (a session,
 //! review or claim lease; the train's merge lease; the PR that `aida ship`
-//! opens) also calls one function here. The old records stay authoritative:
-//! nothing here can fail, refuse or slow the caller beyond one bounded lock,
-//! and no reader looks at these records yet. A write that cannot be made is
-//! dropped (and shown only under `AIDA_OWNERSHIP_TRACE=1`); `aida own show
-//! --compare` reports the gap, and PR-C cuts over only once that report is
-//! clean.
+//! opens) also calls one function here. Legacy-writer failures are diagnostic
+//! under `AIDA_OWNERSHIP_TRACE=1`; `aida own show --compare` reports gaps.
+//! Post-open self-handoff failures are always reported without failing ship.
+//! Ownership transfers to the PR, while the lease remains the retirement
+//! handle for guarded session end after the seat exits.
 //!
 //! Where the writes happen (A1, A6): only in host-side processes. A contained
 //! seat never writes `.aida/ownership/`, and its sandbox is never widened to
@@ -489,7 +492,8 @@ fn commit_handoff(project_root: &Path, facts: HandoffFacts) {
 }
 
 /// `aida ship` opened (or found) PR `pr` for the seat `seat` on `branch`.
-/// Verified first; a seat that fails the check records nothing.
+/// Only the owning branch lease may hand off. A refusal is reported, but
+/// never fails a ship whose PR is already open. The lease remains for cleanup.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn handed_off(
     project_root: &Path,
@@ -501,30 +505,33 @@ pub(crate) fn handed_off(
     if !enabled() || pr == 0 {
         return Ok(());
     }
-    let input = aida_core::exec_context::Environment::capture();
-    let session = input
-        .var("AIDA_SESSION_ID")
-        .map_err(|_| anyhow::anyhow!("handoff needs the owning session identity"))?;
-    let store = store_for(project_root)
-        .ok_or_else(|| anyhow::anyhow!("ownership store unavailable for handoff"))?;
-    handoff_seat(
-        &store,
-        seat,
-        branch,
-        resolve_spec(project_root, spec),
-        pr,
-        session,
-    )?;
-    // Release only the lease facts, never delete/reset the tree. Ownership has
-    // already passed to the PR and HEAD is detached.
-    let path = crate::leases::lease_path(project_root, session);
-    match std::fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e).map_err(|e| {
-            anyhow::anyhow!("handoff committed; retained lease {}: {e}", path.display())
-        }),
+    let attempt = || -> anyhow::Result<()> {
+        let input = aida_core::exec_context::Environment::capture();
+        let session = input
+            .var("AIDA_SESSION_ID")
+            .map_err(|_| anyhow::anyhow!("no owning session identity (operator ship)"))?;
+        let owns_branch = crate::list_leases(project_root)
+            .into_iter()
+            .any(|lease| lease.id == session && lease.branch == branch);
+        anyhow::ensure!(owns_branch, "this session does not own the branch lease");
+        let store = store_for(project_root)
+            .ok_or_else(|| anyhow::anyhow!("ownership store unavailable for handoff"))?;
+        handoff_seat(
+            &store,
+            seat,
+            branch,
+            resolve_spec(project_root, spec),
+            pr,
+            session,
+        )
+    };
+    if let Err(error) = attempt() {
+        eprintln!("ownership: PR-{pr} is open; seat handoff requires attention: {error:#}");
     }
+    // Keep the lease as the retirement handle for session_end after merge.
+    // The ownership record alone transfers to InPr; the running seat keeps
+    // its lifecycle/cleanup identity until guarded session teardown.
+    Ok(())
 }
 
 /// Testable self-handoff. CAS binds both records; all ownership checks and git
@@ -549,11 +556,13 @@ pub(crate) fn handoff_seat(
         .as_ref()
         .filter(|h| h.session == session)
         .ok_or_else(|| anyhow::anyhow!("handoff refused: this session does not own the spec"))?;
-    if holder
+    let tree = holder
         .tree
         .as_ref()
-        .is_none_or(|t| t.path != seat || t.branch.as_deref() != Some(branch))
-    {
+        .ok_or_else(|| anyhow::anyhow!("handoff refused: owner has no seat"))?;
+    let owner_path = tree.path.canonicalize().context("resolving owner's seat")?;
+    let seat_path = seat.canonicalize().context("resolving handoff seat")?;
+    if owner_path != seat_path || tree.branch.as_deref() != Some(branch) {
         bail!("handoff refused: the owner's seat and branch do not match");
     }
     let head = verify_seat_at_pr_head(seat, branch).map_err(anyhow::Error::msg)?;

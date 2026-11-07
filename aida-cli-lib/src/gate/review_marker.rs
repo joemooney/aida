@@ -252,19 +252,54 @@ pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<Str
     None
 }
 
-/// Missing evidence retains the review. TTL is display metadata; only the
-/// ownership judge or an explicit release ends the review.
+/// Recorded ownership controls reviews; legacy/manual markers without a
+/// matching record retain their promised TTL expiry.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn is_live_at(root: &Path, m: &Marker) -> bool {
     ownership_ended(root, m).is_none()
 }
 
 fn ownership_ended(root: &Path, m: &Marker) -> Option<String> {
-    let key = crate::ownership::WorkKey::Review {
-        change: crate::ownership::dual::change(m.pr),
-        head: m.head_sha.clone(),
+    use crate::ownership::{store::OwnershipStore, WorkKey};
+    let store = match OwnershipStore::for_project(root) {
+        Ok(Some(store)) => store,
+        Ok(None) => return ttl_expired(m),
+        Err(_) => return None,
     };
-    crate::ownership::reader::ended(root, &key).ok().flatten()
+    let (records, errors) = store.list();
+    if !errors.is_empty() {
+        return None;
+    }
+    let matching: Vec<_> = records
+        .iter()
+        .filter(|r| {
+            matches!(&r.key,
+        WorkKey::Review { change, head } if change == &crate::ownership::dual::change(m.pr)
+            && covers_head(head, Some(&m.head_sha)))
+        })
+        .collect();
+    if matching.is_empty() {
+        return ttl_expired(m);
+    }
+    // Prefix/case matching must agree with covers_head. Ambiguous evidence
+    // retains the marker unless every matching record has positively ended.
+    let reasons: Option<Vec<_>> = matching
+        .into_iter()
+        .map(|record| crate::ownership::reader::ended_record(record))
+        .collect();
+    reasons.map(|r| r.join("; "))
+}
+
+// trace:STORY-2325 | ai:codex
+fn ttl_expired(m: &Marker) -> Option<String> {
+    let age = now_secs().saturating_sub(m.started_at);
+    (age > m.ttl_secs).then(|| {
+        format!(
+            "it is {}m old, past its {}m expiry",
+            age / 60,
+            m.ttl_secs / 60
+        )
+    })
 }
 
 #[cfg(test)]

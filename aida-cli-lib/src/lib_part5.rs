@@ -2841,7 +2841,7 @@ pub(crate) fn handle_review_claim(
     crate::gate::review_marker::write(&root, &marker)
         .with_context(|| format!("could not mark PR-{pr} as under review"))?;
     println!(
-        "{} PR-{pr} is marked under review{} for {ttl_mins}m — merges wait for your verdict",
+        "{} PR-{pr} is marked under review{} — manual expiry {ttl_mins}m (matching ownership takes precedence)",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         head.as_deref()
             .map(|h| format!(" at {}", crate::gate::review_verdict::short_sha(h)))

@@ -462,10 +462,10 @@ fn exited_lease(fx: &Fixture) -> crate::SessionLease {
     let mut lease = seat_lease(&fx.seat);
     lease.scope = uuid::Uuid::from_u128(2315).to_string();
     lease.hostname = crate::coordination::hostname();
-    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid = Some(i32::MAX as u32 - 1);
     lease.active_pid_start_time = Some("linux-starttime:1".into());
     let id = aida_core::process_probe::ProcessIdentity {
-        pid: u32::MAX - 1,
+        pid: i32::MAX as u32 - 1,
         start: format!("linux:{}:1", aida_core::local_boot_id().unwrap()),
     };
     let ns = aida_core::process_probe::ProbeSource::system()
@@ -773,4 +773,121 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
         );
         assert!(messages[0].body.contains(&lease.id));
     }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_safe_end_retires_dead_pushed_seat_without_force() {
+    let fx = shipped_lane();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let lease = exited_lease(&fx);
+    let cargo_target = fx._tmp.path().join("target/worktrees/seat");
+    std::fs::create_dir_all(&cargo_target).unwrap();
+    std::fs::create_dir_all(fx.seat.join(".aida")).unwrap();
+    std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+    std::fs::write(
+        fx.seat.join(".aida/session-env.sh"),
+        format!("export CARGO_TARGET_DIR='{}'\n", cargo_target.display()),
+    )
+    .unwrap();
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    assert_eq!(
+        plan_lease_end(&fx.main, &lease, Some("feat")),
+        LeaseEndAction::SafeEnd
+    );
+    crate::session_end::session_end(
+        Some(&lease.id),
+        None,
+        None,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap();
+    assert!(!path.exists());
+    assert!(!fx.seat.exists());
+    assert!(!cargo_target.exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_ship_handoff_keeps_lease_until_guarded_cleanup() {
+    let fx = shipped_lane();
+    let lease = {
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            &fx.main,
+            None,
+            &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+        );
+        exited_lease(&fx)
+    };
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[
+            ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
+            ("AIDA_SESSION_ID", Some(&lease.id)),
+        ],
+    );
+    crate::ownership::dual::enable_for_test();
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lease_body = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &lease_body).unwrap();
+    std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = crate::ownership::store::OwnershipStore::for_project(&fx.main)
+        .unwrap()
+        .unwrap();
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(uuid::Uuid::from_u128(2315)),
+    };
+    store
+        .update(&key, "tree", crate::ownership::store::Expect::Any, |cur| {
+            let mut r = cur.unwrap().clone();
+            r.holder.as_mut().unwrap().tree = Some(crate::ownership::SeatTree {
+                path: fx.seat.clone(),
+                kind: crate::ownership::TreeKind::Worktree,
+                branch: Some("feat".into()),
+            });
+            Some((r, None))
+        })
+        .unwrap();
+    crate::ownership::dual::handed_off(&fx.main, &fx.seat, "feat", &lease.scope, 42).unwrap();
+    assert!(matches!(
+        store.load(&key).unwrap().unwrap().phase,
+        crate::ownership::Phase::InPr { .. }
+    ));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), lease_body);
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|l| l.branch == "feat"));
+    crate::session_end::session_end(
+        Some(&lease.id),
+        None,
+        None,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap();
+    assert!(!path.exists());
+    assert!(!fx.seat.exists());
 }

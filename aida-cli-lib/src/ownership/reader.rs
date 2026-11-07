@@ -39,13 +39,18 @@ pub(crate) fn ended(root: &Path, key: &WorkKey) -> Result<Option<String>> {
     let Some(record) = load(root, key)? else {
         return Ok(None);
     };
-    if let Phase::Closed { why } = record.phase {
-        return Ok(Some(why));
+    Ok(ended_record(&record))
+}
+
+// trace:STORY-2325 | ai:codex
+pub(crate) fn ended_record(record: &Ownership) -> Option<String> {
+    if let Phase::Closed { why } = &record.phase {
+        return Some(why.clone());
     }
-    Ok(match owner(&record) {
+    match owner(record) {
         OwnerVerdict::Dead { proof } => Some(proof),
         _ => None,
-    })
+    }
 }
 
 pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
