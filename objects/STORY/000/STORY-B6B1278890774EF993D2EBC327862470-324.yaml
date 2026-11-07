@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T15:48:45.273139196Z
+modified_at: 2026-11-07T15:48:52.286652214Z
 req_type: Story
 tags:
 - architecture
@@ -764,6 +764,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-D Claude env_clear meets ruling items a-e in shape, but CI is red at head (cli-0, lib-1 fail; base main 122fea66d3 green), contained Claude launches now leak projected ambient keys across the containment boundary, the standalone Claude reviewer loses AIDA_REVIEW_VERDICT_FILE, and declared cargo resources have no production caller.. No triage reason was given.'
   created_at: 2026-11-07T15:48:45.273131992Z
   modified_at: 2026-11-07T15:48:45.273131992Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6b2-c6ef-7922-9899-f344adca47f4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3603):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 76ff0e3af1a9
+    Recorded: 2026-11-07T15:47:47.122469719+00:00
+    Findings:
+    1. BLOCKING: no green PR CI at 76ff0e3af1a9. Run 42386910263: CI (cli-0) and CI (lib-1) FAILED in 'Run tests' (lib-0 and gates still pending at review time); the base commit 122fea66d3 CI run 42383891622 is green, so treat the failures as caused by this PR. The reviewer sandbox could not fetch job logs (log blob host denied), so the failing test names are unknown: read the logs, fix, and cite a green run at the new head. The likely cause is env_clear breaking a non-fixture Claude path (see the next two findings).
+    2. MAJOR (containment boundary): Claude AIDA-posture launches pass the spawn_agent Command into containment::launch::PreparedLaunch (session.rs:2188 headless; agent_launch.rs:7449 prepare_interactive). launch/contained.rs:396 selected_environment and explicit() (373) treat every explicit Command env pair as a site decision. After cmd.env_clear().envs(child_env.pairs()) (launch/spawn.rs:38-42), ambient parent values become explicit: PATH (overrides the /usr/bin:/bin default at contained.rs:1247), AIDA_SESSION_ID/SCOPE, AIDA_AGENT_CONTEXT_FILE, AIDA_USER, AIDA_DRIVE_ROOT, AIDA_HARNESS_VERSION and the AIDA_ROTATION_* keys (contained.rs:1262-1271, whose comment says 'never ambient rotation state'). They now cross into the sandbox when the site did not set them. A parent session's id and rotation state can reach an independent contained child. The implementer flagged this as punt item (4) and the PR does not address it. Fix: skip the projection for wrapper-owned contained launches, or mark projected pairs so selected_environment ignores them. Add a test showing that a parent AIDA_ROTATION_HANDOFF / AIDA_SESSION_ID / PATH that the site did not set is absent from the contained env.
+    3. MAJOR (reviewer handshake regression): AIDA_REVIEW_VERDICT_FILE is in DROPPED_AIDA_KEYS (aida-core/src/launch_policy.rs:319). The standalone reviewer still delivers it only by process inheritance: queue_cmd.rs:14201 and lib_part5.rs:1421 call std::env::set_var, then spawn through spawn_vendor_headless_with_seat_granted -> spawn_vendor_headless_forking (session.rs:2131 spawn_agent), which never sets it explicitly. Claude standalone/headless reviewers therefore lose it. The /aida-review skill step 6a branches on it ('unset -> skip'), and session_start.rs:1140 session_start_is_review_session uses it as a fallback. The AIDA_AGENT_CMD fixture seam keeps the full parent env, so the integration suites cannot detect this. Fix: set it explicitly on the reviewer child command (as orchestrator_leases.rs:1550 and phase_driver_trait.rs:2083 already do). Also audit the other dropped keys that production sets with set_var, then expects a child to read.
+    4. MINOR (ruling item: apply resources.rs cargo env through the same path): SandboxResources::child_env (resources.rs:47) and VendorProfile::child_env(.., Some(resources)) have no production caller. spawn_agent always passes None (spawn.rs:40), so production Claude children get the parent's CARGO_TARGET_DIR/RUSTC_WRAPPER forwarded via COMMON instead of the declared seat resources. Only story_2326_resource_env_uses_vendor_projection exercises it. Wire the declared resources into spawn_agent when the context has them, or state in the PR body that this is plumbing only.
+    5. MINOR (ratchet, ruling item f): story_2326_profile_and_grant_issuance_have_one_owner (ratchet_tests.rs:473-476) forbids only the qualified 'seat_authority::issue_launch_child_with_delegation('. A 'use crate::gate::seat_authority::issue_launch_child_with_delegation;' import followed by a bare call, or an 'as' alias, evades it. The new patterns have no mutant fixture (TASK-1749 C2). Forbid the import path too, and add mutant fixtures.
+    6. COSMETIC: environment_is_cleared (profile.rs:141) mutates the Command, recording a probe env_remove on inheriting commands, and assign_seat's ThisSession branch calls it on every vendor. Codex/AGY commands now carry a stray __AIDA_LAUNCH_INHERITANCE_PROBE removal entry in get_envs(). It is harmless, but document it or remove the probe after the check.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T15:48:52.079557451Z
+  modified_at: 2026-11-07T15:48:52.079557451Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
