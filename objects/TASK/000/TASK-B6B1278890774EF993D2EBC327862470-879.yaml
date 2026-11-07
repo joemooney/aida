@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:27.802268399Z
-modified_at: 2026-11-07T02:53:01.800823510Z
+modified_at: 2026-11-07T02:53:07.809760887Z
 req_type: Task
 tags:
 - architecture
@@ -501,6 +501,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 10 (post-merge refresh): S1a design, three mutants, F2-F4 fixes, Limits doc and fast-tier CI wiring remain met, but merge 49a2cd6 pulled #3545 (agy private runtime) and the store-writer ratchet is stale at head again; the CI Gates job is still pending.. No triage reason was given.'
   created_at: 2026-11-07T02:53:01.800822321Z
   modified_at: 2026-11-07T02:53:01.800822321Z
+- id: 01a1b3ec-9104-7a20-bed7-2ff071aa89a6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 49a2cd66ed69
+    Recorded: 2026-11-07T02:49:07.644037513+00:00
+    Findings:
+    1. BLOCKER (inventory stale at head 49a2cd6): merge 49a2cd6 resolved only the PR's own six files and did not regenerate scripts/store-writers.toml. It pulled #3545 (02400bc, STORY-2460/TASK-3048), which added fn install_private_runtime (aida-cli-lib/src/launch/contained.rs:385) with two production std::fs::write sinks at :401 (settings.json) and :402 (policy.credential). store-writers.toml has no 'launch/contained.rs|install_private_runtime|fs::write' row (contained.rs rows are only :974-980), so check() reports an addition and 'Store writer inventory ratchet' (ci.yml:900) in the Gates shard and make check-ci-fast fail. The same merge also brought #3516 (store_mutation/{mod.rs,service.py,client.py}, contained_host.py broker_connect_contained gaining a mutation param), #3531 (launch/control.rs, profile.rs, grant.rs), session.rs (exec_or_spawn_agent removed), review_watch.rs (watch_changes/reviewable_changes added) and queue_cmd.rs refactors. Source inspection found no other new production sinks in those files, but it was not exhaustive. Fix: run 'python3 scripts/check-store-writers.py --regenerate' on 49a2cd6 or later, review every addition and stale row (new rows stay blocked for TASK-3223), push, then get the exact-head Gates job green, including both store-writer steps.
+    2. UNVERIFIED (CI): at 49a2cd6 the gates, lib-0/1, cli-0/1, rest and contracts jobs are pending. merge-hold-gate failure is the expected supervised hold, not a code defect. Needed: Gates green at the new head after regeneration.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:53:07.716168780Z
+  modified_at: 2026-11-07T02:53:07.716168780Z
 history:
 - id: 01a1b116-1f8c-7781-a63c-d79f232b0930
   author: joe
