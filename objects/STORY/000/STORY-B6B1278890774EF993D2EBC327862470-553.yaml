@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T19:34:55.558954973Z
+modified_at: 2026-11-07T19:51:03.013337275Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -196,6 +196,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b790-80c7-71c1-ba2e-2ae03426c689
+  author: joe
+  timestamp: 2026-11-07T19:51:03.111774521Z
+  session_id: 01a1b78724b9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -211,3 +217,11 @@ attention_reason:
   lean: Use a supported upstream read-only query path with no migrations/healing and host-managed WAL reader prerequisites; preserve the read-only boundary. Do not grant writable DB or sidecar access.
   raised_by: implementer
   raised_at: 2026-11-07T19:16:23.597214607Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Re-review at ae96e54 (slice 1 = AC1+AC3+AC4). PR code is unchanged since the round-3 approval at 3d9a577: merge 34dc589 is conflict-free and touches only main''s files, and ae96e54 adds one investigation doc. But CI (lib-1) ''Run tests'' is red at every round-3 head and was green at round 2 and on main, and the round-3 approval was recorded with CI pending. AC1: covered by codegraph::tests::{seat_uses_primary_index_without_copying_or_replacing, reentered_old_seat_excludes_navigation_link_idempotently} and bug_2169 codegraph_runtime_link_is_clean_on_an_older_clone_base, not yet confirmed by green CI. AC2: not applicable (slice 2, blocked per the investigation doc). AC3: verified (code-navigation.md, AGENTS.md:472 with a template-equality test, codex_md.rs, assembled_skill_prompts_keep_invocation_first_and_include_navigation). AC4: verified by doctor_reports_missing_unreachable_stale_and_corrupt and wal_activity_is_fresh. AC5: not applicable (slice 2). merge-hold-gate red = supervised hold, not a code defect.'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T19:51:03.013337275Z
