@@ -13,6 +13,10 @@ use std::path::PathBuf;
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum AdvisorCommand {
+    /// Supervised advisor services (currently review-watch only).
+    // trace:STORY-2571 | ai:codex
+    #[clap(subcommand)]
+    Loops(AdvisorLoopsCommand),
     /// Record the current Claude or Codex session as the live advisor — writes
     /// `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a
     /// Codex thread, which `advisor watch` forks with `codex exec fork`), else
@@ -197,4 +201,19 @@ pub enum ScheduleCommand {
         /// schedules. With it, force-fire that schedule even if not yet due.
         name: Option<String>,
     },
+}
+
+/// Fixed service controls; no executable or environment overrides.
+// trace:STORY-2571 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum AdvisorLoopsCommand {
+    /// Show review-watch's persisted binding and controller receipt.
+    Status,
+    /// Bind review-watch to this advisor grant through the operator's deputy.
+    Rebind {
+        #[clap(long, default_value = "default")]
+        deputy: String,
+    },
+    #[clap(hide = true)]
+    Worker,
 }

@@ -3257,3 +3257,30 @@ mod bug_2209_roster_leak_tests;
 #[cfg(test)]
 #[path = "tests/story_2215_inline_grant_tests.rs"]
 mod story_2215_inline_grant_tests;
+
+/// Fixed host service issuance after socket peer attribution. Revalidate the
+/// entire advisor chain and narrow the controller to reviewer delegation.
+// trace:STORY-2571 | ai:codex
+pub(crate) fn issue_review_watch_child(
+    project: &Path,
+    id: &str,
+    subject: &str,
+) -> Result<SeatGrant> {
+    let parent = validated_grant(project, id, subject, Utc::now())
+        .context("review-watch parent authority ended")?;
+    anyhow::ensure!(
+        parent.seat == "advisor"
+            && parent.delegable_seats.iter().any(|s| s == "advisor")
+            && parent.delegable_seats.iter().any(|s| s == "reviewer"),
+        "review-watch requires advisor and reviewer delegation"
+    );
+    roster_check(project, &parent.principal, "advisor")
+        .map_err(|r| anyhow::anyhow!(r.describe("review-watch controller refused")))?;
+    issue_child_from_with_delegation(
+        parent,
+        "advisor",
+        "review-watch-controller",
+        false,
+        &["reviewer".into()],
+    )
+}
