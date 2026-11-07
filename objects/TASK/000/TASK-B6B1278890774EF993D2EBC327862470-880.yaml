@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T08:17:14.014922746Z
+modified_at: 2026-11-07T08:17:19.886412351Z
 req_type: Task
 tags:
 - architecture
@@ -302,6 +302,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Redo transaction, typed comment_add/spec_edit verbs and fault/restart tests match the advisor''s S2a code round (Refs-only, correct), but newline rejection makes the verbs unusable for real comments/descriptions, the permanent cache-dirty marker disables incremental cache refresh and write-through restamp store-wide, and the global 4096-decision cap is never pruned.. No triage reason was given.'
   created_at: 2026-11-07T08:17:14.014921035Z
   modified_at: 2026-11-07T08:17:14.014921035Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b515-61a2-7d60-8d19-6149a3f40a13
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3584):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 28184c034fd9
+    Recorded: 2026-11-07T08:15:47.170492894+00:00
+    Findings:
+    1. aida-core/src/db/canonical_mutation.rs validate(): the text check rejects any char where c.is_control(), which includes '\n' and '\t'. Any multi-line comment_add content or spec_edit description returns InvalidRequest from the Rust host, while service.py mutation_request accepts it (Probe-1 mismatch). Most AIDA comments and descriptions are multi-line. Allow \n/\t (reject only other control chars, consistently in Python and Rust), and add a test with a multi-line comment and a multi-line description.
+    2. aida-core/src/db/cached_git_backend.rs current_head_sha(): .aida/redo/cache-dirty is never removed, so after the first mediated write the cache identity becomes '<sha>-redo-<hash>' for good. Then git_ops::is_ancestor(recorded, head) always fails (no more incremental refresh, so a full rebuild on every HEAD move); refresh_epics_then_restamp's first_parent_sha(head) on the suffixed string fails, so no CLI write restamps the cache fresh (full rebuild after every write); and 'aida cache status' shows recorded != actual SHA permanently. The unreadable branch uses a random UUID, so the cache never reads as fresh. This hits the shared store for every user. Keep the git SHA as the cache identity and track the redo generation separately (e.g. a separate cache_meta key compared alongside it, cleared or folded in once a commit captures the installed bytes). Add a test that incremental refresh and write-through restamp still work after a mediated install.
+    3. aida-core/src/db/redo.rs commit_with_fault(): 'retained < 4096' counts every .done/.pending/.unknown file across ALL epochs, and nothing ever prunes completed decisions from ended launch epochs. After 4096 mediated mutations store-wide, every later comment_add/spec_edit returns Busy permanently. Bound retention per live epoch (or prune .done records whose epoch/lease has ended, under the store lock), and test that a new epoch can mutate after an old epoch fills its quota.
+    4. Mediated installs (redo::install) replace canonical object files in the store worktree with no git commit and no oplog/event write, yet comment_add/spec_edit are now in MUTATION_VERBS and reachable whenever AIDA_STORE_MUTATION_REQUIRED=1. A success reply is returned for bytes git does not hold: a later store sync/reset/rebase can drop them, and other writers' commits may or may not sweep them in. Either commit the installed objects inside the transaction (before marking .done), or keep comment_add/spec_edit out of the live service until the publication slice lands. Say which one in the PR body.
+    5. aida-core/src/db/redo.rs recover_inner()/known_decision(): one .unknown record fences EVERY store writer (all CLI writes, not only mediated ones) with 'OutcomeUnknown: canonical transaction requires operator recovery', and no command or doc tells the operator how to inspect or resolve the quarantined record. Add an operator recovery path (at least a documented procedure plus an 'aida doctor'-style diagnostic naming the file) so a single corrupt record cannot silently make the store read-only.
+    6. Cosmetic: unused 'path' bindings that produce unused-variable warnings: redo.rs install() first precondition loop ('let path = ...object_path(...)?;' is never read) and git_backend.rs mutate_canonical ('let path = object_store::object_path(&self.objects_root, sid)?;'). Drop the binding, or keep only the validation call ('object_path(...)?;').
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T08:17:19.778838792Z
+  modified_at: 2026-11-07T08:17:19.778838792Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
