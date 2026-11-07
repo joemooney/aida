@@ -555,7 +555,27 @@ pub(crate) fn acquire(
         .map_err(|why| std::io::Error::other(format!("merge-lease holder refused: {why:?}")))?
         .clone();
     loop {
-        let guard = mutation_guard(&path, deadline.saturating_duration_since(Instant::now()))?;
+        // trace:TASK-3364 | ai:codex
+        let retained = || {
+            let evidence = std::fs::read_to_string(&path)
+                .map(|body| format!("{:?}", holder_verdict(&parse(&body))))
+                .unwrap_or_else(|e| format!("unreadable holder: {e}"));
+            std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                format!(
+                    "merge-lease for '{branch}' is retained ({evidence}); waited {}s; inspect with `aida merge-lock`",
+                    wait.as_secs()
+                ),
+            )
+        };
+        let guard = mutation_guard(&path, deadline.saturating_duration_since(Instant::now()))
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    retained()
+                } else {
+                    e
+                }
+            })?;
         migrate_legacy_deadline(&path)?;
         let (deadline_boot, clock_now) = boot_clock()?;
         let h = Holder {
@@ -614,16 +634,7 @@ pub(crate) fn acquire(
                     continue;
                 }
                 if Instant::now() >= deadline {
-                    let evidence = std::fs::read_to_string(&path)
-                        .map(|body| format!("{:?}", holder_verdict(&parse(&body))))
-                        .unwrap_or_else(|e| format!("unreadable holder: {e}"));
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::WouldBlock,
-                        format!(
-                            "merge-lease for '{branch}' is retained ({evidence}); waited {}s; inspect with `aida merge-lock`",
-                            wait.as_secs()
-                        ),
-                    ));
+                    return Err(retained());
                 }
                 drop(guard);
                 std::thread::sleep(POLL.min(deadline.saturating_duration_since(Instant::now())));
@@ -937,13 +948,27 @@ mod tests {
     }
     #[test]
     fn mutation_guard_respects_zero_wait() {
+        // trace:TASK-3364 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(locks_dir(dir.path())).unwrap();
         let path = lock_path(dir.path(), "main");
         let _held = mutation_guard(&path, Duration::ZERO).unwrap();
         let err = acquire(dir.path(), "main", None, "blocked", Duration::ZERO).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+        assert!(err.to_string().contains("unreadable holder:"));
+        assert!(err
+            .to_string()
+            .contains("waited 0s; inspect with `aida merge-lock`"));
         assert!(!path.exists());
+        let record = serialize(&current_holder());
+        std::fs::write(&path, &record).unwrap();
+        let err = acquire(dir.path(), "main", None, "blocked", Duration::ZERO).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+        assert_eq!(
+            err.to_string(),
+            "merge-lease for 'main' is retained (Ok(Alive)); waited 0s; inspect with `aida merge-lock`"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), record);
     }
     #[test]
     fn release_retries_guard_past_old_two_second_limit() {
