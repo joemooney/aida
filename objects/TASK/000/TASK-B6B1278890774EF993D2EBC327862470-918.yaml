@@ -1,0 +1,29 @@
+id: 01a1b401-0040-7123-bb41-5e005c58c921
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-918
+title: 'non-blocking (minor/perf): ps_integrate.rs:2084 aida ps now runs one bwrap sand…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2473, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor/perf): ps_integrate.rs:2084 aida ps now runs one bwrap sandbox per seat-clone lease, each with a 5s timeout (seat_clone.rs:238). With many stale clone leases this can slow aida ps noticeably; consider caching or a shared deadline.
+
+  PR: #3551
+  Reviewed sha: d4d06def3481fdc01b966835b84ba7f392fb6d4d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T03:15:26.912968294Z
+modified_at: 2026-11-07T03:15:26.912968294Z
+req_type: Task
+tags:
+- carried-from:BUG-2473
+- finding-hash:ffe38d92
+- from-review:PR-3551
+- kind:carried-forward
+filed_at:
+  code_sha: 0d32a3c45bcc6e0c835eaa1488a68ade19bc1a2a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eaebcf25a0b
+  vendor: claude
