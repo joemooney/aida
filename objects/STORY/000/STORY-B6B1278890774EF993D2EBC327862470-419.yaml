@@ -8,10 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-07T20:28:32.195817504Z
+modified_at: 2026-11-07T20:57:46.810059355Z
 req_type: Story
-tags:
-- operator-held
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
   author: joe
@@ -40,10 +38,12 @@ history:
   timestamp: 2026-11-05T04:49:46.902503396Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
-deferred: true
-deferred_at: 2026-11-05T04:49:39.954255893Z
-deferred_until: spec:STORY-2492=completed
-deferred_reason: 'Operator 2026-11-04: do trusted-node cross-machine review (STORY-2492) first'
+- id: 01a1b7cd-af3d-7be2-897c-2cfde584694c
+  author: joe
+  timestamp: 2026-11-07T20:57:52.701877745Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
