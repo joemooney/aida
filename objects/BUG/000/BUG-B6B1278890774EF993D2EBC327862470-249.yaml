@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:34:40.502347183Z
-modified_at: 2026-11-07T16:39:35.299462830Z
+modified_at: 2026-11-07T16:50:02.754324724Z
 req_type: Bug
+comments:
+- id: 01a1b6ea-c982-7093-979a-0807f15f567e
+  author: joe
+  content: 'Implemented npm/nvm wrapper discovery without executing JS: resolve known nested/hoisted platform packages or bundled vendor layout, SHA-check the native ChatGPT executable, and reuse that exact resolved path for lane argv. API-key lanes share native discovery. Doctor vendor-binary diagnostics name the resolved path and pin result in human/JSON/TOON output. Fake npm fixtures cover resolution, changed/unpinned/non-executable/missing binaries, no host execution, and production preparation argv. Validation: BUG-2484 tests 2 passed; codex_auth_tests 12 passed, 1 watchdog child ignored in parent (child exercised separately); vendor literal ratchet 3 passed; cargo fmt --all -- --check and git diff --check passed. Installed-Codex exact live probe was opt-in skipped; no real ChatGPT conformance credit claimed. Native-seat handoff: six files edited, left uncommitted for host publication; spec remains In Progress. No implementation blockers.'
+  created_at: 2026-11-07T16:50:02.754324724Z
+  modified_at: 2026-11-07T16:50:02.754324724Z
+  session_id: 01a1b6e0223a
 history:
 - id: 01a1b6dc-eea2-7240-b69a-eda236461f17
   author: joe
