@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T12:47:22.971337590Z
+modified_at: 2026-11-07T15:14:35.459712877Z
 req_type: Story
 tags:
 - architecture
@@ -472,6 +472,13 @@ comments:
   created_at: 2026-11-07T12:47:22.971337590Z
   modified_at: 2026-11-07T12:47:22.971337590Z
   session_id: 01a1b600b04a
+- id: 01a1b693-6543-7600-8e5b-3af243a9e03d
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 08:25: NEXT slice = sketch step 3a, hook event/backend layout moved into VendorProfile, with hook path/event fixture parity and safe-writer tests, shrinking story_2539_vendor_literals.tsv. SEQUENCED AFTER STORY-2326 PR-D lands (both edit launch/profile.rs). Then 3b: resume/fork backend.'
+  created_at: 2026-11-07T15:14:35.459712877Z
+  modified_at: 2026-11-07T15:14:35.459712877Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
