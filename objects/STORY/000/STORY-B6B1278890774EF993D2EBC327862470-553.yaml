@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T19:54:09.332409460Z
+modified_at: 2026-11-07T19:54:15.522194274Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -110,6 +110,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Re-review at ae96e54 (slice 1 = AC1+AC3+AC4). PR code is unchanged since the round-3 approval at 3d9a577: merge 34dc589 is conflict-free and touches only main''s files, and ae96e54 adds one investigation doc. But CI (lib-1) ''Run tests'' is red at every round-3 head and was green at round 2 and on main, and the round-3 approval was recorded with CI pending. AC1: covered by codegraph::tests::{seat_uses_primary_index_without_copying_or_replacing, reentered_old_seat_excludes_navigation_link_idempotently} and bug_2169 codegraph_runtime_link_is_clean_on_an_older_clone_base, not yet confirmed by green CI. AC2: not applicable (slice 2, blocked per the investigation doc). AC3: verified (code-navigation.md, AGENTS.md:472 with a template-equality test, codex_md.rs, assembled_skill_prompts_keep_invocation_first_and_include_navigation). AC4: verified by doctor_reports_missing_unreachable_stale_and_corrupt and wal_activity_is_fresh. AC5: not applicable (slice 2). merge-hold-gate red = supervised hold, not a code defect.. It was punted on: design-fork: Slice 1 is already approved in PR 3607 round 3. Slice 2 is blocked by installed codegraph 1.6.0: from this Codex seat both normal symlink routing and explicit primary -p calls fail. strace confirms readable primary DB but denied O_RDWR DB and WAL creation (EROFS), then missing read-only WAL (ENOENT). The query path opens a writable adapter and runs migrations/healing. AC2 forbids granting the writes it needs; AC5 cannot honestly pass. Decide supported WAL-safe read-only upstream client versus an explicitly authorized AIDA adapter and host-maintained WAL layout. Evidence: docs/internal/testing/story-2630-read-only-client-blocker.md. No containment code or host index changed.. No triage reason was given.'
   created_at: 2026-11-07T19:54:09.332407728Z
   modified_at: 2026-11-07T19:54:09.332407728Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b793-6fe8-7531-8cf1-a2a883ac1819
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ae96e54ce1a4
+    Recorded: 2026-11-07T19:51:02.152446719+00:00
+    Findings:
+    1. BLOCKING: CI (lib-1) step 'Run tests' fails at all three round-3 heads: 3d9a577 (job 128495453829), 34dc589 (job 128501087931) and ae96e54 (job 128506720072). It passed at the round-2 head 1880ffee and on main cd520a47. The round-3 changes are the prime suspects: the codegraph.rs tests (assembled_skill_prompts_keep_invocation_first_and_include_navigation, reentered_old_seat_excludes_navigation_link_idempotently, seat_uses_primary_index_without_copying_or_replacing; under CI's git environment the new ensure_aida_runtime_excluded call in link_worktree_runtime_state could fail inside the warn-and-skip closure, so no symlink would be created); the navigation suffix that assemble_pickup_prompt now appends; and the worktree_gc exclude heal. The reviewer sandbox could not download the job log (the blob host is denied), so the failing test is not named here. Read the lib-1 log, fix the failing test(s), and push. If you claim a flake, show a green lib-1 rerun at the same head.
+    2. minor: docs/internal/testing/story-2630-read-only-client-blocker.md is stale as committed. The handoff section (last paragraph) says 'This note is left uncommitted; no commit, push, PR creation ... was performed', but ae96e54 commits and pushes it. It also cites /tmp/story-2630-codegraph-open.trace, a host-local ephemeral file no reader can open. Either inline the trace lines that matter (the openat excerpt is already there) or drop the path, and reword the handoff paragraph to match what was published.
+    3. cosmetic: the ae96e54 commit subject reuses the spec title ('feat: Lanes can actually use codegraph: ... doctor and dell1 check it') for a docs-only commit that adds one investigation note. It has no scope, and it claims behavior (dell1 check, AC5 evidence) that the commit does not deliver. Use a 'docs(codegraph): record read-only client blocker (Refs STORY-2630)' style subject for the rework commit. The note also calls the slice-2 punt a publication veto, yet the note itself was published on the slice-1 PR, so the advisor should confirm it belongs here and not in the slice-2 change.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T19:54:15.400891423Z
+  modified_at: 2026-11-07T19:54:15.400891423Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
