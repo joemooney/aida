@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:09.119639981Z
-modified_at: 2026-11-07T07:11:16.188500631Z
+modified_at: 2026-11-07T07:20:36.465447248Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -53,6 +53,12 @@ comments:
   modified_at: 2026-11-07T07:09:51.929785048Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4e1-7371-75c3-b97d-8dd8642846bf
+  author: joe
+  content: 'Round 2 rework addresses both review blockers: the notice-hook child now receives an explicit PATH/project/HOME environment without os.environ reads; the dual-engine hook gate moves to full tier so local pre-push checks do not require gawk, while CI still installs and requires mawk plus gawk. The test docstring records that the original corruption did not reproduce on mawk 1.3.4 20240123 or gawk 5.2.1. Validation: hook tests pass under mawk and gawk 5.2.1 using the existing /tmp package extraction with a temporary wrapper; check-exec-context.py --base origin/main passes (1241 sites, zero additions, ledger unchanged); CI gate audit passes (77 classified); make check-ci-fast passes all 42 gates; cargo fmt --all -- --check and git diff --check pass. Fast guards emitted read-only FETCH_HEAD diagnostics but completed successfully using local evidence. Only tests/test_mail_notice_hook.py and scripts/ci-gate-tiers.toml changed. Edits remain uncommitted for native host publication; no hold clearance or queue completion performed.'
+  created_at: 2026-11-07T07:20:36.465447248Z
+  modified_at: 2026-11-07T07:20:36.465447248Z
+  session_id: 01a1b4d8de50
 history:
 - id: 01a1b444-9558-7901-b5f0-903657561dd2
   author: joe
