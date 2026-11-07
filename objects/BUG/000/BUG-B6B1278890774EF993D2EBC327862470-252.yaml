@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-252
 agreed_id: BUG-2487
 title: Contained Codex pin (0.166.0) contradicts the launcher's -P permission-profile flag (codex 0.167+); re-pin to 0.167.0
 description: 'launch/contained.rs:1397 adds ''-P aida'' (permission profile), which codex-cli only accepts from 0.167.0. launch/codex_auth.rs pins the contained binary to codex-cli 0.166.0 (SHA b8a11fed...), which rejects it: ''error: unexpected argument -P found''. So no binary can pass both the pin and the launch. Repro 2026-11-07 16:52Z, operator''s live conformance run (out=~/.aida/conformance-codex-aida-1794070266): the containment receipt was issued, then codex exited 2 on -P, and C0-C4 were all unknown. dell1 has codex 0.167.0 with -P. Acceptance: (1) the pin moves to codex-cli 0.167.0 with its probed SHA-256 for the npm vendored musl binary (re-probe per STORY-2593: version, no in-lane refresh, empty refresh_token behavior). (2) The launcher checks before launch that the pinned version supports every flag it passes, and fails closed naming the flag. (3) A test pairs the pin with the argv builder, so a future flag or pin change can''t drift apart again. (4) Docs name the supported codex version and the upgrade step (npm i -g @openai/codex@0.167.0).'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T18:05:17.553632261Z
+modified_at: 2026-11-07T18:05:20.169750688Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 11:15 on the lane''s evidence (docs/internal/testing/bug-2487-codex-pin.md): ''-P/--permission-profile'' exists only on ''codex sandbox'', in 0.166.0 and in 0.167.0 (npm and standalone, both SHA cdcb45aa...). No codex accepts ''-P aida'' before or after ''exec''. Contained Codex launches have failed since #3307. RE-SCOPE: (1) KEEP the 0.166.0 pin; no re-pin. Strike AC1 and AC4''s upgrade step. (2) Fix launch/contained.rs:1397: select the ''aida'' permission profile through a mechanism ''codex exec'' accepts in the pinned version. Probe ''-c'' config keys (e.g. default_permissions / permissions profile selection) with an empty HOME, and prove the profile is honoured by a denied-write probe. If exec cannot select a permission profile, remove the flag and rely on ''-s workspace-write'' inside the AIDA boundary, and record that the inner profile is not applied (the AIDA bwrap boundary is the containment; the codex profile was defense in depth). (3) AC2+AC3 stand: a test runs the argv builder''s flags against the pinned binary''s ''exec --help'' (or a recorded fixture of it) and fails on any flag the parser lacks. Completing (BUG-2487). LIGHT gate. Push to #3611.'
   created_at: 2026-11-07T18:05:17.449652667Z
   modified_at: 2026-11-07T18:05:17.449652667Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b72f-b7a9-7831-982d-734aa079bcb5
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 4, reviewed 6f45718a6c0d: finding 6 remains an unresolved advisor decision; explicitly dispute the acceptance premise behind findings 1 and 4 that re-pinning to 0.167.0 fixes exec. Recorded measurements show that binary rejects -P before exec and under exec (exit 2), accepting it only under sandbox; advisor must select an exec-compatible profile interface or a different measured binary and rewrite acceptance before implementation resumes. Accept findings 1-5 as open: pin, compatibility refusal, paired regression and supported upgrade remain unmet; host must retitle PR #3611 as docs(containment) with (Refs BUG-2487) and drop or reword cfbecb41250 before any merge. No advisor decision or revised acceptance appears in current spec/comments; repeated implementer-only rework cannot resolve this manual gate. Native seat Git metadata is read-only. No code/doc changes or completion claim this round; preserve merge hold and publication veto.. No triage reason was given.'
+  created_at: 2026-11-07T18:05:20.169747180Z
+  modified_at: 2026-11-07T18:05:20.169747180Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -239,6 +246,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b72f-b7a9-7831-982d-73336a171784
+  author: joe
+  timestamp: 2026-11-07T18:05:20.169732252Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -248,8 +264,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Round 4, reviewed 6f45718a6c0d: finding 6 remains an unresolved advisor decision; explicitly dispute the acceptance premise behind findings 1 and 4 that re-pinning to 0.167.0 fixes exec. Recorded measurements show that binary rejects -P before exec and under exec (exit 2), accepting it only under sandbox; advisor must select an exec-compatible profile interface or a different measured binary and rewrite acceptance before implementation resumes. Accept findings 1-5 as open: pin, compatibility refusal, paired regression and supported upgrade remain unmet; host must retitle PR #3611 as docs(containment) with (Refs BUG-2487) and drop or reword cfbecb41250 before any merge. No advisor decision or revised acceptance appears in current spec/comments; repeated implementer-only rework cannot resolve this manual gate. Native seat Git metadata is read-only. No code/doc changes or completion claim this round; preserve merge hold and publication veto.'
-  raised_by: implementer
-  raised_at: 2026-11-07T17:58:08.715154038Z
