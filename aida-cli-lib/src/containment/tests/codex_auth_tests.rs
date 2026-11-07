@@ -649,7 +649,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     child.env("AIDA_SESSION_GRANT", &delegated.id);
     let exp = codex_auth::token_expiry(&relocated, unsafe { libc::getuid() }).unwrap();
     let capped = PreparedLaunch::prepare_with_io(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() },
@@ -673,7 +673,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     let before = std::fs::read(&path).unwrap();
     host_auth(&relocated, chrono::Utc::now().timestamp() + 1900);
     let refused = PreparedLaunch::prepare_with_io(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() },
