@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:06.641176370Z
-modified_at: 2026-11-07T12:51:54.534567584Z
+modified_at: 2026-11-07T12:58:46.705971494Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -80,6 +80,12 @@ comments:
   modified_at: 2026-11-07T12:50:43.997503208Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b617-0e31-7373-8402-e7f479a18d32
+  author: joe
+  content: 'Round 3: reclassified release PR-flow fixtures as full, gated CI on full_ci after Build all packages, and pinned AIDA_TEST_BIN. Release helper failures now preserve diagnostics and retained-lease refusals include shared verdict/repair plus legacy migration guidance. Incomplete records report Incomplete; live text verdict omits empty parentheses. Added runtime fixtures for these paths and updated CLI guide. CI tier audit, workflow assertions, shell syntax, static release regressions and formatting passed; fresh CLI build and targeted merge-lock/runtime tests in progress. Native seat will leave edits uncommitted for host publication.'
+  created_at: 2026-11-07T12:58:46.705971494Z
+  modified_at: 2026-11-07T12:58:46.705971494Z
+  session_id: 01a1b610bbb2
 history:
 - id: 01a1b59d-064f-7020-a1ae-8513041adbc0
   author: joe
