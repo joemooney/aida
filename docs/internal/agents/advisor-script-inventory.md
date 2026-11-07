@@ -54,7 +54,7 @@ human-clear authority. `auto-rework.sh` uses typed verdict/CI facts and dispatch
 
 `launch-review-watch.sh` and the later `review-watch-loop.sh` move to the
 supervised review-watch service (AC2), the first implementation slice named in
-the signoff. BUG-2471 (Completed, PR #3536) fixed the snapshot-era behavior where
+the signoff. BUG-2471 (Completed, PR #3535) fixed the snapshot-era behavior where
 a single PR refusal exited the watcher. Build on its per-PR refusal handling;
 the service must retain bounded retry/backoff and reservation-preserving restart.
 

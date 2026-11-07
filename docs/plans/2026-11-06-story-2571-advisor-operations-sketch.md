@@ -10,7 +10,7 @@ this revision remains documentation-only. Nothing here changes the deputy
 contract or enables a service, permission exception, merge, grant issuance, or
 process termination.
 The [script inventory](../internal/agents/advisor-script-inventory.md) records
-the inspected host snapshot and every proposed disposition.
+the inspected host snapshot and every signed-off disposition.
 
 Revision basis: the binding 2026-11-06 19:09 UTC advisor ruling accepts all four
 findings on PR #3526. This revision extends shipped dispatch, reuses branch-update
@@ -133,7 +133,7 @@ an authorized fresh request is admitted through ordinary dispatch.
 
 Replace both `launch-review-watch.sh` and `review-watch-loop.sh`. At the original
 inventory snapshot, one PR refusal could exit `aida review watch`. BUG-2471 is
-now Completed (landed via PR #3536); `review_watch.rs` records per-PR refusals
+now Completed (landed via PR #3535); `review_watch.rs` records per-PR refusals
 and continues the pass. Build the supervised service on that behavior, retaining
 bounded retry/backoff rather than adding another respawn loop. If
 the controller exits, reconcile reservations before supervised restart. Authority
