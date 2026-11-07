@@ -3,12 +3,12 @@ spec_id: TASK-1196
 agreed_id: TASK-1196
 title: 'work-machine environment smoke for codex: proxy, work gitlab remote, employer codex config, claude-absent reality'
 description: 'The residual 10-minute half of TASK-1182 after the 2026-09-06 home-testbed validation proved everything else: on the actual work machine, update aida, aida init in the work repo (AGENTS.md block now injects — BUG-838), confirm [agents] vendor pin honored, run one aida-managed codex task end-to-end, and note anything environment-specific (proxy, work gitlab, employer codex build, Claude genuinely absent). Evidence goes on this task; findings become specs.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:12.323674694Z
-modified_at: 2026-11-07T20:55:17.117594681Z
+modified_at: 2026-11-07T20:55:19.371141774Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -57,3 +57,12 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b7cb-584b-7e92-ae8c-bfce298a1723
+  author: joe
+  timestamp: 2026-11-07T20:55:19.371131745Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
