@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-07T22:34:40.212846655Z
+modified_at: 2026-11-07T22:34:49.207141391Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -69,6 +69,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: ProcIdentity migration of registry/mail-wake is structurally sound and shrinks the ratchet (registry 13->0, mailbox_identity 1->0, seat_authority 3->1), but it breaks private-mail binding from sandboxed agent shells, drops launcher-stamped fields on every live row at upgrade, holds the registry lock across 30s queue submission, and the subreaper acceptance and LIGHT-gate evidence are missing (CI still queued at review).. It was punted on: blocked-dependency: S4 source edits are prepared, but the LIGHT gate cannot be completed on this host-owned build seed. Combined ProcIdentity and registry-only cargo tests each timed out after 900 seconds with zero executed tests; the registry run reports overlay-stale because the primary rewrote generation agent-65a17c57ad652b4a in place. The runner retains that pinned generation and refuses target-dir overrides, so the native seat cannot safely repair it. Host must reseed/relaunch, run the final ProcIdentity and affected-family tests, and finish make check-ci-fast before publication/completion. Final rustfmt, portability, diff hygiene and store-writer inventory checks passed; the other non-build fast gates passed. untested=true. Preserve the uncommitted edits and Refs declaration; TASK-3366 and STORY-2537 are not completed.. No triage reason was given.'
   created_at: 2026-11-07T22:34:40.212845123Z
   modified_at: 2026-11-07T22:34:40.212845123Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b826-6f6f-7062-a271-b1ad5d82756d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3634):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5e201481dfd5
+    Recorded: 2026-11-07T22:30:04.040731141+00:00
+    Findings:
+    1. [major] aida-core/src/mailbox_identity.rs:314-323 (SessionBindingFacts::verify): the new registry_process_live gate requires ProcIdentity::observe==Alive even when the row was selected by session id / CLAUDE_PID. Agent Bash tools run in a bubblewrap sandbox with their own PID namespace (verified in this review shell: NSpid 4, distinct ns inode), so the hook-written row (host coordinates) reads ForeignUnknown(NamespaceMismatch) -> BindingRefusal::NotLive. session_binding_from_row (mailbox_root.rs:343) is the CLI's only mail-identity collector, so every sandboxed 'aida mailbox read'/inbox call loses its private inbox. Need a sandbox-safe positive proof (e.g. host-side attestation, NSpid ancestor translation, or keep session-id selection valid when the row is unobservable but fresh) plus a test that runs the verify path from a foreign-namespace observer.
+    2. [major] aida-cli-lib/src/agent_registry.rs:925-934 and 1019-1021 (touch_session_start_agent_for; also heartbeat_session_agent_for:1105 and touch_mcp_agent:777): every row written by the current binary stores pid_start='linux-starttime:N', which process_identity() now treats as unknown. At the first heartbeat after upgrade each LIVE session's own row is classed 'displaced', retired to retired/ with ended_at, and replaced by a fresh row - dropping name (unless env/lease), launcher role, mail_wake=armed, native_session_id, delegate_seats, resumed_from and source=agent-launcher (carry_concurrent_launcher_write also refuses). Armed Codex sessions silently stop being woken and handles change. The process registering itself is positive proof: accept a legacy row when pid matches, legacy ticks == captured starttime and namespace matches/absent, and upgrade it in place; add a regression test for the upgrade path.
+    3. [major] aida-cli-lib/src/mailbox_wake_run.rs:683-684 (watch_row): lock_namespace_within is now held through audience verification, snapshot and tick() queue submission (CodexQueue QUEUE_TIMEOUT = 30s), per armed row. SessionStart/heartbeat take the same lock with a 250ms budget (agent_handle::lock_namespace) and fail open, so registration/heartbeats and launcher stamps fail project-wide while any wake submission is in flight. Re-validate the row generation under a short lock hold (before and after submission) instead of holding the allocator lock across external I/O, or give the watcher its own row-scoped fence.
+    4. [minor] Acceptance 'the family's namespace, pid-reuse and subreaper cases on the proc_identity matrix': namespace and pid-reuse are covered (proc_identity_s4_registry_matrix_and_launcher_race, proc_identity_s4_watched_mail_requires_full_local_tuple) but no subreaper case exists anywhere in the diff. Add the subreaper row(s) for registry/mail-wake or record why the family has none.
+    5. [minor] aida-cli-lib/src/gate/seat_authority.rs:1820-1847 (issue_direct): the new re-probe and identity revalidation before minting is the refusal path for 'target replacement before mint', but bug_1934 proc_identity_s4_binding_input_keeps_token_transport_and_refuses_absence only asserts observe() on a mutated struct; nothing exercises issue_direct refusing when the bind target changes. Add a refusal-path test (strict tier: authority/grant code).
+    6. [minor] LIGHT gate not evidenced: the implementer's spec comment states no Rust test was executed and make check-ci-fast was interrupted; PR CI run 42420361612 was still queued/in-progress at review time, and several pre-existing tests (mail_wake_tests rows with fake boot id + pid_namespace=42, list_agent_views heartbeat-fallback tests) were rewritten in ways only CI can confirm. Provide a green CI run at the reworked head.
+    7. [minor] AGENTS.md:1-6 and OVERVIEW.md:1805-1835 prepend per-change notes, contrary to CLAUDE.md (TASK-1954/TASK-2015: per-change notes go in the PR body and an aida comment; edit those files only for real architecture changes, since each prepended paragraph conflicts with every open PR). Move the content to the PR body/spec comment or a docs/ topic page.
+    8. [cosmetic] The legacy scheme literal format!("linux-starttime:{}", id.starttime) is hand-built at agent_registry.rs ~1324, ~1376, ~2183, ~2577, session_start.rs:3327 and seat_authority.rs (pid_binding_token, probe_bind_target). Add one ProcIdentity helper (e.g. legacy_ticks_start()) so the transport scheme has a single definition and stays visible to the TASK-1750 ratchet.
+    9. [cosmetic] agent_registry.rs:761, 903, 1101: current_identity = Some(ProcIdentity::capture(pid)...?) is always Some, so the later .as_ref().map(..) and Option plumbing are dead; bind the ProcIdentity directly.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T22:34:49.071120503Z
+  modified_at: 2026-11-07T22:34:49.071120503Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
