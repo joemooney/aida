@@ -1,0 +1,40 @@
+id: 01a1b36f-acec-7d51-9393-aaa37892cec2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-909
+title: 'Repeated unchanged review findings: STORY-2593'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2593; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (STORY-2593):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: ef3e9d4bc65d
+  Recorded: 2026-11-06T22:10:01.546363460+00:00
+  Findings:
+  1. AC1 unmet: refuse_chatgpt() still refuses on an existing auth.json (aida-cli-lib/src/launch/contained.rs:488-491, called at :694) and the launcher still requires OPENAI_API_KEY (:695-701). The plan doc's round-2 table confirms this; no brokered credential path is implemented.
+  2. AC2 unmet: there is no C0-C4 run under --boundary aida with the operator's ChatGPT login, no policy/binary/receipt hashes, and no credential-visibility sentinel probes (sketch step 3).
+  3. AC3 unmet: BUG-2447 and BUG-2448 are still needs-attention and are neither closed nor re-scoped from C3/C4 evidence.
+  4. Metadata not fixed (round-1 finding 4 repeated): the new commit ef3e9d4bc65 again uses the subject '[AI:codex] feat: ... replace the ... refusal with a brokered credential path (STORY-2593)', and the PR title is unchanged. The doc itself recommends '[AI:codex] docs(plans): ... (Refs STORY-2593)' but the commit does not use it. As is, a merge would auto-complete an unimplemented guided story. Fix it one of two ways: (1) re-subject both commits and the PR title as docs with a non-completing trailer, or (2) keep the PR unmerged until steps 1-5 land.
+  5. Guided gate still open (round-1 finding 5): the spec has no recorded master/operator sign-off on option (a) and its residual bearer-token risk. Implementation (sketch steps 1-5) cannot start, and this PR cannot be approved as completing STORY-2593, until that sign-off is on the spec. This needs operator action, not implementer rework; route via punt/escalation instead of another docs-only rework round.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-07T00:36:42.860473587Z
+modified_at: 2026-11-07T00:36:42.860473587Z
+req_type: Task
+tags:
+- from-advisor:STORY-2593
+- kind:observation
+- linked:STORY-2593
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e94aeb3d
+  vendor: claude
+  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
