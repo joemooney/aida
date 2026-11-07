@@ -89,7 +89,7 @@ pub(crate) const PROTOCOL: u32 = 1;
 /// start identity (so a recycled pid is not a live runner); it carries no
 /// path, token or grant.
 // trace:BUG-2383 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub(crate) struct RunnerRecord {
     pub(crate) protocol: u32,
     pub(crate) runner_pid: u32,

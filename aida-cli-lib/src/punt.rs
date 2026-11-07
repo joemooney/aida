@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 /// outcome) without breaking these. `resolution_path` starts at `"punted"`
 /// and STORY-325's analysis layer is what later records how it resolved.
 // trace:TASK-714
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs_forge::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
 pub struct PuntRecord {
     /// When the punt was raised.
     pub timestamp: DateTime<Utc>,

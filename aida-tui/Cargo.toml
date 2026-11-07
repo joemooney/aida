@@ -21,6 +21,9 @@ vt100 = { workspace = true }
 # we use to clamp modal scroll against the WRAPPED (post-word-wrap) row count
 # rather than the logical line count — see render_modal. trace:BUG-635
 ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
+# Preserve underline colors without resolving the unused Termwiz backend.
+ratatui-core = { version = "0.1.2", features = ["underline-color"] }
+ratatui-crossterm = { version = "0.1.2", features = ["underline-color"] }
 
 # Command-surface enumeration walks the real `aida` clap `Command` tree so the
 # fuzzy palette never drifts from the CLI (STORY-682). Already in the workspace
@@ -36,16 +39,15 @@ aida-core = { version = "0.16", path = "../aida-core" }
 
 # Markdown rendering of the show-modal body. Parsed into styled ratatui
 # Lines/Spans ourselves (no tui-markdown — workspace ratatui is 0.30, which
-# tui-markdown does not track). Pinned to the version already resolved in
-# Cargo.lock (via other crates) so no new version enters the dependency graph.
+# tui-markdown does not track). Shared with the CLI renderer and core HTML
+# reports.
 # trace:TASK-913
-pulldown-cmark = "0.9.6"
+pulldown-cmark = "0.13.6"
 
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-dirs = { workspace = true }
 # Local wall-clock timestamps for the overlay's activity log (STORY-133).
 chrono = { workspace = true }
 # Signal handler that restores the terminal before exit on SIGTERM/SIGINT

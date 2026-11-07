@@ -1747,7 +1747,7 @@ pub(crate) fn run_interactive_unblock_sweep(
 
         let action = loop {
             let opts = vec![GROOM_PROPOSE, GROOM_APPLY, PASTE, WALK, SKIP, HELP];
-            let pick = match inquire::Select::new(&heading, opts)
+            let pick = match crate::prompt_select::select(&heading, opts)
                 .with_help_message("Up/Down to move, Enter to select, or pick '?' for examples")
                 .prompt()
             {
@@ -1828,7 +1828,7 @@ pub(crate) fn run_interactive_unblock_sweep(
             let menu = burndown::sweep_menu(line.class);
             let labels: Vec<&str> = menu.iter().map(|c| c.label()).collect();
             let heading = format!("{} — {} — {}", line.id, line.title, line.reason);
-            let picked = match inquire::Select::new(&heading, labels).prompt() {
+            let picked = match crate::prompt_select::select(&heading, labels).prompt() {
                 Ok(label) => menu
                     .iter()
                     .copied()

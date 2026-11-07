@@ -580,6 +580,8 @@ pub(crate) use aida_core::liveness::{
     SpecLiveness, StaleLeaseRecovery,
 };
 mod native_publication;
+// trace:TASK-3325 | ai:codex
+mod prompt_select;
 mod prompts;
 mod ship;
 mod ship_from_seat;
