@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:21.829119860Z
-modified_at: 2026-11-07T05:30:24.901287216Z
+modified_at: 2026-11-07T05:56:42.177765171Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ comments:
   modified_at: 2026-11-07T04:39:14.116479624Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b494-a241-7360-af3f-2dd0107b40b0
+  author: joe
+  content: 'Implemented selective fixture fixes from the operator-approved reference. Added real PID namespace stamps to remaining lease fixtures, namespace-qualified shell/MCP grant bindings, fixture-scoped namespace trust (including the live-holder and merged-reviewer cleanup witnesses), explicit clearing of inherited trust in the holder negative control, Jammy-compatible device/inode lock identity, and side-effect-free reviewer --version with regression coverage. Added the Python namespace fixtures to CI and its local gate classification. Existing base already contains HOME/TMPDIR and real-home fence isolation, missing-Python refusal/explicit skip, and deterministic drain no-root coverage. Validation: 274 selected CLI-library tests passed plus the separate no-root regression; 15 core holder tests passed and the namespace negative control also passed with ambient trust=1; 56 CLI tests passed across bug_2187, story_1653, task_1717; 55 Python guard/fixture tests passed; formatting, diff whitespace and CI gate classification passed. Two additional existing scorer tests cannot run in this native seat because /var/tmp is read-only: real_scorer_mounts_pin_old_trial_and_prefix_after_quarantine and snapshot_refuses_special_files_and_essential_mounted_ancestors. Full unprivileged Ubuntu 22.04 suite remains external validation. Code left uncommitted for host publication; no queue completion or publication from this seat.'
+  created_at: 2026-11-07T05:56:42.177765171Z
+  modified_at: 2026-11-07T05:56:42.177765171Z
+  session_id: 01a1b47c2a9c
 history:
 - id: 01a1b444-c55a-7471-81b1-e959b0bd0cbb
   author: joe
