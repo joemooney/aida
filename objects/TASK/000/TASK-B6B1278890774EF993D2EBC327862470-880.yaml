@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T05:14:30.185158117Z
+modified_at: 2026-11-07T05:15:18.250497211Z
 req_type: Task
 tags:
 - architecture
@@ -395,6 +395,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b46e-bb6a-7540-a835-6cc14df53b14
+  author: joe
+  timestamp: 2026-11-07T05:15:18.250513707Z
+  session_id: 01a1b46b5577
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -404,3 +412,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Round 4 targets closed, unmerged PR 3563 and requires an unapproved-v1 correction, but the later independent advisor ruling at 2026-11-07T04:55:39 approves canonical-object redo transactions and closes that PR in favor of a future implementation PR. Dispute finding 4 as a current-state assertion (signoff now exists), and the mandatory-new-commit clause because this native seat expressly forbids commits. Findings 1-3 remain unperformed host actions on the closed PR; do not reopen or merge its closing history. Host must reconcile this stale review assignment with the approved S2a implementation scope before another implementer review. Recovered and updated the sketch uncommitted; Refs declaration recorded, no runtime acceptance claimed. Finding 5 accepted: TASK-3223 remains open. Finding 6 verified: contracts, gates and Build green at 621c83395e48; merge-hold-gate remains failed, untouched. Preserve publication vetoes. This is a review-target/scope conflict, not a repeat of the resolved transaction design-fork.'
+  raised_by: implementer
+  raised_at: 2026-11-07T05:15:18.250497211Z
