@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T06:55:38.078577329Z
-modified_at: 2026-11-06T00:16:09.215796883Z
+modified_at: 2026-11-07T20:26:29.840260092Z
 req_type: Story
 tags:
 - competitive-hole
@@ -38,6 +38,16 @@ comments:
   created_at: 2026-11-06T00:16:09.215796883Z
   modified_at: 2026-11-06T00:16:09.215796883Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b7b0-f450-7e13-b87d-45b65bc801b4
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-07-21T04:30:13.942023114Z","deferred_until":"unattended drains need microVM strong-isolation beyond gVisor (sandbox slice 3)","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:29.840250365Z
+  modified_at: 2026-11-07T20:26:29.840250365Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a18667-8c25-7aa0-8d35-e73890fcaa3f
   author: joe
@@ -46,4 +56,4 @@ history:
   changes: []
 deferred: true
 deferred_at: 2026-07-21T04:30:13.942023114Z
-deferred_until: unattended drains need microVM strong-isolation beyond gVisor (sandbox slice 3)
+deferred_until: manual:operator
