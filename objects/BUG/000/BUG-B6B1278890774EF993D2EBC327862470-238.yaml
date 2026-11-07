@@ -9,12 +9,12 @@ description: |-
   1. Review watch skips any PR whose head branch is a train branch (the prefix pr_train creates), logging it once as 'train PR: not reviewed'.
   2. auto-queue-review refuses a train branch.
   3. A test covers both.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T19:36:18.589883017Z
-modified_at: 2026-11-07T00:52:11.654884537Z
+modified_at: 2026-11-07T02:12:48.542694176Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -54,6 +54,20 @@ history:
   timestamp: 2026-11-06T20:07:47.954388162Z
   session_id: 01a1b2699522
   changes: []
+- id: 01a1b3c7-a6e4-7591-b66b-15199665e229
+  author: aida-auto-bump
+  timestamp: 2026-11-07T02:12:48.484151206Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b3c7-a71e-7f10-a285-af0635cd1d05
+  timestamp: 2026-11-07T02:12:48.542688259Z
+  agent: aida
+  commit_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
+  summary: 'All 3 BUG-2472 criteria met: review watch filters train/ heads via reviewable_changes() before watch_changes (one log per change per run), try_auto_queue_pr_review_unbumped refuses train/ before forge/store access for both origins, regression tests cover both; merge with BUG-2471 keeps per-change refusal semantics; CI green at head'
+  review_verdict: approved
 filed_at:
   code_sha: 28ff4ec9ac7a007c905ff343c5e20f7f6f94e65b
   branch: main
@@ -62,3 +76,7 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T02:12:48.484144245Z
+  completion_sha: a6e5865acc839b4bde98db30bf216a0bae34fc87
