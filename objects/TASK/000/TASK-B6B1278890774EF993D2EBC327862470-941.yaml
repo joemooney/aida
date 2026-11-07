@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T14:58:25.585224297Z
-modified_at: 2026-11-07T16:06:28.303219684Z
+modified_at: 2026-11-07T16:06:31.046522164Z
 req_type: Task
 comments:
 - id: 01a1b688-1438-7dc1-87bf-340cf18e483d
@@ -16,6 +16,13 @@ comments:
   content: Prepared two cross-linked documentation drafts in branch docs/infinity-docs-draft, commit a78d8d357a0. Existing-harness analysis separates Codex queue, Claude per-turn hook and AGY unsupported live-wake/resume capabilities from runtime-only history, compaction and exact continuation features. Optional owned-runtime exploration records crash recovery, durable deferral, evidence retention, current authority checks and a bounded prototype decision gate. Local links and whitespace verified. Original untracked source on main preserved. Documentation only; runtime implementation/adoption remains unapproved.
   created_at: 2026-11-07T15:02:13.816859182Z
   modified_at: 2026-11-07T15:02:13.816859182Z
+- id: 01a1b6c2-ef86-7281-9b83-b9d8486aba3c
+  author: joe
+  content: 'ADVISOR 2026-11-07 09:10: approved, FASTTRACK (docs only): make check-ci-fast, no cargo. Completing (TASK-3387).'
+  created_at: 2026-11-07T16:06:31.046522164Z
+  modified_at: 2026-11-07T16:06:31.046522164Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6c2-e4cf-7d10-ab19-cb08755df6d7
   author: joe
