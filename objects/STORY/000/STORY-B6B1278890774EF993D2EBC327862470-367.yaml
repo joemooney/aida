@@ -19,12 +19,12 @@ description: |-
   - **Dependencies:** BUG-2433 should land as slice 1. It feeds STORY-2324 (gate inputs must be tri-state, so it must never read "unknown" as "fail") and STORY-2325 (train ownership).
 
   Acceptance: (1) every forge read goes through one Observed<T> = Known|Pending|Transient type, and a ratchet forbids branching on raw gh exit status outside forge.rs; (2) eject, close, mark-failed and spec-state flips require a confirmed negative (re-read after a bounded backoff plus a ground-truth check such as pinned head ancestor of origin/main); (3) the train writes an intent journal before each forge call and resumes from forge truth after an error or crash; (4) CI evidence is keyed by (head SHA, workflow-definition digest). Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T11:47:56.943956236Z
+modified_at: 2026-11-07T13:20:15.630717289Z
 req_type: Story
 relationships:
 - rel_type:
@@ -953,6 +953,20 @@ history:
   timestamp: 2026-11-07T11:47:58.292885032Z
   session_id: 01a1b5b60dd7
   changes: []
+- id: 01a1b62a-b8ba-7d40-baed-8b93c09f0a64
+  author: aida-auto-bump
+  timestamp: 2026-11-07T13:20:15.546261200Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b62a-b90e-7be2-9d28-67857d44cb03
+  timestamp: 2026-11-07T13:20:15.630710608Z
+  agent: aida
+  commit_sha: 4438485e09be859497760f18027f54e2f61f38c5
+  summary: 'Slice 5 (AC4): CiEvidenceKey pins head SHA + workflow digest (.github/workflows tree / .gitlab-ci.yml blob); pr_stale_check compares pinned digests and behind_base_refusal returns StaleDefinition only when they differ, per the advisor 03:35 ruling. Touch-then-revert, real edit, absent, bad-ref and symlink cases tested in story_2401_ci_digest_tests; train proof carries ci_key (bug2406 test). AC1-3 shipped in #3427/#3493/#3533. CI green at head. Non-blocking findings only.'
+  review_verdict: approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -961,3 +975,7 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T13:20:15.546255930Z
+  completion_sha: 4438485e09be859497760f18027f54e2f61f38c5
