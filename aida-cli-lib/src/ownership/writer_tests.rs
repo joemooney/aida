@@ -860,7 +860,15 @@ fn a_contained_process_writes_no_ownership_record() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
     let id = uuid::Uuid::from_u128(92);
     dual::lease_written(dir.path(), &lease("s", &id.to_string(), ""));
-    dual::train_lease_taken(dir.path(), 5);
+    // trace:TASK-3364 | ai:codex
+    let _merge = crate::merge_lock::acquire(
+        dir.path(),
+        "main",
+        Some(5),
+        crate::pr_train::TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
     dual::handed_off_from_seat(dir.path(), &id.to_string(), "tip", 7);
     let own = dir.path().join(".aida").join(store::DIR);
     assert!(
