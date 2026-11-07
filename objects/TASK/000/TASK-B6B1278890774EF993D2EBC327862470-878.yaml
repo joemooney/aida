@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-878
 agreed_id: TASK-3219
 title: Claude interactive, --bg, coordinator and resume launches on the shared contained wrapper
 description: 'Follow-up slice of TASK-2708 AC(1), after PR #3449. Under [contained.vendors] claude = "aida", interactive agent new, claude --bg, coordinators and resume currently refuse with CLAUDE_WRAPPER_UNWIRED (session.rs claude_contained_flags_for_roots). Acceptance: (1) each of those launch paths runs through the signed common wrapper with the same grants, CLI/MCP surfaces and floors as the headless path. (2) CLAUDE_WRAPPER_UNWIRED is removed. (3) With the opt-in unset, Claude stays native byte-for-byte. (4) The TASK-2708 accepted deltas (WAIT_KILLABLE_RECV signal deferral, a fail-closed 5.19+ floor, refusal of ancillary credentials and sendmmsg) apply unchanged. No new deviations without an advisor ruling. Tests: one targeted test per launch path plus the required-live bwrap count.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T22:40:31.193985169Z
+modified_at: 2026-11-07T22:46:10.680752105Z
 req_type: Task
 tags:
 - architecture
@@ -382,6 +382,13 @@ comments:
   created_at: 2026-11-07T22:17:04.245538587Z
   modified_at: 2026-11-07T22:17:04.245538587Z
   session_id: 01a1b7f01a5f
+- id: 01a1b830-d5f8-7e63-b484-565c2b6bf93b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes for prior findings 2-7 are present and correct (ended-drain, socket-close cancellation with SIGKILL+reap+retain, attach-subcommand refusal + test, production entry refusals, CLI logs/attach test, retention docs); gates (required-live) and contracts now green, but CI cli-0 and lib-1 are red at 6c5d01f while main at the same base 47e379a is green on both shards.. No triage reason was given.'
+  created_at: 2026-11-07T22:46:10.680749995Z
+  modified_at: 2026-11-07T22:46:10.680749995Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
@@ -584,6 +591,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b830-d5f8-7e63-b484-564144dc7776
+  author: joe
+  timestamp: 2026-11-07T22:46:10.680732180Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -592,11 +608,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-2 fixes for prior findings 2-7 are present and correct (ended-drain, socket-close cancellation with SIGKILL+reap+retain, attach-subcommand refusal + test, production entry refusals, CLI logs/attach test, retention docs); gates (required-live) and contracts now green, but CI cli-0 and lib-1 are red at 6c5d01f while main at the same base 47e379a is green on both shards.
-  recovery_hint: address the review findings, move TASK-3219 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-07T22:40:31.193985169Z
