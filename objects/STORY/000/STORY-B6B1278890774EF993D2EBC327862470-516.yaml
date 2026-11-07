@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T08:55:45.533410056Z
+modified_at: 2026-11-07T09:09:47.692619114Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -429,6 +429,12 @@ comments:
   modified_at: 2026-11-07T08:54:22.090314113Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b545-6a2c-7a82-9990-f0429753b724
+  author: joe
+  content: 'Round 12 at reviewed ce63aa8541da: downloaded job 128353552905 logs and addressed all three lib-1 failures. Added the explicit generated-private-CODEX_HOME writer exemption; synchronized both live deputy fixtures with bounded /proc readiness instead of assuming spawn immediately publishes cmdline; captured deadline-test stderr through spawn_io (the CI log proved expiry already fired correctly). Also addressed finding 2 by replacing unconfined Codex --version execution with a bounded non-symlink regular-file SHA-256 check against the recorded b8a11fed binary. Added helper and production-prepare no-host-execution sentinels, and documented the native-binary-first-on-PATH requirement (npm/JS wrappers refuse). Validation: 23 targeted nextest tests passed with AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1, including all three reported failures; both deputy tests passed 20 stress iterations (40 executions); cargo fmt --all -- --check and git diff --check passed. Installed-Codex compatibility probe remains opt-in and was not exercised; hashing the installed native binary independently matched the recorded pin. Six changed files remain uncommitted for native-seat host publication. Full lib-1 CI confirmation awaits host publication/rerun; the existing merge hold remains intact. This remains the authorized partial slice, with advisor live C0-C4 evidence/disposition still required for story completion.'
+  created_at: 2026-11-07T09:09:47.692619114Z
+  modified_at: 2026-11-07T09:09:47.692619114Z
+  session_id: 01a1b5388809
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
   author: joe
