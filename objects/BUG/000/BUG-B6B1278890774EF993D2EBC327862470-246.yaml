@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-246
 agreed_id: BUG-2481
 title: 'Full aida status with no derived cache exceeds 50s on a ~7k-row store: the first-use cache rebuild is unbounded'
 description: 'Split from BUG-2479 (advisor 2026-11-06 23:50). With the derived cache warm, full status on 7,247 rows takes about 5s (debug build). With the derived cache empty (a fresh clone, a cache-version bump, or a CI job with no warm-up step), the same command exceeded a 50s watchdog while the cache stayed at zero rows. That means it never populated the cache during the run, or rebuilt it serially per record. Acceptance: on a ~7k-row store snapshot with no derived cache, the first full status populates the cache and finishes within 15s on an optimized build, and the second run takes under 5s. Add a timed regression on a generated 7k-row fixture, not the real store.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T08:42:18.718213626Z
+modified_at: 2026-11-07T09:52:08.056603216Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -189,6 +189,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b56c-2d54-7e42-aae9-2e8db227e7c8
+  author: aida-auto-bump
+  timestamp: 2026-11-07T09:52:08.020639262Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b56c-2d78-7833-805e-4be429e4643f
+  timestamp: 2026-11-07T09:52:08.056600785Z
+  agent: aida
+  commit_sha: 5a0dff1aa07f227d8d9e37085b51bfca25cd4430
+  summary: 'Round 4: all round-3 findings fixed (gate classified full in ci-gate-tiers.toml:85, lib-0 failure was that same gate-tier test, CI timings in PR body). AC: cold-cache populate verified by contracts CI 14.28s/30s debug + 7000-row and epic-status asserts; warm verified 1.93s/10s debug; 7k generated fixture verified (tests/test_status_cold_cache.py, isolated HOME, wired in ci.yml:484); root cause verified (child_status_rollups builds adjacency/index once, batch_rollups_match_single_root_policy pins equivalence). Optimized 15s/5s figures are the implementer''s own numbers only. CI at this head was pending at review; merge-hold-gate red is the supervision hold, not a code defect. Ship gates on green CI.'
+  review_verdict: approved
 filed_at:
   code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
   branch: main
@@ -198,3 +212,7 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-07T09:52:08.020633985Z
+  completion_sha: 5a0dff1aa07f227d8d9e37085b51bfca25cd4430
