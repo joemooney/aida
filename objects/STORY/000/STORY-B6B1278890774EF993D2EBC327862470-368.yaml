@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T12:25:01.646863783Z
+modified_at: 2026-11-07T12:25:08.531122029Z
 req_type: Story
 relationships:
 - rel_type:
@@ -429,6 +429,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 migration is structurally sound (dry-run default, per-row CAS replan under lock, lossless [aida:defer-migration] audit, idempotent re-apply, all tested), but CI cli-0 is red because of this PR (format-json audit lacks the new command), and the heuristic converts almost none of the live store''s real triggers.. No triage reason was given.'
   created_at: 2026-11-07T12:25:01.646859817Z
   modified_at: 2026-11-07T12:25:01.646859817Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b5f8-4248-7ab0-b29d-9ca624e9f782
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 53b0bc9f52bf
+    Recorded: 2026-11-07T12:23:11.117820365+00:00
+    Findings:
+    1. BLOCKING - CI cli-0 red, caused by this PR: aida-cli/tests/bug_1502_format_json_audit.rs:493 (checked_in_audit_is_exhaustive_and_every_honoured_probe_parses) asserts that the command catalog equals the rows in docs/internal/cli-format-json-audit.md. The new 'aida db migrate-defer-conditions' leaf has no row. Regenerate the audit with scripts/generate-format-json-audit.py (expected row next to db migrate-related-edges: 'COULD NOT VERIFY | Dedicated --json exists ...'), and make sure global '--format json' gives the same document as '--json' for this leaf (run_db at db_cmd.rs:901 checks only args.json). Then confirm cli-0 and the still-pending lib-0, lib-1 and gates jobs are green at the new head.
+    2. Acceptance (2) gap - the inference converts almost none of the real legacy triggers. defer_condition_migration.rs:22 accepts only 'STORY-<id>' followed by present-tense 'completes|ships|lands'. In the canonical store's ~55 active triggers, the cleanly typed shapes 'STORY-2492 completed' (past tense) and 'STORY-1469 approved' (a non-completed status the language supports as spec:X=approved) both fall to manual. So do TASK-/BUG-/EPIC-/SPIKE- ids. Widen the SPEC rule to any [A-Z]+-<n> id and to past-tense verbs (completed/shipped/landed/merged -> =completed). Map '<ID> <status-word>' to spec:<ID>=<status> through RequirementStatus::from_filter_str, and keep the whole-string anchoring so compound sentences still become manual. Add the two live examples above to story2402_s3_migration_heuristics_and_conservative_fallback.
+    3. Non-blocking (docs/operator awareness): after --apply, nearly every live deferral becomes manual:<owner>. Tag-only rows get deferred_at = previous modified_at (defer_condition_migration.rs:154), and defer_resurface.rs:49 routes manual conditions older than 14 days to aida human. So the first hourly run after the migration likely routes several dozen specs to the human queue at once. docs/cli/10-storage.md:173 warns only that inferred conditions can become eligible. Add a sentence that old manual conditions route to aida human on the next run, and consider printing that count in the dry-run report.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T12:25:08.424238438Z
+  modified_at: 2026-11-07T12:25:08.424238438Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
