@@ -9,7 +9,7 @@
 //!      / relationship-type arguments.
 //!
 //! DERIVATION (substrate-as-bouncer): the Requirement field set and the enum
-//! variant sets are **derived from the `ts-rs-forge` type reflection** that
+//! variant sets are **derived from the `ts-rs` type reflection** that
 //! already backs `aida-generate-types` — never hand-maintained here. We parse
 //! the `TS::decl()` output of `Requirement` (the field table) and of the four
 //! enums (the variant lists). The wire token for each variant is the
@@ -27,8 +27,8 @@ use aida_core::models::{
     Comment, HistoryEntry, QueueEntry, Relationship, RelationshipType, Requirement,
     RequirementPriority, RequirementStatus, RequirementType,
 };
+use aida_core::typescript::declaration;
 use serde_json::{json, Value};
-use ts_rs_forge::TS;
 
 // trace:TASK-714 — the catalog kinds whose canonical struct lives CLI-side.
 use crate::findings::FindingRow;
@@ -73,7 +73,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Requirement",
         description: "The core spec node (epic/story/task/bug/...) — title, status, type, priority, relationships, history.",
-        decl: Requirement::decl,
+        decl: declaration::<Requirement>,
         note: None,
         lifecycle: "Written as one YAML file under `.aida-store/objects/TYPE/000/SPEC-ID.yaml` on the \
              orphan `aida-store` branch — the writer of record. Created by `aida add` (status \
@@ -89,7 +89,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Finding",
         description: "A shelved phase-failure or advisor observation surfaced for triage (aida findings).",
-        decl: FindingRow::decl,
+        decl: declaration::<FindingRow>,
         note: Some(
             "A Finding has no standalone record — it is a draft Requirement carrying a \
              `from-review:` / `from-implementer:` / `from-advisor:` tag. The fields below are \
@@ -106,7 +106,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Brief",
         description: "A local pickup brief routing work to an agent without scrollback (.aida/agent-briefs/).",
-        decl: BriefListEntry::decl,
+        decl: declaration::<BriefListEntry>,
         note: Some(
             "A brief is a markdown file with YAML frontmatter; the fields below are the listing \
              projection `aida brief list` parses from that frontmatter (spec_id / agent / \
@@ -123,7 +123,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Punt",
         description: "A design-fork an autonomous agent could not safely resolve; parks the spec NeedsAttention.",
-        decl: PuntRecord::decl,
+        decl: declaration::<PuntRecord>,
         note: Some("One append-only line in `.aida/punts.jsonl`."),
         lifecycle: "One append-only JSONL line in `.aida/punts.jsonl` — local runtime state. \
              Written when an autonomous (`--no-human`) implementer or reviewer hits a decision it \
@@ -137,7 +137,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Directive",
         description: "A standing instruction posted to an agent/role via the inter-agent mailbox.",
-        decl: Directive::decl,
+        decl: declaration::<Directive>,
         note: Some("One parsed line of `.aida/worker.cmd` (verb + args)."),
         lifecycle: "One parsed line (verb + args) of `.aida/worker.cmd` — local runtime state on the \
              inter-agent mailbox substrate. Posted by an operator/advisor via `aida directive post` \
@@ -149,7 +149,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Comment",
         description: "A threaded note on a Requirement (carries reactions; doc-seed carrier).",
-        decl: Comment::decl,
+        decl: declaration::<Comment>,
         note: None,
         lifecycle: "Not a standalone file — an element of the parent Requirement's `comments:` array, \
              so it lives inside that spec's YAML on the orphan `aida-store` branch and is written \
@@ -161,7 +161,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Lease",
         description: "An active claim on a spec/worktree by a session — prevents double-driving.",
-        decl: SessionLease::decl,
+        decl: declaration::<SessionLease>,
         note: Some("One session lease file under `.aida/sessions/`."),
         lifecycle: "One lease file under `.aida/sessions/` — local per-clone runtime state. Written \
              when a session starts working a spec/worktree (`aida session start` / `aida queue \
@@ -173,7 +173,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "QueueItem",
         description: "A position in a role's work queue (keyed off the shell user identity).",
-        decl: QueueEntry::decl,
+        decl: declaration::<QueueEntry>,
         note: None,
         lifecycle: "A position in a per-user work queue (local runtime state), keyed off the shell's \
              user identity — `current_user_id()` resolves `--user` → `AIDA_USER` → `USER`, NOT the \
@@ -186,7 +186,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "HistoryEntry",
         description: "An immutable change row inside a Requirement's YAML (the spec-state time series).",
-        decl: HistoryEntry::decl,
+        decl: declaration::<HistoryEntry>,
         note: None,
         lifecycle: "Not a standalone file — an element of the parent Requirement's `history:` array, \
              so it lives inside that spec's YAML on the orphan `aida-store` branch. Appended \
@@ -200,7 +200,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Relationship",
         description: "A typed edge between two Requirements (parent/child/blocked-by/blocks/references/...).",
-        decl: Relationship::decl,
+        decl: declaration::<Relationship>,
         note: None,
         lifecycle: "Not a standalone file — an element of the source Requirement's `relationships:` \
              array, so it lives inside that spec's YAML on the orphan `aida-store` branch. Added by \
@@ -930,19 +930,19 @@ fn requirement_enums() -> Vec<EnumSchema> {
     vec![
         EnumSchema {
             field: "status",
-            tokens: to_tokens(RequirementStatus::decl()),
+            tokens: to_tokens(declaration::<RequirementStatus>()),
         },
         EnumSchema {
             field: "type",
-            tokens: to_tokens(RequirementType::decl()),
+            tokens: to_tokens(declaration::<RequirementType>()),
         },
         EnumSchema {
             field: "relationship",
-            tokens: to_tokens(RelationshipType::decl()),
+            tokens: to_tokens(declaration::<RelationshipType>()),
         },
         EnumSchema {
             field: "priority",
-            tokens: to_tokens(RequirementPriority::decl()),
+            tokens: to_tokens(declaration::<RequirementPriority>()),
         },
     ]
 }
@@ -952,15 +952,15 @@ fn requirement_enums() -> Vec<EnumSchema> {
 /// `name?: type | null,` (with `/** ... */` doc-comment blocks between
 /// fields, which we skip). trace:STORY-538 | ai:claude
 fn requirement_fields() -> Vec<FieldSchema> {
-    parse_struct_fields(&Requirement::decl())
+    parse_struct_fields(&declaration::<Requirement>())
 }
 
 /// The named-struct field parser shared by every catalog kind (and the
 /// drift-guard tests). Handles both `TS::decl()` field layouts:
-///   - one field per line (ts-rs-forge emits this when a field carries a
+///   - one field per line (ts-rs emits this when a field carries a
 ///     `/** ... */` doc-comment — the Requirement case STORY-538 shipped), and
 ///   - several fields on one line (`{ a: string, b: string, c: T, ` — the
-///     layout ts-rs-forge uses for fields with no doc-comment; TASK-714's
+///     layout ts-rs uses for fields with no doc-comment; TASK-714's
 ///     CLI-side structs hit this).
 ///
 /// It first strips all `/** ... */` doc blocks, then the `type X = {` header
@@ -1033,7 +1033,7 @@ fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
         }
         let ts_type = seg[colon + 1..].trim().to_string();
         // A field is optional if it was declared `name?:` OR its type admits
-        // `null` (ts-rs-forge renders `Option<T>` as `T | null`).
+        // `null` (ts-rs renders `Option<T>` as `T | null`).
         let optional = optional_marker || type_admits_null(&ts_type);
         fields.push(FieldSchema {
             name: name.to_string(),
@@ -1045,7 +1045,7 @@ fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
 }
 
 /// True if a reflected TS type admits `null` — i.e. it is (or unions in) the
-/// `null` literal, the shape ts-rs-forge gives an `Option<T>`. Checked on
+/// `null` literal, the shape ts-rs gives an `Option<T>`. Checked on
 /// top-level union arms only so a nested `{ x: T | null }` doesn't count.
 /// trace:TASK-714 | ai:claude
 fn type_admits_null(ts_type: &str) -> bool {
@@ -1326,7 +1326,7 @@ mod tests {
 
     #[test]
     fn parse_struct_fields_handles_inline_and_null_layouts() {
-        // ts-rs-forge packs doc-comment-less fields onto one line, and renders
+        // ts-rs packs doc-comment-less fields onto one line, and renders
         // `Option<T>` as `T | null`. Both must parse. trace:TASK-714
         let decl = "type X = { a: string, b: number, c: string | null, };";
         let fields = parse_struct_fields(decl);
@@ -1345,7 +1345,7 @@ mod tests {
 
     #[test]
     fn parse_enum_variants_skips_custom_newtype() {
-        let decl = aida_core::models::RelationshipType::decl();
+        let decl = declaration::<aida_core::models::RelationshipType>();
         let variants = parse_enum_variants(&decl);
         // The `{ "Custom": string }` arm must NOT appear as a unit variant.
         assert!(variants.contains(&"Parent".to_string()));
@@ -1458,7 +1458,7 @@ mod tests {
         // emits (one field line per non-doc, non-brace line). Re-derive the
         // expected count straight from a fresh parse so the guard tracks the
         // model, not a frozen integer.
-        let reparsed = parse_struct_fields(&Requirement::decl());
+        let reparsed = parse_struct_fields(&declaration::<Requirement>());
         assert_eq!(fields.len(), reparsed.len());
         // Sanity floor: Requirement is a wide struct; if the parser ever
         // collapses to a near-empty set the guard should scream.
@@ -1491,7 +1491,7 @@ mod tests {
         }
         // Touch the Relationship type's reflection so the catalog's claim that
         // it is a storable kind stays grounded in a type that actually exists.
-        let _ = aida_core::models::Relationship::decl();
+        let _ = declaration::<aida_core::models::Relationship>();
     }
 
     /// DRIFT-GUARD (TASK-714): every catalog kind must reflect a non-empty field

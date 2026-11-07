@@ -21,7 +21,9 @@ homepage = "https://github.com/joemooney/aida"
 [workspace.dependencies]
 # Shared dependencies
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
+# trace:TASK-3325 | ai:codex
+# Keep the existing crate name and YAML wire format with the maintained fork.
+serde_yaml = { package = "serde_norway", version = "0.9.42" }
 serde_json = "1.0"
 toml = "0.8"
 toml_edit = "0.22"  # Format-preserving TOML editor for config.toml writers (STORY-633)
@@ -29,7 +31,7 @@ uuid = { version = "1.4", features = ["v4", "v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 thiserror = "1.0"
-dirs = "5.0"
+etcetera = "0.11"
 fs2 = "0.4"  # Cross-platform file locking for multi-user support
 rusqlite = { version = "0.31", features = ["bundled"] }  # SQLite database support
 postgres = { version = "0.19", features = ["with-uuid-1", "with-chrono-0_4", "with-serde_json-1"] }  # PostgreSQL database support
@@ -38,12 +40,14 @@ r2d2_postgres = "0.18"  # PostgreSQL adapter for r2d2
 
 # CLI dependencies
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
-inquire = { version = "0.9.1", features = ["editor"] }
+# Disable inquire's default fuzzy-matcher; prompt_select supplies nucleo.
+inquire = { version = "0.9.4", default-features = false, features = ["macros", "crossterm", "one-liners", "editor"] }
 colored = "2.0"
 regex = "1.10"
 
 # TUI dependencies (EPIC-26 — aida-tui crate)
-ratatui = "0.30"
+# Enable only the terminal backend used by AIDA; see aida-tui for underline color.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "all-widgets", "macros", "layout-cache"] }
 crossterm = "0.29"
 portable-pty = "0.9"
 vt100 = "0.16"

@@ -1,18 +1,17 @@
+// trace:TASK-3325 | ai:codex
 //! The crate's home- and config-directory resolvers.
 //!
-//! On unix `dirs::home_dir()` and `dirs::config_dir()` already derive from
+//! On unix the home and config directories already derive from
 //! `$HOME` (directly, or via `$XDG_CONFIG_HOME` / `Library/Application
 //! Support`), so redirecting the environment at a temp home redirects them
-//! too. On Windows both resolve through `SHGetKnownFolderPath` and ignore
-//! `HOME`, `USERPROFILE` and `APPDATA` entirely — so a redirected
-//! environment (the lib-test fence, a CI runner, a scripted sandbox) still
-//! lands in the operator's real profile there.
+//! too. Platform fallbacks use `etcetera`; the environment-first resolution
+//! below also keeps redirected Windows test homes out of the real profile.
 //!
 //! Every home/config lookup in this crate goes through [`home_dir`] and
 //! [`config_dir`], which consult the environment first and fall back to the
 //! platform lookup. The answer is unchanged on unix and macOS; on Windows it
 //! becomes overridable. A source-scan test in this module keeps new code from
-//! calling the `dirs` crate, or reading the vars, directly.
+//! bypassing the shared home/config resolution.
 // trace:TASK-1513 | ai:claude
 
 use std::path::PathBuf;
@@ -48,7 +47,7 @@ fn config_from_env(get: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
 fn platform_home_dir() -> Option<PathBuf> {
     #[cfg(feature = "native")]
     {
-        dirs::home_dir() // allow-direct-home-dir
+        etcetera::home_dir().ok()
     }
     #[cfg(not(feature = "native"))]
     {
@@ -59,7 +58,17 @@ fn platform_home_dir() -> Option<PathBuf> {
 fn platform_config_dir() -> Option<PathBuf> {
     #[cfg(feature = "native")]
     {
-        dirs::config_dir() // allow-direct-home-dir
+        use etcetera::BaseStrategy;
+        let strategy = etcetera::base_strategy::choose_native_strategy().ok()?;
+        // dirs used Application Support, not Preferences, for macOS config.
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            Some(strategy.data_dir())
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            Some(strategy.config_dir())
+        }
     }
     #[cfg(not(feature = "native"))]
     {
@@ -86,6 +95,23 @@ pub fn config_dir() -> Option<PathBuf> {
         }
     }
     platform_config_dir()
+}
+
+/// The user's platform cache directory, retaining the existing XDG/native paths.
+pub fn cache_dir() -> Option<PathBuf> {
+    #[cfg(feature = "native")]
+    {
+        use etcetera::BaseStrategy;
+        Some(
+            etcetera::base_strategy::choose_native_strategy()
+                .ok()?
+                .cache_dir(),
+        )
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -177,6 +203,8 @@ mod tests {
         let mut needles = vec![
             ["dirs", "::", "home_dir"].concat(),
             ["dirs", "::", "config_dir"].concat(),
+            ["etcetera", "::", "home_dir"].concat(),
+            ["etcetera", "::", "base_strategy"].concat(),
         ];
         for key in ["HOME", "USERPROFILE", "APPDATA"] {
             needles.push(format!("var(\"{key}\")"));

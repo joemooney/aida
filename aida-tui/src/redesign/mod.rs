@@ -1,3 +1,4 @@
+// trace:TASK-3325 | ai:codex
 //! The `aida tui` **action→target redesign** cockpit (EPIC-54).
 //!
 //! Implements the gesture grammar from
@@ -3362,7 +3363,7 @@ fn relation_row<'a>(rel: &'a LoadedRelation, mode: list_row::GlyphMode, theme: &
 /// Anything unrecognised degrades to plain `fg` text; the parser never panics.
 // trace:TASK-913 | ai:claude
 fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
-    use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
+    use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
     let code_style = Style::default().fg(theme.accent);
     let heading_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
@@ -3420,7 +3421,7 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
 
     for event in Parser::new(src) {
         match event {
-            Event::Start(Tag::Heading(level, _, _)) => {
+            Event::Start(Tag::Heading { level, .. }) => {
                 flush!();
                 in_heading = true;
                 current.push(Span::styled(
@@ -3428,17 +3429,17 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
                     heading_style,
                 ));
             }
-            Event::End(Tag::Heading(_, _, _)) => {
+            Event::End(TagEnd::Heading(_)) => {
                 flush!();
                 in_heading = false;
                 lines.push(Line::from(""));
             }
             Event::Start(Tag::Strong) => bold = bold.saturating_add(1),
-            Event::End(Tag::Strong) => bold = bold.saturating_sub(1),
+            Event::End(TagEnd::Strong) => bold = bold.saturating_sub(1),
             Event::Start(Tag::Emphasis) => italic = italic.saturating_add(1),
-            Event::End(Tag::Emphasis) => italic = italic.saturating_sub(1),
+            Event::End(TagEnd::Emphasis) => italic = italic.saturating_sub(1),
             Event::Start(Tag::Paragraph) => { /* spans accumulate until End */ }
-            Event::End(Tag::Paragraph) => {
+            Event::End(TagEnd::Paragraph) => {
                 flush!();
                 lines.push(Line::from(""));
             }
@@ -3447,7 +3448,7 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
                 flush!();
                 in_code_block = true;
             }
-            Event::End(Tag::CodeBlock(_)) => {
+            Event::End(TagEnd::CodeBlock) => {
                 flush!();
                 in_code_block = false;
                 lines.push(Line::from(""));
@@ -3456,7 +3457,7 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
                 flush!();
                 list_stack.push(first);
             }
-            Event::End(Tag::List(_)) => {
+            Event::End(TagEnd::List(_)) => {
                 list_stack.pop();
             }
             Event::Start(Tag::Item) => {
@@ -3473,7 +3474,7 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
                 };
                 item_prefix = Some(marker);
             }
-            Event::End(Tag::Item) => {
+            Event::End(TagEnd::Item) => {
                 flush!();
             }
             Event::Code(text) => {

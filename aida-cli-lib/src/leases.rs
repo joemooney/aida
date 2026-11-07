@@ -9,7 +9,7 @@ pub(crate) mod leases_args;
 pub(crate) use leases_args::*;
 
 // trace:TASK-714
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub(crate) struct SessionLease {
     /// Versioned cooperative holder evidence; absent/refused captures retain legacy policy.
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
