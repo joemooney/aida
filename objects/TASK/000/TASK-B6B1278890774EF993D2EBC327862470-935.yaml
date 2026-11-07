@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-07T10:47:17.436715761Z
+modified_at: 2026-11-07T23:37:57.155933215Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1ae37-9822-7172-a4a8-bd3141b4ff5e
   created_at: 2026-11-07T10:46:24.938294926Z
+comments:
+- id: 01a1b860-3ca3-7f53-98af-6ff766f456dc
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 16:45 MST: fold two carried-forward findings from PR #3615 into this slice. (a) TASK-2996: review_watch.rs Identity::alive maps ForeignUnknown(IncompleteProcfs|Unreadable) on an observable host to alive with no backstop, so a procfs read failure holds a capacity slot forever; apply the existing within_foreign_backstop to every ForeignUnknown arm and add one test. (b) TASK-2997: AGENTS.md lines 1-4 and the matching OVERVIEW.md paragraph (~1797) are per-change notes; move them to this spec''s comments and keep only a durable architecture sentence if one is needed.'
+  created_at: 2026-11-07T23:37:57.155933215Z
+  modified_at: 2026-11-07T23:37:57.155933215Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
