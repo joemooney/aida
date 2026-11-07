@@ -456,6 +456,7 @@ fn install_private_runtime(
     state: &Path,
     home: &Path,
     policy: &crate::containment::RuntimePolicy,
+    workspace: &Path,
 ) -> Result<PathBuf> {
     policy.validate()?;
     let destination = home.join(&policy.relative);
@@ -466,8 +467,11 @@ fn install_private_runtime(
     let source = state.join("vendor-runtime");
     ensure_dir(&source)?;
     std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o700))?;
-    // An empty settings document inherits no host plugins, MCP or hooks.
-    std::fs::write(source.join("settings.json"), "{}")?;
+    // Private settings inherit no host plugins, MCP or hooks.
+    std::fs::write(
+        source.join("settings.json"),
+        serde_json::to_vec(&policy.settings(workspace)?)?,
+    )?;
     std::fs::write(source.join(&policy.credential), "")?;
     profile.add(&source, true)?;
     profile
@@ -1149,7 +1153,7 @@ impl PreparedLaunch {
         let private_home = if let Some(policy) = &runtime_policy {
             // The vendor resolves this conventional path itself; mount only a
             // launch-owned runtime there, never the host settings/plugins/logs.
-            install_private_runtime(&mut profile, state.path(), &host_home, policy)?
+            install_private_runtime(&mut profile, state.path(), &host_home, policy, &root)?
         } else {
             let path = state.path().join(vendor.key);
             ensure_dir(&path)?;
