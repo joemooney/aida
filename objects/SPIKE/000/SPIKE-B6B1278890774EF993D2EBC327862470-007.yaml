@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:00:50.385855628Z
-modified_at: 2026-11-07T22:42:20.704273906Z
+modified_at: 2026-11-07T23:58:25.581534534Z
 req_type: Spike
 comments:
 - id: 01a1b7e3-96fe-7402-a2b3-98f18e1451e4
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-07T22:42:10.658675919Z
   modified_at: 2026-11-07T22:42:10.658675919Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b872-fb2d-7d61-ac29-05fb54f8f670
+  author: joe
+  content: 'Advisor 2026-11-07 17:00 MST: ran the operator host reruns outside the sandbox and pushed the results to PR #3638 (fba714ecd6a). Resume across a human wait = live YES on Claude, Codex and AGY (headless CLI). PreCompact hook fires live on Claude (headless /compact); Codex/AGY have no hook. Fork = headless yes on Claude only (--fork-session; original transcript unchanged); Codex fork is TUI-only, AGY has no CLI fork. Recommendation in the doc: file the park-on-ask/resume-on-answer implementation spec; keep fork vendor-optional. The advisor authored this push, so PR #3638 needs an independent reviewer.'
+  created_at: 2026-11-07T23:58:25.581534534Z
+  modified_at: 2026-11-07T23:58:25.581534534Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b762-cb76-7e13-b7cf-4b2737c734fc
