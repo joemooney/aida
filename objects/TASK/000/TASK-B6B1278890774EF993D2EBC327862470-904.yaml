@@ -13,13 +13,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T23:28:30.927403170Z
-modified_at: 2026-11-06T23:28:30.927403170Z
+modified_at: 2026-11-07T00:22:23.526856611Z
 req_type: Task
 tags:
 - carried-from:BUG-2467
 - finding-hash:b467457f
 - from-review:PR-3523
 - kind:carried-forward
+comments:
+- id: 01a1b362-9026-7811-9a04-f4579f8e30a5
+  author: joe
+  content: '[advisor 17:32] Duplicate of TASK-b6b1278890774ef993d2ebc327862470-903.'
+  created_at: 2026-11-07T00:22:23.526856611Z
+  modified_at: 2026-11-07T00:22:23.526856611Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 584e94aeb3dc020a2abd1635a286c0c5ddd9a792
   branch: main
