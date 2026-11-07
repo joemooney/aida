@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T15:15:40.277562345Z
+modified_at: 2026-11-07T15:32:37.828434081Z
 req_type: Story
 tags:
 - architecture
@@ -751,6 +751,14 @@ comments:
   modified_at: 2026-11-07T15:11:23.234545587Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b6a3-e944-7071-888d-eedb5f32e0c1
+  author: dirtlab
+  content: |
+    PR-D implementation per the 2026-11-07 advisor ruling: Claude spawn_agent uses EnvPolicy/ChildEnv with env_clear; pinned ambient config keys and explicit dropped inventory cover production workspace AIDA names; the uncontained AIDA_AGENT_CMD fixture seam retains inheritance; ThisSession re-establishes its own selectors explicitly. Profile-local non-AIDA exact lists use registry selection without new vendor debt sites. Declared cargo overrides share projection; Codex rebuild preserves clearing; backend delegation/from-parent issuance ratchet is tightened. No dropped-keys report / launch explain is available (accepted known limitation). Final LIGHT validation passed: lane job j20261107T152726592-310492-0 ran 42 STORY-2326 tests successfully (including story_2326_spawn_agent_clears_env); lane job j20261107T152555873-308454-0 ran 3 STORY-2539 vendor-ratchet tests successfully with no ledger growth. make check-ci-fast passed all 44 gates (Cargo checks delegated to the lane runner; umask 022 for mail-wake fixture trust checks); git diff --check passed. untested=false. Publishing on story-2326-prd with Refs STORY-2326; standalone implementer stops at the open PR, leaving review and merge to their separate seats.
+  created_at: 2026-11-07T15:32:37.828434081Z
+  modified_at: 2026-11-07T15:32:37.828434081Z
+  session_id: 01a1b6945d19
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
