@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T09:25:01.506994742Z
+modified_at: 2026-11-07T10:41:11.675192728Z
 req_type: Story
 tags:
 - architecture
@@ -292,6 +292,13 @@ comments:
   created_at: 2026-11-05T18:48:31.521764377Z
   modified_at: 2026-11-05T18:48:31.521764377Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1b598-efa6-7381-b41f-92c2be6bbcd4
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 03:35: the PR-C precondition is still false (aida own show --compare: 27 unexplained of 880). NEXT = PR-C0 in aida-cli-lib/src/ownership/{judge,compare,migrate}.rs: a pre-admission legacy record (no ProcIdentity) whose session holds no lease is Released-by-rule (journaled release, no --force); a record naming a different session than the current lease is superseded and re-migrated from the lease. Tests in ownership/tests.rs for both. Acceptance: compare shows 0 unexplained on this host. Refs STORY-2325. PR-C (cutover, seat-HEAD detach, staged writes) follows.'
+  created_at: 2026-11-07T10:41:01.350632719Z
+  modified_at: 2026-11-07T10:41:01.350632719Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
