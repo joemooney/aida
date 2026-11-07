@@ -10,14 +10,16 @@ interface. This is the design record, not a completed containment change.
 This file is the canonical design; the STORY-2593 comment points here rather
 than maintaining a second copy.
 
-## Round 3: signed interface gate fails (2026-11-06)
+## Step-1 evidence: signed interface gate fails (2026-11-06)
 
 The advisor's spec comment at `2026-11-07T00:33:24Z` signs off option (a),
 accepts the readable bearer-token risk, and makes the installed `codex exec`
 compatibility probe a hard gate. Finding 5's missing-sign-off premise is now
-superseded. This does not satisfy AC1-AC3. The later scope comment at
-`2026-11-07T00:45:56Z` assigns live conformance and bug disposition to the
-implementation follow-up. The design record landed as `90d0ec0baf4` (#3544),
+superseded. This does not satisfy AC1-AC3. That signed comment assigns steps
+1-3 to the implementation PR and reserves steps 4-5 (the live C0-C4 run and
+BUG-2447/2448 disposition) for the advisor through deputy 3. The later scope
+comment at `2026-11-07T00:45:56Z` moves AC1-AC3 to the implementation PR;
+it does not reassign ownership of steps 4-5. The design record landed as `90d0ec0baf4` (#3544),
 with a `docs(plans)` subject and `(Refs STORY-2593)` trailer; that squash
 resolves finding 4's completion-metadata concern for the landed record.
 
@@ -69,6 +71,31 @@ closing or rescoping them. Their historical Needs Attention labels below are
 round-2 observations. The punt for this interface gate vetoes publication and
 completion; these local evidence edits are a handoff, not another completed
 implementation slice.
+
+## Round 5: decision escalation and host handoff
+
+Review of `cadef932a42c` is accepted on its facts. Findings 1-3 remain open:
+the production refusal is retained, containment and credential-visibility
+evidence is absent, and BUG-2447/2448 remain Approved and blocked. Treating
+those findings as actionable implementation work before resolving finding 5
+is disputed: the signed step-1 stop condition requires an advisor/operator
+interface decision first. Accepting the ID-token-shaped/empty-refresh schema
+or naming another supported `codex exec` interface needs an explicit recorded
+decision; requeueing without one does not resolve the gate.
+
+Finding 4 remains a host action. Commit `cadef932a42c` uses docs/Refs, but
+`e58b7e8cafc` and PR #3560 still claim feature completion. Before any eventual
+squash, the host must retitle the PR to
+`[AI:codex] docs(plans): STORY-2593 step-1 interface-gate evidence (Refs STORY-2593)`
+or close it unmerged. This native seat cannot change Git metadata or perform
+PR operations. The merge hold and interface-gate punt remain publication and
+completion vetoes; a corrected subject does not clear either gate.
+
+Finding 6 is corrected above: the signed advisor/deputy-3 ownership is explicit,
+and the step-1 evidence heading no longer uses a round number that disagrees
+with later commit subjects. Escalate finding 5 to the advisor/operator instead
+of scheduling another docs-only implementer round. After that decision,
+implementer steps 1-3 precede advisor/deputy-3 steps 4-5; none is completed here.
 
 ## Round 2: historical acceptance and approval checkpoint
 
