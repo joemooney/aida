@@ -349,8 +349,8 @@ fn collect(
         // superseded (it is a past round, not the standing decision). With
         // no current-head verdict every body still counts, so an off-head
         // approval stands only as the patch-identity carry-over the corpus
-        // gate proved. At the same head, the newest dated verdict wins
-        // across PR/spec keys, as in the corpus gate above.
+        // gate proved. At the same head, append-order selection is shared
+        // with the corpus gate above.
         // trace:BUG-2438 | ai:claude
         let reviewed_at_head = |v: &rv::RecordedVerdict| {
             v.reviewed_sha
@@ -360,17 +360,15 @@ fn collect(
         let at_head = verdicts
             .iter()
             .any(|(_, _, v)| !v.is_closed() && reviewed_at_head(v));
-        // trace:BUG-2474 | ai:codex
-        let recorded_time = |v: &rv::RecordedVerdict| {
-            v.recorded_at
-                .as_deref()
-                .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
-        };
-        let newest_at_head = verdicts
+        // trace:BUG-2474 trace:TASK-2964 | ai:codex
+        let raw_bodies: Vec<_> = verdicts
             .iter()
-            .filter(|(_, _, v)| !v.is_closed() && reviewed_at_head(v))
-            .filter_map(|(_, _, v)| recorded_time(v))
-            .max();
+            .filter(|(_, _, verdict)| !verdict.is_closed())
+            .map(|(_, record, _)| serde_json::to_string(record))
+            .collect::<std::result::Result<_, _>>()?;
+        let effective =
+            rv::effective_recordings_for_sha(raw_bodies.iter().map(String::as_str), &fresh.head)
+                .map_err(anyhow::Error::msg)?;
         let mut originals = Vec::new();
         let mut superseded_here = Vec::new();
         for (key, record, verdict) in verdicts {
@@ -380,15 +378,19 @@ fn collect(
             // Only a well-formed SHA (>= 7 hex) naming a different commit is
             // an older head; a malformed or too-short one keeps counting, so
             // the refusal it carries fails closed.
+            let mut identity = record
+                .as_object()
+                .context("source review is not an object")?
+                .clone();
+            identity.remove("rounds");
+            identity.remove("unarchived_rounds");
             let is_superseded = at_head
                 && verdict.reviewed_sha.as_deref().is_some_and(|sha| {
                     let sha = sha.trim();
                     sha.len() >= 7
                         && sha.bytes().all(|c| c.is_ascii_hexdigit())
                         && (!rv::same_reviewed_sha(sha, &fresh.head)
-                            || recorded_time(&verdict)
-                                .zip(newest_at_head)
-                                .is_some_and(|(at, newest)| at < newest))
+                            || !effective.contains(&identity))
                 });
             if is_superseded {
                 // Covered by this car's current-head verdict, so the train's
@@ -451,10 +453,13 @@ fn collect(
             })
         });
     if let Some(event) = &bound {
-        mapped.push((
-            train_key,
-            Value::Object(event.verdict_record().unwrap().clone()),
-        ));
+        // trace:TASK-2964 | ai:codex
+        // The exact bound event also owns its derived append-history views.
+        // The at-tip gate still checks all retained evidence before mapping.
+        let store = ledger::store_root(&live.project_root)?;
+        for body in rv::bodies_with_ledger_history(&store, event).map_err(anyhow::Error::msg)? {
+            mapped.push((train_key.clone(), serde_json::from_str(&body)?));
+        }
     }
     // Superseded bodies join the mapped set only after the train-key binding
     // above, so an older-head refusal can never be the M1 copy it binds.

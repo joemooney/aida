@@ -1135,31 +1135,44 @@ pub(crate) fn local_verdict_blocks_merge(
 mod bug_1581_merge_block_tests {
     use super::*;
 
+    // The top-level act follows every retained round even when that round's
+    // clock is ahead. Unrelated-artifact opposition is covered separately.
+    // trace:BUG-1581 trace:TASK-2964 | ai:codex
     #[test]
-    fn local_merge_chokepoint_blocks_an_approved_top_level_with_opposition() {
-        let root = tempfile::tempdir().unwrap();
-        let path = root.path().join(".aida/review-verdicts/PR-2066.json");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            path,
-            r#"{
-              "verdict":"Approved",
-              "reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a",
-              "recorded_by":"reviewer-a",
-              "rounds":[{
-                "verdict":"RequestChanges",
-                "reviewed_sha":"ac772eaca9",
-                "recorded_by":"reviewer-b"
-              }]
-            }"#,
-        )
-        .unwrap();
-        assert!(local_verdict_blocks_merge(
-            root.path(),
-            2066,
-            "BUG-1581",
-            Some("ac772eaca9d389fa762a232156df996023bfdf7a")
-        ));
+    fn local_merge_chokepoint_follows_same_artifact_append_order() {
+        for (current, retained, blocks) in [
+            ("Approved", "RequestChanges", false),
+            ("Approved", "Rejected", false),
+            ("RequestChanges", "Approved", true),
+            ("Rejected", "Approved", true),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join(".aida/review-verdicts/PR-2066.json");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let body = serde_json::json!({
+                "verdict": current,
+                "reviewed_sha": "ac772eaca9d389fa762a232156df996023bfdf7a",
+                "recorded_by": "reviewer-a",
+                "recorded_at": "2026-01-01T12:01:00Z",
+                "rounds": [{
+                    "verdict": retained,
+                    "reviewed_sha": "ac772eaca9",
+                    "recorded_by": "reviewer-b",
+                    "recorded_at": "2099-01-01T00:00:00Z"
+                }]
+            });
+            std::fs::write(path, body.to_string()).unwrap();
+            assert_eq!(
+                local_verdict_blocks_merge(
+                    root.path(),
+                    2066,
+                    "BUG-1581",
+                    Some("ac772eaca9d389fa762a232156df996023bfdf7a")
+                ),
+                blocks,
+                "{current} after retained {retained}"
+            );
+        }
     }
 
     #[test]
