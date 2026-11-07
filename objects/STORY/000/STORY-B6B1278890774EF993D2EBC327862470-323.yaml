@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T20:42:04.050478175Z
+modified_at: 2026-11-07T20:45:51.848380266Z
 req_type: Story
 tags:
 - architecture
@@ -587,6 +587,19 @@ comments:
   created_at: 2026-11-07T20:42:04.050478175Z
   modified_at: 2026-11-07T20:42:04.050478175Z
   session_id: 01a1b7b65058
+- id: 01a1b7c2-af68-71b3-9b3e-b485dda720f7
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-07 13:50 on the round-6 punt and the 20:27 review. Ruled once, per the 10-28 order; this supersedes the 11:35 'PR-D completes' clause.
+    (A) Mail retention (finding 1 / ruling 2) is split to TASK-3420 with these answers: delivered-but-unacknowledged mail may retire its source only after durable preservation in the canonical store; queued/undelivered mail must retain its source; the fresh writer-admission scan after fencing stays mandatory. In PR-D, LEAVE the build-identity gate exactly as it is.
+    (B) The four remaining legacy probes in finding 2 (session_start orphan_lease_to_adopt, session_start_with_receipt, queue/fill pickup filter, lane_liveness review_lease_running) are split to TASK-3420 Part B. They stay grandfathered in ownership-liveness-legacy.json for this PR, and that file must not grow.
+    (C) PR-D MUST still fix: every red CI lane at its head; finding 3, the BUG-307 regression (a dead owner with a clean tree and no origin head must be reclaimed by rule, as before; add a test); and every other blocking finding not covered by (A) or (B).
+    (D) PR-D is now Refs STORY-2325, NOT completing: retitle the PR and commits to (Refs STORY-2325). TASK-3420 completes the story's remainder.
+    Reviewers: findings 1 and 2 are ruled out of scope for PR-D by this ruling.
+  created_at: 2026-11-07T20:45:51.848380266Z
+  modified_at: 2026-11-07T20:45:51.848380266Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
