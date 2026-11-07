@@ -9,12 +9,12 @@ description: |-
 
   PR: #3591
   Reviewed sha: 702b4277dbe9691fce056a91dd5c90222ace337b
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T13:20:39.863799239Z
-modified_at: 2026-11-07T13:57:17.573412506Z
+modified_at: 2026-11-07T13:57:29.481776574Z
 req_type: Task
 tags:
 - carried-from:STORY-2401
@@ -34,6 +34,15 @@ history:
   author: joe
   timestamp: 2026-11-07T13:49:02.533175442Z
   changes: []
+- id: 01a1b64c-cf09-7b01-a044-71ff3c74b647
+  author: joe
+  timestamp: 2026-11-07T13:57:29.481772540Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9f75814f1947e90c7e37ae099356a20cf8673a77
   branch: main
