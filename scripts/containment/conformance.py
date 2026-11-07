@@ -4,6 +4,7 @@
 trace:TASK-3046 | ai:codex
 """
 import argparse
+import contextlib
 import datetime
 import hashlib
 import http.server
@@ -22,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import termios
 import threading
 import time
 import tomllib
@@ -528,9 +530,36 @@ def role_enter_refusal(diagnostic):
     return "fixture-role-enter-refused"
 
 
+# Prompt libraries can leave raw/no-output-processing modes behind when killed.
+# Hold our own fd until children have been reaped, including supervisor cleanup.
+# trace:BUG-2485 | ai:codex
+@contextlib.contextmanager
+def preserved_terminal():
+    terminal = None
+    attributes = None
+    try:
+        terminal = os.dup(0)
+        if os.isatty(terminal):
+            attributes = termios.tcgetattr(terminal)
+    except (OSError, termios.error):
+        pass
+    try:
+        yield
+    finally:
+        if terminal is not None:
+            try:
+                if attributes is not None:
+                    termios.tcsetattr(terminal, termios.TCSANOW, attributes)
+            except (OSError, termios.error):
+                pass  # A disconnected terminal cannot be restored.
+            finally:
+                os.close(terminal)
+
+
 # Retain the operator's terminal session, but own a group for continuation
 # setup. SIGTERM unwinds the continuation's lane-group and Network finally
 # blocks; SIGKILL bounds a failed cleanup. trace:TASK-3194 | ai:codex
+@preserved_terminal()
 def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
     # Transport secret eval output only through a pipe, then restore the
     # inherited terminal stdin for the later production role-entry call.
@@ -693,13 +722,13 @@ def run_aida(args):
         script = continuation_script(block, root, "--aida-setup")
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
-        # Four setup calls (advisor probe, spec add, queue add, implementer
-        # entry) take up to 4*30s, followed by the inner timeout+180s budget.
+        # Three setup calls take 3*30s; implementer entry allows 300s for
+        # operator prompts, followed by the inner timeout+180s budget.
         # Add 30s for inner timeout cleanup (10s TERM + 5s reap) and reporting:
-        # total timeout+330s. On interruption, give the setup supervisor 25s
+        # total timeout+600s. On interruption, give the setup supervisor 25s
         # to kill/reap the inner group and publish before killing its own group.
-        # trace:TASK-2941 | ai:codex
-        result = launch_aida_continuation(script, repo, env, args.timeout + 330,
+        # trace:TASK-2941 trace:BUG-2485 | ai:codex
+        result = launch_aida_continuation(script, repo, env, args.timeout + 600,
                                           cleanup_grace=25)
         if result:
             raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
@@ -718,6 +747,7 @@ def run_aida(args):
 # Successful role output includes a secret key-adoption heredoc. Keep it only
 # in memory; failed output is displayable diagnostic evidence.
 # trace:BUG-2465 | ai:codex
+@preserved_terminal()
 def fixture_role_enter(aida, repo, env, root, report, seat):
     # Only the executing seat needs to delegate to the queue-work child.
     # trace:TASK-2941 | ai:codex
@@ -725,7 +755,12 @@ def fixture_role_enter(aida, repo, env, root, report, seat):
     if seat == "implementer":
         argv += ["--delegate-seat", "implementer"]
     argv += ["--no-resume", "--no-title"]
-    entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=30)
+    # Real operator prompts keep their default (no extra delegation authority).
+    # Give the operator minutes rather than the ordinary setup's 30 seconds.
+    # trace:BUG-2485 | ai:codex
+    print(f"Waiting for operator role entry ({seat}); answer any terminal prompts "
+          "within 5 minutes (Ctrl+C cancels).", file=sys.stderr, flush=True)
+    entered = subprocess.run(argv, cwd=repo, env=env, stdout=subprocess.PIPE, text=True, timeout=300)
     report["setup"].append({"stage": "role-enter", "argv": argv, "exit_code": entered.returncode})
     if entered.returncode:
         print(entered.stdout, file=sys.stderr, end="")
@@ -1139,6 +1174,7 @@ def main():
         if args.boundary == "native" and args.vendor == "claude":
             parser.error("native-boundary-unsupported-vendor: claude")
         try:
+            signal.signal(signal.SIGTERM, continuation_terminated)
             run(args)
         except ValueError as error:
             parser.exit(2, f"conformance: {error}\n")

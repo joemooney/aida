@@ -353,15 +353,20 @@ stdout remains a private captured eval block. The shell continuation receives
 that block through its own stdin pipe, then restores the inherited terminal stdin
 from a passed descriptor before evaluating it. Successful eval blocks never enter
 argv, environment variables, reports or files. Both seat transitions retain the
-operator's terminal session and the supervised timeout cleanup.
+operator's terminal session and the supervised timeout cleanup. Each role entry
+announces that it is waiting for the operator and allows five minutes for prompts,
+including the advisor delegation question (whose default remains no). The harness
+saves and restores terminal attributes around role entry and continuation cleanup,
+including timeout, cancellation and SIGTERM exits.
+<!-- trace:BUG-2485 | ai:codex -->
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 
 The advisor setup seat requests no child delegation; only the implementer seat
 requests `--delegate-seat implementer`. Closed inherited stdin refuses with
 `fixture-terminal-stdin-unavailable` before starting a continuation. The outer
-continuation budget is the vendor timeout plus 330 seconds: four 30-second setup
-calls, the inner timeout's 180-second overhead, and 30 seconds for inner cleanup
-and reporting. On interruption the outer supervisor allows 25 seconds for setup
+continuation budget is the vendor timeout plus 600 seconds: three 30-second setup
+calls, five minutes for implementer entry, the inner timeout's 180-second overhead,
+and 30 seconds for inner cleanup and reporting. On interruption the outer supervisor allows 25 seconds for setup
 cleanup, exceeding the inner supervisor's 10-second SIGTERM grace and 5-second
 SIGKILL reap budget so the inner group is killed before setup is killed.
 <!-- trace:TASK-2941 | ai:codex -->

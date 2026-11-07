@@ -202,6 +202,87 @@ items = [{name = "preserved", enabled = true}]
             self.assertNotIn("private-key-adoption", saved)
             self.assertIn("offline-launch-reached", saved)
 
+    # trace:BUG-2485 | ai:codex
+    def test_role_entry_allows_operator_time_and_restores_terminal_on_every_exit(self):
+        for outcome in ("success", "refusal", "timeout", "interrupt", "termination", "spawn-error"):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                master, terminal = pty.openpty()
+                before = c.termios.tcgetattr(terminal)
+                duplicate = os.dup
+                report = {"setup": [], "checks": {}, "containment_receipt_sha256": None}
+                def entered(argv, **kwargs):
+                    self.assertEqual(kwargs["timeout"], 300)
+                    self.assertNotIn("stdin", kwargs)
+                    self.assertNotIn("stderr", kwargs)
+                    self.assertNotIn("--delegate-seat", argv)
+                    damaged = c.termios.tcgetattr(terminal)
+                    damaged[1] &= ~c.termios.OPOST
+                    damaged[3] &= ~(c.termios.ECHO | c.termios.ICANON)
+                    c.termios.tcsetattr(terminal, c.termios.TCSANOW, damaged)
+                    if outcome == "timeout":
+                        raise c.subprocess.TimeoutExpired(argv, 300)
+                    if outcome == "interrupt":
+                        raise KeyboardInterrupt()
+                    if outcome == "termination":
+                        c.continuation_terminated(c.signal.SIGTERM, None)
+                    if outcome == "spawn-error":
+                        raise OSError("fixture spawn error")
+                    return c.subprocess.CompletedProcess(argv, int(outcome == "refusal"), stdout=
+                        "#aida:eval:begin\nprivate-key-adoption\n#aida:eval:end\n")
+                try:
+                    with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)), \
+                            mock.patch.object(c.subprocess, "run", side_effect=entered), \
+                            contextlib.redirect_stderr(io.StringIO()) as diagnostics:
+                        if outcome == "success":
+                            self.assertEqual(c.fixture_role_enter("aida", root, {}, root, report, "advisor"),
+                                             "private-key-adoption")
+                        else:
+                            expected = {"timeout": c.subprocess.TimeoutExpired,
+                                        "interrupt": KeyboardInterrupt, "spawn-error": OSError}.get(outcome, ValueError)
+                            with self.assertRaises(expected):
+                                c.fixture_role_enter("aida", root, {}, root, report, "advisor")
+                    self.assertEqual(c.termios.tcgetattr(terminal), before)
+                    self.assertIn("Waiting for operator role entry (advisor)", diagnostics.getvalue())
+                    self.assertIn("5 minutes", diagnostics.getvalue())
+                    if outcome == "success":
+                        self.assertNotIn("private-key-adoption", str(report) + diagnostics.getvalue())
+                finally:
+                    os.close(master)
+                    os.close(terminal)
+
+    def test_disconnected_terminal_does_not_mask_original_error(self):
+        with mock.patch.object(c.os, "isatty", return_value=True), \
+                mock.patch.object(c.termios, "tcgetattr", return_value=[]), \
+                mock.patch.object(c.termios, "tcsetattr", side_effect=c.termios.error("disconnected")):
+            with self.assertRaisesRegex(ValueError, "original failure"):
+                with c.preserved_terminal():
+                    raise ValueError("original failure")
+
+    # trace:BUG-2485 | ai:codex
+    def test_supervisor_restores_terminal_after_forced_child_cleanup(self):
+        master, terminal = pty.openpty()
+        duplicate = os.dup
+        before = c.termios.tcgetattr(terminal)
+        script = "exec " + c.shlex.join([c.sys.executable, "-c", """
+import os, signal, termios
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+a = termios.tcgetattr(0)
+a[1] &= ~termios.OPOST
+a[3] &= ~(termios.ECHO | termios.ICANON)
+termios.tcsetattr(0, termios.TCSANOW, a)
+print('terminal changed', flush=True)
+signal.pause()
+"""])
+        try:
+            with mock.patch.object(c.os, "dup", side_effect=lambda _: duplicate(terminal)):
+                with self.assertRaisesRegex(ValueError, "continuation-timeout"):
+                    c.launch_aida_continuation(script, Path("."), dict(os.environ), 1, cleanup_grace=0.1)
+            self.assertEqual(c.termios.tcgetattr(terminal), before)
+        finally:
+            os.close(master)
+            os.close(terminal)
+
     def test_setup_refusal_never_enters_implementer_or_launches(self):
         for refused in ("setup-seat-preflight", "spec-add", "queue-add"):
             with self.subTest(stage=refused), tempfile.TemporaryDirectory() as directory:
@@ -357,7 +438,7 @@ items = [{name = "preserved", enabled = true}]
             def timeout(script, repo, env, seconds, cleanup_grace):
                 # Cover all four 30s setup calls, the full inner budget, its
                 # TERM/KILL cleanup and time to publish the real outcome.
-                self.assertEqual(seconds, args.timeout + 4 * 30 + 180 + 30)
+                self.assertEqual(seconds, args.timeout + 3 * 30 + 300 + 180 + 30)
                 self.assertEqual(cleanup_grace, 25)
                 report = json.loads((root / "aida-state.json").read_text())["report"]
                 report["setup"].append({"stage": "continuation-only-evidence"})
