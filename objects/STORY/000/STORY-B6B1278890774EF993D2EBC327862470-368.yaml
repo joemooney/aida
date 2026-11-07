@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-07T09:58:34.243168565Z
+modified_at: 2026-11-07T10:31:58.929083745Z
 req_type: Story
 relationships:
 - rel_type:
@@ -404,6 +404,13 @@ comments:
   created_at: 2026-11-07T09:58:34.243168565Z
   modified_at: 2026-11-07T09:58:34.243168565Z
   session_id: 01a1b57149f8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b590-a872-79e3-a093-c2312bb9a851
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 03:35: S1, S2 and S4 have landed. NEXT = S3: add aida db migrate-defer-conditions [--apply] in new aida-cli-lib/src/defer_condition_migration.rs (+_args.rs, registered via command_registry::REGISTRY), modelled on related_edge_migration.rs. Dry-run by default. The heuristic maps ''STORY-X completes/ships/lands'' to spec:X=completed, ''#N merges'' to pr:N=merged, a version to release:>=V, an ISO date to date:, and legacy deferred:<x> tags; anything else becomes manual:<owner|operator>. Keep the original text in a [aida:defer-migration] comment. Test story2402_s3_migration (round trip, idempotent re-apply, nothing lost). Refs STORY-2402. S5 (handoff conditions: plus findings recur --until) is the next PR.'
+  created_at: 2026-11-07T10:31:58.834206759Z
+  modified_at: 2026-11-07T10:31:58.834206759Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
