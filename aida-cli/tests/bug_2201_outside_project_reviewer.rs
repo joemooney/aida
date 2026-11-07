@@ -260,6 +260,21 @@ fn fixture() -> Fixture {
 }
 
 fn contained_review(fx: &Fixture, force_deny: bool) -> Output {
+    // Configure the fake itself; production children deliberately drop fixture env.
+    // trace:STORY-2326 | ai:codex
+    let script = FAKE_CLAUDE
+        .replace(
+            "$BUG2201_ENV_DUMP",
+            fx.base.join("child-env").to_str().unwrap(),
+        )
+        .replace(
+            "$BUG2201_ARGV_DUMP",
+            fx.base.join("child-argv").to_str().unwrap(),
+        )
+        .replace("$BUG2201_FORCE_DENY", if force_deny { "1" } else { "" })
+        .replace("$BUG2201_SPEC", &fx.spec)
+        .replace("$BUG2201_SHA", fx.sha.trim());
+    std::fs::write(fx.bin.join("claude"), script).unwrap();
     let mut cmd = as_advisor(fx);
     cmd.env("AIDA_CONTAINED", "1");
     if force_deny {
