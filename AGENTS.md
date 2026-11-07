@@ -514,6 +514,15 @@ child worktree; judges use the project root with the same write boundary.
 Burndown and intake share the headless Claude posture resolver.
 <!-- trace:BUG-2172 | ai:codex -->
 
+## Execution inputs
+
+Use `aida-core::exec_context` for explicitly injected execution inputs and
+`launch_policy::EnvPolicy` for child projection. Never introduce another
+ambient reader, test environment writer or child allowlist. Existing exceptions
+are tracked by the [exact-site migration ledger](docs/internal/testing/exec-context-migration.md);
+this API foundation does not yet migrate production consumers or activate env_clear.
+<!-- trace:STORY-2538 | ai:codex -->
+
 ## Cache read behavior
 
 Single-spec `show` uses a zero refresh-wait budget on every CLI format,

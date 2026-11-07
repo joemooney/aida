@@ -14,6 +14,27 @@ update this file in the same change so the two don't drift.
 
 ---
 
+## Execution input foundation (internal workspace API)
+
+<!-- trace:STORY-2538 | ai:codex -->
+
+`exec_context` and the environment projection types in `launch_policy` are
+internal workspace APIs for the staged execution-input migration. They are not
+stable external API and currently have no production consumers.
+
+| Item | Contract |
+| --- | --- |
+| `exec_context::Environment` | Immutable OsString snapshot; one explicit ambient capture boundary, fallible Unicode access |
+| `exec_context::EnvLookupError` | Missing/non-Unicode lookup errors without names or values |
+| `exec_context::ExecContext` | Explicit environment, optional home, project/authority roots, tools and clock; no authority validation |
+| `exec_context::ToolPaths` | Explicit search path and selected paths; no installation or executable trust claim |
+| `exec_context::{Clock, SystemClock}` | Live wall timestamps and monotonic elapsed durations, with injectable test clocks |
+| `launch_policy::{EnvPolicy, ChildEnv}` | Pure complete child projection using the single owned-key table; no spawn or env-clear activation |
+| `launch_policy::{EnvRecipient, EnvPolicyRefusal}` | Vendor/tool recipient boundary and value-free projection refusal |
+
+See the [migration inventory](../testing/exec-context-migration.md) for ownership,
+legacy exceptions and final acceptance still outstanding.
+
 ## Who consumes `aida-core` as a Rust library
 
 Only two workspace crates link against `aida-core`:
