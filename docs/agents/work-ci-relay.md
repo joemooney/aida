@@ -132,36 +132,73 @@ retained request to work under the advisor's ruling.
 
 Both validators derive inventory from the retained home commit, never work API
 claims or executable discovery. `.gitlab-ci.yml`, when present, is authoritative.
-Supported GitLab definitions are flat static jobs with literal names and `script`;
-ordinary stage/image/tags/script/variables/services/cache/artifacts/retry/timeout/
-needs/dependencies settings are accepted. Includes, hidden jobs, extends,
-parallel/matrices, conditional rules and unknown job keys refuse. If there is no
-GitLab definition, static `.github/workflows/*.yml|yaml` job definitions can
-supply inventory; matrices, reusable workflows, dynamic names, conditions and
-unknown job keys refuse. This does not translate GitHub workflows to GitLab;
-the operator must arrange a work pipeline with exactly the pinned job names.
-The relay never invents a pipeline definition.
+GitLab inventory resolves canonical repository-relative `.yml`/`.yaml` local
+includes from that exact commit (string or `{local: path}` form). Includes merge
+in listed order before the root; mappings deep-merge and arrays replace, as with
+GitLab. Hidden templates and ordered `extends` parents use reverse deep merge.
+Defaults accept execution settings that cannot select or rename jobs. Remote,
+project, component, template, wildcard, variable, absolute and parent-relative
+includes refuse, as do missing/nonregular blobs, cycles and unsupported syntax.
+No checkout file or work API response supplies configuration.
+
+Selection models only a push to canonical `ci/<positive u32>` with no tag or MR.
+Rules use first-match `if`/`when`, supporting `always`, `on_success` and `never`.
+The closed expression vocabulary is AIDA's committed pipeline-source equality
+(`push`, `schedule`, `web`, `merge_request_event`), MR/tag presence, release-tag
+regex `/^v[0-9]+/`, and relay-branch regex `/^ci\/[1-9][0-9]*$/`, joined with
+spaced `&&` and `||`. Default-branch and `PUBLISH_PAGES` comparisons remain
+unknown; they are admitted only when the whole expression is independent of them
+(for example a false `web` conjunction). Other expressions, `changes`/`exists`,
+manual/delayed jobs, matrices, dynamic names, triggers and unknown job keys refuse.
+Selection variables cannot be overridden in committed global/job variables.
+Enrolled GitLab project/runner variables must preserve predefined pipeline
+context; dynamic injection of configuration or job-selection variables is outside
+this profile. The relay does not query or execute an external CI compiler.
+
+AIDA's committed `.merge-gate` explicitly admits relay push branches. The
+selected jobs are exactly `verify`, `test` and `bwrap-confinement`. The test job
+uses nextest's `ci` profile, removes stale cached JUnit first, and always copies
+this run's report into a checkout-relative GitLab JUnit artifact for the test
+report API. MR-only merge-hold and release/Pages jobs are excluded. Native PR merge holds remain
+separate gates. This admits the repository's configuration and source size;
+**no AIDA runner or credential deployment is claimed**. If no GitLab definition
+exists, static GitHub workflows retain their prior supported syntax: no matrices,
+reusable workflows, conditions, dynamic names or unknown job keys. This does not
+translate GitHub workflows to GitLab.
 
 Literal Rust `#[test]` / `#[tokio::test]` function names in committed regular
-`.rs` files form the supported failing-test inventory. Receipts use unqualified
-function identifiers. Qualified JUnit names such as `module::checks` map to the
-home-derived final function identifier `checks`; work-authored module prefixes
-are never returned. Repeated failures of that identifier deduplicate. Inline
-modules are walked;
-all committed `.rs` files are inspected without running code. Dynamic/generated,
-parameterized and non-Rust test names are unsupported and refuse if returned.
-This profile does not promise discovery of every generated or conditionally
-compiled test. There is no test-discovery subprocess or work-supplied inventory.
-Source reads are bounded (1 MiB/file, 4096 Rust files, 16 MiB total, 20 seconds).
-This slice is explicitly limited to repositories within those bounds and flat
-static pipeline definitions. **AIDA itself is not currently supported**: its
-tracked Rust sources total about 48 MiB and its GitLab configuration uses
-includes, defaults, workflow rules and hidden templates. A separate supported
-pipeline alone does not solve the source-size limit. Deployment to AIDA needs
-the inventory follow-up recorded on STORY-2480 (round 2 finding 3); no actual
-AIDA runner deployment is claimed. That follow-up must cover bounded bulk source
-reads/test-bearing scope, committed local template expansion, deterministic
-selected jobs and an AIDA-sized end-to-end fixture.
+`.rs` files form the failing-test inventory. Receipts use unqualified function
+identifiers. Qualified JUnit names such as `module::checks` map to the pinned
+final identifier `checks`; returned module prefixes never cross home. Repeated
+failures deduplicate. Inline modules are walked; all committed `.rs` files are
+tokenized, with literal test signatures and inline modules parsed while opaque
+item bodies are skipped. CI performs compilation; inventory does not validate
+expression semantics or execute discovery. Dynamic/generated, parameterized and
+non-Rust tests remain unsupported and refuse if returned.
+
+<!-- trace:TASK-3232 | ai:codex -->
+One inventory has a 60-second wall budget, 4096 Rust files, 8192 combined
+Rust/YAML files, 2 MiB per source blob and 64 MiB combined source bytes.
+`ls-tree -rlz` preflights committed sizes/modes only for Rust sources,
+`.gitlab-ci.yml` and `.github/workflows/*.yml`/`*.yaml`. Other YAML is read and
+validated only when referenced by a local include; unrelated YAML does not count
+toward inventory limits. `cat-file --batch` reads eager blobs by object
+ID in at most 8 MiB chunks with bounded output and at most 30 seconds per Git
+call. CI YAML is further capped at 1 MiB/file, 4 MiB expanded includes, 64 include
+loads and depth 16. Extends is capped at depth 11, 16 parents and 1024 total
+expansions. Inventory still caps 256 selected jobs and 100,000 test identifiers.
+The admission snapshot checks a 300-second admission cutoff before each uncached
+fetch/inventory pair and after it, retaining the newest-32 attempt rule plus
+explicit on-demand older validation. An in-flight fetch and inventory finish under
+their separate Git-call and 60-second inventory budgets before the next check;
+300 seconds is therefore not a strict total wall-time limit. Deadline exhaustion
+refuses without accepting partial evidence. Intake ancestry/metadata retains its separate
+30-second budget, excluding source-validation time. This is a work bound, not a
+latency guarantee on every machine. The AIDA-sized regression uses real Rust sources padded above
+48 MiB at three distinct commits and repeats validation in a cold home clone.
+That full end-to-end fixture has a separate 480-second subprocess budget and
+540-second nextest hang guard, reserving all nextest slots; individual source
+and history validation keep the bounds above.
 
 Receipts use exactly `version`, `kind`, `sha`, `attempt`, `status`, `jobs`,
 `failing_tests`, `digest`. Kind is `ci-result`, version is 1. Jobs contain exactly
@@ -242,6 +279,13 @@ GitLab commit-target readers consume it too; the legacy branch/MR pipeline
 summary is not a relay-status display. A newer pending status blocks the
 required-check paths until a current success arrives. The source integration
 regression is `work_ci_native_status_is_a_required_train_and_pr_source`.
+The binary-contract test
+`aida_sized_relay_native_statuses_reach_required_pr_and_train_gates` additionally
+runs the real local relay fixture and feeds its HTTP-posted native statuses through
+the commit reader, train required-check judge and PR required-row classifier.
+The Python-only suite runs the smaller transport regressions; the large case is
+selected by that Rust contract with an explicit evidence output path, avoiding a
+duplicate expensive run in CI's contracts lane.
 Local transport
 configuration cannot change protected-branch or required-check settings. A newer
 admitted attempt supersedes older receipts for the same SHA, even while its
@@ -264,8 +308,11 @@ Validation:
 
 ```bash
 cargo test -p aida-cli-lib --no-default-features ci_receipt::tests --lib
+cargo test -p aida-cli-lib --no-default-features ci_inventory::tests --lib
 cargo build -p aida-cli --no-default-features
 AIDA_TEST_BIN="$PWD/target/debug/aida" python3 tests/test_work_ci_relay.py
+AIDA_TEST_BIN="$PWD/target/debug/aida" cargo test -p aida-cli-lib --no-default-features \
+  aida_sized_relay_native_statuses_reach_required_pr_and_train_gates --lib -- --nocapture
 ```
 
 CI commands accept `--json` (or `--format json`) and emit one result object
