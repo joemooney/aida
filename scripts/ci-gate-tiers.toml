@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:BUG-2476 | ai:codex
+"Run fixture PID namespace binding tests" = "fast"
 # trace:TASK-3222 | ai:codex
 "Store writer inventory ratchet" = "fast"
 "Store writer inventory mutation fixtures" = "fast"

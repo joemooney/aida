@@ -367,6 +367,58 @@ fn failure_reason_shelf_surfaces_as_rework_not_escalation() {
     assert_eq!(report.compact_line().unwrap().contains("1 in rework"), true);
 }
 
+// trace:BUG-2477 | ai:codex
+#[test]
+fn colliding_display_labels_classify_each_escalation_by_uuid() {
+    let _env = awaiting_clean_env();
+    // Exercise both lookup orders: either colliding record can be shelved.
+    for shelved_index in 0..2 {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+        let mut records = [
+            Requirement::new("first escalation".into(), String::new()),
+            Requirement::new("second escalation".into(), String::new()),
+        ];
+        for (index, req) in records.iter_mut().enumerate() {
+            req.spec_id = Some(format!("BUG-{}", 24770 + index));
+            req.agreed_id = Some("BUG-2477".into());
+            req.status = RequirementStatus::NeedsAttention;
+            if index == shelved_index {
+                req.failure_reason = Some(aida_core::FailureReason {
+                    phase: "preflight".into(),
+                    phase_index: 1,
+                    kind: "stale-base".into(),
+                    detail: "branch is behind main".into(),
+                    recovery_hint: None,
+                    shelved_by: Some("codex".into()),
+                    shelved_at: chrono::Utc::now(),
+                });
+            }
+            // Model a collision imported by sync, bypassing allocation guards.
+            aida_core::object_store::write_object(&dir.path().join("store/objects"), req).unwrap();
+        }
+        backend.rebuild_cache().unwrap();
+        let summaries = backend
+            .list_summaries(&aida_core::ListFilter::default())
+            .unwrap();
+        assert_eq!(summaries.len(), 2);
+        assert!(summaries
+            .iter()
+            .all(|s| s.agreed_id.as_deref() == Some("BUG-2477")));
+
+        let ctx = empty_user_ctx(Some("implementer"));
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+        assert_eq!(report.shelved_total, 1);
+        assert_eq!(report.escalations.len(), 1);
+        assert_eq!(report.escalations[0].spec_id, "BUG-2477");
+        assert_eq!(
+            report.escalations[0].title,
+            records[1 - shelved_index].title
+        );
+    }
+}
+
 // Briefs are filed under `.aida/agent-briefs/<agent>/`. The classifier
 // narrows to the running agent's directory when `AIDA_AGENT_TYPE` is a
 // known value, so we set it explicitly to make detection deterministic

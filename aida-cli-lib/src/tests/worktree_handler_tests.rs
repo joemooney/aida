@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 use super::*;
 
 fn git(path: &std::path::Path, args: &[&str]) {
@@ -662,6 +663,12 @@ fn task_1784_lease(id: &str, path: &str, started: &str) -> SessionLease {
         ("hostname", "h"),
     ] {
         t.insert(k.to_string(), toml::Value::String(v.to_string()));
+    }
+    if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+        t.insert(
+            "pid_namespace".into(),
+            toml::Value::Integer(namespace as i64),
+        );
     }
     t.try_into().unwrap()
 }
