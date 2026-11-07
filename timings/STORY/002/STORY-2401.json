@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2401",
+  "publishes": [
+    {
+      "at": "2026-11-07T13:20:29.480484736Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T15:56:39.760564580Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T10:12:57.680758760Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T11:21:33.780026967Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T13:54:31.395269074Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T14:53:28.363567620Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-06T16:57:11.310327743Z",
+      "spec": "STORY-2401",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2401",
+        "branch": "origin/story-2401-r0147",
+        "first_seen": "2026-11-06T16:57:11.310265062+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-06T19:30:27.636866325Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T07:25:41.175446656Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T08:46:03.379711237Z",
+      "spec": "STORY-2401",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2401",
+        "branch": "origin/story-2401-r1150",
+        "first_seen": "2026-11-07T08:46:03.379655523+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-07T13:19:40.916612212Z",
+      "spec": "STORY-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3591
+      }
+    },
+    {
+      "ts": "2026-11-07T13:20:29.332589830Z",
+      "spec": "STORY-2401",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4438485e09be859497760f18027f54e2f61f38c5",
+        "pr": 3591,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
