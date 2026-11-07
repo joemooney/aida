@@ -681,6 +681,12 @@ const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
         "writes generated vendor state (a private per-launch Codex config.toml \
          in its own tempdir), never the project config",
     ),
+    // trace:STORY-2593 | ai:codex
+    (
+        "aida-cli-lib/src/launch/codex_auth.rs",
+        "writes only the generated private CODEX_HOME config in the launch tempdir, \
+         never the project config",
+    ),
 ];
 
 /// Text that names the project config path.

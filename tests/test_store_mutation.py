@@ -681,7 +681,8 @@ time.sleep(.2)
     watch = [proxy, notification]
     context = dict(ns, process=process, notification=notification, proxy=proxy,
                    watch=watch, mutation=None, state_fd=-1, state_prefix=b'', connector=None,
-                   port=0, lane_net=None, lane_user=None,
+                   port=0, lane_net=None, lane_user=None, oauth_denial_fd=None,
+                   credential_deadline=lambda: None,
                    broker_connect_contained=receive_notification)
     start = time.monotonic()
     try:
