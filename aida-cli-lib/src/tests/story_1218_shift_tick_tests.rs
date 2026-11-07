@@ -2,6 +2,7 @@
 //! through a recording [`ShiftExec`] mock, so no test can launch a drain; the
 //! one process test spawns `/bin/sh` through the wave builder, never `aida`.
 // trace:STORY-1218 | ai:claude
+// trace:BUG-2476 | ai:codex
 
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
@@ -445,11 +446,14 @@ fn shift_cross_clone_drain_claim_blocks_launch() {
         crate::coordination::lock_claim_path(&store, crate::coordination::LockKind::Drain);
     std::fs::create_dir_all(claim_path.parent().unwrap()).unwrap();
     let write = |clone: &str| {
-        let body = format!(
+        let mut body = format!(
             "scope = \"drain\"\nnode_id = \"1\"\nclone_path = \"{clone}\"\nhost = \"{}\"\npid = 77\nagent = \"queue work\"\nstarted_at = \"{t}\"\nheartbeat_at = \"{t}\"\nttl_secs = 1800\nprocess_backed = true\n",
             crate::coordination::hostname(),
             t = now().to_rfc3339()
         );
+        if let Some(namespace) = aida_core::pid_observer::current_pid_namespace() {
+            body.push_str(&format!("pid_namespace = {namespace}\n"));
+        }
         std::fs::write(&claim_path, body).unwrap();
     };
     write("/some/other/clone");
