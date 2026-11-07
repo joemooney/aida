@@ -46,6 +46,8 @@
 [tiers]
 # trace:STORY-2606 | ai:codex
 "GitLab upstream CI adapter fixtures" = "fast"
+# trace:BUG-2476 | ai:codex
+"Run fixture PID namespace binding tests" = "fast"
 # trace:TASK-3222 | ai:codex
 "Store writer inventory ratchet" = "fast"
 "Store writer inventory mutation fixtures" = "fast"

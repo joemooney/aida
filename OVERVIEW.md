@@ -1600,8 +1600,16 @@ arm preserves existing Claude behavior without the trusted opt-in. Under
 `[contained.vendors] claude = "aida"`, foreground headless phases and
 coordinators use the shared boundary. Coordinators retain quiet or streaming
 output, bind their explicit child grant to the attested worker before release,
-and keep the private state owner until exit. Interactive, background and
-resume/fork launches still refuse under that opt-in; their migration and
+and keep the private state owner until exit. Fresh foreground Claude agent-new
+uses the same receipt/binding barrier with a private PTY, host input/output relay,
+window-size propagation and terminal restoration. The lane claims only that private
+terminal inside its isolated session; no host `/dev/tty` is mounted. Registry and
+lease tracking use the attested worker PID, while the host waits on the helper.
+Interactive wrapper launches query `claude --version` inside the lane after
+receipt acceptance, with private stdio, stripped seat selectors, a two-second
+deadline and bounded output. A failed query leaves provenance unknown; the
+launcher never runs an unconfined vendor query or lends its own version.
+Background and resume/fork launches still refuse under that opt-in; their migration and
 OpenCode integration remain later slices. The authenticated operator run is
 still required for acceptance.
 <!-- trace:TASK-3219 | ai:codex -->

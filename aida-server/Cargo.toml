@@ -45,7 +45,6 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 rusqlite = { workspace = true }
 clap = { workspace = true }
-dirs = "5"
 dotenvy = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

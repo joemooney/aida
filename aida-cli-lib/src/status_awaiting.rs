@@ -899,7 +899,9 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             .clone()
             .or_else(|| s.spec_id.clone())
             .unwrap_or_else(|| "?".to_string());
-        match backend.get_requirement_by_spec_id(&spec_id) {
+        // Display labels can collide after sync; classify this summary's UUID.
+        // trace:BUG-2477 | ai:codex
+        match backend.get_requirement(&s.id) {
             Ok(Some(req)) if req.failure_reason.is_some() => {
                 shelved_total += 1;
             }

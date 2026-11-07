@@ -272,7 +272,6 @@ pub(crate) fn collect_idle_in_progress(
     orphans: &[PsOrphan],
     now: DateTime<Utc>,
 ) -> Vec<IdleInProgressItem> {
-    use aida_core::db::DatabaseBackend as _;
     let idle = idle_orphans(orphans);
     if idle.is_empty() {
         return Vec::new();
@@ -291,7 +290,14 @@ pub(crate) fn collect_idle_in_progress(
                 .into_iter()
                 .filter_map(|b| newest_commit_ahead(project_root, &b, base).map(|t| (b, t)))
                 .max_by_key(|(_, t)| *t);
-            let req = backend.get_requirement_by_spec_id(&o.spec).ok().flatten();
+            // Orphans use display/agreed IDs, which need not name an object
+            // file. Resolve through the cache's validated canonical locator
+            // instead of scanning every YAML object for each idle spec.
+            // trace:BUG-2479 | ai:codex
+            let req = backend
+                .get_requirement_unambiguous_for_read(&o.spec)
+                .ok()
+                .flatten();
             IdleCandidate {
                 spec_id: o.spec.clone(),
                 title: o.title.clone(),

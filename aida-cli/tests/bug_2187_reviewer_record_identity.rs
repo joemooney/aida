@@ -1,4 +1,5 @@
 #![cfg(target_os = "linux")]
+// trace:BUG-2476 | ai:codex
 //! A real headless launch must identify its reviewer before the real recorder
 //! runs. Labels alone must never make an ordinary implementer shell a reviewer.
 // trace:BUG-2187 | ai:codex
@@ -176,7 +177,11 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
     executable(&fixture.bin.join("git"), &format!("#!/bin/sh\nif [ \"$1\" = -C ]; then repo=$2; shift 2; else repo=$PWD; fi\nif [ \"$1\" = fetch ]; then\n shift\n if [ \"$1\" = origin ]; then shift; exec /usr/bin/git -C \"$repo\" -c maintenance.auto=false -c gc.auto=0 fetch '{}' \"$@\"; fi\n echo 'unexpected fixture fetch; network refused' >&2; exit 97\nfi\nexec /usr/bin/git -C \"$repo\" \"$@\"\n", fixture.repo.display()));
     let metadata = serde_json::json!({"number":59,"title":format!("Fix ({spec})"),"body":"","headRefName":"fixture-head","baseRefName":"main","headRefOid":head,"baseRefOid":head,"labels":[],"url":"https://github.com/fixture/repo/pull/59","state":"OPEN","isDraft":false,"files":[{"path":"src.rs"}]});
     executable(&fixture.bin.join("gh"), &format!("#!/bin/sh\ncase \"$*\" in\n*--jq*) printf '%s\\n' '{head}';;\n*\"repo view\"*) printf '%s\\n' '{{\"nameWithOwner\":\"fixture/repo\"}}';;\n*\"pr diff\"*) printf '%s\\n' src.rs;;\n*) printf '%s\\n' '{metadata}';;\nesac\n"));
-    executable(&fixture.bin.join("claude"), &format!("#!/bin/sh\nset -eu\n[ \"$AIDA_AGENT_TYPE\" = claude ]\n[ \"$AIDA_AGENT_NAME\" = claude-reviewer ]\n'{}' review record {spec} --pr 59 --verdict approved --sha {head} --summary 'fixture independent review'\nprintf '%s\\n' '{{\"type\":\"result\",\"result\":\"Recorded approval\"}}'\n", env!("CARGO_BIN_EXE_aida").replace('\'', "'\\''")));
+    executable(&fixture.bin.join("claude"), &format!("#!/bin/sh\nset -eu\nif [ \"${{1:-}}\" = --version ]; then printf '%s\\n' 'claude 9.9.9'; exit 0; fi\n[ \"$AIDA_AGENT_TYPE\" = claude ]\n[ \"$AIDA_AGENT_NAME\" = claude-reviewer ]\n'{}' review record {spec} --pr 59 --verdict approved --sha {head} --summary 'fixture independent review'\nprintf '%s\\n' '{{\"type\":\"result\",\"result\":\"Recorded approval\"}}'\n", env!("CARGO_BIN_EXE_aida").replace('\'', "'\\''")));
+    let mut version = Command::new(fixture.bin.join("claude"));
+    version.arg("--version").current_dir(&fixture.repo);
+    assert_eq!(checked(version).stdout, b"claude 9.9.9\n");
+    assert!(!fixture.repo.join(".aida/gate-ledger/PR-59.jsonl").exists());
     let worktree = fixture._temp.path().join("reviewer");
     let output = checked(fixture.command(
         &[

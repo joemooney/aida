@@ -343,6 +343,102 @@ fn git(dir: &Path, args: &[&str], date: &str) {
     assert!(st.status.success(), "git {args:?}: {st:?}");
 }
 
+fn cached_fixture(
+    requirements: &[aida_core::Requirement],
+) -> (tempfile::TempDir, aida_core::CachedGitBackend) {
+    let project = tempfile::tempdir().unwrap();
+    let store = project.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    write_config(project.path(), "[awaiting]\nidle_in_progress_hours = 24\n");
+    git(
+        project.path(),
+        &["init", "-q", "-b", "main"],
+        "2026-10-01T00:00:00Z",
+    );
+    git(
+        project.path(),
+        &["commit", "-q", "--allow-empty", "-m", "base"],
+        "2026-10-01T00:00:00Z",
+    );
+    git(
+        &store,
+        &["init", "-q", "-b", "aida-store"],
+        "2026-10-01T00:00:00Z",
+    );
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
+    for req in requirements {
+        aida_core::object_store::write_object(&store.join("objects"), req).unwrap();
+    }
+    git(&store, &["add", "objects"], "2026-10-01T00:00:00Z");
+    git(
+        &store,
+        &["commit", "-q", "-m", "fixture"],
+        "2026-10-01T00:00:00Z",
+    );
+    let backend = aida_core::CachedGitBackend::open(
+        &store,
+        &aida_core::db::project_cache_path(project.path()),
+    )
+    .unwrap();
+    (project, backend)
+}
+
+fn idle_requirement(spec: &str, agreed: Option<&str>) -> aida_core::Requirement {
+    let mut req = aida_core::Requirement::new("idle work".into(), String::new());
+    req.spec_id = Some(spec.into());
+    req.agreed_id = agreed.map(str::to_string);
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::InProgress;
+    req.modified_at = hours_ago(30);
+    req
+}
+
+// trace:BUG-2479 | ai:codex
+#[test]
+fn cached_agreed_id_dates_idle_age_from_the_canonical_object() {
+    let mut req = idle_requirement("TASK-1-101", Some("TASK-101"));
+    let (project, backend) = cached_fixture(&[req.clone()]);
+    let items = collect_idle_in_progress(project.path(), &backend, &[orphan("TASK-101")], now());
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].spec_id, "TASK-101");
+    assert_eq!(items[0].age_source, IdleAgeSource::Modified);
+    assert_eq!(items[0].idle_secs, 30 * 3600);
+
+    // The cache is a locator, not authority for a changed object's timestamp.
+    req.modified_at = hours_ago(1);
+    aida_core::object_store::write_object(&project.path().join(".aida-store/objects"), &req)
+        .unwrap();
+    assert!(
+        collect_idle_in_progress(project.path(), &backend, &[orphan("TASK-101")], now()).is_empty()
+    );
+}
+
+// trace:BUG-2479 | ai:codex
+#[test]
+fn ambiguous_idle_id_is_not_dated_from_an_arbitrary_record() {
+    let native = idle_requirement("TASK-101", None);
+    let agreed = idle_requirement("TASK-1-101", Some("TASK-101"));
+    let (project, backend) = cached_fixture(&[native, agreed]);
+    assert!(
+        collect_idle_in_progress(project.path(), &backend, &[orphan("TASK-101")], now()).is_empty()
+    );
+    assert_eq!(
+        collect_idle_in_progress(project.path(), &backend, &[orphan("TASK-1-101")], now()).len(),
+        1,
+        "the unambiguous canonical handle must still resolve"
+    );
+}
+
+// trace:BUG-2479 | ai:codex
+#[test]
+fn missing_idle_id_has_no_invented_activity_date() {
+    let req = idle_requirement("TASK-1-101", Some("TASK-101"));
+    let (project, backend) = cached_fixture(&[req]);
+    assert!(
+        collect_idle_in_progress(project.path(), &backend, &[orphan("TASK-999")], now()).is_empty()
+    );
+}
+
 #[test]
 fn branch_commit_is_the_newest_commit_ahead_of_main_on_a_branch_named_for_the_spec() {
     let repo = tempfile::tempdir().unwrap();

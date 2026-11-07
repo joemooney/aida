@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fmt;
-use ts_rs_forge::TS;
+use ts_rs::TS;
 use uuid::Uuid;
 
 /// Represents the status of a requirement
@@ -7950,7 +7950,7 @@ mod tests {
     // trace:BUG-1921 | ai:claude
     #[test]
     fn requirement_type_all_lists_every_variant() {
-        let decl = <RequirementType as TS>::inline();
+        let decl = <RequirementType as TS>::inline(&ts_rs::Config::default());
         let mut from_derive: Vec<String> = decl
             .split('|')
             .map(|v| v.trim().trim_matches('"').to_string())

@@ -8,4 +8,4 @@ description = "Binary to generate TypeScript types from Aida core models"
 [dependencies]
 aida-core = { path = "../aida-core" }
 serde_json = { workspace = true }
-ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
+ts-rs = { version = "12.0.1", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }

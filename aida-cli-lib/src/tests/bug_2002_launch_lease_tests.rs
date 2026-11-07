@@ -1,3 +1,4 @@
+// trace:BUG-2476 | ai:codex
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
@@ -19,7 +20,8 @@ fn fixture() -> (tempfile::TempDir, SessionLease) {
         "id": "launch-owner-2002", "scope": "BUG-2002", "slug": "bug2002",
         "owner": "tester", "worktree_path": worktree, "branch": "bug-2002-work",
         "started_at": (chrono::Utc::now() - chrono::Duration::days(2)).to_rfc3339(),
-        "hostname": "test", "role": "implementer"
+        "hostname": "test", "role": "implementer",
+        "pid_namespace": aida_core::pid_observer::current_pid_namespace()
     }))
     .unwrap();
     persist(root, &lease);
@@ -548,7 +550,11 @@ fn bug2188_fresh_receipt_owns_exact_lease_and_rolls_back_requested_tree() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let (plan, receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -579,7 +585,11 @@ fn bug2188_prelease_failure_removes_materialized_tree_and_names_cause() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     crate::seat_clone::failpoint::fail_before_lease(true);
     let result = prepare_agent_launch_attempt(
         &root,
@@ -675,7 +685,11 @@ fn bug2188_pool_cleanup_keeps_the_lease_when_a_live_process_holds_the_tree() {
         return;
     }
     let (_tmp, root, _tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let (plan, receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -731,7 +745,11 @@ fn bug2188_private_clone_cleanup_removes_the_clone_pin_and_lease() {
         .status()
         .unwrap()
         .success());
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let tree = root.parent().unwrap().join(format!(
         "{}receipt-fixture",
         crate::seat_clone::CLONE_DIR_PREFIX
@@ -772,7 +790,11 @@ fn bug2188_post_checkout_partial_materialization_rolls_back() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     crate::test_exec::write_executable(
         &root.join(".git/hooks/post-checkout"),
         "#!/bin/sh\necho injected-post-checkout-failure >&2\nexit 73\n",
@@ -808,7 +830,11 @@ fn bug2188_preexisting_path_and_branch_survive_failed_setup() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     std::fs::create_dir(&tree).unwrap();
     std::fs::write(tree.join("keep"), "existing path").unwrap();
     assert!(std::process::Command::new("/usr/bin/git")
@@ -856,7 +882,11 @@ fn bug2188_changed_worktree_identity_is_kept() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let (plan, receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -883,7 +913,11 @@ fn bug2188_changed_branch_identity_survives_cleanup() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let (_plan, receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -933,6 +967,7 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
                 ("AIDA_BIN", None),
                 ("AIDA_OS_WRAP", Some("0")),
                 ("AIDA_CONTAINED", None),
+                ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
             ],
         );
         let parent = crate::gate::seat_authority::current_grant(&root)
@@ -1041,7 +1076,11 @@ fn bug2188_checkout_created_destination_is_never_nested_or_removed() {
         return;
     }
     let (_tmp, root, tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     crate::test_exec::write_executable(
         &root.join(".git/hooks/post-checkout"),
         &format!(
@@ -1078,7 +1117,11 @@ fn bug2188_pool_hook_commit_keeps_original_branch_receipt() {
         return;
     }
     let (_tmp, root, _tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     crate::test_exec::write_executable(&root.join(".git/hooks/post-checkout"), "#!/bin/sh\nif /usr/bin/git symbolic-ref --quiet HEAD >/dev/null; then /usr/bin/git -c maintenance.auto=false -c gc.auto=0 -c user.name=fixture -c user.email=fixture@test commit -q --allow-empty -m hook-created-work; fi\n");
     let (plan, receipt) = prepare_agent_launch_attempt(
         &root,
@@ -1293,7 +1336,11 @@ fn bug2188_full_pool_falls_back_to_a_fresh_worktree_and_rolls_it_back() {
         "[worktree_pool]\nenabled = true\nmax_trees = 1\n",
     )
     .unwrap();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     let (first, first_receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -1348,7 +1395,11 @@ fn bug2188_failed_pool_checkout_rolls_back_the_pool_tree_then_falls_back() {
         return;
     }
     let (_tmp, root, _tree) = receipt_project();
-    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        Some("implementer"),
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
     // Fail only `git checkout -b` inside an existing tree: a real previous
     // HEAD (a fresh `worktree add` reports the null one) and an attached HEAD
     // (the pool's return-time detach leaves HEAD detached).
@@ -1423,6 +1474,7 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
                 ("AIDA_BIN", None),
                 ("AIDA_OS_WRAP", Some("0")),
                 ("AIDA_CONTAINED", None),
+                ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
             ],
         );
         let script = root.join("fail-child");
