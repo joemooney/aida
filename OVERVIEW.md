@@ -1584,7 +1584,10 @@ read-only credential leaf, explicit trusted auth-host approval and read-only
 Git/store/cache authority. AGY's `vendors.toml` row selects that mechanism, but
 its incomplete refresh-host inventory and missing integrated all-tool evidence
 keep admission closed. See [AGY adapter preparation](docs/internal/testing/containment-conformance.md#agy-shared-boundary-adapter-preparation)
-for the remaining acceptance and model-free test limits.
+for the remaining acceptance and model-free test limits. The live runtime
+regression checks filesystem, network and host-IPC restrictions in external
+file/URL helpers and a stdio server, with positive controls; it grants no
+real-vendor conformance credit.
 <!-- trace:TASK-3048 | ai:codex -->
 
 ### Foreground headless Codex boundary
