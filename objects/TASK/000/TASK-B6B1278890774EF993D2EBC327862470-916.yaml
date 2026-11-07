@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T02:13:19.656979457Z
-modified_at: 2026-11-07T05:56:55.697230018Z
+modified_at: 2026-11-07T06:35:36.378366866Z
 req_type: Task
 tags:
 - carried-from:BUG-2474
@@ -65,6 +65,12 @@ comments:
   modified_at: 2026-11-07T05:53:12.887610793Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4b8-403a-71c0-85f7-b438ec5b47c5
+  author: joe
+  content: 'Round 2: addressed all four findings at 888d0611abb1. Verdict supersession now follows retained-round append order and shared ledger sequence, without a reader-clock cutoff or timestamp-only ordering between unrelated artifacts. Compatible histories resolve earlier acts; contradictory or ambiguous histories refuse. Repeated identical acts retain append occurrences. Projected history preserves merge closure and exact train-source binding. Phase-3, drive, conflict detection, human approval authority and train source selection now agree; Rejected remains distinct from RequestChanges. Added regressions for elapsed and sub-five-minute skew, legitimate later approval with durable authority, repeated acts, contradictions and closure. Validation: 279 targeted Rust tests passed, including verdict, corpus, ledger, train, Rework release and authority suites; cargo fmt --all -- --check and git diff --check passed. Native-seat edits remain uncommitted for host publication. Existing supervised merge-hold clearance remains separate.'
+  created_at: 2026-11-07T06:35:36.378366866Z
+  modified_at: 2026-11-07T06:35:36.378366866Z
+  session_id: 01a1b494ceb1
 history:
 - id: 01a1b3e2-36ae-7cf3-b019-cfdaf99c87f3
   author: joe
