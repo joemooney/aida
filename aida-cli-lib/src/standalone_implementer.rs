@@ -209,6 +209,8 @@ pub(crate) enum Outcome {
     Punted { reason: String },
     Held { branch: String },
     NoPr,
+    // trace:BUG-2488 | ai:codex
+    NoChange,
 }
 
 /// Classify a finished run the way the drain's phase 1 does: a punt signal
@@ -262,6 +264,7 @@ pub(crate) fn report(
         // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
         // BUG-050: a stall leaves work in the seat; name it as the reason.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        Outcome::NoChange => ("implementer: no-change".into(), 0),
         Outcome::NoPr => (
             match unshipped {
                 Some(Unshipped::UncommittedWork(n)) => {
@@ -643,24 +646,33 @@ pub(crate) fn record_child_authority(
     crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
+/// Put the handshakes inside the leased seat's writable runtime directory.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf, PathBuf)> {
+    let punt = crate::punt::signal_path(worktree, spec);
+    let hold = crate::punt::hold_signal_path(worktree, spec);
+    for path in [&punt, &hold] {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok((punt, hold))
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
-    // Provision the punt and hold handshakes exactly as the drain's phase 1
-    // does: a fresh path under the main checkout, any stale file removed.
-    let punt_signal = crate::punt::signal_path(&main_root, launch.spec);
-    let hold_signal = crate::punt::hold_signal_path(&main_root, launch.spec);
-    for path in [&punt_signal, &hold_signal] {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::remove_file(path);
-    }
+    let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    let (punt_signal, hold_signal) = provision_signals(&worktree, launch.spec)?;
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
-    let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // trace:TASK-2902 | ai:codex
     if launch.vendor == crate::session::HeadlessVendor::Codex {
         crate::native_publication::prepare(&main_root, &worktree)?;
@@ -807,6 +819,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             );
             let done = match &outcome {
                 Outcome::NoPr => false,
+                Outcome::NoChange => true,
                 Outcome::PrOpened { .. } => {
                     !launch_seat.is_stale(&outcome, &bg::SeatState::read(&worktree, launch.branch))
                 }
@@ -842,6 +855,13 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             status.success(),
         )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
+        // trace:BUG-2488 | ai:codex
+        if matches!(outcome, Outcome::NoPr)
+            && status.success()
+            && !crate::seat_clone::has_commits_beyond_base(&main_root, &worktree)?
+        {
+            outcome = Outcome::NoChange;
+        }
     }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude

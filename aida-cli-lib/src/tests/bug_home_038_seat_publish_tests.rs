@@ -2767,3 +2767,110 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         "generation-one declaration"
     );
 }
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "no-change", "c0ffee248801");
+    let spec = "BUG-2488";
+    let (punt, hold) = crate::standalone_implementer::provision_signals(&clone, spec).unwrap();
+    let mut child = std::process::Command::new("bwrap");
+    child
+        .args([
+            "--unshare-all",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+        ])
+        .arg("--bind")
+        .arg(&clone)
+        .arg(&clone)
+        .arg("--ro-bind")
+        .arg(clone.join(".git"))
+        .arg(clone.join(".git"))
+        .args([
+            "--",
+            "/bin/sh",
+            "-c",
+            "test ! -w \"$1\" && cat > \"$AIDA_PUNT_SIGNAL_FILE\"",
+            "sh",
+        ])
+        .arg(&fx.main)
+        .stdin(std::process::Stdio::piped());
+    crate::standalone_implementer::apply_standalone_child_env(
+        &mut child,
+        "c0ffee248801",
+        &punt,
+        &hold,
+    );
+    let signal_path = child
+        .get_envs()
+        .find(|(key, _)| *key == crate::punt::SIGNAL_FILE_ENV)
+        .unwrap()
+        .1
+        .unwrap();
+    assert!(Path::new(signal_path).starts_with(&clone));
+    // The host and Git metadata are read-only, as in the native seat.
+    let mut child = child.spawn().unwrap();
+    serde_json::to_writer(
+        child.stdin.take().unwrap(),
+        &crate::punt::PuntSignal {
+            spec: spec.into(),
+            category: aida_core::PuntCategory::DesignFork,
+            detail: "decision required".into(),
+            lean: None,
+        },
+    )
+    .unwrap();
+    assert!(child.wait().unwrap().success());
+    let outcome =
+        crate::standalone_implementer::classify(crate::punt::read_signal(&punt), None, || {
+            panic!("punt must suppress PR lookup")
+        });
+    assert!(matches!(
+        outcome,
+        crate::standalone_implementer::Outcome::Punted { .. }
+    ));
+    // Missing host spec/intent is deliberate: the writable-seat veto must
+    // prevent even post-exit commit preparation, not merely the push.
+    crate::ship_from_seat::publish_queue_exit(&fx.main, &clone, spec, "lane", true).unwrap();
+    std::fs::remove_file(punt).unwrap();
+    let forge = crate::forge::fake::RecordingForge::new();
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| panic!("unchanged seat must never invoke bundle"),
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| panic!("unchanged seat must never publish"),
+    };
+    assert!(!crate::seat_clone::has_commits_beyond_base(&fx.main, &clone).unwrap());
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
+    let (line, code) = crate::standalone_implementer::report(
+        &crate::standalone_implementer::Outcome::NoChange,
+        Some(0),
+        None,
+    );
+    assert_eq!((line.as_str(), code), ("implementer: no-change", 0));
+    // Positive control: commits on the seat require publication.
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "work (BUG-2488)",
+        ],
+    );
+    assert!(crate::seat_clone::has_commits_beyond_base(&fx.main, &clone).unwrap());
+}

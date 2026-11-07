@@ -356,7 +356,7 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    if publication_veto(&main, spec) {
+    if publication_veto(&main, spec) || publication_veto(tree, spec) {
         eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
         return PostExitCommit::Clean;
     }
@@ -502,7 +502,17 @@ pub(crate) fn publish_queue_exit(
     clean_exit: bool,
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
+    // trace:BUG-2488 | ai:codex
+    if publication_veto(tree, spec) {
+        return Ok(());
+    }
+    let no_change =
+        || -> Result<bool> { Ok(!crate::seat_clone::has_commits_beyond_base(&main, tree)?) };
     let publish = || {
+        if no_change()? {
+            eprintln!("implementer: no-change (seat has no commits beyond its base)");
+            return Ok(());
+        }
         run_at(
             &main,
             FromSeatOptions {
@@ -522,6 +532,10 @@ pub(crate) fn publish_queue_exit(
         || crate::seat_clone::probe(&main, tree),
         publish,
         || {
+            if no_change()? {
+                eprintln!("implementer: no-change (seat has no commits beyond its base)");
+                return Ok(());
+            }
             advisor_request(
                 &main,
                 "Queue-work lane exited without changes",
@@ -1525,6 +1539,13 @@ fn run_from_with_reconciliation(
                 None => eprintln!("  the seat had no pending work to commit"),
             }
         }
+    }
+    // trace:BUG-2488 | ai:codex
+    // An unchanged seat cannot produce a nonempty bundle. Inspect before
+    // invoking the bundler, including direct host publication retries.
+    if !crate::seat_clone::has_commits_beyond_base(&main, &seat.root)? {
+        println!("implementer: no-change (seat has no commits beyond its base)");
+        return Ok(());
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;

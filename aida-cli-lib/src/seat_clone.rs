@@ -1502,6 +1502,40 @@ pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<boo
     Some(!out.is_empty())
 }
 
+/// Whether the leased branch contains work beyond the host-pinned seat base.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn has_commits_beyond_base(main: &Path, clone: &Path) -> Result<bool> {
+    let base = pinned_base(main, clone).context("could not read seat base pin")?;
+    let root = clone.canonicalize()?;
+    let lease = crate::list_leases(main)
+        .into_iter()
+        .find(|lease| {
+            lease.tree_kind == TreeKind::Clone
+                && lease
+                    .worktree_path
+                    .canonicalize()
+                    .is_ok_and(|path| path == root)
+        })
+        .context("could not read seat branch lease")?;
+    let branch = format!("refs/heads/{}", lease.branch);
+    let out = run_sandboxed_until(
+        clone,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--max-count=1".as_ref(),
+            branch.as_ref(),
+            "--not".as_ref(),
+            base.as_ref(),
+        ],
+        PROBE_OUTPUT_CAP,
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+    )
+    .map_err(|why| anyhow::anyhow!("could not inspect seat commits: {why}"))?;
+    Ok(!out.is_empty())
+}
+
 /// Count commits held by the seat but by no remote: HEAD and the lease branch
 /// for worktrees, all local branches for private clones. Unlike salvage
 /// accounting, a local host ref or base pin never excuses a commit.
