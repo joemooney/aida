@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T17:21:35.032111285Z
+modified_at: 2026-11-07T17:21:42.702701449Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -34,6 +34,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 1 (AC1+AC3+AC4) per ruling. AC1 unverified-in-practice: link works in unit test (codegraph::tests::seat_uses_primary_index_without_copying_or_replacing) but has two setup-path defects below. AC2 n/a (slice 2). AC3 verified by implementer_and_reviewer_prompts_include_navigation + codex_md.rs:422/430 + AGENTS.md:472. AC4 verified by doctor_reports_missing_unreachable_stale_and_corrupt + wal_activity_is_fresh. AC5 n/a (slice 2). CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-07T17:21:35.032108888Z
   modified_at: 2026-11-07T17:21:35.032108888Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b707-c6be-7a33-961d-caf31820380c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2e3d9218d338
+    Recorded: 2026-11-07T16:42:11.351046053+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3607#issuecomment-6710045433
+    Findings:
+    1. BLOCKING: the new .codegraph symlink is not excluded as AIDA runtime state. worktree_gc.rs:1094 links <tree>/.codegraph for every worktree AND seat clone (session_start.rs:3164 runs for clones too), but only this PR's .gitignore line (.codegraph, no slash) ignores it. Any branch forked before this merge (every open PR branch checked out for review, every rework branch, pooled trees on older bases) still has only '.codegraph/' in its .gitignore, which does not match a symlink, so git status shows '?? .codegraph'. In a seat clone that is (a) not treated as runtime noise by seat_clone.rs:1980 is_runtime_noise_entry, so the clone reads dirty, and (b) an untracked symlink-to-directory, which SALVAGE_SCRIPT (seat_clone.rs:2480) fails the whole salvage on, so session end keeps the clone. Downstream projects whose ignore is '.codegraph/' hit the same thing permanently. Fix: add '.codegraph' to aida_core::git_ops::ensure_aida_runtime_excluded (git_ops.rs:1117), to seat_exclude_body (seat_clone.rs:594), and to is_runtime_noise_entry (only while it is a symlink, mirroring .aida-store); add a test that a clone/worktree on a base whose .gitignore lacks '.codegraph' stays clean.
+    2. BLOCKING: a conflicting .codegraph now aborts all runtime linking. codegraph::primary_index_link (codegraph.rs:59-66) returns Err when <tree>/.codegraph exists as a real dir or a foreign link (e.g. a lane that earlier ran 'codegraph init' after 'CodeGraph not initialized'; 16 lanes in 3 days invoked codegraph), and worktree_gc.rs:1076 calls it with ? BEFORE the .aida-store link and the .aida runtime links. Result: session start (session_start.rs:3164, including BUG-2223 clone re-entry and pooled reuse) fails outright, and the BUG-1988 restore paths (session_end.rs:1720/1761/2049, leases.rs:3531) restore none of the store/.aida links, only printing a warning. A navigation convenience must not fail closed over lane setup. Fix: on conflict, warn and skip the codegraph link (keep preserving the content), and compute it after the existing links so a failure cannot suppress them; change setup_skips_absent_index_and_preserves_conflicting_content to assert Ok + content preserved + .aida-store linked.
+    3. minor: full 'aida doctor' now always reports codegraph findings on hosts/projects that never use codegraph. doctor_root.rs:780 runs codegraph::scan unconditionally when no category filter is set, so a project with no primary .codegraph yields both 'missing' (if no binary) and 'unreachable'. That is the intended signal on dell1 per AC4, but for projects without any index it is noise in every full doctor run. Suggest: emit 'unreachable'/'stale' only when the primary has a .codegraph dir or the binary is on PATH; keep 'missing' only when the primary has an index.
+    4. minor: the codegraph.rs:46-48 doc comment and AC1's 'links .codegraph read-only' differ: the symlink gives lanes the primary's writable directory, so a codegraph query from a non-contained lane can write WAL/shm (or worse) into the primary index. Slice 2 owns the containment read grant, but slice 1 should record on the spec that non-contained lanes get read-write routing, so slice 2 or a follow-up covers non-contained seats too.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T17:21:42.590524445Z
+  modified_at: 2026-11-07T17:21:42.590524445Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
