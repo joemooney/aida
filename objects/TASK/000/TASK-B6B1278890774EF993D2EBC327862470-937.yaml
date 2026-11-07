@@ -1,5 +1,6 @@
 id: 01a1b62b-0ebb-7d22-a44f-c22fab9df6d4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-937
+agreed_id: TASK-2980
 title: '[minor, non-blocking] GitLab digest covers only the .gitlab-ci.yml blob, but th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-2401, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:6b357d78
 - from-review:PR-3591
 - kind:carried-forward
+history:
+- id: 01a1b645-121c-7d71-8ef4-eb1defd49ff6
+  author: joe
+  timestamp: 2026-11-07T13:49:02.364129223Z
+  changes: []
 filed_at:
   code_sha: 9f75814f1947e90c7e37ae099356a20cf8673a77
   branch: main
