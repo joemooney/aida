@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-06T21:33:32.450870157Z
-modified_at: 2026-11-06T21:33:32.450870157Z
+modified_at: 2026-11-07T00:22:40.880511286Z
 req_type: Task
 tags:
 - carried-from:BUG-2470
 - finding-hash:54f1f969
 - from-review:PR-3532
 - kind:carried-forward
+comments:
+- id: 01a1b362-d3f0-7831-9c08-c9492eb9b856
+  author: joe
+  content: '[advisor 17:32] Accepted, no work (rule-once, 2026-10-28): latent only; no fixture-flow step writes project config through toml_edit. Revisit if conformance.py gains a config_edit step.'
+  created_at: 2026-11-07T00:22:40.880511286Z
+  modified_at: 2026-11-07T00:22:40.880511286Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b300-bc63-7990-a1c1-f7e443891a68
   author: joe
