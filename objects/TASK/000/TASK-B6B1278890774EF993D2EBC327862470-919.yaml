@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:28:57.996084502Z
-modified_at: 2026-11-07T04:54:09.038271733Z
+modified_at: 2026-11-07T05:11:13.688812945Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,6 +22,65 @@ comments:
   modified_at: 2026-11-07T04:39:10.950211480Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b46b-0018-7371-9287-694e0d7a0f04
+  author: joe
+  content: |-
+    Native implementer handoff: full TASK-3325 implementation ready for host commit/publication; edits remain uncommitted and status remains In Progress. No publication blocker.
+
+    Ported only the approved dependency reference hunks, regenerated Cargo.lock using public crates.io, and migrated additional picker/type-derive call sites present on this HEAD. Replacements: serde_norway 0.9.42 aliased as serde_yaml; unsafe-libyaml-norway 0.2.15 aliased as unsafe-libyaml; etcetera 0.11 with the prior dirs feature alias retained; nucleo-matcher through a shared Select scorer; ts-rs 12.0.1 with v11 optional map keys and bigint; pulldown-cmark 0.13.6 event adapters preserving old footnotes; ratatui 0.30.2 without Termwiz while retaining underline colors. ctutils is pinned exactly to 0.4.7. No quarantined package remains in Cargo.lock, and all registry sources are public crates.io.
+
+    Validation: 75 targeted tests passed: CLI markdown 28 (existing snapshots unchanged), TUI markdown 10, YAML compatibility 5, picker 5, schema 14, hermetic home 11, TypeScript settings 1, generated types 1. The picker/schema/home groups ran from the built CLI test binary; the standalone TypeScript settings module ran via rustc --test. cargo test -p aida-core --test yaml_compatibility, cargo test -p aida-cli-lib --lib markdown_render, cargo test -p aida-tui --lib markdown, cargo test -p aida-generate-types, cargo check -p aida-cli --no-default-features, cargo fmt --all -- --check and git diff --check all passed.
+
+    Captured the YAML fixture from the original serde_yaml 0.9.34 and Requirement model in an untouched HEAD temporary checkout; its bytes survive the new serializer unchanged. The original ts-rs-forge generator and replacement produce byte-identical output. shared/types.ts had two stale documentation lines before this task; synchronized those lines with both generators, with no declaration/type changes.
+
+    Separate pre-existing issue: standalone aida-core --no-default-features fails with the same 63 native-module gating errors on untouched HEAD and this branch. Filed a minor draft observation TASK-b6b1278890774ef993d2ebc327862470-922; the required CLI feature-disabled check passes. No punt, hold, ship, commit, push, PR creation or queue completion was performed.
+
+    Changed files (42):
+    Cargo.lock
+    Cargo.toml
+    aida-cli-lib/Cargo.toml
+    aida-cli-lib/src/agent_launch.rs
+    aida-cli-lib/src/brief.rs
+    aida-cli-lib/src/findings.rs
+    aida-cli-lib/src/human.rs
+    aida-cli-lib/src/init_bootstrap.rs
+    aida-cli-lib/src/lane_job.rs
+    aida-cli-lib/src/leases.rs
+    aida-cli-lib/src/lib.rs
+    aida-cli-lib/src/lib_part5.rs
+    aida-cli-lib/src/markdown_render.rs
+    aida-cli-lib/src/prompts.rs
+    aida-cli-lib/src/punt.rs
+    aida-cli-lib/src/queue_cmd.rs
+    aida-cli-lib/src/regen/score/report/cache.rs
+    aida-cli-lib/src/requirements_cli.rs
+    aida-cli-lib/src/role.rs
+    aida-cli-lib/src/role_cmd.rs
+    aida-cli-lib/src/schema.rs
+    aida-cli-lib/src/seat_clone.rs
+    aida-cli-lib/src/session.rs
+    aida-cli-lib/src/session_misc.rs
+    aida-cli-lib/src/test_home.rs
+    aida-cli-lib/src/worker.rs
+    aida-core/Cargo.toml
+    aida-core/src/ai/responses.rs
+    aida-core/src/home.rs
+    aida-core/src/lib.rs
+    aida-core/src/models.rs
+    aida-core/src/team.rs
+    aida-generate-types/Cargo.toml
+    aida-generate-types/src/main.rs
+    aida-server/Cargo.toml
+    aida-tui/Cargo.toml
+    aida-tui/src/redesign/mod.rs
+    shared/types.ts
+    aida-cli-lib/src/prompt_select.rs
+    aida-core/src/typescript.rs
+    aida-core/tests/fixtures/requirement-serde-yaml-0.9.yaml
+    aida-core/tests/yaml_compatibility.rs
+  created_at: 2026-11-07T05:11:13.688812945Z
+  modified_at: 2026-11-07T05:11:13.688812945Z
+  session_id: 01a1b45afa16
 history:
 - id: 01a1b444-69b0-7043-a1df-82db4062c304
   author: joe
