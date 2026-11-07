@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-957
 agreed_id: TASK-3424
 title: 'Crate-split PR1: lift inline #[cfg(test)] suites out of mcp.rs, auto_complete.rs, maintenance_schedule.rs, awaiting_you.rs and burndown.rs into src/tests/ (no production-line changes)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move each file''s inline test module into src/tests/<module>_tests.rs, using the STORY-770 pattern (#[cfg(test)] #[path] or a tests-module include), with zero production-line changes. EXCLUDE doctor_cmd.rs until #3613 (BUG-2486) and STORY-2630''s final slice land; its own follow-up gets filed then. Update path-keyed ledgers (store-writers.toml, exec-context-legacy.json, portability-allowlist.txt) for moved test sites. Acceptance: the same test count runs before and after (report both numbers), make check-ci-fast passes, and production code is byte-identical outside the test-module stanza. LIGHT gate: one targeted cargo test for each moved module.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T23:33:12.708977913Z
+modified_at: 2026-11-07T23:35:05.039125141Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -170,6 +170,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b85d-9c4f-7293-a019-b711c0d9d5e4
+  author: aida-pr-open
+  timestamp: 2026-11-07T23:35:05.039123136Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
