@@ -184,7 +184,7 @@
   requirement_id: 01a1b493-c156-7f12-8acd-0893e609a19f
   position: 875000
   added_by: joe
-  note: auto-queued by `aida pr` (01a1b472); covers 1 spec
-  added_at: 2026-11-07T05:56:15.568808684Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-07T05:57:07.746166008Z
   for_role: reviewer
   added_by_machine: imac
