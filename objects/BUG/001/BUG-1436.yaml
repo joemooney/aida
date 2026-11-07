@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-11-07T20:55:45.856152727Z
+modified_at: 2026-11-07T20:55:54.951843069Z
 req_type: Bug
 tags:
 - drain-safe
@@ -75,6 +75,13 @@ comments:
     Migrated condition: manual:operator
   created_at: 2026-11-07T20:26:53.998114951Z
   modified_at: 2026-11-07T20:26:53.998114951Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7cb-e347-7d42-a689-1106e73d2ffc
+  author: joe
+  content: 'ADVISOR 2026-11-07 14:20, regroup triage of stale deferrals: REJECTED as obsolete. 1000 parallel runs, 0 failures; Windows cause fixed in BUG-1303.'
+  created_at: 2026-11-07T20:55:54.951843069Z
+  modified_at: 2026-11-07T20:55:54.951843069Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 history:
