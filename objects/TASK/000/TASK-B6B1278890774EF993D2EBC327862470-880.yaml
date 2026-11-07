@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T13:45:06.774637281Z
+modified_at: 2026-11-07T13:48:19.328147250Z
 req_type: Task
 tags:
 - architecture
@@ -369,6 +369,25 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 06:50: S2a part 1 (redo transaction + canonical-object verbs) landed as #3584 (095c9efa83). NEXT = S2a part 2: deny raw store/authority-metadata/shared-cache writes in the shared contained boundary for the mediated profile (contained_boundary.rs contained_store_write_paths), provide lane-private derived caches, and gate the mediated profile (Claude/native compatibility unchanged until it validates). Add same-profile raw create/append/rename negatives with parent-observed unchanged sentinels, plus host-read mediated comment/edit positives. Completing (TASK-3223) only if every S2a criterion is then met; otherwise Refs.'
   created_at: 2026-11-07T13:45:05.093719016Z
   modified_at: 2026-11-07T13:45:05.093719016Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b644-6927-76a1-8ce4-de297869f2b5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3223):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 621c83395e48
+    Recorded: 2026-11-07T04:20:24.784000864+00:00
+    Findings:
+    1. PR title is still '[AI:codex] chore: STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary (TASK-3223)'. GitHub's squash subject defaults to the PR title, and the trailing closing (TASK-3223) auto-completes TASK-3223 at merge with zero implementation. Retitle to exactly '[AI:codex] docs(plans): TASK-3223 unapproved mediated-transaction sketch v1 (Refs TASK-3223)' (round-2 finding 1, still unaddressed; host/PR action).
+    2. Branch history still includes 1baca620b4a5 with the closing 'chore: ... (TASK-3223)' subject, and 0c650b3d5e7 and 621c83395e4 share an identical subject. GitHub's default squash body lists every commit subject, which would carry the closing trailer into main. Either rewrite the branch to a single Refs-only docs(plans) commit, or have the merger set an empty or Refs-only squash body explicitly (round-2 finding 2, unaddressed).
+    3. The PR body is only the bare 'Published from seat ...' line. It needs the documentation-only / unapproved-v1 / TASK-3223-stays-open statement that TASK-3223 comment 6 drafted for the host, so a merger sees the publication constraints (empty squash body, no completion, hold preserved). Prior finding 4 moved those notes out of the doc and into the PR body, but they never reached the PR body.
+    4. No independent advisor signoff is recorded on TASK-3223 for the redo-transaction design, canonical reader/writer recovery admission, or the multi-root claim/queue participant protocol (TASK-3225 comment 0 amendment 2; repo rule that architecture needs advisor signoff). merge-hold-gate fails at 621c83395e48 for this reason. Only the human/advisor 'aida merge-hold clear 3563' path can clear it; a reviewer verdict cannot.
+    5. TASK-3223 implementation acceptance is unmet, which is expected for a sketch. Verified at head: service.py:11 MUTATION_VERBS is still ('session_probe','request_status'); contained_boundary.rs:136 contained_store_write_paths still grants store/cache; there is no lane-private cache, no gated mediated profile, and no stale-base / concurrent-mutation / persist-before-reply tests. TASK-3223 must stay open, and this PR may land only as Refs-only.
+    6. CI 'contracts' and 'gates' jobs were still pending at 621c83395e48 when this review ran. Confirm they are green before any eventual merge.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T13:48:19.111243636Z
+  modified_at: 2026-11-07T13:48:19.111243636Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
