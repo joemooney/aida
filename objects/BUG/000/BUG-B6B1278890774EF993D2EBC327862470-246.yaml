@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-246
 agreed_id: BUG-2481
 title: 'Full aida status with no derived cache exceeds 50s on a ~7k-row store: the first-use cache rebuild is unbounded'
 description: 'Split from BUG-2479 (advisor 2026-11-06 23:50). With the derived cache warm, full status on 7,247 rows takes about 5s (debug build). With the derived cache empty (a fresh clone, a cache-version bump, or a CI job with no warm-up step), the same command exceeded a 50s watchdog while the cache stayed at zero rows. That means it never populated the cache during the run, or rebuilt it serially per record. Acceptance: on a ~7k-row store snapshot with no derived cache, the first full status populates the cache and finishes within 15s on an optimized build, and the second run takes under 5s. Add a timed regression on a generated 7k-row fixture, not the real store.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T06:46:36.863686544Z
-modified_at: 2026-11-07T08:07:56.770497342Z
+modified_at: 2026-11-07T08:21:14.265901406Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -135,6 +135,15 @@ history:
   timestamp: 2026-11-07T07:56:12.597436976Z
   session_id: 01a1b501b7fb
   changes: []
+- id: 01a1b518-f599-7901-8c40-8c421f1ee012
+  author: aida-orchestrator
+  timestamp: 2026-11-07T08:21:14.265921774Z
+  session_id: 01a1b5147458
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7bda6eabe09e52cfd5e0749aed88fdd26cf0370
   branch: main
@@ -144,3 +153,11 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Batched epic rollup is correct and the 7k-row cold-cache regression is wired and green in CI contracts, but CI is red at head: the new CI step is unclassified in scripts/ci-gate-tiers.toml (gates fails), and lib-0 Run tests failed while main passed it.'
+  recovery_hint: address the review findings, move BUG-2481 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-07T08:21:14.265901406Z
