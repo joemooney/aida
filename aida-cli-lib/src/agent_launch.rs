@@ -4413,8 +4413,7 @@ pub(crate) fn preflight_agent_launch_lease(
         .zip(lease.worktree_path.canonicalize().ok())
         .is_some_and(|(cwd, owned)| cwd == owned && owned.is_dir());
     let same_role = role.is_none_or(|role| lease.role.as_deref() == Some(role));
-    let live = process_probe::probe_live_claude_sessions();
-    let active = agent_launch_lease_is_active(project_root, &lease, &live);
+    let active = agent_launch_lease_is_active(project_root, &lease, &[]);
     if !same_cwd || !same_role || active {
         anyhow::bail!(
             "this work is already owned by session {} ({}, worktree: {}).\n  \
@@ -4473,33 +4472,12 @@ fn agent_launch_lease_is_active(
     lease: &SessionLease,
     live: &[process_probe::LiveSession],
 ) -> bool {
-    live.iter().any(|session| {
-        // A lease may record a symlink while /proc reports the real cwd.
-        // Preserve the recorded path if it cannot be resolved.
-        // trace:BUG-2002 | ai:codex
-        let owned = lease
-            .worktree_path
-            .canonicalize()
-            .unwrap_or_else(|_| lease.worktree_path.clone());
-        let cwd = session
-            .cwd
-            .canonicalize()
-            .unwrap_or_else(|_| session.cwd.clone());
-        !session.stale_cwd && (cwd == owned || cwd.starts_with(&owned))
-    }) || matches!(
-        lease_state_for(lease, live, chrono::Utc::now()),
-        LeaseState::Live
-    ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
-        || {
-            // trace:BUG-2010 | ai:antigravity
-            let live_agents = agent_registry::load_live_entries(project_root);
-            agent_registry::live_agent_for_lease_or_spec(
-                &live_agents,
-                Some(lease),
-                Some(&lease.scope),
-            )
-            .is_some()
-        }
+    // trace:STORY-2325 | ai:codex
+    let _ = live; // Historical test callers may supply a process scan.
+    !matches!(
+        crate::ownership::reader::lease_owner(project_root, lease),
+        crate::ownership::OwnerVerdict::Dead { .. }
+    )
 }
 
 pub(crate) fn prepare_agent_launch(
@@ -5113,8 +5091,13 @@ pub(crate) fn approved_unclaimed_queued_specs(
         return Vec::new();
     };
     let leases = list_leases(project_root);
-    let live = process_probe::probe_live_claude_sessions();
-    let is_live = lease_is_live(&live, chrono::Utc::now());
+    // trace:STORY-2325 | ai:codex
+    let is_live = |lease: &SessionLease| {
+        !matches!(
+            crate::ownership::reader::lease_owner(project_root, lease),
+            crate::ownership::OwnerVerdict::Dead { .. }
+        )
+    };
     let cfg = agent_registry::Config::load(project_root);
     entries
         .iter()
@@ -7101,14 +7084,8 @@ fn run_rotating_agent(
     let seat = agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type);
     let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
     if let Some(lease_id) = &plan.lease_id {
-        if let Err(e) =
-            session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
-        {
-            eprintln!(
-                "  {} lease {lease_id} may read as stale between generations: {e:#}",
-                "warning:".yellow().bold()
-            );
-        }
+        session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
+            .context("cannot bind rotation supervisor ownership")?;
     }
     eprintln!(
         "  {}: on (exit after `aida session handoff --write` relaunches {})",
@@ -7225,6 +7202,15 @@ fn run_rotating_agent(
                 eprintln!("  released lease {lease_id}");
             }
             return Ok(RotationOutcome::Cancelled);
+        }
+        if let Some(lease_id) = &plan.lease_id {
+            if let Err(error) =
+                crate::ownership::reader::require_rotation_owner(&plan.project_root, lease_id)
+            {
+                eprintln!("stopped: not relaunching {}: {error:#}", plan.name);
+                run.end(TerminalReason::Blocked);
+                return Ok(RotationOutcome::Exited(status));
+            }
         }
         relaunches.push(exited_at);
         generation += 1;

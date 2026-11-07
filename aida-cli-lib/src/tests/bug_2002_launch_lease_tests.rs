@@ -2,12 +2,46 @@
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
+// The lane's shared-write umask must not weaken this synthetic HOME setting.
+// trace:STORY-2325 | ai:codex
+fn fixture_storage(root: impl AsRef<std::path::Path>) -> aida_core::Storage {
+    use std::os::unix::fs::PermissionsExt;
+    let root = root.as_ref();
+    let storage = crate::test_env::home_fixture_storage(root);
+    let common = aida_core::allocation_authority::common_dir(root).unwrap();
+    assert!(common.starts_with(std::env::temp_dir().canonicalize().unwrap()));
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    storage
+}
+
 // trace:BUG-2002 | ai:codex
 fn fixture() -> (tempfile::TempDir, SessionLease) {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q", "-b", "main"])
+        .arg(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("launch ownership".into(), "".into());
+    req.id = uuid::Uuid::from_u128(2002);
+    req.spec_id = Some("BUG-2002".into());
+    store.requirements.push(req);
+    fixture_storage(root.join(".aida-store"))
+        .save(&store)
+        .unwrap();
     std::fs::create_dir_all(leases_dir(root)).unwrap();
-    std::fs::write(root.join(".aida/config.toml"), "").unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
     let worktree = root.join("owned");
     std::fs::create_dir(&worktree).unwrap();
     assert!(std::process::Command::new("/usr/bin/git")
@@ -30,6 +64,40 @@ fn fixture() -> (tempfile::TempDir, SessionLease) {
 
 fn persist(root: &std::path::Path, lease: &SessionLease) {
     std::fs::write(lease_path(root, &lease.id), toml::to_string(lease).unwrap()).unwrap();
+    // trace:STORY-2325 | ai:codex — ownership is independent of lease PID/cwd.
+    use crate::ownership::{Holder, Ownership, Phase, Role, Witness, WitnessKind, WorkKey};
+    let key = WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(uuid::Uuid::from_u128(2002)),
+    };
+    let at = if lease.active_pid == Some(std::process::id()) {
+        chrono::Utc::now()
+    } else {
+        chrono::Utc::now() - chrono::Duration::days(2)
+    };
+    let holder = Holder {
+        seat: "fixture".into(),
+        role: Role::Implementer,
+        session: lease.id.clone(),
+        tree: None,
+        witnesses: vec![Witness {
+            admission: None,
+            kind: WitnessKind::Heartbeat { at, every_secs: 10 },
+            recorded_at: at,
+        }],
+    };
+    crate::ownership::store::OwnershipStore::at(root.join(".aida/ownership"))
+        .update(&key, "test", crate::ownership::store::Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
 }
 
 fn launch(root: &std::path::Path, background: bool, preview: bool) -> Result<()> {
@@ -276,11 +344,12 @@ fn agent_new_reentry_respects_reasoned_operator_hold() {
     let (tmp, lease) = fixture();
     let mut store = aida_core::RequirementsStore::default();
     let mut req = aida_core::Requirement::new("held work".into(), "".into());
+    req.id = uuid::Uuid::from_u128(2002);
     req.spec_id = Some("BUG-2002".into());
     req.deferred = true;
     req.deferred_reason = Some("waiting for operator".into());
     store.requirements.push(req);
-    crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"))
+    fixture_storage(tmp.path().join(".aida-store"))
         .save(&store)
         .unwrap();
     let error = preflight_agent_launch_lease(
@@ -297,7 +366,7 @@ fn agent_new_reentry_respects_reasoned_operator_hold() {
 
 // trace:BUG-2002 | ai:codex
 #[test]
-fn dead_recorded_pid_does_not_hide_observed_live_owner() {
+fn ownership_death_is_not_overridden_by_a_cwd_scan() {
     let _env = crate::test_env::env_lock();
     let (tmp, mut lease) = fixture();
     // Use a real reaped process, not a numeric sentinel: high unsigned PIDs
@@ -326,7 +395,7 @@ fn dead_recorded_pid_does_not_hide_observed_live_owner() {
         lease_state_for(&lease, &live, chrono::Utc::now()),
         LeaseState::Stale
     );
-    assert!(agent_launch_lease_is_active(tmp.path(), &lease, &live));
+    assert!(!agent_launch_lease_is_active(tmp.path(), &lease, &live));
 }
 
 // trace:BUG-2002 | ai:codex
@@ -356,7 +425,7 @@ fn agent_new_duplicate_scope_owners_refuse_even_with_owning_cwd() {
 // trace:BUG-2002 | ai:codex
 #[cfg(unix)]
 #[test]
-fn agent_new_live_owner_is_seen_through_a_symlinked_lease_path() {
+fn symlinked_cwd_scan_cannot_override_ownership_death() {
     let _env = crate::test_env::env_lock();
     let (tmp, mut lease) = fixture();
     let real = lease.worktree_path.clone();
@@ -369,7 +438,7 @@ fn agent_new_live_owner_is_seen_through_a_symlinked_lease_path() {
         jsonl: None,
         stale_cwd: false,
     }];
-    assert!(agent_launch_lease_is_active(tmp.path(), &lease, &live));
+    assert!(!agent_launch_lease_is_active(tmp.path(), &lease, &live));
 }
 
 // trace:BUG-2002 | ai:codex
@@ -1453,7 +1522,7 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
         req.status = RequirementStatus::Approved;
         store.requirements.push(req);
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-        let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
+        let storage = fixture_storage(root.join(".aida-store"));
         storage.save(&store).unwrap();
         let status = || {
             storage

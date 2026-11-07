@@ -80,3 +80,86 @@ pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<O
     };
     load(root, &key)
 }
+
+/// Re-entry must prove that this exact lease's holder ended. A different
+/// generation, missing record or failed read retains the lane; a process
+/// found in the same cwd is not evidence about the recorded owner.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerdict {
+    match lease_record(root, lease) {
+        Ok(Some(record)) => match record.holder.as_ref() {
+            Some(holder) if holder.session == lease.id => owner(&record),
+            None if matches!(&record.phase, Phase::InPr { handed_off_by: Some(session), .. } if session == &lease.id) =>
+            {
+                let mut cleanup = record;
+                cleanup.holder = Some(dual::holder_for_lease(
+                    lease,
+                    &dual::WriterFacts::here(),
+                    Utc::now(),
+                ));
+                owner(&cleanup)
+            }
+            _ => OwnerVerdict::Unknown {
+                why: "ownership record no longer names this session".into(),
+            },
+        },
+        Ok(None) => OwnerVerdict::Unknown {
+            why: "ownership record missing; migrate or rebind the session".into(),
+        },
+        Err(error) => OwnerVerdict::Unknown {
+            why: format!("ownership evidence unreadable: {error:#}"),
+        },
+    }
+}
+
+/// Record a positive death proof before guarded retirement. CAS refuses a
+/// replacement during preflight; the holder remains until session_end succeeds.
+/// This journal entry grants no permission to discard a tree or pending mail.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn journal_reclaim(root: &Path, lease: &crate::SessionLease) -> Result<()> {
+    use super::store::{Expect, OwnershipStore};
+    let record = lease_record(root, lease)?
+        .ok_or_else(|| anyhow::anyhow!("ownership record missing; reclaim refused"))?;
+    let proof = match lease_owner(root, lease) {
+        OwnerVerdict::Dead { proof } => proof,
+        verdict => anyhow::bail!("ownership reclaim requires positive death proof: {verdict:?}"),
+    };
+    let store = OwnershipStore::for_project(root)?
+        .ok_or_else(|| anyhow::anyhow!("ownership store unavailable"))?;
+    store.update(
+        &record.key,
+        "reclaim",
+        Expect::Generation(record.generation),
+        |current| {
+            current.map(|current| {
+                (
+                    current.clone(),
+                    Some(format!("session {} reclaim: {proof}", lease.id)),
+                )
+            })
+        },
+    )?;
+    Ok(())
+}
+
+/// A rotation may continue only while its recorded holder is alive. Re-read
+/// after the countdown, so a handoff or replacement in the gap stops relaunch.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn require_rotation_owner(root: &Path, session: &str) -> Result<()> {
+    let body = std::fs::read_to_string(crate::lease_path(root, session))?;
+    let lease: crate::SessionLease = toml::from_str(&body)?;
+    anyhow::ensure!(lease.id == session, "rotation lease identity changed");
+    let record = lease_record(root, &lease)?
+        .ok_or_else(|| anyhow::anyhow!("rotation ownership record missing"))?;
+    anyhow::ensure!(
+        record
+            .holder
+            .as_ref()
+            .is_some_and(|holder| holder.session == session),
+        "rotation ownership transferred or ended"
+    );
+    match owner(&record) {
+        OwnerVerdict::Alive { .. } => Ok(()),
+        verdict => anyhow::bail!("rotation ownership is not alive: {verdict:?}"),
+    }
+}

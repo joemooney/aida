@@ -1480,3 +1480,107 @@ fn prc_post_open_handoff_refusals_never_fail_ship_or_drop_the_lease() {
         "refs/heads/main"
     );
 }
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
+    let dir = repo();
+    let id = uuid::Uuid::from_u128(2325);
+    // The legacy lease deliberately names a live process. It cannot override
+    // an expired ownership heartbeat or repair absent ownership evidence.
+    let lease = lease(
+        "rotation",
+        &id.to_string(),
+        &format!("active_pid = {}\n", std::process::id()),
+    );
+    let sessions = dir.path().join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        sessions.join("rotation.toml"),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    let store = repo_store(dir.path());
+    let key = spec(2325);
+    assert!(matches!(
+        reader::lease_owner(dir.path(), &lease),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
+    for (session, beat, expected) in [
+        ("rotation", Utc::now(), "alive"),
+        ("rotation", Utc::now() - chrono::Duration::days(2), "dead"),
+        (
+            "replacement",
+            Utc::now() - chrono::Duration::days(2),
+            "unknown",
+        ),
+    ] {
+        let mut holder = holder(session);
+        holder.witnesses.push(Witness {
+            admission: None,
+            kind: WitnessKind::Heartbeat {
+                at: beat,
+                every_secs: 10,
+            },
+            recorded_at: beat,
+        });
+        store
+            .update(&key, "test", Expect::Any, |_| {
+                Some((rec(key.clone(), Some(holder), Phase::Leased), None))
+            })
+            .unwrap();
+        let actual = reader::lease_owner(dir.path(), &lease);
+        assert!(
+            matches!(
+                (&actual, expected),
+                (OwnerVerdict::Alive { .. }, "alive")
+                    | (OwnerVerdict::Dead { .. }, "dead")
+                    | (OwnerVerdict::Unknown { .. }, "unknown")
+            ),
+            "{actual:?}"
+        );
+        assert_eq!(
+            reader::require_rotation_owner(dir.path(), "rotation").is_ok(),
+            expected == "alive"
+        );
+        let before = store.journal().len();
+        assert_eq!(
+            reader::journal_reclaim(dir.path(), &lease).is_ok(),
+            expected == "dead"
+        );
+        assert_eq!(
+            store.journal().len(),
+            before + usize::from(expected == "dead")
+        );
+        if expected == "dead" {
+            assert_eq!(store.journal().last().unwrap().op, "reclaim");
+            assert_eq!(
+                store
+                    .load(&key)
+                    .unwrap()
+                    .unwrap()
+                    .holder
+                    .as_ref()
+                    .unwrap()
+                    .session,
+                "rotation"
+            );
+        }
+    }
+    store
+        .update(&key, "handoff", Expect::Any, |current| {
+            ops::handoff(current, &key, &dual::change(2325), "head", Utc::now())
+        })
+        .unwrap();
+    assert!(
+        reader::require_rotation_owner(dir.path(), "rotation").is_err(),
+        "a handed-off owner may not rotate even if its old lease PID is alive"
+    );
+    std::fs::write(store.path_for(&key), "not JSON").unwrap();
+    assert!(matches!(
+        reader::lease_owner(dir.path(), &lease),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
+}
