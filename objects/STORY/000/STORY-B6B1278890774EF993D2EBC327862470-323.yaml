@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T22:14:51.590894592Z
+modified_at: 2026-11-07T22:30:23.320260308Z
 req_type: Story
 tags:
 - architecture
@@ -625,6 +625,13 @@ comments:
     PR-D now contains findings 3-8 and CI fixture fixes only, with a native publication declaration of [AI:codex] fix(ownership): repair PR-D reclaim and regression gates (Refs STORY-2325). No completion claim. Two Python ratchet tests, rustfmt and diff-check pass. Post-scope eight-test Rust run j20261107T221225629-2-0 is compiling; final result will follow. Existing merge hold remains; fresh clean LIGHT validation on dell1 remains required. No Git metadata mutation or publication from this seat.
   created_at: 2026-11-07T22:14:51.590894592Z
   modified_at: 2026-11-07T22:14:51.590894592Z
+  session_id: 01a1b7b65058
+- id: 01a1b822-6158-79c2-b88d-d38f399006dc
+  author: joe
+  content: |
+    Final scoped-tree validation: launcher job j20261107T221225629-2-0 exited 0; 8 executed Rust tests passed, 0 failed. Includes stamping_a_lane_role_refuses_a_live_lease_and_keeps_other_fields, dead_non_pr_tree_without_origin_branch_requires_remote_coverage_and_cleanliness, queue_work_reclaims_dead_clean_lane_without_an_origin_branch, unchanged leaked_probe_refs_are_swept_and_live_ones_kept, queue_recover_dry_run_inspects_live_and_unknown_ownership_without_mutation, only_fresh_dispatch_accepts_a_holderless_unverified_namespace, recordless_leased_conversation_renders_unknown_even_when_old, and task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads. Python ratchet: 2 passed. rustfmt --check and git diff --check pass. Runner reported overlay-stale; fresh clean LIGHT gate on dell1 remains required. Scope follows newer advisor ruling: findings 1-2 remain TASK-3420, restored paths/baseline unchanged, PR-D is Refs STORY-2325. Full changed-file handoff: /home/joe/.aida/handoffs/story-2325-round7-final.txt. Uncommitted edits left for host publication; merge hold remains.
+  created_at: 2026-11-07T22:30:23.320260308Z
+  modified_at: 2026-11-07T22:30:23.320260308Z
   session_id: 01a1b7b65058
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
