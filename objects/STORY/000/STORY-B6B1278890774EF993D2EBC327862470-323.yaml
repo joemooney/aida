@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T19:15:28.581163204Z
+modified_at: 2026-11-07T19:18:45.145306190Z
 req_type: Story
 tags:
 - architecture
@@ -492,6 +492,29 @@ comments:
   content: 'ADVISOR RULING 2026-11-07 11:35: PR-C landed (#3600, 292b2370369): train, review, takeover and session-start readers query the ownership record. FINAL slice = PR-D, COMPLETING (STORY-2325). (1) Relaunch and rotation paths (aida agent new --rotate relaunch, review-watch relaunch, fill/queue relaunch of a dead lane) decide ''is this owned and alive'' only from the ownership record''s judge. No direct lease/pid probes remain outside ownership/. Dead owners are reclaimed by rule (journaled), never --force. (2) Mail retention checks against message state (delivered/acknowledged), not the build id. (3) A ratchet test forbids new direct lease-liveness probes outside ownership/. LIGHT gate. Runs on dell1.'
   created_at: 2026-11-07T18:32:59.353576532Z
   modified_at: 2026-11-07T18:32:59.353576532Z
+  session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b772-edc1-7582-a23f-328115930b3e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3619):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 625970c58838
+    Recorded: 2026-11-07T19:15:27.724528842+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3619#issuecomment-6711847813
+    Findings:
+    1. [major][blocker] CI red at 625970c588: CI (lib-1) 'Run tests', CI (gates) 'Live bwrap OS-wrap confinement gate' and CI (contracts) 'CLI-manual drift-guard (every command documented)' fail, so Build 'Require every CI lane' fails. The contained reviewer could not fetch the job logs (the log blob host is denied). Read them and fix every red lane. Likely lib-1 cause: bug_2223_orphan_seat_reentry_tests.rs:722 queue_work_releases_a_dead_gone_tree_lease_without_force_claim writes a dead lease with no ownership record. The new sweep (queue_cmd.rs ~13245 plan_lease_end -> check_pr_lease -> 'ownership record missing') now bails, so queue_work(...).unwrap() panics. Likely contracts cause: the new docs/cli/06-roles-sessions.md:156 bullet, which cites --steal/--force-claim in the session chapter, or a stale interface_changes delta.
+    2. [major] Ruling (1) is unmet for the relaunch paths it names. The review relaunch still decides reclaim with the legacy lease pid probe: retire_idle_review_worktree uses lease_owner_gone at queue_cmd.rs:11509 and :11613, and handle_queue_work calls it at :12562. 'aida queue recover', the relaunch of a dead lane, still recommends and executes from probe_live_claude_sessions + lease_state_for (queue_cmd.rs:16217-16219 -> queue_recover::recommend). review_watch_forge.rs sweep_probe_refs:pid_is_alive and session.rs fill:pid_is_alive also remain. These are grandfathered in scripts/ownership-liveness-legacy.json rather than cut over. Route them through ownership::reader, or record the advisor-approved follow-up slice on the spec.
+    3. [major] Ruling (2) is not addressed. Mail retention still gates on executable/build identity (aida-core/src/mailbox_lifecycle/activation.rs WRITER_EXECUTABLES / same-build check). No hunk in this PR checks retention against delivered or acknowledged message state. Implement it, or split it into a named follow-up with the advisor's sign-off. The commit says 'Refs', but the ruling called PR-D the completing slice.
+    4. [major] Regression for legacy and recordless leases: the old BUG-307 dormant auto-release, the BUG-777 --force-claim orphan release and the BUG-024 gone-tree release were all removed from the queue-work sweep. A lease with no ownership record (pre-PR-B leases, or a dual-write that failed, since failures are diagnostic-only) now blocks pickup of its scope permanently. The error, 'ownership retained: ownership record missing; migrate or rebind the session', names no command. At minimum, release a lease whose tree is gone, or name the exact migrate/rebind command in the refusal. Add a handle_queue_work integration test for dead->journal+end, live->refuse, unknown->refuse and session_end-failure-after-journal.
+    5. [minor] --steal is now a silent no-op: handle_queue_work takes _steal (queue_cmd.rs:12095). Its help text (queue_cmd_args.rs:692-703) still says it ends the holding session, docs/cli/04-git-lifecycle.md:544 and queue rework --work --steal still forward it, and implementer_phase_args still threads it. Refuse it explicitly with the new rule, or remove or deprecate the flag and update the help and docs.
+    6. [minor] Refusal guidance regressed. The dead-owner + dirty-tree refusal (pr_lease_takeover::refusal_message) dropped the BUG-2223/TASK-402 --resume hint, and scope_conflict_resume_hint is now referenced only from tests (a dead_code warning in the lib build). The message also says 'Commit and push the work to the PR' for an implementer lease that has no PR. The live-owner refusal no longer names 'aida session end <id>'. Separately, unattended_git_mutation_refusal now runs before the ownership judgment, so an unattended drain reports 'reclaim refused' for a live owner, and refuses an out-of-batch dead-clean lease that BUG-307 previously released.
+    7. [minor] journal_reclaim (ownership/reader.rs) appends a 'reclaim' journal entry before session_end runs. When session_end then refuses (tree, holder or mail safeguards), the journal records a reclaim that never happened. Either record the outcome after session_end, or name the entry as an attempt and document it. Its error also propagates without the 'ownership reclaim could not end lease' context.
+    8. [minor] Two BUG-2002 tests were inverted (bug_2002_launch_lease_tests.rs: ownership_death_is_not_overridden_by_a_cwd_scan, symlinked_cwd_scan_cannot_override_ownership_death). agent new re-entry now launches into a worktree where a live, unrecorded Claude process still runs whenever the record's witness reads Dead, which is the original BUG-2002 double-occupancy. The ruling allows judge-only liveness, but the PR adds no replacement guard such as the session_end include_in_use tree-holder check. Add one, or document the accepted risk on the spec.
+    9. [cosmetic] lane_env.rs stamp_lease_role_at treats Unknown ownership as live and refuses with 'held by a live session', which is misleading when ownership is merely unknown. agent_launch_lease_is_active keeps an unused live parameter (let _ = live) and preflight passes &[]. queue_work_tests.rs:3216 still asserts on a hand-built '--steal could not end lease' string that production no longer emits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T19:18:44.929390853Z
+  modified_at: 2026-11-07T19:18:44.929390853Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 history:
