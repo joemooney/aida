@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-250
 agreed_id: BUG-2485
 title: Conformance harness kills the interactive role-enter prompt after 30s
 description: 'scripts/containment/conformance.py runs ''aida role enter advisor --no-resume --no-title'' with a 30s subprocess timeout. That command can stop at an interactive y/N prompt (''Include it in the TTY-issued delegation set?''). When the operator doesn''t answer within 30s, the harness reports rc=2 with ''timed out after 30 seconds'' and leaves the terminal in a broken mode (the staircase output). Repro 2026-11-07 16:44Z, out=~/.aida/conformance-codex-aida-1794069894. Acceptance: role-enter prompts run without a deadline (or with a long one, minutes, that says it is waiting for the operator), or the harness pre-answers the delegation-set question non-interactively when it is the expected answer. The terminal state is restored on every exit path.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:46:28.088221399Z
-modified_at: 2026-11-07T17:50:22.004961886Z
+modified_at: 2026-11-07T17:51:58.765277105Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -115,6 +115,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1b723-7d2d-7a81-9099-b1141c075f2a
+  author: aida-session-start
+  timestamp: 2026-11-07T17:51:58.765276183Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
