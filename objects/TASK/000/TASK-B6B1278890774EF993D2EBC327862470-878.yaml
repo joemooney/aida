@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T01:54:03.779962851Z
+modified_at: 2026-11-07T02:06:22.081748547Z
 req_type: Task
 tags:
 - architecture
@@ -221,6 +221,13 @@ comments:
   created_at: 2026-11-07T01:34:00.642600131Z
   modified_at: 2026-11-07T01:34:00.642600131Z
   session_id: 01a1b3868126
+- id: 01a1b3c1-c181-7f50-8698-2e010ce4faf2
+  author: joe
+  content: '[advisor 19:05] #3547 hand-merged again (626b32c) after #3545/#3531 landed: union of PreparedLaunch fields (outer_only + io), neutral module header. dell1: cargo check --tests OK; task_3219/task_3048/contained tests 291 pass. The 2 contained-store failures also fail on main on dell1 (host artifact), and child_grant_revocation_helper passes in isolation (parallel-run flake).'
+  created_at: 2026-11-07T02:06:22.081748547Z
+  modified_at: 2026-11-07T02:06:22.081748547Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
