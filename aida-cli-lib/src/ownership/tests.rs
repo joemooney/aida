@@ -636,3 +636,234 @@ fn legacy_ownership_retains_heartbeat_and_combination_policy() {
         );
     }
 }
+
+// PR-C0 repairs only ownership records; tree retirement and reader cutover
+// remain PR-C. trace:STORY-2325 | ai:codex
+fn c0_plan() -> migrate::MigrationPlan {
+    migrate::plan(
+        &[],
+        &[],
+        Default::default(),
+        vec![],
+        &dual::WriterFacts::here(),
+        &|_, _| false,
+        now(),
+    )
+}
+
+#[test]
+fn c0_orphan_legacy_holder_is_released_by_rule_and_journaled() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store::OwnershipStore::at(dir.path().join("ownership"));
+    // A fresh legacy heartbeat cannot keep ownership after the lease ended.
+    let mut legacy_process = local(1);
+    legacy_process.admission = None;
+    let mut old = record(Phase::Leased, vec![legacy_process, beat(0, 30)]);
+    let tree = dir.path().join("salvage");
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::write(tree.join("uncommitted"), "keep me").unwrap();
+    old.holder.as_mut().unwrap().tree = Some(SeatTree {
+        path: tree.clone(),
+        kind: TreeKind::Clone,
+        branch: Some("salvage".into()),
+    });
+    store
+        .update(&old.key, "fixture", store::Expect::Absent, |_| {
+            Some((old.clone(), None))
+        })
+        .unwrap();
+    let mut plan = c0_plan();
+    plan.existing = store.list().0;
+    assert!(matches!(
+        compare::orphan_outcome(
+            &old,
+            &OwnerVerdict::Alive {
+                witness: "heartbeat".into()
+            }
+        ),
+        Some(compare::Outcome::Unexplained(_))
+    ));
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 1);
+    let released = store.load(&old.key).unwrap().unwrap();
+    assert!(released.holder.is_none());
+    assert_eq!(released.phase, old.phase);
+    assert_eq!(released.generation, 2);
+    assert!(compare::orphan_outcome(
+        &released,
+        &OwnerVerdict::Unknown {
+            why: "no holder".into()
+        }
+    )
+    .is_none());
+    assert_eq!(
+        std::fs::read_to_string(tree.join("uncommitted")).unwrap(),
+        "keep me"
+    );
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    let entry: store::JournalEntry = serde_json::from_str(journal.lines().last().unwrap()).unwrap();
+    assert_eq!(entry.op, "release-by-rule");
+    assert!(entry.note.unwrap().contains("lease-1 has no lease"));
+    plan.existing = vec![released];
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
+    assert_eq!(
+        std::fs::read_to_string(store.journal_path()).unwrap(),
+        journal
+    );
+}
+
+#[test]
+fn c0_superseded_record_is_remigrated_from_current_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store::OwnershipStore::at(dir.path());
+    // Even admitted evidence for the superseded session cannot override the
+    // current lease. The replacement must use freshly classified lease facts.
+    let old = record(Phase::Leased, vec![local(1)]);
+    store
+        .update(&old.key, "fixture", store::Expect::Absent, |_| {
+            Some((old.clone(), None))
+        })
+        .unwrap();
+    let mut replacement = record(Phase::Leased, vec![]);
+    replacement.holder.as_mut().unwrap().session = "current-lease".into();
+    let mut plan = c0_plan();
+    plan.existing = store.list().0;
+    plan.leases.push(migrate::LeasePlan {
+        lease_id: "current-lease".into(),
+        scope: "spec".into(),
+        class: migrate::Class::Salvage,
+        detail: "dirty tree retained".into(),
+        records: vec![replacement.clone()],
+    });
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 1);
+    let repaired = store.load(&old.key).unwrap().unwrap();
+    replacement.generation = 2;
+    assert_eq!(repaired, replacement);
+    assert_eq!(
+        compare::compare_one(
+            "current-lease",
+            aida_core::liveness::LeaseState::Dormant,
+            Some(&repaired),
+            Some(&judge_owner(
+                repaired.holder.as_ref().unwrap(),
+                &host(),
+                now()
+            ))
+        ),
+        compare::Outcome::Agree
+    );
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    let entry: store::JournalEntry = serde_json::from_str(journal.lines().last().unwrap()).unwrap();
+    assert_eq!(entry.op, "migrate-superseded-holder");
+    assert!(entry
+        .note
+        .unwrap()
+        .contains("lease-1 superseded by current lease current-lease"));
+    plan.existing = vec![repaired.clone()];
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
+    // A concurrent writer invalidates the pinned repair, before any write.
+    store
+        .update(&old.key, "race", store::Expect::Generation(2), |cur| {
+            ops::release(cur, "current-lease", "ended")
+        })
+        .unwrap();
+    assert!(migrate::apply(&store, &plan).is_err());
+    assert_eq!(store.load(&old.key).unwrap().unwrap().generation, 3);
+}
+
+#[test]
+fn c0_orphan_rule_retains_admitted_and_merge_lease_holders() {
+    let admitted = holder(vec![local(1)]);
+    assert!(!super::judge::legacy_release_by_rule(&admitted, false));
+    let mut legacy = holder(vec![]);
+    assert!(!super::judge::legacy_release_by_rule(&legacy, true));
+    assert!(super::judge::legacy_release_by_rule(&legacy, false));
+    legacy.session = dual::merge_lease_session(42);
+    assert!(!super::judge::legacy_release_by_rule(&legacy, false));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn c0_unreadable_lease_evidence_refuses_before_collection() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = crate::leases_dir(dir.path());
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("broken.toml"), "id = [").unwrap();
+    let err = migrate::collect(dir.path(), now()).unwrap_err();
+    assert!(err.to_string().contains("broken.toml"), "{err:#}");
+    assert!(!migrate::store_dir(dir.path()).exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn c0_duplicate_lease_keeps_newest_and_compare_accounts_for_older_alias() {
+    let lease = |id: &str, age| {
+        let mut lease = toml::from_str::<crate::SessionLease>(
+            r#"id = "fixture"
+scope = "spec"
+slug = "s"
+owner = "t@example.com"
+worktree_path = "/missing"
+branch = "b"
+started_at = "2026-11-02T12:00:00Z"
+hostname = "box"
+"#,
+        )
+        .unwrap();
+        lease.id = id.into();
+        lease.started_at = now() - Duration::seconds(age);
+        lease
+    };
+    let key = record(Phase::Leased, vec![]).key;
+    let facts = |id, age| migrate::LeaseFacts {
+        lease: lease(id, age),
+        key: Some((key.clone(), Phase::Leased)),
+        spec_closed: false,
+        pr: None,
+        tree: TreeReading::Missing,
+        live_witnesses: vec![],
+    };
+    let plan = migrate::plan(
+        &[facts("older", 60), facts("current", 0)],
+        &[],
+        Default::default(),
+        vec![],
+        &dual::WriterFacts::here(),
+        &|_, _| false,
+        now(),
+    );
+    let rec = plan.records().pop().unwrap();
+    assert_eq!(rec.holder.as_ref().unwrap().session, "current");
+    assert!(plan.repair(&rec).is_none());
+    assert_eq!(
+        compare::superseded_lease_outcome(
+            "older",
+            aida_core::liveness::LeaseState::Stale,
+            &rec,
+            &["older", "current"]
+        ),
+        Some(compare::Outcome::Expected(
+            compare::expected::SUPERSEDED_LEASE.into()
+        ))
+    );
+    assert!(compare::superseded_lease_outcome(
+        "current",
+        aida_core::liveness::LeaseState::Stale,
+        &rec,
+        &["older", "current"]
+    )
+    .is_none());
+    assert!(compare::superseded_lease_outcome(
+        "older",
+        aida_core::liveness::LeaseState::Live,
+        &rec,
+        &["older", "current"]
+    )
+    .is_none());
+    assert!(compare::superseded_lease_outcome(
+        "older",
+        aida_core::liveness::LeaseState::Stale,
+        &rec,
+        &["older"]
+    )
+    .is_none());
+}

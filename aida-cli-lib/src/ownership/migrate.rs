@@ -2,7 +2,9 @@
 //! `.aida/ownership/` (STORY-2325 PR-B, sketch section 3, amendment A4).
 //!
 //! The classification is pure ([`classify`]): every fact is read first by
-//! [`collect`]. The rewrite only ADDS records. It never edits, archives or
+//! [`collect`]. PR-C0 also releases orphaned legacy holders and replaces
+//! superseded holders from current leases, with generation checks and journal
+//! entries. It never edits, archives or
 //! deletes a lease, lane file, review marker or merge lock (they stay
 //! authoritative until PR-C, A6), never detaches a seat HEAD (deferred to
 //! PR-C by the advisor ruling of 2026-11-03), and never touches a tree. Rolling it back is removing
@@ -312,13 +314,13 @@ pub(crate) struct Accounted {
 // trace:STORY-2325 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct MigrationPlan {
-    /// Pinned before collection; repair never releases work or changes tree/phase.
+    /// Pinned before collection; PR-C0 repairs only ownership records, not trees.
     pub existing: Vec<Ownership>,
     pub leases: Vec<LeasePlan>,
     pub trains: Vec<Ownership>,
     pub accounted: Accounted,
     /// Records two inputs both planned for one key: a Live plan wins over
-    /// any other, then the first in list order.
+    /// any other, then the newest lease (input order breaks timestamp ties).
     pub duplicates: Vec<(WorkKey, String)>,
     /// What could not be read (the forge, the store); classification ran
     /// without it.
@@ -326,6 +328,39 @@ pub(crate) struct MigrationPlan {
 }
 
 impl MigrationPlan {
+    /// Reconstruct superseded ownership from the preferred current lease;
+    /// otherwise release a pre-admission holder whose session has no lease.
+    /// Lease plans include unresolved scopes, so an unresolved lease still
+    /// prevents its session from being mistaken for an orphan.
+    // trace:STORY-2325 | ai:codex
+    pub(crate) fn repair(&self, old: &Ownership) -> Option<(&'static str, Ownership, String)> {
+        let holder = old.holder.as_ref()?;
+        for p in by_preference(&self.leases) {
+            if let Some(rec) = p.records.iter().find(|r| r.key == old.key) {
+                return (p.lease_id != holder.session).then(|| {
+                    (
+                        "migrate-superseded-holder",
+                        rec.clone(),
+                        format!(
+                            "session {} superseded by current lease {}",
+                            holder.session, p.lease_id
+                        ),
+                    )
+                });
+            }
+        }
+        let has_lease = self.leases.iter().any(|p| p.lease_id == holder.session);
+        if super::judge::legacy_release_by_rule(holder, has_lease) {
+            let why = format!(
+                "released by rule: pre-admission session {} has no lease",
+                holder.session
+            );
+            let (rec, _) = super::ops::release(Some(old), &holder.session, &why)?;
+            return Some(("release-by-rule", rec, why));
+        }
+        None
+    }
+
     /// Every record to write, one per key: a Live plan wins over any other,
     /// then the first in list order.
     // trace:STORY-2325 | ai:claude
@@ -371,8 +406,13 @@ pub(crate) fn plan(
     is_ancestor: &dyn Fn(&str, &str) -> bool,
     now: DateTime<Utc>,
 ) -> MigrationPlan {
-    let lease_plans: Vec<LeasePlan> = leases
-        .iter()
+    // A retained older lease is not the current owner when neither can be
+    // proven live. Live preference still wins over recency below.
+    // trace:STORY-2325 | ai:codex
+    let mut ordered: Vec<_> = leases.iter().collect();
+    ordered.sort_by_key(|f| std::cmp::Reverse(f.lease.started_at));
+    let lease_plans: Vec<LeasePlan> = ordered
+        .into_iter()
         .map(|f| classify(f, writer, is_ancestor, now))
         .collect();
     let trains: Vec<Ownership> = trains.iter().map(classify_train).collect();
@@ -439,13 +479,13 @@ pub(crate) fn execute_refusal(
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub(crate) struct Applied {
     pub written: usize,
-    /// Already recorded (by a dual-write or an earlier run): left as is.
+    /// Already recorded and requiring no repair: left as is.
     pub kept: usize,
 }
 
-/// Write every planned record that has no record yet, in one locked step.
-/// A key that already has a record keeps it: a writer since PR-B recorded
-/// newer truth than the migration can reconstruct. Idempotent.
+/// Add missing records and apply PR-C0 repairs in one generation-checked batch.
+/// Unchanged existing holders retain their evidence. Idempotent; expectation
+/// failures write nothing (I/O staging remains PR-C).
 // trace:STORY-2325 | ai:claude
 pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Applied> {
     let records = plan.records();
@@ -468,15 +508,18 @@ pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Appl
         })
         .collect();
     for old in &plan.existing {
-        // Existing legacy evidence stays byte-for-byte under its old reader
-        // policy. Migration cannot admit an arbitrary old PID, nor should it
-        // turn a heartbeat-backed row into a refused holder.
-        // trace:STORY-2537 trace:BUG-2458 | ai:codex
+        // Never admit an arbitrary old PID. Only reconstruct from a current
+        // lease or release orphaned pre-admission evidence.
+        // trace:STORY-2325 | ai:codex
+        let repair = plan.repair(old);
         steps.push(Step {
             key: old.key.clone(),
-            op: "retain-legacy-holder".into(),
+            op: repair
+                .as_ref()
+                .map_or("retain-legacy-holder", |r| r.0)
+                .into(),
             expect: Expect::Generation(old.generation),
-            transition: Box::new(|_| None),
+            transition: Box::new(move |_| repair.map(|(_, rec, note)| (rec, Some(note)))),
         });
     }
     let out = store.update_all(steps)?;
@@ -625,7 +668,11 @@ fn file_names(dir: &Path) -> Vec<String> {
 
 /// Read every v0 record the migration covers and plan it.
 // trace:STORY-2325 | ai:claude
-pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
+pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> Result<MigrationPlan> {
+    // Absence now permits a release, so incomplete lease evidence must refuse
+    // before other collection (including any forge calls).
+    // trace:STORY-2325 | ai:codex
+    let leases = crate::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     let (existing, malformed) = OwnershipStore::at(store_dir(main)).list();
     let writer = WriterFacts::here();
@@ -674,7 +721,6 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
             .as_ref()
             .and_then(|s| dual::spec_key_in_store(s, label))
     };
-    let leases = crate::list_leases(main);
     let facts: Vec<LeaseFacts> = leases
         .iter()
         .map(|lease| {
@@ -741,7 +787,7 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
     }
     let mut result = plan(&facts, &trains, accounted, gaps, &writer, &is_ancestor, now);
     result.existing = existing;
-    result
+    Ok(result)
 }
 
 /// The store directory the migration writes into.
@@ -766,7 +812,7 @@ pub(crate) fn run(main: &Path, execute: bool, json: bool) -> Result<()> {
             bail!("{why}");
         }
     }
-    let plan = collect(main, Utc::now());
+    let plan = collect(main, Utc::now())?;
     let applied = if execute {
         Some(apply(&OwnershipStore::at(store_dir(main)), &plan)?)
     } else {
@@ -789,7 +835,8 @@ fn report_json(plan: &MigrationPlan, applied: Option<&Applied>) -> serde_json::V
         "leases": plan.leases.len(),
         "counts": plan.counts().into_iter().map(|(c, n)| (serde_json::to_value(c).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), n)).collect::<BTreeMap<_, _>>(),
         "records": plan.records().len(),
-        "holder_repair_candidates": plan.existing.iter().filter(|rec| rec.holder.as_ref().is_some_and(|h| h.witnesses.iter().any(|w| matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()))).map(|rec| serde_json::json!({"key": rec.key, "generation": rec.generation, "reason": "legacy evidence retained under existing reader policy; cooperative rebind required before cutover"})).collect::<Vec<_>>(),
+        "record_repairs": plan.existing.iter().filter_map(|rec| plan.repair(rec).map(|(op, _, reason)| serde_json::json!({"key": rec.key, "generation": rec.generation, "op": op, "reason": reason}))).collect::<Vec<_>>(),
+        "holder_repair_candidates": plan.existing.iter().filter(|rec| plan.repair(rec).is_none() && rec.holder.as_ref().is_some_and(|h| h.witnesses.iter().any(|w| matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()))).map(|rec| serde_json::json!({"key": rec.key, "generation": rec.generation, "reason": "legacy evidence retained under existing reader policy; cooperative rebind required before cutover"})).collect::<Vec<_>>(),
         "trains": plan.trains.len(),
         "accounted": plan.accounted,
         "duplicates": plan.duplicates.iter().map(|(k, w)| serde_json::json!({"key": k, "input": w})).collect::<Vec<_>>(),
@@ -822,6 +869,10 @@ fn print_report(plan: &MigrationPlan, applied: Option<&Applied>) {
     );
     println!("  records to write: {}", plan.records().len());
     for rec in &plan.existing {
+        if let Some((op, _, why)) = plan.repair(rec) {
+            println!("  {op} {:?} generation {}: {why}", rec.key, rec.generation);
+            continue;
+        }
         if rec.holder.as_ref().is_some_and(|h| {
             h.witnesses.iter().any(|w| {
                 matches!(w.kind, super::types::WitnessKind::Process { .. }) && w.admission.is_none()

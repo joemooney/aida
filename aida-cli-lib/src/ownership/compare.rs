@@ -47,9 +47,28 @@ pub(crate) mod expected {
         "today waits out its 24h age clock; the judge already has proof the holder ended";
     pub(crate) const RELEASED: &str =
         "the record was released while today's lease remains (a release path that ends no lease)";
+    pub(crate) const SUPERSEDED_LEASE: &str =
+        "another current lease holds this work key; this retained lease is superseded";
     // trace:BUG-2425 | ai:claude
     pub(crate) const UNKNOWN_FOREIGN: &str =
         "today abstains: the lease's pids live in a pid namespace this reader cannot observe";
+}
+
+/// Multiple retained leases can resolve to one key (including native/display
+/// aliases). A record matching one of them accounts for the older rows; a
+/// session absent from the leases still needs a migration repair.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn superseded_lease_outcome(
+    lease_id: &str,
+    today: LeaseState,
+    rec: &Ownership,
+    sessions_for_key: &[&str],
+) -> Option<Outcome> {
+    let holder = rec.holder.as_ref()?;
+    (today == LeaseState::Stale
+        && holder.session != lease_id
+        && sessions_for_key.contains(&holder.session.as_str()))
+    .then(|| Outcome::Expected(expected::SUPERSEDED_LEASE.into()))
 }
 
 /// Compare one lease's state today with its record and the judge's verdict
@@ -73,7 +92,7 @@ pub(crate) fn compare_one(
     };
     if holder.session != lease_id {
         return Outcome::Unexplained(format!(
-            "the record names session {}, not this lease",
+            "the record names session {}, not this lease; superseded ownership needs `aida own migrate`",
             holder.session
         ));
     }
@@ -113,6 +132,14 @@ pub(crate) fn orphan_outcome(rec: &Ownership, owner: &OwnerVerdict) -> Option<Ou
     let holder = rec.holder.as_ref()?;
     if holder.session.starts_with("merge-lease:") {
         return None;
+    }
+    // Keep the report read-only: eligibility alone is not a journaled release.
+    // trace:STORY-2325 | ai:codex
+    if super::judge::legacy_release_by_rule(holder, false) {
+        return Some(Outcome::Unexplained(format!(
+            "pre-admission session {} has no lease; release by rule needs `aida own migrate`",
+            holder.session
+        )));
     }
     Some(match owner {
         OwnerVerdict::Alive { witness } => Outcome::Unexplained(format!(
@@ -225,16 +252,28 @@ pub(crate) fn run(main: &Path, filter: Option<&str>, compare: bool, json: bool) 
         };
         let live = aida_core::liveness::probe_live_claude_sessions();
         let leases = crate::list_leases(main);
+        let mut sessions_by_key: std::collections::BTreeMap<WorkKey, Vec<&str>> =
+            Default::default();
+        for lease in &leases {
+            if let Some((key, _)) = dual::key_for_lease(lease, &resolve) {
+                sessions_by_key.entry(key).or_default().push(&lease.id);
+            }
+        }
         for lease in &leases {
             let today = crate::lease_state_for(lease, &live, now);
             let rec = dual::key_for_lease(lease, &resolve)
                 .and_then(|(k, _)| records.iter().find(|r| r.key == k));
             let owner = rec.and_then(judged);
+            let superseded = rec.and_then(|rec| {
+                superseded_lease_outcome(&lease.id, today, rec, sessions_by_key.get(&rec.key)?)
+            });
             let outcome = match rec {
                 None if lease.review_verb => {
                     Outcome::Expected(expected::REVIEW_UNRECORDED.to_string())
                 }
-                _ => compare_one(&lease.id, today, rec, owner.as_ref()),
+                _ => {
+                    superseded.unwrap_or_else(|| compare_one(&lease.id, today, rec, owner.as_ref()))
+                }
             };
             rows.push(Row {
                 lease: lease.id.clone(),
