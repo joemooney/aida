@@ -86,6 +86,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b6f7-ee30-7342-86ef-590107a10ed7
+  author: aida-session-start
+  timestamp: 2026-11-07T17:04:24.112767261Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1b705-f8a5-71b0-8a0e-9c2e68f78343
   author: joe
   timestamp: 2026-11-07T17:19:44.293142961Z
