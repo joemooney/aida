@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T20:18:30.306200473Z
+modified_at: 2026-11-07T20:58:43.768712472Z
 req_type: Story
 comments:
 - id: 01a1b7a6-d350-7e21-b918-65fab0b15f35
@@ -42,6 +42,48 @@ comments:
   modified_at: 2026-11-07T20:18:26.362733584Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b7ce-76b8-7b90-af28-940c39bdd627
+  author: dirtlab
+  content: |
+    Implementation handoff for STORY-2640, following the binding advisor ruling. Edits are uncommitted; publication remains the host launcher's responsibility.
+
+    Both modes are implemented in this change. Native/host publication commits locally, runs an exact host-initiated make check-ci-fast job, offers one repair round on red, checks the repaired head, and annotates publication with the final marker. Self-pushing lanes gate after PR discovery, annotate the result, and queue one repair before review-watch can admit a reviewer. Host-owned branch receipts hold review admission through gating, queued repair, and native publication/annotation. Publication checks the actual imported tip against the gate receipt, refusing a head changed by reconciliation instead of publishing stale evidence. Punt and hold vetoes remain checked; failed repair exits retain Refs commit treatment.
+
+    The gate shares the BUG-2383 execution engine, cleared environment, read-only filesystem profile, seat target, and host-only results. Make jobs add network, IPC and PID namespaces; the host refuses writable paths overlapping the results. The timeout is 300 seconds. There is no unsandboxed fallback; unavailable bubblewrap records skipped(no-sandbox). Gate jobs do not count as executed cargo tests.
+
+    Changed files:
+    - aida-cli-lib/src/lane_fast_gate.rs (new)
+    - aida-cli-lib/src/lane_job.rs
+    - aida-cli-lib/src/lib.rs
+    - aida-cli-lib/src/forge.rs
+    - aida-cli-lib/src/queue_cmd.rs
+    - aida-cli-lib/src/review_watch.rs
+    - aida-cli-lib/src/session.rs
+    - aida-cli-lib/src/ship_from_seat.rs
+    - aida-cli-lib/src/standalone_implementer.rs
+    - aida-core/templates/.aida/discipline/rework-brief-craft.md
+    - .aida/discipline/rework-brief-craft.md (generated mirror)
+    - scripts/store-writers.toml (regenerated and reviewed; only this change's additions and moved run_one sinks)
+
+    Validation through the lane runner:
+    - j20261107T204645166-2-0: 59 regression tests passed, including lane jobs and queue-exit publication.
+    - j20261107T205001760-2-0: four native lifecycle/vendor-ratchet tests passed.
+    - j20261107T205550461-2-0: final 11 fast-gate tests passed, including fail/fix, persistent red, timeout, skipped sandbox, review ordering, result boundary, PR body preservation, and stale-head refusal.
+    - j20261107T204238574-2-0: cargo test --profile agent --workspace --no-run passed (compile-only).
+    - j20261107T204645063-2-0: matching CLI build passed, resolving the earlier missing-binary process-fixture failure.
+    - 41 writer-inventory fixture tests and eight Git-maintenance fixture tests passed.
+    - rustfmt, git diff --check, portability, execution-context ledger, writer inventory, hook links and CI gate-classification audit passed. The discipline mirror matches its template byte for byte.
+    untested=false
+
+    Validation/environment limitations:
+    - The installed host runner still refuses make requests as Cargo-only, so the full make check-ci-fast could not run in this seat. It needs the updated launcher, not an unsandboxed workaround.
+    - make sync-templates/check-templates unexpectedly invoke cargo run in their nested agent-skill target. That indirect build failed against read-only sccache; the requested discipline mirror did synchronize and was compared directly. No direct Cargo retry was attempted.
+    - The host runner reported overlay-stale because the primary rewrote a file of its shared generation during these builds; successful check results above retain that warning.
+    - STORY-2640 remains Needs Attention: this implementer seat's attempted In Progress transition was refused for lacking advisor authority. No status override, commit, push, PR creation, queue completion, shipping, or review verdict was performed.
+  created_at: 2026-11-07T20:58:43.768712472Z
+  modified_at: 2026-11-07T20:58:43.768712472Z
+  session_id: 01a1b7aeffb7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
