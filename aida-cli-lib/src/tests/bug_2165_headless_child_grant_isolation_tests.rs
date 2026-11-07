@@ -15,7 +15,7 @@ use std::path::Path;
 fn get_cmd_env<'a>(cmd: &'a std::process::Command, key: &str) -> Option<Option<&'a str>> {
     cmd.get_envs()
         .find(|(k, _)| *k == key)
-        .map(|(_, v)| v.and_then(|s| s.to_str()))
+        .and_then(|(_, v)| v.and_then(|s| s.to_str()).map(Some))
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
     );
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "quiet burndown child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(
@@ -105,7 +105,7 @@ fn burndown_quiet_command_supports_baseline_child() {
     );
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "baseline child must have AIDA_SESSION_PURPOSE scrubbed"
     );
 }
@@ -149,7 +149,7 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
     );
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "verbose burndown child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(
@@ -185,7 +185,7 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
     );
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "CI-fix child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));
@@ -222,7 +222,7 @@ fn phase_driver_advisor_command_scrubs_purpose() {
     );
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "advisor consult child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));

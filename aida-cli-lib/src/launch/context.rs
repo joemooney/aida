@@ -102,6 +102,7 @@ pub(crate) struct LaunchContext {
     host_main: Option<PathBuf>,
     parent_contained: bool,
     fixture_override: bool,
+    wrapper_environment: bool,
 }
 
 impl LaunchContext {
@@ -178,10 +179,22 @@ impl LaunchContext {
             set_cwd: req.set_cwd,
             host_main: req.host_main,
             parent_contained,
+            wrapper_environment: false,
             fixture_override: agent_cmd
                 && !parent_contained
                 && req.posture == ContainmentPosture::None,
         })
+    }
+
+    /// The receipt-owning wrapper selects and clears its own environment.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn with_wrapper_environment(mut self, wrapper: bool) -> Self {
+        self.wrapper_environment = wrapper;
+        self
+    }
+
+    pub(crate) fn wrapper_environment(&self) -> bool {
+        self.wrapper_environment
     }
 
     pub(crate) fn fixture_override(&self) -> bool {

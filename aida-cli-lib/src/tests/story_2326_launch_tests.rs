@@ -1613,3 +1613,51 @@ fn story_2326_spawn_agent_clears_env() {
         .unwrap()
         .contains("STORY2326_PARENT_SENTINEL=secret"));
 }
+
+// Exercise the real cleared process boundary without AIDA_AGENT_CMD inheritance.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_reviewer_verdict_is_explicit_after_clear() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_REVIEW_VERDICT_FILE",
+        Some("/review/verdict.json"),
+    )]);
+    let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+    req.program = "/usr/bin/env".into();
+    req.args.clear();
+    let ctx = LaunchContext::resolve_under(req, false).unwrap();
+    for role in ["reviewer", "implementer"] {
+        let mut cmd = spawn_agent(&ctx).unwrap();
+        assign_seat(
+            &mut cmd,
+            ctx.kind(),
+            SeatDecision::Child { role, grant: "" },
+        )
+        .unwrap();
+        let output = cmd.output().unwrap();
+        assert!(output.status.success());
+        let env = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(
+            env.lines()
+                .any(|l| l == "AIDA_REVIEW_VERDICT_FILE=/review/verdict.json"),
+            role == "reviewer"
+        );
+    }
+    let mut cmd = spawn_agent(&ctx).unwrap();
+    cmd.env("AIDA_REVIEW_VERDICT_FILE", "/site/verdict.json");
+    assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        SeatDecision::Child {
+            role: "reviewer",
+            grant: "",
+        },
+    )
+    .unwrap();
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .any(|line| line == "AIDA_REVIEW_VERDICT_FILE=/site/verdict.json"));
+}

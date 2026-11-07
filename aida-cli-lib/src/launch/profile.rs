@@ -137,6 +137,8 @@ impl VendorProfile {
 
 /// Command exposes no inheritance getter. Removing an unset reserved probe
 /// is recorded only on inheriting commands; cleared commands discard it.
+/// Command has no API to erase that removal entry without clearing all env
+/// decisions, so inheriting commands retain this harmless reserved tombstone.
 // trace:STORY-2326 | ai:codex
 pub(super) fn environment_is_cleared(child: &mut Command) -> bool {
     const PROBE: &str = "__AIDA_LAUNCH_INHERITANCE_PROBE";

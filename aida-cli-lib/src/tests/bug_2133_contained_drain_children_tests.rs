@@ -35,6 +35,7 @@ fn env_value(cmd: &std::process::Command, key: &str) -> Option<Option<String>> {
     cmd.get_envs()
         .find(|(k, _)| *k == key)
         .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        .filter(|value| value.is_some())
 }
 
 /// The `--settings` JSON value from a contained claude argv.
@@ -299,7 +300,7 @@ fn contained_child_commands_export_aida_contained() {
         "",
     )
     .unwrap();
-    assert_eq!(env_value(&ci_fix_plain, "AIDA_CONTAINED"), Some(None));
+    assert_eq!(env_value(&ci_fix_plain, "AIDA_CONTAINED"), None);
 }
 
 #[test]

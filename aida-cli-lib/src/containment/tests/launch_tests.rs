@@ -3387,3 +3387,59 @@ print('bounded version cases: 6 passed')
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("6 passed"));
 }
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_environment_keeps_ambient_values_implicit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::launch::context::{LaunchContext, LaunchRequest};
+    use aida_core::launch_policy::{LaunchKind, LaunchVendor};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some("/parent/bin:/usr/bin:/bin")),
+        ("AIDA_SESSION_ID", Some("parent-session")),
+        ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    let req = LaunchRequest {
+        vendor: LaunchVendor::Claude,
+        kind: LaunchKind::Fresh,
+        program: "claude".into(),
+        args: vec![],
+        tail: vec![],
+        posture: crate::session::ContainmentPosture::Aida,
+        cwd: std::env::temp_dir(),
+        set_cwd: false,
+        host_main: None,
+    };
+    let ctx = LaunchContext::resolve_under(req, false)
+        .unwrap()
+        .with_wrapper_environment(true);
+    let mut cmd = crate::launch::spawn_agent(&ctx).unwrap();
+    let env = selected_environment(&cmd);
+    for key in ["PATH", "AIDA_SESSION_ID", "AIDA_ROTATION_HANDOFF"] {
+        assert!(
+            !env.contains_key(key),
+            "ambient {key} crossed wrapper selection"
+        );
+        assert!(explicit(&cmd, key).is_none());
+    }
+    cmd.env("PATH", "/site/bin")
+        .env("AIDA_SESSION_ID", "child-session")
+        .env("AIDA_ROTATION_HANDOFF", "child-handoff")
+        .env("AIDA_REVIEW_VERDICT_FILE", "/site/verdict.json");
+    assert_eq!(selected_environment(&cmd)["PATH"], "/site/bin");
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_SESSION_ID"],
+        "child-session"
+    );
+    assert_eq!(
+        explicit(&cmd, "AIDA_ROTATION_HANDOFF").as_deref(),
+        Some("child-handoff")
+    );
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_REVIEW_VERDICT_FILE"],
+        "/site/verdict.json"
+    );
+}

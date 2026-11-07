@@ -36,6 +36,7 @@ fn env_of(cmd: &std::process::Command, key: &str) -> Option<Option<String>> {
     cmd.get_envs()
         .find(|(k, _)| *k == key)
         .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        .filter(|value| value.is_some())
 }
 
 #[test]
@@ -146,7 +147,7 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     );
     assert_eq!(
         env_of(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "contained quiet burndown must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
@@ -173,12 +174,12 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
-        Some(None),
+        None,
         "uncontained quiet burndown must strip AIDA_CONTAINED"
     );
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "uncontained quiet burndown must strip AIDA_SESSION_PURPOSE"
     );
     let args_uncontained = args_of(&cmd_uncontained);
@@ -223,7 +224,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     );
     assert_eq!(
         env_of(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "contained verbose burndown must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
@@ -257,12 +258,12 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
-        Some(None),
+        None,
         "uncontained verbose burndown must strip AIDA_CONTAINED"
     );
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "uncontained verbose burndown must strip AIDA_SESSION_PURPOSE"
     );
     let args_uncontained = args_of(&cmd_uncontained);
@@ -317,7 +318,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     );
     assert_eq!(
         env_of(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "contained autopilot intake must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
@@ -351,12 +352,12 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
-        Some(None),
+        None,
         "uncontained autopilot intake must strip AIDA_CONTAINED"
     );
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "uncontained autopilot intake must strip AIDA_SESSION_PURPOSE"
     );
     let args_uncontained = args_of(&cmd_uncontained);
@@ -396,7 +397,7 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
     );
     assert_eq!(
         env_of(&cmd, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "contained questions clarify must strip AIDA_SESSION_PURPOSE"
     );
     assert_eq!(
@@ -420,12 +421,12 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
             .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
-        Some(None),
+        None,
         "uncontained questions clarify must strip AIDA_CONTAINED"
     );
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_SESSION_PURPOSE"),
-        Some(None),
+        None,
         "uncontained questions clarify must strip AIDA_SESSION_PURPOSE"
     );
     let args_uncontained = args_of(&cmd_uncontained);

@@ -7298,7 +7298,8 @@ pub(crate) fn run_agent_generation(
         aida_core::launch_policy::LaunchKind::Fresh,
         program.clone(),
         exec_args,
-    )?;
+    )?
+    .with_wrapper_environment(wrapper);
     let mut command = crate::launch::spawn_agent(&ctx)?;
     command
         .env("AIDA_AGENT_TYPE", config.agent_type)

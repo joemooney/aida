@@ -444,9 +444,43 @@ fn scanner_catches_every_mutant_spelling() {
     }
 }
 
+// Match identifiers as well as qualified calls so imports (including grouped
+// imports and aliases) cannot hide the backend behind a bare call.
+// trace:STORY-2326 | ai:codex
+fn has_legacy_child_issuer(src: &str) -> bool {
+    let backend = src.replace("crate::launch::issue_launch_child_with_delegation", "");
+    backend
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .any(|word| {
+            matches!(
+                word,
+                "issue_launch_child_with_delegation" | "issue_child_from"
+            )
+        })
+        || src.contains("seat_authority::issue_child(")
+}
+
+#[test]
+fn story_2326_grant_owner_mutants() {
+    for mutant in [
+        "seat_authority::issue_launch_child_with_delegation(root)",
+        "use crate::gate::seat_authority::issue_launch_child_with_delegation; issue_launch_child_with_delegation(root)",
+        "use crate::gate::seat_authority::issue_launch_child_with_delegation as mint; mint(root)",
+        "use crate::gate::seat_authority::{issue_launch_child_with_delegation as mint}; mint(root)",
+        "use crate::gate::seat_authority::issue_child_from as mint; mint(root)",
+    ] {
+        assert!(has_legacy_child_issuer(mutant), "escaped: {mutant}");
+    }
+    for allowed in [
+        "crate::launch::issue_launch_child(root)",
+        "crate::launch::issue_launch_child_with_delegation(root)",
+    ] {
+        assert!(!has_legacy_child_issuer(allowed), "valid facade: {allowed}");
+    }
+}
+
 /// Finalization and grant issuance remain owned by the launch layer even for
-/// the inventoried builders awaiting conversion. A new direct backend caller
-/// cannot bypass those entry points unnoticed.
+/// the inventoried builders awaiting conversion.
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
@@ -465,15 +499,13 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
                 "private profile finalizer escaped into {rel}"
             );
         }
-        if rel != "launch/grant.rs" && rel != "gate/seat_authority.rs" {
+        if !rel.starts_with("launch/") && rel != "gate/seat_authority.rs" {
             assert!(
                 !src.contains("issue_child_for("),
                 "direct grant backend caller in {rel}"
             );
             assert!(
-                !src.contains("seat_authority::issue_child(")
-                    && !src.contains("seat_authority::issue_launch_child_with_delegation(")
-                    && !src.contains("issue_child_from("),
+                !has_legacy_child_issuer(&src),
                 "legacy child issuer in {rel}"
             );
         }
