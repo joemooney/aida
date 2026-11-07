@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. This proves access to the fixture capability, not exploitation of an actual host broker. Production refusal matrix, grant revocation and descendant teardown were not measured and remain unknown.
 
   Acceptance: restrict host-capable IPC to explicitly scoped mediated capabilities, with an independently reviewed policy that preserves authenticated vendor startup. A same-profile real-vendor host-IPC negative must deliver no nonce while its host positive control succeeds. Also validate real launcher lifecycle/teardown; do not substitute this synthetic canary for actual broker authorization tests.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-07T00:30:36.840544448Z
+modified_at: 2026-11-07T00:37:18.914983161Z
 req_type: Bug
 tags:
 - area:containment
@@ -107,6 +107,13 @@ comments:
   modified_at: 2026-11-07T00:30:36.840544448Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b370-39c2-7691-9257-52e846f17a4d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Production IPC policy needs advisor signoff: signed STORY-2460 Q5 preserves Codex native compatibility, while the available shared IPC tracer explicitly disallows ordinary launch. Proposed integration and real-vendor acceptance plan posted on BUG-2448; authenticated startup capabilities and lifecycle boundary must be selected before enforcement.. No triage reason was given.'
+  created_at: 2026-11-07T00:37:18.914977480Z
+  modified_at: 2026-11-07T00:37:18.914977480Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
@@ -155,13 +162,16 @@ history:
   timestamp: 2026-11-06T21:41:41.598458360Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes: []
+- id: 01a1b370-39c2-7691-9257-52d223c77d36
+  author: joe
+  timestamp: 2026-11-07T00:37:18.914963661Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
   vendor: claude
-attention_reason:
-  category: design-fork
-  detail: 'Production IPC policy needs advisor signoff: signed STORY-2460 Q5 preserves Codex native compatibility, while the available shared IPC tracer explicitly disallows ordinary launch. Proposed integration and real-vendor acceptance plan posted on BUG-2448; authenticated startup capabilities and lifecycle boundary must be selected before enforcement.'
-  lean: Reuse shared STORY-2238 broker/supervisor integration under a separately selected protected posture; preserve existing native compatibility until explicit policy ruling.
-  raised_by: implementer
-  raised_at: 2026-11-05T03:00:48.713060939Z
