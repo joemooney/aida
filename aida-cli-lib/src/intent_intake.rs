@@ -181,12 +181,13 @@ fn validator_prefix() -> String {
     validator.update(include_bytes!("observation_envelope.rs"));
     validator.update(include_bytes!("ci_receipt.rs"));
     validator.update(include_bytes!("ci_relay.rs"));
+    validator.update(include_bytes!("ci_inventory.rs"));
     format!("v1:{:x}:", validator.finalize())
 }
 
 // Remove ambient Git routing/configuration. Never inherit product indexes,
 // alternates, replacement objects, URL rewrites, hooks or extra push refspecs.
-fn git_command(root: &Path) -> Command {
+pub(super) fn git_command(root: &Path) -> Command {
     let mut cmd = Command::new("git");
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("GIT_") {
@@ -461,7 +462,7 @@ impl Intake {
         }
         let checkpoint = checkpoint.map(|c| c.tip);
         let mut reached = checkpoint.is_none();
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut deadline = Instant::now() + Duration::from_secs(30);
         let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let mut read_bytes = 0usize;
         let mut previous: BTreeMap<String, Vec<u8>> = BTreeMap::new();
@@ -583,7 +584,13 @@ impl Intake {
                                 && previous.get(path) != Some(&bytes)));
                     drop(snapshot);
                     if selected && !self.ci_verified(path) {
+                        // Source validation owns its separate bounded snapshot
+                        // budget. Do not charge 48+ MiB parsing against the
+                        // intake ancestry/metadata budget as well.
+                        // trace:TASK-3232 | ai:codex
+                        let started = Instant::now();
                         self.ci_validate(path, &bytes)?;
+                        deadline += started.elapsed();
                     }
                 } else if folder == "observations" {
                     let value = envelope::parse(&bytes, &self.profile.deny_patterns)?;

@@ -247,3 +247,29 @@ Acceptance for that task:
   failures safely, and gates native AIDA PR/train checks end to end.
 
 No AIDA runner deployment or story completion is claimed by this slice.
+
+## TASK-3232 implementation profile (2026-11-06)
+
+The advisor approved this follow-up on 2026-11-06 (LIGHT gate). The inventory
+now preflights committed blob sizes/modes and bulk-reads up to 64 MiB of
+Rust/YAML, with a 60-second per-inventory budget. The newest-32 plus on-demand
+ruling is retained, with a separate 300-second source-validation snapshot budget.
+Intake ancestry/metadata keeps its existing 30-second budget exclusive of source
+validation. Exhaustion refuses; it never promotes partial evidence.
+
+Committed local includes and hidden `extends` templates resolve with bounded
+GitLab merge precedence. The supported closed rule vocabulary models canonical
+relay push branches and rejects dynamic/remote expansion and commit/path escapes.
+AIDA's `.merge-gate` admits those branches explicitly; its relay inventory selects
+`verify`, `test` and `bwrap-confinement`. MR-only holds and release/Pages jobs stay
+outside this push profile. Native merge holds remain independently enforced.
+
+The regression fixture uses real AIDA Rust sources padded above 48 MiB at three
+source commits, immutable retained requests and their exact-SHA execution branches,
+qualified test failures, returned receipts, and home HTTP status publication. Its
+captured native statuses feed the production commit reader and PR/train required
+check judges. See [the operational bounds](../agents/work-ci-relay.md).
+No runner or credential deployment, remote test execution, or STORY-2480 completion
+is claimed by this inventory follow-up.
+
+<!-- trace:TASK-3232 | ai:codex -->
