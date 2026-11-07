@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:30:05.847916747Z
-modified_at: 2026-11-07T09:04:54.214364848Z
+modified_at: 2026-11-07T09:09:28.863808807Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -97,6 +97,12 @@ comments:
   modified_at: 2026-11-07T09:03:27.273213667Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b545-209f-7651-8704-3bc58c552040
+  author: joe
+  content: 'Round 3: addressed findings 1-6 in the GDMA adapter: image-mapped awk engines; fail-closed unmapped sudo/apt-get and runner shell variables; fresh per-job RUNNER_TEMP; conservative full CI on unavailable baselines; image/tag presence guards; process-group timeout cleanup; MR mapping documented as future-only. The relay inventory accepts only the exact guarded relay rule, retaining refusal for arbitrary deployment variables. Python adapter suite: 27 tests pass. CI gate audit: all 79 classified. cargo fmt --all -- --check and git diff --check pass. Targeted Rust inventory tests are compiling; final handoff will report their result. Edits remain uncommitted for native host publication; merge hold remains intact.'
+  created_at: 2026-11-07T09:09:28.863808807Z
+  modified_at: 2026-11-07T09:09:28.863808807Z
+  session_id: 01a1b540e1be
 history:
 - id: 01a1b445-7165-7711-9410-a0b875b2776d
   author: joe
