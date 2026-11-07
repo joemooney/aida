@@ -159,7 +159,10 @@ Simple spec completion, shipping, landing or merging phrases (including past
 tense) become spec-completion conditions; an ID followed by a recognized status
 (such as `<ID> approved`) becomes a condition for that status. `#N merges`
 becomes a PR-merged condition; versions become release thresholds; ISO dates
-become date conditions. Compound, conflicting or unknown text becomes
+become date conditions. Inferred spec IDs must have numeric segments (such as
+`BUG-1-234`) and resolve unambiguously in the strict store snapshot; absent
+or ambiguous targets fall back to manual review. Compound, conflicting or unknown
+text becomes
 `manual:<owner>`, falling back to `manual:operator` when the owner is empty
 or cannot be expressed as a single token. Malformed typed input is identified
 separately in the report and also falls back to manual review.
@@ -167,7 +170,9 @@ separately in the report and also falls back to manual review.
 Valid typed conditions stay intact. Legacy tags are removed after recording
 their exact originals, together with the original trigger, in an
 `[aida:defer-migration]` comment. Tag-only deferrals gain the deferred flag;
-missing tag-only timestamps use the spec's previous modification time. Existing
+missing timestamps on any migrated deferral use the spec's previous modification
+time. Non-deferred rows with no legacy tags are skipped, including leftover prose.
+Existing
 deferral timestamps, reasons, holds and lifecycle statuses are preserved.
 The migration never evaluates conditions or resurfaces work itself.
 
@@ -176,7 +181,9 @@ individually. A successful re-apply changes nothing. Preview the report before
 applying: inferred conditions can become eligible for the hourly resurfacing job.
 Manual conditions older than the configured manual-age threshold (14 days by
 default) route to `aida human` on the next hourly run, so migrating old deferrals
-can add many human-queue entries at once.
+can add many human-queue entries at once. The report counts resulting active
+manual conditions already past the default 14-day threshold, using the timestamp
+that apply will preserve or backfill. A custom hourly-job threshold may differ.
 
 ```bash
 aida db migrate-defer-conditions

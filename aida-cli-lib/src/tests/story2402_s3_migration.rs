@@ -4,6 +4,23 @@ use super::*;
 
 #[test]
 fn story2402_s3_migration_heuristics_and_conservative_fallback() {
+    let mut snapshot = RequirementsStore::default();
+    for id in [
+        "STORY-123",
+        "STORY-2492",
+        "STORY-1469",
+        "TASK-42",
+        "BUG-1-234",
+        "EPIC-42",
+        "SPIKE-42",
+        "BUG-42",
+        "STORY-1-234",
+        "STORY-42",
+    ] {
+        let mut row = Requirement::new(id.into(), "".into());
+        row.spec_id = Some(id.into());
+        snapshot.requirements.push(row);
+    }
     for (raw, expected) in [
         ("STORY-123 completes", "spec:STORY-123=completed"),
         ("STORY-2492 completed", "spec:STORY-2492=completed"),
@@ -22,12 +39,18 @@ fn story2402_s3_migration_heuristics_and_conservative_fallback() {
         ("2026-12-01", "date:2026-12-01"),
         ("until 2026-12-01", "date:2026-12-01"),
     ] {
-        assert_eq!(infer(raw).as_deref(), Some(expected), "{raw}");
-        let typed = infer(raw).unwrap();
+        assert_eq!(infer(raw, &snapshot).as_deref(), Some(expected), "{raw}");
+        let typed = infer(raw, &snapshot).unwrap();
         assert_eq!(typed.parse::<Condition>().unwrap().to_string(), expected);
     }
     for raw in [
         "#0 merges",
+        "follow-up done",
+        "after re-review completes",
+        "post-merge lands",
+        "sign-off approved",
+        "STORY-999999 completes",
+        "spec:STORY-999999=completed",
         "2026-02-30",
         "date:bad",
         "spec:",
@@ -38,31 +61,68 @@ fn story2402_s3_migration_heuristics_and_conservative_fallback() {
         "unrelated words TASK-42 completed",
         "not before 0.16.2",
     ] {
-        assert!(infer(raw).is_none(), "{raw}");
+        assert!(infer(raw, &snapshot).is_none(), "{raw}");
     }
+    // Resolve both native/agreed IDs, and keep ambiguous targets manual.
+    let mut first = Requirement::new("first".into(), "".into());
+    first.spec_id = Some("STORY-100".into());
+    first.agreed_id = Some("STORY-200".into());
+    snapshot.requirements.push(first.clone());
+    assert_eq!(
+        infer("STORY-100 completes", &snapshot).as_deref(),
+        Some("spec:STORY-100=completed")
+    );
+    assert_eq!(
+        infer("STORY-200 completes", &snapshot).as_deref(),
+        Some("spec:STORY-200=completed")
+    );
+    let mut second = Requirement::new("second".into(), "".into());
+    second.spec_id = Some("STORY-101".into());
+    second.agreed_id = first.agreed_id;
+    snapshot.requirements.push(second);
+    assert!(infer("STORY-200 completes", &snapshot).is_none());
     let mut row = Requirement::new("fixture".into(), "unchanged".into());
     row.deferred = true;
     row.deferred_until = Some("needs judgement".into());
     row.owner = "joe@example.com".into();
-    assert_eq!(plan_spec(&row).unwrap().condition, "manual:joe@example.com");
+    assert_eq!(
+        plan_spec(&row, &snapshot).unwrap().condition,
+        "manual:joe@example.com"
+    );
+    for raw in ["follow-up done", "STORY-999999 completes"] {
+        row.deferred_until = Some(raw.into());
+        assert_eq!(
+            plan_spec(&row, &snapshot).unwrap().condition,
+            "manual:joe@example.com"
+        );
+    }
     for owner in ["", "  ", "Joe Mooney"] {
         row.owner = owner.into();
-        assert_eq!(plan_spec(&row).unwrap().condition, "manual:operator");
+        assert_eq!(
+            plan_spec(&row, &snapshot).unwrap().condition,
+            "manual:operator"
+        );
     }
     row.deferred_until = Some("date:bad".into());
-    assert!(plan_spec(&row).unwrap().malformed_typed);
+    assert!(plan_spec(&row, &snapshot).unwrap().malformed_typed);
     row.deferred_until = None;
-    assert_eq!(plan_spec(&row).unwrap().condition, "manual:operator");
+    assert_eq!(
+        plan_spec(&row, &snapshot).unwrap().condition,
+        "manual:operator"
+    );
     row.tags.insert("deferred:2026-12-01".into());
     row.tags.insert("deferred:#42 merges".into());
-    assert_eq!(plan_spec(&row).unwrap().condition, "manual:operator");
+    assert_eq!(
+        plan_spec(&row, &snapshot).unwrap().condition,
+        "manual:operator"
+    );
     row.tags.clear();
     row.tags.insert("deferred:date:bad".into());
-    assert!(plan_spec(&row).unwrap().malformed_typed);
+    assert!(plan_spec(&row, &snapshot).unwrap().malformed_typed);
     row.tags.clear();
     row.tags.insert("deferred:spec:STORY-42=completed".into());
     assert_eq!(
-        plan_spec(&row).unwrap().condition,
+        plan_spec(&row, &snapshot).unwrap().condition,
         "spec:STORY-42=completed"
     );
 }
@@ -105,6 +165,9 @@ fn objects(root: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 #[test]
 fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
     let (_dir, root, backend) = fixture();
+    let mut target = Requirement::new("target".into(), "".into());
+    target.spec_id = Some("STORY-42".into());
+    backend.add_requirement(target).unwrap();
     let cases = [
         Some("  STORY-42 ships\n"),
         Some("unknown\n\"quoted\" reason"),
@@ -112,6 +175,8 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
         None,
         Some("date:2026-12-01"),
         Some("manual:joe"),
+        Some("STORY-999999 completes"),
+        Some("follow-up done"),
     ];
     let mut original = Vec::new();
     for (index, raw) in cases.iter().enumerate() {
@@ -120,7 +185,11 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
         row.deferred = index != 3;
         row.deferred_until = raw.map(str::to_string);
         row.owner = "joe".into();
-        row.deferred_at = Some(row.created_at);
+        row.deferred_at = if matches!(index, 1 | 3) {
+            None
+        } else {
+            Some(row.created_at)
+        };
         row.deferred_reason = Some("operator decision must survive".into());
         row.tags.insert("operator-held".into());
         row.tags.insert("other-tag".into());
@@ -136,7 +205,7 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
     let before = objects(&root);
     let preview = run_migration(&backend, &root, false).unwrap();
     assert!(preview.dry_run);
-    assert_eq!(preview.specs.len(), 5);
+    assert_eq!(preview.specs.len(), 7);
     assert_eq!(preview.specs_written, 0);
     assert_eq!(
         objects(&root),
@@ -144,13 +213,15 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
         "dry-run leaves exact canonical bytes alone"
     );
     let applied = run_migration(&backend, &root, true).unwrap();
-    assert_eq!(applied.specs_written, 5);
+    assert_eq!(applied.specs_written, 7);
     let expected = [
         "spec:STORY-42=completed",
         "manual:joe",
         "manual:joe",
         "pr:3491=merged",
         "date:2026-12-01",
+        "manual:joe",
+        "manual:joe",
         "manual:joe",
     ];
     for (index, old) in original.iter().enumerate() {
@@ -164,6 +235,10 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
             );
             continue;
         }
+        assert_eq!(
+            new.deferred_at,
+            Some(old.deferred_at.unwrap_or(old.modified_at))
+        );
         let audit = new.comments.last().unwrap();
         assert!(audit.content.starts_with("[aida:defer-migration]\n"));
         let source: serde_json::Value =
@@ -176,6 +251,7 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
         let mut restored = new.clone();
         restored.deferred_until = old.deferred_until.clone();
         restored.deferred = source["deferred"].as_bool().unwrap();
+        restored.deferred_at = serde_json::from_value(source["deferred_at"].clone()).unwrap();
         restored.tags.extend(tags);
         restored.comments.pop();
         restored.modified_at = old.modified_at;
@@ -184,6 +260,18 @@ fn story2402_s3_migration_round_trip_idempotent_nothing_lost() {
             serde_yaml::to_value(old).unwrap(),
             "all unrelated fields survive for {index}"
         );
+    }
+    let snapshot = crate::condition_cmd::read_store(&root, Some(&root)).unwrap();
+    let facts = crate::condition_cmd::CliConditionFacts::from_store(&root, snapshot);
+    for old in &original {
+        let new = backend.get_requirement(&old.id).unwrap().unwrap();
+        let condition: Condition = new.deferred_until.unwrap().parse().unwrap();
+        if matches!(condition, Condition::Spec { .. } | Condition::Manual { .. }) {
+            assert!(
+                condition.evaluate(&facts).is_ok(),
+                "migrated target must evaluate safely"
+            );
+        }
     }
     let after = objects(&root);
     let second = run_migration(&backend, &root, true).unwrap();
@@ -243,7 +331,11 @@ fn story2402_s3_migration_replans_live_row_preserving_new_trigger_and_hold() {
     edited.tags.insert("operator-held".into());
     backend.update_requirement(&edited).unwrap();
     let before = objects(&root);
-    assert!(migrate_spec(&backend, &observed).unwrap().is_none());
+    assert!(
+        migrate_spec(&backend, &observed, &RequirementsStore::default())
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
         objects(&root),
         before,
@@ -254,10 +346,65 @@ fn story2402_s3_migration_replans_live_row_preserving_new_trigger_and_hold() {
     edited.deferred_at = None;
     backend.update_requirement(&edited).unwrap();
     let live = backend.get_requirement(&edited.id).unwrap().unwrap();
-    let plan = migrate_spec(&backend, &observed).unwrap().unwrap();
+    let plan = migrate_spec(&backend, &observed, &RequirementsStore::default())
+        .unwrap()
+        .unwrap();
     assert_eq!(plan.condition, "  DATE:2026-12-01  ");
     let written = backend.get_requirement(&edited.id).unwrap().unwrap();
     assert_eq!(written.deferred_reason, live.deferred_reason);
     assert!(written.tags.contains("operator-held"));
     assert_eq!(written.deferred_at, Some(live.modified_at));
+}
+
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s3_migration_inactive_prose_untouched_and_manual_age_reported() {
+    let (_dir, root, backend) = fixture();
+    let now = chrono::Utc::now();
+    let mut original = Vec::new();
+    for (name, deferred, tag, age, archived) in [
+        ("inactive", false, false, 30, false),
+        ("old prose", true, false, 30, false),
+        ("recent prose", true, false, 1, false),
+        ("old tag", false, true, 30, false),
+        ("archived", true, false, 30, true),
+    ] {
+        let mut row = Requirement::new(name.into(), "".into());
+        row.spec_id = Some(format!("FR-{}", original.len() + 1));
+        row.deferred = deferred;
+        row.archived = archived;
+        row.deferred_until = Some("needs human judgement".into());
+        row.deferred_at = None;
+        row.modified_at = now - chrono::Duration::days(age);
+        if tag {
+            row.tags.insert("deferred:ask joe".into());
+        }
+        original.push(backend.add_requirement(row).unwrap());
+    }
+    let preview = run_migration(&backend, &root, false).unwrap();
+    assert_eq!(preview.specs.len(), 4);
+    assert_eq!(
+        preview
+            .specs
+            .iter()
+            .filter(|plan| plan.manual_overdue)
+            .count(),
+        2
+    );
+    let report = render_outcome(&preview);
+    assert!(
+        report.contains("2 resulting manual condition(s) older than the default 14-day threshold")
+    );
+    assert!(report.contains(r#"trigger="needs human judgement" tags=[] -> manual:operator"#));
+    assert!(!report.contains("Some("));
+    run_migration(&backend, &root, true).unwrap();
+    let inactive = backend.get_requirement(&original[0].id).unwrap().unwrap();
+    assert_eq!(
+        serde_yaml::to_value(inactive).unwrap(),
+        serde_yaml::to_value(&original[0]).unwrap()
+    );
+    assert_eq!(
+        run_migration(&backend, &root, true).unwrap().specs_written,
+        0
+    );
 }

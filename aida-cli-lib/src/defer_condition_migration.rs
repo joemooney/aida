@@ -2,7 +2,9 @@
 // trace:STORY-2402 | ai:codex
 
 use aida_core::condition::Condition;
-use aida_core::{CachedGitBackend, Comment, DatabaseBackend, Requirement, RequirementStatus};
+use aida_core::{
+    CachedGitBackend, Comment, DatabaseBackend, Requirement, RequirementStatus, RequirementsStore,
+};
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -14,12 +16,15 @@ pub(crate) mod args;
 
 /// Only recognize a whole, simple trigger. A compound or qualified sentence
 /// must not accidentally become permission to resurface on just one clause.
-fn infer(raw: &str) -> Option<String> {
+fn infer(raw: &str, snapshot: &RequirementsStore) -> Option<String> {
     if let Ok(condition) = raw.parse::<Condition>() {
-        return Some(condition.to_string());
+        return resolved_condition(condition, snapshot);
     }
     static SPEC: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)^(?:(?:when|after)\s+)?([a-z]+-[a-z0-9]+(?:-[a-z0-9]+)*)\s+([a-z][a-z _-]*)[.!]?$").unwrap()
+        Regex::new(
+            r"(?i)^(?:(?:when|after)\s+)?([a-z]+-[0-9]+(?:-[0-9]+)*)\s+([a-z][a-z _-]*)[.!]?$",
+        )
+        .unwrap()
     });
     static PR: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)^(?:(?:when|after)\s+)?#([0-9]+)\s+merges[.!]?$").unwrap()
@@ -48,7 +53,17 @@ fn infer(raw: &str) -> Option<String> {
     } else {
         return None;
     };
-    candidate.parse::<Condition>().ok().map(|c| c.to_string())
+    resolved_condition(candidate.parse::<Condition>().ok()?, snapshot)
+}
+
+// Inferred spec triggers must resolve just as the hourly evaluator resolves them.
+// Missing or ambiguous targets retain a manual-review route.
+// trace:STORY-2402 | ai:codex
+fn resolved_condition(condition: Condition, snapshot: &RequirementsStore) -> Option<String> {
+    if let Condition::Spec { id, .. } = &condition {
+        snapshot.get_requirement_unambiguous(id).ok()??;
+    }
+    Some(condition.to_string())
 }
 
 #[derive(Debug, Serialize)]
@@ -58,9 +73,10 @@ pub(crate) struct SpecPlan {
     pub legacy_tags: Vec<String>,
     pub condition: String,
     pub malformed_typed: bool,
+    pub manual_overdue: bool,
 }
 
-fn plan_spec(req: &Requirement) -> Option<SpecPlan> {
+fn plan_spec(req: &Requirement, snapshot: &RequirementsStore) -> Option<SpecPlan> {
     let mut legacy_tags: Vec<_> = req
         .tags
         .iter()
@@ -72,9 +88,7 @@ fn plan_spec(req: &Requirement) -> Option<SpecPlan> {
         .deferred_until
         .as_deref()
         .and_then(|s| s.parse::<Condition>().ok());
-    if legacy_tags.is_empty()
-        && (typed.is_some() || (!req.deferred && req.deferred_until.is_none()))
-    {
+    if legacy_tags.is_empty() && (typed.is_some() || !req.deferred) {
         return None;
     }
     let sources: Vec<_> = req
@@ -99,7 +113,7 @@ fn plan_spec(req: &Requirement) -> Option<SpecPlan> {
         // Even spelling/whitespace of an already valid typed trigger is retained.
         req.deferred_until.clone().unwrap()
     } else {
-        let inferred: Vec<_> = sources.iter().map(|s| infer(s)).collect();
+        let inferred: Vec<_> = sources.iter().map(|s| infer(s, snapshot)).collect();
         match inferred.first() {
             Some(Some(first)) if inferred.iter().all(|c| c.as_ref() == Some(first)) => {
                 first.clone()
@@ -115,6 +129,12 @@ fn plan_spec(req: &Requirement) -> Option<SpecPlan> {
             )
         }) && s.parse::<Condition>().is_err()
     });
+    let manual_overdue = !req.archived
+        && condition
+            .parse::<Condition>()
+            .is_ok_and(|c| matches!(c, Condition::Manual { .. }))
+        && chrono::Utc::now().signed_duration_since(req.deferred_at.unwrap_or(req.modified_at))
+            > chrono::Duration::days(14);
     Some(SpecPlan {
         spec_id: req
             .agreed_id
@@ -125,6 +145,7 @@ fn plan_spec(req: &Requirement) -> Option<SpecPlan> {
         legacy_tags,
         condition,
         malformed_typed,
+        manual_overdue,
     })
 }
 
@@ -156,11 +177,13 @@ fn apply_plan(req: &mut Requirement, plan: &SpecPlan) -> Result<()> {
     req.deferred_until = Some(plan.condition.clone());
     if !plan.legacy_tags.is_empty() {
         req.deferred = true;
-        // Use existing evidence rather than restarting the manual-age clock.
-        req.deferred_at.get_or_insert(previous_modified_at);
         for tag in &plan.legacy_tags {
             req.tags.remove(tag);
         }
+    }
+    if req.deferred {
+        // Use existing evidence rather than restarting the manual-age clock.
+        req.deferred_at.get_or_insert(previous_modified_at);
     }
     req.modified_at = chrono::Utc::now();
     Ok(())
@@ -174,7 +197,7 @@ pub(crate) fn run_migration(
     apply: bool,
 ) -> Result<MigrationOutcome> {
     let snapshot = crate::condition_cmd::read_store(store_path, Some(store_path))?;
-    let mut rows = snapshot.requirements;
+    let mut rows: Vec<_> = snapshot.requirements.iter().collect();
     rows.sort_by_key(|r| r.id);
     let mut outcome = MigrationOutcome {
         dry_run: !apply,
@@ -182,14 +205,14 @@ pub(crate) fn run_migration(
         ..Default::default()
     };
     for row in rows {
-        let Some(plan) = plan_spec(&row) else {
+        let Some(plan) = plan_spec(row, &snapshot) else {
             continue;
         };
         if !apply {
             outcome.specs.push(plan);
             continue;
         }
-        if let Some(plan) = migrate_spec(backend, &row)? {
+        if let Some(plan) = migrate_spec(backend, row, &snapshot)? {
             outcome.specs_written += 1;
             outcome.specs.push(plan);
         }
@@ -197,11 +220,15 @@ pub(crate) fn run_migration(
     Ok(outcome)
 }
 
-fn migrate_spec(backend: &CachedGitBackend, observed: &Requirement) -> Result<Option<SpecPlan>> {
+fn migrate_spec(
+    backend: &CachedGitBackend,
+    observed: &Requirement,
+    snapshot: &RequirementsStore,
+) -> Result<Option<SpecPlan>> {
     let mut result: Result<Option<SpecPlan>> = Ok(None);
     let updated = backend.update_spec_atomically(observed, |current| {
         result = (|| {
-            let Some(plan) = plan_spec(current) else {
+            let Some(plan) = plan_spec(current, snapshot) else {
                 return Ok(None);
             };
             apply_plan(current, &plan)?;
@@ -231,10 +258,13 @@ pub(crate) fn render_outcome(outcome: &MigrationOutcome) -> String {
     for plan in &outcome.specs {
         let _ = writeln!(
             text,
-            "{}: {:?} + {:?} -> {}{}",
+            "{}: trigger={} tags={} -> {}{}",
             plan.spec_id,
-            plan.original_until,
-            plan.legacy_tags,
+            plan.original_until
+                .as_deref()
+                .map(|s| serde_json::to_string(s).unwrap())
+                .unwrap_or_else(|| "(none)".into()),
+            serde_json::to_string(&plan.legacy_tags).unwrap(),
             plan.condition,
             if plan.malformed_typed {
                 " (malformed typed input)"
@@ -249,6 +279,11 @@ pub(crate) fn render_outcome(outcome: &MigrationOutcome) -> String {
         outcome.specs_scanned,
         outcome.specs.len(),
         outcome.specs_written
+    );
+    let _ = writeln!(
+        text,
+        "{} resulting manual condition(s) older than the default 14-day threshold; eligible for aida human on the next hourly run (configured threshold may differ).",
+        outcome.specs.iter().filter(|plan| plan.manual_overdue).count()
     );
     if outcome.dry_run {
         let _ = writeln!(
