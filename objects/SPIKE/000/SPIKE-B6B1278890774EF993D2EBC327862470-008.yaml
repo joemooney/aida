@@ -2,13 +2,13 @@ id: 01a1b762-ab45-7b51-8f66-02f43005e297
 spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-008
 agreed_id: SPIKE-712
 title: 'AIDA-owned agent runtime: investment decision from the exploration doc'
-description: 'Owner spec for docs/plans/2026-11-07-aida-owned-agent-runtime-exploration.md (operator 2026-11-07: keep it). The doc scopes an optional AIDA-owned runtime: durable-execution risks, a prototype scope, and the cost reference (Infinity agent-core is about 6.6k production lines plus about 7.5k for the daemon, before adapters). Acceptance: (1) the doc''s latest revision is on main; (2) the operator records a go/no-go on the prototype in this spec, with the criteria the doc proposes; (3) on go, file the prototype as its own sketch-first story. No implementation is authorized by this spike.'
+description: 'Owner spec for docs/plans/2026-11-07-aida-owned-agent-runtime-exploration.md (operator 2026-11-07: keep it). The doc scopes an optional AIDA-owned runtime: durable-execution risks, a prototype scope, and the cost reference (Infinity agent-core is about 7.9k production lines plus about 7.5k for the daemon, before adapters). Acceptance: (1) the doc''s latest revision is on main; (2) the operator records a go/no-go on the prototype in this spec, with the criteria the doc proposes; (3) on go, file the prototype as its own sketch-first story. No implementation is authorized by this spike.'
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:00:59.333302288Z
-modified_at: 2026-11-07T19:32:22.556359500Z
+modified_at: 2026-11-07T20:12:57.836726580Z
 req_type: Spike
 history:
 - id: 01a1b762-d51a-7e60-9a90-b0d7b2833703
@@ -24,6 +24,12 @@ history:
   author: joe
   timestamp: 2026-11-07T19:32:22.791504407Z
   session_id: 01a1b77dde0e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1b7a4-90d2-7732-b83b-fc02821b5e75
+  author: joe
+  timestamp: 2026-11-07T20:12:57.938880808Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 filed_at:
