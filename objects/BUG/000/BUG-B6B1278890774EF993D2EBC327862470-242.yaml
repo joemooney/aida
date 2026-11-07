@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-242
 agreed_id: BUG-2476
 title: 'Test fixtures assume a native host: PID namespace, HOME/TMPDIR leakage, flock identity, Python selection, fake reviewer --version counted as a review'
 description: 'Source: work GDMS CI report. Valid tests fail inside CI containers. (1) About 40 test files and tests/lib/seat_grant.sh assume the host PID namespace: record the real namespace and opt in to AIDA_TRUST_PID_NAMESPACE only for fixtures the test owns. (2) test_env.rs/test_home.rs leak HOME/TMPDIR into child tests: give each child a unique HOME/TMPDIR plus a fence on the real home. (3) task_1717_store_writer_lock assumes newer flock tooling: use a device/inode identity that works on Jammy. (4) A missing Python silently skips (regen/score/roots.rs): fail unless the skip is explicitly allowed, and keep the configured Python in test_mcp_stdio.py. (5) The bug_2187 fake reviewer counts a --version probe as a review: make the probe side-effect free. (6) The drain_gate no-root test is nondeterministic, and worktree_holders'' negative control inherits ambient trust. Acceptance: the suite passes in an unprivileged Ubuntu 22.04 container as a non-host UID, with no new host-namespace trust. The work branch has reference fixes.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:21.829119860Z
-modified_at: 2026-11-07T04:39:14.116479624Z
+modified_at: 2026-11-07T05:30:01.328164600Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b47c-34f0-71e3-ab3e-ecfb0bea9e80
+  author: aida-session-start
+  timestamp: 2026-11-07T05:30:01.328160884Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 110130adbc78a756f5070181576814c206c0dd54
   branch: main
