@@ -1,5 +1,6 @@
 id: 01a1b49d-f550-7010-9e23-6ccdd6eeb71f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-925
+agreed_id: TASK-2972
 title: 'non-blocking (cosmetic): tests/test_store_mutation.py:51 starts the helper with…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2480, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:d4816620
 - from-review:PR-3573
 - kind:carried-forward
+history:
+- id: 01a1b4c0-d2a2-7be1-9323-f9171846d052
+  author: joe
+  timestamp: 2026-11-07T06:44:58.146453074Z
+  changes: []
 filed_at:
   code_sha: b11ebbd4c258f311cd7647a28eb7b389a532b274
   branch: main
