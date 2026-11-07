@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:37.400718782Z
-modified_at: 2026-11-07T17:41:20.536896230Z
+modified_at: 2026-11-07T17:52:46.804107409Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -45,6 +45,12 @@ comments:
   content: 'Round 2 implementation: MissingIdentity capacity now uses the existing reboot/foreign-TTL backstop (no new expiry clock). Retained queue-work/reviewer Child handles use shared ProcIdentity capture that permits unreaped exited children, without granting holder admission. Restored fast-exit reviewer coverage, added deterministic zombie-worker/core tests and subreaper adoption/no-signal coverage. Caller capture intentionally fails closed on incomplete procfs, now with host-retry diagnostic and documented policy. Changes remain uncommitted for native-seat host publication; targeted validation is running locally because this seat has no lane job runner.'
   created_at: 2026-11-07T17:41:20.536896230Z
   modified_at: 2026-11-07T17:41:20.536896230Z
+  session_id: 01a1b715615a
+- id: 01a1b724-38d4-76a1-b92c-b490f468cd4d
+  author: joe
+  content: 'Round 2 validation complete: 55 review_watch::tests passed (including the CI-failing live-discovery test and restored fast-exit reviewer case); 27 review_watch::supersede_tests passed (namespace/backstop, pid reuse, subreaper adoption/no-signal); all 3 core proc_identity tests passed (including retained exited child); proc_identity_legacy_decisions_do_not_expand passed; cargo fmt --all -- --check and git diff --check passed. Seven source/test/doc files remain uncommitted for host publication per native-seat instructions. PR-body policy note: caller capture intentionally fails closed on restricted/unverified procfs with host-retry guidance. Existing merge hold is unchanged; full CI was not rerun. Suggested host commit: [AI:codex] fix(review-watch): preserve legacy expiry and fast-exit child receipts (TASK-3365).'
+  created_at: 2026-11-07T17:52:46.804107409Z
+  modified_at: 2026-11-07T17:52:46.804107409Z
   session_id: 01a1b715615a
 history:
 - id: 01a1b59d-50c9-7572-acd5-ba4354eb1e1d
