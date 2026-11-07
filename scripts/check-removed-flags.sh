@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # trace:STORY-1028 | ai:codex
+# trace:TASK-1214 | ai:codex
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # A missing rg must fail the check, not read as "no matches".
 # trace:BUG-1665 | ai:claude
@@ -35,6 +36,8 @@ literal_patterns=(
   'aida usage --events'
   'aida usage --auto-complete'
   'aida usage --health'
+  'aida usage --failures'
+  'aida usage --pattern'
   'aida release --patch'
   'aida release --minor'
   'aida release --major'

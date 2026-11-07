@@ -246,20 +246,15 @@ mod bug_678_focus_rollup_tally_tests {
 /// surfaced on the statusline so it is never silently active. Precedence:
 /// `AIDA_FOCUS` env > `.aida/focus` > none.
 // — plain `//` keeps the marker out of `--help`.
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "focus")]
 pub(crate) struct FocusArgs {
     /// The epic or spec to focus on (SPEC-ID / agreed id). Omit to show
     /// the current focus.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-    #[clap(value_name = "SPEC", conflicts_with = "clear", value_parser = crate::spec_arg::spec_id)]
+    #[clap(value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
     pub target: Option<String>,
-    /// Clear the current focus (remove `.aida/focus`).
-    #[clap(long, hide = true)]
-    pub clear: bool,
-    /// Show the current focus (the default when no SPEC is given).
-    #[clap(long, hide = true)]
-    pub show: bool,
 
     /// Focus action.
     // trace:STORY-1028 | ai:codex
@@ -286,30 +281,11 @@ fn run_focus(
             let (store_path, backend) = (*store_path, *backend);
             match &args {
                 // — `aida focus` set/show/clear.
-                FocusArgs {
-                    target,
-                    clear,
-                    show,
-                    cmd,
-                } => {
+                FocusArgs { target, cmd } => {
                     let (clear, show) = match cmd {
                         Some(FocusCommand::Clear) => (true, false),
                         Some(FocusCommand::Show) => (false, true),
-                        None => {
-                            if *clear {
-                                note_hidden_alias(
-                                    concat!("aida focus ", "--clear"),
-                                    "aida focus clear",
-                                );
-                            }
-                            if *show {
-                                note_hidden_alias(
-                                    concat!("aida focus ", "--show"),
-                                    "aida focus show",
-                                );
-                            }
-                            (*clear, *show)
-                        }
+                        None => (false, false),
                     };
                     return crate::command_registry::returned(self::handle_focus_command(
                         target.as_deref(),

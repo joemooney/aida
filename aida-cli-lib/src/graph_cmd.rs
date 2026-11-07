@@ -369,31 +369,12 @@ mod tests {
 /// mode.
 // trace:STORY-489 | ai:claude
 // trace:TASK-778
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "graph")]
 pub(crate) struct GraphArgs {
     /// The root spec (SPEC-ID or UUID) to query from.
     pub id: Option<String>,
-
-    /// Transitive BlockedBy chain: every spec the root is directly or
-    /// indirectly blocked by.
-    #[clap(long, hide = true)]
-    pub blocked_by: bool,
-
-    /// Transitive Blocks chain: every spec the root directly or
-    /// indirectly blocks.
-    #[clap(long, hide = true)]
-    pub blocks: bool,
-
-    /// Parent/Child descendants of the root with a status rollup — the
-    /// epic-rollup view. The default when no mode flag is given.
-    #[clap(long, hide = true)]
-    pub tree: bool,
-
-    /// Reverse impact: every spec that is (transitively) blocked by the
-    /// root — what is at risk if the root slips.
-    #[clap(long, hide = true)]
-    pub impact: bool,
 
     /// Follow a custom (or built-in) relationship type by name, outgoing —
     /// e.g. `--follow begets`. Repeatable to walk several types at once.
@@ -436,10 +417,6 @@ fn run_graph(
             match &args {
                 GraphArgs {
                     id: graph_id,
-                    blocked_by,
-                    blocks,
-                    tree,
-                    impact,
                     follow,
                     depth,
                     json,
@@ -463,31 +440,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            if *blocked_by {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocked-by"),
-                                    "aida graph blocked-by <id>",
-                                );
-                            }
-                            if *blocks {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocks"),
-                                    "aida graph blocks <id>",
-                                );
-                            }
-                            if *tree {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--tree"),
-                                    "aida graph tree <id>",
-                                );
-                            }
-                            if *impact {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--impact"),
-                                    "aida graph impact <id>",
-                                );
-                            }
-                            (id, *blocked_by, *blocks, *tree, *impact)
+                            (id, false, false, true, false)
                         }
                     };
                     self::handle_graph_command(
@@ -505,10 +458,6 @@ fn run_graph(
             match &args {
                 GraphArgs {
                     id: graph_id,
-                    blocked_by,
-                    blocks,
-                    tree,
-                    impact,
                     follow,
                     depth,
                     json,
@@ -532,31 +481,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            if *blocked_by {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocked-by"),
-                                    "aida graph blocked-by <id>",
-                                );
-                            }
-                            if *blocks {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocks"),
-                                    "aida graph blocks <id>",
-                                );
-                            }
-                            if *tree {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--tree"),
-                                    "aida graph tree <id>",
-                                );
-                            }
-                            if *impact {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--impact"),
-                                    "aida graph impact <id>",
-                                );
-                            }
-                            (id, *blocked_by, *blocks, *tree, *impact)
+                            (id, false, false, true, false)
                         }
                     };
                     self::handle_graph_command(

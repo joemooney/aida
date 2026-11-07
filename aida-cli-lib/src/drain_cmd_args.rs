@@ -89,17 +89,13 @@ pub enum DrainCommand {
     /// and spec set — even though they write no per-phase progress file.
     /// Prints `No drain in progress.` (exit 0) when none is running. A
     /// drain-state file whose orchestrator process is no longer alive is
-    /// reported as stale — `--clear` removes it.
+    /// reported as stale — `aida drain clear` removes it.
     // trace:BUG-759 | ai:claude
+    // trace:TASK-1214 | ai:codex
     Status {
         /// Emit the drain state as JSON instead of the human summary.
         #[clap(long)]
         json: bool,
-        /// Remove a stale drain-state file (one whose orchestrator process is
-        /// no longer running). Refuses while the drain is still live — a live
-        /// orchestrator removes the file itself on exit.
-        #[clap(long, hide = true)]
-        clear: bool,
     },
 
     /// Remove a stale drain-state file.

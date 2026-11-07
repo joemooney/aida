@@ -260,7 +260,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             let json_output = output_format_is_json();
             drain_clear(&project_root, &status, json_output)
         }
-        DrainCommand::Status { json, clear } => {
+        DrainCommand::Status { json } => {
             // Resolve the shared `.aida/` root from any worktree so a child in
             // a sibling worktree reads the *orchestrator's* drain-state file.
             // On a resolution failure the lookup simply finds nothing — the
@@ -275,10 +275,6 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 .as_ref()
                 .filter(|outcome| outcome.should_show_in_drain_status(now));
             let json_output = *json || output_format_is_json();
-            if *clear {
-                note_hidden_alias(concat!("aida drain status ", "--clear"), "aida drain clear");
-                return drain_clear(&project_root, &status, json_output);
-            }
             // BUG-759: corroborate the launcher-held drain lock alongside the
             // orchestrator drain-state file. A live lock is authoritative when
             // the state file can't speak for the drain (absent, or a dead-pid

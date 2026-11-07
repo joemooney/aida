@@ -1753,48 +1753,91 @@ mod tests {
         cur.render_long_help().to_string()
     }
 
-    // trace:STORY-1028 | ai:codex
+    // trace:TASK-1214 | ai:codex
     #[test]
-    fn mode_flag_subcommands_parse_next_to_hidden_aliases() {
-        let cli = crate::command_registry::try_parse_from(["aida", "usage", "slowest"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
-            crate::usage_cmd::UsageArgs {
-                action: Some(UsageCommand::Slowest),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "usage", "--slowest"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
-            crate::usage_cmd::UsageArgs { slowest: true, .. }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "usage", "drains", "--pattern"])
-            .unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
-            crate::usage_cmd::UsageArgs {
-                action: Some(UsageCommand::Drains { pattern: true, .. }),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from([
+    fn retired_mode_flags_refuse_and_subcommands_parse() {
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--slowest"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "usage", "--unused", "30d"]).is_err()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--errors"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--events"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "usage", "--auto-complete"]).is_err()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--health"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--failures"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--pattern"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "graph", "--blocked-by"]).is_err()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--blocks"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--tree"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--impact"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "--patch"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "--minor"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "--major"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "--check"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "focus", "--clear"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "focus", "--show"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "--check"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "--diff"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "statusline", "--title"]).is_err()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "history", "--events"]).is_err());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "slowest"]).is_ok());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "usage", "unused", "30d"]).is_ok()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "errors"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "events"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "timeline"]).is_ok());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "usage", "drains", "--pattern"])
+                .is_ok()
+        );
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "usage", "drains", "--failures"])
+                .is_ok()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "usage", "health"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "patch"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "minor"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "major"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "release", "check"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "focus", "clear"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "focus", "show"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "check"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "diff"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "statusline", "title"]).is_ok());
+        assert!(crate::command_registry::try_parse_from(["aida", "history", "events"]).is_ok());
+        assert!(crate::command_registry::try_parse_from([
             "aida",
-            "usage",
-            "--auto-complete",
-            "--pattern",
+            "graph",
+            "blocked-by",
+            "STORY-1"
         ])
-        .unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
-            crate::usage_cmd::UsageArgs {
-                auto_complete: true,
-                pattern: true,
-                ..
-            }
-        ));
+        .is_ok());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "graph", "blocks", "STORY-1"]).is_ok()
+        );
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "graph", "tree", "STORY-1"]).is_ok()
+        );
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "graph", "impact", "STORY-1"]).is_ok()
+        );
+        assert!(crate::command_registry::try_parse_from(["aida", "drain", "clear"]).is_ok());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "drain", "status", "--clear"])
+                .is_err()
+        );
+    }
 
+    // trace:TASK-1214 | ai:codex
+    #[test]
+    fn mode_subcommand_shared_options_still_parse() {
         // TASK-1481: `timeline` is subcommand-only (no legacy `--timeline`
         // flag), and composes with the shared --cmd/--slower-than/--limit
         // flags the same way `events` does.
@@ -1820,107 +1863,6 @@ mod tests {
             }
             other => panic!("expected Usage{{ action: Timeline, .. }}, got {other:?}"),
         }
-
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"])
-                .unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::graph_cmd::GraphArgs>(),
-            crate::graph_cmd::GraphArgs {
-                cmd: Some(GraphCommand::BlockedBy { .. }),
-                ..
-            }
-        ));
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "graph", "STORY-1", "--blocked-by"])
-                .unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::graph_cmd::GraphArgs>(),
-            crate::graph_cmd::GraphArgs {
-                id: Some(_),
-                blocked_by: true,
-                ..
-            }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "release", "minor"]).unwrap();
-        assert!(matches!(
-            cli.command
-                .registered::<crate::upgrade_release::ReleaseArgs>(),
-            crate::upgrade_release::ReleaseArgs {
-                cmd: Some(ReleaseCommand::Minor),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "release", "--minor"]).unwrap();
-        assert!(matches!(
-            cli.command
-                .registered::<crate::upgrade_release::ReleaseArgs>(),
-            crate::upgrade_release::ReleaseArgs { minor: true, .. }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "focus", "clear"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::focus_cmd::FocusArgs>(),
-            crate::focus_cmd::FocusArgs {
-                cmd: Some(FocusCommand::Clear),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "focus", "--clear"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::focus_cmd::FocusArgs>(),
-            crate::focus_cmd::FocusArgs { clear: true, .. }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "drain", "clear"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::drain_cmd::DrainArgs>(),
-            crate::drain_cmd::DrainArgs {
-                inner: DrainCommand::Clear,
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "drain", "status", "--clear"])
-            .unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::drain_cmd::DrainArgs>(),
-            crate::drain_cmd::DrainArgs {
-                inner: DrainCommand::Status { clear: true, .. },
-                ..
-            }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "upgrade", "diff"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::upgrade_cmd::UpgradeArgs>(),
-            crate::upgrade_cmd::UpgradeArgs {
-                cmd: Some(UpgradeCommand::Diff),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "upgrade", "--diff"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::upgrade_cmd::UpgradeArgs>(),
-            crate::upgrade_cmd::UpgradeArgs { diff: true, .. }
-        ));
-
-        let cli = crate::command_registry::try_parse_from(["aida", "statusline", "title"]).unwrap();
-        assert!(matches!(
-            cli.command
-                .registered::<crate::statusline_cmd::StatuslineArgs>(),
-            crate::statusline_cmd::StatuslineArgs {
-                action: Some(StatuslineAction::Title),
-                ..
-            }
-        ));
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "statusline", "--title"]).unwrap();
-        assert!(matches!(
-            cli.command
-                .registered::<crate::statusline_cmd::StatuslineArgs>(),
-            crate::statusline_cmd::StatuslineArgs { title: true, .. }
-        ));
 
         // trace:TASK-1479 | ai:claude
         let cli = crate::command_registry::try_parse_from(["aida", "statusline"]).unwrap();
@@ -1950,20 +1892,6 @@ mod tests {
             "codex"
         ])
         .is_err());
-
-        let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::history::HistoryArgs>(),
-            crate::history::HistoryArgs {
-                cmd: Some(HistoryCommand::Events { .. }),
-                ..
-            }
-        ));
-        let cli = crate::command_registry::try_parse_from(["aida", "history", "--events"]).unwrap();
-        assert!(matches!(
-            cli.command.registered::<crate::history::HistoryArgs>(),
-            crate::history::HistoryArgs { events: true, .. }
-        ));
     }
 
     // BUG-1474: CLAUDE.md documents `aida history events [--id <spec-id|uuid>]`
