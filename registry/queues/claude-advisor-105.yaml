@@ -6,3 +6,11 @@
   added_at: 2026-11-07T22:10:48.352306671Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-105
+  requirement_id: 01a1b823-ebed-7a52-983d-56a53d487aa9
+  position: 4000
+  added_by: claude-advisor-105
+  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
+  added_at: 2026-11-07T22:32:15.860950478Z
+  for_role: reviewer
+  added_by_machine: imac
