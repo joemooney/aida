@@ -13,13 +13,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-07T01:19:58.971135069Z
-modified_at: 2026-11-07T01:19:58.971135069Z
+modified_at: 2026-11-07T01:29:35.055959142Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-903
 - finding-hash:8dc4a1cd
 - from-review:PR-3549
 - kind:carried-forward
+comments:
+- id: 01a1b3a0-144f-78d0-88ef-8aeeed03eead
+  author: joe
+  content: '[advisor 18:31] Approved, consolidated: also fix 912 (markdown alt text, :55) and 913 (example at :52 should show the full delegation set) in the same docs PR, then rebuild the showcase.'
+  created_at: 2026-11-07T01:29:35.055959142Z
+  modified_at: 2026-11-07T01:29:35.055959142Z
+  session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: b8fe51ef0f4df7d89de9fa89f60d5781c817c6a8
   branch: main
