@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T04:55:36.927556627Z
+modified_at: 2026-11-07T04:55:39.522648898Z
 req_type: Task
 tags:
 - architecture
@@ -167,6 +167,18 @@ comments:
   created_at: 2026-11-07T04:25:25.957509403Z
   modified_at: 2026-11-07T04:25:25.957509403Z
   session_id: 01a1b4401c1f
+- id: 01a1b45c-bf02-7350-8cf4-088158714b63
+  author: joe
+  content: |-
+    [advisor 2026-11-06 22:05] SKETCH SIGNOFF (resolves finding 4 and TASK-3225 amendment 2) on docs/plans/2026-11-06-task-3223-mediated-transactions.md v1 (#3563 @621c833).
+    APPROVED: the host-owned durable redo transaction (sketch invariants 1-5), not a new transactional storage representation. The record is written and fsynced before any postimage is installed; recovery runs under with_store_write_lock; OutcomeUnknown plus quarantine on unexpected bytes; never replay business logic.
+    RULING on reader/writer admission (narrower than the sketch, on purpose): (a) WRITERS: every canonical writer already takes with_store_write_lock, so recovery runs at lock acquisition. Whoever takes the lock first completes or quarantines outstanding transactions before doing its own work. No separate admission protocol. (b) READERS: lock-free readers keep today's guarantee (each file is replaced atomically; multi-file views can already be momentarily inconsistent under update_atomically_tracked). No reader admission is added; a reader that finds an outstanding transaction may report the store as recovering, but needn't block. (c) OLD BINARIES: single user, one live binary (memory: single-user surgery OK). Put the transaction directory behind a format-version marker; a newer binary refuses an unknown version. No compatibility shim for older binaries.
+    SCOPE SPLIT: TASK-3223 is now S2a: the redo transaction, routing, raw-write denial and lane-private cache for CANONICAL-OBJECT verbs only (comment add, edit fields and the other inventory writers on canonical objects). own_claim and queue_done keep refusing with UnsupportedOperation and move to TASK-3326 (S2b, blocked by this task). The full S2 contract is otherwise unchanged; nothing is silently narrowed.
+    PUBLICATION: the advisor is closing #3563 unmerged, so its closing commit subjects never reach main. The implementation PR carries the sketch doc (recover it with: git show origin/task-b6b1278890774ef993d2ebc327862470-880:docs/plans/2026-11-06-task-3223-mediated-transactions.md), updated with this ruling and marked APPROVED. Mode guided -> drive.
+  created_at: 2026-11-07T04:55:39.522648898Z
+  modified_at: 2026-11-07T04:55:39.522648898Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
