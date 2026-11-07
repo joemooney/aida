@@ -789,6 +789,9 @@ Contained Codex file-based ChatGPT launches shorten the delegated child grant to
 access-token expiry minus 300 seconds when necessary. The parent grant is unchanged.
 Launch diagnostics report requested and effective seconds and token expiry.
 Trusted default-branch `[contained] codex_min_grant_secs = 1800` sets the minimum
-usable launch lifetime (positive integer seconds, default 30 minutes). A shorter
-usable lifetime refuses with token expiry and host `codex login` guidance.
-`aida doctor` reports remaining token life without refreshing or exposing tokens.
+usable launch lifetime when the token shortens the grant (positive integer seconds,
+default 30 minutes). Only a token-capped lifetime below this floor refuses with
+token expiry and host `codex login` guidance; an already shorter grant with an ample
+token remains valid. `aida config show/menu` displays this trusted, read-only key.
+`aida doctor` reports remaining token life or “expired” without refreshing or exposing
+tokens, both unfiltered and under `--category permission-posture`.

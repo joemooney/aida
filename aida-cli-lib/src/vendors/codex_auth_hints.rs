@@ -14,7 +14,12 @@ pub(crate) fn launch_lifetime(requested: i64, effective: i64, deadline: i64, exp
     format!("contained Codex ChatGPT grant: requested {requested}s, effective {effective}s, deadline {deadline} (Unix seconds), token expiry {exp} (300s margin)")
 }
 pub(crate) fn token_lifetime(exp: i64, left: i64) -> String {
-    format!("ChatGPT token: {left}s remaining; expiry {exp} (Unix seconds); run `codex login` on the host to renew")
+    let status = if left <= 0 {
+        "expired".to_string()
+    } else {
+        format!("{left}s remaining")
+    };
+    format!("ChatGPT token: {status}; expiry {exp} (Unix seconds); run `codex login` on the host to renew")
 }
 pub(crate) fn token_unavailable(error: &dyn std::fmt::Display) -> String {
     format!("ChatGPT token: unavailable ({error}); run `codex login` on the host")

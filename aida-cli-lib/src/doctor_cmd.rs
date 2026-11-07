@@ -665,17 +665,24 @@ pub(crate) struct DoctorReport {
 }
 
 // trace:BUG-2486 | ai:codex — bounded metadata-only read; no refresh or token output.
-fn codex_token_lifetime(env: &aida_core::exec_context::Environment) -> Option<String> {
+fn codex_token_lifetime(
+    env: &aida_core::exec_context::Environment,
+    category: Option<&str>,
+) -> Result<Option<String>> {
+    if !doctor_category_selected(category, "permission-posture")? {
+        return Ok(None);
+    }
     let home = env
         .get(crate::vendors::codex_auth_hints::HOME_ENV)
         .map(std::path::PathBuf::from)
-        .or_else(|| {
-            crate::home_dir().map(|h| h.join(crate::vendors::codex_auth_hints::HOME_DIR))
-        })?;
+        .or_else(|| crate::home_dir().map(|h| h.join(crate::vendors::codex_auth_hints::HOME_DIR)));
+    let Some(home) = home else {
+        return Ok(None);
+    };
     if !home.join("auth.json").try_exists().unwrap_or(true) {
-        return None;
+        return Ok(None);
     }
-    Some(
+    Ok(Some(
         match crate::launch::contained::codex_auth::token_expiry(&home, unsafe { libc::getuid() }) {
             Ok(exp) => crate::vendors::codex_auth_hints::token_lifetime(
                 exp,
@@ -683,7 +690,7 @@ fn codex_token_lifetime(env: &aida_core::exec_context::Environment) -> Option<St
             ),
             Err(error) => crate::vendors::codex_auth_hints::token_unavailable(&error),
         },
-    )
+    ))
 }
 
 impl DoctorReport {
@@ -1215,8 +1222,10 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
 
     let mut report = DoctorReport::from_findings(findings);
-    report.codex_token_lifetime =
-        codex_token_lifetime(&aida_core::exec_context::Environment::capture());
+    report.codex_token_lifetime = codex_token_lifetime(
+        &aida_core::exec_context::Environment::capture(),
+        opts.category.as_deref(),
+    )?;
     // trace:TASK-2631 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), "permission-posture")? {
         report.permission_postures = crate::config_cmd::permission_posture_report(&project_root)
@@ -16428,7 +16437,13 @@ mod bug_2486_tests {
             "CODEX_HOME".into(),
             home.path().as_os_str().into(),
         )]);
-        let lifetime = codex_token_lifetime(&env).unwrap();
+        assert!(codex_token_lifetime(&env, Some("git-hooks"))
+            .unwrap()
+            .is_none());
+        assert!(codex_token_lifetime(&env, Some("permission-posture"))
+            .unwrap()
+            .is_some());
+        let lifetime = codex_token_lifetime(&env, None).unwrap().unwrap();
         assert!(lifetime.contains("remaining") && lifetime.contains(&exp.to_string()));
         let mut report = DoctorReport::default();
         report.codex_token_lifetime = Some(lifetime);
@@ -16439,8 +16454,15 @@ mod bug_2486_tests {
             assert!(rendered.contains("codex_token_lifetime"));
             assert!(!rendered.contains("secret-") && !rendered.contains(&access));
         }
+        let expired = serde_json::json!({"tokens":{"access_token":format!("e30.{}.secret-signature",
+            URL_SAFE_NO_PAD.encode("{\"exp\":1}"))}});
+        std::fs::write(&path, expired.to_string()).unwrap();
+        let expired = codex_token_lifetime(&env, None).unwrap().unwrap();
+        assert!(expired.contains("expired"));
+        assert!(!expired.contains("remaining"));
+        assert!(!expired.contains("secret-"));
         std::fs::write(&path, "secret-malformed-credential").unwrap();
-        let invalid = codex_token_lifetime(&env).unwrap();
+        let invalid = codex_token_lifetime(&env, None).unwrap().unwrap();
         assert!(invalid.contains("unavailable") && invalid.contains("codex login"));
         assert!(!invalid.contains("secret-"));
     }

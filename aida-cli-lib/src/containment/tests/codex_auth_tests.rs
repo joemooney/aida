@@ -787,6 +787,14 @@ fn bug_2486_capped_floor_and_ample_lifetimes() {
         codex_auth::grant_deadline(now, now + 7200, 0, 1800).unwrap(),
         now + 3600
     );
+    // A short inherited grant is allowed when the token does not shorten it,
+    // including equality at the token's safe deadline.
+    for exp in [now + 86400, now + 900] {
+        assert_eq!(
+            codex_auth::grant_deadline(now, exp, 600, 1800).unwrap(),
+            now + 600
+        );
+    }
     let home = tempfile::tempdir().unwrap();
     let exp = chrono::Utc::now().timestamp() + 36000;
     host_auth(home.path(), exp);
@@ -798,4 +806,32 @@ fn bug_2486_capped_floor_and_ample_lifetimes() {
         prepare_auth(home.path(), 86400).unwrap().deadline,
         exp - 300
     );
+}
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_trusted_floor_policy_and_launch_diagnostic() {
+    let default: toml::Value = toml::from_str("").unwrap();
+    assert_eq!(codex_auth::minimum_grant(&default).unwrap(), 1800);
+    let policy: toml::Value = toml::from_str("[contained]\ncodex_min_grant_secs = 600").unwrap();
+    let floor = codex_auth::minimum_grant(&policy).unwrap();
+    assert_eq!(floor, 600);
+    let home = tempfile::tempdir().unwrap();
+    let exp = chrono::Utc::now().timestamp() + 1200;
+    host_auth(home.path(), exp);
+    assert!(prepare_auth(home.path(), 86400).is_err());
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 86400, floor).unwrap();
+    assert_eq!(auth.deadline, exp - 300);
+    let effective = auth.deadline - chrono::Utc::now().timestamp();
+    assert!(effective > 600 && effective <= 900);
+    assert_eq!(crate::vendors::codex_auth_hints::launch_lifetime(86400, effective, auth.deadline, auth.expires_at),
+        format!("contained Codex ChatGPT grant: requested 86400s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", exp - 300));
+    for value in ["0", "-1", "1.5", "\"600\"", "true"] {
+        let policy: toml::Value =
+            toml::from_str(&format!("[contained]\ncodex_min_grant_secs = {value}")).unwrap();
+        assert_eq!(
+            codex_auth::minimum_grant(&policy).unwrap_err().to_string(),
+            crate::vendors::codex_auth_hints::MIN_GRANT_INVALID
+        );
+    }
 }

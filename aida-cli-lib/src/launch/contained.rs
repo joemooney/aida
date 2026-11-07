@@ -1010,21 +1010,12 @@ impl PreparedLaunch {
                         codex_auth::require_program(&program, codex_sha256)?;
                         pinned_program = Some(program);
                         // trace:BUG-2486 | ai:codex — pinned trusted policy only.
-                        let floor = policy
-                            .get("contained")
-                            .and_then(|c| c.get(crate::vendors::codex_auth_hints::MIN_GRANT_KEY))
-                            .map(|v| {
-                                v.as_integer()
-                                    .filter(|n| *n > 0)
-                                    .context(crate::vendors::codex_auth_hints::MIN_GRANT_INVALID)
-                            })
-                            .transpose()?
-                            .unwrap_or(codex_auth::DEFAULT_MIN_GRANT_SECS);
+                        let floor = codex_auth::minimum_grant(&policy)?;
                         let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
                         if !grant.is_empty() {
                             crate::gate::seat_authority::cap_launch_child_expiry(
                                 &grant,
-                                auth.expires_at.saturating_sub(300),
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
                             )?;
                         }
                         let effective =
@@ -1034,7 +1025,7 @@ impl PreparedLaunch {
                             crate::vendors::codex_auth_hints::launch_lifetime(
                                 ttl,
                                 effective,
-                                auth.deadline,
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
                                 auth.expires_at
                             )
                         );

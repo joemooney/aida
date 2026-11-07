@@ -60,7 +60,7 @@ pub(crate) fn resolve_native_program(program: &Path) -> Result<PathBuf> {
 
 pub(super) const RELAUNCH: &str =
     "contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch";
-const MARGIN: i64 = 300;
+pub(super) const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
 pub(crate) const DEFAULT_MIN_GRANT_SECS: i64 = 1800;
 const BOUND: usize = 65536;
@@ -180,15 +180,30 @@ fn access_expiry(value: &serde_json::Value) -> Result<i64> {
         .context("ChatGPT access-token expiry missing")
 }
 
+// trace:BUG-2486 | ai:codex — resolve only the caller's pinned trusted policy.
+pub(super) fn minimum_grant(policy: &toml::Value) -> Result<i64> {
+    policy
+        .get("contained")
+        .and_then(|c| c.get(hints::MIN_GRANT_KEY))
+        .map(|v| {
+            v.as_integer()
+                .filter(|n| *n > 0)
+                .context(hints::MIN_GRANT_INVALID)
+        })
+        .transpose()
+        .map(|floor| floor.unwrap_or(DEFAULT_MIN_GRANT_SECS))
+}
+
 // trace:BUG-2486 | ai:codex
 pub(super) fn grant_deadline(now: i64, exp: i64, ttl: i64, floor: i64) -> Result<i64> {
     anyhow::ensure!(floor > 0, "{}", hints::MIN_GRANT_INVALID);
     let requested = now
         .checked_add(if ttl > 0 { ttl } else { BASELINE })
         .context("ChatGPT deadline invalid")?;
-    let deadline = requested.min(exp.saturating_sub(MARGIN));
+    let cap = exp.saturating_sub(MARGIN);
+    let deadline = requested.min(cap);
     anyhow::ensure!(
-        deadline.saturating_sub(now) >= floor,
+        cap >= requested || deadline.saturating_sub(now) >= floor,
         "{}",
         hints::floor_refusal(exp, exp.saturating_sub(now), floor)
     );
