@@ -407,6 +407,20 @@ The TUI uses the same selector-only `control_env` policy. Resource validation
 grants no write authority by itself.
 <!-- trace:STORY-2326 | ai:codex -->
 
+`aida-core/src/vendors/` owns the pure `profile(LaunchVendor)` registry, with
+identity spellings, interactive prompt transport, hook paths and closed
+wake/resume/background/sandbox capabilities. `launch_policy` re-exports the
+existing vendor key. Session identity, wake selection, resume eligibility and
+operator hints consume these descriptors; `aida-cli-lib/src/vendors/` renders
+vendor-facing hints. The effectful `launch/profile.rs` adapter references the
+same descriptor and retains the existing finalizer. Capabilities do not admit
+launches or grant containment credit; AGY's outer-only containment candidate
+still refuses pending conformance. Headless argv/settings, hook event/backend
+and resume/fork backend migration, the effectful adapter move and the shrinking
+production vendor-literal ratchet remain later slices. See the
+[approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
+<!-- trace:STORY-2539 | ai:codex -->
+
 ### The four layers
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/internal/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
