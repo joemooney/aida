@@ -9,6 +9,10 @@
     {
       "at": "2026-11-07T09:52:15.674276976Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-07T09:52:22.292092639Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -57,6 +61,16 @@
     },
     {
       "ts": "2026-11-07T09:52:15.516986485Z",
+      "spec": "BUG-2481",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5a0dff1aa07f227d8d9e37085b51bfca25cd4430",
+        "pr": 3581,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-07T09:52:22.131624012Z",
       "spec": "BUG-2481",
       "kind": {
         "event": "SpecCompleted",
