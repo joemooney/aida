@@ -6,7 +6,8 @@
 runs its `build` job under GitLab with the same lane, full-CI selection, job/step
 environment, Bash error handling, and failure cleanup conditions. It interprets
 only the expressions currently used by that job; unknown contexts, actions,
-functions, shell substitutions or step settings refuse before commands run.
+functions, shell substitutions or job/strategy/matrix/step settings refuse before
+commands run. String comparisons and `startsWith` ignore case, as on GitHub.
 
 The root `.gitlab-ci.yml` includes `.gitlab/ci/gdma.yml`. Its seven jobs run on
 pushes to retained relay branches `ci/<positive attempt number>`. Existing
@@ -39,8 +40,10 @@ local Git diff, and artifact upload to GitLab artifacts. It does not download
 GitHub Actions or contact GitHub APIs. A newly introduced action must receive an
 explicit mapping before it can run. Shell guards may still fetch from `origin`,
 including the `aida-store` branch; provide the same repository history and store
-access they need on upstream CI. Keep a fresh checkout per job. The lane requests
-full history and fetches the default branch for diff/merge-base checks. MR runs map GitLab's
+access they need on upstream CI. Each job enforces a fresh checkout with
+`GIT_STRATEGY: clone`, overriding the root pipeline's persistent-fetch policy.
+The lane requests full history and fetches the default branch for diff/merge-base
+checks. MR runs map GitLab's
 target branch to `github.base_ref` and its event to `pull_request`; relay pushes
 map to `push`. Missing/zero push baseline selects full CI conservatively.
 
@@ -49,6 +52,10 @@ points to `target/ci-summary.md` for the existing shell reporting steps. Reports
 logs and timing files are copied to ignored `.ci-artifacts/` even after failure;
 GitLab imports `.ci-artifacts/nextest/ci/junit-*.xml` as JUnit reports. A failed
 command or timeout keeps the job red while status-qualified cleanup steps run.
+Before execution, the adapter removes previous collected artifacts and matching
+reports/logs/timings from `target`, so an early failure cannot upload old results.
+The adapter applies `timeout-minutes` as a per-step subprocess cap (using the job
+value as the default); GitLab's own `timeout: 40m` enforces the whole-job budget.
 
 ## Optional source policy
 

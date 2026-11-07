@@ -10,6 +10,7 @@
   # Do not inherit the default GitLab pipeline's host-specific preparation.
   before_script: []
   variables:
+    GIT_STRATEGY: clone
     GIT_DEPTH: "0"
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   rules:

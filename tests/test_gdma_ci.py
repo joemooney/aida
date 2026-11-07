@@ -1,7 +1,6 @@
 # trace:STORY-2606 | ai:codex
 import importlib.util
 from pathlib import Path
-import os
 import subprocess
 import tempfile
 import unittest
@@ -24,6 +23,22 @@ class ExpressionTests(unittest.TestCase):
         self.assertEqual(adapter.condition("${{ matrix.shard == 'gates' && '1' || '' }}", context), "1")
         self.assertFalse(adapter.condition("matrix.shard == 'contracts'", context))
         self.assertTrue(adapter.condition("!cancelled() && (true || false)", context))
+
+    def test_string_comparisons_ignore_case(self):
+        current = adapter.context("gates", True)
+        self.assertTrue(adapter.condition("matrix.shard == 'GATES'", current))
+        self.assertFalse(adapter.condition("runner.os != 'LINUX'", current))
+        self.assertTrue(adapter.condition("startsWith(runner.os, 'LIN')", current))
+
+    def test_context_uses_injected_gitlab_environment(self):
+        current = adapter.context("gates", True, environ={
+            "CI_PIPELINE_SOURCE": "merge_request_event",
+            "CI_MERGE_REQUEST_DIFF_BASE_SHA": "a" * 40,
+            "CI_COMMIT_BEFORE_SHA": "b" * 40,
+        })
+        self.assertEqual(current["github.event_name"], "pull_request")
+        self.assertEqual(current["github.event.pull_request.base.sha"], "a" * 40)
+        self.assertEqual(current["github.event.before"], "b" * 40)
 
     def test_prefix_function(self):
         self.assertTrue(adapter.condition("startsWith(matrix.shard, 'lib-')", adapter.context("lib-0", True)))
@@ -68,7 +83,7 @@ class ExpressionTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.TestCase):
-    def run_workflow(self, steps, lane="gates", full=True, before="a" * 40):
+    def run_workflow(self, steps, lane="gates", full=True, before="a" * 40, job_settings=None, stale=False):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -77,13 +92,20 @@ class ExecutionTests(unittest.TestCase):
         workflow = {"env": {"GLOBAL_VALUE": "global"}, "jobs": {"build": {
             "strategy": {"matrix": {"shard": ["gates"]}},
             "env": {"JOB_VALUE": "${{ matrix.shard }}"}, "steps": steps}}}
+        workflow["jobs"]["build"].update(job_settings or {})
+        if stale:
+            for name in (".ci-artifacts/old.xml", "target/nextest/ci/junit-old.xml",
+                         "target/test-run.log", "target/test-timings.json",
+                         "target/changed-files.txt", "target/cargo-timings/old.html",
+                         "target/ci-summary.md"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("stale")
         (workflows / "ci.yml").write_text(yaml.safe_dump(workflow))
         with patch.object(adapter, "ROOT", root), \
-                patch.dict(os.environ, {"CI_COMMIT_BEFORE_SHA": before,
-                                       "CI_PIPELINE_SOURCE": "push"}), \
-                patch.object(adapter, "full_ci", return_value=full), \
-                patch("sys.argv", ["run-upstream.py", "--lane", lane]):
-            code = adapter.main()
+                patch.object(adapter, "full_ci", return_value=full):
+            code = adapter.main(["--lane", lane], environ={
+                "CI_COMMIT_BEFORE_SHA": before, "CI_PIPELINE_SOURCE": "push"})
         return code, root
 
     def test_failed_command_skips_ordinary_steps_but_runs_cleanup_and_collects_junit(self):
@@ -135,6 +157,34 @@ class ExecutionTests(unittest.TestCase):
                     self.run_workflow([{"run": "touch premature"}, step])
                 run.assert_not_called()
 
+    def test_unsupported_job_settings_refuse_before_first_command(self):
+        settings = [{key: value} for key, value in (
+            ("container", "image"), ("services", {}), ("if", "false"),
+            ("continue-on-error", True), ("needs", ["other"]),
+            ("runs-on", "windows-latest"), ("defaults", {"working-directory": "elsewhere"}),
+        )]
+        settings += [{"strategy": {"matrix": {"shard": ["gates"], key: value}}}
+                     for key, value in (("include", []), ("exclude", []),
+                                        ("unknown", []), ("os", ["windows-latest"]))]
+        settings.append({"strategy": {"matrix": {"shard": ["gates"]}, "max-parallel": 2}})
+        for job_settings in settings:
+            with self.subTest(settings=job_settings), patch.object(adapter.subprocess, "run") as run:
+                with self.assertRaises(ValueError):
+                    self.run_workflow([{"run": "touch premature"}], job_settings=job_settings)
+                run.assert_not_called()
+
+    def test_failure_before_tests_cannot_collect_previous_run_artifacts(self):
+        code, root = self.run_workflow([{"run": "exit 1"}], stale=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(list((root / ".ci-artifacts").rglob("*")), [])
+        self.assertFalse((root / "target/nextest/ci/junit-old.xml").exists())
+        self.assertFalse((root / "target/test-run.log").exists())
+        self.assertFalse((root / "target/ci-summary.md").exists())
+        # GitLab after_script collection must not resurrect old reports either.
+        with patch.object(adapter, "ROOT", root):
+            self.assertEqual(adapter.main(["--collect"], environ={}), 0)
+        self.assertEqual(list((root / ".ci-artifacts").rglob("*")), [])
+
     def test_timeout_fails_and_allows_cleanup(self):
         with patch.object(adapter.subprocess, "run", side_effect=[
                 subprocess.TimeoutExpired("fixture", 1), subprocess.CompletedProcess([], 0)]):
@@ -154,6 +204,7 @@ class ExecutionTests(unittest.TestCase):
             job = config[f"gdma-ci: [{lane}]"]
             self.assertEqual(job["variables"]["GDMA_LANE"], lane)
             self.assertEqual(job["extends"], ".gdma-job")
+        self.assertEqual(config[".gdma-job"]["variables"]["GIT_STRATEGY"], "clone")
         self.assertEqual(config[".gdma-job"]["image"], "$GDMA_CI_IMAGE")
         self.assertEqual(config[".gdma-job"]["tags"], ["$GDMA_RUNNER_TAG"])
 

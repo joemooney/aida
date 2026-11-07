@@ -25,6 +25,10 @@ ACTIONS = {
     "actions/checkout", "dorny/paths-filter", "dtolnay/rust-toolchain",
     "Swatinem/rust-cache", "taiki-e/install-action", "actions/upload-artifact",
 }
+ARTIFACT_PATTERNS = (
+    "test-run.log", "test-timings.json", "changed-files.txt",
+    "nextest/ci/junit-*.xml", "cargo-timings/*", "ci-summary.md",
+)
 SUBSTITUTIONS = {
     "matrix.shard": "${GDMA_LANE}",
     "github.base_ref": "${GDMA_BASE_REF}",
@@ -80,10 +84,14 @@ class Expression:
 
     def comparison(self):
         result = self.atom()
-        if self.take("=="):
-            return result == self.atom()
-        if self.take("!="):
-            return result != self.atom()
+        for operator in ("==", "!="):
+            if self.take(operator):
+                right = self.atom()
+                # GitHub compares expression strings without regard to case.
+                if isinstance(result, str) and isinstance(right, str):
+                    result, right = result.lower(), right.lower()
+                equal = result == right
+                return equal if operator == "==" else not equal
         return result
 
     def atom(self):
@@ -108,7 +116,7 @@ class Expression:
                 self.require(",")
                 right = self.disjunction()
                 self.require(")")
-                return str(left).startswith(str(right))
+                return str(left).lower().startswith(str(right).lower())
             raise ValueError(f"Unsupported workflow function {token}")
         if token not in self.context:
             raise ValueError(f"Unknown workflow context {token}")
@@ -140,17 +148,18 @@ def full_ci(base):
     ) for path in paths)
 
 
-def event_name():
-    return "pull_request" if os.environ.get("CI_PIPELINE_SOURCE") == "merge_request_event" else "push"
+def event_name(environ):
+    return "pull_request" if environ.get("CI_PIPELINE_SOURCE") == "merge_request_event" else "push"
 
 
-def context(lane, full, failed=False):
+def context(lane, full, failed=False, environ=None):
+    environ = {} if environ is None else environ
     return {
         "matrix.shard": lane, "runner.os": "Linux",
-        "github.event_name": event_name(),
-        "github.event.pull_request.base.sha": os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
+        "github.event_name": event_name(environ),
+        "github.event.pull_request.base.sha": environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
         "github.event.merge_group.base_sha": "",
-        "github.event.before": os.environ.get("CI_COMMIT_BEFORE_SHA", ""),
+        "github.event.before": environ.get("CI_COMMIT_BEFORE_SHA", ""),
         "steps.changes.outputs.full_ci": "true" if full else "false",
         "cancelled": False, "always": True, "success": not failed,
         "true": True, "false": False,
@@ -169,6 +178,21 @@ def step_environment(step, current, parent):
 
 
 def validate_job(job, current):
+    # trace:STORY-2606 | ai:codex
+    if set(job) - {"name", "runs-on", "defaults", "timeout-minutes", "env", "strategy", "steps"}:
+        raise ValueError("Unsupported upstream job settings")
+    strategy = job.get("strategy", {})
+    if set(strategy) - {"fail-fast", "matrix"}:
+        raise ValueError("Unsupported upstream strategy settings")
+    matrix = strategy.get("matrix", {})
+    if set(matrix) - {"os", "shard"}:
+        raise ValueError("Unsupported upstream matrix settings")
+    if matrix.get("os", ["ubuntu-latest"]) != ["ubuntu-latest"]:
+        raise ValueError("Unsupported upstream matrix OS")
+    if job.get("runs-on", "${{ matrix.os }}") != "${{ matrix.os }}":
+        raise ValueError("Unsupported upstream runner")
+    if set(job.get("defaults", {})) - {"run"}:
+        raise ValueError("Unsupported upstream defaults")
     allowed = {"name", "id", "if", "run", "uses", "with", "env", "shell", "timeout-minutes"}
     step_environment(job, current, {})
     if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
@@ -197,11 +221,22 @@ def validate_job(job, current):
             raise ValueError("Unmapped upstream step")
 
 
+def clean_artifacts():
+    """Remove previous-run reports before any command can fail or skip tests."""
+    # trace:STORY-2606 | ai:codex
+    destination = ROOT / ".ci-artifacts"
+    if destination.exists():
+        shutil.rmtree(destination)
+    for pattern in ARTIFACT_PATTERNS:
+        for source in (ROOT / "target").glob(pattern):
+            if source.is_file():
+                source.unlink()
+
+
 def collect_artifacts():
     destination = ROOT / ".ci-artifacts"
     destination.mkdir(exist_ok=True)
-    for pattern in ("test-run.log", "test-timings.json", "changed-files.txt",
-                    "nextest/ci/junit-*.xml", "cargo-timings/*", "ci-summary.md"):
+    for pattern in ARTIFACT_PATTERNS:
         for source in (ROOT / "target").glob(pattern):
             if source.is_file():
                 relative = source.relative_to(ROOT / "target")
@@ -210,11 +245,12 @@ def collect_artifacts():
                 shutil.copyfile(source, target)
 
 
-def main():
+def main(argv=None, environ=None):
+    environ = dict(os.environ if environ is None else environ)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lane", default=os.environ.get("GDMA_LANE", "gates"))
+    parser.add_argument("--lane", default=environ.get("GDMA_LANE", "gates"))
     parser.add_argument("--collect", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.collect:
         collect_artifacts()
         return 0
@@ -226,30 +262,31 @@ def main():
     # Validate the complete input before any upstream command can have effects.
     for full in (True, False):
         for failed in (True, False):
-            validate_job(job, context(args.lane, full, failed))
+            validate_job(job, context(args.lane, full, failed, environ))
+    clean_artifacts()
     full = True
-    base_ref = os.environ.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or os.environ.get("CI_DEFAULT_BRANCH", "main")
-    if os.environ.get("CI_PIPELINE_SOURCE") == "merge_request_event":
+    base_ref = environ.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or environ.get("CI_DEFAULT_BRANCH", "main")
+    if environ.get("CI_PIPELINE_SOURCE") == "merge_request_event":
         full = full_ci(f"origin/{base_ref}")
     else:
-        before = os.environ.get("CI_COMMIT_BEFORE_SHA", "")
+        before = environ.get("CI_COMMIT_BEFORE_SHA", "")
         if re.fullmatch(r"[0-9a-f]{40}", before) and before != "0" * 40:
             full = full_ci(before)
     # First/new-branch pushes have no baseline: conservatively run the full suite.
-    environment = os.environ.copy()
+    environment = environ.copy()
     environment["GDMA_LANE"] = args.lane
     environment["GDMA_BASE_REF"] = base_ref
-    environment["GDMA_EVENT_NAME"] = event_name()
+    environment["GDMA_EVENT_NAME"] = event_name(environ)
     (ROOT / "target").mkdir(exist_ok=True)
     environment["GITHUB_STEP_SUMMARY"] = str(ROOT / "target/ci-summary.md")
     environment.pop("AIDA_SESSION_ROLE", None)
-    initial = context(args.lane, full)
+    initial = context(args.lane, full, environ=environ)
     environment = step_environment(workflow, initial, environment)
     environment = step_environment(job, initial, environment)
     failed = False
     for step in job["steps"]:
         name = step.get("name", step.get("uses", "upstream step"))
-        current = context(args.lane, full, failed)
+        current = context(args.lane, full, failed, environ)
         expression = step.get("if", "true")
         selected = bool(condition(expression, current))
         # GitHub's status functions permit cleanup/reporting after an earlier failure.
@@ -267,6 +304,7 @@ def main():
         if "run" not in step:
             raise ValueError(f"Unmapped upstream step: {name}")
         print(f"\n=== {name} ===", flush=True)
+        # Step subprocess caps are separate; GitLab enforces the whole-job 40m budget.
         timeout = step.get("timeout-minutes", job.get("timeout-minutes", 40)) * 60
         try:
             command = shell(step["run"])
