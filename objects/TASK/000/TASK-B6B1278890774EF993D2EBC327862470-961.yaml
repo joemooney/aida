@@ -1,0 +1,21 @@
+id: 01a1b862-584a-7491-b07f-b81dcf3bf545
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
+agreed_id: TASK-3429
+title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
+description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-07T23:40:15.306412624Z
+modified_at: 2026-11-07T23:40:15.306412624Z
+req_type: Task
+filed_at:
+  code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a7fe186bdc
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
