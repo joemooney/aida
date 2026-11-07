@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-07T07:25:39.894561013Z
+modified_at: 2026-11-07T07:25:46.809686972Z
 req_type: Story
 relationships:
 - rel_type:
@@ -436,6 +436,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 4 (AC3, Refs STORY-2401): journal, checkpoints, recovery and SIGKILL resume look sound and the round-7 findings are addressed, but CI lib-1 is red at a02fe289da9 because of a test this PR added (raw current_exe ratchet). AC1/AC2 shipped in slices 1-3; AC4 is slice 5. Fix the ratchet break plus the minor items, then re-review.. No triage reason was given.'
   created_at: 2026-11-07T07:25:39.894554669Z
   modified_at: 2026-11-07T07:25:39.894554669Z
+  session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b4e6-2eda-7a43-9e22-bc71948a4abc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3533):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a02fe289da9f
+    Recorded: 2026-11-07T07:24:57.679519657+00:00
+    Findings:
+    1. [major] CI red at a02fe289da9: CI (lib-1) fails orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65, TASK-1262 ratchet). Cause: the new test pr_train_journal_killed_merge_and_eject_resume_without_replay (aida-cli-lib/src/tests/story_1690_train_tests.rs ~3766) spawns its crash child with std::process::Command::new(std::env::current_exe().unwrap()). The ratchet allows zero raw lookups outside aida_bin.rs/kernel.rs, tests included. Spawn via the hardened resolver instead (crate::aida_exe_path() / resolve_aida_exe(), which resolves to the test runner inside a test binary, as resolve_aida_exe_tests::returns_a_path shows). Build (ubuntu-latest) is the aggregate job and is red only because lib-1 is.
+    2. [minor] AGENTS.md:1-11 prepends a per-change paragraph (slice-4 checkpoint details, e.g. 'Commit-keyed CI API reads checkpoint each check-run page and commit-status request'). CLAUDE.md (TASK-1954/TASK-2015) says per-change notes belong in the PR body and on the spec, not as AGENTS.md prepends, because each one conflicts with every open PR. Drop the AGENTS.md paragraph. The in-place OVERVIEW.md replacement of the 'later slices' sentence is acceptable as an architecture note, but trim its per-call checkpoint list to the architecture.
+    3. [minor] Unbounded remote branch leak: LiveTrainForge::retire_checked (pr_train.rs ~2672-2705) deliberately keeps the remote train/<uuid>-<n> branch on every journaled retirement. Retirement is the common path: every Stale landing (main moved, lease held, re-gate main move) and every red/refused train retires. The old retire() deleted the branch through origin_git. Nothing else ever deletes these branches, so origin collects one dead train/* branch per retired train. Delete the branch once the close is confirmed, with --force-with-lease against the journaled tip so a moved branch is kept, or add a confirmed cleanup path. Add a test.
+    4. [minor] The run lock serializes whole train runs, not just recovery: pr_train_handler_with_dispatch_ctx (pr_train.rs ~3819-3824) holds journal::lock's non-blocking exclusive flock for the entire run, CI waits included (600s+ registration plus watch). A second 'aida pr train', or a dispatch_flow single-PR fallback (dispatch_flow.rs:299), now fails at once with 'another train owns the train journal', where before it would proceed or rebuild. docs/cli/04-git-lifecycle.md:383 says only 'A permanent run lock prevents concurrent recovery'. Either release the lock after recovery and journal admission with per-entry locking, or document that trains on one main worktree are serialized and make the dispatch fallback treat lock contention as a retryable deferral rather than a ship failure. Add a test for the dispatch-side outcome.
+    5. [cosmetic] pr_train_journal.rs:77-95: a crash between create_new and rename leaves a .<uuid>.tmp file in .aida/train/. entries() skips non-.json files, so these are never collected. Prune stale dot-tmp files under run.lock in entries(), or document them in the inspect/discard section.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T07:25:46.586025303Z
+  modified_at: 2026-11-07T07:25:46.586025303Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 history:
