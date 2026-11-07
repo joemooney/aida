@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-07T22:18:32.420595905Z
+modified_at: 2026-11-07T22:20:01.058575917Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,6 +22,48 @@ comments:
   modified_at: 2026-11-07T21:22:00.431879071Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b818-e2a2-7d90-b95d-49cab76f29e3
+  author: joe
+  content: |
+    Native S4 handoff: edits prepared, uncommitted; untested=true; NOT complete. Refs STORY-2537. TASK-3366 is now Needs Attention with a blocked-dependency punt. Native Refs declaration recorded; the punt vetoes publication.
+
+    Base: HEAD already equaled origin/main at 79603aff6b0 (#3615, S3); no Git metadata mutation was needed or attempted.
+
+    Scope: coherent ProcIdentity registry captures and full-tuple comparisons; unknown legacy retention and positive process proof for private mail/session binding; filesystem-only versioned IDs that older strict mail readers refuse while display/API IDs remain stable; launcher/hook and exit-generation fencing; watcher namespace lock across audience/thread validation and submission; bounded nonblocking reads for the new fenced checks; explicit-binding eligibility and identity revalidation. Existing lease/display wire projections remain in the S5 inventory. Ratchet counts: registry 13->0, mailbox identity 1->0, seat authority 3->1.
+
+    Validation: final rustfmt --check on changed Rust, git diff --check, portability guard, and store-writer inventory PASS (3353 sink sites; 293 operation mappings; no added service authority). Independent non-build fast gates passed after accounting for new call sites. An earlier-revision no-default-features agent-profile check passed via the lane runner. Initial three compile errors were corrected. No executed Rust test result exists.
+
+    Blocker: j20261107T213707713-2-0 and j20261107T213942331-2822013-0 timed out at 900s before executing tests. The latter reports overlay-stale: the primary rewrote a file in generation agent-65a17c57ad652b4a. The launcher retains that pinned generation; target-dir overrides are forbidden and the host seed is outside this seat's writable roots. Do not treat subsequent jobs on that generation as clean validation.
+
+    Full make check-ci-fast was interrupted while its lane-delegated TUI check was queued. A temporary /tmp Cargo adapter delegated build/check/test commands to the launcher; it is not a source change. Full fast-gate success is NOT claimed.
+
+    At exit, affected-family job j20261107T214326860-2840778-0 is compiling; TUI j20261107T214359426-170-0, identity j20261107T214648430-2889319-0 and the 1800s retry j20261107T220757509-2-0 are queued. Lane lifecycle owns stopping jobs when the process exits. No further callback is awaited.
+
+    Host action: preserve the dirty edits and refresh/reseed/relaunch with a fresh host-owned target generation. Run cargo test --profile agent -p aida-cli-lib -p aida-core --lib -- proc_identity, the affected registry/mail/binding regressions, and make check-ci-fast. Clear the punt only after the LIGHT gate passes. Commit, push, PR publication and queue completion remain host work; none was performed in the seat.
+
+    Changed files:
+    - AGENTS.md
+    - OVERVIEW.md
+    - aida-cli-lib/src/agent_registry.rs
+    - aida-cli-lib/src/gate/seat_authority.rs
+    - aida-cli-lib/src/gate/tests/bug_1934_grant_binding_tests.rs
+    - aida-cli-lib/src/mail_wake_tests.rs
+    - aida-cli-lib/src/mailbox_resolver.rs
+    - aida-cli-lib/src/mailbox_view.rs
+    - aida-cli-lib/src/mailbox_wake_run.rs
+    - aida-cli-lib/src/mailbox_wake_run_tests.rs
+    - aida-cli-lib/src/session_start.rs
+    - aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs
+    - aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json
+    - aida-cli-lib/src/tests/story_2254_codex_background_tests.rs
+    - aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs
+    - aida-core/src/mailbox_identity.rs
+    - aida-core/src/mailbox_identity_tests.rs
+    - aida-core/src/proc_identity.rs
+    - scripts/store-writers.toml
+  created_at: 2026-11-07T22:20:01.058575917Z
+  modified_at: 2026-11-07T22:20:01.058575917Z
+  session_id: 01a1b7e79d67
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
