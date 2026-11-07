@@ -1895,7 +1895,34 @@ fn task1993_queue_work_records_the_reviewer_it_launches() {
             c.head.clone(),
         ))
     });
-    let status = reviewer_status(&mut exit());
+    // Keep the child live until its identity is recorded. ProcIdentity capture
+    // deliberately refuses an already-exited /bin/true child.
+    // trace:TASK-3365 | ai:codex
+    let release = temp.path().join("release-reviewer");
+    let status = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while store.load().unwrap().entries["PR-1"].attempts[0]
+                .reviewer
+                .is_none()
+            {
+                if std::time::Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            std::fs::write(&release, "done").unwrap();
+        });
+        reviewer_status(
+            Command::new("/bin/sh")
+                .args([
+                    "-c",
+                    "while [ ! -f \"$1\" ]; do sleep 0.01; done",
+                    "reviewer",
+                ])
+                .arg(&release),
+        )
+    });
     LAUNCH.with(|l| *l.borrow_mut() = None);
     assert!(status.unwrap().success());
     let attempt = &store.load().unwrap().entries["PR-1"].attempts[0];

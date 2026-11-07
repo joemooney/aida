@@ -3,6 +3,7 @@
 // trace:TASK-1945 | ai:claude
 use super::signal::{self, Signal};
 use super::*;
+use crate::process_retry::RetryEtxtbsy;
 use std::os::unix::process::CommandExt;
 use std::time::{Duration, Instant};
 
@@ -60,7 +61,7 @@ impl Group {
             .current_dir(dir.path())
             .stdin(Stdio::null())
             .process_group(0)
-            .spawn()
+            .spawn_retrying_etxtbsy()
             .unwrap();
         let pgid = child.id();
         signal::allow_test_group(pgid);
@@ -769,4 +770,33 @@ fn bug_2425_identity_equality_ignores_recorded_at() {
     let mut other_process = second.clone();
     other_process.pid ^= 1;
     assert_ne!(first, other_process);
+}
+
+// trace:TASK-3365 | ai:codex
+#[test]
+fn task_3365_watch_shared_identity_reuse_and_missing_evidence() {
+    use aida_core::proc_identity::{DeadReason, Verdict};
+    let current = Identity::current().unwrap();
+    assert_eq!(current.verdict(), Verdict::Alive);
+    let mut reused = current.clone();
+    reused.start = format!(
+        "linux-starttime:{}",
+        current.process_identity().unwrap().starttime + 1
+    );
+    assert_eq!(reused.verdict(), Verdict::Dead(DeadReason::Reused));
+    assert!(!reused.alive());
+    let mut incomplete = current.clone();
+    incomplete.start = "malformed".into();
+    assert!(matches!(incomplete.verdict(), Verdict::ForeignUnknown(_)));
+    assert!(
+        incomplete.alive(),
+        "unreadable identity must retain capacity"
+    );
+    let mut legacy = current.clone();
+    legacy.pid_namespace = None;
+    legacy.recorded_at = None;
+    assert!(matches!(legacy.verdict(), Verdict::ForeignUnknown(_)));
+    assert!(legacy.alive());
+    let encoded = serde_json::to_string(&current).unwrap();
+    assert_eq!(serde_json::from_str::<Identity>(&encoded).unwrap(), current);
 }

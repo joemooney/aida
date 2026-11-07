@@ -145,10 +145,18 @@ struct Identity {
 // trace:BUG-2425 | ai:claude
 impl PartialEq for Identity {
     fn eq(&self, other: &Self) -> bool {
-        self.pid_namespace == other.pid_namespace
-            && self.pid == other.pid
-            && self.start == other.start
-            && self.boot == other.boot
+        // trace:TASK-3365 | ai:codex
+        match (self.process_identity(), other.process_identity()) {
+            (Some(left), Some(right)) => left == right,
+            // Preserve exact comparison for legacy round trips, without
+            // treating incomplete evidence as a live kernel identity.
+            _ => {
+                self.pid_namespace == other.pid_namespace
+                    && self.pid == other.pid
+                    && self.start == other.start
+                    && self.boot == other.boot
+            }
+        }
     }
 }
 impl Eq for Identity {}
@@ -157,33 +165,52 @@ impl Identity {
         Self::of(std::process::id())
     }
     fn of(pid: u32) -> Result<Self> {
+        let identity =
+            aida_core::proc_identity::ProcIdentity::capture(pid).map_err(anyhow::Error::msg)?;
         Ok(Self {
-            pid_namespace: crate::agent_registry::current_pid_namespace(),
+            pid_namespace: Some(identity.pidns_inode),
             recorded_at: Some(chrono::Utc::now()),
-            pid,
-            start: aida_core::liveness::process_start_identity_exact(pid)
-                .context("cannot bind review launch to its kernel process identity")?,
-            boot: boot_id()?,
+            pid: identity.pid,
+            start: format!("linux-starttime:{}", identity.starttime),
+            boot: identity.boot_id,
         })
     }
-    /// The same kernel process is still running (not reused, not a zombie).
-    // trace:TASK-1993 | ai:claude
+    // Keep the strict persisted wire format readable by rollback binaries.
+    // Missing legacy evidence is unknown; never recapture a recorded PID.
+    // trace:TASK-3365 | ai:codex
+    fn process_identity(&self) -> Option<aida_core::proc_identity::ProcIdentity> {
+        let ticks = self
+            .start
+            .strip_prefix("linux-starttime:")?
+            .parse::<u64>()
+            .ok()?;
+        aida_core::proc_identity::ProcIdentity::from_record(
+            &aida_core::process_probe::ProcessIdentity {
+                pid: self.pid,
+                start: format!("linux:{}:{ticks}", self.boot),
+            },
+            self.pid_namespace,
+        )
+    }
+    fn verdict(&self) -> aida_core::proc_identity::Verdict {
+        use aida_core::proc_identity::{observe, UnknownReason, Verdict};
+        self.process_identity().map_or(
+            Verdict::ForeignUnknown(UnknownReason::MissingIdentity),
+            |identity| observe(&identity, true),
+        )
+    }
+    /// Capacity policy is separate from kernel process observation.
+    // trace:TASK-3365 | ai:codex
     fn alive(&self) -> bool {
-        // trace:BUG-2425 | ai:claude
-        if !self.observable() {
-            return self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref());
+        use aida_core::proc_identity::Verdict;
+        match self.verdict() {
+            Verdict::Alive => true,
+            Verdict::Dead(_) => false,
+            Verdict::ForeignUnknown(_) if !self.observable() => {
+                self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
+            }
+            Verdict::ForeignUnknown(_) => true,
         }
-        let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
-            .ok()
-            .and_then(|stat| {
-                let rest = &stat[stat.rfind(')')? + 1..];
-                rest.split_whitespace().next().map(|state| state == "Z")
-            })
-            .unwrap_or(true);
-        !zombie
-            && boot_id().is_ok_and(|boot| boot == self.boot)
-            && aida_core::liveness::process_start_identity_exact(self.pid).as_deref()
-                == Some(self.start.as_str())
     }
 }
 impl Identity {
