@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-07T22:12:32.196595160Z
+modified_at: 2026-11-07T22:14:00.675288585Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T22:12:54.289291138Z
+comments:
+- id: 01a1b813-62e3-7891-8811-940a0b85a2f9
+  author: joe
+  content: 'ADVISOR 2026-11-07 15:15: SEQUENCED after TASK-3424 and TASK-3425 land (shared path ledgers). Dispatch then.'
+  created_at: 2026-11-07T22:14:00.675288585Z
+  modified_at: 2026-11-07T22:14:00.675288585Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
   author: joe
