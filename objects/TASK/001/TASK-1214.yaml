@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-09-12T14:39:53.399428869Z
+modified_at: 2026-11-07T20:26:45.741856670Z
 req_type: Task
 tags:
 - cli
@@ -19,6 +19,17 @@ relationships:
   target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
   created_at: 2026-09-12T03:07:05.518724917Z
   created_by: joe
+comments:
+- id: 01a1b7b1-326d-71c0-93c2-92d4416a0287
+  author: aida:defer-migration
+  content: |-
+    [aida:defer-migration]
+    {"deferred":true,"deferred_at":"2026-09-12T14:39:53.399428869Z","deferred_until":"after the first release that ships the STORY-1028 subcommands (0.16.0) plus one release of alias grace","legacy_tags":[]}
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:45.741850757Z
+  modified_at: 2026-11-07T20:26:45.741850757Z
+  session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
 deferred: true
 deferred_at: 2026-09-12T14:39:53.399428869Z
-deferred_until: after the first release that ships the STORY-1028 subcommands (0.16.0) plus one release of alias grace
+deferred_until: manual:operator
