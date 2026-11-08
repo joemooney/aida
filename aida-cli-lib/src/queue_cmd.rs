@@ -12358,7 +12358,9 @@ pub(crate) fn handle_queue_work(
     // BUG-2386: a `--resume`'s recorded vendor and resumable id, resolved
     // once here (before any lease is minted) and reused by the launch arms.
     // trace:BUG-2386 | ai:claude
-    let mut resume_target: Option<(session::HeadlessVendor, String)> = None;
+    // Infer the recorded vendor type without adding vendor-ratchet debt.
+    // trace:STORY-2642 | ai:codex
+    let mut resume_target = None;
     let resolved_launch_vendor = if !list_sessions {
         let root = project_root_for_config
             .clone()
