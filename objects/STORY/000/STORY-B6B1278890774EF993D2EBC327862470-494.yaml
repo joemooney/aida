@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T11:23:23.609789934Z
+modified_at: 2026-11-08T11:23:31.760382452Z
 req_type: Story
 tags:
 - area:advisor
@@ -537,6 +537,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 5 (final, advisor-scoped): the round-4 major is fixed: a confirmed controller exit moves its grant to retired_grants, a replacement starts after backoff, restart reconciliation finishes Superseding attempts, and tests cover both crash windows. But retention now has no bound, which re-opens the round-1 key-quota failure: a crash-looping worker with any unresolved attempt exhausts the per-uid kernel key quota in about 33 minutes and blocks every child grant. Found by source reading; not reproduced (reviewer runs no cargo). AC1 met earlier; AC2 covers review-watch only and is partial; AC3-6 do not apply to this Refs slice. CI at cd6d6cb: all CI jobs pending; merge-hold-gate fail is the expected supervised hold.. No triage reason was given.'
   created_at: 2026-11-08T11:23:23.609788581Z
   modified_at: 2026-11-08T11:23:23.609788581Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae6-35ce-7793-bc06-2f393e0acb43
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cd6d6cb5301c
+    Recorded: 2026-11-08T10:45:17.164140845+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3640#issuecomment-6720513478
+    Findings:
+    1. major: review_watch_service.rs tick() L531-547: retiring exited controllers re-opens the round-1 kernel key quota failure. Each restart mints a controller grant whose session key is installed with TTL = parent expiry (seat_authority.rs issue_child_from_with_delegation). The key is freed only by revoke_by_id, and tick() now calls that only when review_blockers() is empty across the whole store. Restart no longer waits for that, so retired_grants and live keys grow without bound at the fixed 10 s backoff. Concrete path: the worker fails at startup on every launch (run_with_program returns Err at forge::Repository::load, Store::open or validate_child_delegation) while any attempt is unresolved. A long review is enough, and a Reserved attempt with no dispatcher never resolves by itself. About 33 minutes later the per-uid quota (kernel.keys.maxkeys=200 on this host) is exhausted, and issue_child_from_with_delegation returns key_quota_child_refusal for every child grant this user mints (agent new, reviewer launches), not only review-watch. Fix: free the key at retirement with grant_keyring::invalidate(id) while keeping the grant record (grant_check validates ancestors with check_lifetime only, so reviewer children are unaffected; confirm no ancestor key read is needed), and/or stop replacing and report blocked once retired_grants passes a small cap, or back off exponentially. Add a test that repeated controller exits with an unresolved attempt do not accumulate keys or unbounded retired_grants.
+    2. minor: docs/cli/06-roles-sessions.md Review-watch service recovery step 1 says to wait for all retired grants to be revoked before resetting the receipt. The same section says a reservation with no dispatcher identity retains capacity, and reconcile_lost_dispatchers never resolves that case, so the wait never ends and status only lists the blocker. Name the exit: after confirming no descendant survives, run `aida review watch --release PR-N` (store.release clears it when no recorded process is alive).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:23:31.662926362Z
+  modified_at: 2026-11-08T11:23:31.662926362Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
