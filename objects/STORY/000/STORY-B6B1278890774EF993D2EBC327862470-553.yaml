@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T19:27:09.103618255Z
+modified_at: 2026-11-08T19:27:23.422551986Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1034,6 +1034,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at faad98f2352e. Round 15 fixes for lane doctor advice with no PATH client and for the missing-descriptor message are correct. Still blocked on host/advisor action: proxy undeployed, client undelivered, AF_UNIX transport undecided, contained posture unsupported, no live seat query. AC1/AC3 partial, AC2/AC5 unverified, AC4 implemented. CI incomplete at this head (cli-0, cli-1, rest green; lib-0, lib-1, gates, contracts pending).. It was punted on: blocked-dependency: Round 15 findings 1-5 and 9 remain blocked on host/advisor actions, not disputed. This native seat cannot deploy the host proxy outside its writable roots, deliver a trusted host client to lane PATH/prompts, change AF_UNIX-denied Claude admission/transport, or produce the required AIDA-contained Codex AC2/AC5 evidence. The primary .codegraph contains only codegraph.db; bare codegraph callers primary_index_link fails with unable to open database file. No completion claim or unauthorized follow-up split: the binding completing-slice ruling remains unmet. Joe must deploy and deliver the reviewed host client, decide denied-socket transport/admission, run the live primary-index query plus candidate doctor age report with read-only grant evidence, and publish the prepared PR body and final-head CI. Findings 6 and 7 are fixed in uncommitted edits with regressions; finding 8 compatibility test executed and passed (21 Python tests, no skips). Rust lane job j20261108T172812430-2482145-0 pending. Host-owned commit/publication is required by this native launch; supervised merge hold remains intact. Prepared PR body: /tmp/story-2630-round15-pr-body.md.. No triage reason was given.'
   created_at: 2026-11-08T19:27:09.103611831Z
   modified_at: 2026-11-08T19:27:09.103611831Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bca1-1dd0-7661-9e08-2bf61cfe41d1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: faad98f2352e
+    Recorded: 2026-11-08T19:22:10.125517379+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3662#issuecomment-6725973212
+    Findings:
+    1. AC status at faad98f2352e, per acceptance criterion. AC1 partial: primary_index_link is on main and this worktree's .codegraph links to the primary, but live 'codegraph callers primary_index_link' from this reviewer seat fails with 'callers failed: unable to open database file', and /home/joe/ai/aida/.codegraph has no lane-proxy.json or socket. AC2 unverified: native bwrap test only (test_service_query_from_read_only_seat_and_graceful_restart); scripts/codegraph/README.md says the AIDA-contained posture is unsupported. AC3 partial: template and AGENTS.md line are on main, but they name bare codegraph, which README says is not routed. AC4 verified by source and codegraph::tests as implemented (assess_proxy, assess_with_client_routing, doctor --lane-host); lib CI still pending at this head, so unit evidence is the implementer's lane job j20261108T172812430-2482145-0 only. Live installed 'aida doctor check codegraph' correctly reports unreachable. AC5 unverified: no codex lane log or live non-empty seat query.
+    2. MAJOR (AC1/AC3, unchanged, host action): nothing delivers the proxy client to lanes. aida-core/templates/dispatch/code-navigation.md:1 and AGENTS.md name bare codegraph, while scripts/codegraph/README.md says bare codegraph is not routed, so a lane following its prompt still fails after deployment. Put the fixed host client command in the template master, provide a host-resolved PATH entry, or have the advisor defer this explicitly.
+    3. MAJOR (AC1, transport undecided, host/advisor action, reproduced this round): python3 socket.socket(socket.AF_UNIX) raises PermissionError EPERM in this Claude sandboxed seat, so those seats have no route to the proxy and doctor will report them unreachable after deployment. Decide how they are served or scope them out explicitly.
+    4. MAJOR (AC2/AC5, advisor decision, unchanged): the 2026-11-07 ruling asks for a completing slice in which a contained Codex seat gets a correct non-empty 'codegraph callers' result with a read-only grant. This PR is Refs-only, the contained posture is unsupported, the proxy is not deployed and no live seat output exists. Spec comment of 2026-11-08 10:41 confirms no AC has been moved to a follow-up with advisor approval. The advisor must accept this slice with AC2/AC5 moved to a named follow-up, or require the evidence here. Further seat rework cannot clear this; TASK-3025 already tracks the repeated unchanged findings.
+    5. MAJOR (process, host/advisor action, unchanged): the PR body is still the 'Published from seat' boilerplate. Add AC1-AC5 status, state that this is a Refs slice, and name who completes AC2/AC5. Commit trailers use '(Refs STORY-2630)', which 'aida review prompt' does not parse ('no (REQ-ID) trailers found'), so this review attributed the PR from its title and commits.
+    6. MINOR (new at f4d86275458, seat-fixable): the commit prepends per-change notes to AGENTS.md:1-5 and OVERVIEW.md:1-9 (doctor advice for a lane with no PATH client, --lane-host error text). CLAUDE.md forbids this: per-change notes go in the PR body and an 'aida comment add' on the spec, and those files change only for a real architecture change, because each prepended paragraph conflicts with every open PR. Remove the AGENTS.md paragraph. Keep at most the proxy-architecture sentences in OVERVIEW.md, and drop the doctor-behaviour sentences.
+    7. MINOR (evidence, host action): test_installed_codegraph_returns_real_edges_from_host_snapshot skips in CI because CI does not install codegraph. The implementer's round 15 comment reports one passing local run (21 tests OK), but no recorded CI run covers real upstream. Paste the run with the AC5 evidence.
+    8. CI gate: at faad98f2352e, cli-0, cli-1 and rest are green; lib-0, lib-1, gates and contracts had not finished when this was recorded, so the help golden, codegraph::tests and the new python step have no final-head CI result. A green run at the final head is required. merge-hold-gate fails as the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:27:17.968573746Z
+  modified_at: 2026-11-08T19:27:17.968573746Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
