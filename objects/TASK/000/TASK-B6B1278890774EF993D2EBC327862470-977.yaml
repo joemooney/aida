@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:39:52.190338119Z
-modified_at: 2026-11-08T05:39:52.190338119Z
+modified_at: 2026-11-08T19:22:10.553680154Z
 req_type: Task
 tags:
 - carried-from:BUG-2489
 - finding-hash:1a8d609f
 - from-review:PR-3655
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-6cf9-7350-b8f6-67b40a77ab44
+  author: joe
+  content: 'Advisor ruling: accepted, cosmetic: behaviour pinned by test; wording only.'
+  created_at: 2026-11-08T19:22:10.553680154Z
+  modified_at: 2026-11-08T19:22:10.553680154Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-3e6e-71d3-957c-0599dcf451c5
   author: joe
