@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:56:04.741968877Z
+modified_at: 2026-11-08T13:56:11.192313897Z
 req_type: Task
 tags:
 - architecture
@@ -862,6 +862,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 7bb74c41a809 fixes the retry-guidance finding (typed OutcomeUnknown on both paths), but the binding routing acceptance is still unmet (mediated inventory exits 1, 3163 writers and 293 operations), the design-fork punt has no ruling, and CI has no job results at this head.. It was punted on: design-fork: PR #3661 review comment 60 finding 1 remains a policy blocker: the binding ruling requires every inventoried writer to route, but existing comment edit/delete were removed pending approved host ownership policy. No subsequent ruling resolves that fork. Decide whether refused operations may remain outside the cutover or approve typed host operation policies; I dispute counting early refusal as verified routing. Mediated inventory still reports 3163 unresolved writer sites and 293 operations. Production mediated admission stays gated, own_claim/queue_done remain TASK-3326, and this run is a partial fix for finding 6 only. The prior punt/publication-veto resolution and PR metadata are host-side findings 3/4; no publication is authorized by this partial fix. make check-ci-fast acceptance is also unmet; direct cargo is prohibited here and the lane runner accepts cargo commands only.. No triage reason was given.'
   created_at: 2026-11-08T13:56:04.741967079Z
   modified_at: 2026-11-08T13:56:04.741967079Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb71-f8cd-7703-a46e-6e6bd8166670
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7bb74c41a809
+    Recorded: 2026-11-08T13:50:00.983400643+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6722310485
+    Findings:
+    1. BLOCKING acceptance gap (spec description and advisor ruling, TASK-3223 comment 34), unfixed and needing an advisor ruling rather than more code. 'python3 scripts/check-store-writers.py --profile mediated' exits 1 at this head with 3163 writers and 293 of 293 operations unresolved. mediated_blockers (scripts/check-store-writers.py:638) counts every operation row by construction, so it cannot reach zero without a reviewed operation policy and evidence. Only comment add and title/description edit route; store_mutation_entry.rs:203 refuses every other command, including read commands such as show and list, so a lane under the mediated profile could not read the store through the CLI once the gate opens. Either re-scope this PR explicitly as a staged partial with a follow-up owning the rest, or define the operation policy.
+    2. BLOCKING until CI reports: CI run 42486434307 at 7bb74c41a809 is pending with no jobs started, so none of the new tests have CI evidence at this head. make check-ci-fast is not shown green as an aggregate (comment 58 reports subsets only), and the ruling names it as acceptance. merge-hold-gate run 42486434319 is failing; it failed the same way on earlier heads while aida:merge-hold is set. That needs advisor or operator release and I could not read its log from this sandbox.
+    3. PROCESS, needs advisor attention: TASK-3223 was moved to NeedsAttention at 06:44 by a new design-fork punt stating 'No subsequent ruling resolves that fork', and head 7bb74c41a809 was committed at 06:44:54 local time and then published from the seat. The queue rework at 06:40 (comment 59) recorded no triage reason and did not answer the fork. The same punt-then-publish sequence was flagged on e88fe1f3543. Rule on the fork, and confirm whether publication under a saved punt is authorized, before this PR advances.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing of comment_add/spec_edit and refusal correlation. The body is only the seat-publication line. Rewrite both to describe staged, gated routing with no launch authority. Commits 30eb320657c, e88fe1f3543 and 7bb74c41a80 use a subject claiming full routing and raw-write denial, so the squash must use the corrected title with an empty body.
+    5. MINOR, test scope, unfixed: mediated_store_tests.rs (mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writable) proves raw denial and a successful comment_add in one bwrap process, but the mediated request is a hand-built Python packet, not the lane client (store_mutation_client.rs / aida comment add), and the fixture supplies synthetic launch identity. The doc states these limits honestly. Before this counts as the ruling's contained-lane test, either drive the real client inside the sandbox or have the advisor accept the synthetic route.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:56:11.085068595Z
+  modified_at: 2026-11-08T13:56:11.085068595Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
