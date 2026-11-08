@@ -12,12 +12,12 @@ description: |-
   Findings:
   1. F1 (blocking, carried over, sixth round): the PR title at 8290289631c7 is still '[AI:codex] feat: Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel (STORY-2493)' and the PR body has no non-completing marker. derive_squash_trailer (aida-cli-lib/src/pr_ship.rs:314-355) takes completing IDs from a title with no trailing (Refs ...), so merging this docs/plans-only PR would complete STORY-2493 with no envelope, transport, home-processing or merge-block behaviour implemented. Fix: retitle to '[AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493)', or add an 'aida: no-complete' line to the PR body (NO_COMPLETE_BODY_MARKERS, pr_ship.rs:227). The only change since the last round is a merge from main; no branch commit can fix this and the implementer seat cannot edit forge metadata, so route it to the advisor or host, not another rework round.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T11:05:26.104788450Z
-modified_at: 2026-11-08T15:27:49.679763824Z
+modified_at: 2026-11-08T17:23:03.309443028Z
 req_type: Task
 tags:
 - from-advisor:STORY-2493
@@ -39,6 +39,15 @@ history:
   author: joe
   timestamp: 2026-11-08T11:51:22.382316055Z
   changes: []
+- id: 01a1bc2f-5e0d-72b0-b67b-d21d8264d4da
+  author: joe
+  timestamp: 2026-11-08T17:23:03.309436543Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 92e7eb3544665f922dabf96cf10439b5dcf736db
   branch: main
