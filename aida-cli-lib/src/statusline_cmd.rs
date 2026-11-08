@@ -1161,6 +1161,7 @@ pub(crate) fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str)
 /// Where `q:N` is the depth of the queue routed to the active role
 /// (omitted when zero).
 // trace:FR-1-041 | ai:claude
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "statusline")]
 pub(crate) struct StatuslineArgs {
@@ -1168,21 +1169,6 @@ pub(crate) struct StatuslineArgs {
     /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
     #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
     pub color: String,
-
-    /// Emit the one-liner wrapped in an OSC terminal-title escape
-    /// sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the
-    /// body, so the AIDA role/queue/inbox segment rides the terminal
-    /// title bar / tmux window name. This is the in-agent parity surface
-    /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
-    /// field set and cannot run `aida statusline` as a command: wire
-    /// `aida statusline title` into the shell prompt
-    /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
-    /// terminal title during the agent session. Forces color off (an
-    /// OSC title string carries no ANSI). Mutually exclusive with the
-    /// `setup` subcommand.
-    // trace:TASK-896
-    #[clap(long, hide = true)]
-    pub title: bool,
 
     /// Merge live fields from a client's stdin JSON payload into the
     /// AIDA segment: model, context-window usage, activity, and VCS
@@ -1268,14 +1254,13 @@ fn run_statusline(
     let args = <StatuslineArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let StatuslineArgs {
         color,
-        title,
         client,
         tmux_pane_pid,
         action,
     } = &args;
     // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
     // statusline; with no subcommand we render the one-liner (default).
-    // trace:TASK-896 — `--title` emits the same one-liner wrapped in an
+    // trace:TASK-896 — `title` emits the same one-liner wrapped in an
     // OSC terminal-title escape so the AIDA segment rides the terminal
     // title bar (the in-agent parity surface for clients without a
     // command-backed footer, e.g. Codex CLI).
@@ -1288,15 +1273,9 @@ fn run_statusline(
         }
         Some(act) => return self::handle_statusline_setup_command(act),
         None => {
-            if *title {
-                note_hidden_alias(
-                    concat!("aida statusline ", "--title"),
-                    "aida statusline title",
-                );
-            }
             return self::handle_statusline_command(
                 color,
-                *title,
+                false,
                 client.as_deref(),
                 *tmux_pane_pid,
             );
