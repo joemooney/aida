@@ -95,6 +95,14 @@ comments:
   modified_at: 2026-11-08 12:37:01.619173+00:00
   session_id: 01a1bb204da2
   harness_version: codex-cli 0.167.0
+- id: 01a1bb3f-b26f-72c2-8840-bbba3993a501
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 are met by the implementation and exercised by PR tests (AC status: ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade + task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write via ship_messages, single-subject path unchanged; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface). Bug protocol ''touches a test file'': met. Blocked because two new test lines violate the Rust portability ratchet, which the CI gates step will reject: that step failed at 53d95b4b1d and 1595572e54 with the same lines present (their logs were unreadable from this sandbox, so the causal link is from the scanner rules). CI at this head was still running at record time, 0 of 7 CI jobs
+    concluded; merge-hold-gate red is the expected supervised hold, not a code defect. No local tests run per review policy.. No triage reason was given.'
+  created_at: 2026-11-08 13:01:16.271572+00:00
+  modified_at: 2026-11-08 13:01:16.271572+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
   author: aida-session-start
@@ -215,6 +223,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb3f-b26f-72c2-8840-bbada6722184
+  author: joe
+  timestamp: 2026-11-08 13:01:16.271557+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 - id: 01a1bb42-2f77-7bd2-a7e6-6f3d3460b64c
   author: dirtlab
   timestamp: 2026-11-08 13:03:59.351480+00:00
