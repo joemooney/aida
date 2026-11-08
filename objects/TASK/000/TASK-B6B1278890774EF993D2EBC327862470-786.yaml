@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T06:00:33.118208105Z
+modified_at: 2026-11-08T06:19:08.972211670Z
 req_type: Task
 tags:
 - area:containment
@@ -529,6 +529,18 @@ comments:
     Inventory unchanged: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] (static installed-binary endpoint only). Advisor must attach live refresh observations and AIDA-boundary report.json. auth_inventory_complete=false and production Adapter::require_conformance refusal remain. TASK-3048 stays incomplete; host publication must use (Refs TASK-3048), with no completion or production unlock. Edits remain uncommitted in this native seat.
   created_at: 2026-11-08T06:00:33.118208105Z
   modified_at: 2026-11-08T06:00:33.118208105Z
+  session_id: 01a1b9ba08ed
+  harness_version: codex-cli 0.167.0
+- id: 01a1b9cf-8b2c-7483-bb1a-913459e68f79
+  author: dirtlab
+  content: |
+    Round 8 final validation and native handoff (AI:codex): all four latest review findings are repaired, with dispositions recorded in the prior comment. Python conformance + production-refusal suites executed 60 tests and passed. Final-source task_3048 Rust lane job j20261108T055849719-2-0 executed 22 tests with zero failures or ignored tests; this includes all diagnostic refusal paths and Unicode quoting. Help snapshot regeneration j20261108T055832865-2-0 executed one test and passed. make check-ci-fast completed exit 0 with all 43 gates passed, using launcher lane jobs for Cargo and umask 077 for private fixture authority. Formatting and git diff --check pass. The writer inventory adds exactly one reviewed read_only string-replacement site.
+
+    Changed files (11): aida-cli-lib/src/config_cmd_args.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; aida-cli-lib/src/containment/vendors.toml; aida-cli-lib/src/launch/agy.rs; aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; docs/internal/testing/containment-conformance.md; scripts/containment/conformance.py; scripts/store-writers.toml; tests/test_containment_conformance.py; tests/test_containment_conformance_aida.py. Detailed handoff: /tmp/task3048-r8-handoff.txt; logs /tmp/task3048-python-r8-final.log and /tmp/task3048-fast-r8-final.log. untested=false for these targeted checks.
+
+    Edits remain uncommitted for the host launcher. Native publication subject declaration: [AI:codex] fix(containment): validate AGY diagnostic inputs and settings path (Refs TASK-3048). No commit, push, PR, pr ship, review record or queue done. No real model or token-refresh run. Measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] (static token endpoint only). Advisor fresh AIDA-boundary C0-C4 report.json, refresh inventory and separate production admission change remain. auth_inventory_complete=false and Adapter::require_conformance refusal remain. TASK-3048 is not completed.
+  created_at: 2026-11-08T06:19:08.972211670Z
+  modified_at: 2026-11-08T06:19:08.972211670Z
   session_id: 01a1b9ba08ed
   harness_version: codex-cli 0.167.0
 history:
