@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T00:02:55.282155934Z
+modified_at: 2026-11-08T03:05:01.709434088Z
 req_type: Bug
+comments:
+- id: 01a1b91d-d20d-7930-ae4c-256520578a3d
+  author: joe
+  content: 'Same root cause seen on dell1 2026-11-07 20:01: dell1''s store had 8 unpushed commits (lane comments/status on STORY-2642, TASK-3048, TASK-3428, STORY-2571, FAQ-151) and was 246 behind; every ''aida db sync --pull'' failed with ''could not apply eccd89bb1d'' (status/modified_at/history hunks), and lanes printed ''proceeding with local view'', so dell1 lanes worked from a stale store for ~2.5h and their store writes never reached origin. The advisor resolved it by hand with a semantic 3-way merge of each conflicted object (scalars: upstream; comments/history: union by id, sorted by timestamp; script at dell1:~/store-resolve.py), then pushed. Fix scope for this bug should include: a semantic merge for store objects (git merge driver or in-process merge on pull) so concurrent edits to one spec from two nodes never conflict, and a pull failure must stop store writes instead of proceeding on a local view.'
+  created_at: 2026-11-08T03:05:01.709434088Z
+  modified_at: 2026-11-08T03:05:01.709434088Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
