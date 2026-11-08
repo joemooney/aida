@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T21:04:52.209107451Z
+modified_at: 2026-11-08T21:04:55.233922679Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -86,6 +86,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 are addressed in source and tests, but finish_confirmed_review makes evidence recording a hard precondition of Superseded, so a refused receipt parks the new head indefinitely. CI was queued at review, so no test result is verified at this head.. No triage reason was given.'
   created_at: 2026-11-08T21:04:52.209105845Z
   modified_at: 2026-11-08T21:04:52.209105845Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcfa-7d31-7120-aba6-784b45dee3d0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2498):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6a331f42b461
+    Recorded: 2026-11-08T20:59:34.594544961+00:00
+    Findings:
+    1. Blocking regression, aida-cli-lib/src/review_watch.rs:1650 with 1716-1727: advance() runs finish_confirmed_review(...)? inside the transaction after confirm() has already proved every process gone. Before this PR that branch always set Phase::Superseded. Now any Err from reader::review_finished (reader.rs:179-215: 'review ownership missing', 'ownership store unavailable', holder/phase mismatch, 'review lease changed before completion receipt', or an unparseable snapshot) rolls back and leaves the attempt Superseding, which still counts as active (review_watch.rs:1337, 1591), so the new head is held every pass and only logged as 'refused' (2337-2342). Dual ownership writes are best-effort, so a lease with no record is a legal input. That is the BUG-2498 symptom: a head parked until an advisor intervenes. Traced from source, not reproduced (review policy forbids cargo). Fix: treat receipt failure as missing evidence: log it, set Superseded and free the slot; the next-head pickup then stays refused by review_lease_ended, which is the intended fail-closed point. Replace the assert!(advance(...).is_err()) at tests/task_1993_review_watch_tests.rs:1327 with assertions that the attempt reaches Superseded and review_lease_ended stays false for the changed lease.
+    2. Minor, OVERVIEW.md:1837-1845: adds a per-change paragraph for this bug fix, plus a stray extra blank line. CLAUDE.md says per-change notes go in the PR body and an aida comment on the spec, and OVERVIEW.md is edited only for a real architecture change. Remove the paragraph.
+    3. Cosmetic, aida-cli-lib/src/queue_cmd.rs:14425-14430: the end_finished_review doc comment still says a review with no collected verdict is kept for recovery. It now also records a completion receipt that lets next-head pickup retire that tree when it is clean and published. Update the comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:04:55.089926977Z
+  modified_at: 2026-11-08T21:04:55.089926977Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
