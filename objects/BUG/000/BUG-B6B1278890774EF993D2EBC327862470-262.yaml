@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-262
 agreed_id: BUG-2497
 title: Conformance harness fixture omits chatgpt.com, so a ChatGPT-auth Codex run fails before any check and reports C0-C4 unknown
 description: 'scripts/containment/conformance.py fixture_policy (line 656) sets contained.allowed_hosts to api.openai.com and allow.fixture.test only. The production template (aida-core/templates/contained.toml) also allows chatgpt.com. Operator run 2026-11-08 (~/.aida/conformance-codex-aida-1794150336): contained Codex ChatGPT grant issued, turn.failed ''workspace routing discovery failed'' after 10 reconnects, launch exit 1, all checks unknown, verdict null. Fix: add chatgpt.com to the fixture list and nothing else; the auth hosts stay excluded per the STORY-2593 credential boundary, and deny.fixture.test must stay denied so C3 remains meaningful. Also make the harness report a vendor that never completed a turn as an explicit invalid-run result rather than rc=0 with unknown checks. Acceptance: with the fix a ChatGPT-auth run completes a turn and C0-C4 report real results. Critical path for STORY-2593, STORY-2238, TASK-2688/2689/2690, BUG-2446/2447/2448.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T16:07:58.434171525Z
+modified_at: 2026-11-08T16:12:59.276853176Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -88,6 +88,13 @@ comments:
   content: 'Round 3 handoff: finding 2 addressed by removing only the BUG-2497 per-change notes from AGENTS.md and OVERVIEW.md; existing containment-conformance.md documentation retains the behavior. Finding 3 addressed with RunCompletionTests.test_agy_verified_terminal_receipt_completes_run: vendor agy, verified_terminal_receipt true, no Codex events; finish_run returns without raising, persists completed and null invalid_run_reason, preserves checks and leaves production_launcher_credit false. Validation: full Python conformance suite passed 55 tests in 44.496s; focused RunCompletionTests passed 4 tests; git diff --check passed. Finding 1 is not disputed and remains blocked on the operator ChatGPT-auth --boundary aida run with report.json run_status/C0-C4 evidence, or an explicit advisor split; blocked-dependency punt requested and merge hold retained. Changed files: AGENTS.md, OVERVIEW.md, tests/test_containment_conformance.py. Edits remain uncommitted per standalone native seat instructions; host must create this round''s commit subject to punt/hold vetoes. No commit/push/PR/queue done/merge/review verdict performed.'
   created_at: 2026-11-08T16:00:44.716021580Z
   modified_at: 2026-11-08T16:00:44.716021580Z
+- id: 01a1bbef-380c-79f2-a90d-1d08b94528e4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixed both minor findings and a full re-sweep found no new code defects, but BUG-2497''s live ChatGPT-auth acceptance still has no run and no advisor split. CI was still pending at review; merge-hold-gate fails on the hold.. It was punted on: blocked-dependency: Round 3 finding 1 remains blocked on operator/advisor acceptance, not disputed: BUG-2497 requires a live ChatGPT-auth harness run from this branch with --boundary aida and report.json run_status plus C0-C4 statuses attached to the spec, or an explicit advisor split into a follow-up. This standalone native implementer seat cannot supply the operator production role/roster entry and must not bypass managed identity. Findings 2 and 3 are addressed in uncommitted edits: removed the AGENTS.md and OVERVIEW.md per-change notes and added a passing AGY verified-terminal-receipt finish_run regression. No live acceptance or completion credit claimed; merge hold and publication veto remain.. No triage reason was given.'
+  created_at: 2026-11-08T16:12:59.276851662Z
+  modified_at: 2026-11-08T16:12:59.276851662Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bbb8-d03f-7092-98dc-459d41472f93
   author: aida-session-start
@@ -176,6 +183,15 @@ history:
   session_id: 01a1bbe91de9
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bbef-380c-79f2-a90d-1cf46e2e850d
+  author: joe
+  timestamp: 2026-11-08T16:12:59.276829617Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
   branch: main
@@ -185,16 +201,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 3 finding 1 remains blocked on operator/advisor acceptance, not disputed: BUG-2497 requires a live ChatGPT-auth harness run from this branch with --boundary aida and report.json run_status plus C0-C4 statuses attached to the spec, or an explicit advisor split into a follow-up. This standalone native implementer seat cannot supply the operator production role/roster entry and must not bypass managed identity. Findings 2 and 3 are addressed in uncommitted edits: removed the AGENTS.md and OVERVIEW.md per-change notes and added a passing AGY verified-terminal-receipt finish_run regression. No live acceptance or completion credit claimed; merge hold and publication veto remain.'
-  raised_by: implementer
-  raised_at: 2026-11-08T16:00:34.575406773Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round 3 fixed both minor findings and a full re-sweep found no new code defects, but BUG-2497's live ChatGPT-auth acceptance still has no run and no advisor split. CI was still pending at review; merge-hold-gate fails on the hold.
-  recovery_hint: address the review findings, move BUG-2497 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T16:07:58.434171525Z
