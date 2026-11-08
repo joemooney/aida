@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-958
 agreed_id: TASK-3425
 title: 'Crate-split PR2: move the 14 command-framework types from command_registry.rs into cmdkit.rs, with a re-export (no import churn)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move the command-framework types the plan lists (section 5/7) into a new aida-cli-lib/src/cmdkit.rs; command_registry.rs re-exports them, so no caller import changes. The plan measures that this removes 29 modules from the main SCC. Acceptance: no caller edits; the dependency script from the plan (or rg) shows the reduced SCC; make check-ci-fast passes; and the command-registry ratchet tests pass. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-07T23:39:24.384388135Z
+modified_at: 2026-11-08T00:18:07.266422832Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -97,6 +97,14 @@ history:
   session_id: 01a1b8608d02
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b885-0322-7e11-af38-c3061d90b9c2
+  author: joe
+  timestamp: 2026-11-08T00:18:07.266443893Z
+  session_id: 01a1b8813cc5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -106,6 +114,12 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Round-2 finding 2: the pure enum moves make cmdkit a leaf, but the measured lexical largest SCC is 327 at reviewed c6118ac -> 326 after rework, equal to base 2a7fe186 (326), not the promised 29-module reduction. Unchanged consumer imports still reach command_registry through re-export paths. Obtaining the hypothetical edge-deletion count needs a symbol-resolved graph or consumer import churn, conflicting with no-import-churn acceptance. Evidence and reproducible measurement: docs/internal/testing/task-3425-cmdkit-rework.md. Finding 1 still requires a host commit with Help-Golden: unchanged because this native seat has read-only Git metadata; finding 3 is narrowed to GlobalArgs. No completion or full check-ci-fast pass is claimed.'
+  lean: Accept pure leaf preparation with corrected SCC acceptance, or authorize a separate import-path migration; retain existing publication veto until advisor decision.
+  raised_by: implementer
+  raised_at: 2026-11-08T00:18:07.266422832Z
 failure_reason:
   phase: reviewer
   phase_index: 3
