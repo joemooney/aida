@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T09:07:26.420619215Z
+modified_at: 2026-11-08T09:09:08.181447979Z
 req_type: Story
 tags:
 - area:human-wait
@@ -335,6 +335,14 @@ comments:
   modified_at: 2026-11-08T09:05:57.642895470Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba6b-1f0e-71b3-ad52-dbf4dbfb6b14
+  author: dirtlab
+  content: |
+    Revised docs/plans/2026-11-08-story-2661-park-resume-sketch.md for R14-R17; no findings disputed. R14: consume/archive accepted generation transport, clear intent/receipt/completion marker under wait and seat locks before each new launch, fail closed on preparation errors, and test park -> resume -> clean publication. R15: AGY cannot park in this slice; refuse before intent submission without a stop instruction or publication veto. AC3 AGY integration remains deferred pending verified mid-turn capture and normal resume admission. R16: foreground aida lane resume owns publication, phase completion, reviewer handoff and cleanup, with durable post-exit checkpoints and fresh-authority recovery without vendor replay; ambiguous external side effects require reconciliation. R17: handshake step 1 now matches host-mediated canonical writes and pending/failure stop behavior. Added verification cases and runtime fields. git diff --check passed; docs-only, no runtime tests run (untested=true). Codegraph executable unavailable; checked relevant source with rg. Native non-completing Refs declaration recorded; edits remain uncommitted. R1 still needs host/advisor metadata action: retitle PR #3666 exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. No seat edit repairs the PR title. Advisor signoff is still required before implementation; manual-only resume and AGY exclusion do not satisfy full story acceptance. Contained Codex remains excluded until PR2. Retain publication veto pending signoff and metadata repair.
+  created_at: 2026-11-08T09:09:04.910023239Z
+  modified_at: 2026-11-08T09:09:04.910023239Z
+  session_id: 01a1ba6997d1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -501,6 +509,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba6b-2bd5-7c63-a302-1b20b43c5c0d
+  author: dirtlab
+  timestamp: 2026-11-08T09:09:08.181467205Z
+  session_id: 01a1ba6997d1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -510,3 +527,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Sketch revised for R14-R17; no findings disputed. Binding ruling requires advisor signoff before code, including manual-only resume, AGY exclusion until verified mid-turn capture/admission, per-generation transport clearing and post-exit recovery ownership. R1 remains host/advisor metadata repair: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Seat edits cannot fix PR metadata; retain publication veto pending signoff and title repair.'
+  raised_by: implementer
+  raised_at: 2026-11-08T09:09:08.181447979Z
