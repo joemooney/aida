@@ -7,12 +7,12 @@ description: |-
 
   Non-blocking (minor): API-key Codex lanes (pinned_program None, contained.rs:1338-1347) run an unpinned npm binary but are validated only against the 0.166.0 help fixture; a different codex version that ignores an unknown -c default_permissions key would silently drop the inner profile instead of failing like -P did. Outer bwrap boundary remains the containment.
   Reviewed sha: 47f7c04664a3d933f34005db763bb0f851b63191
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T01:27:02.365575412Z
-modified_at: 2026-11-08T06:38:30.626946113Z
+modified_at: 2026-11-08T11:51:53.182746378Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
@@ -142,6 +142,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb00-2c1b-7e81-a819-ddd63936e49a
+  author: aida-auto-bump
+  timestamp: 2026-11-08T11:51:53.115040739Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bb00-2c5e-7772-a43b-33cd0e8f7100
+  timestamp: 2026-11-08T11:51:53.182741880Z
+  agent: aida
+  commit_sha: eda6458de1fc74b6db018c290427bc5d63a9b30c
+  summary: All 3 TASK-3000 acceptance criteria met by source and fake-binary test. CI at this head is QUEUED and has not run (20 runs ahead); last green was 9f4cb3b5a27, delta is merge of main. Merge must still wait for CI at this SHA and the supervised merge hold.
+  review_verdict: approved
 filed_at:
   code_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
   branch: main
@@ -151,3 +165,7 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T11:51:53.115034993Z
+  completion_sha: eda6458de1fc74b6db018c290427bc5d63a9b30c
