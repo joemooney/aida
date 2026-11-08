@@ -203,7 +203,8 @@ def check_in(binary, temp):
         calls.unlink(missing_ok=True)
         result = require(run([binary, "show", spec, *flags], root, slow_env, timeout=6))
         assert "canonical title" in result.stdout
-        assert not any(set(line.split()) & {"log", "merge-base", "diff"} for line in calls.read_text().splitlines()), calls.read_text()
+        git_calls = calls.read_text() if calls.exists() else ""
+        assert not any(set(line.split()) & {"log", "merge-base", "diff"} for line in git_calls.splitlines()), git_calls
         with sqlite3.connect(cache) as conn:
             assert conn.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()[0] == old_head
     for flags in (["--full", "--format", "toon"], ["--json"]):

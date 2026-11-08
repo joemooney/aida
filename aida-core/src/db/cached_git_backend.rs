@@ -326,7 +326,21 @@ impl CachedGitBackend {
         // act on a guess.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-018 | ai:claude
         if candidates.is_empty() && !strict {
-            return self.inner.get_requirement_by_object_file(id);
+            let direct = self.inner.get_requirement_by_object_file(id)?;
+            // A snapshot may predate an agreed ID, or be an empty private
+            // fallback. Agreed IDs do not name object files; scan canonical
+            // objects within the existing read budget before declaring a miss.
+            // trace:BUG-2466 | ai:codex
+            if direct.is_none() && self.snapshot_only {
+                let deadline =
+                    std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+                return self.resolve_by_bounded_scan(
+                    id,
+                    deadline,
+                    &anyhow::anyhow!("ID absent from read-only cache snapshot"),
+                );
+            }
+            return Ok(direct);
         }
         if candidates.len() > 1 {
             // The cache said "ambiguous"; confirm against the canonical
@@ -4545,6 +4559,44 @@ mod tests {
             } else {
                 assert!(!cache_path.parent().unwrap().exists());
             }
+        }
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_resolves_agreed_id_missing_from_projection() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, stale_cache) = task_1515_backend(dir.path());
+        let mut req = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        // Assign after the projection was stamped, preserving the origin filename.
+        req.agreed_id = Some("FR-9001".into());
+        crate::object_store::write_object(&store_root.join("objects"), &req).unwrap();
+        crate::git_ops::add_all(&store_root, "objects").unwrap();
+        crate::git_ops::commit(&store_root, "assign agreed ID").unwrap();
+        let missing = dir.path().join("missing/cache.db");
+        let corrupt = dir.path().join("corrupt.db");
+        std::fs::write(&corrupt, b"not sqlite").unwrap();
+        for cache_path in [&missing, &corrupt, &stale_cache] {
+            let before = std::fs::read(cache_path).ok();
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                cache_path,
+            )
+            .unwrap();
+            let found = reader
+                .get_requirement_unambiguous_for_read("FR-9001")
+                .unwrap()
+                .expect("agreed ID must resolve without a current projection");
+            assert_eq!(found.id, req.id);
+            assert_eq!(found.spec_id, req.spec_id);
+            assert_eq!(found.agreed_id, req.agreed_id);
+            assert!(reader.cache.is_read_only());
+            assert_eq!(std::fs::read(cache_path).ok(), before);
+            assert!(!PathBuf::from(format!("{}.refresh-request", cache_path.display())).exists());
         }
     }
 

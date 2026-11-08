@@ -99,17 +99,34 @@ An empty focused subtree does not mean the project has no open work.
 
 ### `aida show`
 
+`show` reads the requested spec from canonical YAML without opening the ID
+allocator. Its derived context comes from a pinned, read-only cache snapshot;
+it never refreshes, migrates, heals, or queues refresh work. Stale context is
+labelled `deferred`. Missing, incompatible or unreadable caches use an empty
+in-memory index. On an index miss, origin IDs read their named canonical
+object directly; agreed IDs use a bounded canonical scan. If that scan runs
+out of time, the result carries an incomplete-scan warning and may be not found.
+Use `aida cache refresh` to update the projection explicitly.
+
+Default human, TOON and card views skip Git linkage and run no Git history
+walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
+`--no-git` suppresses it in those views too. Optional Git linkage has a shared
+1.2-second deadline and reports partial or unknown evidence when it expires.
+Usage events split backend opening into `open.backend`, `open.location` and
+`open.cache` sub-spans for diagnosing remaining latency.
+<!-- trace:BUG-2466 | ai:codex -->
+
 **One line** — the full detail view of one spec.
 
-**Mental model.** Where `list` is breadth, `show` is depth on a single spec: its fields, description, acceptance criteria, relationships, and — by default — its **git linkage** (the commits, files, branch, and PR that reference it). That git section is what makes `show` more than a database dump: it answers "what code actually serves this spec."
+**Mental model.** Where `list` is breadth, `show` is depth on a single spec: its fields, description, acceptance criteria, relationships, and — with `--full`, `--verbose` or JSON output — its **git linkage** (the commits, files, branch, and PR that reference it). That git section is what makes `show` more than a database dump: it answers "what code actually serves this spec."
 
 **Reach for it when** — you're about to work, review, or reason about a specific spec and need its full contract; or you want to see what's already shipped against it.
 
-**Don't reach for it when** — you only need the fields and not the (slower) git scan — pass `--no-git`. Or you want the whole subtree, not one node — that's `--tree`.
+**Don't reach for it when** — you need a broad list of specs — use `aida list`. Default detail reads skip Git linkage; `--no-git` also suppresses it in expanded views. Or you want the whole subtree, not one node — that's `--tree`.
 
 **Key options (rationale only).**
 - `--card` (+ `--brief` / `--full`) — renders a boxed "spec card" instead of the linear view. The pickup skill prints this at session start so the spec's contract stays in scrollback. `--brief` is the one-liner for scripts; `--full` is the no-truncation deep dive.
-- `--no-git` — skip the git-linkage scan. The right default for read-only/scripted contexts that only need the fields; meaningfully faster on specs with many referencing commits.
+- `--no-git` — suppress the git-linkage scan in full, verbose and JSON views when only the fields are needed.
 - `--tree` (+ `--depth`) — show the spec *and its descendants* as an indented hierarchy. The quick "what's under this EPIC" without leaving `show`.
 - `--rels` / `--relations` — force every relationship edge to print. Without it, `show` summarizes (lists edges when few, otherwise a count + pointer to `rel list`) to keep the view readable on hub specs.
 - `-c/--comments` — inline the comment bodies (design discussion, doc seeds) rather than just the count.

@@ -232,20 +232,6 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID> --full` renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
 
-`show` reads the requested spec from canonical YAML without opening the ID
-allocator. Its derived context comes from a pinned, read-only cache snapshot;
-it never refreshes, migrates, heals, or queues refresh work. Stale context is
-labelled `deferred`. Missing, incompatible or unreadable caches use an empty
-in-memory index, while the requested spec still comes from canonical YAML.
-Use `aida cache refresh` to update the projection explicitly.
-
-Default human, TOON and card views skip Git linkage and run no Git history
-walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
-`--no-git` suppresses it in those views too. Optional Git linkage has a shared
-1.2-second deadline and reports partial or unknown evidence when it expires.
-Usage events split backend opening into `open.backend`, `open.location` and
-`open.cache` sub-spans for diagnosing remaining latency.
-<!-- trace:BUG-2466 | ai:codex -->
 
 **How explicit show linkage keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first explicit linkage request runs the full search and, if it finds nothing, notes that. The next explicit linkage request runs the full search once more, this time recording exactly which commits it covered. Later linkage requests only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
 
