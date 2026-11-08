@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T06:03:51.137795261Z
+modified_at: 2026-11-08T06:33:40.120743796Z
 req_type: Story
 tags:
 - area:advisor
@@ -518,6 +518,12 @@ comments:
   content: 'Final advisor-authorized round, scoped to PR-3640 round-4 major: decoupling confirmed controller exit/restart from grant revocation with persisted retired_grants. Replacement uses normal backoff while unresolved attempts retain their reservations and old reviewer grant ancestry. Restart reconciliation uses the existing complete process/group proof to finish Superseding attempts; a Reserved attempt with no dispatcher remains ambiguous (it may hide an unpinned spawned dispatcher), but no longer prevents replacement. Status names retaining PR/attempt/phase evidence. Added production-spawn regression for both crash windows and delayed revocation. Targeted story2571 tests running through lane job j20261108T060148364-2-0; final evidence follows. No change to merge holds, the reported lane-fixture CI failure, or other runtime loops.'
   created_at: 2026-11-08T06:03:51.137795261Z
   modified_at: 2026-11-08T06:03:51.137795261Z
+  session_id: 01a1b9bd094f
+- id: 01a1b9dc-d618-7ee3-b7f7-602e03ac1b6d
+  author: joe
+  content: 'Final-round handoff for PR-3640 round-4 major only: review_watch_service.rs now persists confirmed exited controllers as retired_grants, clears the active controller receipt immediately, and allows replacement after normal backoff while old review descendants retain their grant ancestry. Restart reconciliation completes Superseding attempts using the ordinary full process/group proof. Reserved attempts with no recorded dispatcher remain conservatively reserved but cannot gate controller replacement. Status names retaining PR/attempt/phase evidence; lifecycle and recovery documentation updated. Added regression coverage for both crash windows, replacement spawn, reviewer grant validation and delayed revocation; existing reviewer-survival and revoked-parent rotation assertions updated. Final static checks passed: rustfmt, diff whitespace, trace headers, execution-context inventory (zero additions), store writer inventory, doc links/paths and CI gate audit. Local Rust validation is blocked: lane jobs j20261108T060148364-2-0 and j20261108T060640776-2-0 both timed out at 900 seconds before executing tests; the latter diagnosed overlay-stale for agent-eb517b3f5eb72f8c. A 3600-second retry j20261108T063159451-2-0 reused that same pinned generation and is still compiling at handoff; lane-end supervision stops unfinished jobs. No local Rust pass is claimed: untested=true. Host needs a fresh usable target or fresh CI. Codegraph was unreachable; no lane index was created. Only aida-cli-lib/src/review_watch_service.rs and docs/cli/06-roles-sessions.md changed. Edits intentionally uncommitted per native-seat instruction. Publication declaration recorded: [AI:codex] fix(review-watch): decouple controller restart from grant revocation (Refs STORY-2571). No merge hold clearance, review recording, queue completion, commit or push was attempted.'
+  created_at: 2026-11-08T06:33:40.120743796Z
+  modified_at: 2026-11-08T06:33:40.120743796Z
   session_id: 01a1b9bd094f
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
