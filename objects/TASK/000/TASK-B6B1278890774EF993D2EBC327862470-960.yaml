@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T03:41:13.470036395Z
+modified_at: 2026-11-08T03:42:55.664268084Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -111,6 +111,12 @@ comments:
   modified_at: 2026-11-08T03:26:06.090796263Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b940-84b0-7252-b143-e69139cb5cb2
+  author: joe
+  content: 'Round 4 PR #3644 rework: fixed findings 1 and 2 in tests/test_crate_split_tools.py by adding maintenance.auto=false and gc.auto=0 to both the shared fixture Git helper and the direct fixture commit argv. Ratchet baseline unchanged. Validation: 15 crate-split fixture tests passed; 8 Git auto-maintenance ratchet tests passed; glob ratchet against HEAD passed (220 remaining, zero additions); all 81 CI Build gates classified; git diff --check passed. Finding 3/AC5 remains unverified: native seat cannot publish a reworked head, and make check-ci-fast includes direct Cargo commands prohibited by this lane runner-only policy. Host must commit/publish these uncommitted edits and obtain green functional CI at the new head; supervised merge hold remains expected. No Rust source changes or Cargo tests run.'
+  created_at: 2026-11-08T03:42:55.664268084Z
+  modified_at: 2026-11-08T03:42:55.664268084Z
+  session_id: 01a1b93ee41f
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
