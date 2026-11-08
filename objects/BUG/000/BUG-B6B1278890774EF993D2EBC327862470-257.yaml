@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T09:13:52.579011698Z
+modified_at: 2026-11-08T09:22:28.145752631Z
 req_type: Bug
 tags:
 - area:ci
@@ -140,6 +140,13 @@ comments:
   modified_at: 2026-11-08T09:12:16.782277977Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba77-60b1-7e43-bba3-ae988688d993
+  author: dirtlab
+  content: 'Round 4 addresses the latest review: status_prs now summarizes StatusContext SUCCESS/FAILURE/ERROR/PENDING/EXPECTED; integrate parks a pending active or uncleared recorded hold, while malformed gate statuses remain failing. Pending gate rows without local marker or confirmed active-label release authority refuse immediately instead of waiting indefinitely. Idle evidence reads successful status startedAt; coarse probes fetch labels and report transient unheld pending inspections as InProgress. Updated stale hold wording and added bug2492 regressions for rollup, integration, timestamps, probe evidence and unbounded ship refusal. Shell gate fixtures, shell syntax, rustfmt and diff hygiene pass. Launcher Rust jobs j20261108T091530867-2-0 and j20261108T091648905-2-0 are running/queued; executed-test results not yet available. AC1/AC2 live operator cutover evidence remains required before Completed.'
+  created_at: 2026-11-08T09:22:28.145752631Z
+  modified_at: 2026-11-08T09:22:28.145752631Z
+  session_id: 01a1ba6ef7fd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
