@@ -688,8 +688,8 @@ shows the resolved path and pin diagnostic, including in JSON and TOON output.
 <!-- trace:BUG-2484 | ai:codex -->
 
 API-key launches without the verified executable pin probe the resolved binary's
-own `--version`, `--help`, `exec --help` and `sandbox --help` before launch.
-The root and exec help must declare the value-taking `-c, --config` override
+own version, root help, exec help and sandbox help before launch.
+The root and exec help must declare the value-taking configuration override (`-c`)
 used for `default_permissions="aida"`; generated exec and sandbox flags must
 also be supported. Missing surfaces or failed probes refuse with the binary
 path and reported version. Probes use private HOME/CODEX_HOME without lane
