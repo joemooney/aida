@@ -18,12 +18,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T11:41:11.213204610Z
+modified_at: 2026-11-08T11:42:15.050440482Z
 req_type: Story
 tags:
 - area:human-wait
 - area:lanes
 - from:SPIKE-711
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1baf6-dcd5-7550-8c89-6aab299db444
+  created_at: 2026-11-08T11:42:15.050437420Z
+  created_by: joe
 comments:
 - id: 01a1b9c5-0ecd-7d53-88a5-d2e58eadae3b
   author: joe
@@ -685,6 +691,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1baf7-5eda-7380-b8d0-0ac7e651bfc0
+  author: joe
+  timestamp: 2026-11-08T11:42:16.282975334Z
+  session_id: 01a1baf4e954
+  changes: []
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
