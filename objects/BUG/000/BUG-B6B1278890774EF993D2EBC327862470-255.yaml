@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T15:30:50.366816416Z
+modified_at: 2026-11-08T15:35:33.443424666Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -496,6 +496,19 @@ comments:
     Validation so far: all 8 git auto-maintenance ratchet tests pass; rustfmt --check on all changed Rust files and git diff --check pass. Lane Rust test job j20261108T152655388-2-0 is compiling; CLI feature-disabled check j20261108T152746012-1800403-0 is queued. Neither is yet a test pass. Preserve the punt/publication veto and merge hold. No commit, push, PR mutation, queue completion, ship declaration or review recording is performed by this seat.
   created_at: 2026-11-08T15:30:50.366816416Z
   modified_at: 2026-11-08T15:30:50.366816416Z
+  session_id: 01a1bbc30299
+- id: 01a1bbcc-f343-78d3-a8c7-c4b412a6d3f2
+  author: joe
+  content: |
+    Round 15 native-seat changes (uncommitted): finding 3 preserves the full structured rebase merge cause in ordinary anyhow Display, with a modify/delete regression checking the diagnosis, restored HEAD/branch/content and no active rebase after abort. Finding 4 routes alias, advisor-goal and allocation publication retries through pull_rebase_store_retry: it checks dirt under the shared store writer lock, refuses before fetch, explains that automatic stashing is disabled and requests host review/commit, preserving pending writer changes. Regression covers staged and unstaged changes and a successful clean retry. Finding 5 directly asserts both -c autoStash=false pairs in the hardening arguments for a linked store worktree and a custom store; code-tree scope remains covered. AGENTS.md and OVERVIEW.md describe these lasting invariants.
+
+    Finding 1 remains explicitly punted as design-fork/advisor-action. This implementer disputes treating an implementer policy replacement or an implementer-filed split as advisor approval. No merge-policy ruling or linked follow-up was invented; maybe_sync_pull/burndown failure fencing and modify/delete merge policy remain incomplete. Finding 2 remains blocked: gh pr checks at the current published head reported merge-hold-gate failed and seven CI checks pending. New edits have no published-head CI evidence. Finding 6 is considered and deferred as non-blocking: Storage::load delegates through the database backend and does not expose skipped-object diagnostics; eliminating the doctor-only double parse needs a loader/report interface change. It is not fixed in this slice.
+
+    Final validation: cargo test --profile agent -p aida-core --lib -- bug_2490 executed 12 tests, all passed (lane job j20261108T152655388-2-0, exit 0). cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T152746012-1800403-0, exit 0; a compile check, not a test result). All 8 git auto-maintenance ratchet tests pass; rustfmt --check on all changed Rust files and git diff --check pass. Both lane jobs reported overlay-stale after successful completion because the primary rewrote a seed-generation file. Preserve the punt/publication veto and merge hold. No commit, push, PR mutation, queue completion, ship declaration or review recording is performed by this seat.
+
+    Changed files: aida-core/src/git_ops.rs; aida-core/src/git_ops/tests/store_hook_tests.rs; aida-core/src/alias.rs; aida-core/src/advisor_goal.rs; aida-cli-lib/src/store_sync.rs; AGENTS.md; OVERVIEW.md. All edits remain uncommitted for host collection, subject to the existing punt/publication veto. The patch addresses findings 3, 4 and 5; findings 1 (advisor ruling/scope), 2 (published-head green CI and gate state) and 6 (non-blocking doctor cost) remain open.
+  created_at: 2026-11-08T15:35:33.443424666Z
+  modified_at: 2026-11-08T15:35:33.443424666Z
   session_id: 01a1bbc30299
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
