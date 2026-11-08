@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T12:49:35.869319907Z
+modified_at: 2026-11-08T13:03:32.498265665Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -328,6 +328,24 @@ comments:
   modified_at: 2026-11-08T12:47:26.141230801Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb41-ade3-75f1-b7f7-250eda727ec4
+  author: joe
+  content: |
+    Round 10 native-seat handoff against reviewed 8ad379ae3152:
+
+    Finding 1 addressed: reproduced owned_rebase_abort_failure_is_reported_and_preserved failing in lane job j20261108T125037043-1189804-0. The structured rebase path discarded the failed abort diagnostic after db sync migrated from plain rebase. A shared abort-error helper now retains the original failure and automatic-abort failure at each existing structured-rebase abort site. Strengthened the regression to require the conflicting path and T1717-ABORT-BLOCKED detail. Final job j20261108T125500297-1205282-0 executed the test: 1 passed.
+
+    Finding 2 addressed: validate_pending_store_commit shares the host pending-commit preflight with db_sync_local_window and auto_push_store_best_effort, under their existing store writer locks and before whole-tree staging can erase unmerged stages. New CLI regressions create real conflicts, clear the merge operation while retaining unmerged stages (autostash-like state), and assert unchanged HEAD/index/files on refusal. They cover a non-object queue registry conflict and a marker-free object modify/delete conflict; explicit registry resolution supplies a positive sync control. Final job j20261108T125217335-2-0 executed both tests: 2 passed.
+
+    Changed files (uncommitted, native seat): aida-core/src/git_ops.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli-lib/src/store_push_pull.rs; aida-cli/tests/task_1717_store_writer_lock.rs.
+    Additional validation: writer inventory passed (3372 sinks/293 mappings); all 42 inventory fixture tests passed; all 10 git-maintenance/ownership-liveness tests passed; portability ratchet, rustfmt --check and git diff --check passed. Codegraph could not open its database; source navigation used rg. Full CI at the next head remains host work; no claim of a full CI pass.
+
+    Finding 3 remains blocked on the explicitly requested advisor action: record the semantic merge-policy ruling and either require the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here, or file and link a follow-up. No ruling or linked split exists in the current spec. CLAUDE.md requires advisor signoff for architecture changes. This implementer does not supply that authority. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix. Finding 4 remains carried/non-blocking: doctor still parses objects twice; the loader does not expose reusable per-object diagnostics, and no loader API expansion is included in this correctness repair.
+
+    No commit, push, PR creation, queue completion, ship declaration, hold clearance or review recording performed. Host owns Git publication, subject to the unresolved punt and hold.
+  created_at: 2026-11-08T13:03:26.179469336Z
+  modified_at: 2026-11-08T13:03:26.179469336Z
+  session_id: 01a1bb34f948
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
@@ -648,6 +666,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb41-c692-7ad2-aad1-a612f8914583
+  author: joe
+  timestamp: 2026-11-08T13:03:32.498283078Z
+  session_id: 01a1bb34f948
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -657,3 +683,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 10 finding 3 explicitly requires advisor action: record the semantic merge-policy ruling and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. No ruling or linked split is recorded; CLAUDE.md requires advisor signoff for architecture changes. Findings 1 and 2 are repaired in uncommitted edits with all three targeted tests passing. Finding 4 remains carried and non-blocking. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.'
+  raised_by: implementer
+  raised_at: 2026-11-08T13:03:32.498265665Z
