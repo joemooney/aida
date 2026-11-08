@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:26:30.635530303Z
-modified_at: 2026-11-08T20:11:23.550316373Z
+modified_at: 2026-11-08T20:25:50.910343961Z
 req_type: Bug
 tags:
 - area:ship
@@ -26,6 +26,13 @@ comments:
   content: 'Implementation prepared: preserve the full forge error chain in ordinary ship and host seat publication errors; refuse GitHub PR titles over 256 characters with measured length, limit and retry guidance. Added regressions for nested error Display and ASCII/Unicode title boundaries. Lane-runner validation pending; edits remain uncommitted for host publication.'
   created_at: 2026-11-08T20:11:23.550316373Z
   modified_at: 2026-11-08T20:11:23.550316373Z
+  session_id: 01a1bcc7b8ef
+  harness_version: codex-cli 0.167.0
+- id: 01a1bcd6-b83e-7640-ba47-ce811479a8d2
+  author: dirtlab
+  content: 'Native-seat handoff: changed aida-cli-lib/src/forge.rs, pr_cmd.rs and ship_from_seat.rs. Forge diagnostics now remain visible in Display; GitHub titles above 256 characters refuse with measured length, limit and shortening guidance. Added nested-error and ASCII/Unicode boundary regressions. rustfmt and git diff --check pass. untested=true: lane job j20261108T201040771-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- open_change_) timed out after 900s compiling dependencies, exit 124, before any tests executed. No compiler errors reported. Edits left uncommitted; host publication and queue completion remain pending.'
+  created_at: 2026-11-08T20:25:50.910343961Z
+  modified_at: 2026-11-08T20:25:50.910343961Z
   session_id: 01a1bcc7b8ef
   harness_version: codex-cli 0.167.0
 history:
