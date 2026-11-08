@@ -13341,18 +13341,10 @@ pub(crate) fn handle_queue_work(
             .map(|r| r.status.clone())
     });
 
-    // Pull the orphan store before resolving the worktree — keeps the
-    // queue + req view fresh for the new session. Best-effort: a
-    // failed pull (offline, divergent) prints a note and continues
-    // with local view rather than aborting the whole pickup.
+    // trace:BUG-2501 | ai:codex — never start work from a failed sync.
     if !no_pull {
-        if let Err(e) = run_aida_db_sync_pull(storage.path()) {
-            eprintln!(
-                "  {} {}",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                format!("pre-pickup pull failed; proceeding with local view: {}", e).yellow()
-            );
-        }
+        run_aida_db_sync_pull(storage.path())
+            .context("pre-pickup store pull failed; pickup stopped")?;
     }
 
     // TASK-619: cross-machine duplicate-pickup guard. Session leases are

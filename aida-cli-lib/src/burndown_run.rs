@@ -352,19 +352,10 @@ pub(crate) fn handle_burndown_run(
         })?;
     }
 
-    // BUG-530: sync the orphan store before computing the blessed set. The
-    // preflight reads the local `.aida-store/` worktree (via
-    // resolve_burndown_sets → load_store_for_lookup → GitBackend), which can
-    // LAG origin when a prior drain pushed Done→Completed bumps that this clone
-    // hasn't pulled — so the preflight would otherwise announce stale specs
-    // (e.g. already-Completed/unqueued ones). maybe_sync_pull is the proven
-    // `--sync` primitive: fetch + ff/rebase, and it NEVER fails the caller (every
-    // error → a warning), so a degraded/offline sync just falls back to the
-    // local view. Runs on dry-run too, so the previewed set matches the real
-    // drain. trace:BUG-530 | ai:claude
+    // trace:BUG-2501 | ai:codex — sync must succeed before queueing work.
     if let Ok(project_root) = find_project_root() {
         if let Some(store_path) = detect_distributed_store_from(&project_root) {
-            let _ = maybe_sync_pull(&store_path);
+            maybe_sync_pull(&store_path)?;
         }
     }
 
@@ -667,7 +658,7 @@ pub(crate) fn handle_burndown_run(
         // A `--max` cap makes "blessed specs remain unstarted" an EXPECTED stop,
         // so the unstarted probe is skipped; open wave PRs must still drain.
         let mut residual =
-            probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some());
+            probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some())?;
         // TASK-1169 / ADR-21: the launcher integrates the open wave PRs ITSELF
         // — a Rust CI wait with no harness ceiling and no 10-minute tool cap —
         // BEFORE deciding whether another agent turn is even needed. Run on a
@@ -685,7 +676,7 @@ pub(crate) fn handle_burndown_run(
                     batch,
                     &ready,
                     max.is_some(),
-                );
+                )?;
             }
         }
         match burndown::drain_followup(code, residual.is_empty(), rounds_used, MAX_RESUME_ROUNDS) {
@@ -730,8 +721,7 @@ pub(crate) fn handle_burndown_run(
 /// (the unstarted remainder — skipped when `--max` capped the run, where a
 /// remainder is an expected stop), and matches the forge's open PRs against
 /// the drain's scope (initial blessed set ∪ still-ready set). Every leg is
-/// best-effort: a failed probe degrades to "no residual" rather than wedging
-/// the launcher in a relaunch loop on bad data.
+/// best-effort except store refresh: failed sync refuses further writes.
 // trace:BUG-755 | ai:claude
 pub(crate) fn probe_burndown_residual(
     project_root: &std::path::Path,
@@ -740,12 +730,12 @@ pub(crate) fn probe_burndown_residual(
     batch: Option<&str>,
     blessed: &[String],
     spec_capped: bool,
-) -> burndown::ResidualWork {
+) -> Result<burndown::ResidualWork> {
     // Refresh the store view first — the drain's merges push Done→Completed
     // bumps this clone may not have pulled (same reason as the BUG-530 preflight
-    // sync; never fails the caller).
+    // sync). A failed refresh stops integration and follow-up writes.
     if let Some(store_path) = detect_distributed_store_from(project_root) {
-        let _ = maybe_sync_pull(&store_path);
+        maybe_sync_pull(&store_path)?;
     }
     let unstarted: Vec<String> = if spec_capped {
         Vec::new()
@@ -803,10 +793,10 @@ pub(crate) fn probe_burndown_residual(
         .into_values()
         .map(|pr| (pr.number, pr.title, pr.head_branch))
         .collect();
-    burndown::ResidualWork {
+    Ok(burndown::ResidualWork {
         unmerged_prs: burndown::match_wave_prs(&scope, &open, &facts),
         unstarted,
-    }
+    })
 }
 
 /// TASK-1169 / ADR-21: the launcher's OWN integration leg — the impure half of

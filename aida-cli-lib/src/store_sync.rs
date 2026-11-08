@@ -1674,24 +1674,8 @@ pub(crate) fn cache_freshness_threshold_secs() -> u64 {
         .unwrap_or(300)
 }
 
-/// STORY-78 Part 2: the implementation of `--sync` on read commands.
-/// Mirrors `aida db sync --pull` but without the commit-pending step
-/// (read commands have no pending work to commit) and without conflict
-/// detection (the caller is about to read the result anyway). Designed
-/// to NEVER fail the caller: every failure mode is converted to a
-/// warning and the command continues with the local view.
-///
-/// Failure modes handled here:
-///   - store missing / not a git repo → warn, skip
-///   - orphan store has uncommitted changes → warn, skip (pull --rebase
-///     would abort partway and leave weirder state than we started with)
-///   - offline / unreachable origin → warn, skip
-///   - any other git error during rebase → abort the rebase, warn, skip
-///
-/// On success, updates `~/.aida/cache/last-fetch.toml` so the statusline
-/// `cache:behind|?` indicator immediately reflects the pull (instead of
-/// waiting for STORY-79's background fetcher).
-/// trace:STORY-78 | ai:claude
+/// Refresh before reads or mutations; failed pulls refuse the caller.
+/// trace:BUG-2501 | ai:codex
 pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     if !aida_core::git_ops::is_git_repo(store_path) {
         eprintln!(
@@ -1706,6 +1690,12 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     // lock. A rebase that was already in progress (someone else's recovery)
     // is reported and left alone, never aborted.
     let pulled = aida_core::db::with_store_write_lock(store_path, || {
+        // trace:BUG-2501 | ai:codex — never abort someone else's recovery.
+        if aida_core::git_ops::rebase_in_progress(store_path) {
+            return Ok(SyncPull::Failed(anyhow::anyhow!(
+                "store pull refused: rebase already in progress; resolve or abort it before retrying"
+            )));
+        }
         // A failing `git status` is a failed pull, not a clean tree.
         match aida_core::git_ops::has_changes_checked(store_path) {
             Ok(true) => return Ok(SyncPull::Dirty),
@@ -1735,11 +1725,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     });
     match pulled {
         Ok(SyncPull::Dirty) => {
-            eprintln!(
-                "{} --sync: orphan store has uncommitted changes; skipping pull",
-                "Warning:".yellow().bold()
-            );
-            eprintln!("  Run `aida db sync --pull` manually after committing or stashing.");
+            anyhow::bail!("store pull refused: uncommitted changes; commit or stash the store before retrying");
         }
         Ok(SyncPull::Pulled) => {
             // Best-effort: refresh the statusline freshness signal so
@@ -1754,18 +1740,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             aida_core::git_ops::opportunistic_store_gc(store_path);
         }
         Ok(SyncPull::Failed(e)) | Err(e) => {
-            let first_line = e
-                .to_string()
-                .lines()
-                .next()
-                .unwrap_or("unknown error")
-                .to_string();
-            eprintln!(
-                "{} --sync pull failed: {}",
-                "Warning:".yellow().bold(),
-                first_line
-            );
-            eprintln!("  Falling back to local view.");
+            return Err(e).context("store pull failed; refusing to continue with local view");
         }
     }
     Ok(())
@@ -1960,4 +1935,32 @@ pub(crate) fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn_retrying_etxtbsy();
+}
+
+// trace:BUG-2501 | ai:codex
+#[cfg(test)]
+mod pull_failure_tests {
+    use super::*;
+
+    #[test]
+    fn sync_pull_refuses_dirty_store_and_unreachable_remote() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        aida_core::git_ops::init(repo).unwrap();
+        aida_core::git_ops::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(repo, "seed").unwrap();
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        let error = maybe_sync_pull(repo).unwrap_err().to_string();
+        assert!(error.contains("uncommitted changes"), "{error}");
+        assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(
+            error.to_string().contains("refusing to continue"),
+            "{error:#}"
+        );
+        assert!(!aida_core::git_ops::rebase_in_progress(repo));
+    }
 }

@@ -2044,30 +2044,11 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     // trace:BUG-2162 | ai:claude
     evidence::with_sync_lock(repo, || {
         let gate = evidence::preflight(repo, &target)?;
-        rebase_onto(repo, &target)?;
+        // trace:BUG-2501 | ai:codex — ordinary pulls use the same structural
+        // resolver as explicit auto-merge, including locked retry callers.
+        rebase_auto_merge_onto(repo, &target)?;
         gate.map_or(Ok(()), |gate| gate.finalize(repo))
     })
-}
-
-fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
-    let result = git(repo, &["rebase", "--end-of-options", target])?;
-    if !result.success {
-        // A failed pull may have started a rebase and detached HEAD.  Never
-        // leave the managed store in that state: later writers could commit
-        // successfully onto the disposable rebase HEAD. trace:BUG-1229 | ai:codex
-        if rebase_in_progress(repo) {
-            let abort = git(repo, &["rebase", "--abort"])?;
-            if !abort.success {
-                anyhow::bail!(
-                    "git pull --rebase failed: {}; automatic `git rebase --abort` also failed: {}",
-                    result.stderr,
-                    abort.stderr
-                );
-            }
-        }
-        anyhow::bail!("git pull --rebase failed: {}", result.stderr);
-    }
-    Ok(())
 }
 
 /// Outcome of an auto-merging store-leg pull.
@@ -2076,17 +2057,16 @@ pub enum StorePullOutcome {
     /// `git pull --rebase` succeeded with no conflict.
     Clean,
     /// One or more conflicting spec objects were structurally auto-merged
-    /// (history unioned, scalars resolved LWW) and the rebase completed.
+    /// (history unioned, conflicting scalars taken from upstream) and the rebase completed.
     /// Carries a one-line note per resolved spec for the caller to surface.
     AutoMerged { notes: Vec<String> },
 }
 
 /// Pull-rebase the orphan store, auto-reconciling conflicting spec YAMLs.
 ///
-/// STORY-641 / MU-204: a plain `pull_rebase` stops on a textual conflict in
-/// `objects/TYPE/000/SPEC.yaml` whenever two clones edited the SAME spec —
-/// even though the spec is structurally union-mergeable (`history:` is
-/// append-only by entry id; scalars resolve via LWW). This wrapper attempts
+/// Ordinary `pull_rebase` and this reporting variant share a resolver for
+/// concurrent spec edits: upstream scalars and append-only evidence unioned
+/// by id and ordered by timestamp. This wrapper attempts
 /// the rebase and, if it conflicts AND every unmerged path has a known union
 /// rule — a spec object under `objects/**/*.yaml`, the oplog, or a per-user
 /// queue registry under `registry/queues/*.yaml` (BUG-725) — runs the
@@ -2119,7 +2099,26 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
 
 #[cfg(feature = "native")]
 fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome> {
-    let result = git(repo, &["rebase", "--end-of-options", target])?;
+    // trace:BUG-2501 | ai:codex — never autostash pending writes or take over
+    // another invocation's paused rebase. The caller holds the writer lock.
+    anyhow::ensure!(
+        !rebase_in_progress(repo),
+        "store pull refused: rebase already in progress; resolve or abort it before retrying"
+    );
+    anyhow::ensure!(
+        !has_changes_checked(repo)?,
+        "store pull refused: uncommitted changes; commit or stash the store before retrying"
+    );
+    let result = git(
+        repo,
+        &[
+            "-c",
+            "rebase.autoStash=false",
+            "rebase",
+            "--end-of-options",
+            target,
+        ],
+    )?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -2155,7 +2154,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         }
 
         // Every conflicted path must be a structurally-mergeable artifact: a
-        // spec object (history union + scalar LWW), the oplog (operations
+        // spec object (history union + upstream scalars), the oplog (operations
         // union by id + lamport reconcile), or a per-user queue registry
         // (entry union by requirement_id — BUG-725, the same-user-two-machines
         // collision). Anything else (agreed_counters, blocks, nodes) → bail to
@@ -2183,10 +2182,16 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 // trace:STORY-1226 | ai:claude
                 resolve_schedule_ledger_conflict(repo, path)
             } else {
-                resolve_spec_conflict(repo, path)
+                resolve_spec_conflict(repo, path, true)
             };
             match resolved {
                 Ok(note) => {
+                    // Upstream deletion is already resolved by `git rm`.
+                    // trace:BUG-2501 | ai:codex
+                    if !unmerged_paths(repo)?.contains(path) {
+                        notes.push(note);
+                        continue;
+                    }
                     add(repo, &[path])
                         .with_context(|| format!("git add {path} after auto-merge"))?;
                     notes.push(note);
@@ -2560,8 +2565,9 @@ fn resolve_queue_conflict(repo: &Path, path: &str) -> Result<String> {
 /// Reads the base/ours/theirs blobs from the index stages and writes the
 /// merged YAML back to the working tree. Returns a one-line note.
 #[cfg(feature = "native")]
-fn resolve_spec_conflict(repo: &Path, path: &str) -> Result<String> {
-    use crate::conflict::merge_spec_three_way;
+// trace:BUG-2501 | ai:codex
+fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<String> {
+    use crate::conflict::{merge_spec_three_way, merge_spec_upstream};
     use crate::models::Requirement;
 
     // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
@@ -2586,17 +2592,32 @@ fn resolve_spec_conflict(repo: &Path, path: &str) -> Result<String> {
     let theirs = parse("theirs", &theirs_yaml)?;
     let base = parse("base", &base_yaml)?;
 
-    // Both sides must exist to do a 3-way merge. If one side deleted the
-    // file, that's not an append-only history conflict — defer to manual.
+    // Pulls retain the upstream side of modify/delete conflicts. Symmetric
+    // reconciliation still requires a manual decision for deletion.
+    // trace:BUG-2501 | ai:codex
     let (ours, theirs) = match (ours, theirs) {
         (Some(o), Some(t)) => (o, t),
+        (Some(o), None) if upstream => (o.clone(), o),
+        (None, Some(_)) if upstream => {
+            let removed = git(repo, &["rm", "--force", "--", path])?;
+            anyhow::ensure!(
+                removed.success,
+                "resolve upstream deletion of {path}: {}",
+                removed.stderr
+            );
+            return Ok(format!("kept upstream deletion of {path}"));
+        }
         _ => anyhow::bail!("one side deleted {path}; not auto-mergeable"),
     };
     // Anchor the union with the merge base when present; otherwise use ours
     // as a harmless base (ours+theirs union still preserves everything).
     let base = base.unwrap_or_else(|| ours.clone());
 
-    let merged = merge_spec_three_way(&base, &ours, &theirs);
+    let merged = if upstream {
+        merge_spec_upstream(&base, &ours, &theirs)
+    } else {
+        merge_spec_three_way(&base, &ours, &theirs)
+    };
 
     let yaml = serde_yaml::to_string(&merged)
         .with_context(|| format!("serialize merged requirement for {path}"))?;
@@ -2791,7 +2812,7 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
         } else if is_schedule_ledger_path(path) {
             resolve_schedule_ledger_conflict(repo, path)
         } else {
-            resolve_spec_conflict(repo, path)
+            resolve_spec_conflict(repo, path, false)
         };
         match resolved {
             Ok(note) => {
@@ -5752,7 +5773,7 @@ pub fn register_node_full_identity(
                     if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
                         eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                         anyhow::bail!(
-                        "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete node registration: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                     }
@@ -5948,7 +5969,7 @@ pub fn register_node_remote_only(
                 if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
                     eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                     anyhow::bail!(
-                        "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete remote-only node backfill: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                 }
@@ -6081,7 +6102,7 @@ pub fn set_node_identity_field(
                 if attempt > 0 && !local_only {
                     if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
                         anyhow::bail!(
-                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            "Cannot update node identity: store pull failed after {} attempts. Error: {}",
                             attempt,
                             e
                         );
@@ -10254,8 +10275,190 @@ mod tests {
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
     }
 
-    // A failed plain store pull owns the rebase it started and must abort it
-    // before returning, restoring the branch checkout. trace:BUG-1229 | ai:codex
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn pull_merges_concurrent_spec_edits_with_upstream_scalars() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "--bare"]).unwrap();
+
+        let first = dir.path().join("first");
+        home_fixture_init(&first).unwrap();
+        configure_user(&first, "Test", "test@example.com").unwrap();
+        git(&first, &["checkout", "-b", "aida-store"]).unwrap();
+        use crate::models::{Comment, Requirement};
+        let relative = "objects/BUG/000/BUG-test.yaml";
+        std::fs::create_dir_all(first.join("objects/BUG/000")).unwrap();
+        let seed = Requirement::new("seed".into(), "description".into());
+        std::fs::write(first.join(relative), serde_yaml::to_string(&seed).unwrap()).unwrap();
+        add(&first, &[relative]).unwrap();
+        commit(&first, "seed").unwrap();
+        git(&first, &["remote", "add", "origin", hub.to_str().unwrap()]).unwrap();
+        assert!(push(&first, "origin", "aida-store").unwrap());
+        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]).unwrap();
+
+        git(dir.path(), &["clone", hub.to_str().unwrap(), "second"]).unwrap();
+        let second = dir.path().join("second");
+        configure_user(&second, "Test", "test@example.com").unwrap();
+
+        let mut remote = seed.clone();
+        remote.title = "upstream".into();
+        remote
+            .comments
+            .push(Comment::new("remote".into(), "remote comment".into()));
+        std::fs::write(
+            first.join(relative),
+            serde_yaml::to_string(&remote).unwrap(),
+        )
+        .unwrap();
+        add(&first, &[relative]).unwrap();
+        commit(&first, "remote edit").unwrap();
+        assert!(push(&first, "origin", "aida-store").unwrap());
+
+        let mut local = seed.clone();
+        local.title = "local".into();
+        local.modified_at = remote.modified_at + chrono::Duration::days(1);
+        local
+            .comments
+            .push(Comment::new("local".into(), "local comment".into()));
+        std::fs::write(
+            second.join(relative),
+            serde_yaml::to_string(&local).unwrap(),
+        )
+        .unwrap();
+        add(&second, &[relative]).unwrap();
+        commit(&second, "local edit").unwrap();
+        pull_rebase(&second, "origin", "aida-store").unwrap();
+        assert!(!rebase_in_progress(&second));
+        assert_eq!(current_branch(&second).unwrap(), "aida-store");
+        let merged: Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(second.join(relative)).unwrap()).unwrap();
+        assert_eq!(merged.title, "upstream");
+        assert_eq!(merged.comments.len(), 2);
+        assert!(merged
+            .comments
+            .iter()
+            .any(|c| c.id == remote.comments[0].id));
+        assert!(merged.comments.iter().any(|c| c.id == local.comments[0].id));
+        assert!(!has_changes_checked(&second).unwrap());
+        // Both pull entry points refuse staged and unstaged pending writes,
+        // even when the operator enables Git autostashing.
+        assert!(
+            git(&second, &["config", "rebase.autoStash", "true"])
+                .unwrap()
+                .success
+        );
+        for staged in [false, true] {
+            let before = head_sha(&second).unwrap();
+            std::fs::write(second.join(relative), "pending content\n").unwrap();
+            if staged {
+                add(&second, &[relative]).unwrap();
+            }
+            let error = pull_rebase(&second, "origin", "aida-store").unwrap_err();
+            assert!(
+                error.to_string().contains("uncommitted changes"),
+                "{error:#}"
+            );
+            let error = pull_rebase_auto_merge(&second, "origin", "aida-store").unwrap_err();
+            assert!(
+                error.to_string().contains("uncommitted changes"),
+                "{error:#}"
+            );
+            assert_eq!(head_sha(&second).unwrap(), before);
+            assert_eq!(
+                std::fs::read_to_string(second.join(relative)).unwrap(),
+                "pending content\n"
+            );
+            assert!(git(&second, &["stash", "list"]).unwrap().stdout.is_empty());
+            assert!(!rebase_in_progress(&second));
+            assert!(git(&second, &["reset", "--hard", "HEAD"]).unwrap().success);
+        }
+    }
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn pull_modify_delete_keeps_upstream() {
+        for delete_upstream in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let hub = dir.path().join("hub.git");
+            std::fs::create_dir_all(&hub).unwrap();
+            git(&hub, &["init", "--bare"]).unwrap();
+
+            let first = dir.path().join("first");
+            home_fixture_init(&first).unwrap();
+            configure_user(&first, "Test", "test@example.com").unwrap();
+            git(&first, &["checkout", "-b", "aida-store"]).unwrap();
+            use crate::models::{Comment, Requirement};
+            let relative = "objects/BUG/000/BUG-test.yaml";
+            std::fs::create_dir_all(first.join("objects/BUG/000")).unwrap();
+            let seed = Requirement::new("seed".into(), "description".into());
+            std::fs::write(first.join(relative), serde_yaml::to_string(&seed).unwrap()).unwrap();
+            add(&first, &[relative]).unwrap();
+            commit(&first, "seed").unwrap();
+            git(&first, &["remote", "add", "origin", hub.to_str().unwrap()]).unwrap();
+            assert!(push(&first, "origin", "aida-store").unwrap());
+            git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]).unwrap();
+
+            git(dir.path(), &["clone", hub.to_str().unwrap(), "second"]).unwrap();
+            let second = dir.path().join("second");
+            configure_user(&second, "Test", "test@example.com").unwrap();
+
+            let mut remote = seed.clone();
+            remote.title = "upstream".into();
+            remote
+                .comments
+                .push(Comment::new("remote".into(), "remote comment".into()));
+            if delete_upstream {
+                assert!(git(&first, &["rm", "--", relative]).unwrap().success);
+            } else {
+                std::fs::write(
+                    first.join(relative),
+                    serde_yaml::to_string(&remote).unwrap(),
+                )
+                .unwrap();
+            }
+            if !delete_upstream {
+                add(&first, &[relative]).unwrap();
+            }
+            commit(&first, "remote edit").unwrap();
+            assert!(push(&first, "origin", "aida-store").unwrap());
+
+            let mut local = seed.clone();
+            local.title = "local".into();
+            local.modified_at = remote.modified_at + chrono::Duration::days(1);
+            local
+                .comments
+                .push(Comment::new("local".into(), "local comment".into()));
+            if delete_upstream {
+                std::fs::write(
+                    second.join(relative),
+                    serde_yaml::to_string(&local).unwrap(),
+                )
+                .unwrap();
+            } else {
+                assert!(git(&second, &["rm", "--", relative]).unwrap().success);
+            }
+            if delete_upstream {
+                add(&second, &[relative]).unwrap();
+            }
+            commit(&second, "local edit").unwrap();
+            pull_rebase(&second, "origin", "aida-store").unwrap();
+            assert!(!rebase_in_progress(&second));
+            assert_eq!(current_branch(&second).unwrap(), "aida-store");
+            if delete_upstream {
+                assert!(!second.join(relative).exists());
+            } else {
+                let merged: Requirement =
+                    serde_yaml::from_str(&std::fs::read_to_string(second.join(relative)).unwrap())
+                        .unwrap();
+                assert_eq!(merged.title, "upstream");
+            }
+            assert!(!has_changes_checked(&second).unwrap());
+        }
+    }
+
+    // A failed pull must restore the original branch. trace:BUG-1229 | ai:codex
     #[test]
     fn failed_pull_rebase_aborts_and_restores_branch() {
         let dir = tempfile::tempdir().unwrap();
@@ -10291,7 +10494,7 @@ mod tests {
         let err = pull_rebase(&second, "origin", "aida-store")
             .unwrap_err()
             .to_string();
-        assert!(err.contains("git pull --rebase failed"), "{err}");
+        assert!(err.contains("non-mergeable path `shared.yaml`"), "{err}");
         assert!(!rebase_in_progress(&second));
         assert_eq!(current_branch(&second).unwrap(), "aida-store");
         assert_eq!(head_sha(&second).unwrap(), local_head);

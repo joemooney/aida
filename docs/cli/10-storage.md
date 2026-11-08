@@ -24,6 +24,21 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 The `aida-store` branch can also carry an `adoption/` namespace: `adoption/settings.toml` with shared, non-executable project settings and guidance documents. Each worktree projects one pinned revision of it into the git-ignored `.aida/` (see [`aida adoption`](07-project-setup.md#aida-adoption)), so a project can adopt AIDA without tracked configuration on its code branches. Settings are read from Git objects at one commit, never from a checkout, so a branch that moves mid-read cannot mix two revisions. The plane must be an orphan: one that shares history with the product branch is refused. Executable settings are not accepted there; they keep coming from the trusted default-branch config. Publishing plane content is an ordinary store write and goes through the same outbound checks as any other store change.
 
+### Concurrent object edits and pull failures
+
+Store pulls resolve conflicting object YAML in process. Upstream fields win;
+comments and history are unioned by ID and sorted by timestamp. Processing
+records are also retained. Modify/delete conflicts keep upstream's state.
+The separate symmetric reconciliation merge keeps its existing policy, and
+hypothesis evidence checks still apply to every result.
+
+A pull refuses uncommitted store changes without autostashing them. Commit or
+stash those changes explicitly before retrying. Failed pre-pickup and burndown
+pulls stop the operation; `--sync` also returns an error instead of continuing
+with a local view. Retry diagnostics preserve Git's error and describe a store
+pull failure rather than assuming the remote is unreachable.
+<!-- trace:BUG-2501 | ai:codex -->
+
 ### Store sync and pre-registration
 
 Every store sync AIDA runs (the `aida pull` store leg, `aida db sync`, push-retry pulls, `aida remote reconcile` merges and fast-forwards, and the coordination refreshes behind claims and locks) checks [locked hypotheses](02-specs.md#pre-registering-a-hypothesis) on both sides before Git touches the store, and checks the result before reporting success. A clean Git merge is not enough on its own.
