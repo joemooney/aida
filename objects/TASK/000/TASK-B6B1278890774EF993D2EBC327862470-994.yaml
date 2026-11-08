@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T12:41:45.623898030Z
-modified_at: 2026-11-08T15:25:24.930045350Z
+modified_at: 2026-11-08T15:25:31.330487488Z
 req_type: Task
 tags:
 - carried-from:TASK-3472
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1ba22-fb45-77b3-8aaa-626d7e65356e
   created_at: 2026-11-08T15:25:24.930041587Z
   created_by: joe
+comments:
+- id: 01a1bbc3-c342-7f22-a9d7-ab4d2bd6ddac
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Rollback-only edge; recovered by resetting review-watch state.'
+  created_at: 2026-11-08T15:25:31.330487488Z
+  modified_at: 2026-11-08T15:25:31.330487488Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb7d-1669-7980-bb3a-12bd55b38c66
   author: joe
