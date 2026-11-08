@@ -1,0 +1,29 @@
+id: 01a1bb2d-c1e8-79c0-b692-a3fb7e0ad011
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-992
+title: 'NON-BLOCKING, unmet CHANGE item: TASK-3472 calls for a Help-Golden trailer; nei…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, unmet CHANGE item: TASK-3472 calls for a Help-Golden trailer; neither 317e7493a87 nor c196dce0864 has one (round-1 finding 3, left to the host). No gate reads it: scripts/check-help-golden-cochange.sh only honours 'unchanged', and the golden did co-change. Add 'Help-Golden: updated' to the squash body, or waive it.
+
+  PR: #3674
+  Reviewed sha: c196dce0864b77ad45696bf8940b8ff8e367a4fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:40.584747246Z
+modified_at: 2026-11-08T12:41:40.584747246Z
+req_type: Task
+tags:
+- carried-from:TASK-3472
+- finding-hash:63fab18c
+- from-review:PR-3674
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
