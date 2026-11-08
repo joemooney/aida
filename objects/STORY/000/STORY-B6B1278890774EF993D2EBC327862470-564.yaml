@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479533Z
-modified_at: 2026-11-08T05:56:43.653708070Z
+modified_at: 2026-11-08T06:03:37.466219064Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -188,6 +188,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9c1-55be-7a91-ab4a-1948f3e7f74d
+  author: joe
+  timestamp: 2026-11-08T06:03:37.790136562Z
+  session_id: 01a1b9bfa726
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -202,3 +208,11 @@ attention_reason:
   detail: 'Round-3 review finding 1 is agreed and remains blocked on host/operator evidence: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits > 0 on both primary and dell1. This native seat cannot run jobs on both hosts, and no advisor amendment is recorded. Findings 2 and 3 are fixed locally: removed per-change status notes from AGENTS.md/OVERVIEW.md and bound the optional host before host_recorded_clone. Required targeted tests and make check-ci-fast are in progress; results will be recorded separately. Preserve the publication veto and existing merge hold.'
   raised_by: implementer
   raised_at: 2026-11-08T05:56:43.653708070Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Head 3c2300f is only a merge from main on top of dd487ec; PR files are byte-identical to the round-2 review. AC0/AC2/AC3/AC4 met with tests; AC1 (two-host lane-job sccache hits) still unverified and none of the round-2 findings were addressed. CI at head pending.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T06:03:37.466219064Z
