@@ -16,12 +16,12 @@ description: |
   1. Find where slow `show` calls wait: lock acquisition, cache refresh, or git/store I/O. Instrument the phases if the usage log cannot already attribute them.
   2. A read-only `show` must not block behind a writer or a cache rebuild for longer than the ceiling. Serve the last consistent snapshot, or time out to it.
   3. Over the 24h window after the fix lands, the performance-guard passes at the unchanged budget (2000 ms, 10%, 5000 ms ceiling). Do not loosen the budget (ADR-53).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T06:41:17.983959032Z
+modified_at: 2026-11-08T07:23:19.135984045Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -312,6 +312,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba0a-4adf-79c3-b4c7-c8bdf8226f9a
+  author: aida-orchestrator
+  timestamp: 2026-11-08T07:23:19.136006587Z
+  session_id: 01a1ba06b88e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
   branch: main
@@ -321,3 +330,11 @@ filed_at:
   vendor: claude
   session: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 fixes verified in code (scan only after alias miss and only on stale/unavailable snapshot, tests added, docs moved). Blocking: default show dropped linkage but four skills and the --no-git help/docs still promise it, and CI is still queued at this head so the contracts fix and all tests are unproven.'
+  recovery_hint: address the review findings, move BUG-2466 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T07:23:19.135984045Z
