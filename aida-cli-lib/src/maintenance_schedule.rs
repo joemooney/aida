@@ -3660,22 +3660,6 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
-        // Read-only monthly guard; forced cleanup stays with the operator.
-        // trace:TASK-1596 | ai:codex
-        (
-            &["doctor check merged-agent-worktrees --fail-on-findings"],
-            ScheduledCommand {
-                display: "doctor check merged-agent-worktrees --fail-on-findings",
-                args: &[
-                    "doctor",
-                    "check",
-                    "merged-agent-worktrees",
-                    "--json",
-                    "--fail-on-findings",
-                ],
-                hook_allowed: false,
-            },
-        ),
         // STORY-1700: the drive-mandate tick. Model-free and grant-free; a
         // no-op unless a drive mandate is active (the job's `when` gate).
         // trace:STORY-1700 | ai:claude

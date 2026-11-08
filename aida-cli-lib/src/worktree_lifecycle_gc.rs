@@ -59,33 +59,38 @@ fn bytes_until(path: &Path, deadline: Instant) -> Result<u64> {
     Ok(total)
 }
 
-// Ignored local state is work too. Only ignored target/ build outputs are
-// disposable; tracked modifications under target/ still refuse removal.
+// Runtime noise is shared with seat probes; tracked changes always retain work.
 // trace:TASK-1222 | ai:codex
 fn linked_clean(path: &Path) -> Result<bool> {
-    Ok(git(
+    let status = git(
         path,
         &[
             "status",
-            "--porcelain",
+            "--porcelain=v2",
             "--untracked-files=all",
             "--ignore-submodules=none",
+            "-z",
         ],
-    )?
-    .is_empty()
-        && git(
-            path,
-            &[
-                "ls-files",
-                "--others",
-                "--ignored",
-                "--exclude-standard",
-                "--",
-                ".",
-                ":(exclude)target",
-            ],
-        )?
-        .is_empty())
+    )?;
+    for entry in status.split('\0').filter(|s| !s.is_empty()) {
+        if !crate::seat_clone::is_runtime_noise_entry(path, entry) {
+            return Ok(false);
+        }
+    }
+    let ignored = git(
+        path,
+        &[
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "-z",
+        ],
+    )?;
+    Ok(ignored
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .all(|entry| crate::seat_clone::is_runtime_noise_entry(path, &format!("? {entry}"))))
 }
 
 fn same_path(a: &Path, b: &Path) -> bool {
@@ -230,7 +235,9 @@ fn inspect_with(
             );
             anyhow::ensure!(linked_clean(path)?, "uncommitted work");
             anyhow::ensure!(
-                !path.join(".gitmodules").try_exists()?,
+                !path.join(".gitmodules").try_exists()?
+                    || (crate::seat_clone::is_empty_gitmodules_placeholder(path)
+                        && git(path, &["ls-files", "--", ".gitmodules"])?.is_empty()),
                 "submodules require operator inspection"
             );
             row.head = Some(git(path, &["rev-parse", "HEAD^{commit}"])?);
@@ -662,15 +669,102 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         bail!("some GC candidates were retained; inspect item reasons");
     }
     if fail_on_findings && (eligible > 0 || remaining > 0) {
-        bail!("{eligible} lifecycle GC candidates; {reclaimable_bytes} bytes reclaimable; operator review required");
+        bail!(
+            "{}",
+            findings_summary(
+                rows.len(),
+                eligible,
+                kept,
+                remaining,
+                reclaimable_bytes,
+                rows.iter().all(|r| r.bytes_complete)
+            )
+        );
     }
     Ok(())
+}
+
+// The scheduler routes only this final error line to the advisor.
+// trace:TASK-1222 | ai:codex
+fn findings_summary(
+    scanned: usize,
+    eligible: usize,
+    kept: usize,
+    remaining: usize,
+    bytes: u64,
+    bytes_complete: bool,
+) -> String {
+    format!("lifecycle GC: scanned={scanned}; eligible={eligible}; kept={kept}; remaining={remaining}; reclaimable_bytes={bytes}; bytes_complete={bytes_complete}; operator review required")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    #[test]
+    fn task_1222_runtime_layout_and_placeholders_are_disposable() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "runtime");
+        std::fs::write(tree.join(".gitignore"), ".aida/\ntarget/\n.aida-store\n.codegraph\n.claude/\n.bashrc\n.gitconfig\n.gitmodules\n.env\nnotes\n").unwrap();
+        git_ok(&tree, &["add", ".gitignore"]);
+        git_ok(&tree, &["commit", "-qm", "runtime ignores"]);
+        for directory in [
+            ".aida/agents",
+            ".aida/cache-db",
+            ".aida/sessions",
+            "target",
+            ".claude",
+        ] {
+            std::fs::create_dir_all(tree.join(directory)).unwrap();
+        }
+        for file in [
+            ".aida/agents/registry",
+            ".aida/cache-db/cache",
+            ".aida/sessions/ended",
+            ".aida/session-env.sh",
+            "target/cache",
+        ] {
+            std::fs::write(tree.join(file), "runtime").unwrap();
+        }
+        for file in [".bashrc", ".gitconfig", ".gitmodules"] {
+            std::fs::write(tree.join(file), "").unwrap();
+        }
+        for link in [".aida-store", ".codegraph", ".claude/skills"] {
+            std::os::unix::fs::symlink(main.join("missing-runtime"), tree.join(link)).unwrap();
+        }
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut closed);
+        assert!(row.eligible, "{}", row.reason);
+        for file in [
+            ".aida/merge-holds",
+            ".aida/review-verdicts",
+            ".env",
+            "notes",
+            ".claude/local-notes",
+            ".gitmodules",
+            ".bashrc",
+        ] {
+            std::fs::write(tree.join(file), "precious").unwrap();
+            assert!(
+                !inspect_with(&main, &tree, false, "origin/main", &mut closed).eligible,
+                "{file}"
+            );
+            std::fs::remove_file(tree.join(file)).unwrap();
+        }
+        std::fs::write(tree.join(".gitmodules"), "").unwrap();
+        git_ok(&tree, &["add", "-f", ".gitmodules"]);
+        git_ok(&tree, &["commit", "-qm", "tracked modules"]);
+        assert!(!inspect_with(&main, &tree, false, "origin/main", &mut closed).eligible);
+    }
+
+    #[test]
+    fn task_1222_partial_advisor_summary_has_all_counts() {
+        // trace:TASK-1222.ac14b158 | ai:codex
+        assert_eq!(findings_summary(3, 0, 3, 12, 0, false),
+            "lifecycle GC: scanned=3; eligible=0; kept=3; remaining=12; reclaimable_bytes=0; bytes_complete=false; operator review required");
+    }
 
     #[test]
     fn task_1222_byte_budget_does_not_veto_eligibility() {

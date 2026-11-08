@@ -1514,8 +1514,6 @@ fn each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean() {
         "doctor check stale-remote-branches --fail-on-findings",
         "doctor check disk-headroom --fail-on-findings",
         "doctor check runaway-seats --fail-on-findings",
-        // trace:TASK-1596 | ai:codex
-        "doctor check merged-agent-worktrees --fail-on-findings",
         // trace:STORY-1699 | ai:claude
         "doctor check relay-stall --fail-on-findings",
         // trace:TASK-2347 | ai:codex

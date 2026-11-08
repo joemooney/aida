@@ -199,8 +199,10 @@ The weekly report replaces the former monthly guard.
 
 A candidate must have no remaining session lease (even a dead-process lease
 must first be ended/reaped), no operator or Git worktree lock, no uncommitted
-or untracked work (including ignored local state, except regenerable target/),
-and no live filesystem holders. Main, default/store branches,
+or untracked work. Linked worktrees also retain ignored local state, except
+regenerable target output, AIDA runtime links/caches and empty sandbox placeholders.
+Seat clone probes do not inspect ignored files. All candidates require
+no live filesystem holders. Main, default/store branches,
 detached checkouts, submodules, and unreadable evidence stay protected. Linked
 worktrees qualify when their HEAD is an ancestor of the default branch or an
 exact same-repository merged/closed PR head. Seat clones additionally require a

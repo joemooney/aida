@@ -2019,6 +2019,30 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         return false;
     };
     let path = path.trim_end_matches('/');
+    // Only known runtime links/caches and empty sandbox placeholders qualify.
+    // Genuine ignored state (holds, verdicts, credentials, notes) stays work.
+    // trace:TASK-1222 | ai:codex
+    if matches!(path, ".bashrc" | ".gitconfig" | ".gitmodules") {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|m| m.is_file() && m.len() == 0);
+    }
+    if path.starts_with(".claude/") {
+        let mut component = clone.join(path);
+        while component != clone.join(".claude") {
+            if std::fs::symlink_metadata(&component).is_ok_and(|m| m.is_symlink()) {
+                return true;
+            }
+            if !component.pop() {
+                break;
+            }
+        }
+    }
+    if path == ".aida/session-env.sh"
+        || path == ".aida/sessions"
+        || path.starts_with(".aida/sessions/")
+    {
+        return true;
+    }
     // trace:STORY-2630 | ai:codex
     if matches!(path, ".aida-store" | ".codegraph") {
         return std::fs::symlink_metadata(clone.join(path))
