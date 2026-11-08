@@ -1197,7 +1197,7 @@ blocks:
   type_prefix: STORY
   range_start: 2619
   range_end: 2718
-  next: 2674
+  next: 2675
   allocated_at: 2026-11-07T01:09:10.979526361Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: redacted@node.invalid
