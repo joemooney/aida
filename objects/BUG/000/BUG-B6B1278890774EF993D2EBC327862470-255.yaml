@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T13:03:32.498265665Z
+modified_at: 2026-11-08T13:16:17.801060410Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -346,6 +346,13 @@ comments:
   created_at: 2026-11-08T13:03:26.179469336Z
   modified_at: 2026-11-08T13:03:26.179469336Z
   session_id: 01a1bb34f948
+- id: 01a1bb4d-7409-7a23-a471-ee0a9e93fae5
+  author: joe
+  content: 'Advisor evidence 2026-11-08 06:10 (primary host): local .aida-store diverged 44 ahead / 43 behind origin; ''aida db sync --pull'' failed at ''Rebasing (1/43) could not apply ... chore: sync pending changes'', and every ''aida push'' was rejected, so local advisor writes (rulings, comments) silently stayed local. 13 conflicted files (objects/*.yaml + timings/*.json). Resolved with the dell1 stopgap ported to the primary host: ~/.local/share/aida/ops/advisor-scripts/store-sync-local.sh + store-resolve.py (upstream scalars win, comments/history union by id); backup branch advisor-store-backup-0610 = 4a56476dc96. Recurred within 15 minutes, so the fix must handle concurrent writers (auto-rework queue writes) on the same host, not only cross-host.'
+  created_at: 2026-11-08T13:16:17.801060410Z
+  modified_at: 2026-11-08T13:16:17.801060410Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
