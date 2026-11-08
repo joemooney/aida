@@ -91,4 +91,21 @@ for flag in failures pattern; do
   fi
 done
 
+# trace:TASK-1214 | ai:codex — selectors after filters must also refuse.
+for command in 'aida history --events' 'aida history --since "5 min ago" --events'; do
+  printf '%s\n' "$command" >"$TMP/docs/guide.md"
+  if run_check; then
+    echo "FAIL: retired history selector after filters was not caught" >&2
+    exit 1
+  fi
+done
+for command in 'aida usage events' 'aida history events --since "5 min ago"'; do
+  printf '%s\n' "$command" >"$TMP/docs/guide.md"
+  if ! run_check; then
+    echo "FAIL: canonical event subcommand should pass" >&2
+    cat "$TMP/out" >&2
+    exit 1
+  fi
+done
+
 echo "check-removed-flags fixture tests passed"

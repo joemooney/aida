@@ -534,7 +534,6 @@ drain start --project TASK-1	Write	false	false	false
 drain start --role TASK-1	Write	false	false	false
 drain start --vendor TASK-1	Write	false	false	false
 drain status	Write	false	false	false
-drain status --clear	Write	false	false	false
 drain status --json	Write	false	false	false
 drain stop	Write	false	false	false
 drain stop --now	Write	false	false	false
@@ -658,8 +657,6 @@ findings promote TASK-1	Finding	true	false	false
 findings recur --note TASK-1 TASK-1	Finding	true	false	false
 findings recur TASK-1	Finding	true	false	false
 focus	Write	false	false	false
-focus --clear	Write	false	false	false
-focus --show	Write	false	false	false
 focus clear	Write	false	false	false
 focus show	Write	false	false	false
 gate list	Write	false	false	false
@@ -722,13 +719,9 @@ goal --pr 1	Read	false	false	false
 goal --queue-empty TASK-1	Read	false	false	false
 goal --spec TASK-1	Read	false	false	false
 graph	Read	false	false	false
-graph --blocked-by	Read	false	false	false
-graph --blocks	Read	false	false	false
 graph --depth 1	Read	false	false	false
 graph --follow TASK-1	Read	false	false	false
-graph --impact	Read	false	false	false
 graph --json	Read	false	false	false
-graph --tree	Read	false	false	false
 graph blocked-by TASK-1	Read	false	false	false
 graph blocks TASK-1	Read	false	false	false
 graph impact TASK-1	Read	false	false	false
@@ -1442,10 +1435,6 @@ rel-def remove TASK-1	Write	true	false	false
 rel-def show TASK-1	Write	true	false	false
 release	Write	false	false	false
 release --after-pr 1	Write	false	false	false
-release --check	Write	false	false	false
-release --major	Write	false	false	false
-release --minor	Write	false	false	false
-release --patch	Write	false	false	false
 release --skip-xplat-check	Write	false	false	false
 release check	Write	false	false	false
 release major	Write	false	false	false
@@ -1856,7 +1845,6 @@ statusbar --restore-title	Write	false	true	false
 statusline	Write	false	true	false
 statusline --client claude	Write	false	true	false
 statusline --color auto	Write	false	true	false
-statusline --title	Write	false	true	false
 statusline setup	Write	false	true	false
 statusline setup --client claude	Write	false	true	false
 statusline setup --install	Write	false	true	false
@@ -1960,25 +1948,17 @@ unassign TASK-1	Write	true	false	false
 unclaim TASK-1	Write	false	false	false
 undefer TASK-1	Write	true	false	true
 upgrade	Write	false	false	false
-upgrade --check	Write	false	false	false
-upgrade --diff	Write	false	false	false
 upgrade --target TASK-1	Write	false	false	false
 upgrade --yes	Write	false	false	false
 upgrade check	Write	false	false	false
 upgrade diff	Write	false	false	false
 usage	Read	false	false	false
-usage --auto-complete	Read	false	false	false
 usage --cmd TASK-1	Read	false	false	false
-usage --errors	Read	false	false	false
-usage --events	Read	false	false	false
-usage --health	Read	false	false	false
 usage --json	Read	false	false	false
 usage --limit 1	Read	false	false	false
 usage --read-write	Read	false	false	false
 usage --since TASK-1	Read	false	false	false
 usage --slower-than 1	Read	false	false	false
-usage --slowest	Read	false	false	false
-usage --unused TASK-1	Read	false	false	false
 usage drains	Read	false	false	false
 usage drains --failures	Read	false	false	false
 usage drains --pattern	Read	false	false	false

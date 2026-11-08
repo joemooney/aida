@@ -48,7 +48,6 @@ literal_patterns=(
   'aida upgrade --check'
   'aida upgrade --diff'
   'aida statusline --title'
-  'aida history --events'
 )
 
 failed=0
@@ -62,6 +61,13 @@ done
 
 graph_regex='(\baida|\$AIDA_BIN|"\$AIDA_BIN") graph( +("[^"]+"|<[^>]+>|\$[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9_{}./:-]+))? +--(blocked-by|blocks|tree|impact)\b|\bgraph +--(blocked-by|blocks|tree|impact)\b'
 if "${common_rg[@]}" -e "$graph_regex" -- .; then
+  failed=1
+fi
+
+# Filters may precede the retired selector in history hints.
+# trace:TASK-1214 | ai:codex
+history_regex='\baida history( +[^|;`]*)? +--events\b'
+if "${common_rg[@]}" -e "$history_regex" -- .; then
   failed=1
 fi
 
