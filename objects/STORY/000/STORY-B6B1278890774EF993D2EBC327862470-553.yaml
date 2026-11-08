@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T17:24:19.175226798Z
+modified_at: 2026-11-08T17:24:25.199132684Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -942,6 +942,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at 3ed56ded30f8. Prior seat-fixable findings (help golden, refresh backoff, heartbeat guard, foreign-uid test, AF_UNIX test skip, startup flake, snapshot sweep, stop timeout) are fixed in source. Still blocked: proxy undeployed and client undelivered, live codegraph callers fails in this seat; AC1/AC3 partial, AC2/AC5 unverified; CI still queued at this head.. It was punted on: blocked-dependency: PR #3662 local proxy review fixes are implemented, but completing AC2/AC5 remains blocked: no codegraph executable, primary index, deployed host proxy or candidate doctor binary exists on this seat host. Host Joe must deploy the reviewed client/proxy outside seat writable roots, deliver the fixed client command to lane prompts, validate contained read-only admission and collect a non-empty primary callers result plus doctor --lane-host age output in the PR body. AF_UNIX-denied seats also require a host/advisor transport or scope decision. No writable index grant added. Completing publication remains vetoed until those requirements are met.. No triage reason was given.'
   created_at: 2026-11-08T17:24:19.175220464Z
   modified_at: 2026-11-08T17:24:19.175220464Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc30-9d7f-7d02-929f-4cf95c47f8c2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3ed56ded30f8
+    Recorded: 2026-11-08T17:02:27.095910612+00:00
+    Findings:
+    1. AC status at 3ed56ded30f8. AC1 partial: primary_index_link is on main, but live 'codegraph callers primary_index_link' from this reviewer seat fails with 'callers failed: unable to open database file', and /home/joe/ai/aida/.codegraph has no lane-proxy.json. AC2 unverified: native bwrap test only (test_service_query_from_read_only_seat_and_graceful_restart, and it skips where userns is blocked); README line 74 says the AIDA-contained posture is unsupported. AC3 partial: AGENTS.md:477 has the line, but it names bare codegraph, which README says is not routed. AC4 implemented (assess_proxy, doctor --lane-host, codegraph::tests) with one gap below; live 'aida doctor check codegraph' correctly reports unreachable here; no CI at this head yet. AC5 unverified: no lane log or live non-empty seat query.
+    2. MAJOR (AC1/AC3, unchanged, host action): nothing delivers the proxy client to lanes. AGENTS.md:477 and the shared lane prompt name bare codegraph, while scripts/codegraph/README.md says bare codegraph is not routed, so a lane following its prompt still fails after deployment. Put the fixed host client command in the template master, provide a host-resolved PATH entry, or have the advisor defer this explicitly.
+    3. MAJOR (AC1, transport undecided, host/advisor action, reproduced this round): AF_UNIX socket creation raises EPERM in this Claude sandboxed seat (python3 socket.socket(socket.AF_UNIX): Operation not permitted). The tests now skip correctly, but those seats still have no route to the proxy, and after deployment doctor will report them unreachable. Decide how those seats are served or scope them out explicitly.
+    4. MAJOR (AC2/AC5, advisor decision, unchanged): the 2026-11-07 20:46 ruling asks for a completing slice in which a contained Codex seat gets a correct non-empty 'codegraph callers' result with a read-only grant. This PR is Refs-only, the contained posture is unsupported, the proxy is not deployed and no live seat output exists. The advisor must accept this slice with AC2/AC5 moved to a named follow-up, or require the evidence here.
+    5. MAJOR (process, host/advisor action, unchanged): the PR body is still the 'Published from seat' boilerplate. Add AC1-AC5 status, state that this is a Refs slice, and name who completes AC2/AC5. Commit trailers use '(Refs STORY-2630)', which 'aida review prompt' does not parse (no REQ-ID trailers found), so this review attributed the PR from its title and commits.
+    6. MINOR (AC4, unchanged, seat-fixable): doctor gives the wrong fix when a lane has a deployed proxy but no codegraph on PATH, the expected state on a host like dell1. assess() emits 'missing' with 'Install codegraph on this host', and client_routing_findings (aida-cli-lib/src/codegraph.rs:270, if let Some(binary)) acts only when a binary is found, so the lane is never told to select the host-owned client path; installing upstream then produces a client-routing finding. When a descriptor is present and the seat is a lane, emit the client-routing action instead, and add a None-binary test case.
+    7. MINOR (new, seat-fixable): aida doctor --lane-host before deployment or on a dangling link prints only the bare OS error, because lane_host_status propagates options.open(path)? without context (aida-cli-lib/src/codegraph.rs:35). This report is the documented acceptance surface, and it never says the proxy descriptor is missing or that the host must deploy it. Add context naming the descriptor and the host action, with a test.
+    8. MINOR (evidence, host action, unchanged): test_installed_codegraph_returns_real_edges_from_host_snapshot skips when codegraph is absent and CI does not install it, so no recorded run covers real upstream. CLI flags match upstream 1.6.0 --help (reviewer checked), but the host must run this test and paste the output with the AC5 evidence.
+    9. CI gate: run 42502233445 was still queued with no jobs started at 3ed56ded30f8 when this was recorded, so the regenerated help golden and the new python test step have no CI evidence yet. A green run at the final head is required. merge-hold-gate fails as the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:24:25.087864301Z
+  modified_at: 2026-11-08T17:24:25.087864301Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
