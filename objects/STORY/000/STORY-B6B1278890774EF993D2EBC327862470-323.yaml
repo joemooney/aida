@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-07T23:45:52.045662774Z
+modified_at: 2026-11-08T00:22:14.303767448Z
 req_type: Story
 tags:
 - architecture
@@ -640,6 +640,12 @@ comments:
   modified_at: 2026-11-07T23:45:52.045662774Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b888-c81f-7673-9c34-f3c77b2ba2df
+  author: joe
+  content: 'Round 7 follow-up on current 3be6b88a28c: fetched the full failed CI logs. Gates failed on the new /tmp/owned test literal (the lane_fixture_fails output is expected negative-fixture evidence, not the enclosing failure). Replaced it with temp_dir().join. lib-1 failed because the restored artifact-only watcher PID check was absent from proc_identity_legacy_baseline.json; accounting for exactly one compatibility site there, while scripts/ownership-liveness-legacy.json stays unchanged. lib-0 failed because BUG-2469 rewrote only legacy lease PIDs and never seeded authoritative ownership; fixture now seeds explicit live/dead/unknown review witnesses and asserts their verdicts. Missing review-head metadata remains Unknown and retained. All production ownership authority stays unchanged. Findings 1-2 remain TASK-3420 per advisor ruling; PR title already uses Refs STORY-2325. Targeted launcher tests are queued/running; portability, Python ownership ratchet, rustfmt and diff checks pass. Existing merge hold requires authorized clearance; none claimed.'
+  created_at: 2026-11-08T00:22:14.303767448Z
+  modified_at: 2026-11-08T00:22:14.303767448Z
+  session_id: 01a1b8852a0f
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
