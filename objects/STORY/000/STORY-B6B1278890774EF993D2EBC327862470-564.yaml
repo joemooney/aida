@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T13:26:01.398841673Z
+modified_at: 2026-11-08T13:26:13.318061082Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -326,6 +326,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 8 removes --unshare-pid and restores AC2 and the host queue, but that reopens the sccache restart race from round 6, and AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment. AC0/AC2/AC3/AC4 met in code. CI had no job results at this head when recorded (CI run pending, merge-hold-gate queued); no local cargo run.. It was punted on: blocked-dependency: Round-8 finding 1 remains agreed and unresolved: AC1 needs consecutive lane Cargo cache-hit statistics on both primary and dell1 using this branch launcher, or an advisor amendment. Findings 2/3: removed private PID namespace locally to preserve host queue ticket identity and unchanged no-cache behavior; live ticket regression added. The separate sccache restart race requires the host wrapper aida-host/bin/cargo to skip its restart branch when SCCACHE_SERVER_UDS is set. That file is not in this repository and cannot be fixed in this seat; host must apply and test that companion fix before publication. Preserve publication veto and existing merge hold. Validation running; results follow.. No triage reason was given.'
   created_at: 2026-11-08T13:26:01.398839127Z
   modified_at: 2026-11-08T13:26:01.398839127Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb56-89aa-7cd3-8a22-2bdb8a3d3e53
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c1ded365ca5e
+    Recorded: 2026-11-08T13:24:08.205918110+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6722048363
+    Findings:
+    1. major/acceptance: AC1 is unverified at c1ded365ca5e. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. Spec comments through round 8 (comment 24) contain no lane-job statistics from either host and no advisor amendment. A code change cannot close this. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on the spec, or have the advisor record an amendment of AC1. Needs host/operator action.
+    2. major/correctness: removing --unshare-pid reopened the restart race from round 6, and round 8 added no replacement. Inside a job, the host wrapper's ensure_sccache_server runs before cargo (~/ai/aida-host/bin/cargo:231 and 1365). sccache_dead_tmpdir (157-177) uses pgrep -x sccache, which now sees every host sccache process, and treats any TMPDIR that is absent in the sandbox or matches /dev/shm/cargo-tmp-* as dead. So a concurrent build's client makes the wrapper run --stop-server (lines 218-223) against this job's SCCACHE_SERVER_UDS and start a detached daemon. SCCACHE_JOB_SCRIPT's wait then covers only the stopped foreground server: statistics reset, which also undermines the AC1 measurement, and 'server exited before sandbox teardown' prints while the daemon may still be draining, so --die-with-parent can lose final cache writes. Found by reading the wrapper, not reproduced at runtime. story_2641_sccache_host_queue_ticket_stays_live covers tickets only. Fix in this repo: run cargo as AIDA_SCCACHE_PIDS="$server" "$@" in SCCACHE_JOB_SCRIPT (lane_job.rs:302); the wrapper honours it at lines 160 and 201, so it inspects only the job's server (TMPDIR=/tmp) and skips the restart. Or make the wrapper skip restart when SCCACHE_SERVER_UDS is set. Add a regression with a foreign dead-TMPDIR sccache process.
+    3. minor/robustness: SCCACHE_JOB_SCRIPT (lane_job.rs:292-296) exits 1 before running cargo when the lane server does not create its socket within 10s. A cache is an optimisation, yet a host whose configured sccache lacks SCCACHE_SERVER_UDS support, or whose server fails to start, now fails every lane job with no test run. The host wrapper's own pattern is sccache_degrade to direct rustc. Fix: on startup failure, warn and run cargo with RUSTC_WRAPPER empty, or document the fail-closed choice in OVERVIEW.md next to the other failure rules. Add a test either way.
+    4. cosmetic/test: the cached=true/false loop in story_2641_sccache_host_queue_ticket_stays_live (bug_2383_lane_job_tests.rs) only sets SCCACHE_SERVER_UDS on the bwrap process. lane_job_bwrap_argv takes no env, so both passes run the same sandbox and the cached case proves nothing extra. Fix: collapse to one pass, or build the argv through the real job path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:26:13.162277213Z
+  modified_at: 2026-11-08T13:26:13.162277213Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
