@@ -1,5 +1,6 @@
 id: 01a1bce3-05c6-79f3-9b7d-590ffc377206
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1016
+agreed_id: TASK-3053
 title: 'Repeated unchanged review findings: STORY-2641'
 description: |-
   Identical reviewer findings recurred twice for STORY-2641; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
@@ -25,6 +26,11 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+history:
+- id: 01a1bd2e-8b08-7570-a7fc-6135a73bb9a4
+  author: joe
+  timestamp: 2026-11-08T22:01:46.504351842Z
+  changes: []
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
