@@ -1614,6 +1614,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc30-4f79-7440-bfa3-15afce60a50f
+  author: dirtlab
+  timestamp: 2026-11-08 17:24:05.113519+00:00
+  session_id: 01a1bc2ff79f
+  harness_version: codex-cli 0.167.0
+  changes: []
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
