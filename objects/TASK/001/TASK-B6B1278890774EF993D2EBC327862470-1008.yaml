@@ -1,5 +1,6 @@
 id: 01a1bc97-aa98-7ad3-9c76-f8a55b07cf93
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1008
+agreed_id: TASK-3041
 title: 'Repeated unchanged review findings: TASK-1222'
 description: |-
   Identical reviewer findings recurred twice for TASK-1222; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
@@ -46,6 +47,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1bc9d-fb19-76b0-8c4d-c88de4f81264
+  author: joe
+  timestamp: 2026-11-08T19:23:52.473465013Z
+  changes: []
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
