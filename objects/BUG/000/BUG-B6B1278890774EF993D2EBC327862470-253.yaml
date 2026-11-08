@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T20:30:30.951364273Z
+modified_at: 2026-11-08T20:40:11.929597659Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -358,6 +358,22 @@ comments:
   modified_at: 2026-11-08T20:19:53.409517422Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bce3-db99-7481-a6c7-20ca97370b87
+  author: dirtlab
+  content: |
+    Round-8 native-seat handoff (base f0aea346d817): addressed both remaining code findings. Queue resumes now reconcile implementer signals immediately after child exit regardless of contained/publication gating. The real mock-Codex contained=false resume regression starts with a host hold, writes a new seat hold, and verifies held re-entry receives that new host marker. Drain punt consumption now clears both pinned seat and host punt paths while retaining hold markers; the regression reconciles after consumption (Claude advisor-resume behavior), verifies no stale host punt reappears, and proves a fresh punt still mirrors.
+
+    Changed files: aida-cli-lib/src/phase_driver_trait.rs, queue_cmd.rs, standalone_implementer.rs, tests/bug_044_headless_background_tests.rs, tests/bug_home_038_seat_publish_tests.rs; scripts/store-writers.toml (new queue-resume reconciliation caller, existing comments preserved).
+
+    Validation: lane job j20261108T203257636-2-0 executed 15 BUG-2488 tests successfully plus the watchdog child (its direct entry remains intentionally ignored in the parent). Lane job j20261108T203417081-2-0 executed all 7 resolve_aida_exe_tests successfully, including the exact prior CI-failing guard. 42 writer-inventory tests and 29 environment/Git-maintenance tests passed. Writer scanner reconciles 3400 sites; ExecContext ledger has zero additions vs HEAD. Portability and allowlist-growth checks, targeted rustfmt --check and git diff --check pass. aida criteria BUG-2488 reports no untested or unanchored criteria.
+
+    Limitations: make check-ci-fast unexpectedly invokes Cargo despite its no-build description; its first no-default-features step failed because sccache could not write the read-only local debug target, so the aggregate fast gate is not green. Rust testing used the authorized lane runner and passed. Codegraph is missing, confirmed with aida doctor check codegraph; navigation used rg. Fresh CI at the eventual published head and supervised merge-hold clearance remain host/reviewer work.
+
+    untested=false. Six changed files remain uncommitted. Native publication declaration recorded: [AI:codex] fix(seats): reconcile resume signals and consume handled punts (Refs BUG-2488). No commit, push, PR creation, queue completion, pr ship or review record attempted. Keep Refs scope: TASK-3608 remains the separately split queue-resume/drain no-change outcome propagation follow-up.
+  created_at: 2026-11-08T20:40:11.929597659Z
+  modified_at: 2026-11-08T20:40:11.929597659Z
+  session_id: 01a1bcda7000
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start

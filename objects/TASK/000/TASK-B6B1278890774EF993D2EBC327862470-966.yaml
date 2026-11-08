@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T20:10:28.937884469Z
+modified_at: 2026-11-08T20:40:23.353554516Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -102,6 +102,20 @@ comments:
   modified_at: 2026-11-08T20:08:49.858290909Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bce4-0839-7180-9a0e-adb0556a2771
+  author: dirtlab
+  content: |
+    Addressed review findings F7-F10. Recovery notices are Home-only; Work refreshes clear stale cache parts, and awaiting suppresses Work caches even before refresh. Display-cache persistence warns and continues, preserving computed skipped rows in process output and allowing pull, exact reads and verified native status publication. Exact reads refresh only after new verification and reuse the admission snapshot instead of loading another remote snapshot. Updated operator docs for awaiting, skipped JSON fields and publication-refusal error objects.
+
+    Changed files: aida-cli-lib/src/ci_relay.rs; aida-cli-lib/src/intent_intake.rs; tests/test_work_ci_relay.py; docs/agents/work-ci-relay.md.
+
+    Validation: lane cargo build --profile agent -p aida-cli passed. Final lane cargo test --profile agent -p aida-cli-lib --lib -- ci_relay::tests:: passed 4 executed tests in 94.03s; the wrapper runs 33-attempt and cold/warm-history Python regressions, including a Work clone, broken display-cache writes with positive verified publication, and exact-read CI probe counts. Real on-disk awaiting reader test also checks stale Work-cache suppression. Python syntax and git diff --check passed; Rust files formatted with rustfmt. Initial compile timed out at 900s; subsequent build passed. First history run exposed an overly broad test probe counter including intake sync; narrowed the assertion to CI retained refs before the final passing run.
+
+    Native handoff: edits are uncommitted for host publication and subsequent queue completion. No remaining implementation blockers. codegraph is unavailable; used rg after the missing executable. untested=false.
+  created_at: 2026-11-08T20:40:23.353554516Z
+  modified_at: 2026-11-08T20:40:23.353554516Z
+  session_id: 01a1bcc84523
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
