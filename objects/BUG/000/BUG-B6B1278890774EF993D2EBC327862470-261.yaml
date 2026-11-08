@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T13:16:37.955934159Z
-modified_at: 2026-11-08T20:12:22.437533478Z
+modified_at: 2026-11-08T20:28:11.513673940Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -23,6 +23,13 @@ comments:
   modified_at: 2026-11-08T20:01:40.141531897Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd8-dd79-7351-aa03-31baea8aa1e5
+  author: dirtlab
+  content: 'Implemented immediate review-watch concurrency changes under the existing admission lock. Existing active attempts count against the requested cap; lowering reports ordinary global reviewer capacity rather than a different-watcher error. Added regression coverage for 2 active / cap 2 -> 4 admitting a third, then cap 4 -> 2 retaining 3 active and refusing a fourth. Updated the obsolete mismatch-error assertion. Validation: rustfmt and git diff --check passed. Lane job j20261108T201258411-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- review_watch::tests) timed out after 900s during dependency compilation at aida-tui; no tests executed, untested=true. Codegraph unavailable, confirmed by doctor. Native handoff: edits uncommitted; host publication and queue completion remain pending.'
+  created_at: 2026-11-08T20:28:11.513673940Z
+  modified_at: 2026-11-08T20:28:11.513673940Z
+  session_id: 01a1bcc9fc03
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bbc4-da81-7212-9f16-ae4eed6729d5
   author: joe

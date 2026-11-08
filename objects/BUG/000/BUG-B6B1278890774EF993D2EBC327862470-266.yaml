@@ -15,8 +15,40 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T20:05:30.070970526Z
+modified_at: 2026-11-08T20:28:03.631000700Z
 req_type: Bug
+comments:
+- id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
+  author: dirtlab
+  content: |
+    BUG-2501 native implementer handoff (uncommitted).
+
+    Changed files:
+    - aida-core/src/git_ops.rs: ordinary and reporting pulls share the structural resolver; upstream scalars for conflicting objects, upstream modify/delete state, dirty-store refusal without autostash, and accurate node retry diagnostics. Symmetric reconciliation keeps its existing merge policy.
+    - aida-core/src/conflict.rs: upstream merge policy unions history/comments/processing records while preserving hypothesis evidence.
+    - aida-cli-lib/src/store_sync.rs: failed or dirty --sync pulls return errors; preexisting rebase recovery remains untouched. Added a targeted sync-failure regression.
+    - aida-cli-lib/src/queue_cmd.rs: pre-pickup pull failure stops pickup.
+    - aida-cli-lib/src/burndown_run.rs: initial and residual refresh errors stop queueing/integration/follow-up.
+    - docs/cli/10-storage.md: documents conflict and failure policies.
+
+    Validation:
+    - Earlier core pull suite: 8 executed, 8 passed (j20261108T200834695-2-0).
+    - Final expanded core suite: 9 executed, 9 passed (j20261108T201152168-2-0).
+    - CLI pull_failure_tests: untested=true; j20261108T201133652-2-0 timed out after 900s while compiling, exit 124. No executed CLI test result. Earlier compile error from using private git helper was corrected to public init.
+    - Store writer inventory: 3387 sink sites / 293 operation mappings reconciled; its 42 regression tests passed.
+    - rustfmt --check and git diff --check passed.
+    - Stopgap removal patch dry-run passed.
+
+    Host actions/blockers:
+    1. Validate CLI after publication with an adequate compile timeout; no published-head CI result is claimed.
+    2. Deploy the new binary before retiring dell1 stopgaps. /home/dirtlab/lane-run.sh, /home/dirtlab/store-sync.sh and /home/dirtlab/store-resolve.py are outside this seat's writable roots. Prepared /tmp/BUG-2501-remove-stopgaps.patch (dry-run verified with patch --dry-run -d /home/dirtlab -p1). Apply on the host after rollout: it replaces wrapper calls with fail-closed ordinary AIDA sync and deletes both helper scripts. Acceptance item 4 is not fulfilled until applied.
+    3. Draft finding filing for this host action was refused because the clone lacks an AIDA node binding; no finding object was written. This comment records the headless flag instead. Codegraph is missing from PATH, confirmed by aida doctor check codegraph; navigation used rg.
+
+    Recorded lease-bound subject: [AI:codex] fix(store): reconcile concurrent edits and stop after failed pulls (Refs BUG-2501). Leave Refs and keep the spec incomplete pending validation and stopgap retirement. No commit, push, PR creation, queue completion, pr ship or review record performed in this seat.
+  created_at: 2026-11-08T20:28:03.631000700Z
+  modified_at: 2026-11-08T20:28:03.631000700Z
+  session_id: 01a1bcc3b70a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
