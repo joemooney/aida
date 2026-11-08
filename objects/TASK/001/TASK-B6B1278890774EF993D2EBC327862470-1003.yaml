@@ -1,0 +1,37 @@
+id: 01a1bbe0-fcc2-75b0-b031-5e8cd18a4c40
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1003
+title: 'Repeated unchanged review findings: STORY-2641'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2641; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3657):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: cfc8a3db93da
+  Recorded: 2026-11-08T14:34:49.411132502+00:00
+  Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6722782907
+  Findings:
+  1. major/acceptance: AC1 is unverified at cfc8a3db93da. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The round 11 handoff (latest spec comment, 2026-11-08 07:30 -07:00) confirms no lane-job statistics from either host, and the spec has no advisor amendment. A code change cannot close this, so do not queue implementer rework for it: route it to the host/operator or advisor. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on STORY-2641, or have the advisor record an amendment of AC1.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T15:57:26.594450692Z
+modified_at: 2026-11-08T15:57:26.594450692Z
+req_type: Task
+tags:
+- from-advisor:STORY-2641
+- kind:observation
+- linked:STORY-2641
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 48e3865999b
+  vendor: claude
+  session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
