@@ -101,6 +101,36 @@ fn same_path(a: &Path, b: &Path) -> bool {
 /// An ended lease is absent, not merely old or attached to an exited process.
 /// Require explicit session retirement; GC never releases someone else's lease.
 fn ownership_clear(main: &Path, path: &Path, branch: &str) -> Result<()> {
+    // Pool reservations survive session retirement; unreadable inventory retains work.
+    // trace:TASK-1222 | ai:codex
+    let directory = aida_core::worktree_pool::pool_dir(main);
+    match std::fs::symlink_metadata(&directory) {
+        Ok(meta) => anyhow::ensure!(
+            meta.is_dir() && !meta.is_symlink(),
+            "unreadable worktree pool directory"
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("unreadable worktree pool directory"),
+    }
+    let registry = directory.join("pool.json");
+    match std::fs::symlink_metadata(&registry) {
+        Ok(_) => {
+            let body = aida_core::seat_clone_detect::read_regular_file(&registry)
+                .context("unreadable worktree pool registry")?;
+            let pool: aida_core::worktree_pool::Pool =
+                serde_json::from_str(&body).context("invalid worktree pool registry")?;
+            anyhow::ensure!(
+                !pool.entries.iter().any(|entry| same_path(&entry.path, path)
+                    && (entry.leased
+                        || entry.destroying
+                        || entry.retiring.is_some()
+                        || aida_core::worktree_pool::owner_is_live(entry))),
+                "worktree pool reservation or owner still exists"
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("unreadable worktree pool registry"),
+    }
     let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
     anyhow::ensure!(
         !leases
@@ -142,14 +172,25 @@ fn ownership_clear(main: &Path, path: &Path, branch: &str) -> Result<()> {
     Ok(())
 }
 
-fn inspect(main: &Path, path: &Path, is_clone: bool, default: &str) -> Candidate {
-    inspect_with(
+fn inspect(main: &Path, invoking: &Path, path: &Path, is_clone: bool, default: &str) -> Candidate {
+    let mut row = inspect_with(
         main,
         path,
         is_clone,
         default,
         &mut crate::forge::observe_gc_branch_closed,
-    )
+    );
+    protect_invoking(&mut row, invoking);
+    row
+}
+
+// The holder guard exempts this process; explicitly retain its checkout.
+// trace:TASK-1222 | ai:codex
+fn protect_invoking(row: &mut Candidate, invoking: &Path) {
+    if same_path(&row.path, invoking) || invoking.starts_with(&row.path) {
+        row.eligible = false;
+        row.reason = "protected invoking checkout".into();
+    }
 }
 
 fn inspect_with(
@@ -473,6 +514,15 @@ fn remove_with(
     }
 }
 
+// Count only confirmed removals, including teardown errors after path removal.
+// trace:TASK-1222 | ai:codex
+fn freed_bytes(main: &Path, rows: &[Candidate]) -> u64 {
+    rows.iter()
+        .filter(|row| row.removed)
+        .map(|row| freed_estimate(main, row))
+        .sum()
+}
+
 fn freed_estimate(main: &Path, row: &Candidate) -> u64 {
     if !row.clone {
         return row.bytes;
@@ -627,12 +677,12 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     let total = inventory.len();
     let mut rows = if autonomous {
         scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
-            inspect(&main, &p, c, &default)
+            inspect(&main, &invoking, &p, c, &default)
         })
     } else {
         inventory
             .into_iter()
-            .map(|(p, c)| inspect(&main, &p, c, &default))
+            .map(|(p, c)| inspect(&main, &invoking, &p, c, &default))
             .collect()
     };
     // A failed hint write is visible but cannot discard scan results.
@@ -643,13 +693,11 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     let remaining = total - rows.len();
     let eligible = rows.iter().filter(|r| r.eligible).count();
     let reclaimable_bytes: u64 = rows.iter().filter(|r| r.eligible).map(|r| r.bytes).sum();
-    let mut freed_bytes = 0u64;
     let mut failures = 0usize;
     for row in rows.iter_mut().filter(|r| r.eligible && apply) {
         match remove(&main, row, &default) {
             Ok(true) => {
                 row.removed = true;
-                freed_bytes += freed_estimate(&main, row);
             }
             Ok(false) => {
                 failures += 1;
@@ -667,12 +715,10 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
                             .push_str(&format!("; removal unconfirmed: {stat_error}"));
                     }
                 }
-                if row.removed {
-                    freed_bytes += freed_estimate(&main, row);
-                }
             }
         }
     }
+    let freed_bytes = freed_bytes(&main, &rows);
     let removed = rows.iter().filter(|r| r.removed).count();
     let kept = rows
         .iter()
@@ -755,6 +801,59 @@ fn findings_summary(
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    #[test]
+    fn task_1222_caller_pool_reservations_and_freed_estimates() {
+        // trace:TASK-1222 | ai:codex
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "reserved");
+        let mut row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(row.eligible, "{}", row.reason);
+        assert_eq!(freed_estimate(&main, &row), row.bytes);
+        protect_invoking(&mut row, &tree.join("subdir"));
+        assert!(!row.eligible);
+        assert!(row.reason.contains("invoking"));
+
+        let registry = aida_core::worktree_pool::pool_dir(&main).join("pool.json");
+        std::fs::create_dir_all(registry.parent().unwrap()).unwrap();
+        for entry in [
+            serde_json::json!({"name":"reserved", "path":tree, "leased":true}),
+            serde_json::json!({"name":"reserved", "path":tree, "owner_pid":std::process::id()}),
+        ] {
+            std::fs::write(
+                &registry,
+                serde_json::json!({"entries":[entry]}).to_string(),
+            )
+            .unwrap();
+            let held = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+            assert!(
+                !held.eligible && held.reason.contains("pool"),
+                "{}",
+                held.reason
+            );
+        }
+        std::fs::write(&registry, "corrupt").unwrap();
+        assert!(!inspect_with(&main, &tree, false, "origin/main", &mut absent).eligible);
+        std::fs::remove_file(&registry).unwrap();
+        std::fs::remove_dir(registry.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(main.join("missing-pool"), registry.parent().unwrap()).unwrap();
+        assert!(!inspect_with(&main, &tree, false, "origin/main", &mut absent).eligible);
+
+        row.clone = true;
+        row.bytes = 100;
+        let target = main
+            .join("target/worktrees")
+            .join(tree.file_name().unwrap());
+        assert_eq!(freed_estimate(&main, &row), 100);
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("cache"), [0u8; 30]).unwrap();
+        assert_eq!(freed_estimate(&main, &row), 70);
+        assert_eq!(freed_bytes(&main, &[row.clone()]), 0);
+        row.removed = true;
+        assert_eq!(freed_bytes(&main, &[row.clone()]), 70);
+        row.bytes = 10;
+        assert_eq!(freed_estimate(&main, &row), 0);
+    }
 
     #[test]
     fn task_1222_runtime_layout_and_placeholders_are_disposable() {

@@ -209,7 +209,8 @@ links/caches, notice/onboarding markers and empty sandbox placeholders.
 Ignored `.aida/brief.md` and `.aida/events.jsonl` remain protected as work context
 and audit evidence, along with notes, holds and review verdicts.
 Seat clone probes do not inspect ignored files. All candidates require
-no live filesystem holders. Main, default/store branches,
+no live filesystem holders. The invoking checkout, pool reservations and live pool
+owners are retained. Main, default/store branches,
 detached checkouts, submodules, and unreadable evidence stay protected. Linked
 worktrees qualify when their HEAD is an ancestor of the default branch or an
 exact same-repository merged/closed PR head. Seat clones additionally require a
@@ -221,7 +222,12 @@ a secondary remote, a seat-written tracking ref or a host-only branch cannot
 excuse unpushed commits. Origin-advertised PR/MR head refs can
 cover a published head after a squash merge deletes its source branch. An open
 PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
-retains the tree. Reviewer checkouts named `pr-N` resolve GitHub PR N directly;
+retains the tree. GC also conservatively includes every clone tracking ref as
+local history to preserve. A stale tracking ref whose commits are no longer
+advertised by origin can therefore retain an otherwise eligible clone; the
+operator must review and prune stale tracking refs before retrying. GC never
+prunes them automatically. <!-- trace:TASK-1222 | ai:codex -->
+Reviewer checkouts named `pr-N` resolve GitHub PR N directly;
 the response must still match that number, repository and exact checkout HEAD.
 
 Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,

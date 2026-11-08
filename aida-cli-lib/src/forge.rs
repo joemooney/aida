@@ -4595,6 +4595,8 @@ pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
 const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 // trace:TASK-1222 | ai:codex
+// Central constructor for read-only forge probes, inventoried separately from
+// mutation commands so command-trust audits can identify these call sites.
 fn forge_read_command(cli: &Path) -> Command {
     Command::new(cli)
 }
