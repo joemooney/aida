@@ -1,0 +1,21 @@
+id: 01a1bb4d-c2c3-7e00-bb0c-df9eb11b05e1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-261
+agreed_id: BUG-2496
+title: 'review watch: changing max_concurrent refuses every admission until all running reviews drain (''another watcher uses a different concurrency limit'')'
+description: 'Observed 2026-11-08 05:45-05:58 after TASK-3472 landed and the repo set [review_watch] max_concurrent = 4: the restarted watcher refused every PR with ''another watcher uses a different concurrency limit; use --max-concurrent 2'' because .aida/review-watch/state.json kept max_concurrent=2 while two reviews started under the old limit were active (review_watch.rs ~1328-1330 only adopts the new limit when the active-attempt count is 0). Throughput dropped to zero new admissions for ~13 min. Expected: a raised limit applies immediately (active attempts simply count against it), and a lowered limit stops new admissions without refusing with a misleading ''another watcher'' message. Acceptance: unit test where state has max 2 with 2 active attempts and a watcher with max 4 admits a third review; lowering 4->2 with 3 active admits none and reports the cap, not another watcher.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T13:16:37.955934159Z
+modified_at: 2026-11-08T13:16:37.955934159Z
+req_type: Bug
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d68eb4ec071
+  vendor: claude
+  session: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
