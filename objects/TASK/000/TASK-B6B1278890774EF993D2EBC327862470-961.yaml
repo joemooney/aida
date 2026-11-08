@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T17:57:00.860299473Z
+modified_at: 2026-11-08T18:06:30.686610032Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -204,6 +204,57 @@ comments:
   modified_at: 2026-11-08T17:50:30.380966792Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc57-271e-7532-8267-076ea8fb2abb
+  author: dirtlab
+  content: |
+    TASK-3429 native rework handoff (uncommitted)
+
+    Changed files:
+    OVERVIEW.md
+    aida-cli-lib/src/command_registry.rs
+    aida-cli-lib/src/config_cmd.rs
+    aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs
+    aida-cli-lib/src/mcp.rs
+    aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs
+    aida-cli-lib/src/tests/node_alias_display_ratchet_tests.rs
+    aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs
+    aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs
+    aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs
+    aida-mcp/src/mcp.rs
+    aida-mcp/src/serve.rs
+    docs/showcase/integrations.html
+    scripts/crate-globs-legacy.json
+    scripts/doc-path-exceptions.json
+    scripts/portability-allowlist.txt
+    scripts/publish.sh
+
+    Implemented review findings 4-11: posture audit reads extracted production sources; launch/Git ledgers retain moved sites; grant/liveness/store guard inventories include aida-mcp; stale static guard paths corrected; glob import removed with its retired budget; shipping-crate tools/list/serve tests and missing-registration refusal test added; publish order and showcase source link repaired.
+
+    Acceptance remains blocked: advisor must resolve 72 requested tools versus 58 existing descriptors; dell1 clean build comparison/timings required. This host is disrad-dvp98b3puw. No new tools were invented. TASK-3429 is punted Needs Attention. Punt reason saved but separate signal write refused (read-only filesystem): HOST MUST RETAIN PUBLICATION VETO; no publication or completion until triage. No completion trailer justified.
+
+    Draft finding creation refused because this clone has no AIDA node binding. check-ci-fast started Cargo despite no-build description; it was stopped and static gates run separately. No clean full-fast-CI claim.
+
+    Additional validation finding fixed: display-ID ratchet lost four MCP sites after extraction. Extended its scan to aida-mcp while keeping BASELINE 169; rerun passed (33 tests).
+
+    Validation (untested=false; executed through launcher, all final targeted runs green):
+    - aida-mcp --lib: 2 passed, including shipping transport tools/list and serve wrapper (j20261108T175440856-2-0; earlier run also passed).
+    - aida-cli-lib --lib -- mcp_handler_refuses_without_binary_registration: 1 passed (j20261108T175424987-2-0).
+    - -- bug_1667_mcp_cannot_reach_the_posture_writer: 1 passed (j20261108T175431420-2-0).
+    - -- ratchet: 33 passed (j20261108T180206017-2-0). Initial run: 32 passed, 1 failed; fixed missing MCP display-ID scan without lowering the budget.
+    - -- task_175: 16 passed (j20261108T180517602-2-0). Initial run: 15 passed, 1 failed; fixed explicit cfg(test) attributes on the CLI test stub's child test modules.
+    - -- descriptor: 20 passed (j20261108T175639633-2-0).
+    - -- tools_list_respects_profile: 1 passed (j20261108T175640782-2-0).
+    - -- bug_1929_store_git_guard: 1 passed (j20261108T180606840-2-0).
+    - -- bug_1985_host_status_guard: 1 passed (j20261108T180606842-2-0).
+    - Static checks: crate glob ratchet and portability including growth against HEAD; documentation paths; ExecContext (1239 exact sites, zero additions); store writers (3385 sinks, 293 mappings); trace headers; git diff --check: PASS.
+    - Schema source unchanged versus HEAD; count remains 58. No full CI/golden compatibility-suite or dell1 clean-build timing claim. Existing broader fixture failures documented by prior handoff were not rerun.
+    - Test-generated agent-registry artifacts in aida-mcp/.aida and aida-cli-lib/.aida removed.
+
+    No commit, push, PR, queue done, pr ship, review record or publication declaration performed. All source edits remain uncommitted. No pending launcher test jobs from this run. TASK-3429 remains Needs Attention with a publication veto until triage resolves the count and dell1 measurement requirements.
+  created_at: 2026-11-08T18:06:30.686610032Z
+  modified_at: 2026-11-08T18:06:30.686610032Z
+  session_id: 01a1bc49d0a1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
