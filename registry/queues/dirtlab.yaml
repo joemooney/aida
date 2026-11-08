@@ -155,18 +155,18 @@
   added_at: 2026-11-08T06:12:48.976021954Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a1b908-96b2-7b30-a9a6-a1cbf45a47a6
-  position: 34000
-  added_by: dirtlab
-  note: auto-queue retry reused canonical review story; covers 0 specs
-  added_at: 2026-11-08T06:13:21.264595503Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a1b894-9371-76a0-b5bd-fafa756dd159
   position: 35000
   added_by: dirtlab
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-11-08T06:13:28.609971017Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a1b908-96b2-7b30-a9a6-a1cbf45a47a6
+  position: 36000
+  added_by: dirtlab
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-08T06:14:15.931084077Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
