@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T07:48:01.407244667Z
+modified_at: 2026-11-08T07:49:20.179290154Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -87,6 +87,13 @@ comments:
   modified_at: 2026-11-08T07:46:38.144507170Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba22-0b76-76a1-b941-51d4c0867c89
+  author: dirtlab
+  content: 'Rework: F4 removed the per-change host shipping note from docs/plans/2026-11-07-story-2493-untrusted-review.md. F5 now scopes digest obligations to repository/PR/exact head; head B requires its own authenticated independent review, which may omit a rejected false positive from A while preserving audit history. Added moved-head verification cases. git diff --check and document assertions/reference existence checks passed; no Rust tests run (documentation only). F1 remains unresolved in forge metadata: host must retitle PR-3665 to [AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493) before any publication/merge. Native publication declaration recorded with that exact subject. No commit, push, PR edit, review record or queue completion attempted. Advisor architecture signoff remains absent; this does not implement or complete STORY-2493.'
+  created_at: 2026-11-08T07:49:15.766478568Z
+  modified_at: 2026-11-08T07:49:15.766478568Z
+  session_id: 01a1ba20e28b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
@@ -194,6 +201,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba21-7008-7123-9ccf-10fb2fa632ab
+  author: dirtlab
+  timestamp: 2026-11-08T07:48:35.976330348Z
+  session_id: 01a1ba20e28b
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1ba22-1cb3-7e53-9a3e-499568df7dde
+  author: dirtlab
+  timestamp: 2026-11-08T07:49:20.179316566Z
+  session_id: 01a1ba20e28b
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -202,3 +224,8 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: 'F4/F5 sketch rework is ready as uncommitted documentation. F1 remains unresolved: PR-3665 has a completing title; the host must retitle it to [AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493). Native seat publication declaration records that subject but cannot repair existing forge metadata in this launch. CLAUDE.md requires advisor architecture signoff before implementation; reviewer/session attestation, home verification and supersession authority still require that decision. Preserve publication veto until these gates are resolved; design-only work does not complete STORY-2493.'
+  raised_by: implementer
+  raised_at: 2026-11-08T07:49:20.179290154Z
