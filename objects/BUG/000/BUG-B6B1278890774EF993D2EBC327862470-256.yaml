@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T05:10:50.452609307Z
+modified_at: 2026-11-08T05:37:03.131455284Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -117,6 +117,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9a9-0130-70d1-87f1-0ad4c17c19d9
+  author: joe
+  timestamp: 2026-11-08T05:37:03.280870311Z
+  session_id: 01a1b9a5e2db
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -130,7 +136,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'No production change: head e6ee594 only merges main; seat_clone.rs/test files are byte-identical to the previously rejected f27e742. AC(1) unmet and contradicted by the test, AC(2) untested, AC(3) proves no fix.'
+  detail: Slice-tag exemption and checkpoint salvage meet AC1-3, but the rewritten UNPUSHED_COUNT_SCRIPT fails open when HEAD has no commit, and CI (gates) is red on this PR's new unguarded git push in a test.
   recovery_hint: address the review findings, move BUG-2491 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T05:06:32.760476092Z
+  shelved_at: 2026-11-08T05:37:03.131455284Z
