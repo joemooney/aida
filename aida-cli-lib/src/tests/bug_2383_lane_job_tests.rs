@@ -1893,6 +1893,7 @@ from pathlib import Path
 root = Path(os.environ['SCCACHE_DIR'])
 if os.environ.get('SCCACHE_START_SERVER') == '1':
     assert os.environ['TMPDIR'] == '/tmp'
+    (root / 'idle-timeout').write_text(os.environ['SCCACHE_IDLE_TIMEOUT'])
     sock = socket.socket(socket.AF_UNIX)
     sock.bind(os.environ['SCCACHE_SERVER_UDS'])
     while not (root / 'stop').exists():
@@ -1936,6 +1937,15 @@ else:
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(7), "{output:?}");
+    // A dead launcher must leave a finite server lifetime, without expiring
+    // the server during the longest permitted cold build.
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("idle-timeout"))
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+        MAX_TIMEOUT_SECS
+    );
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("persisted")).unwrap(),
         "final cache put"

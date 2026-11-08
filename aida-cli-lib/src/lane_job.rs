@@ -285,7 +285,10 @@ fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(Strin
 /// All paths/argv are positional arguments, never interpolated shell source.
 // trace:STORY-2641 | ai:codex
 const SCCACHE_JOB_SCRIPT: &str = r#"
-TMPDIR=/tmp SCCACHE_NO_DAEMON=1 SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 "$RUSTC_WRAPPER" &
+# Bound orphan lifetime if the launcher dies, while allowing a full cold job.
+idle_timeout=$1
+shift
+TMPDIR=/tmp SCCACHE_NO_DAEMON=1 SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT="$idle_timeout" "$RUSTC_WRAPPER" &
 server=$!
 ready=0
 while [ ! -S "$SCCACHE_SERVER_UDS" ]; do
@@ -323,6 +326,7 @@ fn cargo_with_cache_lifecycle(
             "-c".into(),
             SCCACHE_JOB_SCRIPT.into(),
             "lane-sccache".into(),
+            MAX_TIMEOUT_SECS.to_string(),
             cargo.to_string_lossy().into_owned(),
         ];
         shell_args.extend(args);
