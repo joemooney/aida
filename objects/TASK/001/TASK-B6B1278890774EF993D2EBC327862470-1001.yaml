@@ -24,7 +24,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:41:27.807010288Z
-modified_at: 2026-11-08T17:23:15.922080025Z
+modified_at: 2026-11-08T17:23:21.926578602Z
 req_type: Task
 tags:
 - from-advisor:STORY-2630
@@ -38,6 +38,14 @@ relationships:
   target_id: 01a1bb61-abe0-7842-b236-2ee5447fddeb
   created_at: 2026-11-08T17:23:15.922077122Z
   created_by: joe
+comments:
+- id: 01a1bc2f-a6c6-74c0-b55f-ea1d6f06a500
+  author: joe
+  content: 'Advisor 2026-11-08: duplicate of the same PR-3662 note.'
+  created_at: 2026-11-08T17:23:21.926578602Z
+  modified_at: 2026-11-08T17:23:21.926578602Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bbe4-5f4e-79a0-a967-e807cc601155
   author: joe
