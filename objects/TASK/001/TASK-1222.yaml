@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T07:25:06.600346039Z
+modified_at: 2026-11-08T07:29:43.653226287Z
 req_type: Task
 tags:
 - cleanup
@@ -190,6 +190,13 @@ comments:
   modified_at: 2026-11-08T06:12:55.379594641Z
   session_id: 01a1b9bad3d8
   harness_version: codex-cli 0.167.0
+- id: 01a1ba10-28e5-7bc1-930c-ca615097a153
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3 job registration and AC4 fixtures hold and CI shards are green, but linked_clean counts AIDA runtime/ignored noise as uncommitted work, retaining 92% of sampled real linked worktrees, so AC2 is near-vacuous on the target host; four minor reporting/doc gaps.. No triage reason was given.'
+  created_at: 2026-11-08T07:29:43.653224769Z
+  modified_at: 2026-11-08T07:29:43.653224769Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -337,11 +344,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC1, AC3 job registration and AC4 fixtures hold and CI shards are green, but linked_clean counts AIDA runtime/ignored noise as uncommitted work, retaining 92% of sampled real linked worktrees, so AC2 is near-vacuous on the target host; four minor reporting/doc gaps.
-  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T07:25:06.600346039Z
+- id: 01a1ba10-28e5-7bc1-930c-ca5a8cb187f0
+  author: joe
+  timestamp: 2026-11-08T07:29:43.653212882Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
