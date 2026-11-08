@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:33:52.338057747Z
-modified_at: 2026-11-06T13:41:19.169539421Z
+modified_at: 2026-11-08T18:37:47.805250834Z
 req_type: Bug
 tags:
 - area:containment
@@ -83,6 +83,13 @@ comments:
   created_at: 2026-11-06T13:41:19.169536159Z
   modified_at: 2026-11-06T13:41:19.169536159Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+- id: 01a1bc73-cb9d-76f2-9c07-f07d556dcc16
+  author: joe
+  content: 'Conformance run 2026-11-08 11:35 MST (~/.aida/conformance-codex-aida-1794162936), codex-cli 0.167.0, ChatGPT auth, turn completed: C2 FAIL confirmed. Terminal store-create, store-append and store-rename all succeeded; admin, common-dir and git-pointer writes were denied (EROFS). Fix path is STORY-2561 host-mediated store writes.'
+  created_at: 2026-11-08T18:37:47.805250834Z
+  modified_at: 2026-11-08T18:37:47.805250834Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a957-74fc-7913-99bf-268eaf265ca8
   author: joe
