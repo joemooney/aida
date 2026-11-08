@@ -360,7 +360,7 @@
     "aida-cli-lib/src/mcp.rs:hostname_or_unknown:var:1ba89cd6dfdc5010b8f2": 1,
     "aida-cli-lib/src/mcp.rs:hostname_or_unknown:var:814241a73f12ebfed2d8": 1,
     "aida-cli-lib/src/mcp.rs:resolve_mcp_profile:var:eb6c18ec3c3e497f45c9": 1,
-    "aida-cli-lib/src/mcp.rs:resolve_profile_prefers_override_then_config_then_default:var:eb6c18ec3c3e497f45c9": 1,
+    "aida-cli-lib/src/tests/mcp_tests.rs:resolve_profile_prefers_override_then_config_then_default:var:eb6c18ec3c3e497f45c9": 1,
     "aida-cli-lib/src/mcp.rs:tool_claim_task:var:b2f19d32c23343449272": 1,
     "aida-cli-lib/src/mcp.rs:tool_queue_add_inner:var:4ebb4af463260a0a0210": 1,
     "aida-cli-lib/src/mcp.rs:tool_queue_done:var:0ad9aea53dcf442ca518": 1,
