@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T21:07:15.607935625Z
+modified_at: 2026-11-08T21:07:19.206517943Z
 req_type: Task
 tags:
 - cleanup
@@ -607,6 +607,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No code defect in a full read of the merge-base diff; the head adds only a main merge over 6d34424d54b. Not approvable because CI run 42521473017 is still queued, so the Rust is unproven. Re-run a reviewer when CI is terminal; do not push.. It was punted on: blocked-dependency: Latest review finding 1 requests no code change, push or main merge until terminal CI and fresh independent review. Current head is 1725311184d4ad1677755195fe9ec1b9ff291f6f; its runs 42521473050 and 42521473017 are queued. Reviewed-head run 42518333153 is still queued with cancelled component jobs after the host advanced the branch. Preserve this head and obtain terminal CI plus independent review; existing supervised merge hold requires separate authorized clearance. Changed files: none; working tree clean; no local tests executed (untested=true). No publication or host cleanup performed.. No triage reason was given.'
   created_at: 2026-11-08T21:07:15.607928969Z
   modified_at: 2026-11-08T21:07:15.607928969Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcfc-afb0-75b1-8c1e-fb7fa2306c46
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1725311184d4
+    Recorded: 2026-11-08T20:53:00.238634488+00:00
+    Findings:
+    1. WAIT STATE, blocking, no code change requested: CI run 42521473017 at 1725311184d4 is queued with no job started (14 CI runs ahead of it at 2026-11-08 20:52 UTC). No CI has passed the current code: the last terminal run, 42510498051 at 6891d1d82dc0, failed gates and Build. Do NOT dispatch rework, push, or merge main for this finding, because a new push restarts the queue position. Re-run a reviewer once run 42521473017 is terminal.
+    2. COSMETIC, non-blocking: docs/what-is-aida.md:188 and docs/what-is-aida.html:799 still present merged-agent-worktrees --fail-on-findings as a scheduled guard, but this PR removes that command from the schedule allow-list (aida-cli-lib/src/maintenance_schedule.rs:3656). The doctor check still works by hand. Update when next touching those docs.
+    3. Criterion status at 1725311184d4 (full merge-base diff read; no tests run by reviewer, no CI at this head). ac683e0c: code verified, traced by task_1222_ended_clone_requires_origin_coverage_and_closed_pr, task_1222_byte_budget_does_not_veto_eligibility, task_1222_gc_cli_defaults_to_preview_and_rejects_apply_guard_combo; execution unverified. acfbfd06: code verified, traced by task_1222_branch_tag_collision_preserves_branch_identity, task_1222_linked_preview_and_removal_revalidate_dirty_and_locks, task_1222_linked_closed_pr_and_unknown_or_reopened_pr, task_1222_ownership_unknown_and_locks_keep_linked_tree, task_1222_live_holder_retains_linked_tree; linked mailbox retention comes from retire_checkout in teardown_worktree_path (aida-core/src/worktree_pool_destroy.rs:410), no dedicated test; execution unverified. ac14b158: code verified, traced by task_1222_weekly_gc_reports_to_advisor_without_apply, each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean, task_1222_only_scheduled_scans_consume_weekly_cursor; execution unverified. ac5418e8: fixture repositories present in worktree_lifecycle_gc.rs tests; execution unverified until CI is terminal. The supplied untraced list is stale: these tests carry trace:TASK-1222.<ac> comments.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:07:19.088757221Z
+  modified_at: 2026-11-08T21:07:19.088757221Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
