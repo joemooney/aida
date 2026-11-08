@@ -5154,10 +5154,11 @@ pub(crate) struct HistoryArgs {
     /// windowing and event-selector flags are refused rather than
     /// silently producing partial totals that read as complete.
     // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:TASK-1214 | ai:codex — conflicts name arguments, not retired mode flags.
     #[clap(
         long,
         conflicts_with_all = [
-            "full", "events", "status_changes", "comments", "oneline",
+            "full", "status_changes", "comments", "oneline",
             "shipped", "opened", "to", "from", "kind", "since", "until",
             "max_commits", "type", "author", "all", "archived", "deferred",
         ]
