@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T18:05:54.467877392Z
+modified_at: 2026-11-08T18:18:04.833563629Z
 req_type: Task
 tags:
 - cleanup
@@ -443,6 +443,22 @@ comments:
   modified_at: 2026-11-08T18:03:49.717318625Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc61-bea1-74a3-9fd8-698733f3612e
+  author: dirtlab
+  content: |
+    Review rework completed in native implementer seat; edits remain uncommitted for host publication.
+
+    Addressed findings 2-4 from the 190cf3480b8d review: the runtime classifier now excuses only the sessions symlink or direct existing regular *.toml lease files, retaining arbitrary files and nested paths under a real sessions directory. Updated its documentation, added shared-classifier cases and a live bwrap seat-probe regression, and added an ignored precious-session-note case to the linked-worktree GC fixture. The advisor route prompt now explains that manual non-TTY JSON scans can show a different window from the rotating weekly scan.
+
+    Changed files: .aida/config.toml; aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/worktree_lifecycle_gc.rs; aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs.
+
+    Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- task_1222: 23 passed (job j20261108T181533426-2-0); shared classifier filter bug_051_runtime_links_and_build_output_are_not_work: 1 passed (job j20261108T181748452-2-0); python3 -m unittest tests/test_store_writer_inventory.py: 42 passed; schedule TOML parsing and guard/advisor route assertions passed; rustfmt --check and git diff --check passed. Two earlier iterations failed the new probe fixture because seat creation ignores /.aida/*; the final fixture explicitly exposes sessions to status, and the final suite passed. untested=false.
+
+    Finding 1 remains host-side CI/review work: full CI for the final published head and separate authorized merge-hold clearance are still required. No commit, push, PR creation, queue completion or host cleanup performed. codegraph unavailable; aida doctor check codegraph confirmed missing executable, so navigation used rg.
+  created_at: 2026-11-08T18:18:04.833563629Z
+  modified_at: 2026-11-08T18:18:04.833563629Z
+  session_id: 01a1bc563cf9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
