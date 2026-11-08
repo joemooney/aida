@@ -6,6 +6,7 @@ using the absolute upstream executable, not this wrapper. See README.md.
 """
 # trace:STORY-2630 | ai:codex
 import argparse
+import errno
 from contextlib import closing
 import json
 import os
@@ -14,6 +15,7 @@ import signal
 import socket
 import sqlite3
 import struct
+import stat
 import subprocess
 import sys
 import tempfile
@@ -137,11 +139,16 @@ class Host:
             self.captured_at = time.time()
             self.published = {"protocol": 1, "indexed_at": self.indexed_at,
                               "captured_at": self.captured_at}
-            if previous is not None:
-                previous.cleanup()
         except BaseException:
             generation.cleanup()
             raise
+        # Publication has succeeded. Old-generation removal must never roll back
+        # (or delete) the new generation; the host may remove the orphan later.
+        if previous is not None:
+            try:
+                previous.cleanup()
+            except OSError as exc:
+                print(f"codegraph proxy: old snapshot cleanup failed: {exc}", file=sys.stderr)
 
     def status(self):
         # Publish one complete generation atomically; status never waits for the
@@ -218,6 +225,33 @@ def write_descriptor(directory, descriptor, data):
             temp_path.unlink(missing_ok=True)
 
 
+def bind_socket(server, path):
+    """Recover a crashed service without displacing a live listener or other file."""
+    try:
+        server.bind(str(path))
+        return
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+    identity = path.lstat()
+    if not stat.S_ISSOCK(identity.st_mode):
+        raise ValueError("existing proxy path is not a socket")
+    with socket.socket(socket.AF_UNIX) as probe:
+        probe.settimeout(0.25)
+        try:
+            probe.connect(str(path))
+        except OSError as exc:
+            if exc.errno != errno.ECONNREFUSED:
+                raise
+        else:
+            raise ValueError("host proxy already running")
+    current = path.lstat()
+    if (identity.st_dev, identity.st_ino) != (current.st_dev, current.st_ino):
+        raise ValueError("proxy socket changed during recovery")
+    path.unlink()
+    server.bind(str(path))
+
+
 def serve(primary, state, upstream):
     host = Host(primary, state, upstream)
     host.refresh()
@@ -265,9 +299,9 @@ def serve(primary, state, upstream):
         finally:
             slots.release()
 
-    # Refuse existing sockets, including live services; never unlink blindly.
+    # Recover only a refused, unchanged socket; never displace a live service.
     with socket.socket(socket.AF_UNIX) as server:
-        server.bind(str(path))
+        bind_socket(server, path)
         os.chmod(path, 0o600)
         server.listen(16)
         server.settimeout(0.1)

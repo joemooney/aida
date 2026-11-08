@@ -88,10 +88,10 @@ travels to the host as a query path. Clients derive the socket from the linked
 JSON, including when `--json` is omitted. Limits default to 20 (max 100), and
 impact depth defaults to 2 (max 10). No fallback to upstream writable opens.
 
-The service refuses an existing socket so it cannot displace another server.
-On crash, stop/check the service, confirm there is no live owner, remove only
-`/home/joe/ai/aida/.codegraph/lane-query.sock`, then restart. A graceful stop
-cleans its own socket. Old descriptor heartbeats cannot claim health after 30s.
+The service refuses a live listener and non-socket paths. After a crash it
+recovers only an unchanged socket whose connect probe returns ECONNREFUSED,
+so a killed service can restart without manual socket removal. Other probe
+errors refuse startup for host investigation. A graceful stop cleans its own socket. Old descriptor heartbeats cannot claim health after 30s.
 Old snapshot directories left after a crash can be removed by the host while
 the service is stopped. Do not run `serve` from a seat.
 
@@ -106,7 +106,9 @@ query service or heartbeat. Before proxy deployment it retains the
 existing direct-index diagnostic. The descriptor is read with a bounded
 non-following regular-file handle. When a proxy descriptor is present, doctor
 also compares the PATH client with the bundled wrapper using a bounded read;
-an upstream or different client produces a `client-routing` finding. Reinstall
+an upstream or different client on a lane produces a `client-routing` finding.
+The primary host keeps upstream on PATH for index maintenance and skips this
+lane-only client check. Reinstall
 the matching reviewed host wrapper with a candidate AIDA build. This diagnostic
 identifies client content only and grants no containment or launch authority.
 

@@ -248,13 +248,29 @@ pub(crate) fn scan(root: &Path) -> Vec<DoctorFinding> {
     }
     let binary = crate::which_binary("codegraph");
     let mut findings = assess(root, binary.is_some(), SystemTime::now());
-    if root.join(".codegraph/lane-proxy.json").exists() {
+    findings.extend(client_routing_findings(
+        root,
+        &crate::main_worktree_root_from(root),
+        binary.as_deref().map(Path::new),
+    ));
+    findings
+}
+
+// The primary keeps upstream on PATH for indexing; only lanes need the client.
+// trace:STORY-2630 | ai:codex
+fn client_routing_findings(
+    root: &Path,
+    primary: &Path,
+    binary: Option<&Path>,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+    if root != primary && root.join(".codegraph/lane-proxy.json").exists() {
         if let Some(binary) = binary {
-            if !is_bundled_proxy(Path::new(&binary)) {
+            if !is_bundled_proxy(binary) {
                 findings.push(finding(
                     "client-routing",
                     "PATH codegraph is not the bundled host-query client".into(),
-                    "Ask the host to install the reviewed query client outside seat writable roots and select it on PATH; a healthy proxy alone does not route bare codegraph commands.",
+                    "Ask the host for the reviewed absolute query-client path outside seat writable roots and select its directory on this lane shell PATH; keep upstream on the primary host PATH. A healthy proxy alone does not route bare codegraph commands.",
                 ));
             }
         }
@@ -430,6 +446,26 @@ mod tests {
             "--heal"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn documented_host_path_keeps_upstream_while_lanes_require_proxy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let primary = tmp.path().join("primary");
+        let seat = tmp.path().join("seat");
+        for root in [&primary, &seat] {
+            std::fs::create_dir_all(root.join(".codegraph")).unwrap();
+            std::fs::write(root.join(".codegraph/lane-proxy.json"), "{}").unwrap();
+        }
+        let upstream = tmp.path().join("upstream");
+        std::fs::write(&upstream, "upstream CLI").unwrap();
+        assert!(client_routing_findings(&primary, &primary, Some(&upstream)).is_empty());
+        assert_eq!(
+            client_routing_findings(&seat, &primary, Some(&upstream))[0].id,
+            "client-routing"
+        );
+        let client = Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/codegraph/codegraph");
+        assert!(client_routing_findings(&seat, &primary, Some(&client)).is_empty());
     }
 
     fn index(root: &Path) {

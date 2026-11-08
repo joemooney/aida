@@ -96,6 +96,50 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.assertFalse(snapshot.exists())
         self.assertEqual(len(json.loads(host.query({"op": "callees", "symbol": "known"})["output"])["files"]), 3)
 
+    def test_old_snapshot_cleanup_failure_keeps_published_generation_queryable(self):
+        host = self.host()
+        host.refresh()
+        previous = host.snapshot
+        self.conn.execute("INSERT INTO files VALUES ('new.rs')")
+        self.conn.commit()
+        with mock.patch.object(previous, "cleanup", side_effect=OSError("cleanup denied")):
+            host.refresh()
+        self.assertNotEqual(host.snapshot.name, previous.name)
+        self.assertTrue(Path(host.snapshot.name).exists())
+        result = host.query({"op": "callers", "symbol": "known"})
+        self.assertEqual(result["rc"], 0)
+        self.assertIn(["new.rs"], json.loads(result["output"])["files"])
+        previous.cleanup()
+
+    def test_socket_recovery_preserves_live_service_and_non_socket_paths(self):
+        path = self.root / "recovery.sock"
+        with socket.socket(socket.AF_UNIX) as live:
+            live.bind(str(path))
+            live.listen(1)
+            inode = path.stat().st_ino
+            with socket.socket(socket.AF_UNIX) as candidate:
+                with self.assertRaisesRegex(ValueError, "already running"):
+                    proxy.bind_socket(candidate, path)
+            self.assertEqual(path.stat().st_ino, inode)
+        # A killed server leaves exactly this refused socket behind.
+        with socket.socket(socket.AF_UNIX) as restarted:
+            proxy.bind_socket(restarted, path)
+            restarted.listen(1)
+            with socket.socket(socket.AF_UNIX) as client:
+                client.connect(str(path))
+        path.unlink()
+        for kind in ("file", "symlink"):
+            with self.subTest(kind=kind):
+                if kind == "file":
+                    path.write_text("preserve")
+                else:
+                    path.symlink_to(self.db)
+                with socket.socket(socket.AF_UNIX) as candidate:
+                    with self.assertRaisesRegex(ValueError, "not a socket"):
+                        proxy.bind_socket(candidate, path)
+                self.assertTrue(path.is_symlink() if kind == "symlink" else path.read_text() == "preserve")
+                path.unlink()
+
     def test_old_source_age_is_not_reset_by_new_snapshot(self):
         old = time.time() - 7200
         os.utime(self.db, (old, old))
