@@ -1456,6 +1456,42 @@ fn codex_argv(
     }
     let mut i = 0;
     while i < original.len() {
+        // trace:TASK-3015 | ai:codex — site config must not replace the
+        // generated posture; match the background launch's protected keys.
+        let config = match original[i].as_str() {
+            "-c" | "--config" => Some(
+                original
+                    .get(i + 1)
+                    .context("contained Codex config flag requires a value")?
+                    .as_str(),
+            ),
+            arg => arg
+                .strip_prefix("--config=")
+                .or_else(|| arg.strip_prefix("-c").filter(|v| !v.is_empty())),
+        };
+        if let Some(config) = config {
+            let key = config.split('=').next().unwrap_or("").trim();
+            anyhow::ensure!(
+                ![
+                    "sandbox",
+                    "approval",
+                    "shell_environment_policy",
+                    "permissions"
+                ]
+                .iter()
+                .any(|prefix| key.starts_with(prefix)),
+                "contained Codex refuses posture config override `{key}`"
+            );
+            // Consume the value as data, even if it resembles another flag.
+            let consumed = if matches!(original[i].as_str(), "-c" | "--config") {
+                2
+            } else {
+                1
+            };
+            args.extend_from_slice(&original[i..i + consumed]);
+            i += consumed;
+            continue;
+        }
         // trace:BUG-2495 | ai:codex — approval flags are top-level only in
         // the pinned CLI; exec accepts the equivalent config override.
         let approval = if matches!(original[i].as_str(), "--ask-for-approval" | "-a") {
