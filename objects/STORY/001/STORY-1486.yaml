@@ -2,40 +2,28 @@ id: 01a0defb-9c3e-7720-9d24-577c1a32d9e5
 spec_id: STORY-1486
 agreed_id: STORY-1486
 title: 'Scaffolded agent launch profile: root scoping and declared seat-based Git read-only policy (no approval exemptions)'
-description: 'Split from TASK-1499 by operator decision (2026-09-26, "Portability only; the permission profile moves to a separate spec"). This is the permission-shaping half of TASK-1499. Read it against STORY-1473 (seat authority is session-bound and set at a TTY), which owns seat semantics.
-
+description: |
+  Split from TASK-1499 by operator decision (2026-09-26, "Portability only; the permission profile moves to a separate spec"). This is the permission-shaping half of TASK-1499. Read it against STORY-1473 (seat authority is session-bound and set at a TTY), which owns seat semantics.
 
   DECISION (operator, 2026-10-08, re-affirmed 2026-10-11): "Profile without exemptions". The generated profile scopes roots and declares Git policy; it adds NO approval-prompt exemptions and no bypass flags.
 
-
   SCOPE:
-
-  - aida scaffold generates an agent launch profile that distinguishes the consumer project''s writable roots (source, .git, .aida, .aida-store, cache, build output) from the AIDA source/build checkout, which is read-only unless the resolved repo identity is AIDA itself.
-
+  - aida scaffold generates an agent launch profile that distinguishes the consumer project's writable roots (source, .git, .aida, .aida-store, cache, build output) from the AIDA source/build checkout, which is read-only unless the resolved repo identity is AIDA itself.
   - Seat-based Git policy: normal development seats get Git-write by default, guest seats are Git-read-only, and --git-read-only downgrades any seat. Current adapters cannot enforce a Git-write ban (codex headless passes --dangerously-bypass-approvals-and-sandbox; bwrap always binds the worktree writable), so this story DECLARES and PRINTS the policy; enforcement is a follow-up once a backend supports it.
-
   - Scaffolding authorizes both target/debug and target/release under the resolved local AIDA checkout, so switching build modes needs no scaffold rerun.
 
-
   Acceptance:
-
   1. consumer_profile_keeps_aida_checkout_read_only and aida_self_development_uses_verified_repo_identity: the generated profile lists writable and read-only roots separately; the AIDA checkout is read-only for a consumer project and writable only when the resolved repo identity is AIDA.
-
   2. generated_profile_preserves_approval_prompts: the generated profile contains no allow/no-ask exemption rule and no approval-bypass flag (test).
-
   3. The effective seat Git policy (write / read-only, and why) is printed by --no-exec --verbose before the agent starts, for a normal seat, a guest seat and a --git-read-only seat (test). The output states that the policy is declared, not enforced, on adapters that cannot enforce it.
-
   4. Both target/debug and target/release are authorized; switching between them needs no scaffold rerun (test).
-
-  5. No generated file contains a machine-specific absolute path (inherits TASK-1499''s rule).
-
-  '
+  5. No generated file contains a machine-specific absolute path (inherits TASK-1499's rule).
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-09-26 18:30:26.622729+00:00
-modified_at: 2026-11-08 17:23:34.549149+00:00
+created_at: 2026-09-26T18:30:26.622729Z
+modified_at: 2026-11-08T17:37:18.950021959Z
 req_type: Story
 tags:
 - agent-launch
@@ -48,1165 +36,853 @@ tags:
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0d6d4-2360-76a0-85d7-09f92ea11aae
-  created_at: 2026-09-26 18:30:33.806902+00:00
+  created_at: 2026-09-26T18:30:33.806902Z
   created_by: joe
 - rel_type: References
   target_id: 01a0d626-b41b-7d82-9b13-939d31ae2bfc
-  created_at: 2026-09-26 18:30:53.087973+00:00
+  created_at: 2026-09-26T18:30:53.087973Z
   created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a1bb0e-4193-7be0-b498-9c9592e7234c
-  created_at: 2026-11-08 12:08:00.098245+00:00
+  created_at: 2026-11-08T12:08:00.098245Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bbe0-6514-7fa1-b803-d22f7371f01a
-  created_at: 2026-11-08 17:23:34.549142+00:00
+  created_at: 2026-11-08T17:23:34.549142Z
   created_by: joe
 comments:
 - id: 01a0e339-464f-7680-a3b5-44783fc0de7c
   author: joe
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): left as a DRAFT, held for the operator. It is tagged authority/needs-operator for good reason: it sets what a launched agent may write and which commands skip the approval prompt. An agent approving its own launch profile is exactly the self-widening the orchestrate skill forbids. Also blocked-by TASK-1499 (portability half), which is still in progress.'
-  created_at: 2026-09-27 14:16:16.719762+00:00
-  modified_at: 2026-09-27 14:16:16.719762+00:00
+  created_at: 2026-09-27T14:16:16.719762Z
+  modified_at: 2026-09-27T14:16:16.719762Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 - id: 01a0fc39-b38d-73d0-8d47-52e5dbe66e17
   author: joe
-  content: 'Advisor pass (relay session #12, 2026-10-02): LEFT IN DRAFT DELIBERATELY. Not an
-
+  content: |
+    Advisor pass (relay session #12, 2026-10-02): LEFT IN DRAFT DELIBERATELY. Not an
     oversight, and it should not be re-groomed as if it were groomable.
 
-
     The spec says in its own text that it changes agent authority and "stays a DRAFT
-
     for the operator; a proxy must not approve it". This session is a proxy advisor
-
     seat, so approving it is out of bounds regardless of how sound the proposal
-
     looks. Recording that here so the next advisor pass does not spend the
-
     investigation again.
-
 
     ## One thing HAS changed since filing, and it is the thing the operator needs
 
-
     Its only blocker is now satisfied: **TASK-1499 is Completed** (`blocked: false`
-
     on the spec as of this pass). At filing time, "hold until TASK-1499 lands" was a
-
     live option. It has landed.
 
-
     So STORY-1486 is now waiting on **nothing but an operator decision**. Its three
-
     recorded options were: adopt the profile as proposed; adopt it without the
-
     no-approval-prompt part; or hold until STORY-1473 lands. The first two are now
-
     actionable immediately. Only the third still depends on other work --
-
     STORY-1473 (seat authority is session-bound and set at a TTY) is referenced, not
-
     a blocker, and is itself approved-but-not-queued.
-
 
     ## What the operator is actually being asked
 
-
     Heft 7, and the substantive question is AC3: which commands are exempt from
-
     Codex approval prompts. ACs 1, 2, 4 and 5 are mechanical and carry little
-
     authority risk -- separating writable from read-only roots, downgrading a seat
-
     to Git-read-only, authorizing both target/debug and target/release, and banning
-
     machine-specific absolute paths. AC3 is the one that widens what an agent may do
-
     without being asked, and it is the reason this spec is operator-gated.
 
-
     That suggests a third disposition the recorded options do not list, offered here
-
     as advice and not as a decision: approve ACs 1, 2, 4, 5 as their own spec now --
-
     they are a portability and least-privilege improvement with no authority
-
     widening -- and keep AC3 parked for the operator. That would unblock most of
-
     heft 7 without a proxy touching the approval-prompt surface. If the operator
-
     prefers the spec whole, it stays as it is.
-
-    '
-  created_at: 2026-10-02 10:47:15.085897+00:00
-  modified_at: 2026-10-02 10:47:15.085897+00:00
+  created_at: 2026-10-02T10:47:15.085897Z
+  modified_at: 2026-10-02T10:47:15.085897Z
   session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 - id: 01a11c5b-255b-7b91-881d-243f9e2b5db5
   author: codex-sketch-author
-  content: 'SKETCH (awaiting advisor signoff): STORY-1486 — portable root profile and Git read-only downgrade, preserving approvals
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 — portable root profile and Git read-only downgrade, preserving approvals
 
-
-    Author: Codex, separate sketch-author advisor, 2026-10-08. Source baseline: main b46aec1e674baae5a329416d4119e67b59200a88, also origin''s advertised main at inspection. This is an authored proposal, not an independent verdict, launch authorization or implementation.
-
+    Author: Codex, separate sketch-author advisor, 2026-10-08. Source baseline: main b46aec1e674baae5a329416d4119e67b59200a88, also origin's advertised main at inspection. This is an authored proposal, not an independent verdict, launch authorization or implementation.
 
     ## Recorded direction and existing authority
 
-
-    Canonical decision_request answered=0 at 2026-10-08T15:54:29.273727039Z selects “Profile without exemptions”; consequence: “Scope writable roots and Git policy; preserve approval prompts.” Snapshot: answered-sketch-evidence/STORY-1486.json. Choice 1 is this option, not the older description''s “full profile”. The proposed title is “Scaffolded agent launch profile: root scoping and seat-based Git read-only downgrade”. Remove the old no-prompt bullet and replace AC3 as specified below. No exemption list is introduced, even for routine AIDA commands.
-
+    Canonical decision_request answered=0 at 2026-10-08T15:54:29.273727039Z selects “Profile without exemptions”; consequence: “Scope writable roots and Git policy; preserve approval prompts.” Snapshot: answered-sketch-evidence/STORY-1486.json. Choice 1 is this option, not the older description's “full profile”. The proposed title is “Scaffolded agent launch profile: root scoping and seat-based Git read-only downgrade”. Remove the old no-prompt bullet and replace AC3 as specified below. No exemption list is introduced, even for routine AIDA commands.
 
     TASK-1499 portability and STORY-1473 seat authority have landed. Current seat_authority.rs current_grant/current_seat, require_direct_human, validate_child_delegation and issue_child already validate the grant, roster ceiling and explicit delegation scope; lib.rs effective_role_with_roster uses that validator and falls back to the existing implementer baseline when no valid grant is found. Role env is routing/display metadata, not authority. Do not replace these semantics with a new profile role system or assume missing grant means an already-existing “guest” grant. The profile adds a restriction to the resolved launch, never an issuance mechanism.
 
-
     ## Owner and triggers
-
 
     Scaffolding owns a portable declarative profile recipe. The existing launcher owns its per-launch resolution, capability check, dry preview and actual execution. The runtime adapter owns enforcing the restrictions it can truthfully support. Canonical seat issuance/validation stays owned by the existing authority code. No profile file can mint a seat, expand delegation, change a roster, bypass a TTY floor, clear a hold or approve a merge.
 
-
     Triggers: explicit scaffold generation/upgrade; agent new dry preview and launch; launch paths consuming that generated profile. Integrate with existing foreground/background/headless planning at the shared seams, but do not automatically enroll unsupported launch paths or modify global vendor defaults. A profile-enabled path must either apply the verified profile or refuse; bypass flags and an incompatible headless posture cannot silently strip the profile. Direct vendor execution outside the AIDA launcher is outside its enforcement claim.
-
 
     ## Portable recipe and effective roots
 
-
-    Propose a small LaunchPermissionProfile recipe and ResolvedLaunchPermissionProfile runtime value (new symbols). Persist only symbolic project/worktree/store/build/AIDA-executable references and the Git downgrade request, not this machine''s absolute paths. Resolve at launch through existing project/store discovery, git worktree metadata and aida_bin::process. Absolute paths can appear in the runtime preview and transient runtime value; portable generated files may not contain them.
-
+    Propose a small LaunchPermissionProfile recipe and ResolvedLaunchPermissionProfile runtime value (new symbols). Persist only symbolic project/worktree/store/build/AIDA-executable references and the Git downgrade request, not this machine's absolute paths. Resolve at launch through existing project/store discovery, git worktree metadata and aida_bin::process. Absolute paths can appear in the runtime preview and transient runtime value; portable generated files may not contain them.
 
     Enumerate the actual consumer worktree source, Git administrative paths (git-dir AND git-common-dir, not just a .git directory assumption), project .aida, canonical store, cache and required build output. Canonicalize existing ancestors for planned output paths and validate the final target before use. Resolve sibling worktrees, symlinked store paths and relocated projects explicitly. Do not grant a broad writable home/repository parent merely to cover one nested path. Report which roots are shared with other worktrees; declaring one project writable must not claim sibling isolation if common Git metadata is shared.
 
-
     For a consumer project, the AIDA source/build checkout is read-only; both resolved target/debug and target/release binaries are readable/executable without a scaffold rerun. “Authorized” here means within the proposed filesystem/execution policy, not exempt from approval. Running either binary must still pass ordinary approval/authority gates. Do not authorize arbitrary binaries by a target/* glob. If AIDA is installed as a standalone executable with no provable checkout, report that fact and permit no inferred writable checkout; resolve the actual binary without inventing debug/release directories.
-
 
     When the actual consumer project is AIDA itself, its development worktree/build paths can be writable under its ordinary project policy. Establish that from resolved repository/worktree identity, not a directory basename, env hint, or prompt assertion. A writable ancestor containing a read-only AIDA checkout is a real overlap: the adapter must prove read-only precedence or refuse the profile. Symlink aliasing, path uncertainty and unavailable required roots cannot silently widen the writable set.
 
-
     ## Git downgrade and approvals
 
-
-    Compute the desired Git mode from the existing authorized seat policy, intersected with explicit --git-read-only. A known guest is always read-only; a downgrade stays read-only irrespective of development seat or child flag. A normal development seat''s Git-write allowance is not a merge/roster/hold grant. Missing/invalid seat resolution must never be used as evidence to widen a previously read-only policy; report the current baseline and refuse any unsupported stronger claim. Do not change effective_role_with_roster''s fallback in this story.
-
+    Compute the desired Git mode from the existing authorized seat policy, intersected with explicit --git-read-only. A known guest is always read-only; a downgrade stays read-only irrespective of development seat or child flag. A normal development seat's Git-write allowance is not a merge/roster/hold grant. Missing/invalid seat resolution must never be used as evidence to widen a previously read-only policy; report the current baseline and refuse any unsupported stronger claim. Do not change effective_role_with_roster's fallback in this story.
 
     Print desired and enforceable Git mode separately in --no-exec --verbose, with effective seat/source, roots, adapter, approval posture and unsupported surfaces. Preview remains side-effect-free: no grant, lease, worktree, status flip or launch. Repeat validation at actual launch rather than treating preview as a reusable authorization token.
 
-
-    Preserve the user''s ordinary approval prompting. Generate no allow/no-ask rules, no broad routine-command exemption, no approval_policy=never and no bypass flag. Existing explicitly selected bypass postures elsewhere remain a separate policy; a requested restricted profile that conflicts with them refuses with the conflict stated. Approval of a command cannot lift this profile''s read-only constraint or existing merge/TTY gate. No unattended wake or autonomous launch is authorized by generating a profile.
-
+    Preserve the user's ordinary approval prompting. Generate no allow/no-ask rules, no broad routine-command exemption, no approval_policy=never and no bypass flag. Existing explicitly selected bypass postures elsewhere remain a separate policy; a requested restricted profile that conflicts with them refuses with the conflict stated. Approval of a command cannot lift this profile's read-only constraint or existing merge/TTY gate. No unattended wake or autonomous launch is authorized by generating a profile.
 
     ## Material unsupported surface — not a security claim
 
-
     The present session has filesystem sandboxing disabled (danger-full-access) and approval policy never imposed by its harness. Its displayed workspace roots are not an enforced write boundary. This proposal cannot retrofit either restriction into this running session, and did not change its settings.
-
 
     Current session.rs codex_session_args preserves native posture unless bypass is requested, whereas codex_headless_args_with_model_and_effort includes the full bypass flag. bwrap_confinement_args_inner has a read-only filesystem base but always binds the worktree writable; its current optional wrapper is not a general per-seat Git policy. Claude tool hooks/settings are not a whole-process boundary by themselves. Reuse genuine capabilities only after verifying their application to the selected launch; do not claim cross-harness parity from a generated settings file.
 
-
     Writable source roots cannot guarantee “cannot run a Git write”: Git can change a worktree, create a new repository, use an alternate index/object directory or another git-dir; a read-only .git mount alone is insufficient. PATH wrappers and shell-command string filters do not cover an absolute git binary, aliases, libgit2, direct file writes or a tool/MCP executing outside the confined child. Root confinement also does not prevent remote push/PR/merge with shared network credentials. The existing same-UID grant boundary is not hardened by this profile.
 
+    Therefore AC2's absolute Git-write prohibition is NOT demonstrated on current source. Proposed fail-closed contract: an actual profile launch requesting Git read-only must refuse before process spawn unless the adapter establishes the full claimed mutation boundary, including out-of-process tool endpoints. A dry preview may still show “requested read-only; unsupported; launch refused.” An unrestricted launch is not a successful profile launch. Native Codex in this session and the current bypass headless route cannot be certified by this sketch.
 
-    Therefore AC2''s absolute Git-write prohibition is NOT demonstrated on current source. Proposed fail-closed contract: an actual profile launch requesting Git read-only must refuse before process spawn unless the adapter establishes the full claimed mutation boundary, including out-of-process tool endpoints. A dry preview may still show “requested read-only; unsupported; launch refused.” An unrestricted launch is not a successful profile launch. Native Codex in this session and the current bypass headless route cannot be certified by this sketch.
-
-
-    Unresolved operator-only scope fork, stated without requesting an absent operator''s answer: (A) retain the strong “cannot run a Git write” requirement and leave restricted launch unavailable until a separately reviewed enforcement backend exists; (B) explicitly amend it to an AIDA-mediated command policy plus clearly labeled filesystem limits, accepting that arbitrary same-user tools are outside that guarantee. This sketch does NOT select B, weaken the acceptance, design a new broker, or claim a refusal-only implementation satisfies all functional acceptance. Independent advisor should distinguish readiness to review the recipe from readiness to implement/ship the full guarantee.
-
+    Unresolved operator-only scope fork, stated without requesting an absent operator's answer: (A) retain the strong “cannot run a Git write” requirement and leave restricted launch unavailable until a separately reviewed enforcement backend exists; (B) explicitly amend it to an AIDA-mediated command policy plus clearly labeled filesystem limits, accepting that arbitrary same-user tools are outside that guarantee. This sketch does NOT select B, weaken the acceptance, design a new broker, or claim a refusal-only implementation satisfies all functional acceptance. Independent advisor should distinguish readiness to review the recipe from readiness to implement/ship the full guarantee.
 
     ## Races and fail-closed behavior
 
-
     Resolve roots, seat and effective flags into one immutable launch plan. Revalidate grant/delegation and root identities immediately before spawn using the existing launcher checks. If a symlink/root, common-dir, selected executable, profile revision, seat or effective flags changed after preview/planning, replan or refuse. Fail on invalid profile syntax, unresolved required roots, contradictory bindings, missing required adapter or failed confinement self-test. Never silently fall back to native/bypass execution.
 
-
-    Bind actual mount/path handles where the adapter supports that; canonical path strings alone do not close same-user rename races. If a backend cannot close the race, label it unsupported for the strong guarantee. Child launches inherit restriction ceilings; they cannot use a fresh request to regain Git-write. Live revocation is still governed by existing authority/runtime boundaries: a prelaunch grant check alone does not revoke an already running shell''s OS access. Do not introduce a new revocation engine here.
-
+    Bind actual mount/path handles where the adapter supports that; canonical path strings alone do not close same-user rename races. If a backend cannot close the race, label it unsupported for the strong guarantee. Child launches inherit restriction ceilings; they cannot use a fresh request to regain Git-write. Live revocation is still governed by existing authority/runtime boundaries: a prelaunch grant check alone does not revoke an already running shell's OS access. Do not introduce a new revocation engine here.
 
     Scaffold upgrades use managed merging, preserve unrelated local config and refuse contradictory settings instead of overwriting operator approval choices. Failed validation must not leave a partially active profile. Keep runtime evidence separate from portable recipe; no machine paths leak through generated comments, command prefixes or error-remediation snippets persisted into the recipe.
 
-
     ## Files and current symbols
 
-
     | Surface | Extend/reuse |
-
     | --- | --- |
-
     | Scaffold | aida-cli-lib/src/scaffold_cmd.rs handle_scaffold_command, run_scaffold_upgrade, decide_managed_merge; aida-core/src/scaffolding/settings.rs Scaffolder::generate_claude_settings_json and mcp_translate.rs render_codex_config_document: portable generation without permission exemptions |
-
     | Binary discovery | aida-cli-lib/src/aida_bin.rs process, resolve, Resolved, Profile: consume existing TASK-1499 resolution; no second executable-selection algorithm |
-
     | Launch planning | aida-cli-lib/src/lib.rs agent_new_with_config, prepare_agent_launch_dry, print_agent_launch_noexec, agent_new_bg_dispatch, resolved_agent_permission_summary: resolve/preview the additive restrictive profile before effects |
-
     | Runtime adapters | aida-cli-lib/src/session.rs compose_headless_command, spawn_vendor_headless_with_seat, codex_session_args, codex_headless_args_with_model_and_effort, bwrap_confinement_args_inner, bwrap_preflight: capability reporting and refusal of incompatible profile paths; no new bypass mapping |
-
     | Authority dependency | seat_authority.rs current_grant/current_seat/validate_child_delegation; lib.rs effective_role_with_roster and gate_agent_bypass: call existing checks; no grant-schema or issuance rewrite |
-
-    | CLI and documentation | cli.rs AgentNewCommand''s launch option plumbing for proposed --git-read-only; existing scaffold/launch docs: requested vs enforced mode and honest supported-host matrix |
-
+    | CLI and documentation | cli.rs AgentNewCommand's launch option plumbing for proposed --git-read-only; existing scaffold/launch docs: requested vs enforced mode and honest supported-host matrix |
 
     New profile symbols and storage location are proposals for the ADR, not shipped APIs. Source hashes: answered-sketch-evidence/source-hashes.json. Existing role/CLI changes (including STORY-1473 and TASK-1592/TASK-1594 traces) are dependencies, not work to recreate. TASK-1593, TASK-1591, BUG-1811 and BUG-1812 are reserved to the external agent: no source/spec edits or redefinition here. Rebase the eventual adapter inventory on their reviewed result before implementation; this proposal must not absorb their authority or shell fixes. TASK-1612/BUG-1808 checkpoint work does not authorize activation or supply a production enforcement backend by implication.
 
-
     ## Proposed amended acceptance and meaningful tests
 
-
     1. List desired writable/read-only roots separately and the actual supported boundary. consumer_profile_keeps_aida_checkout_read_only and aida_self_development_uses_verified_repo_identity exercise real consumer and sibling AIDA worktrees, not just string serialization. overlapping_roots_and_store_symlink_escape_refuse verifies no outside writes after alias changes.
-
     2. Preserve guest/--git-read-only downgrade and pure preview; do not claim the strong prohibition is already supported. git_read_only_cannot_be_widened_by_child_or_env tests native, bg and headless attempts. unsupported_git_boundary_refuses_before_spawn asserts zero child/session effects. supported_adapter_blocks_git_write_entrypoints must exercise commit/update-ref/index/alternate git-dir, direct writes and tool endpoints with before/after filesystem/ref evidence; remote mutation gets its own forged-server no-request assertion. Required functional tests remain blocked until a real adapter exists, not replaced by config snapshot tests.
-
     3. Replace original exemption-list AC entirely: generated_profile_preserves_approval_prompts proves no new allow/no-ask entries or bypass flags in generated artifacts and effective launch argv. With a supported adapter, a harness approval-required action still requests approval; approval does not lift Git read-only. incompatible_existing_bypass_refuses_profile proves conflict handling. No exemption list is generated.
-
     4. debug_release_switch_needs_no_rescaffold consumes the same portable recipe after selecting each existing local binary through aida_bin, preserving all approval checks and consumer read-only roots; missing/unresolved build errors before effects.
-
     5. relocated_project_and_aida_install_keep_profile_portable asserts every generated artifact contains no machine-specific absolute path, then resolves correctly in a different temp root. Preview may print current absolute roots without writing them into the recipe.
-
     6. preview_then_grant_or_root_change_refuses_launch tests revocation/delegation change and path replacement barriers; preview_is_read_only checks no lease/grant/store/status writes. shared_git_common_dir_is_explicit verifies sibling administrative scope is disclosed, not mislabeled as isolated.
 
-
-    Tests are named proposals only; no suite or build was run. Approval prompts here describe future supported profile behavior, not this harness''s currently enforced approval policy.
-
+    Tests are named proposals only; no suite or build was run. Approval prompts here describe future supported profile behavior, not this harness's currently enforced approval policy.
 
     ## Readiness and exclusions
 
-
     Ready for independent architecture review of the operator-selected non-exemption direction. Not ready to claim complete enforceability or all-harness implementation: the strong Git-write guarantee has a material backend/scope fork. A different advisor must review this exact content and its proposed acceptance before any authorized implementation. No self-signoff and no status/queue mutation accompanies this sketch.
 
-
     Out of scope: command exemption lists; restoring old authority code; TTY bypass; new seats, grants or delegation; global sandbox/approval edits; credential broker design; production wake/activation; vendor policy claims based only on stale docs; implementation, merge, push or edits to the reserved specs.
-
-    '
-  created_at: 2026-10-08 16:31:37.819605+00:00
-  modified_at: 2026-10-08 16:31:37.819605+00:00
+  created_at: 2026-10-08T16:31:37.819605Z
+  modified_at: 2026-10-08T16:31:37.819605Z
 - id: 01a11c65-6a1e-70e0-a611-216029612fbd
   author: joe
-  content: 'ADVISOR SIGNOFF: CHANGES REQUESTED.
-
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED.
 
     Independent reviewer: Codex, new strict advisor, not the sketch author or coordinator. Reviewed STORY1486_AMENDED_SKETCH.md SHA-256 6bed750343f488083dc2fced9eb794e65f2c89dc8f32a5d205812358a7a81f75 against main b46aec1e674baae5a329416d4119e67b59200a88 and the canonical operator answer at 2026-10-08T15:54:29.273727039Z.
 
-
     Profile WITHOUT exemptions and preserved approval prompts is settled. Replace original exemption AC3 accordingly. The current native/headless/bwrap/root-list surfaces do not establish the strong Git-read-only contract. Require a supported backend and explicit operation/resource/threat boundary, actual-launch capability matrix, path/handle race closure, monotonic child restriction and out-of-process tool/network coverage. Preserve pure preview, portability, managed merge, existing seat validation and executable resolution. Inspect effective inherited config/argv, not just generated files.
-
 
     Retain strong AC2. Unsupported restricted launch must refuse before session/grant/lease/worktree/spawn effects; refusal alone is not functional completion. No authority is inferred to narrow the guarantee to AIDA-mediated commands or to introduce a broker/new privileged enforcement architecture. That scope fork remains explicit until separately authorized. Approval never lifts the restriction. No exemptions, TTY bypass, new grants or global harness changes.
 
-
     Full rework details, acceptance amendments, named positive/adversarial tests, source references and publication limits: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_INDEPENDENT_REVIEW.md, sections P1–P3. No implementation/dispatch/status/queue/merge authorization. TASK-1593 TASK-1591 BUG-1811 BUG-1812 remain external reservations. No tests were executed by this design review.
-
-    '
-  created_at: 2026-10-08 16:42:50.782544+00:00
-  modified_at: 2026-10-08 16:42:50.782544+00:00
+  created_at: 2026-10-08T16:42:50.782544Z
+  modified_at: 2026-10-08T16:42:50.782544Z
   relayed_from: answered-sketch-independent-advisor
 - id: 01a11c81-a0d5-7c62-aa82-83fa332ee96b
   author: joe
-  content: 'SKETCH (awaiting advisor signoff): STORY-1486 v2 — non-exemption profile, strong Git-read-only backend unresolved
-
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 v2 — non-exemption profile, strong Git-read-only backend unresolved
 
     Codex same sketch-author lineage, 2026-10-08; pinned main b46aec1e674baae5a329416d4119e67b59200a88. Reworks P1–P3 of the full CHANGES REQUESTED verdict. Exact proposed canonical comment body for coordinator relay; NOT posted. V1 artifacts/comment remain unchanged. Companion STORY1486_NEEDS_OPERATOR_SCOPE_V2.md is part of this proposal, not a newly answered direction.
 
-
     ## Recorded scope and ownership
-
 
     Actual answer choice 1 / answered=0 at 2026-10-08T15:54:29.273727039Z is “Profile without exemptions”: roots and Git policy, approval prompts preserved. Strong AC2 is retained. No weaker AIDA-command-only guarantee is selected; no new broker, privileged service or changed developer workflow is designed/authorized here. No implementation or refusal-only completion proposed.
 
-
     Scaffolder owns a symbolic recipe; launcher resolves desired policy and reports capabilities; a proven adapter would own enforcement; existing seat_authority.rs owns seat/grant validation. TASK-1499/aida_bin::process owns executable resolution, including debug/release. STORY-1473 current_grant/current_seat/validate_child_delegation and lib.rs effective_role_with_roster stay intact: invalid grant fallback is implementer metadata, not proof of guest status or permission to relax a previously imposed restriction. No grant-schema change or duplicate authority machinery.
 
-
-    Triggers covered by future profile planning: scaffold/upgrade, foreground/background/headless, resume and all descendant launches; dry previews remain pure. Profile not applied means not certified; direct vendor launches are outside AIDA''s launcher but cannot be an escape path for a purportedly enforced descendant. Effective inherited vendor config/argv matter as much as generated files.
-
+    Triggers covered by future profile planning: scaffold/upgrade, foreground/background/headless, resume and all descendant launches; dry previews remain pure. Profile not applied means not certified; direct vendor launches are outside AIDA's launcher but cannot be an escape path for a purportedly enforced descendant. Effective inherited vendor config/argv matter as much as generated files.
 
     ## Precise retained boundary and the unmet requirement
 
-
     For the strong AC2, protected Git mutation includes repository init; worktree/index changes by checkout/reset; object/ref/config/remote changes by commit/update-ref/fetch/config; alternate index, object directory, git-dir/common-dir; libgit2 or equivalent direct writes; and remote push/PR/merge effects through CLI, libraries or tool endpoints. Scope includes new repositories in writable tmp/source, inherited children, absolute binaries and out-of-process tool channels. This is the conservative strong interpretation tested by v1/review, not a silently weakened command allow-list.
-
 
     Ordinary source editing/build output and universal prevention of arbitrary Git-equivalent filesystem writes cannot be derived merely from writable-root lists. Making .git read-only still allows alternate state; writable tmp allows new repositories. Readable credentials/shared sockets or unconfined MCP endpoints allow remote writes. A new mediation/enforcement architecture or a changed editing/build workflow would require separately authorized scope. None is inferred from the profile answer. No selected current backend meets this positive launch contract. Consequently strong mode is unsupported across the matrix below; requested strong launch must refuse before persistent session/grant/lease/worktree effects or spawn. Refusal is necessary, not satisfaction of functional AC2.
 
-
     ## Capability matrix — current source, not a host experiment
-
 
     Cells show current evidence and strong-profile disposition. “Unverified” is not “supported.” OS labels describe intended platform matrix; no live OS probe or launch was run.
 
-
     | Vendor / OS | Foreground | Background/headless | Resume / inherited children | Strong mode |
-
     | --- | --- | --- | --- | --- |
-
     | Codex / Linux | codex_session_args native preserves selected posture; roots do not mediate Git operations | codex_headless_args_with_model_and_effort includes bypass; composed flags conflict with restricted profile | no demonstrated immutable inherited restriction context; resuming cannot retrofit one | Unsupported; refuse |
-
     | Codex / macOS, Windows | no inspected adapter proving root precedence, handles and Git/network mediation | no certified equivalent; bypass path cannot establish restriction | unproven descendant and endpoint boundary | Unsupported; refuse |
-
     | Claude / Linux | tool hooks/settings do not confine every Edit/Write/MCP endpoint | optional bwrap_confinement_args_inner binds source/rw_paths and tmp writable; bwrap_preflight proves only basic sandbox viability | writable handles, child policy, remote credentials/endpoints not covered by strong certificate | Unsupported; refuse, even if bwrap is installed |
-
     | Claude / macOS, Windows | no inspected whole-process strong adapter | no proven equivalent to required operation/resource boundary | no proven monotonic resume/descendant ceiling | Unsupported; refuse |
-
     | Antigravity / Linux, macOS, Windows | no proven strong adapter in inspected launch inventory | bypass/posture flags are not Git mediation | no certified inheritance/endpoint closure | Unsupported; refuse |
-
     | Other/unknown vendor or launcher / any OS | no capability evidence | no capability evidence | no capability evidence | Unsupported by default; no fallback |
-
 
     No row is a production-supported positive path. A unit-test fake adapter cannot change that fact. Existing native launch functionality without this strong profile is separate; this sketch does not alter global defaults or authorize it in response to a failed restricted request.
 
-
     ## Resource/capability proof obligations
 
-
     | Resource or channel | Desired policy / necessary proof | Current limitation |
-
     | --- | --- | --- |
-
     | Consumer source, .aida, store, cache, build | Enumerate resolved project roots; actual intended editing/build succeeds; write outside denied | strings/settings alone not proof; required functionality must not be removed just to pass negatives |
-
     | Consumer versus AIDA checkout | AIDA checkout and both selected debug/release binaries read/execute-only unless actual developed repository is AIDA; verify repo identity, not basename/env | ancestor rw bind may dominate nested ro; no proven universal precedence |
-
     | Git admin | Resolve both git-dir and git-common-dir and sibling reach; protect all relevant refs/index/objects | read-only normal .git does not cover alternate/new state or sibling shared metadata |
-
     | Symlink/ancestor/executable | Resolve identities/handles; bind chosen executable; no path replacement between plan and spawn | canonical strings alone leave TOCTOU; backend must bind handles or refuse |
-
     | Existing writable FDs and child processes | No inherited write handle bypass; kernel/adapter restriction ceiling survives env deletion, exec and child spawning | no present proof; profile env string is insufficient |
-
     | tmp and build scratch | Positive build/edit workflow and no new/alternate Git-equivalent mutation | unrestricted scratch contradicts universal operation prohibition; unresolved scope/backend |
-
     | Credentials/network | Remote Git/forge mutations prevented for every equivalent caller, not just git binary | existing shared network/credentials do not establish this |
-
     | Local sockets and external MCP/tools | Deny unconfined endpoints or prove independently enforced same ceiling | child process filesystem sandbox does not confine external server |
-
     | Resume | Restore same or stricter enforcement context before any action | old unrestricted process/session cannot be labeled restricted from new metadata |
 
-
-    A backend capability certificate would need evidence for EVERY required resource/channel and positive workflow, not only a bwrap smoke test. Designing that backend is outside this rework''s authorization. Requested vs enforceable policy must be printed distinctly in preview, including missing row/channel and refusal reason.
-
+    A backend capability certificate would need evidence for EVERY required resource/channel and positive workflow, not only a bwrap smoke test. Designing that backend is outside this rework's authorization. Requested vs enforceable policy must be printed distinctly in preview, including missing row/channel and refusal reason.
 
     ## Monotonic restriction and race contract
 
-
     Desired Git permission is intersection of existing authorized seat policy, explicit --git-read-only, inherited restriction ceiling and adapter capability. Known guest and explicit downgrade never widen. Loss/revocation/expiry of a guest grant cannot fall through to implementer and thereby regain Git-write; the already-established enforcement ceiling must persist independently of mutable role/env metadata. Ordinary grant validation still runs; it never creates an exemption. No new seat or grant field is proposed as an enforcement substitute.
-
 
     An actual supported implementation would bind the ceiling to non-removable enforcement context and close writable-handle/path substitution before spawn. Child cannot clear env, invoke another binary or contact an unconfined server to escape. If proof cannot be supplied, refuse. Revalidate resolved roots, profile revision, executable identity, seat and composed approval flags immediately before any authority/session/worktree effects; plan or preview does not grant later execution. Path handles/identities must remain stable through spawn, not just another pre-spawn string check. This pass does not claim that current launchers have such a primitive.
 
-
     Symbolic portable recipe may reference consumer worktree, store, cache/build and resolved AIDA installation. Runtime resolved absolute paths may be printed but not written into any generated project file, hook, prefix, comment or remediation snippet. Missing/overlapping roots and unproven sibling/common-dir scope refuse. A standalone AIDA executable does not imply a writable source checkout or fictitious debug/release siblings.
-
 
     Scaffold proposed update is prepared and validated as a whole before publication through existing managed-merge seams. Generation/digest manifest would prevent launch using partially updated files: launcher accepts only a complete validated generation, otherwise refuses. Publish the manifest last after file writes; failure leaves old generation valid only if all old hashes still match, otherwise disabled until corrected. This is a proposed artifact-integrity mechanism, not authority storage. Do not overwrite unrelated user settings or lower approvals to make a profile fit. Atomic per-file replacement is not claimed to be multi-file atomicity. No generation files or runtime state are created by this sketch.
 
-
     ## Approval-posture amendment and current session
 
-
-    Replace original AC3: “The profile generates no exemption list, allow/no-ask entry, approval-policy-never setting or bypass flag. Fully composed launch argv/config, including inherited settings and headless adapters, must preserve the user''s ordinary approval posture; incompatible restricted launch refuses. An approval cannot lift the profile restriction ceiling.” No exemption list is reintroduced under another name.
-
+    Replace original AC3: “The profile generates no exemption list, allow/no-ask entry, approval-policy-never setting or bypass flag. Fully composed launch argv/config, including inherited settings and headless adapters, must preserve the user's ordinary approval posture; incompatible restricted launch refuses. An approval cannot lift the profile restriction ceiling.” No exemption list is reintroduced under another name.
 
     The current author harness has disabled filesystem sandbox and approval_policy=never; displayed roots are not enforcement. Nothing here changes that harness, conducts approval experiments or retrofits a restricted profile. It is an explicit unsupported surface, not a test of a future implementation.
 
-
     ## Proposed acceptance and named tests (not executed)
 
-
     1. Actual permitted/prohibited filesystem effects for consumer and verified AIDA self-development, shared administration and root overlap. consumer_profile_keeps_aida_checkout_read_only; aida_self_development_uses_verified_repo_identity; overlapping_roots_and_store_symlink_escape_refuse; shared_git_common_dir_is_explicit. Merely listing paths is insufficient.
-
     2. Retain strong guest/explicit Git-read-only guarantee. Require one genuinely supported positive restricted launch AND adversarial negative operations; no supported current row, so this AC remains unmet. supported_profile_positive_read_edit_build_with_prompt and supported_adapter_blocks_git_write_entrypoints must include absolute binaries, init/checkout/update-ref/commit, alternate state, libgit2/direct equivalent writes, tmp, inherited FDs, child escalation and external sockets/MCP. readonly_remote_mutation_sends_no_request uses isolated fake forge/server credentials and proves zero mutating requests. A fake adapter unit test is not platform acceptance.
-
     3. Above replacement for approval AC: generated_profile_preserves_approval_prompts; incompatible_existing_bypass_refuses_profile; approval_granted_does_not_lift_readonly. Test composed inherited configuration, not just emitted recipe.
-
     4. debug_release_switch_needs_no_rescaffold uses existing aida_bin selection, validates the selected executable at execution and preserves root/approval restrictions; no target/* permission or prompt exemption.
-
     5. relocated_project_and_aida_install_keep_profile_portable checks every generated artifact/hook/snippet before resolving in a relocated temp root.
-
     6. preview_is_read_only; preview_then_grant_or_root_change_refuses_launch; git_read_only_cannot_be_widened_by_child_or_env; grant_loss_does_not_widen_restriction; unsupported_git_boundary_refuses_before_spawn; partial_scaffold_generation_is_not_launchable. Observe no lease/grant/store/status/worktree/spawn changes on refusal, with complete supported positives where eventually available.
-
 
     All future tests must use isolated temp HOME/repos, fake credentials/forges and explicit process barriers. No live kernel, vendor, approval or launch experiment in this pass. Pending real capability design, test plan is not evidence of support.
 
-
     ## Files/symbols and readiness
-
 
     Reuse scaffold_cmd.rs handle_scaffold_command/run_scaffold_upgrade/decide_managed_merge; core scaffolding/settings.rs generate_claude_settings_json and mcp_translate.rs render_codex_config_document; aida_bin.rs process/resolve/Resolved/Profile; lib.rs agent_new_with_config/agent_new_bg_dispatch/prepare_agent_launch_dry/print_agent_launch_noexec/resolved_agent_permission_summary; session.rs compose_headless_command/spawn_vendor_headless_with_seat/codex_session_args/codex_headless_args_with_model_and_effort/bwrap_confinement_args_inner/bwrap_preflight. Existing seat checks are dependencies. No source implementation, new privileged backend or authority schema is included.
 
-
     NEEDS_OPERATOR_SCOPE is recorded in the companion exact relay body: the selected strong guarantee lacks a supported backend within existing scope. Remains blocked; no implementation, refusal-only completion or speculative narrowing. A fresh different advisor may review completeness/honesty, but cannot manufacture missing authorization. TASK-1593/TASK-1591/BUG-1811/BUG-1812 external reservations and shipped authority changes remain untouched. No operator question sent, no autonomous wake, TTY bypass, grant/hold/status/queue change or self-signoff.
-
-    '
-  created_at: 2026-10-08 17:13:39.797658+00:00
-  modified_at: 2026-10-08 17:13:39.797658+00:00
+  created_at: 2026-10-08T17:13:39.797658Z
+  modified_at: 2026-10-08T17:13:39.797658Z
   relayed_from: answered-design-sketch-author
 - id: 01a11c81-d2ee-7c01-aa34-adfd1ee49811
   author: joe
-  content: 'NEEDS_OPERATOR_SCOPE: STORY-1486 — retained strong Git-read-only contract has no selected supported backend
-
+  content: |
+    NEEDS_OPERATOR_SCOPE: STORY-1486 — retained strong Git-read-only contract has no selected supported backend
 
     Exact proposed canonical comment body for coordinator relay, authored by Codex sketch author, 2026-10-08. NOT posted. This records an existing unresolved scope gap; it is neither an operator answer nor a new question or direction.
 
-
     Recorded choice 1 at 2026-10-08T15:54:29.273727039Z remains “Profile without exemptions.” Preserve ordinary approval prompts and replace exemption-list AC3 accordingly. Strong AC2 remains unchanged; weaker AIDA-mediated-only behavior is NOT selected. Full independent v1 review was CHANGES REQUESTED; current rework is STORY1486_AMENDED_SKETCH_V2.md at main b46aec1e674baae5a329416d4119e67b59200a88.
-
 
     Current root/settings/bwrap/headless surfaces do not prove universal Git-read-only while preserving required source editing/builds, writable scratch, inherited children and external tool/network channels. V2 supplies explicit operation/resource/vendor/OS/mode matrices and monotonic-restriction requirements. No row presently supports the required positive restricted launch. Unsupported launch must refuse before effects, but refusal alone cannot complete AC2 or the story.
 
-
     Missing direction is authorization for a coherent enforcement scope/backend, if one is desired beyond currently available capabilities. This author does not select a narrower guarantee, change developer functionality, create a broker/privileged service, or infer any release/TTY/approval exemption. Existing strong acceptance remains pending capability evidence or a separately recorded operator scope disposition. No new alternative is adopted; no question sent to absent Joe. Other authorized work need not stop because this story is blocked.
 
-
     No status/queue/spec-description/source/grant/hold changes or implementation are made. This is a proposed relay record, not independent signoff or permission to dispatch. A new different advisor reviews exact v2 hashes and the gap; coordinator preserves recorded direction and authority boundary.
-
-    '
-  created_at: 2026-10-08 17:13:52.622174+00:00
-  modified_at: 2026-10-08 17:13:52.622174+00:00
+  created_at: 2026-10-08T17:13:52.622174Z
+  modified_at: 2026-10-08T17:13:52.622174Z
   relayed_from: answered-design-sketch-author
 - id: 01a11c81-f346-7282-b0e8-c8f892a9f664
   author: joe
-  content: 'ADVISOR SIGNOFF: CHANGES REQUESTED — STORY-1486 functional V2 sketch.
-
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED — STORY-1486 functional V2 sketch.
 
     Independent reviewer: Codex, newly assigned V2 strict advisor, neither sketch author, coordinating/root session nor V1 reviewer. Reviewed fresh canonical STORY-1486 and actual main b46aec1e674baae5a329416d4119e67b59200a88.
 
-
     Exact reviewed proposals (SHA-256):
-
     STORY1486_AMENDED_SKETCH_V2.md 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf
-
     STORY1486_NEEDS_OPERATOR_SCOPE_V2.md 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598
-
 
     Profile WITHOUT exemptions is settled by the recorded 2026-10-08T15:54:29.273727039Z answer. Preserve prompts; replace old exemption AC3, check composed inherited argv/config, emit no allow/no-ask/bypass/never setting, and never let approval lift the profile ceiling. P2 resource/mode matrix, monotonic inherited restriction, pure preview, path/handle checks, recipe integrity and portability are accepted within claimed supported scope.
 
-
     STORY1486_NEEDS_OPERATOR_SCOPE_V2.md: ADVISOR SIGNOFF: APPROVED AS AMENDED by P1 of the full review, as an accurate gap record only. Strong AC2 remains. No selected supported adapter provides a genuine positive restricted launch; current headless bypass/root/bwrap surfaces do not prove it. Unsupported restricted launch refuses before session/grant/lease/worktree/spawn, but blanket refusal or a fake adapter cannot complete the story.
-
 
     Actual remaining blocker: concrete coherent backend evidence within authorized scope, or separately recorded operator scope disposition if satisfying the contract requires changed developer functionality/new enforcement architecture. No weaker AIDA-only contract, new broker, credentials service, permanent capability removal or new operator answer is inferred. Retain the strong requirement pending evidence; do not prompt absent Joe.
 
-
     The matrix is adversarial proof for the adapter/mode actually claimed supported, not a new requirement for universal vendor/OS support or general hostile-process confinement. Distinguish protected Git-equivalent effects from ordinary source editing; preserve positive editing/build workflow. Existing shared-network/no-PID common containment is not a strong Git-read-only certificate; do not change global defaults. Profile is a common-launch consumer, not a second authority publisher or grant schema. Existing seat and aida_bin behavior remain dependencies; no TTY/permission bypass or live harness experiment.
 
-
-    Full binding evidence, P1-P3 amendments and proposed acceptance: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V2_INDEPENDENT_REVIEW.md. This accepts the gap''s honesty, not functional implementation readiness. Preserve prior V1 verdict/history. All tests proposed, none run. Draft relay only; no spec/status/queue/grant/hold/launch/PR/merge writes or dispatch authorization. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 unchanged.
-
-    '
-  created_at: 2026-10-08 17:14:00.902665+00:00
-  modified_at: 2026-10-08 17:14:00.902665+00:00
+    Full binding evidence, P1-P3 amendments and proposed acceptance: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V2_INDEPENDENT_REVIEW.md. This accepts the gap's honesty, not functional implementation readiness. Preserve prior V1 verdict/history. All tests proposed, none run. Draft relay only; no spec/status/queue/grant/hold/launch/PR/merge writes or dispatch authorization. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 unchanged.
+  created_at: 2026-10-08T17:14:00.902665Z
+  modified_at: 2026-10-08T17:14:00.902665Z
   relayed_from: answered-v2-independent-advisor
 - id: 01a11c90-3944-72f1-aa67-9876d17b8292
   author: joe
-  content: 'SKETCH (awaiting advisor signoff): STORY-1486 v3 handoff — retain v2 bodies with independent scope amendments
-
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 v3 handoff — retain v2 bodies with independent scope amendments
 
     Codex same sketch-author lineage, 2026-10-08, main b46aec1e674baae5a329416d4119e67b59200a88. Exact proposed canonical relay body; NOT posted. This author does not supply independent signoff or rewrite the settled choice. Preserve unchanged full bodies:
 
-
     - STORY1486_AMENDED_SKETCH_V2.md, SHA-256 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf.
-
     - STORY1486_NEEDS_OPERATOR_SCOPE_V2.md, SHA-256 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598.
-
 
     The full independent V2 review accepted the accurate boundary/gap and P2/P3 as amended, while functional STORY-1486 remains CHANGES REQUESTED: no selected supported backend meets strong AC2. This amendment carries those precise review limits into v3; it does not claim approval of the functional story.
 
-
     1. Retain strong AC2 and the settled profile WITHOUT exemptions at canonical answered_at 2026-10-08T15:54:29.273727039Z. No weaker AIDA-command-only policy, broker, privileged service, credential service or removal of developer functionality selected. Missing support may remain pending concrete capability evidence within existing scope; no new operator answer must be solicited merely to keep that requirement pending.
-
-    2. V2''s vendor/OS/mode matrix is adversarial proof obligations for whichever adapter/mode is actually claimed supported, NOT a requirement to implement every vendor/OS or general hostile-process confinement. Equivalent mutations and external endpoints matter when they defeat the claimed Git boundary. Do not interpret ordinary source editing as prohibited merely because Git could also edit files. A coherent eventual backend must distinguish protected operations/resources while preserving positive editing/builds. Fake adapter or universal refusal cannot satisfy AC2.
-
+    2. V2's vendor/OS/mode matrix is adversarial proof obligations for whichever adapter/mode is actually claimed supported, NOT a requirement to implement every vendor/OS or general hostile-process confinement. Equivalent mutations and external endpoints matter when they defeat the claimed Git boundary. Do not interpret ordinary source editing as prohibited merely because Git could also edit files. A coherent eventual backend must distinguish protected operations/resources while preserving positive editing/builds. Fake adapter or universal refusal cannot satisfy AC2.
     3. Preserve requested-versus-enforceable mode, pure preview, restriction ceiling independent of mutable grant/env labels, path/handle/executable identity, effective inherited config/argv, common-dir/endpoint scope and manifest-last recipe integrity. Scaffold manifest is not authority ledger. No new seat schema or revocation engine. Where lifecycle publication applies, consume the one common publisher/C/receipt; profile installs no independent release owner. The existing shared-network/no-PID common containment is not a strong Git-read-only certificate, and this review does not authorize changing that default.
-
     4. Keep replacement AC3: no generated exemptions, allow/no-ask/bypass/never settings; preserve ordinary approval prompts and refuse incompatible fully composed posture. Approval cannot lift ceiling. Preserve aida_bin portability/debug-release semantics. No change to this current unrestricted harness; no live launch/kernel/approval experiment or TTY bypass.
-
     5. Retain all v2 proposed positive/adversarial tests scoped to the actually supported claim; no tests executed. Future supported_profile_positive_read_edit_build_with_prompt must be real capability evidence, not a fake adapter or removal of editing/build behavior. Missing common hook/receipt or checked persistence remains dependency/refusal, never permission to use the current bypass launcher.
 
-
     The existing NEEDS_OPERATOR_SCOPE record is accurate pending capability; it is not an automatically sent question or authorization to invent architecture. New different advisor evaluates v3 EPIC corrections; profile functional unready status remains explicit. No canonical mutation, code, status/queue/grant/hold/launch/merge or external-reservation changes accompany this relay draft.
-
-    '
-  created_at: 2026-10-08 17:29:36.324344+00:00
-  modified_at: 2026-10-08 17:29:36.324344+00:00
+  created_at: 2026-10-08T17:29:36.324344Z
+  modified_at: 2026-10-08T17:29:36.324344Z
   relayed_from: answered-design-sketch-author
 - id: 01a11cf2-e58b-7b81-847a-9b86a52713a1
   author: joe
-  content: 'SKETCH (awaiting advisor signoff): STORY-1486 v3 handoff — retain v2 bodies with independent scope amendments
-
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 v3 handoff — retain v2 bodies with independent scope amendments
 
     Codex same sketch-author lineage, 2026-10-08, main b46aec1e674baae5a329416d4119e67b59200a88. Exact proposed canonical relay body; NOT posted. This author does not supply independent signoff or rewrite the settled choice. Preserve unchanged full bodies:
 
-
     - STORY1486_AMENDED_SKETCH_V2.md, SHA-256 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf.
-
     - STORY1486_NEEDS_OPERATOR_SCOPE_V2.md, SHA-256 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598.
-
 
     The full independent V2 review accepted the accurate boundary/gap and P2/P3 as amended, while functional STORY-1486 remains CHANGES REQUESTED: no selected supported backend meets strong AC2. This amendment carries those precise review limits into v3; it does not claim approval of the functional story.
 
-
     1. Retain strong AC2 and the settled profile WITHOUT exemptions at canonical answered_at 2026-10-08T15:54:29.273727039Z. No weaker AIDA-command-only policy, broker, privileged service, credential service or removal of developer functionality selected. Missing support may remain pending concrete capability evidence within existing scope; no new operator answer must be solicited merely to keep that requirement pending.
-
-    2. V2''s vendor/OS/mode matrix is adversarial proof obligations for whichever adapter/mode is actually claimed supported, NOT a requirement to implement every vendor/OS or general hostile-process confinement. Equivalent mutations and external endpoints matter when they defeat the claimed Git boundary. Do not interpret ordinary source editing as prohibited merely because Git could also edit files. A coherent eventual backend must distinguish protected operations/resources while preserving positive editing/builds. Fake adapter or universal refusal cannot satisfy AC2.
-
+    2. V2's vendor/OS/mode matrix is adversarial proof obligations for whichever adapter/mode is actually claimed supported, NOT a requirement to implement every vendor/OS or general hostile-process confinement. Equivalent mutations and external endpoints matter when they defeat the claimed Git boundary. Do not interpret ordinary source editing as prohibited merely because Git could also edit files. A coherent eventual backend must distinguish protected operations/resources while preserving positive editing/builds. Fake adapter or universal refusal cannot satisfy AC2.
     3. Preserve requested-versus-enforceable mode, pure preview, restriction ceiling independent of mutable grant/env labels, path/handle/executable identity, effective inherited config/argv, common-dir/endpoint scope and manifest-last recipe integrity. Scaffold manifest is not authority ledger. No new seat schema or revocation engine. Where lifecycle publication applies, consume the one common publisher/C/receipt; profile installs no independent release owner. The existing shared-network/no-PID common containment is not a strong Git-read-only certificate, and this review does not authorize changing that default.
-
     4. Keep replacement AC3: no generated exemptions, allow/no-ask/bypass/never settings; preserve ordinary approval prompts and refuse incompatible fully composed posture. Approval cannot lift ceiling. Preserve aida_bin portability/debug-release semantics. No change to this current unrestricted harness; no live launch/kernel/approval experiment or TTY bypass.
-
     5. Retain all v2 proposed positive/adversarial tests scoped to the actually supported claim; no tests executed. Future supported_profile_positive_read_edit_build_with_prompt must be real capability evidence, not a fake adapter or removal of editing/build behavior. Missing common hook/receipt or checked persistence remains dependency/refusal, never permission to use the current bypass launcher.
 
-
     The existing NEEDS_OPERATOR_SCOPE record is accurate pending capability; it is not an automatically sent question or authorization to invent architecture. New different advisor evaluates v3 EPIC corrections; profile functional unready status remains explicit. No canonical mutation, code, status/queue/grant/hold/launch/merge or external-reservation changes accompany this relay draft.
-
-    '
-  created_at: 2026-10-08 19:17:22.955217+00:00
-  modified_at: 2026-10-08 19:17:22.955217+00:00
+  created_at: 2026-10-08T19:17:22.955217Z
+  modified_at: 2026-10-08T19:17:22.955217Z
   relayed_from: answered-sketch-author
 - id: 01a11cf3-84db-7af2-9051-7222738dcf2a
   author: joe
-  content: 'ADVISOR SIGNOFF: APPROVED AS AMENDED — STORY-1486 retained profile/gap and exact V3 scope amendment, as an accurate BLOCKED CONTRACT ONLY.
-
+  content: |
+    ADVISOR SIGNOFF: APPROVED AS AMENDED — STORY-1486 retained profile/gap and exact V3 scope amendment, as an accurate BLOCKED CONTRACT ONLY.
     ADVISOR SIGNOFF: CHANGES REQUESTED — functional STORY-1486; no supported strong backend or positive restricted launch supplied.
-
 
     Independent V3 reviewer: Codex answered-v3-independent-advisor; neither sketch author, coordinating author/root session nor V1/V2 reviewer. Committed code reference b46aec1e674baae5a329416d4119e67b59200a88; concurrent edits excluded.
 
-
     Verified exact canonical full bodies:
-
     STORY1486_AMENDED_SKETCH_V2.md 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf (01a11c81-a0d5-7c62-aa82-83fa332ee96b)
-
     STORY1486_NEEDS_OPERATOR_SCOPE_V2.md 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598 (01a11c81-d2ee-7c01-aa34-adfd1ee49811)
-
     STORY1486_V3_REVIEW_AMENDMENTS_RELAY.md 9682c627e48a0d2cf7fcdfea635f2b3870e0586174aaae655be25d75da8559f1 (01a11c90-3944-72f1-aa67-9876d17b8292)
-
 
     Strong AC2 and settled no-exemptions choice remain. Accept accurate missing-capability record without approving functional completion; no new profile rewrite or operator question requested. Unsupported restricted launch refuses before effects, but refusal/fake adapter is not the required positive read/edit/build launch. Retain requested/enforceable distinction, monotonic inherited ceiling, path/handle and effective inherited config/argv checks, pure preview, recipe integrity, portability/aida_bin and existing seat gates. Profile consumes the one common publisher; no independent release owner.
 
-
     Proof obligations concern the actually claimed adapter/mode, not mandatory all-vendor/OS support or general hostile-process confinement. Preserve ordinary source editing/build functionality. No new broker, weakened AIDA-only contract, approval exemption, global shared-network/no-PID default change, authority schema, new operator answer or backend selection. Pending concrete coherent capability evidence remains an acceptable disposition. Current headless bypass/root/bwrap surfaces do not provide that evidence.
 
-
     Full binding independent report: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V3_INDEPENDENT_REVIEW.md
-
     SHA-256: 65400759950fa8e3ab3072b23d9e6c72409a0e15098baabfdea45f1de87c1a0e
-
     All tests proposed, none run. No canonical, status/queue/relationship/grant/hold/activation/source/PR/merge/commit/push writes by this reviewer. Previous V1/V2 artifacts/history and external TASK-1593/TASK-1591/BUG-1811/BUG-1812 preserved. Exact sidefile for honest coordinator relay, not automatic dispatch or functional signoff.
-
-    '
-  created_at: 2026-10-08 19:18:03.739394+00:00
-  modified_at: 2026-10-08 19:18:03.739394+00:00
+  created_at: 2026-10-08T19:18:03.739394Z
+  modified_at: 2026-10-08T19:18:03.739394Z
   relayed_from: answered-v3-independent-advisor
 - id: 01a129cc-f68f-75d1-a187-1f50516cf768
   author: night-fable
-  content: 'PRODUCT TRIAGE (night): recommend approve because the operator''s recorded answer (2026-10-08T15:54:29Z, "Profile without exemptions") settles the open fork and the remaining work is a sketched, independently reviewed least-privilege change; this spec is operator-only (needs-operator), so this is a recommendation for the operator, not a proxy approval.
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the operator's recorded answer (2026-10-08T15:54:29Z, "Profile without exemptions") settles the open fork and the remaining work is a sketched, independently reviewed least-privilege change; this spec is operator-only (needs-operator), so this is a recommendation for the operator, not a proxy approval.
 
-
-    Problem: scaffolded launches do not distinguish the consumer project''s writable roots from the AIDA checkout, there is no seat-based Git read-only downgrade, and the description''s AC3 still proposes an approval-prompt exemption list that the recorded decision rejected.
-
+    Problem: scaffolded launches do not distinguish the consumer project's writable roots from the AIDA checkout, there is no seat-based Git read-only downgrade, and the description's AC3 still proposes an approval-prompt exemption list that the recorded decision rejected.
 
     Evidence path (verified):
-
     - Description is STALE against the recorded decision: the "no-approval-prompt" bullet and AC3 must be replaced (sketch comment 2026-10-08 09:31 and signoff 09:42 both say so). Proposed title: "Scaffolded agent launch profile: root scoping and seat-based Git read-only downgrade".
-
-    - Seams exist on main: aida-cli-lib/src/aida_bin.rs (TASK-1499 resolver), aida-cli-lib/src/scaffold_cmd.rs, aida-cli-lib/src/seat_authority.rs. aida-cli-lib/src/session.rs:1934 codex_headless_args_with_model_and_effort pushes --dangerously-bypass-approvals-and-sandbox (line 1942) and session.rs:2431 bwrap_confinement_args_inner always binds the worktree writable, which confirms the sketch''s finding that AC2''s strong "cannot run a Git write" is NOT enforceable on current adapters.
-
+    - Seams exist on main: aida-cli-lib/src/aida_bin.rs (TASK-1499 resolver), aida-cli-lib/src/scaffold_cmd.rs, aida-cli-lib/src/seat_authority.rs. aida-cli-lib/src/session.rs:1934 codex_headless_args_with_model_and_effort pushes --dangerously-bypass-approvals-and-sandbox (line 1942) and session.rs:2431 bwrap_confinement_args_inner always binds the worktree writable, which confirms the sketch's finding that AC2's strong "cannot run a Git write" is NOT enforceable on current adapters.
     - Blocker TASK-1499 is Completed and STORY-1473 is Completed; nothing but the operator decision is pending.
-
     - Signoff state: V2 plus V3 amendment APPROVED AS AMENDED "as an accurate blocked contract"; the functional strong profile is CHANGES REQUESTED (no supported backend).
 
-
     Acceptance criteria (amended per the sketch):
-
     1. consumer_profile_keeps_aida_checkout_read_only and aida_self_development_uses_verified_repo_identity: the generated profile lists writable and read-only roots separately; the AIDA checkout is read-only for a consumer project and writable only when resolved repo identity is AIDA itself.
-
     2. generated_profile_preserves_approval_prompts: no allow/no-ask rule and no bypass flag in generated artifacts or effective launch argv; this replaces the old AC3 entirely.
-
     3. unsupported_git_boundary_refuses_before_spawn: `aida agent new --git-read-only` on an adapter that cannot enforce the boundary refuses before spawn with zero session/lease/worktree effects; `--no-exec --verbose` prints requested versus enforceable Git mode.
-
     4. debug_release_switch_needs_no_rescaffold: both target/debug and target/release resolve through aida_bin from one recipe.
-
     5. relocated_project_and_aida_install_keep_profile_portable: no machine-specific absolute path in any generated file (TASK-1499 rule).
 
-
-    Scope / non-goals: no exemption list, no new seat/grant/delegation, no credential broker, no change to effective_role_with_roster''s fallback. Suggest splitting on approval: (a) portable recipe + preview + fail-closed refusal, approvable now; (b) enforcement backend for the strong Git-write guarantee, blocked until a reviewed adapter exists. Related: related:TASK-1499 related:STORY-1473 related:ADR-61 related:TASK-1612 related:BUG-1934.
-
+    Scope / non-goals: no exemption list, no new seat/grant/delegation, no credential broker, no change to effective_role_with_roster's fallback. Suggest splitting on approval: (a) portable recipe + preview + fail-closed refusal, approvable now; (b) enforcement backend for the strong Git-write guarantee, blocked until a reviewed adapter exists. Related: related:TASK-1499 related:STORY-1473 related:ADR-61 related:TASK-1612 related:BUG-1934.
 
     Suggested size: M for (a); L overall.
-
-    '
-  created_at: 2026-10-11 07:11:00.751844+00:00
-  modified_at: 2026-10-11 07:11:00.751844+00:00
+  created_at: 2026-10-11T07:11:00.751844Z
+  modified_at: 2026-10-11T07:11:00.751844Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 - id: 01a129ec-1a03-7063-aad8-70895df8288d
   author: joe
   content: 'ADVISOR (overnight 00:45): left for the OPERATOR, not proxy-approved overnight. Operator-only (needs-operator).'
-  created_at: 2026-10-11 07:45:01.443808+00:00
-  modified_at: 2026-10-11 07:45:01.443808+00:00
+  created_at: 2026-10-11T07:45:01.443808Z
+  modified_at: 2026-10-11T07:45:01.443808Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 - id: 01a12b8d-26f2-73d1-9e9b-282abe0e9d04
   author: joe
   content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED as amended. Rewrote the description to match the 2026-10-08 ''Profile without exemptions'' answer: dropped the approval-prompt exemption bullet and old AC3 (replaced by generated_profile_preserves_approval_prompts), and weakened old AC2 from ''cannot run a Git write'' to ''policy declared and printed'', since no current adapter can enforce it (see night triage comment). Enforcement is a follow-up once a backend supports it.'
-  created_at: 2026-10-11 15:20:33.266429+00:00
-  modified_at: 2026-10-11 15:20:33.266429+00:00
+  created_at: 2026-10-11T15:20:33.266429Z
+  modified_at: 2026-10-11T15:20:33.266429Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 - id: 01a1b7b1-ac96-70d0-99c1-dad742708257
   author: aida:defer-migration
-  content: '[aida:defer-migration]
-
+  content: |-
+    [aida:defer-migration]
     {"deferred":true,"deferred_at":"2026-10-19T15:50:34.517693048Z","deferred_until":"when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it","legacy_tags":[]}
-
-    Migrated condition: manual:operator'
-  created_at: 2026-11-07 20:27:17.014194+00:00
-  modified_at: 2026-11-07 20:27:17.014194+00:00
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:27:17.014194Z
+  modified_at: 2026-11-07T20:27:17.014194Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8db-33a8-73c0-a338-50037ce6f5bf
   author: joe
   content: 'Operator 2026-11-07 18:51 agreed to the advisor recommendation: release STORY-1486 (deferral condition STORY-2326=completed is met); EPIC-78 stays deferred until STORY-2325 lands.'
-  created_at: 2026-11-08 01:52:15.784215+00:00
-  modified_at: 2026-11-08 01:52:15.784215+00:00
+  created_at: 2026-11-08T01:52:15.784215Z
+  modified_at: 2026-11-08T01:52:15.784215Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9d8-4ca4-7200-ad68-e870264f12db
   author: dirtlab
-  content: 'Implemented the operator-amended declared-policy scope of STORY-1486. Scaffold now emits a portable .aida/launch-profile.toml recipe without approval exemptions or bypass flags. Launch previews resolve writable/read-only roots, shared Git metadata, verified common-directory AIDA repository identity, standalone-install limits, and both debug/release executable locations. Agent-new accepts --git-read-only before/after vendor and reports normal/guest/explicit-downgrade policy and reason as declared, not enforced. Existing permission settings and authority/delegation gates remain unchanged. Recipe reads are bounded regular-file reads and unsupported recipes refuse before dispatch.
-
+  content: |
+    Implemented the operator-amended declared-policy scope of STORY-1486. Scaffold now emits a portable .aida/launch-profile.toml recipe without approval exemptions or bypass flags. Launch previews resolve writable/read-only roots, shared Git metadata, verified common-directory AIDA repository identity, standalone-install limits, and both debug/release executable locations. Agent-new accepts --git-read-only before/after vendor and reports normal/guest/explicit-downgrade policy and reason as declared, not enforced. Existing permission settings and authority/delegation gates remain unchanged. Recipe reads are bounded regular-file reads and unsupported recipes refuse before dispatch.
 
     Changed files: aida-core/templates/launch-profile.toml; aida-core/src/scaffolding/launch_profile.rs; aida-core/src/scaffolding/mod.rs; aida-cli-lib/src/launch_permission_profile.rs; aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/agent_launch_args.rs; aida-cli-lib/src/lib.rs; docs/cli/06-roles-sessions.md.
 
-
     Validation through aida lane job: cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile (8 passed); cargo test --profile agent -p aida-cli-lib --lib -- noexec (7 passed); cargo test --profile agent -p aida-core --lib -- scaffolding::launch_profile (2 passed). rustfmt --check for changed Rust files and git diff --check passed. Full make check-templates was interrupted when it invoked Cargo internally, which the lane instructions prohibit; preceding symlink/mirror checks passed. codegraph was unavailable; used rg navigation, and doctor supplied no index diagnosis.
 
-
     No implementation blockers. Native-seat handoff: edits are uncommitted; no commit/push/PR/ship/review-record/queue-done action performed. Host publication and queue completion follow process exit. Git/filesystem enforcement remains the explicitly excluded follow-up.
-
-    '
-  created_at: 2026-11-08 06:28:42.788759+00:00
-  modified_at: 2026-11-08 06:28:42.788759+00:00
+  created_at: 2026-11-08T06:28:42.788759Z
+  modified_at: 2026-11-08T06:28:42.788759Z
   session_id: 01a1b9c8ee66
   harness_version: codex-cli 0.167.0
 - id: 01a1b9f3-165c-76e0-b1f0-4cf0482f1881
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Declared Git policy is wrong for real guest sessions and requesters, the printed-policy AC has no output-level test, and declared roots ignore the actual launch directory; ACs 2, 4 and 5 hold by source, CI still queued at review.. No triage reason was given.'
-  created_at: 2026-11-08 06:57:58.364212+00:00
-  modified_at: 2026-11-08 06:57:58.364212+00:00
+  created_at: 2026-11-08T06:57:58.364212Z
+  modified_at: 2026-11-08T06:57:58.364212Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9f3-2214-7ea1-809b-ba35a40f58a9
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 372a14e28e5b
-
     Recorded: 2026-11-08T06:53:26.330086939+00:00
-
     Findings:
-
-    1. AC3/guest: agent_launch.rs:406 gets the parent seat from current_seat(), which only returns a validated grant. Guest is a BASELINE_SEAT (seat_authority.rs:2784) that runs ungranted and is identified by AIDA_SESSION_ROLE (stakeholder_role.rs:6, permissions.rs:258). So in a guest session, ''aida agent new claude --no-exec --verbose'' prints ''git_policy: write'', and a guest parent launching --role implementer also prints write, contradicting launch_permission_profile.rs:7-8 and the docs. The unit test only passes with a fabricated Some("guest") parent. Fix: treat a guest env role as a downgrade input (a label can only lower the declaration, so it grants nothing) and test with AIDA_SESSION_ROLE=guest.
-
+    1. AC3/guest: agent_launch.rs:406 gets the parent seat from current_seat(), which only returns a validated grant. Guest is a BASELINE_SEAT (seat_authority.rs:2784) that runs ungranted and is identified by AIDA_SESSION_ROLE (stakeholder_role.rs:6, permissions.rs:258). So in a guest session, 'aida agent new claude --no-exec --verbose' prints 'git_policy: write', and a guest parent launching --role implementer also prints write, contradicting launch_permission_profile.rs:7-8 and the docs. The unit test only passes with a fabricated Some("guest") parent. Fix: treat a guest env role as a downgrade input (a label can only lower the declaration, so it grants nothing) and test with AIDA_SESSION_ROLE=guest.
     2. AC3/test: the criterion requires a test that the policy is printed by --no-exec --verbose for normal, guest and --git-read-only seats. The tests call git_policy() directly and parse clap separately; nothing exercises the print in handle_agent_command (agent_launch.rs:400-415), so the wiring is untested and the guest bug above went unseen. Add an output-level test through agent new --no-exec --verbose for all three seats, asserting the declared-not-enforced line.
-
-    3. Requester misdeclared: launch_permission_profile.rs:10-13 matches only guest, so --role requester or a requester session prints ''write (development baseline...)''. Requester is a stakeholder persona, ''not a build seat'' (role.rs:749-750), and the codebase pairs it with guest (permissions.rs:258, stakeholder_role.rs:16). Spec grants Git-write only to normal development seats. Treat requester as read-only or record why not on the spec, and add a test.
-
-    4. AC1/launch root: render_agent_launch_noexec passes plan.project_root (agent_launch.rs:6206), which agent_launch_project_root_from maps to the primary checkout, and ignores plan.launch_cwd. ''aida agent new codex --cwd <linked-worktree> --no-exec --verbose'' declares the primary as the writable project and omits the worktree the agent actually runs in plus its git-dir. linked_aida_worktree_uses_common_git_identity passes the linked path directly, a path production never takes. Declare the launch cwd and test through the real caller.
-
-    5. AC1/AC4 on the live dev install: checkout() (launch_permission_profile.rs:60-68) only walks the executable''s ancestors. The supported dev binary is ~/.local/share/aida/live/aida, outside any checkout (confirmed on this host), so every launch reports ''standalone installation'': the AIDA checkout is not listed read-only for consumers and no target/debug or target/release locations appear. The spec requires authorization under the resolved local AIDA checkout. Resolve the checkout for promoted builds, or get the limit accepted on the spec.
-
+    3. Requester misdeclared: launch_permission_profile.rs:10-13 matches only guest, so --role requester or a requester session prints 'write (development baseline...)'. Requester is a stakeholder persona, 'not a build seat' (role.rs:749-750), and the codebase pairs it with guest (permissions.rs:258, stakeholder_role.rs:16). Spec grants Git-write only to normal development seats. Treat requester as read-only or record why not on the spec, and add a test.
+    4. AC1/launch root: render_agent_launch_noexec passes plan.project_root (agent_launch.rs:6206), which agent_launch_project_root_from maps to the primary checkout, and ignores plan.launch_cwd. 'aida agent new codex --cwd <linked-worktree> --no-exec --verbose' declares the primary as the writable project and omits the worktree the agent actually runs in plus its git-dir. linked_aida_worktree_uses_common_git_identity passes the linked path directly, a path production never takes. Declare the launch cwd and test through the real caller.
+    5. AC1/AC4 on the live dev install: checkout() (launch_permission_profile.rs:60-68) only walks the executable's ancestors. The supported dev binary is ~/.local/share/aida/live/aida, outside any checkout (confirmed on this host), so every launch reports 'standalone installation': the AIDA checkout is not listed read-only for consumers and no target/debug or target/release locations appear. The spec requires authorization under the resolved local AIDA checkout. Resolve the checkout for promoted builds, or get the limit accepted on the spec.
     6. Preview failure on non-Git roots: render_roots uses git_path(...)? for the project and for the AIDA checkout (launch_permission_profile.rs:107-108,128). A scaffolded project without Git, or an AIDA source tree without .git, now fails --no-exec. render_agent_launch_diagnostics shares this renderer, so --verbose on a real launch hits the same Err. Degrade to a printed note instead of failing, and add a test.
-
-    7. Repository identity trusts ambient Git env: git_path (launch_permission_profile.rs:29-33) does not clear GIT_DIR/GIT_COMMON_DIR. With GIT_DIR exported both probes resolve to the same directory, so line 128 reports ''verified AIDA repository identity'' and lists the AIDA checkout writable for a consumer. Remove those variables on the child command and add a test.
-
+    7. Repository identity trusts ambient Git env: git_path (launch_permission_profile.rs:29-33) does not clear GIT_DIR/GIT_COMMON_DIR. With GIT_DIR exported both probes resolve to the same directory, so line 128 reports 'verified AIDA repository identity' and lists the AIDA checkout writable for a consumer. Remove those variables on the child command and add a test.
     8. Criterion anchors missing: aida criteria reports all five STORY-1486 criteria untraced. Tests carry only a module-level trace; add trace:STORY-1486.<criterion> beside each proving test so coverage records them (ac91839b, generated_profile_preserves_approval_prompts, ac325a99, acc62dfa, acc62716).
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 06:58:01.364691+00:00
-  modified_at: 2026-11-08 06:58:01.364691+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T06:58:01.364691Z
+  modified_at: 2026-11-08T06:58:01.364691Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba05-7d6b-7bc2-9312-664994089dc7
   author: dirtlab
-  content: 'Addressed all eight review findings from commit 372a14e28e5b. Guest/requester session labels now only downgrade declared Git policy, including development-child requests. Explicit-vendor no-exec previews are classified as reads so stakeholder sessions can inspect their declaration; actual launches retain the stakeholder write gate. Added a real CLI output regression covering normal, guest (with/without requested role), requester parent/child, explicit downgrade, declared-not-enforced wording, and linked-worktree project/git-dir roots.
-
+  content: |
+    Addressed all eight review findings from commit 372a14e28e5b. Guest/requester session labels now only downgrade declared Git policy, including development-child requests. Explicit-vendor no-exec previews are classified as reads so stakeholder sessions can inspect their declaration; actual launches retain the stakeholder write gate. Added a real CLI output regression covering normal, guest (with/without requested role), requester parent/child, explicit downgrade, declared-not-enforced wording, and linked-worktree project/git-dir roots.
 
     Root rendering now uses the actual launch cwd, discovers promoted dev sources through existing .promoted receipts, keeps unverified checkout identities read-only when Git metadata is unavailable, and removes inherited Git routing variables from identity probes. Added criterion-specific trace anchors and updated documentation. The generated recipe still introduces no approval exemptions or bypass flags; filesystem/Git policy remains declared rather than enforced.
 
-
     Changed files:
-
     - aida-cli-lib/src/agent_launch.rs
-
     - aida-cli-lib/src/launch_permission_profile.rs
-
     - aida-core/src/scaffolding/launch_profile.rs
-
     - aida-cli/tests/story_1486_launch_profile.rs (new)
-
     - docs/cli/06-roles-sessions.md
 
-
     Final validation:
-
     - cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile: 12 passed (lane job j20261108T071442082-2-0).
-
     - cargo test --profile agent -p aida-cli --test story_1486_launch_profile: 1 passed, six CLI cases (j20261108T071441196-2-0).
-
     - cargo test --profile agent -p aida-core --lib -- scaffolding::launch_profile: 2 passed (j20261108T070144507-2-0).
-
     - python3 tests/test_git_maintenance_ratchet.py: 8 passed.
-
     - rustfmt --check for all four changed Rust files and git diff --check passed.
-
     Earlier CLI fixture failures were corrected (inherited project context, allocation-file mode under the lane umask, explicit vendor inventory); final test passes.
-
     Codegraph is unavailable; navigation used rg, and aida doctor check codegraph reported no diagnosis.
 
-
     No implementation blockers. Native-seat handoff: edits remain uncommitted. No commit, push, PR creation, review record, ship, or queue-done operation was performed. Host publication and queue completion remain pending after exit.
-
-    '
-  created_at: 2026-11-08 07:18:04.395734+00:00
-  modified_at: 2026-11-08 07:18:04.395734+00:00
+  created_at: 2026-11-08T07:18:04.395734Z
+  modified_at: 2026-11-08T07:18:04.395734Z
   session_id: 01a1b9f44294
   harness_version: codex-cli 0.167.0
 - id: 01a1ba19-0d7f-7042-986f-3b3fca4b30cf
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests and the eight round-1 findings are addressed, but the always-on policy line breaks the stdout and --show-prompt contracts, and an unresolvable declared root aborts a real --verbose launch. One criterion anchor is still not recognised. CI still queued at review.. No triage reason was given.'
-  created_at: 2026-11-08 07:39:26.463895+00:00
-  modified_at: 2026-11-08 07:39:26.463895+00:00
+  created_at: 2026-11-08T07:39:26.463895Z
+  modified_at: 2026-11-08T07:39:26.463895Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba19-14b6-7ae2-99c8-b54daa52ca68
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: e8002e052434
-
     Recorded: 2026-11-08T07:30:02.604344379+00:00
-
     Findings:
-
     1. Policy line breaks the stdout contract. agent_launch.rs:410 print!s git_policy to stdout for every agent new, ahead of dispatch. On a real launch without --verbose this contradicts the contract at agent_launch.rs:3333-3335 (diagnostics go to stderr so stdout stays exactly what it is without --verbose). It also prepends two lines to --show-prompt, which docs/cli/06-roles-sessions.md:334 says prints only the exact initial prompt, and to --show-context. AC3 only needs the line in --no-exec --verbose. Fix: emit it inside the no-exec body, send real-launch output to stderr, skip it for --show-prompt/--show-context, and add a test that --show-prompt stdout starts with the preview header.
-
     2. A declaration can abort a real launch. With a recipe present and a dangling target symlink, planned() fails at launch_permission_profile.rs:59-62 and render_roots propagates at :135. render_agent_launch_noexec propagates at agent_launch.rs:6209-6213, and aida agent new <vendor> --verbose then dies at agent_launch.rs:3339 before spawning; --no-exec fails the same way. Round 1 finding 6 asked for unavailable roots to degrade to a printed note, but only Git metadata does. dangling_root_symlink_is_not_a_planned_output pins planned() only. Fix: report the unresolvable root as a diagnostic in render_roots and add a render_roots-level test.
-
     3. Criterion still reports untraced. aida criteria STORY-1486 lists generated_profile_preserves_approval_prompts as untraced and the test at aida-core/src/scaffolding/launch_profile.rs:15 as unanchored, despite its exact trace:STORY-1486.generated_profile_preserves_approval_prompts anchor. criterion_trace_suffix (worktree_gc.rs:393) rejects that lowercase underscored suffix, so the id is minted but cannot be anchored. The test exists; only coverage is misreported, under the default warn gate. Fix: make the tracer accept minted criterion ids, or re-key the criterion to a traceable id.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 07:39:28.310056+00:00
-  modified_at: 2026-11-08 07:39:28.310056+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:39:28.310056Z
+  modified_at: 2026-11-08T07:39:28.310056Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba25-d199-7b92-b56b-97c1a0a8387d
   author: dirtlab
-  content: 'Addressed all three review findings from e8002e052434. Policy output is now limited to verbose diagnostics: stdout for no-exec previews, stderr for real launches, and omitted for show-prompt/show-context. Unresolvable declared state/store/cache/build roots are omitted with diagnostics instead of aborting the renderer. Criterion trace suffix validation now matches the labels minted by criteria explicit_label, including generated_profile_preserves_approval_prompts. Added CLI prompt-only and dangling-root regressions, render_roots regression, and trace-token regression.
-
+  content: |-
+    Addressed all three review findings from e8002e052434. Policy output is now limited to verbose diagnostics: stdout for no-exec previews, stderr for real launches, and omitted for show-prompt/show-context. Unresolvable declared state/store/cache/build roots are omitted with diagnostics instead of aborting the renderer. Criterion trace suffix validation now matches the labels minted by criteria explicit_label, including generated_profile_preserves_approval_prompts. Added CLI prompt-only and dangling-root regressions, render_roots regression, and trace-token regression.
 
     Changed files: aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/launch_permission_profile.rs; aida-cli-lib/src/worktree_gc.rs; aida-cli/tests/story_1486_launch_profile.rs.
 
-
     Validation via lane runner: cargo test --profile agent -p aida-cli --test story_1486_launch_profile: 1 passed (j20261108T074219828-2-0); cargo test --profile agent -p aida-cli-lib --lib -- minted_underscore_criterion: 1 passed (j20261108T074219836-2-0); cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile: 13 passed (j20261108T074334560-2-0). Initial build failed on a field typo, corrected before all successful runs. Final rustfmt checks and git diff --check passed. Codegraph unavailable; doctor reported no diagnosis, navigation used rg.
 
-
-    No implementation blockers. Native handoff: edits remain uncommitted; host must commit/publish and complete queue after exit. No commit, push, PR creation, review record, or queue completion attempted.'
-  created_at: 2026-11-08 07:53:23.097392+00:00
-  modified_at: 2026-11-08 07:53:23.097392+00:00
+    No implementation blockers. Native handoff: edits remain uncommitted; host must commit/publish and complete queue after exit. No commit, push, PR creation, review record, or queue completion attempted.
+  created_at: 2026-11-08T07:53:23.097392Z
+  modified_at: 2026-11-08T07:53:23.097392Z
   session_id: 01a1ba1a131c
   harness_version: codex-cli 0.167.0
 - id: 01a1ba72-6b28-7912-9dbd-768ffbcc8b3d
   author: dirtlab
-  content: 'STORY-1486 native-seat handoff: the branch already contains the implementation and all three latest review fixes. This pass extends aida-cli/tests/story_1486_launch_profile.rs to exercise --show-context with and without --verbose alongside --show-prompt, asserting exact preview headers, no git_policy diagnostic on stdout or stderr, and no vendor execution.
-
+  content: |
+    STORY-1486 native-seat handoff: the branch already contains the implementation and all three latest review fixes. This pass extends aida-cli/tests/story_1486_launch_profile.rs to exercise --show-context with and without --verbose alongside --show-prompt, asserting exact preview headers, no git_policy diagnostic on stdout or stderr, and no vendor execution.
 
     Validation through the launcher lane runner:
-
     - cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile: 13 passed (j20261108T090614462-2-0).
-
     - cargo test --profile agent -p aida-cli --test story_1486_launch_profile: 1 passed, including all preview and seat-policy cases (j20261108T090621624-2-0).
-
     - cargo test --profile agent -p aida-cli-lib --lib -- minted_underscore_criterion: 1 passed (j20261108T090756230-2-0).
-
     - rustfmt --check on the changed Rust file and git diff --check passed.
-
 
     Codegraph is unavailable; doctor returned no codegraph diagnosis, so navigation used rg. Installed aida criteria still reports the underscore criterion untraced; the lane-built trace regression passes, confirming the source fix without promoting a binary from this seat. Queue routing is implementer, but aida role active returned no validated active role. There are 24 findings awaiting triage.
 
-
     No implementation blockers. Only changed file this pass: aida-cli/tests/story_1486_launch_profile.rs. Edits remain uncommitted. No commit, push, PR creation, review record, ship or queue-done operation was performed. Host publication and queue completion remain pending after exit.
-
-    '
-  created_at: 2026-11-08 09:17:03.144656+00:00
-  modified_at: 2026-11-08 09:17:03.144656+00:00
+  created_at: 2026-11-08T09:17:03.144656Z
+  modified_at: 2026-11-08T09:17:03.144656Z
   session_id: 01a1ba6793a4
   harness_version: codex-cli 0.167.0
 - id: 01a1ba7b-74e5-70b0-9831-3f359ea19ec5
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests in source, but the criterion-suffix widening contradicts the existing word_labelled_criteria_can_be_traced test and makes filename-like trace tokens parse as criteria. Found by reading source; no cargo run by policy; CI at this head still pending.. No triage reason was given.'
-  created_at: 2026-11-08 09:26:55.461777+00:00
-  modified_at: 2026-11-08 09:26:55.461777+00:00
+  created_at: 2026-11-08T09:26:55.461777Z
+  modified_at: 2026-11-08T09:26:55.461777Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba7b-7c2d-7ae2-a633-70d4d5c735bb
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 917ff8ea66d0
-
     Recorded: 2026-11-08T09:22:19.139611658+00:00
-
     Findings:
-
-    1. BLOCKING, regression: criterion_trace_suffix (aida-cli-lib/src/worktree_gc.rs:396) now accepts any ASCII-letter-led token, so parse_trace_id_token(''trace:STORY-1.rs'') returns STORY-1.RS and ''trace:STORY-1.TXT'' returns STORY-1.TXT. The unchanged test word_labelled_criteria_can_be_traced (aida-cli-lib/src/gate/tests/story_1700_drive_mandate_tests.rs:1998-2005) asserts both return STORY-1, with the comment ''a lowercase or all-caps word is not a label''. It will fail in CI. The lane only ran filtered tests, so it did not see this. Fix: keep the STORY-1700 guard and additionally accept labels containing an underscore or hyphen (which covers generated_profile_preserves_approval_prompts and Vendor-neutral), rather than dropping the shape rules; or re-key the criterion. Do not weaken the existing assertions. Unit test minted_underscore_criterion_is_preserved_in_trace should gain the rs/TXT negative cases.
-
-    2. Minor, AC1 edge: render_roots (aida-cli-lib/src/launch_permission_profile.rs:124-138) treats the launch directory as the project root without resolving the Git toplevel. ''aida agent new <vendor> --cwd <repo>/sub --no-exec --verbose'' declares project: <repo>/sub, project-state: <repo>/sub/.aida and build: <repo>/sub/target, and omits the real .aida and target. Resolve the worktree toplevel for those roots, with the fallback to the launch directory when Git is unavailable, and add a test.
-
-    3. Minor, docs: docs/cli/06-roles-sessions.md (''The launch output prints the mode and reason, including in dry previews'') overstates the behavior. agent_launch.rs:432-446 prints the policy only with --verbose, and never with --show-prompt or --show-context. Carried over from round 3; still present.
-
-    4. Minor, design follow-up: validate_recipe (launch_permission_profile.rs:109) requires exact equality with the binary''s RECIPE and runs on every agent new (agent_launch.rs:431). After any template change, binary/recipe skew such as aida dev rollback refuses all launches until scaffold upgrade, for a file that grants nothing. Consider refusing only an unsupported version or a malformed file. Carried over from round 3.
-
+    1. BLOCKING, regression: criterion_trace_suffix (aida-cli-lib/src/worktree_gc.rs:396) now accepts any ASCII-letter-led token, so parse_trace_id_token('trace:STORY-1.rs') returns STORY-1.RS and 'trace:STORY-1.TXT' returns STORY-1.TXT. The unchanged test word_labelled_criteria_can_be_traced (aida-cli-lib/src/gate/tests/story_1700_drive_mandate_tests.rs:1998-2005) asserts both return STORY-1, with the comment 'a lowercase or all-caps word is not a label'. It will fail in CI. The lane only ran filtered tests, so it did not see this. Fix: keep the STORY-1700 guard and additionally accept labels containing an underscore or hyphen (which covers generated_profile_preserves_approval_prompts and Vendor-neutral), rather than dropping the shape rules; or re-key the criterion. Do not weaken the existing assertions. Unit test minted_underscore_criterion_is_preserved_in_trace should gain the rs/TXT negative cases.
+    2. Minor, AC1 edge: render_roots (aida-cli-lib/src/launch_permission_profile.rs:124-138) treats the launch directory as the project root without resolving the Git toplevel. 'aida agent new <vendor> --cwd <repo>/sub --no-exec --verbose' declares project: <repo>/sub, project-state: <repo>/sub/.aida and build: <repo>/sub/target, and omits the real .aida and target. Resolve the worktree toplevel for those roots, with the fallback to the launch directory when Git is unavailable, and add a test.
+    3. Minor, docs: docs/cli/06-roles-sessions.md ('The launch output prints the mode and reason, including in dry previews') overstates the behavior. agent_launch.rs:432-446 prints the policy only with --verbose, and never with --show-prompt or --show-context. Carried over from round 3; still present.
+    4. Minor, design follow-up: validate_recipe (launch_permission_profile.rs:109) requires exact equality with the binary's RECIPE and runs on every agent new (agent_launch.rs:431). After any template change, binary/recipe skew such as aida dev rollback refuses all launches until scaffold upgrade, for a file that grants nothing. Consider refusing only an unsupported version or a malformed file. Carried over from round 3.
     5. Cosmetic: the overlap note (launch_permission_profile.rs:184-186) only checks a read-only root nested under a writable one. A consumer repository nested inside the AIDA checkout gets a writable root under a read-only root with no note.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 09:26:57.325577+00:00
-  modified_at: 2026-11-08 09:26:57.325577+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:26:57.325577Z
+  modified_at: 2026-11-08T09:26:57.325577Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bac9-52f5-7171-a6ce-6cfbe6c6b096
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests by source and all five round-4 findings are fixed, but CI (cli-0) failed at this head (Run tests and Test time budget steps) with the cause undiagnosed, and lib-0, lib-1, rest and gates had not finished. No cargo run, by policy.. No triage reason was given.'
-  created_at: 2026-11-08 10:51:58.581865+00:00
-  modified_at: 2026-11-08 10:51:58.581865+00:00
+  created_at: 2026-11-08T10:51:58.581865Z
+  modified_at: 2026-11-08T10:51:58.581865Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bac9-5d56-7293-a2c2-18e2378110ad
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: e781399b006c
-
     Recorded: 2026-11-08T09:57:39.372969098+00:00
-
     Findings:
-
-    1. BLOCKING, CI: CI (cli-0) failed at e781399b006c in its ''Run tests'' and ''Test time budget'' steps (job 128692618458). The failing test is not identified: the launcher captured only the exit-code line and this reviewer''s sandbox denied the log download host. cli-0 passed at b68d471c9a9a and on main at 5cbe14e5fc6b, so a PR-caused failure is not ruled out. Read the job log and fix the failing test, or show it is an unrelated flake and re-run. Also check the budget result for aida-cli::story_1486_launch_profile noexec_verbose_prints_stakeholder_and_explicit_git_downgrades: it makes about 13 CLI launches and has no entry in scripts/test-time-budget.toml, whose default_limit is 10s (hypothesis, unconfirmed). Separately, lib-0, lib-1, rest and gates were still pending, so word_labelled_criteria_can_be_traced and the lib tests are not yet confirmed green.
-
-    2. Minor, docs: docs/cli/06-roles-sessions.md still says ''The project root in this declaration is the actual launch directory, including an explicit linked-worktree --cwd''. Since this rework, render_roots (aida-cli-lib/src/launch_permission_profile.rs:125) resolves the Git worktree toplevel, so --cwd <repo>/sub declares <repo> and only falls back to the launch directory when Git is unavailable. Reword to ''the Git worktree containing the launch directory''.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 10:52:01.238706+00:00
-  modified_at: 2026-11-08 10:52:01.238706+00:00
+    1. BLOCKING, CI: CI (cli-0) failed at e781399b006c in its 'Run tests' and 'Test time budget' steps (job 128692618458). The failing test is not identified: the launcher captured only the exit-code line and this reviewer's sandbox denied the log download host. cli-0 passed at b68d471c9a9a and on main at 5cbe14e5fc6b, so a PR-caused failure is not ruled out. Read the job log and fix the failing test, or show it is an unrelated flake and re-run. Also check the budget result for aida-cli::story_1486_launch_profile noexec_verbose_prints_stakeholder_and_explicit_git_downgrades: it makes about 13 CLI launches and has no entry in scripts/test-time-budget.toml, whose default_limit is 10s (hypothesis, unconfirmed). Separately, lib-0, lib-1, rest and gates were still pending, so word_labelled_criteria_can_be_traced and the lib tests are not yet confirmed green.
+    2. Minor, docs: docs/cli/06-roles-sessions.md still says 'The project root in this declaration is the actual launch directory, including an explicit linked-worktree --cwd'. Since this rework, render_roots (aida-cli-lib/src/launch_permission_profile.rs:125) resolves the Git worktree toplevel, so --cwd <repo>/sub declares <repo> and only falls back to the launch directory when Git is unavailable. Reword to 'the Git worktree containing the launch directory'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T10:52:01.238706Z
+  modified_at: 2026-11-08T10:52:01.238706Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bad4-cb12-7100-8702-ff4e13744fbd
   author: dirtlab
-  content: 'STORY-1486 round-5 native handoff. Downloaded and inspected CI run 42468010290 logs. cli-0 ran 226 tests: 225 passed, only bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses timed out at 180.020s; its 15s budget caused the budget failure. STORY-1486 did not overrun its default budget, so no budget inflation. Local rerun initially exposed a separate deterministic allocation-receipt permission failure under the lane umask; fixture now sets mode 0600 explicitly. Both CLI tests now pass (reviewer 4.31s, story 1.08s). The historical CI timeout itself is not reproduced or conclusively explained. Attempted GitHub job rerun; GitHub returned HTTP 403 because the parent workflow is still running/queued.
-
+  content: |
+    STORY-1486 round-5 native handoff. Downloaded and inspected CI run 42468010290 logs. cli-0 ran 226 tests: 225 passed, only bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses timed out at 180.020s; its 15s budget caused the budget failure. STORY-1486 did not overrun its default budget, so no budget inflation. Local rerun initially exposed a separate deterministic allocation-receipt permission failure under the lane umask; fixture now sets mode 0600 explicitly. Both CLI tests now pass (reviewer 4.31s, story 1.08s). The historical CI timeout itself is not reproduced or conclusively explained. Attempted GitHub job rerun; GitHub returned HTTP 403 because the parent workflow is still running/queued.
 
     Also inspected final other shards: lib-1 failed help snapshot and policy parity; lib-0 failed vendor ratchet; gates failed help-golden cochange. Fixed these branch regressions: regenerated and reviewed help snapshot (only new git-read-only option/catalog entries); manually corrected the three intended dry-preview Write -> Read fixture rows with rationale; projected common launch options through vendors/ rather than adding forbidden typed vendor debt in agent_launch.rs. Corrected docs to identify the Git worktree containing --cwd and the Git-unavailable launch-directory fallback.
 
-
     Changed files: aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/vendors/mod.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv; aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs; aida-cli/tests/bug_2187_reviewer_record_identity.rs; docs/cli/06-roles-sessions.md.
 
-
     Executed lane-runner validation:
-
     - j20261108T105424182-2-0: word_labelled_criteria_can_be_traced, 1 passed.
-
     - j20261108T105546328-2-0: help snapshot regeneration, 1 passed; j20261108T110205811-2-0: normal snapshot verification, 1 passed.
-
     - j20261108T105558659-2-0: registered_policy_matches_mains_legacy_tables_for_every_verb, 1 passed.
-
     - j20261108T105559842-2-0: vendor ratchet, 3 passed.
-
     - j20261108T105638328-2-0: launch_permission_profile, 16 passed.
-
     - j20261108T105653945-2-0: bug_2187_reviewer_record_identity and story_1486_launch_profile, 1 passed each.
-
     - rustfmt --check on changed Rust files and git diff --check passed.
-
     Codegraph unavailable; doctor supplied no codegraph diagnosis, navigation used rg.
 
-
     All edits remain uncommitted as required by native launch. No commit, push, PR creation, queue completion, ship or review record performed. Host must commit/publish these changes, obtain fresh CI evidence and finish queue completion. Full CI remains unverified; local targeted checks pass. untested=false.
-
-    '
-  created_at: 2026-11-08 11:04:30.226814+00:00
-  modified_at: 2026-11-08 11:04:30.226814+00:00
+  created_at: 2026-11-08T11:04:30.226814Z
+  modified_at: 2026-11-08T11:04:30.226814Z
   session_id: 01a1baca9e02
   harness_version: codex-cli 0.167.0
 - id: 01a1baf2-4c82-76d3-8ac3-427593f3cb55
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests by source and every prior finding is fixed, but CI run 42474150272 had assigned no jobs at this head, so no test result confirms them. No blocking code defect found. Re-review once CI finishes. No cargo run, by policy.. No triage reason was given.'
-  created_at: 2026-11-08 11:36:43.906373+00:00
-  modified_at: 2026-11-08 11:36:43.906373+00:00
+  created_at: 2026-11-08T11:36:43.906373Z
+  modified_at: 2026-11-08T11:36:43.906373Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1baf2-5346-7590-8ee6-01d944bd518b
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: e21e2ae5087f
-
     Recorded: 2026-11-08T11:13:36.933062424+00:00
-
     Findings:
-
-    1. WAIT STATE, no code change needed for this item: CI run 42474150272 (CI, e21e2ae5087f) was still ''pending'' with zero jobs at 11:13 UTC, behind other queued runs, and merge-hold-gate was queued. This head fixes the round-6 help golden, policy golden, reviewer fixture and docs findings by source, but no CI result confirms them, including the earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses, which the implementer could not reproduce or explain. Re-review at this head when CI completes; if it is green, this item closes without a new commit.
-
+    1. WAIT STATE, no code change needed for this item: CI run 42474150272 (CI, e21e2ae5087f) was still 'pending' with zero jobs at 11:13 UTC, behind other queued runs, and merge-hold-gate was queued. This head fixes the round-6 help golden, policy golden, reviewer fixture and docs findings by source, but no CI result confirms them, including the earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses, which the implementer could not reproduce or explain. Re-review at this head when CI completes; if it is green, this item closes without a new commit.
     2. Minor, contract: explicit-vendor --no-exec is now classified Read for guest and requester seats and described as side-effect-free (aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs header), but the claude path calls maybe_show_faithful_launcher_notice (aida-cli-lib/src/agent_launch.rs:4008) before the no-exec return (agent_launch.rs:3158), and that function writes <aida home>/.faithful-launcher-notice on first use. A stakeholder preview therefore performs a write once. Skip the notice for no-exec and preview launches, and add a test that the marker is not created.
-
-    3. Cosmetic: the launch-profile artifact in Scaffolder::preview (aida-core/src/scaffolding/mod.rs:1391-1395) pushes any existing file to overwrites, unlike sibling Template artifacts that match on file_status. A hand-edited or older profile is never listed in modified_files or upgradeable_files. ''scaffold upgrade'' compares content itself, so its remedy still works; only the preview classification is wrong.
-
-    4. Cosmetic, test: git_read_only_flag_parses_before_or_after_vendor (aida-cli-lib/src/launch_permission_profile.rs:324) tests codex only with the flag before the vendor. Codex is the one vendor with a positional argument, so it is the case that most needs the after-vendor form. Add ''agent new codex --git-read-only --no-exec --verbose''.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 11:36:45.638718+00:00
-  modified_at: 2026-11-08 11:36:45.638718+00:00
+    3. Cosmetic: the launch-profile artifact in Scaffolder::preview (aida-core/src/scaffolding/mod.rs:1391-1395) pushes any existing file to overwrites, unlike sibling Template artifacts that match on file_status. A hand-edited or older profile is never listed in modified_files or upgradeable_files. 'scaffold upgrade' compares content itself, so its remedy still works; only the preview classification is wrong.
+    4. Cosmetic, test: git_read_only_flag_parses_before_or_after_vendor (aida-cli-lib/src/launch_permission_profile.rs:324) tests codex only with the flag before the vendor. Codex is the one vendor with a positional argument, so it is the case that most needs the after-vendor form. Add 'agent new codex --git-read-only --no-exec --verbose'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:36:45.638718Z
+  modified_at: 2026-11-08T11:36:45.638718Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb0d-aa21-7c52-a1a5-3545b78e51d1
   author: joe
-  content: 'Round 6: addressed findings 2-4. Moved faithful-launcher notices after all foreground/background preview returns; regression covers no-exec/show-context/show-prompt without marker writes plus positive notice control. Profile preview now classifies New/Modified/NoHeader/OlderVersion/Unmodified like sibling template artifacts, with regression coverage. Added Codex after-vendor --git-read-only parser case. CI run 42474150272 at e21e2ae5087f later failed gates solely on the negative /tmp/ test literal portability ratchet: scoped that Linux-path assertion test to Linux without baseline growth. Validation: 16 permission-profile tests, 1 preview-marker test, 3 core profile tests, and the exact bug_2187 reviewer integration test passed (21 executed tests); scripts/check-portability.sh, rustfmt checks and git diff --check passed. Initial marker regression had reversed context constructor arguments and failed, corrected and rerun successfully; initial reviewer command targeted wrong crate
-    and matched zero, then correct integration target executed and passed. Finding 1 remains CI/re-review state: rest, cli-0, cli-1, contracts, lib-1 passed; lib-0 still running; old-head gates failure fixed locally but requires CI on host publication. Merge hold retained. Native seat leaves five edited files uncommitted for host publication.'
-  created_at: 2026-11-08 12:06:37.345935+00:00
-  modified_at: 2026-11-08 12:06:37.345935+00:00
+  content: 'Round 6: addressed findings 2-4. Moved faithful-launcher notices after all foreground/background preview returns; regression covers no-exec/show-context/show-prompt without marker writes plus positive notice control. Profile preview now classifies New/Modified/NoHeader/OlderVersion/Unmodified like sibling template artifacts, with regression coverage. Added Codex after-vendor --git-read-only parser case. CI run 42474150272 at e21e2ae5087f later failed gates solely on the negative /tmp/ test literal portability ratchet: scoped that Linux-path assertion test to Linux without baseline growth. Validation: 16 permission-profile tests, 1 preview-marker test, 3 core profile tests, and the exact bug_2187 reviewer integration test passed (21 executed tests); scripts/check-portability.sh, rustfmt checks and git diff --check passed. Initial marker regression had reversed context constructor arguments and failed, corrected and rerun successfully; initial reviewer command targeted wrong crate and matched zero, then correct integration target executed and passed. Finding 1 remains CI/re-review state: rest, cli-0, cli-1, contracts, lib-1 passed; lib-0 still running; old-head gates failure fixed locally but requires CI on host publication. Merge hold retained. Native seat leaves five edited files uncommitted for host publication.'
+  created_at: 2026-11-08T12:06:37.345935Z
+  modified_at: 2026-11-08T12:06:37.345935Z
   session_id: 01a1baf36d4a
 - id: 01a1bb1c-b5f5-7993-8ffb-194e5725d312
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: AC1,2,4,5 have matching tests by source and all round-6 findings are fixed, but AC3 is not met when the seat comes from the role picker (git_policy is printed before the role is resolved), and CI at this head is still queued. No cargo run, by policy.. No triage reason was given.'
-  created_at: 2026-11-08 12:23:03.413620+00:00
-  modified_at: 2026-11-08 12:23:03.413620+00:00
+  created_at: 2026-11-08T12:23:03.413620Z
+  modified_at: 2026-11-08T12:23:03.413620Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb1c-bcf6-7373-a5de-a71ca3161709
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 18e98acfe80c
-
     Recorded: 2026-11-08T12:18:39.674395259+00:00
-
     Findings:
-
-    1. BLOCKING (AC3, effective seat): handle_agent_command computes and prints git_policy (aida-cli-lib/src/agent_launch.rs:417-427) from the raw --role before dispatch_agent_new runs, but the seat is only resolved later by resolve_child_role (agent_launch.rs:2727 claude, :2866 codex, :2953 antigravity), which opens the role picker at a TTY when --role is absent, and that picker appends guest/requester (role.rs:685,725-749). So `aida agent new claude --no-exec --verbose` at a terminal prints `git_policy: write (development baseline; requested seat: default ...)` and then the operator picks guest: the declared policy says write for a read-only seat, and the same happens on a real launch with --verbose. Fix: emit the declaration after the child role is resolved (for example from the shared launch path with the resolved role, keeping stdout for no-exec, stderr for real launches and silence for --show-prompt/--show-context), or resolve the role first. Add a test that a picked or otherwise late-resolved
-    guest/requester role declares read-only; the current e2e test always passes --role or gets no TTY.
-
+    1. BLOCKING (AC3, effective seat): handle_agent_command computes and prints git_policy (aida-cli-lib/src/agent_launch.rs:417-427) from the raw --role before dispatch_agent_new runs, but the seat is only resolved later by resolve_child_role (agent_launch.rs:2727 claude, :2866 codex, :2953 antigravity), which opens the role picker at a TTY when --role is absent, and that picker appends guest/requester (role.rs:685,725-749). So `aida agent new claude --no-exec --verbose` at a terminal prints `git_policy: write (development baseline; requested seat: default ...)` and then the operator picks guest: the declared policy says write for a read-only seat, and the same happens on a real launch with --verbose. Fix: emit the declaration after the child role is resolved (for example from the shared launch path with the resolved role, keeping stdout for no-exec, stderr for real launches and silence for --show-prompt/--show-context), or resolve the role first. Add a test that a picked or otherwise late-resolved guest/requester role declares read-only; the current e2e test always passes --role or gets no TTY.
     2. WAIT STATE, no code change needed: CI run 42478929548 at 18e98acfe80c was still queued with all 7 jobs (rest, lib-0, lib-1, cli-0, cli-1, gates, contracts) unassigned at 12:2x UTC, and merge-hold-gate was pending. No CI result confirms this head, including the round-6 changes (b3d619c7a0b) and the earlier unexplained cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses. Every AC test above is verified by source reading only until CI completes.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 12:23:05.206597+00:00
-  modified_at: 2026-11-08 12:23:05.206597+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:23:05.206597Z
+  modified_at: 2026-11-08T12:23:05.206597Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb2b-0329-7c31-8c1f-92323554c1f7
   author: dirtlab
-  content: 'Addressed round-7 AC3 finding: moved Git policy reporting after child role resolution for Claude/Codex/Antigravity, carrying the CLI downgrade through launch options. Codex background previews report the planned role and real background launches report the resolved role. Preserved stdout for no-exec, stderr for real verbose launches, and silence for show-prompt/show-context. Added a real PTY regression that picks guest and requester without --role, asserts no policy precedes the picker, and verifies read-only policy after selection. Validation: launcher job j20261108T122639106-2-0 executed 16 permission-profile library tests, all passed; j20261108T122735630-2-0 executed the story integration test including both PTY selections, passed. Portability script, rustfmt check and git diff --check passed. Changed files: aida-cli-lib/src/agent_launch.rs, launch_permission_profile.rs, agent_codex_background.rs, vendors/mod.rs; aida-cli/tests/story_1486_launch_profile.rs. Native seat leaves
-    edits uncommitted for host publication. CI/re-review remains host-side; no merge hold cleared. codegraph unavailable in this seat; doctor diagnostic ran and navigation used rg/source reads.'
-  created_at: 2026-11-08 12:38:40.681340+00:00
-  modified_at: 2026-11-08 12:38:40.681340+00:00
+  content: 'Addressed round-7 AC3 finding: moved Git policy reporting after child role resolution for Claude/Codex/Antigravity, carrying the CLI downgrade through launch options. Codex background previews report the planned role and real background launches report the resolved role. Preserved stdout for no-exec, stderr for real verbose launches, and silence for show-prompt/show-context. Added a real PTY regression that picks guest and requester without --role, asserts no policy precedes the picker, and verifies read-only policy after selection. Validation: launcher job j20261108T122639106-2-0 executed 16 permission-profile library tests, all passed; j20261108T122735630-2-0 executed the story integration test including both PTY selections, passed. Portability script, rustfmt check and git diff --check passed. Changed files: aida-cli-lib/src/agent_launch.rs, launch_permission_profile.rs, agent_codex_background.rs, vendors/mod.rs; aida-cli/tests/story_1486_launch_profile.rs. Native seat leaves edits uncommitted for host publication. CI/re-review remains host-side; no merge hold cleared. codegraph unavailable in this seat; doctor diagnostic ran and navigation used rg/source reads.'
+  created_at: 2026-11-08T12:38:40.681340Z
+  modified_at: 2026-11-08T12:38:40.681340Z
   session_id: 01a1bb1e3e0f
   harness_version: codex-cli 0.167.0
 - id: 01a1bb52-032e-71e3-90aa-72d7cc924ba2
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: no code defect found and the round-7 AC3 finding is fixed, but CI at this head has not started (0 jobs assigned), so all five criteria are verified by source reading only. No cargo run, by policy.. No triage reason was given.'
-  created_at: 2026-11-08 13:21:16.590742+00:00
-  modified_at: 2026-11-08 13:21:16.590742+00:00
+  created_at: 2026-11-08T13:21:16.590742Z
+  modified_at: 2026-11-08T13:21:16.590742Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb52-0ef4-7e13-963d-18b94b2e78e9
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 22900c26a0e0
-
     Recorded: 2026-11-08T13:06:13.137216394+00:00
-
     Findings:
-
     1. WAIT STATE, no code change needed: CI run 42482722422 at 22900c26a0e0 was still pending with no jobs assigned at 13:05 UTC, and merge-hold-gate run 42482722418 was queued. No completed CI run exists for this head or for the round-7 changes. The earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses and the new PTY test noexec_verbose_prints_stakeholder_and_explicit_git_downgrades are unconfirmed. Re-review once CI is green at this head; do not push a filler commit, which would restart CI.
-
     2. NON-BLOCKING, minor: the scaffolded .aida/launch-profile.toml (aida-core/src/scaffolding/launch_profile.rs:3) has no allow-list entry under the deny-by-default .aida/* rule (aida-cli-lib/src/lib_part1.rs:2394-2428, scaffold_init.rs:547), so it is never committed. A fresh clone has no profile until aida scaffold runs there, and render_agent_launch_noexec (agent_launch.rs:6238) then omits the root declaration without saying so, which undercuts the portable-recipe intent in docs/cli/06-roles-sessions.md:214. No acceptance criterion requires committing it; fix by allow-listing the file or by documenting it as per-clone.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 13:21:19.604903+00:00
-  modified_at: 2026-11-08 13:21:19.604903+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:21:19.604903Z
+  modified_at: 2026-11-08T13:21:19.604903Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb5d-87f6-7fc0-84e4-c9e05a16cb87
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five criteria match tests by source reading and no blocking code defect was found, but CI run 42484828405 at this head has assigned no jobs, so no test result confirms them. No cargo run, by policy.. No triage reason was given.'
-  created_at: 2026-11-08 13:33:51.478066+00:00
-  modified_at: 2026-11-08 13:33:51.478066+00:00
+  created_at: 2026-11-08T13:33:51.478066Z
+  modified_at: 2026-11-08T13:33:51.478066Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb5d-9538-7ca0-ad59-7ebbe20098a8
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 807a93da120f
-
     Recorded: 2026-11-08T13:31:17.961815465+00:00
-
     Findings:
-
     1. WAIT STATE, no code change needed: CI run 42484828405 at 807a93da120f was still pending with 0 jobs at 13:50 UTC behind a repo-wide runner backlog, and merge-hold-gate run 42484828369 was queued. No completed CI run exists for the round-7 changes, so the PTY test noexec_verbose_prints_stakeholder_and_explicit_git_downgrades (aida-cli/tests/story_1486_launch_profile.rs:153), its time budget, and the earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses are unconfirmed. Re-review at this head when CI finishes; do not push a filler commit, which would restart CI.
-
     2. NON-BLOCKING, minor: for a --spec launch, --no-exec --verbose declares the wrong project roots. prepare_agent_launch_dry (aida-cli-lib/src/agent_launch.rs:5574) sets launch_cwd to the project root, and render_agent_launch_noexec passes that to render_roots (agent_launch.rs:6243), so the preview lists the primary checkout as the writable project and git-dir while a real launch gets a dedicated worktree. Either label the preview as primary-checkout-until-launch or state the planned worktree. Can be a follow-up.
-
-    3. NON-BLOCKING, test gap: generated_profile_preserves_approval_prompts (aida-core/src/scaffolding/launch_profile.rs:17) scans RECIPE, not the generated artifact that includes the wrap_with_aida_header line. The header text holds no forbidden word today (mod.rs:596), so AC2 holds; asserting on artifact.content would match the criterion''s wording.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 13:33:54.872910+00:00
-  modified_at: 2026-11-08 13:33:54.872910+00:00
+    3. NON-BLOCKING, test gap: generated_profile_preserves_approval_prompts (aida-core/src/scaffolding/launch_profile.rs:17) scans RECIPE, not the generated artifact that includes the wrap_with_aida_header line. The header text holds no forbidden word today (mod.rs:596), so AC2 holds; asserting on artifact.content would match the criterion's wording.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:33:54.872910Z
+  modified_at: 2026-11-08T13:33:54.872910Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb68-4ec4-77f2-b06a-bb8e68d4a164
   author: dirtlab
-  content: 'Addressed latest review minor findings 2 and 3: spec-bound launch previews now explicitly label declared roots as primary-checkout-until-launch and explain that dedicated worktree/Git roots resolve at actual launch; approval-preservation regression now checks generated artifact.content including its scaffold header. Changed aida-cli-lib/src/agent_launch.rs, aida-cli-lib/src/tests/agent_launcher_tests.rs, aida-core/src/scaffolding/launch_profile.rs. Lane validation: j20261108T133627275-2-0 executed 3 core profile tests, passed; j20261108T133631274-2-0 executed library noexec preview test, passed; j20261108T133655667-2-0 executed story_1486_launch_profile PTY integration and bug_2187_reviewer_record_identity integration, both passed. Six executed tests total; untested=false. rustfmt --check, scripts/check-portability.sh and git diff --check passed. CI run 42484828405 at current committed head 807a93da120f was still queued across all seven jobs when inspected; this local validation
-    does not replace CI or fresh review. Codegraph unavailable (command not found), doctor check ran; used rg/source reads. Active role query returned no validated seat; queue routes this item to implementer. Native seat leaves three files uncommitted for host publication, with no commit/push/PR/queue done/ship/review record actions or hold clearance.'
-  created_at: 2026-11-08 13:45:37.732025+00:00
-  modified_at: 2026-11-08 13:45:37.732025+00:00
+  content: 'Addressed latest review minor findings 2 and 3: spec-bound launch previews now explicitly label declared roots as primary-checkout-until-launch and explain that dedicated worktree/Git roots resolve at actual launch; approval-preservation regression now checks generated artifact.content including its scaffold header. Changed aida-cli-lib/src/agent_launch.rs, aida-cli-lib/src/tests/agent_launcher_tests.rs, aida-core/src/scaffolding/launch_profile.rs. Lane validation: j20261108T133627275-2-0 executed 3 core profile tests, passed; j20261108T133631274-2-0 executed library noexec preview test, passed; j20261108T133655667-2-0 executed story_1486_launch_profile PTY integration and bug_2187_reviewer_record_identity integration, both passed. Six executed tests total; untested=false. rustfmt --check, scripts/check-portability.sh and git diff --check passed. CI run 42484828405 at current committed head 807a93da120f was still queued across all seven jobs when inspected; this local validation does not replace CI or fresh review. Codegraph unavailable (command not found), doctor check ran; used rg/source reads. Active role query returned no validated seat; queue routes this item to implementer. Native seat leaves three files uncommitted for host publication, with no commit/push/PR/queue done/ship/review record actions or hold clearance.'
+  created_at: 2026-11-08T13:45:37.732025Z
+  modified_at: 2026-11-08T13:45:37.732025Z
   session_id: 01a1bb5ee45d
   harness_version: codex-cli 0.167.0
 - id: 01a1bb70-060f-75a3-9aa1-4c375b56b6d6
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL, CI wait state only: all five criteria have matching code and tests by source reading (ac91839b, generated_profile_preserves_approval_prompts, ac325a99, acc62dfa, acc62716), and no code defect was found, but CI run 42486514383 at this head has assigned no jobs, so no test has been run against it. No cargo run, by policy. Re-review at this head when CI finishes.. No triage reason was given.'
-  created_at: 2026-11-08 13:54:03.407051+00:00
-  modified_at: 2026-11-08 13:54:03.407051+00:00
+  created_at: 2026-11-08T13:54:03.407051Z
+  modified_at: 2026-11-08T13:54:03.407051Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb70-0db8-71b1-85f3-2d76f7219d85
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 4649d63143c4
-
     Recorded: 2026-11-08T13:50:53.608411768+00:00
-
     Findings:
-
     1. WAIT STATE, no code change needed: CI run 42486514383 at 4649d63143c4 was still pending with 0 jobs at 13:50 UTC behind a repo-wide runner backlog, and merge-hold-gate run 42486514477 was queued. No completed CI run exists for this head, so the tests behind all five criteria are unconfirmed, including the PTY test noexec_verbose_prints_stakeholder_and_explicit_git_downgrades (aida-cli/tests/story_1486_launch_profile.rs:153) and bug_2187_reviewer_record_identity, which timed out on cli-0 in an earlier round. Re-review at this head when CI finishes; do not push a filler commit, which would restart CI.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 13:54:05.368117+00:00
-  modified_at: 2026-11-08 13:54:05.368117+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:54:05.368117Z
+  modified_at: 2026-11-08T13:54:05.368117Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bbe0-42a3-7f62-adf6-6fe48821e3bb
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Latest review finding 1 is a CI wait state, explicitly requesting no code change and no filler commit. At head 4649d63143c4, CI run 42486514383 has lib-1 in progress and six lanes queued; no completed CI result exists. Merge-hold-gate run 42486514477 failed because the existing aida:merge-hold is active and has no clearance. Completion requires settled CI and fresh authorized review/hold clearance. No source edits or new commit are warranted; preserving the reviewed head avoids restarting CI. git diff --check passed and worktree is clean; no cargo tests executed this turn (untested=true). No active validated seat reported; queue routing is implementer. Codegraph unavailable; doctor check returned no findings. Native seat publication veto retained; no commit, push, PR creation, queue completion, ship, or review record performed.. No triage reason was given.'
-  created_at: 2026-11-08 15:56:38.947096+00:00
-  modified_at: 2026-11-08 15:56:38.947096+00:00
+  created_at: 2026-11-08T15:56:38.947096Z
+  modified_at: 2026-11-08T15:56:38.947096Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bbe6-ad1f-7b43-be6e-d514f142e037
   author: joe
   content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
-  created_at: 2026-11-08 16:03:39.423097+00:00
-  modified_at: 2026-11-08 16:03:39.423097+00:00
+  created_at: 2026-11-08T16:03:39.423097Z
+  modified_at: 2026-11-08T16:03:39.423097Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bbf0-75e1-7821-97f9-7e11b7ae1439
   author: joe
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
-  created_at: 2026-11-08 16:14:20.641744+00:00
-  modified_at: 2026-11-08 16:14:20.641744+00:00
+  created_at: 2026-11-08T16:14:20.641744Z
+  modified_at: 2026-11-08T16:14:20.641744Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc2e-9c1b-7e41-a0b5-08687739d10b
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 STORY-1486 acceptance criteria hold by source, but the new CLI test adds an unledgered env::var site, so the CI (gates) ExecContext ratchet fails at this head; four non-blocking defects also listed.. It was punted on: blocked-dependency: Latest review finding 1 explicitly requires CI settlement and re-review, with no code change or filler commit. Current local and PR-3671 head is a443282e5ca095c42c1a7b0bab92f9918d4eb596. CI run 42502107395 has all seven lanes queued; merge-hold-gate run 42502107345 is queued, and aida:merge-hold plus aida:merge-hold-recorded remain active. Earlier minor findings are already implemented. Preserving this head rather than restarting CI; completion requires settled CI and fresh authorized review/hold clearance. Changed files: none. git diff --check passed. No cargo tests executed this turn; untested=true. Codegraph missing
-    from PATH, confirmed by doctor. No validated active seat reported; queue routes implementer. Native seat: no commit, push, PR creation, queue done, ship or review record performed.. No triage reason was given.'
-  created_at: 2026-11-08 17:22:13.659275+00:00
-  modified_at: 2026-11-08 17:22:13.659275+00:00
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 STORY-1486 acceptance criteria hold by source, but the new CLI test adds an unledgered env::var site, so the CI (gates) ExecContext ratchet fails at this head; four non-blocking defects also listed.. It was punted on: blocked-dependency: Latest review finding 1 explicitly requires CI settlement and re-review, with no code change or filler commit. Current local and PR-3671 head is a443282e5ca095c42c1a7b0bab92f9918d4eb596. CI run 42502107395 has all seven lanes queued; merge-hold-gate run 42502107345 is queued, and aida:merge-hold plus aida:merge-hold-recorded remain active. Earlier minor findings are already implemented. Preserving this head rather than restarting CI; completion requires settled CI and fresh authorized review/hold clearance. Changed files: none. git diff --check passed. No cargo tests executed this turn; untested=true. Codegraph missing from PATH, confirmed by doctor. No validated active seat reported; queue routes implementer. Native seat: no commit, push, PR creation, queue done, ship or review record performed.. No triage reason was given.'
+  created_at: 2026-11-08T17:22:13.659275Z
+  modified_at: 2026-11-08T17:22:13.659275Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc2e-a8b0-79b0-bd69-535eb82def7e
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-1486):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: a443282e5ca0
-
     Recorded: 2026-11-08T17:00:35.904252189+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3671#issuecomment-6724377392
-
     Findings:
-
-    1. BLOCKING (CI gate): aida-cli/tests/story_1486_launch_profile.rs:173 calls std::env::var("PATH") in noexec_verbose_prints_stakeholder_and_explicit_git_downgrades. This site is not in scripts/exec-context-legacy.json, so scripts/check-exec-context.py raises ''new sites (forbidden)'' through test_repository_matches_exact_ledger. That exact failure is in CI run 42486514383 (CI gates) at 4649d63143c. The test file, ratchet script and ledger are all unchanged at a443282e5ca0, so CI (gates) will fail again. Fix without growing the ledger: build the fixture PATH through the approved exec-context/test helper or another non-ambient source. Run make check-ci-fast before pushing.
-
-    2. MINOR (--git-read-only is inert on a real launch without --verbose): launch_permission_profile.rs:44 prints only when visible, and print_git_policy is the flag''s sole effect (agent_launch.rs:2735, 2883, 2977; agent_codex_background.rs:582, 609). ''aida agent new claude --git-read-only'' prints nothing and passes nothing to the child, yet help says it declares policy for this launch. AC3 only covers --no-exec --verbose, so this does not fail an AC. Print the one-line declaration on stderr whenever the flag is explicitly set.
-
+    1. BLOCKING (CI gate): aida-cli/tests/story_1486_launch_profile.rs:173 calls std::env::var("PATH") in noexec_verbose_prints_stakeholder_and_explicit_git_downgrades. This site is not in scripts/exec-context-legacy.json, so scripts/check-exec-context.py raises 'new sites (forbidden)' through test_repository_matches_exact_ledger. That exact failure is in CI run 42486514383 (CI gates) at 4649d63143c. The test file, ratchet script and ledger are all unchanged at a443282e5ca0, so CI (gates) will fail again. Fix without growing the ledger: build the fixture PATH through the approved exec-context/test helper or another non-ambient source. Run make check-ci-fast before pushing.
+    2. MINOR (--git-read-only is inert on a real launch without --verbose): launch_permission_profile.rs:44 prints only when visible, and print_git_policy is the flag's sole effect (agent_launch.rs:2735, 2883, 2977; agent_codex_background.rs:582, 609). 'aida agent new claude --git-read-only' prints nothing and passes nothing to the child, yet help says it declares policy for this launch. AC3 only covers --no-exec --verbose, so this does not fail an AC. Print the one-line declaration on stderr whenever the flag is explicitly set.
     3. MINOR (over-broad writable declaration): launch_permission_profile.rs:198 lists the resolved AIDA checkout as writable whenever Git common dirs match. With a promoted binary, checkout() resolves .promoted repo to the primary checkout (line 103), so a launch from a linked AIDA worktree declares the primary checkout writable, beyond its own worktree roots. AC1 is met, but this contradicts isolated-worktree discipline. linked_aida_worktree_uses_common_git_identity (line 486) does not assert which checkout is listed. Declare aida-checkout writable only when it is the launch worktree, or label it, and add an assertion.
-
-    4. MINOR (trace parsers disagree): the worktree_gc.rs:403 fix makes parse_trace_id_token keep minted compound labels, but criteria_coverage.rs:297 criterion_token_pattern still requires suffixes beginning a/A/ac/AC. ''aida criteria'' will count trace:STORY-1486.generated_profile_preserves_approval_prompts, while the coverage scan''s git-grep path will not. Align the pattern with criterion_trace_suffix.
-
-    5. COSMETIC (filename shape can parse as a criterion): trace.rs:32-35 stops the suffix at the first ''.'', so trace:STORY-1.my_module.rs yields suffix my_module, which now passes worktree_gc.rs:403 and returns STORY-1.MY_MODULE. The regression test''s ''label.name'' case calls criterion_trace_suffix directly with a dotted string the parser never passes it. No such token exists in the tree today. Reject a suffix followed by ''.'', and test through parse_trace_id_token.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 17:22:16.880172+00:00
-  modified_at: 2026-11-08 17:22:16.880172+00:00
+    4. MINOR (trace parsers disagree): the worktree_gc.rs:403 fix makes parse_trace_id_token keep minted compound labels, but criteria_coverage.rs:297 criterion_token_pattern still requires suffixes beginning a/A/ac/AC. 'aida criteria' will count trace:STORY-1486.generated_profile_preserves_approval_prompts, while the coverage scan's git-grep path will not. Align the pattern with criterion_trace_suffix.
+    5. COSMETIC (filename shape can parse as a criterion): trace.rs:32-35 stops the suffix at the first '.', so trace:STORY-1.my_module.rs yields suffix my_module, which now passes worktree_gc.rs:403 and returns STORY-1.MY_MODULE. The regression test's 'label.name' case calls criterion_trace_suffix directly with a dotted string the parser never passes it. No such token exists in the tree today. Reject a suffix followed by '.', and test through parse_trace_id_token.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:22:16.880172Z
+  modified_at: 2026-11-08T17:22:16.880172Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc3c-6c66-7040-bb27-90856b5fec9a
+  author: dirtlab
+  content: |
+    Addressed all five findings from review at a443282e5ca0. Replaced the unledgered PATH read with the shared ExecContext Environment capture; explicit --git-read-only declarations now remain visible without verbose output; linked AIDA worktrees no longer declare another AIDA checkout writable; coverage git-grep gathers complete criterion labels for shared-parser validation; dotted filenames are rejected as criterion suffixes through the real parser. Added regression assertions for non-verbose explicit downgrade, linked checkout scope, whole-label coverage and dotted filenames.
+
+    Changed files: aida-cli-lib/src/criteria_coverage.rs, aida-cli-lib/src/launch_permission_profile.rs, aida-cli-lib/src/tests/story_1487_capture_coverage_tests.rs, aida-cli-lib/src/trace.rs, aida-cli-lib/src/worktree_gc.rs, aida-cli/tests/story_1486_launch_profile.rs.
+
+    Validation: five launcher-managed cargo test jobs passed, 39 executed test results (one regression runs in two filters): j20261108T172518331-2-0 launch_permission_profile (16); j20261108T172545852-2-0 criterion_ (6); j20261108T172547031-2-0 CLI story_1486_launch_profile (1, including PTY); j20261108T172605974-2-0 parse_trace_id_token (1); j20261108T173315917-2-0 story_1487_capture_coverage_tests (15). untested=false. ExecContext exact ledger passed with 1239 sites and zero additions. Portability, rustfmt --check and git diff --check passed. make check-ci-fast failed at its first step (Check aida-cli without default features): sccache could not write target debug dep-info (read-only filesystem); remaining fast gates did not run. This target/environment failure is not a successful gate run and requires host/CI follow-up.
+
+    Codegraph unavailable, doctor confirms missing PATH tool; used rg and direct source reads. No validated active seat reported; queue routes implementer. Native seat leaves all six files uncommitted. No commit/push/PR creation, queue completion, ship or review record performed; existing holds remain untouched. Publication is the host launcher's responsibility after exit; fresh CI/review and authorized hold clearance remain required.
+  created_at: 2026-11-08T17:37:18.950021959Z
+  modified_at: 2026-11-08T17:37:18.950021959Z
+  session_id: 01a1bc2ff79f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
   author: joe
-  timestamp: 2026-10-11 15:20:32.189123+00:00
+  timestamp: 2026-10-11T15:20:32.189123Z
   changes:
   - field_name: status
     old_value: Draft
     new_value: Approved
 - id: 01a154db-8421-7f20-8f78-9cf49a01b131
   author: joe
-  timestamp: 2026-10-19 15:50:34.785185+00:00
+  timestamp: 2026-10-19T15:50:34.785185Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
 - id: 01a1b7cd-3ec3-72a2-998e-fc12874c3d1e
   author: joe
-  timestamp: 2026-11-07 20:57:23.907210+00:00
+  timestamp: 2026-11-07T20:57:23.907210Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b8db-27ce-7a52-9cf5-aa6fc1796b4f
   author: joe
-  timestamp: 2026-11-08 01:52:12.750043+00:00
+  timestamp: 2026-11-08T01:52:12.750043Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9c8-fae4-7610-a7b3-589cfb25bfb6
   author: aida-session-start
-  timestamp: 2026-11-08 06:11:58.820590+00:00
+  timestamp: 2026-11-08T06:11:58.820590Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9c9-7533-7650-893b-969a419c8297
   author: dirtlab
-  timestamp: 2026-11-08 06:12:30.131056+00:00
+  timestamp: 2026-11-08T06:12:30.131056Z
   session_id: 01a1b9c8ee66
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b9ee-f027-77c1-aa13-c3be511a4f07
   author: aida-orchestrator
-  timestamp: 2026-11-08 06:53:26.439050+00:00
+  timestamp: 2026-11-08T06:53:26.439050Z
   session_id: 01a1b9eb985d
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1215,7 +891,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9f3-165c-76e0-b1f0-4cec45c32541
   author: joe
-  timestamp: 2026-11-08 06:57:58.364198+00:00
+  timestamp: 2026-11-08T06:57:58.364198Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1224,20 +900,20 @@ history:
     new_value: Approved
 - id: 01a1b9f4-485b-72a1-8f81-1456f72d114a
   author: aida-session-start
-  timestamp: 2026-11-08 06:59:16.699085+00:00
+  timestamp: 2026-11-08T06:59:16.699085Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9f4-9817-7882-8499-d0e399114848
   author: dirtlab
-  timestamp: 2026-11-08 06:59:37.111815+00:00
+  timestamp: 2026-11-08T06:59:37.111815Z
   session_id: 01a1b9f44294
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba10-7689-7f73-a9d2-713d6a68af91
   author: aida-orchestrator
-  timestamp: 2026-11-08 07:30:03.529921+00:00
+  timestamp: 2026-11-08T07:30:03.529921Z
   session_id: 01a1ba0cc1cb
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1246,7 +922,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba19-0d7f-7042-986f-3b246b537eec
   author: joe
-  timestamp: 2026-11-08 07:39:26.463881+00:00
+  timestamp: 2026-11-08T07:39:26.463881Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1255,20 +931,20 @@ history:
     new_value: Approved
 - id: 01a1ba1a-1ecb-7352-a67b-d67effea3fad
   author: aida-session-start
-  timestamp: 2026-11-08 07:40:36.427775+00:00
+  timestamp: 2026-11-08T07:40:36.427775Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba1a-a1dc-7630-97d5-2f936bf52eda
   author: dirtlab
-  timestamp: 2026-11-08 07:41:09.980812+00:00
+  timestamp: 2026-11-08T07:41:09.980812Z
   session_id: 01a1ba1a131c
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba66-6b29-7fa1-9fb6-97bab1e52e8c
   author: joe
-  timestamp: 2026-11-08 09:03:56.713081+00:00
+  timestamp: 2026-11-08T09:03:56.713081Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1277,20 +953,20 @@ history:
     new_value: Approved
 - id: 01a1ba67-a029-7bd1-81fa-0d237e1e410d
   author: aida-session-start
-  timestamp: 2026-11-08 09:05:15.817347+00:00
+  timestamp: 2026-11-08T09:05:15.817347Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba68-2e8e-7f60-8b1a-631cbef8222a
   author: dirtlab
-  timestamp: 2026-11-08 09:05:52.270413+00:00
+  timestamp: 2026-11-08T09:05:52.270413Z
   session_id: 01a1ba6793a4
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba77-3df1-7680-a253-347ed47e5e26
   author: aida-orchestrator
-  timestamp: 2026-11-08 09:22:19.249257+00:00
+  timestamp: 2026-11-08T09:22:19.249257Z
   session_id: 01a1ba743c33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1299,7 +975,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba7b-74e5-70b0-9831-3f266d22495a
   author: joe
-  timestamp: 2026-11-08 09:26:55.461767+00:00
+  timestamp: 2026-11-08T09:26:55.461767Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1308,20 +984,20 @@ history:
     new_value: Approved
 - id: 01a1ba7c-d57b-7802-95e8-9683958b3474
   author: aida-session-start
-  timestamp: 2026-11-08 09:28:25.723781+00:00
+  timestamp: 2026-11-08T09:28:25.723781Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba7d-2590-7163-b216-d68f99932e85
   author: dirtlab
-  timestamp: 2026-11-08 09:28:46.224249+00:00
+  timestamp: 2026-11-08T09:28:46.224249Z
   session_id: 01a1ba7ccf7b
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba97-981b-7053-ac9b-51a18c597d25
   author: aida-orchestrator
-  timestamp: 2026-11-08 09:57:39.483121+00:00
+  timestamp: 2026-11-08T09:57:39.483121Z
   session_id: 01a1ba93b9c2
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1330,7 +1006,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bac9-52f5-7171-a6ce-6ce5ff848077
   author: joe
-  timestamp: 2026-11-08 10:51:58.581854+00:00
+  timestamp: 2026-11-08T10:51:58.581854Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1339,20 +1015,20 @@ history:
     new_value: Approved
 - id: 01a1baca-a39b-7f33-b5c8-4c8d4f35038d
   author: aida-session-start
-  timestamp: 2026-11-08 10:53:24.763750+00:00
+  timestamp: 2026-11-08T10:53:24.763750Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bacb-039a-76e0-889a-85894d13a0c2
   author: dirtlab
-  timestamp: 2026-11-08 10:53:49.338100+00:00
+  timestamp: 2026-11-08T10:53:49.338100Z
   session_id: 01a1baca9e02
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bacf-a6f8-7c00-aa0c-3eeaa5c9b21a
   author: aida-orchestrator
-  timestamp: 2026-11-08 10:58:53.305008+00:00
+  timestamp: 2026-11-08T10:58:53.305008Z
   session_id: 01a1baccb0f0
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1361,13 +1037,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1badd-2367-70a0-a3c6-e1a1a851d299
   author: joe
-  timestamp: 2026-11-08 11:13:37.127289+00:00
+  timestamp: 2026-11-08T11:13:37.127289Z
   session_id: 01a1bad95af1
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1baf2-4c82-76d3-8ac3-426f7888d232
   author: joe
-  timestamp: 2026-11-08 11:36:43.906362+00:00
+  timestamp: 2026-11-08T11:36:43.906362Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1376,19 +1052,19 @@ history:
     new_value: Approved
 - id: 01a1baf3-7649-7260-8ff6-fe85580b8f96
   author: aida-session-start
-  timestamp: 2026-11-08 11:38:00.137622+00:00
+  timestamp: 2026-11-08T11:38:00.137622Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb0e-f1f3-77e1-9add-bfd447451660
   author: joe
-  timestamp: 2026-11-08 12:08:01.267634+00:00
+  timestamp: 2026-11-08T12:08:01.267634Z
   session_id: 01a1baf36d4a
   changes: []
 - id: 01a1bb18-b02c-7442-ac7f-232fa36f3050
   author: aida-orchestrator
-  timestamp: 2026-11-08 12:18:39.788197+00:00
+  timestamp: 2026-11-08T12:18:39.788197Z
   session_id: 01a1bb162f3a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1397,7 +1073,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb1c-b5f5-7993-8ffb-193d28d92421
   author: joe
-  timestamp: 2026-11-08 12:23:03.413610+00:00
+  timestamp: 2026-11-08T12:23:03.413610Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1406,20 +1082,20 @@ history:
     new_value: Approved
 - id: 01a1bb1e-4a1c-74f0-932b-519e0a770f4b
   author: aida-session-start
-  timestamp: 2026-11-08 12:24:46.876283+00:00
+  timestamp: 2026-11-08T12:24:46.876283Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb1e-cb4e-7060-8f96-aa3d6e191c4a
   author: dirtlab
-  timestamp: 2026-11-08 12:25:19.950985+00:00
+  timestamp: 2026-11-08T12:25:19.950985Z
   session_id: 01a1bb1e3e0f
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb44-3a9a-72c3-8204-e3a6a69680ce
   author: aida-orchestrator
-  timestamp: 2026-11-08 13:06:13.274316+00:00
+  timestamp: 2026-11-08T13:06:13.274316Z
   session_id: 01a1bb3f9f39
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1428,7 +1104,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb52-032e-71e3-90aa-72cf338acf31
   author: joe
-  timestamp: 2026-11-08 13:21:16.590727+00:00
+  timestamp: 2026-11-08T13:21:16.590727Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1437,20 +1113,20 @@ history:
     new_value: Approved
 - id: 01a1bb53-9b18-7462-ae58-2bbc518edb0e
   author: aida-session-start
-  timestamp: 2026-11-08 13:23:01.016012+00:00
+  timestamp: 2026-11-08T13:23:01.016012Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb53-f625-7fd1-8d11-8806dd4c0357
   author: dirtlab
-  timestamp: 2026-11-08 13:23:24.325035+00:00
+  timestamp: 2026-11-08T13:23:24.325035Z
   session_id: 01a1bb5394ae
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb5b-30bc-7141-8bb9-fff8a7a61383
   author: aida-orchestrator
-  timestamp: 2026-11-08 13:31:18.076969+00:00
+  timestamp: 2026-11-08T13:31:18.076969Z
   session_id: 01a1bb56c645
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1459,7 +1135,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb5d-87f6-7fc0-84e4-c9dd1b9364b7
   author: joe
-  timestamp: 2026-11-08 13:33:51.478060+00:00
+  timestamp: 2026-11-08T13:33:51.478060Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1468,20 +1144,20 @@ history:
     new_value: Approved
 - id: 01a1bb5e-ea37-7ca2-b210-5ebc981034e7
   author: aida-session-start
-  timestamp: 2026-11-08 13:35:22.167254+00:00
+  timestamp: 2026-11-08T13:35:22.167254Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb5f-36bb-7432-82de-47a0eb53bbfa
   author: dirtlab
-  timestamp: 2026-11-08 13:35:41.755325+00:00
+  timestamp: 2026-11-08T13:35:41.755325Z
   session_id: 01a1bb5ee45d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb6d-2118-71b3-a545-016f7f938acb
   author: aida-orchestrator
-  timestamp: 2026-11-08 13:50:53.720646+00:00
+  timestamp: 2026-11-08T13:50:53.720646Z
   session_id: 01a1bb6a28ab
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1490,7 +1166,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb70-060f-75a3-9aa1-4c2686e004c2
   author: joe
-  timestamp: 2026-11-08 13:54:03.407045+00:00
+  timestamp: 2026-11-08T13:54:03.407045Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1499,20 +1175,20 @@ history:
     new_value: Approved
 - id: 01a1bb71-55cc-72c2-869e-fe39b000b0a8
   author: aida-session-start
-  timestamp: 2026-11-08 13:55:29.356324+00:00
+  timestamp: 2026-11-08T13:55:29.356324Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb71-a359-7530-8850-c43f879027be
   author: dirtlab
-  timestamp: 2026-11-08 13:55:49.209160+00:00
+  timestamp: 2026-11-08T13:55:49.209160Z
   session_id: 01a1bb714fd9
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb72-4d94-7171-ae99-ff868a84aed7
   author: dirtlab
-  timestamp: 2026-11-08 13:56:32.788891+00:00
+  timestamp: 2026-11-08T13:56:32.788891Z
   session_id: 01a1bb714fd9
   harness_version: codex-cli 0.167.0
   changes:
@@ -1521,7 +1197,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bbe0-42a3-7f62-adf6-6fd2c27406af
   author: joe
-  timestamp: 2026-11-08 15:56:38.947084+00:00
+  timestamp: 2026-11-08T15:56:38.947084Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1530,7 +1206,7 @@ history:
     new_value: Approved
 - id: 01a1bbe0-5609-7d22-bbcb-1c3ea6778095
   author: aida-loop-guard
-  timestamp: 2026-11-08 15:56:43.913043+00:00
+  timestamp: 2026-11-08T15:56:43.913043Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1539,7 +1215,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bbe6-ad1f-7b43-be6e-d50a17f20fa7
   author: joe
-  timestamp: 2026-11-08 16:03:39.423092+00:00
+  timestamp: 2026-11-08T16:03:39.423092Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1548,7 +1224,7 @@ history:
     new_value: Approved
 - id: 01a1bbe6-bd89-7003-8b8a-dc0cd721163c
   author: aida-loop-guard
-  timestamp: 2026-11-08 16:03:43.625697+00:00
+  timestamp: 2026-11-08T16:03:43.625697Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1557,7 +1233,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bbf0-75e1-7821-97f9-7e0e84c6136c
   author: joe
-  timestamp: 2026-11-08 16:14:20.641739+00:00
+  timestamp: 2026-11-08T16:14:20.641739Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1566,20 +1242,20 @@ history:
     new_value: Approved
 - id: 01a1bc13-6732-7f61-b47e-da6c35bdfc9c
   author: aida-session-start
-  timestamp: 2026-11-08 16:52:30.642071+00:00
+  timestamp: 2026-11-08T16:52:30.642071Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc13-e7af-7b11-ac79-255313c09101
   author: dirtlab
-  timestamp: 2026-11-08 16:53:03.535953+00:00
+  timestamp: 2026-11-08T16:53:03.535953Z
   session_id: 01a1bc13613a
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc14-69ea-76d0-ab2f-17dc12174ed8
   author: dirtlab
-  timestamp: 2026-11-08 16:53:36.874275+00:00
+  timestamp: 2026-11-08T16:53:36.874275Z
   session_id: 01a1bc13613a
   harness_version: codex-cli 0.167.0
   changes:
@@ -1588,13 +1264,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc1a-d1ab-7583-b212-8e20e527eaa3
   author: joe
-  timestamp: 2026-11-08 17:00:36.651843+00:00
+  timestamp: 2026-11-08T17:00:36.651843Z
   session_id: 01a1bc163ec2
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc2e-9c1b-7e41-a0b5-085c9d01b78e
   author: joe
-  timestamp: 2026-11-08 17:22:13.659261+00:00
+  timestamp: 2026-11-08T17:22:13.659261Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1603,20 +1279,20 @@ history:
     new_value: Approved
 - id: 01a1bc2f-dd01-7d20-961a-a0d98630ef96
   author: joe
-  timestamp: 2026-11-08 17:23:35.809865+00:00
+  timestamp: 2026-11-08T17:23:35.809865Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc2f-fdcf-7fa3-bfd4-0c37f7df4363
   author: aida-session-start
-  timestamp: 2026-11-08 17:23:44.207310+00:00
+  timestamp: 2026-11-08T17:23:44.207310Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc30-4f79-7440-bfa3-15afce60a50f
   author: dirtlab
-  timestamp: 2026-11-08 17:24:05.113519+00:00
+  timestamp: 2026-11-08T17:24:05.113519Z
   session_id: 01a1bc2ff79f
   harness_version: codex-cli 0.167.0
   changes: []
@@ -1635,5 +1311,5 @@ decision_request:
   recommended: 0
   rationale: Preserves approval floors while separating the bounded profile from authority expansion.
   answered: 0
-  asked_at: 2026-10-07 23:07:59.822050+00:00
-  answered_at: 2026-10-08 15:54:29.273727+00:00
+  asked_at: 2026-10-07T23:07:59.822050Z
+  answered_at: 2026-10-08T15:54:29.273727Z
