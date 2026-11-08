@@ -1,9 +1,3 @@
-Command-framework types and their shared output/stakeholder vocabulary live in
-`cmdkit`; existing CLI, registry and stakeholder paths re-export them. The
-path-based SCC reduction remains an advisor scope decision; see
-[round-2 evidence](docs/internal/testing/task-3425-cmdkit-rework.md).
-<!-- trace:TASK-3425 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

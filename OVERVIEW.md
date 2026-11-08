@@ -1,10 +1,5 @@
-The in-crate `cmdkit` holds command registration/dispatch types, `GlobalArgs`,
-`OutputFormat` and `StakeholderAction`. Existing paths re-export them to preserve
-consumer imports. Its only named production module dependency is `spec_arg`;
-the root Storage alias still resolves to aida-core. This prepares a framework
-leaf, but the lexical module graph still follows consumers' registry re-export
-paths, so the plan's 29-module SCC reduction is not established. See the
-[measurement and scope decision](docs/internal/testing/task-3425-cmdkit-rework.md).
+`cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
+existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,
