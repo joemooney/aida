@@ -28,12 +28,19 @@ verify both verbs refuse without changing the target object's bytes.
 `store_mutation_entry.rs` selects an explicit mediated profile before CLI
 identity, telemetry, aliases, extension dispatch and cache setup. The bounded
 Rust SEQPACKET client supports inline, `--body-file` or bounded `--stdin`
-`comment add` and title/description-only `edit`. Its separate MCP loop translates
+`comment add` and title/description/priority-only `edit`. Its separate MCP loop translates
 `add_comment` and `update_requirement` without backend setup, agent-registry
 writes, mail acknowledgements or respawn. It retains MCP profile and stakeholder
 restrictions, narrows advertised input properties, and refuses extra fields
 rather than silently dropping semantics. Non-Unicode session roles and CLI
 arguments refuse; explicitly configured non-string MCP profiles also refuse.
+Priority edits use the same owned-spec, host role and redo checks as title edits.
+The closed broker and Rust schemas accept high/medium/low (case insensitive,
+with the CLI's `med` alias); invalid or null values refuse before persistence.
+A same-request replay returns its durable result without another history entry;
+stale revisions refuse. This extends a partial route and does not discharge
+whole-operation inventory blockers or enable production admission.
+
 Comment body files are opened read-only without following symlinks and with
 nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. Stdin has
 the same size, UTF-8 and nonempty-content checks. The lane sends literal text,
@@ -144,7 +151,7 @@ authorization or test execution.
 
 `--profile mediated` includes these records as `partial_routes` alongside its
 unresolved counts. They do **not** clear writer or operation blockers: a
-title/description edit route cannot certify status, ownership or tag edits, and
+title/description/priority edit route cannot certify status, ownership or tag edits, and
 a literal-text comment route cannot certify parent, relay or author semantics.
 Production admission remains gated until the remaining inventory is reconciled
 and routed. This partial reconciliation does not meet the advisor's zero

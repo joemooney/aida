@@ -188,10 +188,10 @@ fn translate_with_reader(
             Ok(("add_comment", json!({"id":id,"text":text})))
         }
         "edit" => {
-            explicit_fields(args, &["id", "title", "description"], command)?;
+            explicit_fields(args, &["id", "title", "description", "priority"], command)?;
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
             let mut payload = json!({"id":id});
-            for field in ["title", "description"] {
+            for field in ["title", "description", "priority"] {
                 if let Some(value) = args.get_one::<String>(field) {
                     payload[field] = json!(value);
                 }
@@ -361,6 +361,11 @@ mod tests {
                 vec!["aida", "edit", "TASK-1", "--description", ""],
                 "update_requirement",
                 json!({"id":"TASK-1","description":""}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--priority", "med"],
+                "update_requirement",
+                json!({"id":"TASK-1","priority":"med"}),
             ),
         ] {
             let matches = crate::command_registry::built_command()

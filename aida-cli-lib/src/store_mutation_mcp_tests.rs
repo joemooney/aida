@@ -36,10 +36,18 @@ fn mediated_mcp_advertises_only_translated_tools_with_existing_profile_and_perso
             &request("tools/list", json!({})),
         )
         .unwrap();
-        assert_eq!(
-            response.result.unwrap()["tools"].as_array().unwrap().len(),
-            count
-        );
+        let result = response.result.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), count);
+        // trace:TASK-3223 | ai:codex
+        for tool in tools {
+            if tool["name"] == "update_requirement" {
+                let properties = tool["inputSchema"]["properties"].as_object().unwrap();
+                assert!(properties.contains_key("priority"));
+                assert!(!properties.contains_key("status"));
+                assert_eq!(tool["inputSchema"]["additionalProperties"], false);
+            }
+        }
     }
 }
 

@@ -310,6 +310,7 @@ fn canonical_comment_add_and_spec_edit_are_revision_bound() {
         spec_id: "TASK-1".into(),
         expected_revision: results[0]["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: Some("updated".into()),
             description: None,
         },
@@ -477,6 +478,7 @@ fn locked_hypothesis_description_cannot_be_edited() {
         spec_id: "TASK-1".into(),
         expected_revision: hash(&before),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: None,
             description: Some("rewritten hypothesis".into()),
         },
@@ -607,6 +609,7 @@ fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
         spec_id: "TASK-1".into(),
         expected_revision: result["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: None,
             description: Some("paragraph one\n\tparagraph two".into()),
         },
@@ -879,4 +882,67 @@ fn initialized_journal_recovery_does_not_resolve_git_excludes_again() {
         Ok(())
     })
     .unwrap();
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn priority_edit_replays_once_and_refuses_stale_or_invalid_requests() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (_, comment) = fixture(root);
+    let epoch = uuid::Uuid::new_v4();
+    let request = uuid::Uuid::new_v4();
+    let backend = GitBackend::new(root).unwrap();
+    let edit = |priority: &str| CanonicalOperation::SpecEdit {
+        spec_id: "TASK-1".into(),
+        expected_revision: comment.target().1.into(),
+        fields: super::super::canonical_mutation::EditFields {
+            title: None,
+            description: None,
+            priority: Some(priority.into()),
+        },
+    };
+    // Pick a different priority regardless of the fixture's default.
+    let before: crate::Requirement =
+        serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+    let (value, expected) = if before.priority == crate::RequirementPriority::High {
+        ("med", crate::RequirementPriority::Medium)
+    } else {
+        ("HIGH", crate::RequirementPriority::High)
+    };
+    let op = edit(value);
+    let result = backend
+        .mutate_canonical("fixed", epoch, request, "bound author", &op, || Ok(()))
+        .unwrap();
+    let installed = object_bytes(root, "TASK-1").unwrap();
+    let row: crate::Requirement = serde_yaml::from_slice(&installed).unwrap();
+    assert_eq!(row.priority, expected);
+    assert_eq!(row.title, before.title);
+    assert_eq!(row.description, before.description);
+    assert_eq!(hash(&installed), result["revision"].as_str().unwrap());
+    assert_eq!(
+        backend
+            .mutate_canonical("fixed", epoch, request, "bound author", &op, || Ok(()))
+            .unwrap(),
+        result
+    );
+    assert_eq!(object_bytes(root, "TASK-1").unwrap(), installed);
+    for (op, reason) in [
+        (edit("low"), "Conflict"),
+        (edit("urgent"), "InvalidRequest"),
+    ] {
+        assert!(backend
+            .mutate_canonical(
+                "fixed",
+                epoch,
+                uuid::Uuid::new_v4(),
+                "bound author",
+                &op,
+                || Ok(())
+            )
+            .unwrap_err()
+            .to_string()
+            .contains(reason));
+        assert_eq!(object_bytes(root, "TASK-1").unwrap(), installed);
+    }
 }

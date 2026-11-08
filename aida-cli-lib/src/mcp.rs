@@ -9235,7 +9235,7 @@ fn mediated_mcp_response(
                 let fields: &[&str] = if tool["name"] == "add_comment" {
                     &["id", "text"]
                 } else {
-                    &["id", "title", "description"]
+                    &["id", "title", "description", "priority"]
                 };
                 tool["inputSchema"]["properties"]
                     .as_object_mut()

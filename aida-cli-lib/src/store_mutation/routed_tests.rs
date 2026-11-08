@@ -266,3 +266,41 @@ fn client_broker_host_competing_mutations_compare_the_same_preimage() {
     assert_eq!(row.comments.len(), 1);
     assert_eq!(row.comments[0].author, "bound author");
 }
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn priority_routes_through_client_broker_host_with_bound_history() {
+    let route = Route::new(false);
+    let before = route.row();
+    let result = route
+        .client()
+        .mcp(
+            &route.root(),
+            "update_requirement",
+            &serde_json::json!({"id":"TASK-3223", "priority":"low"}),
+        )
+        .unwrap();
+    let after = route.row();
+    assert_eq!(after.priority, aida_core::RequirementPriority::Low);
+    assert_eq!(after.title, before.title);
+    assert_eq!(after.description, before.description);
+    assert_eq!(
+        result["revision"],
+        redo::hash(&redo::object_bytes(&route.root(), &route.origin).unwrap())
+    );
+    let changes: Vec<_> = after
+        .history
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .changes
+                .iter()
+                .filter(|change| change.field_name == "priority")
+                .map(move |change| (&entry.author, change))
+        })
+        .collect();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].0, "bound author");
+    assert_eq!(changes[0].1.old_value, before.priority.to_string());
+    assert_eq!(changes[0].1.new_value, "Low");
+}

@@ -408,7 +408,7 @@ fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
             } else {
                 (
                     "spec_edit",
-                    json!({"spec_id":origin,"expected_revision":expected_revision,"fields":{"title":"new title","description":""}}),
+                    json!({"spec_id":origin,"expected_revision":expected_revision,"fields":{"title":"new title","description":"","priority":"low"}}),
                 )
             };
             assert_eq!(
@@ -431,6 +431,7 @@ fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
             origin
         );
         let fields = || aida_core::db::canonical_mutation::EditFields {
+            priority: Some("low".into()),
             title: Some("new title".into()),
             description: Some("".into()),
         };
@@ -446,7 +447,7 @@ fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
             .mcp(
                 &store,
                 "update_requirement",
-                &json!({"id":id,"title":"new title","description":""}),
+                &json!({"id":id,"title":"new title","description":"","priority":"low"}),
             )
             .unwrap();
     }

@@ -37,12 +37,33 @@ pub struct EditFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub description: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "present_text",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub priority: Option<String>,
 }
 // Missing fields mean unchanged; explicit null is not an edit verb. Match the
 // broker's closed schema when decoding independently in the trusted host.
 fn present_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
+// trace:TASK-3223 | ai:codex
+impl EditFields {
+    pub fn parsed_priority(&self) -> anyhow::Result<Option<crate::RequirementPriority>> {
+        self.priority
+            .as_deref()
+            .map(|value| match value.to_lowercase().as_str() {
+                "high" => Ok(crate::RequirementPriority::High),
+                "medium" | "med" => Ok(crate::RequirementPriority::Medium),
+                "low" => Ok(crate::RequirementPriority::Low),
+                _ => anyhow::bail!("InvalidRequest"),
+            })
+            .transpose()
+    }
+}
+
 impl CanonicalOperation {
     pub fn target(&self) -> (&str, &str) {
         match self {
@@ -83,9 +104,12 @@ impl CanonicalOperation {
             }
             Self::SpecEdit { fields, .. } => {
                 anyhow::ensure!(
-                    fields.title.is_some() || fields.description.is_some(),
+                    fields.title.is_some()
+                        || fields.description.is_some()
+                        || fields.priority.is_some(),
                     "InvalidRequest"
                 );
+                fields.parsed_priority()?;
                 if let Some(t) = &fields.title {
                     anyhow::ensure!(text(t) && t.len() <= 512, "InvalidRequest");
                 }
@@ -141,6 +165,8 @@ mod tests {
             .validate()
             .is_err());
         for fields in [
+            serde_json::json!({"priority": null}),
+            serde_json::json!({"priority": 1}),
             serde_json::json!({"title": null, "description": "text"}),
             serde_json::json!({"description": null, "title": "title"}),
             serde_json::json!({"title": "title", "status": "Completed"}),

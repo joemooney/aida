@@ -90,10 +90,12 @@ def mutation_request(raw):
                     raise ValueError('comment')
             elif obj['op'] == 'spec_edit':
                 fields = data['fields']
-                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description'}:
+                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority'}:
                     raise ValueError('fields')
                 if any(not isinstance(v, str) for v in fields.values()):
                     raise ValueError('field value')
+                if 'priority' in fields and fields['priority'].lower() not in ('high', 'medium', 'med', 'low'):
+                    raise ValueError('priority')
                 if 'title' in fields and (not fields['title'] or len(fields['title'].encode()) > 512):
                     raise ValueError('title')
         return obj
