@@ -15,12 +15,12 @@ description: |
   Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
 
   Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T14:04:09.266544551Z
+modified_at: 2026-11-08T14:09:43.502124969Z
 req_type: Story
 tags:
 - architecture
@@ -249,6 +249,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb7e-5e4e-7fa3-806d-7c88b89a795e
+  author: aida-orchestrator
+  timestamp: 2026-11-08T14:09:43.502147110Z
+  session_id: 01a1bb7b42d4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -262,7 +271,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Slice 1 design matches advisor amendments A1/A3/A4, but three CI-blocking misses from moving slots to HOME (stale CLI wiring test, two ledgers) and a new admission race; CI still pending at review time.
+  detail: Round-1 findings are all fixed and the slice-1 cap resolver is sound, but host status fails open from an isolated PID namespace (false free capacity), so request changes.
   recovery_hint: address the review findings, move STORY-2660 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T13:35:04.031467528Z
+  shelved_at: 2026-11-08T14:09:43.502124969Z
