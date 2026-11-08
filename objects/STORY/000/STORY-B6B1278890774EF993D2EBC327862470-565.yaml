@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574469Z
-modified_at: 2026-11-08T01:31:22.641281227Z
+modified_at: 2026-11-08T01:53:44.822037351Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -76,6 +76,12 @@ comments:
   modified_at: 2026-11-08T00:22:16.761106721Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8dc-8f76-70b3-a4d8-9f39387410b8
+  author: joe
+  content: 'Native rework progress: changed only aida-cli-lib/src/lane_host.rs to exercise each containment failure independently through real fresh and drain queue handlers, with passing controls for all other containment rows and snapshots proving no project/user writes. Formatting, git diff --check, execution-context ledger (zero additions), and 8 Git fixture-maintenance tests passed. Rust validation remains pending: job j20261108T013313655-2-0 timed out compiling after 900s (no tests executed); retry j20261108T014845851-2-0 uses AIDA_CARGO_TIMEOUT=3600 and is currently queued for a Cargo slot. Non-completing native publication declaration recorded: [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). No commit, push, PR creation or queue completion performed.'
+  created_at: 2026-11-08T01:53:44.822037351Z
+  modified_at: 2026-11-08T01:53:44.822037351Z
+  session_id: 01a1b8c792b8
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
