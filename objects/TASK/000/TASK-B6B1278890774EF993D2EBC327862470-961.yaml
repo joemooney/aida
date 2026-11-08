@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T18:24:19.720797435Z
+modified_at: 2026-11-08T18:42:43.693451323Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -281,6 +281,66 @@ comments:
   modified_at: 2026-11-08T18:19:38.502501018Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc78-4f6d-7e93-bb98-9befb47e29de
+  author: dirtlab
+  content: |
+    TASK-3429 native implementer handoff — review remediation, uncommitted
+
+    Latest review findings 4 and 6 addressed:
+    - All seven named source guards include aida-mcp, preserving existing budgets. Launcher-main detection also recognizes the external library qualification.
+    - Completion scan asserts the extracted MCP transport and serve wrapper are visible.
+    - Strict cache-authority scan initially caught the existing cache-status diagnostic implementation. Moved that helper into cli-lib/cache_output and retained a thin MCP wrapper, without exempting cache reads in transport authority code. Helper body matches HEAD after receiver substitution and formatting.
+    - Both stale documentation paths corrected.
+    - Fixed the existing misplaced TASK-3429 trace header in lib_part3; trace-header gate now passes.
+
+    Changed files:
+    aida-cli-lib/src/cache_output.rs
+    aida-cli-lib/src/gate/tests/story_1917_dispatch_exec_tests.rs
+    aida-cli-lib/src/gate/tests/task_2707_cache_authority_tests.rs
+    aida-cli-lib/src/lib_part3.rs
+    aida-cli-lib/src/test_home.rs
+    aida-cli-lib/src/tests/bug_1670_stale_cache_callers_tests.rs
+    aida-cli-lib/src/tests/resolve_aida_exe_tests.rs
+    aida-cli-lib/src/tests/story_1418_completion_seam_tests.rs
+    aida-cli-lib/src/tests/task_2032_launcher_main_ratchet_tests.rs
+    aida-mcp/src/mcp.rs
+    docs/internal/agents/aida-repository-guide.md
+    docs/product-integrations.md
+
+    Validation: untested=false. All Rust tests ran through the launcher using cargo test --profile agent.
+    - Ratchets: 33 passed, final run j20261108T183210708-2-0 (initial run also 33 passed).
+    - Completion seam: 14 passed, j20261108T182258984-2-0.
+    - Destructive tolerant-cache guard: 1 passed, j20261108T182300160-2-0.
+    - Raw executable lookup guard: 1 passed, j20261108T182301336-2-0.
+    - Raw home lookup guard: 1 passed, j20261108T182302513-2-0.
+    - Grant binding guard/runtime test: 1 passed, j20261108T182303704-2-0.
+    - Strict cache-authority guard: 1 passed on final source, j20261108T183142263-2-0. Initial run failed on the now-moved informational cache-status implementation.
+    - Shipping aida-mcp --lib: 2 passed, j20261108T182313686-2-0, including tools/list and serve wrapper.
+    - Descriptor filter: 20 passed, j20261108T182314863-2-0.
+    - tools_list_respects_profile: 1 passed, j20261108T182316041-2-0.
+    - cache_status_reports_freshness: FAILED in fixture setup at mcp_tests.rs:4824, before calling the relocated helper: allocation setting must be a bounded owned regular file without shared writes. j20261108T183209334-2-0. No clean freshness-test/full-suite claim.
+    - Store-writer inventory passes: 3385 sink sites, 293 operation mappings unchanged.
+    - ExecContext inventory passes: 1239 exact sites, zero additions.
+    - Documentation paths, trace headers, rustfmt checks for changed source, git diff --check: PASS.
+    - Schema remains unchanged: 58 unique literal descriptor names.
+    - Codegraph unavailable; aida doctor check codegraph confirms missing from PATH. Used rg fallback.
+    - Removed only verified test-generated agent-registry artifacts under aida-mcp/.aida and aida-cli-lib/.aida.
+    - No pending launcher jobs.
+
+    Acceptance/publication blockers:
+    Review finding 1 / AC5: dell1 clean-build comparisons and cargo --timings evidence remain absent. This host is disrad-dvp98b3puw.
+    Review finding 2 / AC3: contract says 72 tools; preserved surface has 58; advisor correction is still absent.
+    Review finding 5: no final-head CI result is established from this native lane.
+    Review finding 3: no completion trailer is justified. Git metadata is read-only; this seat cannot rewrite PR/commit metadata.
+
+    TASK-3429 was punted to Needs Attention with these reasons. Punt signal file write refused (read-only filesystem), but the reason/status persisted in the store. HOST MUST RETAIN PUBLICATION VETO from the spec and this handoff; no publication or completion until triage. Preserve existing holds/punts. If later triage authorizes partial publication, it must use Refs TASK-3429 and disclose incomplete acceptance.
+
+    Draft finding creation refused because this clone has no AIDA node binding; this comment retains the conversational flag.
+    No commit, push, PR creation, queue done, pr ship, review record or ship declaration performed. All source edits are uncommitted.
+  created_at: 2026-11-08T18:42:43.693451323Z
+  modified_at: 2026-11-08T18:42:43.693451323Z
+  session_id: 01a1bc645291
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
