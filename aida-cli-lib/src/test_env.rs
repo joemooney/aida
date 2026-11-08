@@ -994,7 +994,8 @@ mod tests {
     ///
     /// Scope limitation: this source scanner checks literal `set_current_dir(`
     /// calls inside test files (`src/tests/**`, `tests/**`) and `#[cfg(...test...)]`
-    /// blocks. Indirect cwd mutation through production code (`queue_cmd.rs:12794`,
+    /// blocks. Indirect cwd mutation through production code
+    /// (`queue_cmd/work.rs::handle_queue_work`,
     /// `session_start.rs:2516`, `agent_launch.rs`, `reconstitute.rs`,
     /// `lib_part1.rs`, `session_end.rs`, ...) is not detected; tests reaching
     /// those production paths in-process must opt into `run_path_isolated_test()`
@@ -1073,7 +1074,8 @@ fn guarded_by_output_variant() {
 /// enclosing function does not call `run_path_isolated_test()`.
 ///
 /// Limitation: only literal `set_current_dir(` calls in test modules/files are
-/// inspected; indirect cwd mutation through production code (`queue_cmd.rs:12794`,
+/// inspected; indirect cwd mutation through production code
+/// (`queue_cmd/work.rs::handle_queue_work`,
 /// `session_start.rs:2516`, ...) is not detected.
 // trace:TASK-1970 | ai:antigravity
 pub(crate) fn scan_unisolated_set_current_dir_in_dir(src_dir: &Path) -> Vec<String> {
