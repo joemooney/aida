@@ -510,6 +510,28 @@ class WorkCiTests(unittest.TestCase):
         cached = [row for index in range(json.loads((f.private(fresh) / "ci-skipped-results.json").read_text()))
                   for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
         self.assertEqual(cached, reported["skipped"])
+        # Awaiting must warn about both damaged indexes and missing parts.
+        # trace:TASK-3452 | ai:codex
+        awaiting_home = fresh / "isolated-home"
+        awaiting_env = dict(f.env, HOME=str(awaiting_home), XDG_CONFIG_HOME=str(awaiting_home / "config"),
+                            XDG_CACHE_HOME=str(awaiting_home / "cache"), AIDA_TELEMETRY="0")
+        initialized = subprocess.run([BINARY, "init", "--footprint", "minimal", "--no-skills", "--no-hooks",
+                                      "--no-post-hooks", "--no-roles", "--no-agent-config", "--no-schedule"],
+                                     cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        display_index = f.private(fresh) / "ci-skipped-results.json"
+        saved_index = display_index.read_bytes()
+        display_index.write_text("invalid json")
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertIn("could not read CI skipped-result display cache", awaiting.stderr)
+        display_index.write_bytes(saved_index)
+        display_part = f.private(fresh) / "ci-skipped-results-0.json"
+        saved_part = display_part.read_bytes()
+        display_part.unlink()
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertIn("could not read CI skipped-result display cache", awaiting.stderr)
+        display_part.write_bytes(saved_part)
+        display_part.chmod(0o600)
         for row in reported["skipped"]:
             self.assertEqual(row["reason"], reason)
             self.assertEqual(row["command"], f"aida intent ci read --attempt {row['attempt']} --sha {row['sha']}")
@@ -546,10 +568,18 @@ class WorkCiTests(unittest.TestCase):
         self.assertIn("display cache", broken_pull.stderr)
         broken_process = f.cli(fresh, "ci", "process", "--json")
         self.assertEqual(json.loads(broken_process.stdout)["skipped"], reported["skipped"])
+        self.assertEqual(broken_process.stderr.count("could not refresh CI skipped-result display cache"), 1)
+        # A refused old marker cannot block a current verified publication.
+        # trace:TASK-3452 | ai:codex
+        bad_marker = f.private(fresh) / f"ci-status-{3 if warm else 1}.json"
+        bad_marker.mkdir()
         marker.unlink()
         published = f.cli(fresh, "ci", "process", "--json")
         self.assertIn("native status published", json.loads(published.stdout)["message"])
         self.assertEqual(len(f.statuses), 1)
+        self.assertIn("publication marker", published.stderr)
+        self.assertEqual(json.loads(published.stdout)["skipped"], reported["skipped"])
+        bad_marker.rmdir()
         f.statuses.clear()
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1

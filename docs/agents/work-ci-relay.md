@@ -265,7 +265,8 @@ exact read cannot repair invalid receipt content. Never edit verification or
 publication markers to silence a refused result.
 
 Work clones show no Home status recovery notices. The display cache refresh is
-best-effort: a write failure warns without blocking intake, reads or publication. Invalid input remains in the independent
+best-effort: a write failure warns without blocking intake, reads or publication.
+Invalid input remains in the independent
 quarantine ref/object database; it cannot advance the accepted intake branch or
 publish a native status. No work logs, URLs, paths, runner identities or diagnostic
 prose enter the return schema. Allow-lists and digests cannot establish that work

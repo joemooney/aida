@@ -887,6 +887,14 @@ impl Intake {
     }
 
     pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
+        let files = self.files_without_display_refresh()?;
+        self.refresh_ci_skipped(&files);
+        Ok(files)
+    }
+
+    // Process reports and refreshes the same inventory once, after loading it.
+    // trace:TASK-3452 | ai:codex
+    pub(super) fn files_without_display_refresh(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         let mut files = BTreeMap::new();
         for branch in self.profile.branches() {
             if let Some(tip) = self.branch_tip(branch)? {
@@ -900,8 +908,6 @@ impl Intake {
                 }
             }
         }
-        // trace:TASK-3452 | ai:codex
-        self.refresh_ci_skipped(&files);
         Ok(files)
     }
 

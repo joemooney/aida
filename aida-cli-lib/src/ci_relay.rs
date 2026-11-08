@@ -852,9 +852,22 @@ pub(super) fn record_skipped(
         // completed native publication. Such rows need no operator action.
         // trace:TASK-3452 | ai:codex
         if home && !intake.ci_verified(path) && latest.get(&r.sha) == Some(&&r.attempt) {
-            let published = intake
+            // A refused old marker is not evidence of publication. Display
+            // inventory must not block processing of other verified results.
+            // trace:TASK-3452 | ai:codex
+            let published = match intake
                 .private
-                .read(&format!("ci-status-{}.json", r.attempt))?;
+                .read(&format!("ci-status-{}.json", r.attempt))
+            {
+                Ok(published) => published,
+                Err(error) => {
+                    eprintln!(
+                        "warning: could not read CI attempt {} publication marker: {error}",
+                        r.attempt
+                    );
+                    None
+                }
+            };
             if published.as_deref() == Some(r.digest.as_bytes()) {
                 continue;
             }
@@ -907,6 +920,9 @@ pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
         let path = aida_core::allocation_authority::common_dir(root)?
             .join("aida-intake")
             .join(SKIPPED);
+        if !path.try_exists()? {
+            return Ok(Vec::new());
+        }
         // Work clones cannot publish Home statuses, even with a stale cache.
         // trace:TASK-3452 | ai:codex
         let config =
@@ -927,12 +943,23 @@ pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
         }
         Ok(rows)
     };
-    read().unwrap_or_default()
+    // Missing caches are normal before the first refresh; damaged caches
+    // must remain visible to the operator instead of silently losing rows.
+    // trace:TASK-3452 | ai:codex
+    match read() {
+        Ok(rows) => rows,
+        Err(error) => {
+            eprintln!("warning: could not read CI skipped-result display cache: {error}");
+            Vec::new()
+        }
+    }
 }
 
 fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     intake.sync()?;
-    let files = intake.files()?;
+    // Refresh once below, retaining the rows for process output.
+    // trace:TASK-3452 | ai:codex
+    let files = intake.files_without_display_refresh()?;
     let snapshot = Snapshot::load(intake)?;
     let mut latest = BTreeMap::<String, u32>::new();
     for (n, sha) in &snapshot.requests {
