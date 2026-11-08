@@ -8838,6 +8838,17 @@ pub(crate) fn ship_messages(
     args: &ShipArgs,
     native: bool,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
+    // trace:BUG-2493 | ai:codex
+    // Native authors provide bodies only through the explicit body-file surface.
+    if native {
+        anyhow::ensure!(
+            !args
+                .message
+                .as_deref()
+                .is_some_and(|s| s.contains(['\n', '\r'])),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
     if args.commit_body_file.is_some() {
         anyhow::ensure!(
             args.commit_pending.is_some() || (args.message.is_some() && native),

@@ -108,10 +108,11 @@ exits, the host launcher commits and publishes the PR; queue completion follows 
 Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
 run `aida punt`; existing punt or hold signals remain publication vetoes. \
 For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" \
---commit-body-file <file>` to declare the host publication subject and body; \
+--commit-body-file <file>` to declare the host publication subject and optional body; \
 this records intent without publishing. \
 For a completing lane, use `aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" \
---commit-body-file <file>` to declare completion with the required body. \
+--commit-body-file <file>` to declare completion with an optional body. \
+Omit `--commit-body-file <file>` when no body trailers are needed. \
 For required commit-body trailers such as `Help-Golden: unchanged`, write a UTF-8 file \
 outside the checkout (for example under `/tmp`) and add `--commit-body-file <file>` \
 to the declaration. Avoid body lines ending in `(ID)` groups, which can supply completion credit.";

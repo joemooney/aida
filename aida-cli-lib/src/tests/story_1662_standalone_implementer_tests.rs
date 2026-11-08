@@ -1093,6 +1093,8 @@ fn task_2879_native_stop_hands_pending_work_to_host() {
 #[cfg(unix)]
 #[test]
 fn bug_2493_native_prompts_name_safe_body_file_surface() {
+    assert!(NATIVE_STOP_CONTRACT
+        .contains("Omit `--commit-body-file <file>` when no body trailers are needed."));
     assert!(NATIVE_STOP_CONTRACT.contains(
         "aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" --commit-body-file <file>"
     ));

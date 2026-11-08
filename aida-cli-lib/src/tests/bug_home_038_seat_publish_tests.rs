@@ -2665,6 +2665,17 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
         crate::pr_cmd::ShipArgs::from_arg_matches(&matches).unwrap()
     };
     let path = missing.to_str().unwrap();
+    // trace:BUG-2493 | ai:codex
+    // An inline native body must not bypass the documented file surface.
+    for message in ["subject\n\nHelp-Golden: unchanged", "subject\rhidden"] {
+        let args = parse(vec!["ship", "-m", message]);
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, true)
+                .unwrap_err()
+                .to_string(),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
     for (argv, native) in [
         (vec!["ship", "--commit-body-file", path], true),
         (
@@ -2736,7 +2747,11 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
             crate::pr_cmd::ship_messages(&args, native)
                 .unwrap_err()
                 .to_string(),
-            "--commit-body-file requires a single-line subject"
+            if native {
+                "native -m requires a single-line subject; use --commit-body-file for the body"
+            } else {
+                "--commit-body-file requires a single-line subject"
+            }
         );
         std::fs::remove_file(&missing).unwrap();
     }
