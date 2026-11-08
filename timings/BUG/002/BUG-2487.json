@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2487",
+  "publishes": [
+    {
+      "at": "2026-11-08T01:26:57.297189004Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-07T17:19:43.214724230Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T17:42:48.257178629Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T17:52:36.155210786Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T18:05:21.018126017Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T00:19:17.780197489Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3611,
+        "verdict": "APPROVED",
+        "reviewed_sha": "47f7c04664a3d933f34005db763bb0f851b63191"
+      }
+    },
+    {
+      "ts": "2026-11-08T01:26:28.690087005Z",
+      "spec": "BUG-2487",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3611
+      }
+    },
+    {
+      "ts": "2026-11-08T01:26:57.125197414Z",
+      "spec": "BUG-2487",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2d1589ac325cca9366b218b577b7b0f41b2133d5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
