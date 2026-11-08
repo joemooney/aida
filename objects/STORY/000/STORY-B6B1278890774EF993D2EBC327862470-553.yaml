@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T04:46:06.916908518Z
+modified_at: 2026-11-08T04:47:09.292977141Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -256,6 +256,129 @@ comments:
   modified_at: 2026-11-08T03:39:36.745921374Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b97b-51ec-7a31-915a-3ef62c601ce2
+  author: joe
+  content: |
+    Native implementation handoff for the 2026-11-08 ruling. The host-deployment blocked-dependency punt is recorded; no publication from this seat and no completion claim. Changed files and full host commands: /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-553/.aida/story-2630-handoff.md. PR body draft: /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-553/.aida/story-2630-pr-body.md. The host must apply the body after authorized punt resolution and live AC5 evidence; source edits remain uncommitted. Final-source checks: 12 Rust tests (job j20261108T042904623-2-0), 11 Python proxy tests, 42 writer-inventory fixtures, inventory and ExecContext guards, CI gate audit, rustfmt, whitespace and template-hook checks passed.
+
+    Prepared PR-body evidence and host continuation:
+
+    Publication is vetoed by the host-deployment punt until its authorized resolution.
+    This is an uncommitted native-seat candidate; no completing claim is made.
+
+    Implements a host query proxy for read-only CodeGraph navigation from lanes. The
+    host maintains a WAL-inclusive SQLite snapshot and runs only fixed upstream
+    caller/callee/impact queries against it. Query routing adds no index write grant.
+    Adds `aida doctor --lane-host` age/reachability reporting and proxy diagnostics.
+
+    Acceptance baseline verified against locally available `origin/main`
+    `049e5206de1` (also this seat's base):
+
+    - AC1: primary `.codegraph` routing is already on main in
+      `codegraph::primary_index_link` / `worktree_gc::link_worktree_runtime_state`.
+      Routing alone did not establish working read-only queries.
+    - AC2: the existing native filesystem read-only grant is verified in this
+      seat; original main still has no working read-only CodeGraph query client.
+      The workspace-write sandbox denies primary-index writes and permits reads: the
+      `O_RDWR` check below returns EROFS and reading the SQLite header succeeds. The proxy implementation adds no writable
+      roots, `--add-dir` flags or index write operation. The deployed proxy/state
+      must remain outside every new seat write grant;
+      live query compatibility is still pending under AC5.
+    - AC3: AGENTS template and shared lane navigation guidance are already on main;
+      this candidate does not change template masters.
+    - AC4: missing/stale/unreachable diagnostics are already on main (#3632).
+      This candidate adds source/capture/heartbeat ages, refresh failures and a
+      bounded actual proxy status round trip. Fresh backups cannot freshen an old
+      index's age.
+    - AC5: **OPEN**. No successful primary-index query from this seat is claimed.
+      The installed upstream CLI fails; no host proxy has been deployed yet.
+
+    The advisor authorized option (b) when upstream cannot query read-only. The
+    installed CodeGraph 1.6.0 public query path calls writable DatabaseConnection.open,
+    configures WAL, migrates and heals. The historical blocker note contains the
+    exact syscall evidence; the current failed command is below. The proxy uses
+    that upstream CLI only against a disposable host snapshot, never the primary
+    or seat code/config. It bounds argv, requests, output and runtime; the seat
+    cannot select a host executable, environment, project or indexing command.
+
+    Current real-seat evidence (native sandbox, not AIDA-contained):
+
+    ```console
+    $ codegraph callers primary_index_link
+    ✗ callers failed: unable to open database file
+
+    $ PATH="$PWD/scripts/codegraph:$PATH" codegraph callers primary_index_link
+    codegraph proxy: no host codegraph proxy; ask the host to deploy it (do not initialize a lane index)
+
+    $ python3 - <<'PY'
+    import os
+    path='/home/joe/ai/aida/.codegraph/codegraph.db'
+    try:
+        fd=os.open(path,os.O_RDWR)
+    except OSError as e:
+        print(f'primary index O_RDWR refused: {e}')
+    else:
+        os.close(fd)
+        print('primary index O_RDWR unexpectedly permitted (no bytes written)')
+    PY
+    primary index O_RDWR refused: [Errno 30] Read-only file system: '/home/joe/ai/aida/.codegraph/codegraph.db'
+
+    $ python3 - <<'PY'
+    from pathlib import Path
+    with Path('/home/joe/ai/aida/.codegraph/codegraph.db').open('rb') as source:
+        print(f'primary index read allowed: {source.read(16)!r}')
+    PY
+    primary index read allowed: b'SQLite format 3\x00'
+
+    $ rg -n primary_index_link aida-cli-lib/src/worktree_gc.rs
+    1124:        let link = crate::codegraph::primary_index_link(project_root, worktree_path)?;
+    ```
+
+    Validation:
+
+    - Python proxy suite: 11 tests passed, none skipped. Includes real installed
+      CodeGraph caller/callee/impact edges from a synthetic graph; WAL-inclusive
+      backups; primary preservation; option refusal; deadlines/output limits;
+      reindex-lock refusal; a socket client inside read-only bubblewrap that can
+      query but cannot open the primary DB for writing or create host state; graceful stop/restart, bounded/deeply nested protocol messages and fast-leader
+      descendant cleanup (leader retained until killpg to avoid PID reuse). This is fixture evidence, not AC5 for the live index.
+    - Rust launcher job `j20261108T040408961-2-0`: timed out after 900s during
+      compilation (exit 124), with no executed tests. Second run `j20261108T041936122-2-0`: 12 executed tests passed, exit 0
+      after 13m07s compilation. A final-source rerun
+      was performed after the runtime client path changed to the host-owned
+      `.codegraph/proxy-state/bin` deployment path. Final run
+      `j20261108T042904623-2-0`: 12 executed tests passed, exit 0 (11m08s build;
+      0.41s tests). This is the final Rust source, not just prior-head evidence.
+    - Writer inventory guard and 42 writer-inventory fixtures passed; source
+      formatting, `git diff --check`, template-hook checks and the ExecContext
+      zero-additions guard passed. CI gate classification audit passed (80 gates).
+    - Full `make sync-templates` / `make check-templates` and LIGHT/fast publication
+      gate are host checks: those recipes invoke Cargo outside the lane-job protocol.
+      No template master changes were made in this slice.
+
+    Host continuation before claiming completion:
+
+    1. Refresh/rebase onto origin/main before publishing, retaining the #3613
+       doctor changes (BUG-2486 is already in this seat's baseline).
+    2. Deploy a host-owned copy of the reviewed candidate script and service per
+       `scripts/codegraph/README.md`, with host-only state outside every seat's
+       writable roots. Do not widen index writes. Keep the original host sync timer.
+    3. Use the candidate AIDA binary and launch a contained Codex seat with the deployed proxy and run
+       `codegraph callers primary_index_link --json` plus
+       `aida doctor --lane-host --json`. If that symbol's caller file was excluded
+       from indexing, confirm with `rg` and use a known indexed symbol (for example
+       `for_vendor`); do not initialize or index a lane.
+    4. Replace the failed evidence here with the exact successful command/output,
+       including a correct non-empty caller result and the seat's read-only index
+       grant evidence. Verify snapshot age appears in doctor output.
+    5. After live acceptance and authorized punt resolution, complete the required
+       host gates/current-head CI before a completing `(STORY-2630)` publication.
+       Until then, retain Refs and keep AC5 open; recheck the deployed state keeps
+       the verified read-only index boundary. No queue completion or review verdict
+       was recorded by this seat.
+  created_at: 2026-11-08T04:47:09.292977141Z
+  modified_at: 2026-11-08T04:47:09.292977141Z
+  session_id: 01a1b94e002e
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
