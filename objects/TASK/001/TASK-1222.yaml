@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T11:17:58.234483029Z
+modified_at: 2026-11-08T11:18:01.458098499Z
 req_type: Task
 tags:
 - cleanup
@@ -234,6 +234,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior findings and AC1/AC3/AC4 hold and all code CI is green, but ignored __pycache__ output still counts as uncommitted work, so only 8 of 115 sampled real linked worktrees pass the ignored-state check and AC2 stays near-vacuous on the target host.. No triage reason was given.'
   created_at: 2026-11-08T11:17:58.234481627Z
   modified_at: 2026-11-08T11:17:58.234481627Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae1-2b8d-7952-81df-b251d164339d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 928ad05d31a6
+    Recorded: 2026-11-08T10:18:43.736253535+00:00
+    Findings:
+    1. MAJOR (AC2 acfbfd06, AC4 ac5418e8, blocking): linked_clean (aida-cli-lib/src/worktree_lifecycle_gc.rs:90-93) still retains trees whose only ignored content is regenerable Python bytecode, because is_runtime_noise_entry (seat_clone.rs:2017) has no __pycache__ rule. Read-only emulation of the new classifier over 115 of 163 host worktrees: only 8 pass the ignored-state check; 96 have ignored entries under tests/, scripts/ or docs/, and 44 are retained by nothing else. A second sample of 29 trees found those entries in 23, all __pycache__, none anything else. make check-ci-fast creates them, so any tree that ran the gates reads as 'uncommitted work'. Fix: excuse ignored paths with a __pycache__ directory component (or *.pyc under one), and add __pycache__ to the task_1222_runtime_layout_and_placeholders_are_disposable fixture, with a retained non-pycache ignored file beside it. Excusing it moves the sample to about 52 of 115. Also decide whether AIDA runtime files .aida/brief.md (17 trees), .aida/events.jsonl (14), .aida/team-onboarded, .aida/upstream-report-notice-version and .aida/.format-hint-shown are disposable; they retain most of the rest.
+    2. MINOR (AC3 ac14b158): inventory() sorts by path (worktree_lifecycle_gc.rs:352) and scan_budgeted stops admitting entries at 60s, so on a host too large for one budget every weekly run re-scans the same prefix and never inspects the same tail. The routed remaining count makes this visible but the tail's candidates are never reported. Rotate the start point, or scan oldest or never-reported entries first, and test it.
+    3. MINOR (stale comment): aida-cli-lib/src/session_reap.rs:105-106 and the module comment at session_reap.rs:31 say session reap feeds the very same classifier/predicate that 'aida worktree gc' uses, but this PR routes worktree gc to worktree_lifecycle_gc::run, which does not call classify_agent_worktree. Reword to name doctor's merged-agent-worktrees heal, or the actual shared checks.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:18:01.357327109Z
+  modified_at: 2026-11-08T11:18:01.357327109Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
