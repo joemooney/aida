@@ -2682,12 +2682,42 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
         None,
     ));
     assert_eq!(facts.unpushed, 0, "{facts:?}");
-    // A checkpoint on an unpublished side history must still prevent teardown.
+    // Pre-squash checkpoint history is exempt on a clean, pushed head.
     git_ok(&clone, &["checkout", "-q", "-b", "side"]);
     seat_commit(&clone, "private.txt");
     git_ok(&clone, &["tag", "slice-02-r1"]);
+    let unpublished = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(unpublished.unpushed, 1, "{unpublished:?}");
+
     git_ok(&clone, &["checkout", "-q", "feat"]);
     git_ok(&clone, &["branch", "-D", "side"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 0, "{facts:?}");
+    std::fs::write(clone.join("pending.txt"), "pending").unwrap();
+    let dirty = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(dirty.unpushed, 1, "{dirty:?}");
+    assert!(dirty.unshipped());
+    std::fs::remove_file(clone.join("pending.txt")).unwrap();
+    // An ordinary tag on that same private history must still protect it.
+    git_ok(&clone, &["tag", "private-work", "slice-02-r1"]);
     let facts = known(probe_counting_origin(
         &fx.main,
         &clone,
@@ -2700,7 +2730,7 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
         facts
             .unpushed_refs
             .iter()
-            .any(|r| r.contains("refs/tags/slice-02-r1")),
+            .any(|r| r.contains("refs/tags/private-work")),
         "{facts:?}"
     );
     assert!(matches!(
@@ -2708,7 +2738,7 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
         Destroyed::Kept { .. }
     ));
     assert!(clone.exists());
-    git_ok(&clone, &["tag", "-d", "slice-02-r1"]);
+    git_ok(&clone, &["tag", "-d", "private-work"]);
     assert!(matches!(
         destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
         Destroyed::Removed { .. }
