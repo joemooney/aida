@@ -2213,7 +2213,11 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             fail_on_findings,
         } => {
             // trace:TASK-1222 | ai:codex — legacy flags remain an explicit apply.
-            worktree_lifecycle_gc::run(*apply || (*yes && *force), *json, *fail_on_findings)
+            worktree_lifecycle_gc::run(
+                worktree_lifecycle_gc::apply_requested(*apply, *yes, *force),
+                *json,
+                *fail_on_findings,
+            )
         }
         WorktreeCommand::Dismiss { path, category } => {
             worktree_dismiss::handle_dismiss(path.as_deref(), category.as_deref())

@@ -190,11 +190,15 @@ reasons, candidate/retained counts, and estimated logical bytes reclaimable or
 freed. It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
-also requests removal through the same gate.
+also requests removal through the same gate. Scans have a soft budget and report
+partial counts plus the number of deferred entries; a partial scheduled scan
+routes to the advisor. Byte walks are bounded and retain trees on timeout.
+The monthly guard and weekly report both use lifecycle eligibility checks.
 
 A candidate must have no remaining session lease (even a dead-process lease
 must first be ended/reaped), no operator or Git worktree lock, no uncommitted
-or untracked work, and no live filesystem holders. Main, default/store branches,
+or untracked work (including ignored local state, except regenerable target/),
+and no live filesystem holders. Main, default/store branches,
 detached checkouts, submodules, and unreadable evidence stay protected. Linked
 worktrees qualify when their HEAD is an ancestor of the default branch or an
 exact same-repository merged/closed PR head. Seat clones additionally require a

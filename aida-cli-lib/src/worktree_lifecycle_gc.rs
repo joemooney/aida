@@ -3,7 +3,7 @@
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize)]
 struct Candidate {
@@ -35,6 +35,15 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
 
 /// Logical bytes, without following symlinks (including a symlinked root).
 fn bytes(path: &Path) -> Result<u64> {
+    bytes_until(path, Instant::now() + Duration::from_secs(5))
+}
+
+// Bound large build-directory walks as well as the outer inventory scan.
+fn bytes_until(path: &Path, deadline: Instant) -> Result<u64> {
+    anyhow::ensure!(
+        Instant::now() < deadline,
+        "byte estimate budget exhausted; retained"
+    );
     let meta = std::fs::symlink_metadata(path)?;
     if meta.is_symlink() {
         return Ok(0);
@@ -44,9 +53,38 @@ fn bytes(path: &Path) -> Result<u64> {
     }
     let mut total = 0u64;
     for entry in std::fs::read_dir(path)? {
-        total = total.saturating_add(bytes(&entry?.path())?);
+        total = total.saturating_add(bytes_until(&entry?.path(), deadline)?);
     }
     Ok(total)
+}
+
+// Ignored local state is work too. Only ignored target/ build outputs are
+// disposable; tracked modifications under target/ still refuse removal.
+// trace:TASK-1222 | ai:codex
+fn linked_clean(path: &Path) -> Result<bool> {
+    Ok(git(
+        path,
+        &[
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    )?
+    .is_empty()
+        && git(
+            path,
+            &[
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--",
+                ".",
+                ":(exclude)target",
+            ],
+        )?
+        .is_empty())
 }
 
 fn same_path(a: &Path, b: &Path) -> bool {
@@ -188,19 +226,7 @@ fn inspect_with(
                 !Path::new(&dir).join("locked").try_exists()?,
                 "Git worktree lock exists"
             );
-            anyhow::ensure!(
-                git(
-                    path,
-                    &[
-                        "status",
-                        "--porcelain",
-                        "--untracked-files=all",
-                        "--ignore-submodules=none"
-                    ]
-                )?
-                .is_empty(),
-                "uncommitted work"
-            );
+            anyhow::ensure!(linked_clean(path)?, "uncommitted work");
             anyhow::ensure!(
                 !path.join(".gitmodules").try_exists()?,
                 "submodules require operator inspection"
@@ -395,16 +421,7 @@ fn remove_with(
                 )?)
                 .as_ref()
                     == row.branch.as_ref()
-                && git(
-                    &row.path,
-                    &[
-                        "status",
-                        "--porcelain",
-                        "--untracked-files=all",
-                        "--ignore-submodules=none"
-                    ]
-                )?
-                .is_empty(),
+                && linked_clean(&row.path)?,
             "linked worktree changed before teardown"
         );
         let removed = aida_core::worktree_pool_destroy::teardown_worktree_path(
@@ -457,6 +474,8 @@ fn freed_estimate(main: &Path, row: &Candidate) -> u64 {
 fn render_toon(report: &serde_json::Value) -> String {
     use crate::toon::{scalar, table_raw};
     let mut blocks: Vec<String> = [
+        "partial",
+        "remaining",
         "dry_run",
         "scanned",
         "eligible",
@@ -491,21 +510,54 @@ fn render_toon(report: &serde_json::Value) -> String {
     blocks.join("\n")
 }
 
+// Shared by dispatch and authority regressions, including legacy flags.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn apply_requested(apply: bool, yes: bool, force: bool) -> bool {
+    apply || (yes && force)
+}
+
+// trace:TASK-1222 | ai:codex
+fn authorize_apply(apply: bool, seat: bool, autonomous: bool) -> Result<()> {
+    if apply && seat {
+        bail!("worktree gc --apply must run on the host, outside a seat clone");
+    }
+    if apply && autonomous {
+        bail!("worktree gc --apply requires an interactive operator terminal; scheduled/headless cleanup is refused");
+    }
+    Ok(())
+}
+
+// Leave enough of the scheduler's 300s ceiling for a final bounded inspection
+// and report delivery. Never silently claim a complete inventory.
+fn scan_budgeted<T, R>(
+    items: impl IntoIterator<Item = T>,
+    budget: Duration,
+    mut inspect: impl FnMut(T) -> R,
+) -> Vec<R> {
+    let deadline = Instant::now() + budget;
+    items
+        .into_iter()
+        .take_while(|_| Instant::now() < deadline)
+        .map(&mut inspect)
+        .collect()
+}
+
 pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()> {
     let invoking = crate::find_project_root()?;
     let main = crate::worktree_gc::main_worktree_root_from(&invoking);
-    if apply && aida_core::seat_clone_detect::seat_clone_root(&invoking).is_some() {
-        bail!("worktree gc --apply must run on the host, outside a seat clone");
-    }
-    if apply && crate::doctor_cmd::doctor_running_autonomously(&main) {
-        bail!("worktree gc --apply requires an interactive operator terminal; scheduled/headless cleanup is refused");
-    }
+    authorize_apply(
+        apply,
+        aida_core::seat_clone_detect::seat_clone_root(&invoking).is_some(),
+        crate::doctor_cmd::doctor_running_autonomously(&main),
+    )?;
     let default =
         crate::resolve_default_branch_ref(&main).context("cannot resolve default branch")?;
-    let mut rows: Vec<_> = inventory(&main)?
-        .into_iter()
-        .map(|(p, c)| inspect(&main, &p, c, &default))
-        .collect();
+    let inventory = inventory(&main)?;
+    let total = inventory.len();
+    let mut rows = scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
+        inspect(&main, &p, c, &default)
+    });
+    let remaining = total - rows.len();
     let eligible = rows.iter().filter(|r| r.eligible).count();
     let reclaimable_bytes: u64 = rows.iter().filter(|r| r.eligible).map(|r| r.bytes).sum();
     let mut freed_bytes = 0u64;
@@ -523,11 +575,18 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
             Err(error) => {
                 failures += 1;
                 // A compare-delete of the branch can fail after tree teardown.
-                row.removed = !row.path.try_exists()?;
+                row.reason = format!("cleanup incomplete: {error:#}");
+                match row.path.try_exists() {
+                    Ok(exists) => row.removed = !exists,
+                    Err(stat_error) => {
+                        row.removed = false;
+                        row.reason
+                            .push_str(&format!("; removal unconfirmed: {stat_error}"));
+                    }
+                }
                 if row.removed {
                     freed_bytes += freed_estimate(&main, row);
                 }
-                row.reason = format!("cleanup incomplete: {error:#}");
             }
         }
     }
@@ -537,7 +596,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         .filter(|r| !r.eligible || (apply && !r.removed))
         .count();
     let report = serde_json::json!({
-        "dry_run": !apply, "eligible": eligible, "kept": kept, "scanned": rows.len(), "failures": failures,
+        "partial": remaining > 0, "remaining": remaining, "dry_run": !apply, "eligible": eligible, "kept": kept, "scanned": rows.len(), "failures": failures,
         "removed": removed, "reclaimable_bytes": reclaimable_bytes, "freed_bytes": freed_bytes, "items": &rows
     });
     use crate::doctor_cmd::DoctorRenderMode;
@@ -549,6 +608,10 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         DoctorRenderMode::Json => println!("{}", serde_json::to_string_pretty(&report)?),
         DoctorRenderMode::Toon => println!("{}", render_toon(&report)),
         DoctorRenderMode::Human => {
+            println!(
+                "Scan: {} inspected; {remaining} deferred by budget.",
+                rows.len()
+            );
             for row in &rows {
                 println!(
                     "{} {} ({} bytes): {}",
@@ -570,7 +633,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     if apply && failures > 0 {
         bail!("some GC candidates were retained; inspect item reasons");
     }
-    if fail_on_findings && eligible > 0 {
+    if fail_on_findings && (eligible > 0 || remaining > 0) {
         bail!("{eligible} lifecycle GC candidates; {reclaimable_bytes} bytes reclaimable; operator review required");
     }
     Ok(())
@@ -580,6 +643,69 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    #[test]
+    fn task_1222_budget_and_apply_authority() {
+        assert!(scan_budgeted([1, 2], Duration::ZERO, |_| panic!("must defer")).is_empty());
+        assert_eq!(
+            scan_budgeted([1, 2], Duration::from_secs(1), |v| v),
+            vec![1, 2]
+        );
+        for apply in [
+            apply_requested(true, false, false),
+            apply_requested(false, true, true),
+        ] {
+            assert!(authorize_apply(apply, true, false).is_err());
+            assert!(authorize_apply(apply, false, true).is_err());
+        }
+        assert!(!apply_requested(false, true, false));
+        assert!(!apply_requested(false, false, true));
+        assert!(authorize_apply(false, true, true).is_ok());
+        assert!(authorize_apply(true, false, false).is_ok());
+    }
+
+    #[test]
+    fn task_1222_ignored_local_state_is_retained() {
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "feature");
+        std::fs::create_dir_all(tree.join(".aida")).unwrap();
+        std::fs::write(tree.join(".aida/merge-hold"), "retain").unwrap();
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(
+            !row.eligible && row.reason.contains("uncommitted"),
+            "{}",
+            row.reason
+        );
+        assert!(tree.join(".aida/merge-hold").exists());
+        std::fs::remove_dir_all(tree.join(".aida")).unwrap();
+        std::fs::create_dir_all(tree.join("target")).unwrap();
+        std::fs::write(tree.join("target/cache"), "regenerable").unwrap();
+        assert!(linked_clean(&tree).unwrap());
+        git_ok(&tree, &["add", "-f", "target/cache"]);
+        git_ok(&tree, &["commit", "-qm", "tracked target"]);
+        std::fs::write(tree.join("target/cache"), "modified tracked work").unwrap();
+        assert!(!linked_clean(&tree).unwrap());
+    }
+
+    #[test]
+    fn task_1222_live_holder_retains_linked_tree() {
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "feature");
+        let _held_file = std::fs::File::open(tree.join("seed")).unwrap();
+        // The caller is intentionally exempt; a separate process must hold it.
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .current_dir(&tree)
+            .spawn()
+            .unwrap();
+        let result = aida_core::worktree_holders::check_worktree_removal(&tree);
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(result.is_err());
+        assert!(!row.eligible, "{}", row.reason);
+        assert!(tree.exists());
+    }
 
     fn git_ok(root: &Path, args: &[&str]) -> String {
         let out = crate::test_git::git_command()

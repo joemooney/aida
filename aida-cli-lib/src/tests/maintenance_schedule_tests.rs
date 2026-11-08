@@ -221,6 +221,7 @@ fn task_1222_weekly_gc_reports_to_advisor_without_apply() {
         &["worktree", "gc", "--json", "--fail-on-findings"]
     );
     assert!(!command.hook_allowed);
+    assert_eq!(command_timeout(command), HYGIENE_COMMAND_TIMEOUT);
     assert!(parse_scheduled_command("worktree gc --apply").is_err());
     assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
     let route = registry
@@ -252,13 +253,7 @@ fn task_1596_monthly_guard_is_read_only_and_routes_to_advisor() {
     let command = guard.command.as_ref().unwrap();
     assert_eq!(
         command.args,
-        &[
-            "doctor",
-            "check",
-            "merged-agent-worktrees",
-            "--json",
-            "--fail-on-findings"
-        ]
+        &["worktree", "gc", "--json", "--fail-on-findings"]
     );
     assert!(!command.hook_allowed);
     assert!(parse_scheduled_command("worktree gc --yes --force").is_err());

@@ -3873,7 +3873,11 @@ pub(crate) const HYGIENE_COMMAND_TIMEOUT: std::time::Duration = std::time::Durat
 /// The kill ceiling for one scheduled child.
 // trace:STORY-2351 | ai:claude
 fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
-    if command.display == "session hygiene" {
+    // trace:TASK-1222 | ai:codex — lifecycle scans emit partial counts before this ceiling.
+    if matches!(
+        command.display,
+        "session hygiene" | "worktree gc --fail-on-findings"
+    ) {
         HYGIENE_COMMAND_TIMEOUT
     } else {
         SCHEDULED_COMMAND_TIMEOUT

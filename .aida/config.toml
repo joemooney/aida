@@ -317,7 +317,7 @@ enabled = true
 # trace:TASK-1596 | ai:codex
 [[schedule.jobs]]
 name = "merged-worktrees-guard"
-command = "doctor check merged-agent-worktrees --fail-on-findings"
+command = "worktree gc --fail-on-findings"
 every = "30d"
 enabled = true
 
@@ -325,7 +325,7 @@ enabled = true
 name = "merged-worktrees-guard-route"
 seats = ["advisor"]
 on = ["CronJobFailed:merged-worktrees-guard"]
-prompt = "Merged agent worktrees are accumulating. Review the routed trip evidence and `aida doctor check merged-agent-worktrees`. Ask the operator to review `aida worktree gc` (dry run), then run `aida worktree gc --yes --force` at an interactive TTY to clean up. Force is refused in unattended contexts; do not run forced cleanup from a scheduled job or headless seat."
+prompt = "Merged agent worktrees are accumulating. Review the routed lifecycle counts and `aida worktree gc --json`. Ask the operator to review `aida worktree gc` (dry run), then run `aida worktree gc --apply` at an interactive TTY to clean up. Force is refused in unattended contexts; do not run forced cleanup from a scheduled job or headless seat."
 enabled = true
 
 # STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
