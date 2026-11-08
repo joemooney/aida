@@ -5,10 +5,10 @@ last_by:
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-launch, 52m old: Review blocked by retained lease 01a1b88bb2d1; advisor: unread [request] from review-watch, 45m old: PR-3647 behind `main` with overlap; update-branch conflicts'
+note: 'advisor: unread [request] from review-launch, 67m old: Review blocked by retained lease 01a1b90eb553'
 due_since: 2026-11-08T01:21:11.545860007Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-08T01:21:11Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-08T05:45:55Z
   job: mail-backlog
-  error: 'advisor: unread [request] from review-launch, 52m old: Review blocked by retained lease 01a1b88bb2d1; advisor: unread [request] from review-watch, 45m old: PR-3647 behind `main` with overlap; update-branch conflicts'
+  error: 'advisor: unread [request] from review-launch, 67m old: Review blocked by retained lease 01a1b90eb553'
