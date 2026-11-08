@@ -1881,6 +1881,7 @@ fn story_2641_sccache_existing_cache_diagnostic_names_path_and_remedy() {
 // returning from the job before wait(server) would lose the final artifact.
 // trace:STORY-2641 | ai:codex
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2641_sccache_lifecycle_waits_for_writes_and_preserves_cargo_exit() {
     let tmp = tempfile::tempdir().unwrap();
     let wrapper = tmp.path().join("sccache fixture");
@@ -1919,10 +1920,20 @@ else:
             tmp.path().join("server.sock").display().to_string(),
         ),
     ]);
+    // A foreign sccache client has a TMPDIR absent from the job. The host
+    // wrapper's PID override must exclude it from its health scan.
+    let mut foreign = std::process::Command::new("/usr/bin/python3")
+        .args([
+            "-c",
+            "import ctypes,time; ctypes.CDLL(None).prctl(15,b'sccache',0,0,0); time.sleep(30)",
+        ])
+        .env("TMPDIR", tmp.path().join("foreign-dead-tmp"))
+        .spawn()
+        .unwrap();
     // Shell-looking text is an argv value, never executable source.
     let args = vec![
         "-c".into(),
-        "[ \"$1\" = '$(exit 99)' ] || exit 98; exit 7".into(),
+        "test -n \"$AIDA_SCCACHE_PIDS\" && kill -0 \"$AIDA_SCCACHE_PIDS\" || exit 97; test \"$(tr '\\000' '\\n' < /proc/$AIDA_SCCACHE_PIDS/environ | sed -n 's/^TMPDIR=//p')\" = /tmp || exit 96; [ \"$1\" = '$(exit 99)' ] || exit 98; exit 7".into(),
         "cargo-fixture".into(),
         "$(exit 99)".into(),
     ];
@@ -1934,6 +1945,8 @@ else:
         .envs(&env)
         .output()
         .unwrap();
+    foreign.kill().unwrap();
+    foreign.wait().unwrap();
     assert_eq!(output.status.code(), Some(7), "{output:?}");
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("persisted")).unwrap(),
@@ -1966,10 +1979,10 @@ fn story_2641_sccache_host_queue_ticket_stays_live() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    // This test process is a live host queue owner throughout both sandboxes.
+    // This test process is a live host queue owner throughout the sandbox.
     let pid = std::process::id();
     let ticket = tmp.path().join(format!("wait.0.{pid}"));
-    for cached in [false, true] {
+    {
         std::fs::write(&ticket, "host ticket").unwrap();
         let script = r#"
 # The host wrapper uses the same kill -0 sweep for wait and acq tickets.
@@ -1996,11 +2009,43 @@ test "$(readlink /proc/self/ns/pid)" = "$3"
         assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
         let mut cmd = Command::new("bwrap");
         cmd.args(args).env_remove("SCCACHE_SERVER_UDS");
-        if cached {
-            cmd.env("SCCACHE_SERVER_UDS", "/tmp/aida-lane-sccache.sock");
-        }
         let output = cmd.output().unwrap();
-        assert!(output.status.success(), "cached={cached}: {output:?}");
+        assert!(output.status.success(), "{output:?}");
         assert_eq!(std::fs::read_to_string(&ticket).unwrap(), "host ticket");
     }
+}
+
+// Host wrappers must inspect only the foreground server, not foreign clients.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2641_sccache_scopes_health_check_and_degrades_startup_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wrapper = tmp.path().join("sccache");
+    crate::test_exec::write_executable(&wrapper, "#!/bin/sh\nexit 1\n");
+    let env = BTreeMap::from([
+        ("RUSTC_WRAPPER".into(), wrapper.display().to_string()),
+        ("SCCACHE_DIR".into(), tmp.path().display().to_string()),
+        (
+            "SCCACHE_SERVER_UDS".into(),
+            tmp.path().join("socket").display().to_string(),
+        ),
+    ]);
+    let (program, args) = cargo_with_cache_lifecycle(
+        Path::new("/bin/sh"),
+        vec![
+            "-c".into(),
+            "test -z \"$RUSTC_WRAPPER\" && test -z \"$AIDA_SCCACHE_PIDS\" || exit 99; exit 7"
+                .into(),
+        ],
+        &env,
+    );
+    let output = std::process::Command::new(program)
+        .args(args)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(env)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("running without cache"));
 }

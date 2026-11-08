@@ -1833,7 +1833,10 @@ path ending in `sccache`. Jobs use `~/.cache/aida/lane-sccache`, never the
 operator's cache. Each job starts a foreground server inside its sandbox with a
 Unix-domain socket in private `/tmp`. The job prints final `sccache --show-stats`, requests
 `--stop-server`, and waits for the server process before sandbox teardown so
-pending local cache writes can drain. Shutdown/statistics failures fail an
+pending local cache writes can drain. The Cargo wrapper receives only the job's
+server PID for health checks, excluding foreign clients with inaccessible temp
+directories. If startup fails, the job warns and runs Cargo with the cache
+disabled. Shutdown/statistics failures fail an
 otherwise successful job; Cargo failures retain their exit code. Timeouts and
 forced lane stops can still interrupt cache writes. Jobs share cached artifacts
 but have separate servers. Jobs retain host PID identity for the shared Cargo

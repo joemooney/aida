@@ -290,15 +290,17 @@ server=$!
 ready=0
 while [ ! -S "$SCCACHE_SERVER_UDS" ]; do
     if ! kill -0 "$server" 2>/dev/null || [ "$ready" -ge 10 ]; then
-        echo 'lane sccache: server startup failed' >&2
+        echo 'lane sccache: server startup failed; running without cache' >&2
         kill "$server" 2>/dev/null
         wait "$server"
-        exit 1
+        RUSTC_WRAPPER= AIDA_SCCACHE_PIDS= "$@"
+        exit $?
     fi
     ready=$((ready + 1))
     sleep 1
 done
-"$@"
+# Restrict host-wrapper health checks to this job-owned server.
+AIDA_SCCACHE_PIDS="$server" "$@"
 rc=$?
 echo 'lane sccache: final job statistics'
 "$RUSTC_WRAPPER" --show-stats || { [ "$rc" -ne 0 ] || rc=1; }
