@@ -70,7 +70,7 @@ systemctl --user enable --now codegraph-query-aida.service
 Keep the existing primary `codegraph-sync-aida.timer` and its original upstream
 executable. Do not replace `~/.local/bin/codegraph`: unrelated projects and host
 index maintenance keep using upstream. The host-owned `proxy-state/bin`
-query wrapper must be selected explicitly inside a native sandbox seat shell.
+query wrapper must be invoked by its reviewed absolute path inside a native sandbox seat shell.
 The AIDA-contained posture is not supported by this slice: its tmpfs root has
 no mount for the host client, descriptor or socket. A host operator must supply
 a separately reviewed read-only admission and contained-seat acceptance before
@@ -79,8 +79,8 @@ entries from a seat-controlled `.codegraph` link. The host should provide the
 reviewed absolute client path; existing and new seats use the same command:
 
 ```sh
-PATH=/home/joe/ai/aida/.codegraph/proxy-state/bin:$PATH codegraph callers primary_index_link
-PATH=/home/joe/ai/aida/.codegraph/proxy-state/bin:$PATH codegraph status
+/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers primary_index_link
+/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph status
 ```
 
 `--path` selects the **client's** project for descriptor discovery; it never
@@ -106,10 +106,11 @@ reports missing tool, stale (>1h) snapshot, refresh failure and unreachable
 query service or heartbeat. Before proxy deployment it retains the
 existing direct-index diagnostic. The descriptor is read with a bounded
 non-following regular-file handle. When a proxy descriptor is present, doctor
-also compares the PATH client with the bundled wrapper using a bounded read;
-an absent, upstream or different client on a lane produces a `client-routing`
+also compares the client at the resolved primary checkout’s
+`.codegraph/proxy-state/bin/codegraph` with the bundled wrapper using a bounded read;
+an absent or different deployed client on a lane produces a `client-routing`
 finding directing the operator to select the reviewed host client. A lane with
-a descriptor and no PATH client does not receive upstream-install advice.
+a valid deployed client and no PATH client does not receive upstream-install advice.
 Before deployment, or with a dangling descriptor link, `--lane-host` names the
 descriptor path and asks the host to deploy or repair the proxy and lane link,
 while preserving the underlying OS error.
@@ -140,8 +141,8 @@ In particular, Claude seats that deny creation of AF_UNIX sockets cannot use
 this transport. Their admission or an alternative transport requires an advisor
 decision; the presence of a descriptor does not establish support.
 Host operator Joe owns deployment and the later completing slice for
-contained-seat AC2/AC5 on STORY-2630. The shared navigation prompt selects the
-fixed reviewed absolute client path above; it does not install the client.
+contained-seat AC2/AC5 on STORY-2630. The shared navigation prompt asks for the project host’s reviewed absolute
+client path; this repository’s AGENTS.md supplies the path above. Neither installs the client.
 This PR is a Refs slice under the 2026-11-08 advisor ruling. Do not treat a native run as AIDA-contained evidence.
 
 Status requests bypass the query/backup lock. Up to sixteen bounded request
@@ -170,3 +171,7 @@ index. Run Rust coverage through the lane runner:
 ```sh
 aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests
 ```
+
+The example absolute paths above belong to Joe’s AIDA host. For another project
+or host, deploy under its primary checkout and supply that absolute client path
+to its lanes. Shared scaffold and dispatch guidance contains no host-specific path.

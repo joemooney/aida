@@ -272,7 +272,12 @@ fn assess_with_client_routing(
     now: SystemTime,
 ) -> Vec<DoctorFinding> {
     let routing = client_routing_findings(root, primary, binary);
-    let mut findings = assess(root, binary.is_some(), now);
+    let client = primary.join(".codegraph/proxy-state/bin/codegraph");
+    let mut findings = assess(
+        root,
+        binary.is_some() || (root != primary && is_bundled_proxy(&client)),
+        now,
+    );
     if !routing.is_empty() {
         findings.retain(|finding| finding.id != "missing");
     }
@@ -285,17 +290,17 @@ fn assess_with_client_routing(
 fn client_routing_findings(
     root: &Path,
     primary: &Path,
-    binary: Option<&Path>,
+    _binary: Option<&Path>,
 ) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
     if root != primary
         && std::fs::symlink_metadata(root.join(".codegraph/lane-proxy.json")).is_ok()
-        && !binary.is_some_and(is_bundled_proxy)
+        && !is_bundled_proxy(&primary.join(".codegraph/proxy-state/bin/codegraph"))
     {
         findings.push(finding(
             "client-routing",
-            "PATH codegraph is missing or is not the bundled host-query client".into(),
-            "Ask the host for the reviewed absolute query-client path outside seat writable roots and select its directory on this lane shell PATH; keep upstream on the primary host PATH. A healthy proxy alone does not route bare codegraph commands.",
+            "Reviewed host query client is missing or differs from the bundled client".into(),
+            "Ask the host to deploy the reviewed absolute query-client path at the primary checkout’s .codegraph/proxy-state/bin/codegraph outside seat writable roots, and invoke that absolute executable; keep upstream on the primary host PATH.",
         ));
     }
     findings
@@ -523,7 +528,18 @@ mod tests {
             "client-routing"
         );
         let client = Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/codegraph/codegraph");
-        assert!(client_routing_findings(&seat, &primary, Some(&client)).is_empty());
+        assert!(!client_routing_findings(&seat, &primary, Some(&client)).is_empty());
+        let deployed = primary.join(".codegraph/proxy-state/bin/codegraph");
+        std::fs::create_dir_all(deployed.parent().unwrap()).unwrap();
+        std::fs::copy(client, &deployed).unwrap();
+        for binary in [None, Some(upstream.as_path())] {
+            assert!(client_routing_findings(&seat, &primary, binary).is_empty());
+            assert!(
+                !assess_with_client_routing(&seat, &primary, binary, SystemTime::now())
+                    .iter()
+                    .any(|f| f.id == "missing" || f.id == "client-routing")
+            );
+        }
     }
 
     fn index(root: &Path) {
@@ -748,10 +764,10 @@ mod tests {
             .split("\n<!-- trace:STORY-2630")
             .next()
             .unwrap();
-        assert_eq!(
-            format!("For code navigation, {navigation}").trim(),
-            include_str!("../../aida-core/templates/dispatch/code-navigation.md").trim()
-        );
+        assert!(navigation.contains("/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph"));
+        let shared = include_str!("../../aida-core/templates/dispatch/code-navigation.md");
+        assert!(!shared.contains("/home/joe"));
+        assert!(shared.contains("absolute path supplied by this project"));
     }
 
     // trace:STORY-2630 | ai:codex
