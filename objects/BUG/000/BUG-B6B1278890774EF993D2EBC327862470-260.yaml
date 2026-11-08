@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-260
 agreed_id: BUG-2495
 title: 'Contained Codex launch refuses its own posture: --ask-for-approval is a top-level flag in codex-cli 0.166.0, not an exec flag'
 description: 'STORY-2593 conformance run 2026-11-07 22:50 (out=/home/joe/.aida/conformance-codex-aida-1794116556) failed every check C0-C4 with launch exit 1: ''contained Codex exec flag --ask-for-approval is unsupported by pinned codex-cli 0.166.0''. In 0.166.0 ''-a/--ask-for-approval'' is declared only in top-level ''codex --help''; ''codex exec --help'' lacks it. CODEX_NATIVE_POSTURE (codex_native_sandbox.rs:56) emits it after exec, and launch/contained.rs validate_codex_flags checks every arg against the recorded exec help (codex_0166_help.json), so the contained path refuses its own posture. FIX (same pattern as BUG-2487''s -P -> -c default_permissions): in launch/contained.rs codex_argv, rewrite ''--ask-for-approval V'' / ''--ask-for-approval=V'' / ''-a V'' into ''-c approval_policy="V"'' before validate_codex_flags; refuse any value other than ''never'' (ADR-31). Do not change the 0.166.0 pin or the help fixture. ACCEPTANCE: unit test in the contained launch tests that a site argv ''exec --sandbox workspace-write --ask-for-approval never <prompt>'' passes codex_argv and yields ''-c approval_policy="never"'' and no --ask-for-approval; a value other than never is refused. Gate LIGHT: one targeted cargo test -p aida-cli-lib <filter> + make check-ci-fast.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T05:52:44.068560018Z
-modified_at: 2026-11-08T05:52:44.068560018Z
+modified_at: 2026-11-08T05:54:10.482394599Z
 req_type: Bug
+history:
+- id: 01a1b9b8-adb2-7962-b5b8-c3407472eb9f
+  author: joe
+  timestamp: 2026-11-08T05:54:10.482382199Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
   branch: main
