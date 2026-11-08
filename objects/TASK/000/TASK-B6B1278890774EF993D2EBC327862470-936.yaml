@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-08T05:01:30.363595749Z
+modified_at: 2026-11-08T05:01:42.244055821Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -113,6 +113,13 @@ comments:
   modified_at: 2026-11-08T05:01:30.363595749Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b988-a3e4-78a1-aecb-33d0568432ab
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 2 finding 1 cannot be fully completed in this native seat: Git metadata is read-only, so the host must create the new revision commit and correct the original completion-bearing subject to (Refs TASK-3368). Findings 2 and 3: sketch pointer/decisions recorded on TASK-3368 and PR title/body updated. The latest signed advisor decision resolves the former sender-authentication and sandbox-transport choices; revised sketch is uncommitted. Advisor attention remains required for implementation-slice routing and authorized merge-hold clearance; implementation is still owed under TASK-3368. Preserve publication vetoes.. No triage reason was given.'
+  created_at: 2026-11-08T05:01:42.244054225Z
+  modified_at: 2026-11-08T05:01:42.244054225Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
@@ -189,6 +196,15 @@ history:
   timestamp: 2026-11-08T03:07:49.174669128Z
   session_id: 01a1b91d7e61
   changes: []
+- id: 01a1b988-a3e4-78a1-aecb-33c00ca5b266
+  author: joe
+  timestamp: 2026-11-08T05:01:42.244038130Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -198,8 +214,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 2 finding 1 cannot be fully completed in this native seat: Git metadata is read-only, so the host must create the new revision commit and correct the original completion-bearing subject to (Refs TASK-3368). Findings 2 and 3: sketch pointer/decisions recorded on TASK-3368 and PR title/body updated. The latest signed advisor decision resolves the former sender-authentication and sandbox-transport choices; revised sketch is uncommitted. Advisor attention remains required for implementation-slice routing and authorized merge-hold clearance; implementation is still owed under TASK-3368. Preserve publication vetoes.'
-  raised_by: implementer
-  raised_at: 2026-11-08T03:06:57.968325452Z
