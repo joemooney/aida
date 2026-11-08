@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T17:42:29.742510978Z
+modified_at: 2026-11-08T17:42:37.443314563Z
 req_type: Task
 tags:
 - architecture
@@ -1204,6 +1204,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The new priority route is sound and stays gated, but zero-unrouted acceptance is unmet and needs an advisor ruling, CI at this head has not started, and two minor findings from last round remain open.. No triage reason was given.'
   created_at: 2026-11-08T17:42:29.742508516Z
   modified_at: 2026-11-08T17:42:29.742508516Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc41-435a-75b1-abbf-8bec1c343e34
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dd86811111aa
+    Recorded: 2026-11-08T17:25:44.301122303+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6724658520
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; TASK-3223 comment 34 'zero unrouted writers for the mediated profile'). At dd86811111aa, python3 scripts/check-store-writers.py --profile mediated exits 1 with 3171 writers and 293 operations unresolved. mediated_blockers counts every operation row, so it cannot reach zero by construction, and the mediated_route records clear nothing. Only comment add and title/description/priority edit route (store_mutation_entry.rs translate_with_reader, mcp.rs mediated_mcp_response); reads are refused. No ruling has been recorded since this was first raised. The advisor must either authorize this as a staged partial with named follow-up owners (including successful mediated resume, which is only refusal-tested) or define the operation policy, including whether an explicit early UnsupportedOperation counts as reconciled. selected_store_profile (launch/contained.rs:796) correctly stays closed.
+    2. BLOCKING until CI reports: run 42504344671 at dd86811111aa is pending with no job started, and merge state is BLOCKED. The last full success is run 42496043147 at 4387ae4fad6e, which predates this head's priority route and the af26575f93df edits. make check-ci-fast, named in comment 34, has only the implementer's report of 45 passing gates (comment 83), with no independent result.
+    3. BLOCKING until cleared by advisor or operator: the aida:merge-hold label is on this PR and merge-hold-gate is queued at this head (it failed at the two prior heads). The reviewer cannot clear it.
+    4. PROCESS, needs advisor attention, carried with no reply on the spec: comment 80 (16:24:37Z) said not to commit or push over the punt or hold, yet af26575f93df was committed at 16:24:58Z and this head builds on it. Comment 75's lead is also unanswered: a persisted punt may be invisible to publication_veto when AIDA_PUNT_SIGNAL_FILE is unset. Confirm whether that publication was authorized or the veto fails open. Comment 83 hands this head's edits over for host publication, so this head is not a new instance.
+    5. MINOR, docs, carried and still present: docs/internal/security/store-mutation-writers.md:56 says the host 'revalidates the resolved path against its launch-bound store identity'. The lane's path never reaches the host, which checks expected_revision and the owned UUID on its own pinned root. Reword the sentence.
+    6. MINOR, carried and still present: mediated tools/list (mcp.rs mediated_mcp_response) narrows inputSchema to id/title/description/priority but keeps the ordinary update_requirement description (mcp.rs:7605), which also advertises type, status, tags, parent, assignee and weight. A mediated agent is told it can set fields that refuse with UnsupportedOperation. Replace the description for the mediated profile and assert it in store_mutation_mcp_tests.rs; this head's new assertion covers only the properties.
+    7. COSMETIC, new: the PR body still says 'comment_add and title/description spec_edit', but this head also routes priority. Update the body so it matches the staged scope.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:42:36.122000182Z
+  modified_at: 2026-11-08T17:42:36.122000182Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
