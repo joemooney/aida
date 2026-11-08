@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-08T15:11:11.713568917Z
+modified_at: 2026-11-08T18:37:57.667583571Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -516,6 +516,13 @@ comments:
   content: 'Conformance rerun 2026-11-08 invalid, not a failure: harness fixture omitted chatgpt.com so no turn ran (BUG-2497). Rerun after BUG-2497 lands.'
   created_at: 2026-11-08T15:11:11.713568917Z
   modified_at: 2026-11-08T15:11:11.713568917Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc73-f223-7e32-93b0-fa25419bc119
+  author: joe
+  content: 'Conformance run 2026-11-08 11:35 MST (~/.aida/conformance-codex-aida-1794162936), codex-cli 0.167.0, ChatGPT auth, turn completed: C0 pass; C1 terminal-side pass (file tool unattested); C2 fail (BUG-2446); C3 and C4 no violations, unknown by harness limits.'
+  created_at: 2026-11-08T18:37:57.667583571Z
+  modified_at: 2026-11-08T18:37:57.667583571Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
