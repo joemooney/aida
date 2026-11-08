@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T06:08:52.079531368Z
+modified_at: 2026-11-08T06:49:02.465074810Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -141,6 +141,12 @@ comments:
   content: 'Round 3 implementation is in the native seat, uncommitted for host publication: criterion traces now report no untested criteria; punt mirroring deduplicates case-insensitive spec + timestamp + category; drain and queue-resume admissions clear stale seat signals; store-writer inventory reconciled to fix CI run 42441426173 actual gate failure. Validation so far: 42 inventory tests and 27 environment/Git-maintenance ratchet tests pass; portability + growth, environment ledger + base ratchet, rustfmt and diff checks pass. Both initial Rust jobs timed out at 900s while compiling (no executed tests, no compiler error); 1800s retries submitted. Native publication subject declared. Fresh CI and supervised merge-hold clearance remain host/review work.'
   created_at: 2026-11-08T06:08:52.079531368Z
   modified_at: 2026-11-08T06:08:52.079531368Z
+  session_id: 01a1b9a47968
+- id: 01a1b9ea-e901-7492-bfdf-38baac42e200
+  author: joe
+  content: 'Round 3 final handoff: all 10 selected Rust tests executed and passed through lane job j20261108T063804099-2-0 (6 BUG-2488 regressions, launch-boundary cleanup, and 3 vendor-ratchet tests). Native punt/no-change fixture executed with visible host publication/no-change output. Corrected queue-resume fixture expects its earlier trusted-policy refusal while asserting stale signals were already removed. Reused a single vendor/role predicate so the vendor ledger does not grow. Also passed: 42 store-writer inventory tests, 27 environment/Git-maintenance ratchet tests, writer scanner, environment ledger including base comparison, portability and allowlist growth, rustfmt and whitespace. Both acceptance criteria are traced with no untested criteria. Earlier 900s requests timed out during compilation; 1800s retries supplied real executed-test evidence. Runner emitted overlay-stale after successful builds because the primary rewrote its cached generation; recorded here for host awareness. Six changed files remain uncommitted in the native seat. Publication subject already declared: [AI:codex] fix(seats): prevent resolved punt replay and stale lane vetoes (BUG-2488). Host must commit/publish and obtain fresh CI; supervised merge hold remains untouched.'
+  created_at: 2026-11-08T06:49:02.465074810Z
+  modified_at: 2026-11-08T06:49:02.465074810Z
   session_id: 01a1b9a47968
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
