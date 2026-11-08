@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T05:06:22.154247540Z
+modified_at: 2026-11-08T05:08:41.804297664Z
 req_type: Bug
 comments:
 - id: 01a1b91d-d20d-7930-ae4c-256520578a3d
@@ -47,6 +47,12 @@ comments:
   content: 'Round 2 local patch (uncommitted native seat): findings 1/4 remove full-store commit scans, validate selected commit_paths worktree matches and staged blobs, use dirty porcelain paths for pending sync, and read staged blobs through one cat-file --batch process. Finding 2 adds report-only store-objects doctor findings with path/remediation and unit/CLI regressions; other categories retain tolerant loading. Updated invalid commit fixtures in child_store_commit, real_phase_driver_wiring_tests, roster sync, scaffolding, publication wrappers, and protocol CLI cleanup. Core bug_2490 run executed 4 tests: all passed (including 512-object batch with newline/bracket filenames). rustfmt and git diff --check passed. Additional targeted CI regression jobs are queued behind CLI-library compilation. Finding 3 remains explicitly punted for advisor policy approval or an advisor-authorized linked follow-up; no completion or publication is claimed.'
   created_at: 2026-11-08T05:06:22.154247540Z
   modified_at: 2026-11-08T05:06:22.154247540Z
+  session_id: 01a1b977c304
+- id: 01a1b98f-0acc-7792-8610-d57c59309661
+  author: joe
+  content: 'Validation update: CLI-library doctor unit-test job j20261108T044736725-1642311-0 timed out after 900 seconds during compilation (exit 124), before any tests executed; this is not a passing test result. Core job j20261108T044619201-2-0 executed all 4 BUG-2490 regressions successfully. Remaining CLI/CI regression jobs have not yet produced executed-test results. CLI validation untested=true. Formatting and git diff --check are clean. Native edits remain uncommitted and finding 3 remains a publication-vetoing design-fork punt; host/advisor must authorize the policy/scope resolution and rerun incomplete CLI checks (a longer AIDA_CARGO_TIMEOUT may be needed).'
+  created_at: 2026-11-08T05:08:41.804297664Z
+  modified_at: 2026-11-08T05:08:41.804297664Z
   session_id: 01a1b977c304
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
