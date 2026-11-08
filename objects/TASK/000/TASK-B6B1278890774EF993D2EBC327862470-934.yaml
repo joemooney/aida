@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T02:23:22.566613530Z
+modified_at: 2026-11-08T02:41:03.887372621Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -165,6 +165,15 @@ comments:
   modified_at: 2026-11-08T02:21:40.203220046Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b907-e18f-7b53-9b26-7a1b91947d27
+  author: joe
+  content: |
+    Round 3 PR #3634 rework: implemented findings 1-5 in the native seat. Added namespace-admitted legacy registry observation for absence/exit/start mismatch and advisory listing/capacity matches, while incomplete records remain Unknown for positive authorization. Positively recapture only matching local self/ancestor starts for private inbox binding. Native-session namespace-mismatch private inbox access uses explicit ending, not a five-minute heartbeat limit; aged-row coverage added. Added gate ProcIdentity external leaves with feeds-authority reasons. Re-keyed the vendor ledger from verify to verify_with at unchanged count 1; watch_row remains codex count 1. All originally listed regressed tests are unchanged. Updated AGENTS.md and OVERVIEW.md.
+
+    Validation: make check-ci-fast passed all 43 gates, including no-default-features compile, standalone TUI all-targets check, formatting and portability. git diff --check passed. untested=true for Rust: launcher job j20261108T022510809-2-0 timed out at 900s without an executed-test result after extended Cargo slot queuing. Runner also reported overlay-stale: primary rewrote a file in seed generation agent-060d00274526b161. Remaining launcher jobs submitted: j20261108T022521885-2-0 (CLI S4), j20261108T022609848-333427-0 (all listed CLI regressions + gate/vendor ratchets), j20261108T022629217-337600-0 (core inbox/action/proc_identity), j20261108T022630391-337862-0 (TUI regression). Repair/reseed the lane target before relying on these runs. Finding 6 remains open: obtain executed Rust results and green CI at the host-published new head. Merge hold remains in place. Edits are intentionally uncommitted per read-only native-seat instructions; host must create this round's commit and publish. No finding disputed; no queue completion or merge action.
+  created_at: 2026-11-08T02:41:03.887372621Z
+  modified_at: 2026-11-08T02:41:03.887372621Z
+  session_id: 01a1b8f7a28f
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
